@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+VERITAS Doctor Dashboard Generator v2.4 (local .veritas layout)
+- decide_*.json / decide_first_*.json を自動検出して集計
+- ログ: veritas_os/scripts/logs
+- MemoryOS / ValueEMA: veritas_os/.veritas/
+"""
+
+import os
+import json
+import glob
+import base64
+import io
+import statistics
+import datetime
+import collections
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+
+# Matplotlib設定
+plt.rcParams.update({
+    "font.family": "AppleGothic",
+    "axes.unicode_minus": False,
+})
+
+# ==== パス設定 ====
+# このファイル: .../veritas_os/scripts/generate_report.py を想定
+REPO_ROOT   = Path(__file__).resolve().parents[1]   # .../veritas_os
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+
+LOG_DIR = cfg.log_dir              # ← config.py の log_dir をそのまま使う
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+# レポートの出力先
+REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
+REPORT_JSON = LOG_DIR / "doctor_report.json"
+
+# Value / Memory の保存先も config に統一
+VAL_JSON = cfg.value_stats_path    # 例: scripts/logs/value_stats.json
+MEM_JSON = cfg.memory_path         # 例: scripts/logs/memory.json
+
+# ---------- 共通関数 ----------
+def b64_png_from_fig(fig):
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    return base64.b64encode(buf.read()).decode("ascii")
+
+def read_json(path: Path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def iso_now():
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def _as_list(v):
+    """None/単体値/タプルも安全にリスト化"""
+    if v is None:
+        return []
+    if isinstance(v, (list, tuple)):
+        return list(v)
+    return [v]
+
+# ---------- データ収集 ----------
+def collect_decisions():
+    records = []
+    for pat in ["decide_*.json", "decide_first_*.json"]:
+        for p in sorted(LOG_DIR.glob(pat)):
+            j = read_json(p)
+            if not isinstance(j, dict):
+                continue
+
+            # response / gate / fuji
+            response = j.get("response", {})
+            if not isinstance(response, dict):
+                response = {}
+
+            gate = response.get("gate", {})
+            if not isinstance(gate, dict):
+                gate = j.get("gate", {}) if isinstance(j.get("gate"), dict) else {}
+
+            fuji = response.get("fuji", {})
+            if not isinstance(fuji, dict):
+                fuji = j.get("fuji", {}) if isinstance(j.get("fuji"), dict) else {}
+
+            extras = j.get("extras") or response.get("extras") or {}
+            if not isinstance(extras, dict):
+                extras = {}
+            metrics = extras.get("metrics") or {}
+            if not isinstance(metrics, dict):
+                metrics = {}
+
+            # decision_status
+            status = None
+            if isinstance(gate, dict):
+                status = gate.get("decision_status")
+            if not status and isinstance(response, dict):
+                status = response.get("decision_status")
+            if not status:
+                status = j.get("decision_status") or "unknown"
+
+            # latency_ms を候補から総当たり
+            latency_ms = (
+                metrics.get("latency_ms")
+                or (j.get("meta") or {}).get("latency_ms")
+                or j.get("latency_ms")
+                or (response.get("meta") or {}).get("latency_ms")
+                or (j.get("timing") or {}).get("latency_ms")
+                or (j.get("timing") or {}).get("duration_ms")
+                or j.get("duration_ms")
+                or j.get("elapsed_ms")
+            )
+
+            # memory evidence 件数
+            mem_evi_count = None
+            if isinstance(metrics.get("mem_evidence_count"), (int, float)):
+                mem_evi_count = int(metrics["mem_evidence_count"])
+
+            if mem_evi_count is None:
+                evid = response.get("evidence") or j.get("evidence") or []
+                mem_evi_count = 0
+                if isinstance(evid, list):
+                    for e in evid:
+                        if not isinstance(e, dict):
+                            continue
+                        src = str(e.get("source", "") or "")
+                        if src.startswith("internal:memory") or src.startswith("memory"):
+                            mem_evi_count += 1
+
+            # mtime
+            try:
+                mtime_str = datetime.datetime.fromtimestamp(
+                    p.stat().st_mtime
+                ).strftime("%Y-%m-%d %H:%M:%S")
+            except Exception:
+                mtime_str = ""
+
+            # chosen title
+            chosen_title = ""
+            chosen_obj = j.get("chosen") or response.get("chosen")
+            if isinstance(chosen_obj, dict):
+                chosen_title = chosen_obj.get("title") or ""
+
+            records.append({
+                "file": str(p),
+                "mtime": mtime_str,
+                "status": status,
+                "latency_ms": latency_ms,
+                "mem_evidence": mem_evi_count,
+                "risk": (gate.get("risk") if isinstance(gate, dict) else None),
+                "redactions": _as_list(fuji.get("redactions") if isinstance(fuji, dict) else []),
+                "mods": _as_list(fuji.get("modifications") if isinstance(fuji, dict) else []),
+                "chosen": chosen_title,
+            })
+    return records
+
+# ---------- MemoryOS 解析 ----------
+def analyze_memory():
+    total_memories = 0
+    used_memories = 0
+    citation_count = 0
+
+    if not MEM_JSON.exists():
+        return {"total_memories": 0, "used_memories": 0, "citation_count": 0, "hit_rate": 0.0}
+
+    data = read_json(MEM_JSON)
+
+    mem_list = []
+    if isinstance(data, list):
+        mem_list = data
+    elif isinstance(data, dict) and isinstance(data.get("history"), list):
+        mem_list = data["history"]
+
+    for m in mem_list:
+        if not isinstance(m, dict):
+            continue
+
+        v = m.get("value")
+        if isinstance(v, dict):
+            rec = v
+        else:
+            rec = m
+
+        total_memories += 1
+
+        if rec.get("used"):
+            used_memories += 1
+
+        citations = rec.get("citations") or []
+        if isinstance(citations, list):
+            citation_count += len(citations)
+
+    hit_rate = (used_memories / total_memories * 100.0) if total_memories else 0.0
+    return {
+        "total_memories": total_memories,
+        "used_memories": used_memories,
+        "citation_count": citation_count,
+        "hit_rate": round(hit_rate, 1),
+    }
+
+# ---------- レポート生成 ----------
+def build_report():
+    decides = collect_decisions()
+    total = len(decides)
+
+    counter_status = collections.Counter([d.get("status", "unknown") for d in decides])
+
+    # Latency
+    latencies = [
+        int(d["latency_ms"]) for d in decides
+        if isinstance(d.get("latency_ms"), (int, float))
+    ]
+    avg_latency = int(sum(latencies) / len(latencies)) if latencies else None
+    p95_latency = (
+        sorted(latencies)[int(0.95 * (len(latencies) - 1))]
+        if latencies else None
+    )
+
+    # Memory evidence
+    mem_counts = [int(d.get("mem_evidence", 0)) for d in decides]
+    avg_mem_evidence = round(sum(mem_counts) / len(mem_counts), 2) if mem_counts else 0.0
+
+    # FUJI 分布
+    fuji_counts = collections.Counter([d.get("status", "unknown") for d in decides])
+
+    # redactions / mods
+    red_items, mod_items = [], []
+    for d in decides:
+        red_items.extend([x for x in _as_list(d.get("redactions")) if x is not None])
+        mod_items.extend([x for x in _as_list(d.get("mods")) if x is not None])
+    red_terms = collections.Counter(red_items)
+    mod_terms = collections.Counter(mod_items)
+
+    # 日次決定数
+    bucket = collections.Counter()
+    for d in decides:
+        m = d.get("mtime") or ""
+        key = str(m)[:10] if isinstance(m, str) else ""
+        if key:
+            bucket[key] += 1
+    days = sorted(bucket.keys())
+    counts = [bucket[d] for d in days]
+
+    img_decisions = None
+    if days:
+        fig1 = plt.figure()
+        plt.plot(range(len(days)), counts, marker="o")
+        plt.title("決定数の推移（日次）")
+        plt.xlabel("日付")
+        plt.ylabel("件数")
+        img_decisions = b64_png_from_fig(fig1)
+
+    img_red = None
+    if red_terms:
+        keys, vals = zip(*red_terms.most_common(10))
+        fig2 = plt.figure()
+        plt.bar(keys, vals)
+        plt.title("Redaction 頻度 Top10")
+        plt.xticks(rotation=15)
+        img_red = b64_png_from_fig(fig2)
+
+    img_mods = None
+    if mod_terms:
+        keys, vals = zip(*mod_terms.most_common(10))
+        fig3 = plt.figure()
+        plt.bar(keys, vals)
+        plt.title("FUJI Modifications 頻度 Top10")
+        plt.xticks(rotation=15)
+        img_mods = b64_png_from_fig(fig3)
+
+    img_latency = None
+    if latencies:
+        fig4 = plt.figure()
+        plt.plot(range(len(latencies)), latencies, marker=".")
+        plt.title("Latency 推移（ms）")
+        plt.xlabel("ログ順（最新=右）")
+        plt.ylabel("ms")
+        img_latency = b64_png_from_fig(fig4)
+
+    img_mem = None
+    if mem_counts:
+        fig5 = plt.figure()
+        plt.plot(range(len(mem_counts)), mem_counts, marker="o")
+        plt.title("Memory evidence 件数の推移")
+        plt.xlabel("ログ順（最新=右）")
+        plt.ylabel("件")
+        img_mem = b64_png_from_fig(fig5)
+
+    img_fuji = None
+    if fuji_counts:
+        keys, vals = zip(*fuji_counts.items())
+        fig6 = plt.figure()
+        plt.bar(keys, vals)
+        plt.title("FUJI 判定ステータス分布")
+        plt.xticks(rotation=10)
+        img_fuji = b64_png_from_fig(fig6)
+
+    # Value EMA history
+    img_ema = None
+    try:
+        hist = []
+        if VAL_JSON.exists():
+            with open(VAL_JSON, encoding="utf-8") as f:
+                vs = json.load(f)
+                hist = vs.get("history", []) or []
+        if hist:
+            xs = list(range(len(hist)))
+            emas = [float(h.get("ema", 0.5)) for h in hist]
+            fig_ema = plt.figure()
+            plt.plot(xs, emas, marker="o")
+            plt.title("Value EMA の推移")
+            plt.xlabel("ログ順（最新=右）")
+            plt.ylabel("EMA")
+            img_ema = b64_png_from_fig(fig_ema)
+    except Exception as e:
+        print("[report] ema history skipped:", e)
+
+    # 学習効果の可視化（meta_log / world.utility）
+    meta_files = glob.glob(str(LOG_DIR / "meta_log*.jsonl"))
+    decide_files = glob.glob(str(LOG_DIR / "decide_*.json"))
+
+    reason_boosts = []
+    world_utils = []
+
+    for f in meta_files:
+        try:
+            with open(f, "r", encoding="utf-8") as fp:
+                for line in fp:
+                    j = json.loads(line)
+                    if "next_value_boost" in j:
+                        reason_boosts.append(float(j["next_value_boost"]))
+        except Exception:
+            pass
+
+    for f in decide_files:
+        try:
+            j = json.load(open(f, "r", encoding="utf-8"))
+            alts = []
+            if isinstance(j.get("alternatives"), list):
+                alts.extend(j["alternatives"])
+            if isinstance(j.get("chosen"), dict):
+                alts.append(j["chosen"])
+            for a in alts:
+                world = a.get("world", {}) or {}
+                if "utility" in world:
+                    world_utils.append(float(world["utility"]))
+        except Exception:
+            pass
+
+    avg_reason_boost = round(statistics.mean(reason_boosts), 4) if reason_boosts else 0.0
+    avg_world_utility = round(statistics.mean(world_utils), 4) if world_utils else 0.0
+
+    value_ema = 0.5
+    try:
+        if VAL_JSON.exists():
+            with open(VAL_JSON, encoding="utf-8") as f:
+                vs = json.load(f)
+                value_ema = float(vs.get("ema", 0.5))
+    except Exception as e:
+        print("[report] value_ema load skipped:", e)
+
+    mem_stats = analyze_memory()
+
+    report = {
+        "generated_at": iso_now(),
+        "total_decisions": total,
+        "status_counts": dict(counter_status),
+        "redactions": dict(red_terms),
+        "modifications": dict(mod_terms),
+        "value_ema": round(value_ema, 4),
+        "source_folder": str(LOG_DIR),
+        "memory": mem_stats,
+        "avg_latency_ms": avg_latency,
+        "p95_latency_ms": p95_latency,
+        "avg_memory_evidence": avg_mem_evidence,
+        "fuji_status_counts": dict(fuji_counts),
+        "avg_reason_boost": avg_reason_boost,
+        "avg_world_utility": avg_world_utility,
+    }
+
+    with open(REPORT_JSON, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+
+    ema_block = f"<img src='data:image/png;base64,{img_ema}'/>" if img_ema else "<i>データなし</i>"
+    status_str = json.dumps(report["status_counts"], ensure_ascii=False)
+
+    html = f"""<!doctype html>
+<html lang="ja"><meta charset="utf-8">
+<title>VERITAS Doctor Dashboard</title>
+<body style="background:#0f1117;color:#e6edf3;font-family:-apple-system,system-ui,Segoe UI,Roboto;">
+<h1>🩺 VERITAS Doctor Dashboard</h1>
+<p>生成日時: {report['generated_at']}</p>
+<p>データ元フォルダ: <code>{report['source_folder']}</code></p>
+
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  <h3>サマリー</h3>
+  <table>
+    <tr><td>決定総数</td><td>{total}</td></tr>
+    <tr><td>Status分布</td><td><code>{status_str}</code></td></tr>
+    <tr><td>価値EMA(total)</td><td>{report.get('value_ema','N/A')}</td></tr>
+    <tr><td>平均応答時間</td><td>{report.get('avg_latency_ms','N/A')} ms（p95: {report.get('p95_latency_ms','N/A')} ms）</td></tr>
+    <tr><td>Memory evidence平均</td><td>{report.get('avg_memory_evidence','N/A')} 件</td></tr>
+    <tr><td>平均 Value Boost</td><td>{report.get('avg_reason_boost','N/A')}</td></tr>
+    <tr><td>平均 world.utility</td><td>{report.get('avg_world_utility','N/A')}</td></tr>
+  </table>
+</div>
+
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px;margin-top:12px">
+  <h3>MemoryOS 指標</h3>
+  <table>
+    <tr><td>総メモリ件数</td><td>{mem_stats['total_memories']}</td></tr>
+    <tr><td>活用（used=True）</td><td>{mem_stats['used_memories']}</td></tr>
+    <tr><td>引用総数</td><td>{mem_stats['citation_count']}</td></tr>
+    <tr><td>記憶ヒット率</td><td>{mem_stats['hit_rate']}%</td></tr>
+  </table>
+</div>
+
+<h3>決定数の推移</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {"<img src='data:image/png;base64," + img_decisions + "'/>" if img_decisions else "<i>データなし</i>"}
+</div>
+
+<h3>Redaction 頻度</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {"<img src='data:image/png;base64," + img_red + "'/>" if img_red else "<i>データなし</i>"}
+</div>
+
+<h3>Latency 推移（ms）</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {"<img src='data:image/png;base64," + img_latency + "'/>" if img_latency else "<i>データなし</i>"}
+</div>
+
+<h3>Memory evidence 件数の推移</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {"<img src='data:image/png;base64," + img_mem + "'/>" if img_mem else "<i>データなし</i>"}
+</div>
+
+<h3>FUJI 判定ステータス分布</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {"<img src='data:image/png;base64," + img_fuji + "'/>" if img_fuji else "<i>データなし</i>"}
+</div>
+
+<h3>Value EMA の推移</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  {ema_block}
+</div>
+
+</body></html>
+"""
+    with open(REPORT_HTML, "w", encoding="utf-8") as f:
+        f.write(html)
+    print("✅ Doctor Dashboard 生成完了：", REPORT_HTML)
+    print("🗂 JSON Summary:", REPORT_JSON)
+
+if __name__ == "__main__":
+    build_report()

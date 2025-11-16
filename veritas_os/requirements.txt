@@ -1,0 +1,29 @@
+# =============================
+# VERITAS OS — Core Dependencies
+# =============================
+
+# --- API / Server ---
+fastapi==0.115.0
+uvicorn==0.30.3
+pydantic==2.8.2
+python-dotenv==1.0.1
+orjson==3.10.7
+
+# --- Model / Decision Engine ---
+joblib>=1.4.0
+scikit-learn>=1.5.0
+
+# --- OpenAI / LLM Integration ---
+openai>=1.0.0
+requests>=2.31.0
+
+# --- CLI / Dashboard Tools ---
+matplotlib>=3.8.0
+
+# optional but recommended
+jinja2>=3.1.0         # HTML dashboard template rendering
+numpy>=1.26.0         # sklearn & plotting backend
+pandas>=2.2.0         # doctor/analyze logs, summary CSV
+
+# --- System Tools (optional but stable) ---
+psutil>=5.9.0         # health check / process monitor

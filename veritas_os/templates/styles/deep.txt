@@ -1,0 +1,1 @@
+Style: deep reasoning, multi-step chain-of-thought (summarized), expert tone.

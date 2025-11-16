@@ -1,0 +1,55 @@
+# --- OS / エディタ系 ---
+.DS_Store
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# --- Python 共通 ---
+__pycache__/
+*.py[cod]
+core/config.py
+*.pyo
+*.pyd
+*.so
+.mypy_cache/
+.venv/
+venv/
+
+# --- 環境変数・秘密情報 ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- VERITAS のローカルデータ / ログ ---
+# ローカルの「脳みそ・世界状態・価値ログ」
+datasets
+scripts/doctor_report.json
+trust_log.json
+trust_log.jsonl
+trust_log.json.*
+world_state.json
+value_core.json
+value_stats.json
+memory.json
+persona.json
+
+# メモリ用のベクトル・インデックス（再生成可能なデータ）
+memory/
+*.npz
+*.jsonl
+
+# ログ＆レポート類（あとから再生成できるもの）
+logs/
+reports/
+scripts/logs/
+*.log
+*.csv
+
+# バックアップ系
+backups/
+backup/
+*.bak
+*.tmp
+*.temp

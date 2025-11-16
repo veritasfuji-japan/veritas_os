@@ -1,0 +1,213 @@
+# veritas/core/adapt.py
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+import json, os
+from pathlib import Path
+from collections import Counter
+from typing import Any, Dict, List, Tuple
+from .config import cfg  # 追加
+
+# ==== NEW: プロジェクト内に保存する ============
+# 例: .../veritas_clean_test2/veritas_os/scripts/logs
+VERITAS_DIR = cfg.log_dir          # = .../veritas_os/scripts/logs
+PERSONA_JSON = str(VERITAS_DIR / "persona.json")
+TRUST_JSONL  = str(VERITAS_DIR / "trust_log.jsonl")
+
+
+def _safe_float(x, d=0.0):
+    try:
+        return float(x)
+    except Exception:
+        return d
+
+
+# =====================================
+#  bias_weights のクリーニングユーティリティ
+# =====================================
+def clean_bias_weights(
+    bias: Dict[str, float] | None,
+    zero_eps: float = 1e-4,
+) -> Dict[str, float]:
+    """
+    persona.bias_weights をクリーンアップする。
+
+    - すべて float 化
+    - 0.0〜1.0 にクリップ
+    - きわめて小さい値( |v| < zero_eps )は 0 扱い
+    - 最大値で正規化して、最大でも 1.0 にする
+    """
+    if not bias:
+        return {}
+
+    tmp: Dict[str, float] = {}
+    for k, v in bias.items():
+        try:
+            x = float(v)
+        except Exception:
+            x = 0.0
+
+        # 0..1 にクリップ
+        if x < 0.0:
+            x = 0.0
+        if x > 1.0:
+            x = 1.0
+
+        # ごく小さい値は 0 扱い
+        if abs(x) < zero_eps:
+            x = 0.0
+
+        tmp[k] = x
+
+    # 最大値でスケーリング（分布の形は保ちつつ極小値を防ぐ）
+    mx = max(tmp.values()) if tmp else 1.0
+    if mx <= 0.0:
+        return {k: 0.0 for k in tmp.keys()}
+
+    cleaned: Dict[str, float] = {}
+    for k, v in tmp.items():
+        nv = v / mx
+        # 再度クリップ＆丸め（見やすさ用）
+        if abs(nv) < zero_eps:
+            nv = 0.0
+        if nv > 1.0:
+            nv = 1.0
+        cleaned[k] = float(f"{nv:.3f}")
+
+    return cleaned
+
+
+# =====================================
+#  persona のロード／セーブ
+# =====================================
+def load_persona(path: str = PERSONA_JSON) -> Dict[str, Any]:
+    persona: Dict[str, Any]
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            persona = json.load(f) or {}
+    except Exception:
+        persona = {
+            "name": "VERITAS",
+            "style": "direct, strategic, honest",
+            "bias_weights": {},
+        }
+
+    if not isinstance(persona, dict):
+        persona = {
+            "name": "VERITAS",
+            "style": "direct, strategic, honest",
+            "bias_weights": {},
+        }
+
+    # 必ずここで bias_weights をクリーンにして返す
+    persona["bias_weights"] = clean_bias_weights(
+        dict(persona.get("bias_weights") or {})
+    )
+    return persona
+
+
+def save_persona(persona: Dict[str, Any], path: str = PERSONA_JSON) -> None:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    persona = dict(persona or {})
+    persona["bias_weights"] = clean_bias_weights(
+        dict(persona.get("bias_weights") or {})
+    )
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(persona, f, ensure_ascii=False, indent=2)
+
+
+# =====================================
+#  trust_log から履歴を読む
+# =====================================
+def read_recent_decisions(jsonl_path: str = TRUST_JSONL, window: int = 50) -> List[Dict[str, Any]]:
+    """trust_log.jsonl から直近 window 件の chosen を抽出（なければ空）"""
+    items: List[Dict[str, Any]] = []
+    try:
+        with open(jsonl_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    # 決定ログを想定：shadow_decide書式 or append_trust_log派生
+                    chosen = obj.get("chosen") or {}
+                    if chosen:
+                        items.append({"id": chosen.get("id"), "title": chosen.get("title")})
+                except Exception:
+                    pass
+    except FileNotFoundError:
+        return []
+    # 後ろ（新しい）から window 件
+    return items[-window:]
+
+
+def compute_bias_from_history(decisions: List[Dict[str, Any]]) -> Dict[str, float]:
+    """頻度→確率（weight）。title 優先、なければ id で集計。"""
+    keys: List[str] = []
+    for d in decisions:
+        t = (d.get("title") or "").strip()
+        if t:
+            keys.append(t.lower())
+        elif d.get("id"):
+            keys.append(f"@id:{d['id']}")
+    if not keys:
+        return {}
+    cnt = Counter(keys)
+    total = sum(cnt.values())
+    return {k: v / total for k, v in cnt.items()}
+
+
+def merge_bias_to_persona(
+    persona: Dict[str, Any],
+    new_bias: Dict[str, float],
+    alpha: float = 0.25
+) -> Dict[str, Any]:
+    """
+    単純EMAマージ：new = (1-alpha)*old + alpha*new
+    （途中で clean_bias_weights を挟んで、値の暴走を防ぐ）
+    """
+    persona = dict(persona or {})
+    old = clean_bias_weights(dict(persona.get("bias_weights") or {}))
+    nb  = clean_bias_weights(dict(new_bias or {}))
+
+    merged: Dict[str, float] = {}
+    keys = set(old.keys()) | set(nb.keys())
+    for k in keys:
+        merged[k] = (1.0 - alpha) * float(old.get(k, 0.0)) + alpha * float(nb.get(k, 0.0))
+
+    persona["bias_weights"] = clean_bias_weights(merged)
+    return persona
+
+
+def fuzzy_bias_lookup(bias_weights: Dict[str, float], title: str) -> float:
+    """
+    title に対して bias_weights のキー（lower title or @id:...）を緩めに照合。
+    キーワード部分一致（3文字以上）で最大重みを返す。
+    """
+    if not bias_weights or not title:
+        return 0.0
+    t = title.lower()
+    best = 0.0
+    for k, w in bias_weights.items():
+        if k.startswith("@id:"):
+            # id一致は kernel 側で処理するのでここはスキップ
+            continue
+        # 3文字以上のトークンで部分一致
+        toks = [x for x in k.split() if len(x) >= 3] or [k]
+        if any(tok in t for tok in toks):
+            best = max(best, float(w))
+        elif k == t:
+            best = max(best, float(w))
+    return best
+
+
+def update_persona_bias_from_history(window: int = 50) -> Dict[str, Any]:
+    """履歴→バイアス計算→persona.json に反映して返す"""
+    persona = load_persona()
+    recent  = read_recent_decisions(TRUST_JSONL, window=window)
+    bias    = compute_bias_from_history(recent)
+    if not bias:
+        return persona
+    persona = merge_bias_to_persona(persona, bias, alpha=0.25)
+    save_persona(persona)
+    return persona
