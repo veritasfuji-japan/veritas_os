@@ -403,3 +403,5 @@ Dashboard では:
 - 長期メモリ＋トラストログ付きエージェントの挙動解析
 
 をローカルで再現できることを目的としています。
+Copyright (c) 2025 Takeshi Fujishita
+All rights reserved.
