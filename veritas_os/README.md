@@ -2,7 +2,7 @@
 
 **Status**: Single-user AGI-OS prototype (local only)  
 **Domain**: Long-horizon decision support, self-monitoring agent  
-**Author**: FUJISHITA (ERASER)  
+**Author**: FUJISHITA   
 
 ---
 
