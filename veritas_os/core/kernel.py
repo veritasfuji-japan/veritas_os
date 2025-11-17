@@ -6,6 +6,7 @@ import re, uuid
 from typing import Any, Dict, List
 from . import adapt  # persona 学習
 from . import evidence as evos  # いまは未使用だが将来のために残す
+from . import debate  # ← Multi-Agent ReasonOS (DebateOS)
 
 
 def _safe_float(x: Any, default: float = 0.0) -> float:
@@ -201,7 +202,7 @@ async def decide(
     # 初期化
     evidence: List[Dict[str, Any]] = []
     critique: List[Dict[str, Any]] = []
-    debate: List[Dict[str, Any]] = []
+    debate_logs: List[Dict[str, Any]] = []
     extras: Dict[str, Any] = {}
 
     # Telos/重み・stakes
@@ -219,17 +220,57 @@ async def decide(
 
     # 1) options 無ければ自動生成（ある場合は“その中から”）
     alts: List[Dict[str, Any]] = list(alternatives or [])
+    intent = _detect_intent(q_text)
     if not alts:
-        intent = _detect_intent(q_text)
         alts = _gen_options_by_intent(intent)
-    else:
-        intent = _detect_intent(q_text)
 
-    # 2) スコアリング（学習バイアスを反映）
+    # 2) まずはローカルのスコアリング（学習バイアスを反映）
     _score_alternatives(intent, q_text, alts, telos_score, stakes, persona_bias)
 
-    # 3) 採択
-    chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
+    # 3) Multi-Agent DebateOS で再評価して最終 chosen を決定
+    try:
+        debate_result = debate.run_debate(
+            query=q_text,
+            options=alts,
+            context={
+                "user_id": ctx.get("user_id"),
+                "stakes": stakes,
+                "telos_weights": tw,
+            },
+        )
+
+        chosen = debate_result.get("chosen") or max(
+            alts, key=lambda d: _safe_float(d.get("score"), 1.0)
+        )
+
+        enriched_alts = debate_result.get("options") or alts
+
+        extras["debate"] = {
+            "raw": debate_result.get("raw"),
+            "source": debate_result.get("source", "openai_llm"),
+        }
+
+        debate_logs.append(
+            {
+                "summary": "Multi-Agent DebateOS により候補が評価されました。",
+                "risk_delta": 0.0,
+                "suggested_choice_id": chosen.get("id"),
+                "source": debate_result.get("source", "openai_llm"),
+            }
+        )
+
+        alts = enriched_alts
+
+    except Exception as e:
+        chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
+        debate_logs.append(
+            {
+                "summary": f"DebateOS フォールバック (例外: {repr(e)[:80]})",
+                "risk_delta": 0.0,
+                "suggested_choice_id": chosen.get("id"),
+                "source": "fallback",
+            }
+        )
 
     # 4) 根拠（EvidenceOS; 外部通信なしのローカル推論）
     evidence.append(
@@ -266,10 +307,14 @@ async def decide(
         "alternatives": alts,
         "evidence": evidence,
         "critique": critique,
-        "debate": debate,
+        "debate": debate_logs,
         "telos_score": telos_score,
         "fuji": {"status": "allow", "reasons": [], "violations": []},
         "rsi_note": None,
-        "summary": "意図検出＋学習バイアスで最適案を選定しました。",
-        "description": "与えられた選択肢がある場合はその中から選択、無い場合は自動生成します。学習バイアスで次第に“選択の癖”を反映します。",
+        "summary": "意図検出＋学習バイアス＋Multi-Agent DebateOSで最適案を選定しました。",
+        "description": (
+            "与えられた選択肢がある場合はその中から選択し、無い場合は自動生成します。"
+            "ローカル学習バイアスと Multi-Agent DebateOS により、徐々に“選択の癖”と安全性を反映します。"
+        ),
+        "extras": extras,
     }

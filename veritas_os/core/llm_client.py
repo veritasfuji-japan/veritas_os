@@ -84,8 +84,7 @@ def chat(
     }
 
 
-def plan_for_veritas_agi(query: str, context: Dict[str, Any]) -> Dict[str, 
-Any]:
+def plan_for_veritas_agi(query: str, context: Dict[str, Any]) -> Dict[str, Any]:
     """
     VERITAS の AGI化プロジェクト専用の「プラン生成」API。
     - /v1/decide から呼ばれる想定。
@@ -93,9 +92,11 @@ Any]:
     """
     system_prompt = """\
 あなたは『VERITAS（プロトAGI OS）』専属のテクニカルプランナーです。
-- タスクを3〜7個の小さなステップに分解してください。
-- 各ステップは「1コマンド or 1ファイル修正」レベルに細かくしてください。
-- 出力は必ず JSON 形式のみで返します（説明文は不要です）。
+
+【重要なルール】
+- 出力は必ず **JSON だけ** を返してください。
+- JSON の前後に日本語の説明やコードブロック記法```は絶対に書かないでください。
+- 改行やスペースは JSON 内だけにしてください。
 
 JSON スキーマ:
 {
@@ -119,27 +120,43 @@ JSON スキーマ:
     }
     user_prompt = f"現在のクエリ: {query}\n\ncontext概要: {json.dumps(ctx_summary, ensure_ascii=False)}"
 
-    raw_res = chat(system_prompt, user_prompt, temperature=0.25, max_tokens=900)
-    raw_text = raw_res.get("text", "")
+    # ---- LLM 呼び出し ----
+    raw = chat(system_prompt, user_prompt, temperature=0.25, max_tokens=900)
+    # chat() は {"text": "...", "source": "openai_llm"} を返す前提
+    raw_text = raw.get("text", "")
+    # デバッグログ（邪魔ならコメントアウト）
+    print("[PlannerOS] raw_text:", raw_text[:200])
 
-    # JSON としてパース（失敗したら最低限の骨格にする）
-    try:
-        obj = json.loads(raw_text)
-        if not isinstance(obj, dict):
-            raise ValueError("not a dict")
-    except Exception:
-        obj = {
+    # ---- JSON パースを強制するユーティリティ ----
+    def _safe_parse_json(s: str) -> Dict[str, Any]:
+        # まず素直にトライ
+        try:
+            obj = json.loads(s)
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+
+        # 失敗した場合: 最初の '{' 〜 最後の '}' を抜き出して再トライ
+        try:
+            start = s.find("{")
+            end = s.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                sub = s[start : end + 1]
+                obj = json.loads(sub)
+                if isinstance(obj, dict):
+                    return obj
+        except Exception:
+            pass
+
+        # それでもダメなら空骨格
+        return {
             "steps": [],
-            "note": f"LLM からの生出力をパースできませんでした: {raw_text[:200]}",
+            "note": f"LLM 出力を JSON としてパースできませんでした",
         }
 
-        if not isinstance(obj, dict):
-            raise ValueError("not a dict")
-    except Exception:
-        obj = {
-            "steps": [],
-            "note": f"LLM からの生出力をパースできませんでした: {raw[:200]}",
-        }
+    # ---- 実際にパース ----
+    obj = _safe_parse_json(raw_text)
 
     # steps 正規化
     steps = obj.get("steps") or []

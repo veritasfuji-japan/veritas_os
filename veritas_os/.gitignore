@@ -36,7 +36,6 @@ memory.json
 persona.json
 
 # メモリ用のベクトル・インデックス（再生成可能なデータ）
-memory/
 *.npz
 *.jsonl
 

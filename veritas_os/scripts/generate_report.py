@@ -26,21 +26,25 @@ plt.rcParams.update({
     "axes.unicode_minus": False,
 })
 
-# ==== パス設定 ====
-# このファイル: .../veritas_os/scripts/generate_report.py を想定
 REPO_ROOT   = Path(__file__).resolve().parents[1]   # .../veritas_os
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 
-LOG_DIR = cfg.log_dir              # ← config.py の log_dir をそのまま使う
+# プロジェクトルート（.../veritas_clean_test2）
+PROJECT_ROOT = REPO_ROOT.parent
+
+# ログディレクトリは scripts/logs 固定
+LOG_DIR = SCRIPTS_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-# レポートの出力先
 REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
 REPORT_JSON = LOG_DIR / "doctor_report.json"
 
-# Value / Memory の保存先も config に統一
-VAL_JSON = cfg.value_stats_path    # 例: scripts/logs/value_stats.json
-MEM_JSON = cfg.memory_path         # 例: scripts/logs/memory.json
+# Value は data/value_stats.json を見る
+DATA_DIR = PROJECT_ROOT / "data"
+VAL_JSON = DATA_DIR / "value_stats.json"
+
+# Memory は今まで通り logs/memory.json を見る（ここは今動いているのでそのまま）
+MEM_JSON = LOG_DIR / "memory.json"
 
 # ---------- 共通関数 ----------
 def b64_png_from_fig(fig):
@@ -86,9 +90,15 @@ def collect_decisions():
             if not isinstance(gate, dict):
                 gate = j.get("gate", {}) if isinstance(j.get("gate"), dict) else {}
 
-            fuji = response.get("fuji", {})
-            if not isinstance(fuji, dict):
-                fuji = j.get("fuji", {}) if isinstance(j.get("fuji"), dict) else {}
+            fuji: dict = {}
+            resp_fuji = response.get("fuji")
+            if isinstance(resp_fuji, dict) and resp_fuji:
+                # response.fuji に中身があるとき優先
+                fuji = resp_fuji
+            else:
+                top_fuji = j.get("fuji")
+                if isinstance(top_fuji, dict):
+                    fuji = top_fuji
 
             extras = j.get("extras") or response.get("extras") or {}
             if not isinstance(extras, dict):
@@ -97,14 +107,27 @@ def collect_decisions():
             if not isinstance(metrics, dict):
                 metrics = {}
 
-            # decision_status
+            # decision_status（FUJI を優先）
             status = None
-            if isinstance(gate, dict):
-                status = gate.get("decision_status")
+
+            fuji_status = ""
+            if isinstance(fuji, dict):
+                fuji_status = (fuji.get("status") or "").lower()
+
+            if fuji_status in ("modify", "rejected", "allow"):
+                if fuji_status == "modify":
+                    status = "modify"
+                else:
+                    status = fuji_status  # "allow" or "rejected"
+
+            if not status and isinstance(gate, dict):
+                status = (gate.get("decision_status") or "").lower()
+
             if not status and isinstance(response, dict):
-                status = response.get("decision_status")
+                status = (response.get("decision_status") or "").lower()
+
             if not status:
-                status = j.get("decision_status") or "unknown"
+                status = (j.get("decision_status") or "unknown").lower()
 
             # latency_ms を候補から総当たり
             latency_ms = (
@@ -210,7 +233,11 @@ def build_report():
     decides = collect_decisions()
     total = len(decides)
 
-    counter_status = collections.Counter([d.get("status", "unknown") for d in decides])
+        # FUJI のステータスを優先してカウント（なければ従来の status）
+    counter_status = collections.Counter([
+        (d.get("fuji_status") or d.get("status") or "unknown")
+        for d in decides
+    ])
 
     # Latency
     latencies = [
@@ -228,7 +255,7 @@ def build_report():
     avg_mem_evidence = round(sum(mem_counts) / len(mem_counts), 2) if mem_counts else 0.0
 
     # FUJI 分布
-    fuji_counts = collections.Counter([d.get("status", "unknown") for d in decides])
+    fuji_counts = collections.Counter([d.get("fuji_status", "unknown") for d in decides])
 
     # redactions / mods
     red_items, mod_items = [], []
@@ -309,18 +336,42 @@ def build_report():
         if VAL_JSON.exists():
             with open(VAL_JSON, encoding="utf-8") as f:
                 vs = json.load(f)
-                hist = vs.get("history", []) or []
+
+                # ① 一般的な dict 形式 {"ema":..,"history":[...]} を優先
+                if isinstance(vs, dict):
+                    h = vs.get("history", [])
+                    if isinstance(h, list):
+                        hist = h
+
+                # ② もしファイル全体がリスト形式でも、そのまま履歴として扱う
+                elif isinstance(vs, list):
+                    hist = vs
+
+        # 実データがあればプロット
+        emas = []
         if hist:
-            xs = list(range(len(hist)))
-            emas = [float(h.get("ema", 0.5)) for h in hist]
+            for item in hist:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    emas.append(float(item.get("ema", 0.5)))
+                except Exception:
+                    continue
+
+        if emas:
+            xs = list(range(len(emas)))
             fig_ema = plt.figure()
             plt.plot(xs, emas, marker="o")
             plt.title("Value EMA の推移")
             plt.xlabel("ログ順（最新=右）")
             plt.ylabel("EMA")
             img_ema = b64_png_from_fig(fig_ema)
+        else:
+            img_ema = None
+
     except Exception as e:
         print("[report] ema history skipped:", e)
+        img_ema = None
 
     # 学習効果の可視化（meta_log / world.utility）
     meta_files = glob.glob(str(LOG_DIR / "meta_log*.jsonl"))
@@ -362,9 +413,18 @@ def build_report():
         if VAL_JSON.exists():
             with open(VAL_JSON, encoding="utf-8") as f:
                 vs = json.load(f)
-                value_ema = float(vs.get("ema", 0.5))
+
+                if isinstance(vs, dict):
+                    value_ema = float(vs.get("ema", 0.5))
+
+                elif isinstance(vs, list) and vs:
+                    # リスト形式の場合は最後の要素の ema を採用
+                    last = vs[-1]
+                    if isinstance(last, dict):
+                        value_ema = float(last.get("ema", 0.5))
     except Exception as e:
         print("[report] value_ema load skipped:", e)
+        value_ema = 0.5
 
     mem_stats = analyze_memory()
 

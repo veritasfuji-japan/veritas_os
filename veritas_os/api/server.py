@@ -40,7 +40,7 @@ from veritas_os.core.planner import plan_for_veritas_agi
 from veritas_os.core.sanitize import mask_pii
 from veritas_os.core.memory import predict_decision_status
 from veritas_os.core.reason import generate_reason
-
+from veritas_os.core.llm_client import plan_for_veritas_agi
 # ---- ログ／メモリ層 ----
 from veritas_os.logging.dataset_writer import (
     build_dataset_record,
@@ -118,6 +118,7 @@ PROJECT_ROOT = REPO_ROOT.parent            # .../veritas_clean_test2
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 VAL_JSON = DATA_DIR / "value_stats.json"
+META_LOG = LOG_DIR / "meta_log.jsonl"
 
 # ディレクトリを実際に作成（念のため）
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -333,20 +334,29 @@ async def decide(req: DecideRequest, request: Request):
         k in qlower for k in ["veritas", "agi", "protoagi", "プロトagi", "veritasのagi化"]
     )
 
-    # ---------- PlannerOS: AGI/VERITAS 用の計画生成 ----------
-    plan: Dict[str, Any] = {"steps": [], "source": "fallback"}
-    if is_veritas_query:
-        try:
-            from core.planner import plan_for_veritas_agi
+    # -------- PlannerOS: AGI/VERITAS 用の計画生成 ----------
+    # ---------- PlannerOS: すべてのクエリで計画生成 ----------
 
-            plan = plan_for_veritas_agi(
-                context=context,
-                query=query,
-            )
-            response_extras.setdefault("planner", plan)
-            print(f"[PlannerOS:AGI] steps={len(plan.get('steps', []))}")
-        except Exception as e:
-            print("[PlannerOS:AGI] skipped:", e)
+    try:
+        from veritas_os.core.planner import plan_for_veritas_agi
+
+        plan: Dict[str, Any] = plan_for_veritas_agi(
+            context=context,
+            query=query,
+        )
+        print(
+            f"[PlannerOS] steps={len(plan.get('steps', []))}, "
+            f"source={plan.get('source')}"
+        )
+    except Exception as e:
+        print("[PlannerOS] skipped:", e)
+        plan = {"steps": [], "raw": None, "source": "fallback"}
+
+    response_extras["planner"] = {
+        "steps": plan.get("steps", []),
+        "raw": plan.get("raw"),
+        "source": plan.get("source"),
+    }
 
     # ---------- MemoryOS: prior 取り込み ----------
     recent_logs = mem.recent(user_id, limit=20)
@@ -750,38 +760,6 @@ async def decide(req: DecideRequest, request: Request):
         except Exception:
             chosen = alts[0] if alts else {}
 
-    # ===== DebateOS: LLM ベースの批判・代替案生成 =====
-    try:
-        # LLM で chosen が妥当か検討
-        debate_res = debate_core.run_debate(
-            context=context,
-            query=query,
-            chosen=chosen,
-            alts=alts,
-        )
-
-        # extras に丸ごと入れる
-        response_extras.setdefault("debate", debate_res)
-
-        # 互換用: 既存の top-level "debate" フィールドにも要約だけ入れておく
-        debate = [{
-            "summary": debate_res.get("summary"),
-            "risk_delta": debate_res.get("risk_delta"),
-            "suggested_choice_id": debate_res.get("suggested_choice_id"),
-            "source": debate_res.get("source", "openai_llm"),
-        }]
-
-        # 別の案を推してきたら chosen を差し替え
-        sug_id = debate_res.get("suggested_choice_id")
-        if sug_id:
-            for cand in alts:
-                if str(cand.get("id")) == str(sug_id):
-                    chosen = cand
-                    break
-
-    except Exception as e:
-        print("[DebateOS] skipped:", e)
-
     # ---------- FUJI 事前チェック ----------
     try:
         fuji_pre = fuji_core.validate_action(query, context)
@@ -1162,6 +1140,27 @@ async def decide(req: DecideRequest, request: Request):
         valstats["ema"] = round(ema, 4)
         json.dump(valstats, open(vs_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
+        # ★ ここで meta_log.jsonl にも書き込む
+
+        try:
+            nv = float(reflection.get("next_value_boost", 0.0))
+        except Exception:
+            nv = 0.0
+        
+        try:
+            META_LOG.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "request_id": request_id,
+                "next_value_boost": nv,
+                "value_ema": ema,
+                "source": "reason_core",
+            }
+            with open(META_LOG, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e2:
+            print("[ReasonOS] meta_log append skipped:", e2)
+
         # ③ OpenAI LLM で “自然文の反省” を生成（失敗時は reflection を fallback）
         try:
             payload["reason"] = generate_reason(
@@ -1338,6 +1337,8 @@ async def decide(req: DecideRequest, request: Request):
         payload["meta"] = meta_payload
 
         # 保存用の最小統一レコード
+        fuji_full = payload.get("fuji") or {}
+
         persist = {
             "request_id": request_id,
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -1345,8 +1346,13 @@ async def decide(req: DecideRequest, request: Request):
             "chosen": chosen,
             "decision_status": payload.get("decision_status") or "unknown",
             "telos_score": float(payload.get("telos_score", 0.0)),
-            "gate_risk": float(payload.get("gate", 0.0).get("risk", 0.0)) if isinstance(payload.get("gate"), dict) else 0.0,
-            "fuji": (payload.get("fuji") or {}).get("status"),
+            "gate_risk": float(payload.get("gate", 0.0).get("risk", 0.0))
+                          if isinstance(payload.get("gate"), dict) else 0.0,
+
+            # ★ FUJI を丸ごと保存 & ステータスも別キーで保存
+            "fuji_status": fuji_full.get("status"),
+            "fuji": fuji_full,
+
             "latency_ms": latency_ms,
             "evidence": evidence_list[-5:] if evidence_list else [],
             "memory_evidence_count": mem_evidence_count,

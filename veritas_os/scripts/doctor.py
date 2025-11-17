@@ -61,32 +61,28 @@ def _read_json_or_jsonl(path: str) -> list[dict]:
     - {"items":[...]} 形式は items を展開
     """
     items: list[dict] = []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            head = f.read(1)
-            if not head:
-                return []
-            f.seek(0)
+    with open(path, "r", encoding="utf-8") as f:
+        head = f.read(1)
+        if not head:
+            return []
+        f.seek(0)
 
-            if head == "{":  # JSON
-                data = json.load(f)
-                if isinstance(data, dict) and isinstance(data.get("items"), list):
-                    items.extend(data["items"])
-                else:
-                    items.append(data)
-            else:            # JSONL
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        items.append(json.loads(line))
-                    except Exception:
-                        # 破損行は無視して続行
-                        continue
-    except Exception:
-        # 読めなければ上位で badjson としてカウント
-        raise
+        if head == "{":  # JSON
+            data = json.load(f)
+            if isinstance(data, dict) and isinstance(data.get("items"), list):
+                items.extend(data["items"])
+            else:
+                items.append(data)
+        else:            # JSONL
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except Exception:
+                    # 破損行は無視して続行
+                    continue
     return items
 
 
@@ -100,7 +96,7 @@ def _bump_kw(counter: dict, text: str):
 def analyze_logs():
     files = _iter_files()
 
-    # ★ ここで LOG_JSONL（= TRUST_LOG_JSON）も見る
+    # TRUST_LOG_JSON がなくても、とりあえず警告だけでOK
     if not files and not os.path.exists(LOG_JSONL):
         print("⚠️ .veritas 内に解析対象のログが見つかりません。")
         return
@@ -172,7 +168,6 @@ def analyze_logs():
     last_check = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
         if os.path.exists(LOG_JSONL) and os.path.getsize(LOG_JSONL) > 0:
-            # 末尾行の created_at を拾う（安全のため後ろから数行だけ見る）
             with open(LOG_JSONL, "r", encoding="utf-8") as f:
                 tail = f.readlines()[-20:]
             for line in reversed(tail):
@@ -190,24 +185,19 @@ def analyze_logs():
     avg_unc = round(statistics.mean(uncertainties), 3) if uncertainties else 0.0
 
     result = {
-        # 総件数は “見つけたファイル数” と “解析OK数” を分けて記録
         "total_files_found": found_total,
         "parsed_logs":       parsed,
         "skipped_zero":      skipped_zero,
         "skipped_badjson":   skipped_bad,
-
         "avg_uncertainty":   avg_unc,
         "keywords":          keywords,
         "last_check":        last_check,
-
         "by_category":       {k: v["count"] for k, v in metrics.items()},
         "generated_at":      datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "source_dir":        str(LOG_DIR),
     }
 
-    # 出力先ディレクトリの作成
     os.makedirs(os.path.dirname(REPORT_PATH), exist_ok=True)
-
     with open(REPORT_PATH, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 

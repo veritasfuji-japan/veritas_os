@@ -1,9 +1,11 @@
-# veritas/core/planner.py
-# -*- coding: utf-8 -*-
+
+# veritas_os/core/planner.py
+
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
-import json, textwrap
+import json
+import textwrap
+from typing import Any, Dict, List, Optional  # ★ これがないと Dict で落ちる
 
 from . import llm_client
 from . import world as world_model
@@ -45,10 +47,67 @@ def _build_system_prompt() -> str:
       ]
     }
 
-    - step の数は 2〜7 個程度にしてください。
+    - 通常モードでは、step の数は 2〜7 個程度にしてください。
     - eta_hours は「そのステップに必要なおおよその時間（時間単位）」です。
     - risk は 0.0〜1.0 で、主観的なリスクの大きさです。
     - dependencies には、依存している step の id を配列で入れてください（なければ空配列）。
+
+    =====================================================
+    【最優先ルール】VERITAS 自己診断モード（必ず従うこと）
+    =====================================================
+
+    次の2つの条件を **両方とも満たす場合**、
+    あなたは「通常モード」ではなく **自己診断モード ONLY** を使わなければなりません：
+
+    1. ユーザーの問いに「VERITAS」という語が含まれている
+    2. ユーザーの問いに「弱点」「ボトルネック」「設計レビュー」「アーキテクチャ」など
+       アーキテクチャ分析を示すキーワードのいずれかが含まれている
+
+    この 2 条件を満たした場合：
+
+    - steps は **必ず 1つだけ** にしてください。
+    - その唯一の step は、次のように構成します：
+
+      - id: "step1"
+      - title: "VERITASアーキテクチャの弱点と改善案の一覧"
+      - detail: **ここが最重要です。**
+        以下をすべて含む「実際の内容」を、十分に長い日本語テキストで書いてください。
+        ここでは「〜を列挙する」「〜を分析する」といった指示文ではなく、
+        実際に分析した結果そのものを書きます。
+
+        detail に含めるべき内容：
+          - 現在の VERITAS の技術的な弱点の一覧
+            - モジュール単位（例: kernel / planner / debate / memory / world / fuji / api / cli / storage / logging など）
+          - 各弱点ごとに：
+            - 何が問題か（技術的・設計的な観点）
+            - そのまま放置した場合の具体的リスク
+            - 改善案（なるべく具体的な設計方針・実装方針）
+            - 改善の優先度（例："高", "中", "低" のラベル）
+          - 全体としての総括：
+            - 今の VERITAS の強み
+            - 大きな弱点
+            - 「どこから手を付けるべきか」の推奨順
+
+        禁止事項：
+          - 「弱点をリストアップする」「〜を分析する」といった、
+            これから作業することを説明するだけの文章を書かないこと。
+          - 必ず、すでに分析が終わっている体で、
+            結果そのもの（弱点と改善案の具体的リスト）を書いてください。
+
+      - why:
+          上記の自己診断レポートを作ることが、
+          なぜ VERITAS の成長にとって重要かを 2〜3 文で説明してください。
+      - eta_hours:
+          4〜12 の範囲で、現実的だと思う値を設定してください。
+      - risk:
+          0.1〜0.3 の範囲で、主観的なリスク値を設定してください。
+      - dependencies: [] （空配列にしてください）
+
+    重要：
+    - 上記の「自己診断モード」の条件を満たす場合、
+      通常モードの「2〜7ステップに分解する」というルールは **無視** してください。
+    - 自己診断モードでは、steps は常に 1 つだけであり、
+      その唯一の step の detail が「長い技術レポート」の役割を果たします。
     """)
 
 
@@ -115,24 +174,33 @@ def _build_user_prompt(
 def _safe_json_extract(raw: str) -> Dict[str, Any]:
     """
     LLM の出力から JSON を安全に取り出す。
-    - そのまま json.loads が通ればそれを使う。
-    - ダメなら `{` から最後の `}` までを探して再トライ。
-    - それでもダメなら簡易プランを返す。
+    Markdown の ```json / ``` コードブロックが付いていても処理できるようにする。
     """
     if not raw:
         return {"steps": []}
 
+    # ★ まず Markdown コードブロックを除去する
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        # 1行目の ```json / ``` を削除
+        first_newline = cleaned.find("\n")
+        if first_newline != -1:
+            cleaned = cleaned[first_newline+1:]
+        # 最後の ``` を除去
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
     # まずは素直にパース
     try:
-        return json.loads(raw)
+        return json.loads(cleaned)
     except Exception:
         pass
 
     # 先頭の '{' 〜 最後の '}' を抜き出して再挑戦
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        snippet = raw[start:end]
+        start = cleaned.index("{")
+        end = cleaned.rindex("}") + 1
+        snippet = cleaned[start:end]
         return json.loads(snippet)
     except Exception:
         # それでもダメならフォールバック
@@ -169,7 +237,10 @@ def _fallback_plan(query: str) -> Dict[str, Any]:
     }
 
 
-def plan_for_veritas_agi(context: Dict[str, Any], query: str) -> Dict[str, Any]:
+def plan_for_veritas_agi(
+    context: Dict[str, Any],
+    query: str,
+) -> Dict[str, Any]:
     """
     server.py から呼ばれるメイン入口。
     - query / context / world_state / MemoryOS をもとに
@@ -179,11 +250,12 @@ def plan_for_veritas_agi(context: Dict[str, Any], query: str) -> Dict[str, Any]:
     戻り値形式:
     {
       "steps": [...],
-      "raw": "<LLM生テキスト or 空文字>",
+      "raw": "<LLM生 or dict>",
       "source": "openai_llm" or "fallback"
     }
     """
     ctx = dict(context or {})
+
     # ---- WorldModel / MemoryOS から補助情報を取得 ----
     try:
         world_snap = world_model.snapshot("veritas_agi")
@@ -216,20 +288,41 @@ def plan_for_veritas_agi(context: Dict[str, Any], query: str) -> Dict[str, Any]:
 
         raw_text = res.get("text") if isinstance(res, dict) else str(res)
         parsed = _safe_json_extract(raw_text)
-        steps = parsed.get("steps") or []
-        if not isinstance(steps, list) or not steps:
-            raise ValueError("no steps parsed")
+        steps = parsed.get("steps") if isinstance(parsed, dict) else None
 
-        plan: Dict[str, Any] = {
-            "steps": steps,
-            # ★ ここをテキストではなく dict にする
-            "raw": parsed,
-            "source": "openai_llm",
-        }
+    # ★ 1) 正常ケース: steps がちゃんと取れた場合
+        if isinstance(steps, list) and steps:
+            plan: Dict[str, Any] = {
+                "steps": steps,
+                "raw": parsed,          # LLMが返したJSON(dict)をそのまま保持
+                "source": "openai_llm",
+            }
 
-    except Exception:
+    # ★ 2) 失敗ケース: JSONとしては壊れているが、中身は有用な自己診断レポート
+        else:
+        # LLM の生テキストをそのまま 1 ステップの detail に突っ込む
+            fallback_step = {
+                "id": "step1",
+                "title": "VERITAS自己診断レポート（生テキスト）",
+                "detail": raw_text,   # ここに ```json 〜 が丸ごと入る
+                "why": (
+                    "Planner のJSONパースに失敗したため、LLMが生成した自己診断レポート"
+                    "の生テキストをそのまま保持しています。"
+                ),
+                "eta_hours": 4.0,
+                "risk": 0.2,
+                "dependencies": [],
+            }
+            plan = {
+                "steps": [fallback_step],
+                "raw": parsed or raw_text,   # 解析に成功していればparsed、ダメなら生文字列
+                "source": "openai_llm_raw",  # 生テキ扱いだとわかるように別ラベル
+            }
+
+    except Exception as e:
+        # ★ ここで必ず原因を出す
+        print("[Planner] ERROR in plan_for_veritas_agi:", repr(e))
         plan = _fallback_plan(query)
-        # 失敗時は raw を None にしておく
         plan["raw"] = None
         plan["source"] = "fallback"
 
