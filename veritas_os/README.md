@@ -189,7 +189,7 @@ GET /v1/logs/trust/{request_id}
 
 🌐 OpenAPI / Swagger Studio での利用方法
 
-OpenAPI スキーマ（あなたが貼ってくれた YAML）:
+OpenAPI スキーマ:
 	•	openapi: 3.1.0
 	•	info.title: VERITAS Public API
 	•	servers[0].url: http://127.0.0.1:8000
