@@ -47,6 +47,8 @@ class ValuesOut(BaseModel):
     total: float
     top_factors: List[str]
     rationale: str
+    # value-learning で書き込んでいる EMA を受け取る用
+    ema: Optional[float] = None
 
 class EvidenceItem(BaseModel):
     source: str
@@ -135,6 +137,10 @@ class Alt(BaseModel):
     score: float = 1.0
     score_raw: Optional[float] = None
 
+    # WorldModel / Meta 情報を落とさないようにする
+    world: Optional[Dict[str, Any]] = None
+    meta: Optional[Dict[str, Any]] = None
+
 
 class Gate(BaseModel):
     risk: float = 0.0
@@ -146,12 +152,16 @@ class Gate(BaseModel):
 
 
 class DecideResponse(BaseModel):
+    # 追加フィールドを落とさないための保険
+    model_config = ConfigDict(extra="allow")
+
     request_id: str
     chosen: Dict[str, Any] = Field(default_factory=dict)
     alternatives: List[Alt] = Field(default_factory=list)
 
-    # 互換のために残すが、通常は空配列のまま返す
+    # 互換のために残すが、通常は alternatives と同じものを返す
     options: List[Alt] = Field(default_factory=list)
+
     values: Optional[ValuesOut] = None
     evidence: List[Any] = Field(default_factory=list)
     critique: List[Any] = Field(default_factory=list)
@@ -164,8 +174,22 @@ class DecideResponse(BaseModel):
     persona: Dict[str, Any] = Field(default_factory=dict)
     version: str = "veritas-api 1.x"
     evo: Optional[Dict[str, Any]] = None
+
+    # ここから下が /v1/decide 側に合わせた拡張分
     decision_status: Literal["allow", "modify", "rejected"] = "allow"
     rejection_reason: Optional[str] = None
+
+    # MemoryOS メタ
+    memory_citations: List[Any] = Field(default_factory=list)
+    memory_used_count: int = 0
+
+    # PlannerOS / ReasonOS
+    plan: Optional[Dict[str, Any]] = None
+    planner: Optional[Dict[str, Any]] = None
+    reason: Optional[Any] = None
+
+    # persist 用に付けている meta（memory_evidence_count など）
+    meta: Dict[str, Any] = Field(default_factory=dict)
 
 
 DecideResponse.model_rebuild()

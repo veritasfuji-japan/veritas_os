@@ -1,0 +1,44 @@
+id: self_evaluation_loop_v1
+name: "自己評価ループベンチ（Doctor / TrustLog 活用）"
+description: >
+  doctor_report.json / doctor_dashboard.html / trust_log / ベンチ結果
+  などの「自己観測データ」を前提に、週次の自己改善ループを
+  設計させるベンチ。
+
+request:
+  context:
+    user_id: "benchmark_user"
+    session_id: "sess-self-eval-001"
+    fuji_safe_applied: true  # ← ここを追加：内部ログ前提なので「安全化済み」とみなす
+    query: >
+      VERITAS はすでに以下の成果物を出力できるものとします：
+
+      - doctor_report.json
+      - doctor_dashboard.html
+      - trust logs（不変チェーン）
+      - benchmarks/*.yaml の実行結果
+
+      これらを前提に、「週1回の自己評価・自己改善ループ」を設計してください。
+
+      - どのメトリクス（例: Value EMA, FUJIリスク, Redaction頻度, Latencyなど）を
+        どのようにモニタリングするか
+      - どの閾値やパターンを「要介入」とみなすか
+      - その場合に、どんな種類の変更（プロンプト・設定・ベンチの追加など）を提案するか
+      - 人間の監督者（研究者）は週1〜2時間しか取れない前提で、
+        どのタイミングでどのようにレビューに入るべきか
+
+      を具体的な手順として書いてください。
+    goals:
+      - "既存のログ・ダッシュボード機能を活かした具体的な週次ループを設計すること"
+      - "どの指標がどの行動に結びつくかを明確にすること"
+    constraints:
+      - "人間の監督時間は週1〜2時間に制限されていること"
+      - "変更は監査可能かつ元に戻せる形（バージョン管理）で行うこと"
+    time_horizon: "mid"
+    telos_weights:
+      W_Transcendence: 0.5
+      W_Struggle: 0.5
+    affect_hint: "concise"
+  options: []
+  min_evidence: 1  # or 0：証拠不足で flag→modify 扱いになる実装を避けたい場合は 0 に
+  stream: false

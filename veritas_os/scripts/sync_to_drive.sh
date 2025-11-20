@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ====== 設定 ======
-LOG_DIR="/Users/user/scripts/logs"
-SRC_BACKUPS="/Users/user/scripts/backups"
+# ====== ベースディレクトリを「このスクリプトの場所」から取る ======
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# logs / backups は veritas_os/scripts 配下に置く
+LOG_DIR="${SCRIPT_DIR}/logs"
+SRC_BACKUPS="${SCRIPT_DIR}/backups"
+
+# Google Drive 側のパス（ここはこれまで通りでOK）
 DST_BACKUPS="veritas:VERITAS/backups"
 
 RUN_LOG="${LOG_DIR}/rclone_sync.log"
 STATUS_JSON="${LOG_DIR}/drive_sync_status.json"
 
+# ローカル側の logs / backups を必ず作っておく
 mkdir -p "$LOG_DIR" "$SRC_BACKUPS"
 
 # ====== ログ関数 ======
@@ -43,7 +49,6 @@ END_TS="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 DUR=$(( $(date +%s) - START_EPOCH ))
 
 # ====== 転送件数をログから概算抽出 ======
-# 例: "Copied (12 files, 0 directories)" から 12 を取る
 TRANSFERRED=$(grep -Eo 'Copied \([0-9]+ files' "$RUN_LOG" | tail -n1 | grep -Eo '[0-9]+' || echo 0)
 
 # ====== ステータス JSON を1回だけ書き出し ======

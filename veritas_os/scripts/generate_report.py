@@ -228,6 +228,79 @@ def analyze_memory():
         "hit_rate": round(hit_rate, 1),
     }
 
+# ---------- Benchmarks 解析 ----------
+def analyze_benchmarks():
+    """
+    scripts/logs/benchmarks/*.json を読み込み、
+    bench_id ごとの簡易統計を返す。
+    """
+    bench_dir = LOG_DIR / "benchmarks"
+    stats = {}
+
+    if not bench_dir.exists():
+        return stats
+
+    files = sorted(bench_dir.glob("*.json"))
+    if not files:
+        return stats
+
+    buckets = collections.defaultdict(list)
+
+    for p in files:
+        try:
+            with open(p, encoding="utf-8") as f:
+                j = json.load(f)
+        except Exception:
+            continue
+
+        if not isinstance(j, dict):
+            continue
+
+        bench_id = j.get("bench_id") or "unknown"
+        name = j.get("name") or ""
+
+        status_code = j.get("status_code")
+        elapsed = j.get("elapsed_sec")
+        resp = j.get("response_json") or {}
+
+        telos = resp.get("telos_score")
+        fuji = (resp.get("fuji") or {}).get("status")
+
+        buckets[bench_id].append({
+            "name": name,
+            "status_code": status_code,
+            "elapsed_sec": elapsed,
+            "telos_score": telos,
+            "fuji_status": fuji,
+        })
+
+    for bench_id, rows in buckets.items():
+        name = rows[0].get("name") or ""
+
+        status_codes = [r["status_code"] for r in rows if r.get("status_code") is not None]
+        ok_count = sum(1 for s in status_codes if s == 200)
+
+        elapsed_list = [r["elapsed_sec"] for r in rows if isinstance(r.get("elapsed_sec"), (int, float))]
+        telos_list = [r["telos_score"] for r in rows if isinstance(r.get("telos_score"), (int, float))]
+        fuji_list = [r["fuji_status"] for r in rows if r.get("fuji_status")]
+
+        fuji_counter = collections.Counter(fuji_list)
+
+        avg_elapsed = statistics.mean(elapsed_list) if elapsed_list else None
+        avg_telos = statistics.mean(telos_list) if telos_list else None
+
+        stats[bench_id] = {
+            "name": name,
+            "runs": len(rows),
+            "ok_200": ok_count,
+            "avg_elapsed_sec": round(avg_elapsed, 3) if avg_elapsed is not None else None,
+            "avg_telos_score": round(avg_telos, 3) if avg_telos is not None else None,
+            "fuji_counts": dict(fuji_counter),
+        }
+
+    return stats
+
+
 # ---------- レポート生成 ----------
 def build_report():
     decides = collect_decisions()
@@ -427,6 +500,7 @@ def build_report():
         value_ema = 0.5
 
     mem_stats = analyze_memory()
+    bench_stats = analyze_benchmarks()
 
     report = {
         "generated_at": iso_now(),
@@ -443,6 +517,7 @@ def build_report():
         "fuji_status_counts": dict(fuji_counts),
         "avg_reason_boost": avg_reason_boost,
         "avg_world_utility": avg_world_utility,
+        "benchmarks": bench_stats,
     }
 
     with open(REPORT_JSON, "w", encoding="utf-8") as f:
@@ -450,6 +525,32 @@ def build_report():
 
     ema_block = f"<img src='data:image/png;base64,{img_ema}'/>" if img_ema else "<i>データなし</i>"
     status_str = json.dumps(report["status_counts"], ensure_ascii=False)
+
+
+# Benchmarks セクション用 HTML
+    bench_rows_html = ""
+    if bench_stats:
+        for bid, st in bench_stats.items():
+            name = st.get("name") or ""
+            runs = st.get("runs")
+            ok_200 = st.get("ok_200")
+            avg_el = st.get("avg_elapsed_sec")
+            avg_tel = st.get("avg_telos_score")
+            fuji_counts = st.get("fuji_counts") or {}
+
+            bench_rows_html += f"""
+      <tr>
+        <td><code>{bid}</code></td>
+        <td>{name}</td>
+        <td style="text-align:right">{runs}</td>
+        <td style="text-align:right">{ok_200}</td>
+        <td style="text-align:right">{avg_el if avg_el is not None else 'N/A'}</td>
+        <td style="text-align:right">{avg_tel if avg_tel is not None else 'N/A'}</td>
+        <td><code>{json.dumps(fuji_counts, ensure_ascii=False)}</code></td>
+      </tr>
+"""
+    else:
+        bench_rows_html = "<tr><td colspan='7'><i>ベンチマーク結果なし</i></td></tr>"
 
     html = f"""<!doctype html>
 <html lang="ja"><meta charset="utf-8">
@@ -510,6 +611,26 @@ def build_report():
 <h3>Value EMA の推移</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
   {ema_block}
+</div>
+
+<h3>Benchmarks 概要</h3>
+<div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
+  <table border="0" cellspacing="4" cellpadding="4">
+    <thead>
+      <tr>
+        <th>bench_id</th>
+        <th>name</th>
+        <th>runs</th>
+        <th>200 OK</th>
+        <th>avg elapsed (sec)</th>
+        <th>avg telos_score</th>
+        <th>FUJI 分布</th>
+      </tr>
+    </thead>
+    <tbody>
+      {bench_rows_html}
+    </tbody>
+  </table>
 </div>
 
 </body></html>

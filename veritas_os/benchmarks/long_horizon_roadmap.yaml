@@ -1,0 +1,37 @@
+id: long_horizon_roadmap_v1
+name: "長期ロードマップベンチ（6ヶ月のVERITAS進化計画）"
+description: >
+  VERITAS 自身を「研究用Decision OS」として6ヶ月で進化させる
+  ロードマップを立てさせるベンチ。
+
+request:
+  context:
+    user_id: "benchmark_user"
+    session_id: "sess-roadmap-001"
+    query: >
+      あなたは「VERITAS OS のプロダクトオーナー」です。
+      現状のローカルDecision OSを、6ヶ月かけて
+      「複数チームが使える研究用フレームワーク」へ進化させてください。
+
+      6ヶ月間で 4〜6 個程度のマイルストーンに分解し、
+      各マイルストーンごとに：
+
+      - 何ができるようになっているか（機能面）
+      - どんなリスクや課題が想定されるか
+      - 安全性・倫理・ログ・ドキュメント面で何を整備するか
+
+      を具体的に書いてください。
+    goals:
+      - "6ヶ月スパンで現実的なロードマップを提示すること"
+      - "安全・倫理・ドキュメント整備などもマイルストーンに含めること"
+    constraints:
+      - "開発に関わるコアメンバーは少人数（1〜3名）を想定すること"
+      - "最終的には外部の研究者が再現・検証できる状態を目指すこと"
+    time_horizon: "long"
+    telos_weights:
+      W_Transcendence: 0.7
+      W_Struggle: 0.3
+    affect_hint: "focused"
+  options: []
+  min_evidence: 2
+  stream: false

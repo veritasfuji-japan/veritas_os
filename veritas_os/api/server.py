@@ -36,8 +36,6 @@ from veritas_os.core import (
     debate as debate_core,
 )
 from veritas_os.core.config import cfg
-from veritas_os.core.planner import plan_for_veritas_agi
-from veritas_os.core.sanitize import mask_pii
 from veritas_os.core.memory import predict_decision_status
 from veritas_os.core.reason import generate_reason
 from veritas_os.core.llm_client import plan_for_veritas_agi
@@ -323,8 +321,11 @@ async def decide(req: DecideRequest, request: Request):
     query = raw_query.strip()
     user_id = context.get("user_id") or body.get("user_id") or "anon"
 
+    # === WorldOS: context に world_state を注入 ===
     try:
         context = world_model.inject_state_into_context(context, user_id)
+        # ★ ここを追加：World を混ぜた context を body にも反映しておく
+        body["context"] = context
     except Exception as e:
         print("[WorldOS] inject_state_into_context skipped:", e)
 
@@ -335,8 +336,6 @@ async def decide(req: DecideRequest, request: Request):
     )
 
     # -------- PlannerOS: AGI/VERITAS 用の計画生成 ----------
-    # ---------- PlannerOS: すべてのクエリで計画生成 ----------
-
     try:
         from veritas_os.core.planner import plan_for_veritas_agi
 
@@ -686,11 +685,24 @@ async def decide(req: DecideRequest, request: Request):
     # --- worldmodel -------------------------------
     try:
         boosted = []
+        uid_for_world = (context or {}).get("user_id") or user_id or "anon"
         for d in alts:
-            sim = world_model.simulate(d, context)
+            # ★ 正しいシグネチャで simulate を呼ぶ
+            sim = world_model.simulate(
+                user_id=uid_for_world,
+                query=query,
+                chosen=d,
+            )
             d["world"] = sim
             # utilityとconfidenceで最大+3%の上振れ
-            micro = max(0.0, min(0.03, 0.02 * sim.get("utility", 0.0) + 0.01 * sim.get("confidence", 0.5)))
+            micro = max(
+                0.0,
+                min(
+                    0.03,
+                    0.02 * sim.get("utility", 0.0)
+                    + 0.01 * sim.get("confidence", 0.5),
+                ),
+            )
             d["score"] = float(d.get("score", 1.0)) * (1.0 + micro)
             boosted.append(d)
         alts = boosted
@@ -1140,8 +1152,7 @@ async def decide(req: DecideRequest, request: Request):
         valstats["ema"] = round(ema, 4)
         json.dump(valstats, open(vs_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
-        # ★ ここで meta_log.jsonl にも書き込む
-
+        # ★ meta_log.jsonl にも書き込む
         try:
             nv = float(reflection.get("next_value_boost", 0.0))
         except Exception:
@@ -1200,7 +1211,6 @@ async def decide(req: DecideRequest, request: Request):
             )
 
             # 2) ベクトルメモリ（検索用）
-            #    steps のタイトルだけざっくり 1 本のテキストにまとめる
             steps = planner_dict.get("steps") or []
             step_lines = []
             for i, st in enumerate(steps, 1):
@@ -1296,8 +1306,6 @@ async def decide(req: DecideRequest, request: Request):
         mem_evidence_count = int(metrics.get("mem_evidence_count", 0))
 
         # 1) evidence リストを安全に拾う
-        #    - payload.evidence があれば優先
-        #    - なければ decide() 内で使っていた local 変数 evidence を fallback
         evidence_list = []
         if isinstance(payload.get("evidence"), list):
             evidence_list = payload["evidence"]
@@ -1310,7 +1318,6 @@ async def decide(req: DecideRequest, request: Request):
             if not isinstance(ev, dict):
                 continue
             src = str(ev.get("source", "")).lower()
-            # internal:memory, episodic, semantic, skills など全部拾う
             if (
                 "memory" in src
                 or "episodic" in src
@@ -1328,7 +1335,6 @@ async def decide(req: DecideRequest, request: Request):
                 or "semantic" in src
                 or "skills" in src
             ):
-                # evidence_list が空でも「少なくとも 1 件」はあったことにする
                 mem_evidence_count = max(mem_evidence_count, 1)
 
         # おまけ：metaにも入れておく（将来拡張用）
@@ -1338,6 +1344,9 @@ async def decide(req: DecideRequest, request: Request):
 
         # 保存用の最小統一レコード
         fuji_full = payload.get("fuji") or {}
+
+        # ★ WorldState を含んだ context スナップショット（small だがログ観測用）
+        world_snapshot = (context or {}).get("world")
 
         persist = {
             "request_id": request_id,
@@ -1356,6 +1365,11 @@ async def decide(req: DecideRequest, request: Request):
             "latency_ms": latency_ms,
             "evidence": evidence_list[-5:] if evidence_list else [],
             "memory_evidence_count": mem_evidence_count,
+
+            # ★ ここから追加 -----------------------------
+            "context": context,          # full context（必要ならここだけでOK）
+            "world": world_snapshot,     # ショートカット: context.world
+            # -------------------------------------------
         }
 
         stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -1378,7 +1392,7 @@ async def decide(req: DecideRequest, request: Request):
 
         extras = payload.get("extras") or {}
         planner_obj = extras.get("planner") or extras.get("plan") or None
-        latency_ms = (extras.get("metrics") or {}).get("latency_ms")
+        latency_ms2 = (extras.get("metrics") or {}).get("latency_ms")
 
         world_model.update_from_decision(
             user_id=uid,
@@ -1387,7 +1401,7 @@ async def decide(req: DecideRequest, request: Request):
             gate=payload.get("gate") or {},
             values=payload.get("values") or {},
             planner=planner_obj if isinstance(planner_obj, dict) else None,
-            latency_ms=int(latency_ms) if isinstance(latency_ms, (int, float)) else None,
+            latency_ms=int(latency_ms2) if isinstance(latency_ms2, (int, float)) else None,
         )
         print(f"[WorldModel] state updated for {uid}")
     except Exception as e:

@@ -5,6 +5,7 @@
 VERITAS decide (CLI)
 - personas/styles/tones を前置きして /v1/decide を叩く
 - --apply-safe 指定時、FUJI が `modify` なら安全化して 2 回目を自動送信
+- --query-file / --input / --out で Self-Improve 用のバッチ実行にも使える
 """
 
 import os, sys, json, argparse, hmac, hashlib, time, uuid, requests, re
@@ -96,6 +97,16 @@ def _save_txt(name: str, content: str):
 def _save_json(name: str, obj: dict):
     (LOG_DIR / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
+def _write_out(path_str: str, obj: dict):
+    """--out で指定された任意パスに JSON を保存"""
+    try:
+        p = Path(path_str)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"[decide.py] レスポンスを保存しました: {p}")
+    except Exception as e:
+        print(f"[decide.py] --out 保存に失敗しました: {e}")
+
 # ---------- main ----------
 def main():
     if not API_KEY or not API_SECRET:
@@ -103,7 +114,8 @@ def main():
         sys.exit(1)
 
     ap = argparse.ArgumentParser()
-    ap.add_argument("query", help="ユーザ質問")
+    # query は「なくてもよい」にして、--query-file と切り替え可能にする
+    ap.add_argument("query", nargs="?", help="ユーザ質問（または --query-file を使用）")
     ap.add_argument("--persona", default=DEFAULTS["persona"])
     ap.add_argument("--style",   default=DEFAULTS["style"])
     ap.add_argument("--tone",    default=DEFAULTS["tone"])
@@ -111,7 +123,56 @@ def main():
     ap.add_argument("--options", nargs="*", default=[], help="選択肢（スペース/カンマ/スラッシュでもOK）")
     ap.add_argument("--apply-safe", action="store_true", help="FUJIがmodifyの時だけ安全化→再送する")
     ap.add_argument("--user-id", default="cli")
+
+    # ★ Self-Improve 用オプション
+    ap.add_argument(
+        "--query-file",
+        type=str,
+        help="クエリ本文を含むテキストファイルへのパス（指定時は positional query を無視）",
+    )
+    ap.add_argument(
+        "--input",
+        type=str,
+        help="doctor_report 等の JSON 入力ファイルパス。内容をクエリ末尾に添付する。",
+    )
+    ap.add_argument(
+        "--out",
+        type=str,
+        help="レスポンス JSON を保存するパス（省略時は標準出力のみ）。",
+    )
+
     args = ap.parse_args()
+
+    # ---- クエリ本文の決定（query or --query-file） ----
+    if args.query_file:
+        try:
+            query_text = Path(args.query_file).read_text(encoding="utf-8").strip()
+        except Exception as e:
+            print(f"[decide.py] --query-file の読み込みに失敗しました: {e}")
+            sys.exit(1)
+    else:
+        if not args.query:
+            ap.error("query か --query-file のどちらかを指定してください。")
+        query_text = args.query
+
+    # ---- --input JSON をクエリ末尾に埋め込む ----
+    final_query = query_text
+    if args.input:
+        try:
+            with open(args.input, encoding="utf-8") as f:
+                input_obj = json.load(f)
+        except Exception as e:
+            print(f"[decide.py] --input の読み込みに失敗しました: {e}")
+            sys.exit(1)
+
+        input_snippet = json.dumps(input_obj, ensure_ascii=False, indent=2)
+        final_query = (
+            query_text
+            + "\n\n---\n以下の JSON 入力を踏まえて、弱点の整理や次アクションを提案してください。\n"
+            + "```json\n"
+            + input_snippet
+            + "\n```"
+        )
 
     # ---- templates → 前置き ----
     persona = _load_template("personas", args.persona)
@@ -119,7 +180,7 @@ def main():
     tone    = _load_template("tones",    args.tone)
 
     preamble = "\n".join([t for t in [persona, style and f"Style: {style}", tone and f"Tone: {tone}"] if t])
-    context_query = f"{preamble}\n\nUser: {args.query}"
+    context_query = f"{preamble}\n\nUser: {final_query}"
 
     # ---- options を正規化 ----
     opts = args.options
@@ -140,7 +201,7 @@ def main():
             "telos_weights": {"W_Transcendence": 0.6, "W_Struggle": 0.4},
             "affect_hint": {"style": args.style},
         },
-        "query": args.query,
+        "query": final_query,
         "options": opts,
         "min_evidence": int(args.min_evidence),
     }
@@ -176,13 +237,18 @@ def main():
     # ---- allow/rejected or apply-safe disabled → そのまま表示 ----
     if not args.apply_safe:
         _save_txt(f"decide_second_skipped_{ts}.txt", "skip: apply_safe=false")
+        if args.out:
+            _write_out(args.out, res1)
         print(json.dumps(res1, ensure_ascii=False, indent=2))
         return
+
     if status != "modify":
         _save_txt(
             f"decide_second_skipped_{ts}.txt",
             f"skip: status={status}, gate={gate.get('decision_status')}, fuji={fuji.get('status')}"
         )
+        if args.out:
+            _write_out(args.out, res1)
         print(json.dumps(res1, ensure_ascii=False, indent=2))
         return
 
@@ -191,11 +257,11 @@ def main():
     safe_notes = fuji.get("safe_instructions") or []
     mods = fuji.get("modifications") or []
 
-    # ① 質問テキストをマスク
-    safe_query = _mask_with_redactions(args.query, redactions)
+    # ① 質問テキストをマスク（final_query 全体を対象）
+    safe_query = _mask_with_redactions(final_query, redactions)
     _save_txt(f"masked_query_{ts}.txt", safe_query)
 
-    # ② 前置き付きの context.query もマスク版に置換（※ここが重要）
+    # ② 前置き付きの context.query もマスク版に置換
     context_query2 = f"{preamble}\n\nUser: {safe_query}"
 
     payload2 = {
@@ -245,6 +311,9 @@ def main():
         "response": final,
         "fuji_from_first": fuji
     })
+
+    if args.out:
+        _write_out(args.out, final)
 
     print(json.dumps(final, ensure_ascii=False, indent=2))
     print("✅ decide done")

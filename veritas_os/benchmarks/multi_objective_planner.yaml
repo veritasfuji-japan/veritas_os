@@ -1,0 +1,41 @@
+id: multi_objective_planner_v1
+name: "多目的プランニングベンチ（速度×安全×洞察）"
+description: >
+  telos_weights やコンテキストを使って、
+  「速度」「安全性」「洞察の深さ」のトレードオフを明示的に扱えるかを見るベンチ。
+
+request:
+  context:
+    user_id: "benchmark_user"
+    session_id: "sess-multi-obj-001"
+    query: >
+      あなたはR&Dチーム向けのAI意思決定システムを設計しています。
+      チームは「素早い回答」を求めていますが、
+      同時に「安全性」と「浅い結論に逃げないこと」も重視しています。
+
+      以下を満たすような「意思決定ポリシー」を3パターン提案し、
+      その中から1つを選択してください。
+
+      - 速度（結果が出るまでの早さ）
+      - 安全性（FUJI Gate によるリスク）
+      - 洞察の深さ（どれだけ多面的に検討するか）
+
+      各ポリシーごとに、これら3軸の違いを定性的・できれば定量的に説明し、
+      最終的にどれを採用すべきかを理由付きで示してください。
+    goals:
+      - "速度・安全・洞察のトレードオフを明示的に言語化すること"
+      - "最終的に1つのポリシーを選び、その理由を分かりやすく説明すること"
+    constraints:
+      - "研究者は5名程度の小さなチームを想定すること"
+      - "本番ユーザーデータへ直接アクセスしない前提とすること"
+    time_horizon: "mid"
+    preferences:
+      maximize_speed: false
+      prioritize_safety: true
+    telos_weights:
+      W_Transcendence: 0.4
+      W_Struggle: 0.6
+    affect_hint: "calm"
+  options: []
+  min_evidence: 2
+  stream: false

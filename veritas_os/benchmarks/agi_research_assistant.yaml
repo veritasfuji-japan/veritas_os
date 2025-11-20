@@ -1,0 +1,40 @@
+id: agi_research_assistant_v1
+name: "AGIリサーチアシスタント設計ベンチ"
+description: >
+  VERITAS を土台に、論文調査・検索・批判・要約ができる
+  研究アシスタントのアーキテクチャと初週ロードマップを設計させるベンチ。
+
+request:
+  context:
+    user_id: "benchmark_user"
+    session_id: "sess-agi-research-001"
+    query: >
+      あなたは VERITAS OS の上に構築される「AGIリサーチアシスタント」の設計担当です。
+      以下の機能を持つアシスタントの具体的なアーキテクチャと、
+      最初の1週間で実装すべきロードマップを提案してください。
+
+      - 文献レビューの計画（どのテーマをどう網羅するか）
+      - Web検索 / 論文検索ツールの利用
+      - 見つかった知見の長期メモリ化（MemoryOSとの連携）
+      - 監査しやすい形でのレポート生成（証拠・出典付き）
+
+      VERITAS の決定ループ（Evidence / Critique / Debate / FUJI / TrustLog）を前提に、
+      安全性と再現性を保ちながら、研究者チームが使える構成を考えてください。
+    goals:
+      - "研究アシスタントのモジュール構成（コンポーネント分割）を明確にすること"
+      - "現実的な1週間分の実装ステップを箇条書きで提示すること"
+    constraints:
+      - "開発者は1人、時間は限られている前提とすること"
+      - "FUJI Gate による安全・倫理チェックをワークフローに組み込むこと"
+    time_horizon: "mid"
+    tools_allowed:
+      - "web_search"
+      - "local_vector_store"
+      - "notebook"
+    telos_weights:
+      W_Transcendence: 0.5
+      W_Struggle: 0.5
+    affect_hint: "focused"
+  options: []
+  min_evidence: 2
+  stream: false

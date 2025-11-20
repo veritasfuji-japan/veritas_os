@@ -1,0 +1,95 @@
+id: agi_mvp_plan
+name: "AGI MVP demo planning (VERITAS AGI モード)"
+description: >
+  VERITAS を AGI フレームワークとして第三者に見せるための
+  MVP デモ計画を立てさせるベンチ。
+
+request:
+  # ここが DecideRequest 本体
+  context:
+    # --- セッション識別・モード指定 ---
+    user_id: "bench-agi-user"
+    session_id: "sess-agi-mvp-001"
+    mode: "agi_framework"      # ★ AGIモードのフラグ（自由に増やせる）
+
+    # --- タスクの意味論（Planner / WorldModel 用） ---
+    goals:
+      - "第三者が10分で VERITAS の全体像と価値を理解できるデモを作る"
+      - "AGIフレームワークとしての骨格（Planner / FUJI / Memory / Debate）が伝わること"
+    constraints:
+      - "今週中に形にする（7日以内）"
+      - "ローカル環境 + GitHub + Swagger UI だけで完結させる"
+      - "機能よりも“流れと理解しやすさ”を優先する"
+
+    # --- 時間・スケール感 ---
+    time_horizon: "short"      # short / medium / long など（Planner用ヒント）
+    max_steps: 7               # ステップ数の上限（plan_for_veritas_agi 用のヒント）
+
+    # --- Telos & Affect（価値ウェイト / 気分） ---
+    telos_weights:
+      W_Transcendence: 0.6
+      W_Struggle: 0.4
+    affect_hint: "focused"     # calm / focused / exploratory など
+
+    # --- 期待するアウトプット形式（AGIフレームワーク用） ---
+    output_spec:
+      kind: "plan"             # plan / roadmap / policy / review など
+      format: "markdown"
+      sections:
+        - "概要（何を見せるデモか）"
+        - "ステップ一覧（1ステップごとに目的/作業/完了条件）"
+        - "必要ファイル（README / Swagger / CLIサンプルなど）"
+        - "第三者デモの進行台本（10分）"
+      step_template:
+        fields:
+          - "title"
+          - "objective"
+          - "tasks"
+          - "artifacts"
+          - "done_criteria"
+
+    # --- 成功条件（WorldModel / ReasonOS の評価軸） ---
+    success_criteria:
+      - "README を読めば構造と価値が5分で分かる"
+      - "Swagger から /v1/decide を1回叩くだけで“OS感”が伝わる"
+      - "CLI での1コマンド例が提示されている"
+      - "デモ後に第三者が自分のプロジェクトへの適用イメージを語れる"
+
+    # --- メモ：人間側への説明用（ログにも残したい場合） ---
+    human_notes: >
+      このベンチは「VERITAS を AGIフレームワークとして第三者に説明する」
+      ための最短デモ構成を決めることが目的。
+      実装コストではなく、理解コストの最小化を優先。
+
+  # /v1/decide がまず読むクエリ本文
+  query: >
+    VERITAS を「AGIフレームワーク」として第三者に見せるために、
+    今週中にローカル環境＋GitHub＋Swagger UI だけで実行できる
+    MVP デモの計画を 7 ステップ以内で設計してください。
+    各ステップには「タイトル」「目的」「具体的な作業」「作成される成果物」
+    「完了条件」を含めてください。
+
+  # options / alternatives は空 → kernel / planner 側に任せる
+  options: []
+
+  # EvidenceOS / MemoryOS に最低何本は根拠を拾わせるか
+  min_evidence: 2
+
+  # ストリーミング不要なら false のままでOK
+  stream: false
+
+
+# （任意）結果の自動評価ルール
+eval:
+  min_telos_score: 0.6
+  allow_fuji_status:
+    - "allow"
+    - "modify"
+  must_have_keywords:
+    - "README"
+    - "Swagger"
+    - "デモ"
+    - "ステップ"
+  notes: >
+    eval セクションは現在 run_benchmarks.py では未使用だが、
+    将来ベンチ自動採点に使うことを想定。

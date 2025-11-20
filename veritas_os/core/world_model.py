@@ -4,22 +4,30 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# 1ファイルにユーザーごとの state をまとめて保存する
-STATE_FILE = Path(
-    os.getenv("VERITAS_WORLD_STATE", "~/veritas/world_state.json")
+# =========================
+# ファイルパス設定
+# =========================
+
+# ベースのデータディレクトリ（なければ ~/veritas）
+DATA_DIR = Path(os.getenv("VERITAS_DATA_DIR", "~/veritas")).expanduser()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# WorldModel ファイルパス
+WORLD_PATH = Path(
+    os.getenv("VERITAS_WORLD_STATE", str(DATA_DIR / "world_state.json"))
 ).expanduser()
 
 DEFAULT_USER_ID = "global"
 
+# =========================
+# WorldState データ構造（従来インターフェース）
+# =========================
 
-# =========================
-# WorldState データ構造
-# =========================
 @dataclass
 class WorldState:
     user_id: str = DEFAULT_USER_ID
@@ -44,7 +52,6 @@ class WorldState:
     # メタ
     last_updated: str = ""
 
-    # ---- util ----
     def progress(self) -> float:
         """プラン進捗率 0〜1"""
         if not self.active_plan_steps:
@@ -53,44 +60,172 @@ class WorldState:
 
 
 # =========================
-# 低レベル I/O
+# WorldModel ファイルのスキーマ
 # =========================
-def _load_all() -> Dict[str, Dict[str, Any]]:
-    if not STATE_FILE.exists():
-        return {}
+
+DEFAULT_WORLD: Dict[str, Any] = {
+    "schema_version": "1.1.0",
+    "updated_at": None,
+    "projects": [],   # 各ユーザーごとに最低1つ "user_id:default" プロジェクトを持つ想定
+}
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _load_world() -> Dict[str, Any]:
+    if not WORLD_PATH.exists():
+        return {**DEFAULT_WORLD}
     try:
-        with STATE_FILE.open("r", encoding="utf-8") as f:
+        with WORLD_PATH.open("r", encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, dict):
+            # 古い形式（user_id -> state dict）の場合に備えて最低限ラップ
+            if "projects" not in data:
+                # legacy: { "user_id": {...}, "other_user": {...} }
+                projects: List[Dict[str, Any]] = []
+                for uid, raw in data.items():
+                    if not isinstance(raw, dict):
+                        continue
+                    metrics = {
+                        "decisions": int(raw.get("decisions", 0)),
+                        "avg_latency_ms": float(raw.get("avg_latency_ms", 0.0)),
+                        "avg_risk": float(raw.get("avg_risk", 0.0)),
+                        "avg_value": float(raw.get("avg_value", 0.5)),
+                        "active_plan_steps": int(raw.get("active_plan_steps", 0)),
+                        "active_plan_done": int(raw.get("active_plan_done", 0)),
+                    }
+                    last = {
+                        "query": raw.get("last_query", ""),
+                        "chosen_title": raw.get("last_chosen_title", ""),
+                        "decision_status": raw.get("last_decision_status", "unknown"),
+                    }
+                    projects.append({
+                        "project_id": f"{uid}:default",
+                        "owner_user_id": uid,
+                        "title": f"Default Project for {uid}",
+                        "objective": "",
+                        "status": "active",
+                        "created_at": raw.get("last_updated") or _now_iso(),
+                        "last_decision_at": raw.get("last_updated"),
+                        "metrics": metrics,
+                        "last": last,
+                        "decisions": [],
+                    })
+                return {
+                    "schema_version": "1.1.0",
+                    "updated_at": _now_iso(),
+                    "projects": projects,
+                }
             return data
     except Exception:
         pass
-    return {}
+    return {**DEFAULT_WORLD}
 
 
-def _save_all(all_states: Dict[str, Dict[str, Any]]) -> None:
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with STATE_FILE.open("w", encoding="utf-8") as f:
-        json.dump(all_states, f, ensure_ascii=False, indent=2)
+def _save_world(world: Dict[str, Any]) -> None:
+    world["updated_at"] = _now_iso()
+    WORLD_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with WORLD_PATH.open("w", encoding="utf-8") as f:
+        json.dump(world, f, ensure_ascii=False, indent=2)
+
+
+def _get_or_create_default_project(world: Dict[str, Any], user_id: str) -> Dict[str, Any]:
+    projects = world.setdefault("projects", [])
+    proj_id = f"{user_id}:default"
+
+    for p in projects:
+        if p.get("project_id") == proj_id:
+            return p
+
+    proj = {
+        "project_id": proj_id,
+        "owner_user_id": user_id,
+        "title": f"Default Project for {user_id}",
+        "objective": "",
+        "status": "active",
+        "tags": [],
+        "created_at": _now_iso(),
+        "last_decision_at": None,
+        "metrics": {
+            "decisions": 0,
+            "avg_latency_ms": 0.0,
+            "avg_risk": 0.0,
+            "avg_value": 0.5,
+            "active_plan_steps": 0,
+            "active_plan_done": 0,
+        },
+        "last": {
+            "query": "",
+            "chosen_title": "",
+            "decision_status": "unknown",
+        },
+        "decisions": [],
+    }
+    projects.append(proj)
+    return proj
+
+
+def _project_to_worldstate(user_id: str, proj: Dict[str, Any]) -> WorldState:
+    m = proj.get("metrics") or {}
+    last = proj.get("last") or {}
+    return WorldState(
+        user_id=user_id,
+        decisions=int(m.get("decisions", 0)),
+        avg_latency_ms=float(m.get("avg_latency_ms", 0.0)),
+        avg_risk=float(m.get("avg_risk", 0.0)),
+        avg_value=float(m.get("avg_value", 0.5)),
+        active_plan_id=proj.get("active_plan_id"),
+        active_plan_title=proj.get("active_plan_title"),
+        active_plan_steps=int(m.get("active_plan_steps", 0)),
+        active_plan_done=int(m.get("active_plan_done", 0)),
+        last_query=last.get("query", ""),
+        last_chosen_title=last.get("chosen_title", ""),
+        last_decision_status=last.get("decision_status", "unknown"),
+        last_updated=proj.get("last_decision_at") or "",
+    )
 
 
 # =========================
 # Public API
 # =========================
+
 def load_state(user_id: str = DEFAULT_USER_ID) -> WorldState:
-    all_states = _load_all()
-    raw = all_states.get(user_id) or {}
-    if not isinstance(raw, dict):
-        raw = {}
-    return WorldState(user_id=user_id, **{k: v for k, v in raw.items() if k != 
-"user_id"})
+    """
+    互換性維持用：
+    - world_state.json の "user_id:default" プロジェクトから WorldState を復元
+    """
+    world = _load_world()
+    proj = _get_or_create_default_project(world, user_id)
+    return _project_to_worldstate(user_id, proj)
 
 
 def save_state(state: WorldState) -> None:
-    all_states = _load_all()
-    all_states[state.user_id] = asdict(state)
-    all_states[state.user_id]["last_updated"] = datetime.now(timezone.utc).isoformat()
-    _save_all(all_states)
+    """
+    互換性維持用：
+    - WorldState を "user_id:default" プロジェクトの metrics/last に反映して保存
+    """
+    world = _load_world()
+    proj = _get_or_create_default_project(world, state.user_id)
+    m = proj.setdefault("metrics", {})
+    m["decisions"] = int(state.decisions)
+    m["avg_latency_ms"] = float(state.avg_latency_ms)
+    m["avg_risk"] = float(state.avg_risk)
+    m["avg_value"] = float(state.avg_value)
+    m["active_plan_steps"] = int(state.active_plan_steps)
+    m["active_plan_done"] = int(state.active_plan_done)
+
+    proj["active_plan_id"] = state.active_plan_id
+    proj["active_plan_title"] = state.active_plan_title
+
+    last = proj.setdefault("last", {})
+    last["query"] = state.last_query
+    last["chosen_title"] = state.last_chosen_title
+    last["decision_status"] = state.last_decision_status
+    proj["last_decision_at"] = state.last_updated or _now_iso()
+
+    _save_world(world)
 
 
 # ---- state 更新（/v1/decide 後に呼ぶ）-----------------
@@ -105,46 +240,68 @@ def update_from_decision(
     latency_ms: Optional[float] = None,
 ) -> WorldState:
     """
-    decide の結果 1件分から、WorldState を更新する
+    decide の結果 1件分から、WorldModel を更新する（新: projectベース）
+    かつ WorldState を返す（従来インターフェース維持）。
     """
-    st = load_state(user_id)
+    world = _load_world()
+    proj = _get_or_create_default_project(world, user_id)
+    metrics = proj.setdefault("metrics", {})
+    last = proj.setdefault("last", {})
 
-    st.decisions += 1
+    # 決定回数
+    decisions = int(metrics.get("decisions", 0)) + 1
+    metrics["decisions"] = decisions
 
-    # 移動平均（単純に ema_alpha=0.2 くらい）
+    # 移動平均（ema_alpha=0.2）
     alpha = 0.2
-
     risk = float(gate.get("risk", 0.0))
-    val = float(values.get("total", 0.5))
-
-    st.avg_risk = (1 - alpha) * st.avg_risk + alpha * risk
-    st.avg_value = (1 - alpha) * st.avg_value + alpha * val
+    val = float(values.get("total", values.get("ema", 0.5)))
+    prev_risk = float(metrics.get("avg_risk", 0.0))
+    prev_val = float(metrics.get("avg_value", 0.5))
+    metrics["avg_risk"] = (1 - alpha) * prev_risk + alpha * risk
+    metrics["avg_value"] = (1 - alpha) * prev_val + alpha * val
 
     if latency_ms is not None:
-        st.avg_latency_ms = (1 - alpha) * st.avg_latency_ms + alpha * float(latency_ms)
+        prev_lat = float(metrics.get("avg_latency_ms", 0.0))
+        metrics["avg_latency_ms"] = (1 - alpha) * prev_lat + alpha * float(latency_ms)
 
     # プラン情報を反映（あれば）
     if planner:
         steps = planner.get("steps") or []
-        st.active_plan_id = planner.get("id") or planner.get("plan_id")
-        st.active_plan_title = planner.get("title") or planner.get("name")
-        st.active_plan_steps = int(len(steps) or st.active_plan_steps)
-        # done 数は planner 側で "done": true がついていたら数える
+        proj["active_plan_id"] = planner.get("id") or planner.get("plan_id")
+        proj["active_plan_title"] = planner.get("title") or planner.get("name")
+        metrics["active_plan_steps"] = int(len(steps) or metrics.get("active_plan_steps", 0))
         done = 0
         for s in steps:
             if isinstance(s, dict) and s.get("done"):
                 done += 1
         if done:
-            st.active_plan_done = done
+            metrics["active_plan_done"] = done
 
     # 最新決定
-    st.last_query = query
-    st.last_chosen_title = (chosen or {}).get("title") or str(chosen)[:80]
-    st.last_decision_status = gate.get("decision_status") or "unknown"
+    last["query"] = query
+    last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
+    last["decision_status"] = gate.get("decision_status") or "unknown"
+    proj["last_decision_at"] = _now_iso()
 
-    st.last_updated = datetime.now(timezone.utc).isoformat()
+    # 決定スナップショットも蓄積しておく（将来のKosmos的解析用）
+    req_id = chosen.get("request_id") or values.get("request_id") or ""
+    proj.setdefault("decisions", []).append(
+        {
+            "request_id": req_id,
+            "ts": proj["last_decision_at"],
+            "query": query,
+            "chosen_title": last["chosen_title"],
+            "decision_status": last["decision_status"],
+            "avg_value_after": metrics["avg_value"],
+            "avg_risk_after": metrics["avg_risk"],
+        }
+    )
 
-    save_state(st)
+    _save_world(world)
+
+    # WorldState に変換して返す
+    st = _project_to_worldstate(user_id, proj)
     return st
 
 
@@ -152,6 +309,7 @@ def update_from_decision(
 def inject_state_into_context(context: Dict[str, Any], user_id: str) -> Dict[str, Any]:
     """
     decide 実行前に呼んで、WorldState を context["world_state"] に入れる
+    （既存実装と同じキー構造を維持）
     """
     st = load_state(user_id)
     ctx = dict(context or {})
@@ -176,7 +334,7 @@ def inject_state_into_context(context: Dict[str, Any], user_id: str) -> Dict[str
 # ---- options ごとの world シミュレーション -------------
 def simulate(option: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
     """
-    すごくシンプルな world.utility 予測。
+    シンプルな world.utility 予測。
     - base = option["score"]（0〜?）
     - value が高いほど +, risk が高いほど -, plan_progress が高いほど +
     """
