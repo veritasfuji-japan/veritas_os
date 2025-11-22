@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List
+import asyncio
 import json
 import os
 import time
 from datetime import datetime
 
-from . import llm_client 
+from . import llm_client
 
 # ============================
 # ログパスは「このリポジトリ内」のみを見る
@@ -26,21 +27,25 @@ META_LOG = LOG_DIR / "meta_log.jsonl"
 print("[ReasonOS] META_LOG path:", META_LOG)
 
 
+# ============================
+# ① ローカル反省（数値 & メモ）
+# ============================
+
 def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
     """
     決定結果を自己評価し、次回に活かす“改善勘所”を返す。
     FUJI・Value・実効リスク・採択案の整合を点検しつつ、
     next_value_boost を -0.1〜+0.1 の範囲で必ず少しだけ動かす。
     """
-    q         = (decision.get("query") or "").lower()
-    chosen    = decision.get("chosen") or {}
-    gate      = decision.get("gate")   or {}
-    values    = decision.get("values") or {}
+    q = (decision.get("query") or "").lower()
+    chosen = decision.get("chosen") or {}
+    gate = decision.get("gate") or {}
+    values = decision.get("values") or {}
     # ValueCore total（0〜1想定）
-    v_total   = float(values.get("total", 0.5))
-    ema       = float(values.get("ema", v_total))
-    risk      = float(gate.get("risk", 0.0))
-    status    = (gate.get("decision_status") or "allow").lower()
+    v_total = float(values.get("total", 0.5))
+    ema = float(values.get("ema", v_total))
+    risk = float(gate.get("risk", 0.0))
+    status = (gate.get("decision_status") or "allow").lower()
 
     tips: List[str] = []
     if risk >= 0.6:
@@ -95,6 +100,10 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+# ============================
+# ② LLM による自然文 Reason 生成
+# ============================
+
 def generate_reason(*, query, planner=None, values=None, gate=None, context=None):
     system_prompt = """
 あなたは VERITAS OS の Reason モジュールです。
@@ -136,3 +145,126 @@ def generate_reason(*, query, planner=None, values=None, gate=None, context=None
         "text": text,
         "source": llm_res.get("source", "openai_llm"),
     }
+
+
+# ============================
+# ③ Self-Refine 用 テンプレ生成
+# ============================
+
+async def generate_reflection_template(
+    *,
+    query: str,
+    chosen: Dict[str, Any],
+    gate: Dict[str, Any],
+    values: Dict[str, Any],
+    planner: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """
+    Self-Refine / Self-Critique 的な「次回のためのテンプレ」を1つ返す。
+    似たクエリが来たときに再利用できるよう、
+    pattern / guidance / tags / priority を JSON で生成させる。
+
+    失敗時は {} を返す。
+    """
+    if not query or not chosen:
+        return {}
+
+    system_prompt = (
+        "あなたは自己改善ループを持つ AI OS『VERITAS』のメタコーチです。\n"
+        "与えられたクエリ・最終決定・ゲート情報・ValueCoreスコア・プランから、\n"
+        "『似た相談が次に来たとき、どのような順番で考え、どんなアクションを提案すべきか』\n"
+        "をテンプレートとして1つだけ設計してください。\n\n"
+        "出力は必ず JSON で、次のキーを含めてください:\n"
+        "  - pattern: このテンプレが想定するクエリの特徴（日本語の短い説明）\n"
+        "  - guidance: モデルへの指示文（プロンプト断片。ユーザクエリの前に付ける想定）\n"
+        "  - tags: 関連タグの配列（例: [\"agi\", \"veritas\", \"roadmap\"]）\n"
+        "  - priority: 0〜1 の数値（高いほど重要）\n"
+    )
+
+    user_payload = {
+        "query": query,
+        "chosen": chosen,
+        "gate": gate,
+        "values": values,
+        "planner": planner or {},
+    }
+
+    try:
+        # llm_client.chat は同期関数想定なので、スレッドで実行してブロックを回避
+        loop = asyncio.get_running_loop()
+        llm_res = await loop.run_in_executor(
+            None,
+            lambda: llm_client.chat(
+                system_prompt=system_prompt,
+                user_prompt=json.dumps(user_payload, ensure_ascii=False),
+                temperature=0.2,
+                max_tokens=600,
+            ),
+        )
+    except Exception as e:
+        print("[ReasonOS] generate_reflection_template LLM error:", e)
+        return {}
+
+    text = ""
+    if isinstance(llm_res, dict):
+        text = llm_res.get("text", "") or ""
+    elif isinstance(llm_res, str):
+        text = llm_res
+
+    if not text:
+        return {}
+
+    # LLM 出力を JSON として解釈
+    try:
+        data = json.loads(text)
+    except Exception as e:
+        print("[ReasonOS] reflection_template json parse failed:", e)
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    pattern = (data.get("pattern") or "").strip()
+    guidance = (data.get("guidance") or "").strip()
+    tags = data.get("tags") or []
+    priority = data.get("priority", 0.5)
+
+    if not pattern or not guidance:
+        return {}
+
+    if not isinstance(tags, list):
+        tags = ["reflection"]
+
+    try:
+        priority = float(priority)
+    except Exception:
+        priority = 0.5
+
+    # クリップ
+    if priority < 0.0:
+        priority = 0.0
+    if priority > 1.0:
+        priority = 1.0
+
+    tmpl = {
+        "pattern": pattern,
+        "guidance": guidance,
+        "tags": tags,
+        "priority": priority,
+    }
+
+    # ついでに meta_log にも記録しておく（任意）
+    try:
+        meta = {
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "type": "reflection_template",
+            "query": query[:200],
+            "pattern": pattern,
+            "priority": priority,
+        }
+        with open(META_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(meta, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print("[ReasonOS] reflection_template meta_log skipped:", e)
+
+    return tmpl

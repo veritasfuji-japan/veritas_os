@@ -13,6 +13,91 @@ from . import memory as mem
 
 
 # ============================
+#  simple QA 判定 & プラン
+# ============================
+
+
+def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
+    """
+    「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
+    - kernel 側の simple_qa モードと合わせて使うことを想定。
+    """
+    ctx = context or {}
+
+    # 明示フラグが立っていたらそれを最優先
+    if ctx.get("mode") == "simple_qa" or ctx.get("simple_qa"):
+        return True
+
+    q = (query or "").strip()
+
+    if not q:
+        return False
+
+    # 40文字以下 & 疑問形 & 「どう進める/計画」系が含まれないなら simple QA とみなす
+    is_short = len(q) <= 40
+    looks_question = ("?" in q) or ("？" in q) or q.endswith(("か", "かね", "かな", "でしょうか"))
+    has_plan_words = any(k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"])
+
+    if is_short and looks_question and not has_plan_words:
+        return True
+
+    return False
+
+
+def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
+    """
+    「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
+    - kernel 側の simple_qa モードと合わせて使うことを想定。
+    - ※ AGI / VERITAS 系の問いはここでは simple_qa に絶対しない。
+    """
+    ctx = context or {}
+
+    # 明示フラグが立っていたらそれを最優先
+    if ctx.get("mode") == "simple_qa" or ctx.get("simple_qa"):
+        return True
+
+    q = (query or "").strip()
+    if not q:
+        return False
+
+    q_lower = q.lower()
+
+    # =========================================
+    # ★ AGI / VERITAS 系キーワードは simple_qa から除外
+    # =========================================
+    agi_block_keywords = [
+        "agi",
+        "ＡＧＩ",
+        "veritas",
+        "ヴェリタス",
+        "ベリタス",
+        "proto-agi",
+        "プロトagi",
+    ]
+    if any(k in q or k in q_lower for k in agi_block_keywords):
+        return False
+
+    # =========================================
+    # ここから本来の「軽い質問」判定
+    # =========================================
+    is_short = len(q) <= 40
+    looks_question = (
+        ("?" in q)
+        or ("？" in q)
+        or q.endswith(("か", "かね", "かな", "でしょうか"))
+    )
+    has_plan_words = any(
+        k in q
+        for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
+    )
+
+    if is_short and looks_question and not has_plan_words:
+        return True
+
+    return False
+
+
+# ============================
 #  LLM PlannerOS (メイン)
 # ============================
 
@@ -54,6 +139,32 @@ def _build_system_prompt() -> str:
     - dependencies には、依存している step の id を配列で入れてください（なければ空配列）。
 
     =====================================================
+    【情報質問(Q&A系)の問いの扱い（回りくどさを防ぐ最重要ルール） 
+    =====================================================
+
+    ユーザーの問いが、主に「情報を知りたいだけ」の質問だと判断した場合
+    （例：「〜を教えて」「〜を知りたい」「〜を確認したい」
+          「〜に関する最近の論文」「最新の動向」など）は、
+    次のルールに必ず従ってください：
+
+    - DecisionOS がすでに「答えそのもの（要約・代表例など）」を提示済みであると仮定する。
+    - Planner の役割は「その情報をどう活かすか」「次に何を 1〜3 個だけやるか」を提案すること。
+    - 大規模なリサーチプロジェクト
+        例： 
+          - 「過去6ヶ月の論文を網羅的に調査する」
+          - 「関連論文を大量に収集して要約する」
+      のような、何日もかかる重いステップだけを並べることは **禁止**。
+    - ステップ数は 1〜3 個に抑え、
+      各ステップは「今日〜3日以内に終わる、小さく具体的な行動」にする。
+      例：
+        - 「いま得られた要点を1ページのメモにまとめる」
+        - 「重要そうな1本だけ論文を選んで、導入と結論だけ読む」
+        - 「得られたアイデアを VERITAS のどのモジュールに反映できるか、箇条書きで3つ書き出す」
+    - 「〜を検索する」「〜を収集する」「〜を調査する」だけのステップを並べるのは NG。
+      もし検索・調査が必要でも、それは1ステップまでにとどめ、
+      「その結果をどう意思決定や実装に活かすか」まで detail / why に必ず書くこと。
+
+    =====================================================
     【最優先ルール】VERITAS 自己診断モード（必ず従うこと）
     =====================================================
 
@@ -81,7 +192,7 @@ def _build_system_prompt() -> str:
             - モジュール単位（例: kernel / planner / debate / memory / world / fuji / api / cli / storage / logging など）
           - 各弱点ごとに：
             - 何が問題か（技術的・設計的な観点）
-            -そのまま放置した場合の具体的リスク
+            - そのまま放置した場合の具体的リスク
             - 改善案（なるべく具体的な設計方針・実装方針）
             - 改善の優先度（例："高", "中", "低" のラベル）
           - 全体としての総括：
@@ -194,6 +305,11 @@ def _build_user_prompt(
     重要：
     - 抽象的なスローガンではなく、「具体的に何をするか」が分かるようにしてください。
     - リスクが高い行動は避け、安全で合法的な範囲で計画してください。
+    - ユーザーの問いが「〜を教えて」「〜を知りたい」「〜を確認したい」
+      「〜に関する最近の論文」「最新の動向」などの **情報質問(Q&A系)** の場合、
+      すでに主要な情報は別モジュールから提示済みとみなし、
+      その情報を活かすための **小さな具体アクションを 1〜3 個だけ**
+      提案してください（大規模な長期リサーチ計画は避けること）。
     - 出力は、指示された JSON 形式だけにしてください（余分な文章は禁止）。
     """)
 
@@ -534,13 +650,25 @@ def plan_for_veritas_agi(
     """
     VERITAS / AGI ベンチ用のメイン Planner（Worldステージ × LLM ハイブリッド版）。
 
-    - world.snapshot('veritas_agi') を読み、progress から stage を決める
-    - stage 情報を含めて LLM に steps を出させる
-    - JSONパースに失敗 or エラー時は stage 別の決め打ちプランにフォールバック
+    - simple QA の場合: LLM を呼ばず simple_qa_plan を返す
+    - それ以外: world.snapshot('veritas_agi') を読み、progress から stage を決める
+                stage 情報を含めて LLM に steps を出させる
+                JSONパースに失敗 or エラー時は stage 別の決め打ちプランにフォールバック
     """
 
     # ---- コンテキストの正規化 ----
     ctx: Dict[str, Any] = context or {}
+
+    # ★ まず simple QA なら即リターン（LLMプランナーは使わない）
+    if _is_simple_qa(query, ctx):
+        # simple QA でも一応 World のスナップショットは読んでおく（不要なら None でもOK）
+        try:
+            world_snap_simple: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
+        except Exception:
+            world_snap_simple = None
+        return _simple_qa_plan(query=query, context=ctx, world_snap=world_snap_simple)
+
+    # ---- simple QA でなければ、AGI 用の重プランナーを使う ----
 
     # WorldModel のスナップショット（veritas_agi プロジェクト）
     try:

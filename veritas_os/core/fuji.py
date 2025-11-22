@@ -6,6 +6,8 @@ FUJI Gate (安全・法・倫理ゲート)
 - posthoc_check   : 決定＋証拠の健全性チェック（ok / flag / rejected）
 - fuji_gate       : 最終ゲート判定（allow / modify / rejected）＋監査情報
 - evaluate        : 使い勝手用ラッパ
+    - query(str) モード: 旧来の (query, context, evidence, alternatives) で呼ぶ
+    - decision(dict) モード: kernel.decide の decision_snapshot をそのまま渡す
 
 重要なポイント:
 - context["fuji_safe_applied"] == True の場合は、
@@ -50,7 +52,7 @@ def _to_text(x: Any) -> str:
     if isinstance(x, str):
         return x
     if isinstance(x, dict):
-        for k in ("title", "description", "text", "prompt"):
+        for k in ("title", "description", "text", "prompt", "query"):
             v = x.get(k)
             if isinstance(v, str) and v:
                 return v
@@ -338,11 +340,56 @@ def fuji_gate(
 # 4) ラッパ
 # =========================
 def evaluate(
-    query: str,
+    decision_or_query: Any,
     context: Dict[str, Any] | None = None,
     evidence: List[Dict[str, Any]] | None = None,
     alternatives: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
+    """
+    使い勝手ラッパ。
+
+    1) dict が渡された場合（新仕様）:
+        decision_snapshot を想定して、そこから query/context/evidence/alternatives を拾う。
+
+        decision = {
+            "request_id": ...,
+            "query": "...",
+            "chosen": {...},
+            "alternatives": [...],
+            "evidence": [...],
+            "context": {...},
+            "extras": {...},
+            ...
+        }
+
+        fuji.evaluate(decision)
+
+    2) 文字列が渡された場合（旧仕様）:
+        fuji.evaluate(query, context=..., evidence=..., alternatives=...)
+    """
+    # --- 新: decision dict モード ---
+    if isinstance(decision_or_query, dict):
+        dec = decision_or_query
+        ctx = (dec.get("context") or {}) | (context or {})
+        q = dec.get("query") or ""
+        alts = dec.get("alternatives") or dec.get("options") or alternatives or []
+        ev = dec.get("evidence") or evidence or []
+
+        res = fuji_gate(
+            context=ctx,
+            query=q,
+            alternatives=alts,
+            evidence=ev,
+            min_evidence=DEFAULT_MIN_EVIDENCE,
+            max_uncertainty=MAX_UNCERTAINTY,
+        )
+        # 監査用に decision_id を付けておく
+        if dec.get("request_id"):
+            res.setdefault("decision_id", dec.get("request_id"))
+        return res
+
+    # --- 旧: query string モード ---
+    query = str(decision_or_query or "")
     return fuji_gate(
         context=context or {},
         query=query,

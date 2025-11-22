@@ -192,6 +192,7 @@ def run_debate(
     options: List[Dict[str, Any]],
     context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    
     """
     ReasonOS から呼び出すメイン入口。
 
@@ -208,15 +209,15 @@ def run_debate(
       "source": "openai_llm" or "fallback"
     }
     """
+
     ctx = dict(context or {})
 
-    # WorldModel スナップショット（あれば使う）
+    # WorldModel スナップショット
     try:
         world_snap = world_model.snapshot("veritas_agi")
     except Exception:
         world_snap = {}
 
-    # 万が一 options が空ならフォールバック
     if not options:
         return _fallback_debate(options)
 
@@ -225,6 +226,7 @@ def run_debate(
 
     raw_text: str = ""
     parsed: Dict[str, Any] = {}
+
     try:
         res = llm_client.chat(
             system_prompt=system_prompt,
@@ -239,15 +241,15 @@ def run_debate(
         out_opts = parsed.get("options") or []
         chosen_id = parsed.get("chosen_id")
 
-        # id -> enriched option マップ
+        # ---- 入力 options を id -> option に展開 ----
         enriched_by_id: Dict[str, Dict[str, Any]] = {}
-
-        # 入力 options と LLM の評価をマージ
         for base in options:
             bid = base.get("id") or base.get("title") or "opt"
             base_copy = dict(base)
+            base_copy.setdefault("id", bid)
             enriched_by_id[bid] = base_copy
 
+        # ---- LLM 側の評価結果をマージ ----
         for o in out_opts:
             if not isinstance(o, dict):
                 continue
@@ -255,26 +257,41 @@ def run_debate(
             if not oid or oid not in enriched_by_id:
                 continue
             target = enriched_by_id[oid]
-            # LLM 側のフィールドを上書き（score, views, summary 等）
             for k, v in o.items():
                 target[k] = v
 
         enriched_list = list(enriched_by_id.values())
 
-        # chosen 判定
+        # ---- verdict が "却下" のものは基本的に最終候補から除外 ----
+        def _is_rejected(opt: Dict[str, Any]) -> bool:
+            v = str(opt.get("verdict") or "").strip()
+            return v in ("却下", "reject", "Rejected", "NG")
+
+        non_rejected = [o for o in enriched_list if not _is_rejected(o)]
+
+        # ---- chosen 判定 ----
         chosen = None
+
+        # 1) LLM が chosen_id を出していて、かつ却下でなければそれを採用
         if chosen_id and chosen_id in enriched_by_id:
-            chosen = enriched_by_id[chosen_id]
-        else:
-            # chosen_id がない場合は、score 最大のものを選ぶ
-            best = None
-            best_score = -1.0
-            for opt in enriched_list:
-                s = float(opt.get("score", 0.0) or 0.0)
-                if s > best_score:
-                    best_score = s
-                    best = opt
-            chosen = best or enriched_list[0]
+            cand = enriched_by_id[chosen_id]
+            if not _is_rejected(cand):
+                chosen = cand
+
+        # 2) それ以外の場合は「却下以外」の中から score 最大を選ぶ
+        if chosen is None:
+            if non_rejected:
+                best = None
+                best_score = -1.0
+                for opt in non_rejected:
+                    s = float(opt.get("score", 0.0) or 0.0)
+                    if s > best_score:
+                        best_score = s
+                        best = opt
+                chosen = best
+            else:
+                # ★ ここが重要：全候補が却下 → chosen は None にして返す
+                chosen = None
 
         return {
             "chosen": chosen,
@@ -284,5 +301,4 @@ def run_debate(
         }
 
     except Exception:
-        # 何かあればフォールバック
         return _fallback_debate(options)
