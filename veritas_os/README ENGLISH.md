@@ -383,6 +383,6 @@ Safety / Alignment experiments locally, with a focus on:
 	•	repeatability
 	•	auditability
 	•	safety-gated decision-making
-
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
 Copyright (c) 2025 Takeshi Fujishita
 All Rights Reserved.
