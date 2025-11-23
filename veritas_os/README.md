@@ -323,6 +323,6 @@ python generate_report.py
 	•	VERITAS OS は LLM を AGI 的な意思決定エンジンとして包むための OS 層
 	•	Decision / Safety / Memory / Value / WorldModel / TrustLog が一体になっている
 	•	研究者・企業が AGI / AI Safety / Alignment 実験をローカルで再現できることを狙ったプロジェクトです
-
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
 Copyright (c) 2025 Takeshi Fujishita
 All Rights Reserved.
