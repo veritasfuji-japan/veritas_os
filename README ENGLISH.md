@@ -10,8 +10,7 @@ instead of “just a chatbot”.
 VERITAS OS treats the LLM as a low-level reasoning engine and builds on top of it
 a full **Decision OS / Agent OS** with safety, memory, value functions, world
 state, and trust-logs.
-
----
+System prompts are currently written in Japanese but can be easily localized.---
 
 ## 🔥 TL;DR
 ![IMG_1157](https://github.com/user-attachments/assets/c76cef57-485e-40b3-917f-62dc2a7e535b)
