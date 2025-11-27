@@ -7,6 +7,7 @@ import json
 import os
 import secrets
 import time
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -37,6 +38,7 @@ from veritas_os.api.schemas import DecideRequest, DecideResponse
 from veritas_os.api.evolver import load_persona
 from veritas_os.core.reason import generate_reason
 from veritas_os.tools.web_search import web_search
+from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide
 
 # =========================================================
 # Memory / MemoryModel 周りの初期化
@@ -66,81 +68,6 @@ except Exception:
         return {"allow": 0.5}
 
 
-# =========================================================
-# Trust Log / Shadow Decide ログ
-# =========================================================
-
-# trust_log の JSON/JSONL は LOG_DIR 直下に置く
-LOG_JSON = LOG_DIR / "trust_log.json"
-LOG_JSONL = LOG_DIR / "trust_log.jsonl"
-
-# decide_xxx.json などのメインログは DATASET_DIR 側で扱う想定
-
-
-def _load_logs_json() -> list:
-    try:
-        with open(LOG_JSON, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-        if isinstance(obj, dict):
-            return obj.get("items", [])
-        if isinstance(obj, list):
-            return obj
-        return []
-    except Exception:
-        return []
-
-
-def _save_json(items: list) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_JSON, "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=2)
-
-
-def append_trust_log(entry: dict) -> None:
-    """
-    決定ごとの監査ログ（軽量）を JSONL + JSON に保存
-    """
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    # JSONL 追記
-    with open(LOG_JSONL, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-
-    # JSON(配列) の方も更新
-    items = _load_logs_json()
-    items.append(entry)
-    _save_json(items)
-
-
-def write_shadow_decide(
-    request_id: str,
-    body: dict,
-    chosen: dict,
-    telos_score: float,
-    fuji: dict,
-) -> None:
-    """
-    Doctor / ダッシュボード用の 1-decide スナップショット
-    """
-    shadow_dir = LOG_DIR / "DASH"
-    shadow_dir.mkdir(parents=True, exist_ok=True)
-
-    ts_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    out = shadow_dir / f"decide_{ts_str}.json"
-
-    rec = {
-        "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-        "query": (
-            body.get("query")
-            or (body.get("context") or {}).get("query")
-            or ""
-        ),
-        "chosen": chosen,
-        "telos_score": float(telos_score or 0.0),
-        "fuji": (fuji or {}).get("status"),
-    }
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(rec, f, ensure_ascii=False, indent=2)
 
 
 # =========================================================
@@ -1260,21 +1187,30 @@ async def run_decide_pipeline(
 
     # ---------- 監査ログ ----------
     try:
-        append_trust_log(
-            {
-                "request_id": request_id,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "context": context,
-                "query": query,
-                "chosen": chosen,
-                "telos_score": telos,
-                "fuji": fuji_dict,
-                "sha256_prev": None,
-            }
-        )
+        fuji_safe = fuji_dict if isinstance(fuji_dict, dict) else {}
+
+        audit_entry = {
+            "request_id": request_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "context": context,
+            "query": query,
+            "chosen": chosen,
+            "telos_score": float(telos),
+            "fuji": fuji_safe,
+            "gate_status": fuji_safe.get("status", "n/a"),
+            "gate_risk": float(fuji_safe.get("risk", 0.0)),
+            "gate_total": float(values_payload.get("total", 0.0)),
+            "plan_steps": len(plan.get("steps", [])) if isinstance(plan, dict) else 0,
+        }
+
+    # ← ハッシュ連鎖つきログを保存する
+        append_trust_log(audit_entry)
+
+    # シャドー版の保存
         write_shadow_decide(request_id, body, chosen, telos, fuji_dict)
+
     except Exception as e:
-        print("[audit] log write skipped:", e)
+        print("[audit] log write skipped:", repr(e))
 
     # ---------- 型保証 ----------
     try:

@@ -1,54 +1,97 @@
-# --- OS / エディタ系 ---
+# ============================
+# OS / Editor
+# ============================
 .DS_Store
 *.swp
 *.swo
 .vscode/
 .idea/
 
-# --- Python 共通 ---
+# ============================
+# Python / Virtualenv
+# ============================
 __pycache__/
-*.py[cod]
-core/config.py
+**/__pycache__/
+*.pyc
 *.pyo
 *.pyd
 *.so
-.mypy_cache/
+
 .venv/
 venv/
+ENV/
+env/
 
-# --- 環境変数・秘密情報 ---
+# ============================
+# Secrets / Keys
+# ============================
 .env
-.env.*
+*.env
 *.pem
 *.key
+*.token
+*.secret
+*_key.*
+*api_key*
+*API_KEY*
 
-# --- VERITAS のローカルデータ / ログ ---
-# ローカルの「脳みそ・世界状態・価値ログ」
-datasets
-scripts/doctor_report.json
+# ============================
+# VERITAS ローカルデータ
+# ============================
+scripts/logs/
+logs/
+reports/
+*.log
+*.csv
+*.tmp
+*.bak
+
+# doctor/consistency/trustlog 等すべて
+doctor_report.json
+consistency_certificate.json
+world_state.json
+value_core.json
+memory.json
+persona.json
+telos.json
+
+# TrustLog 系（誤コミット防止）
 trust_log.json
 trust_log.jsonl
 trust_log.json.*
-world_state.json
-value_core.json
-value_stats.json
-memory.json
-persona.json
+trust_log_*.json
 
-# メモリ用のベクトル・インデックス（再生成可能なデータ）
+# decide 系（1決定=1ファイルなので大量生成）
+decide_*.json
+meta_log.jsonl
+
+# ============================
+# MemoryOS / WorldModel
+# ============================
 *.npz
-*.jsonl
+*.pkl
+*.pickle
+veritas_os/core/models/memory_model.pkl
+veritas_os/core/memory/episodic.index.npz
 
-# ログ＆レポート類（あとから再生成できるもの）
-logs/
-reports/
-scripts/logs/
-*.log
-*.csv
+# ============================
+# Chainlit / UI キャッシュ
+# ============================
+.chainlit/
+chainlit.log
 
-# バックアップ系
-backups/
+# ============================
+# バックアップ / 一時ファイル
+# ============================
 backup/
-*.bak
+backups/
+*.zip
 *.tmp
-*.temp
+*.bak
+*.out
+*.cache
+
+# ============================
+# Others (不要な生成物)
+# ============================
+__MACOSX/

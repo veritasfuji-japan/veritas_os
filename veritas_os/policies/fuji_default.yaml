@@ -1,0 +1,214 @@
+# veritas_os/policies/fuji_default.yaml
+# FUJI Gate v2 Default Policy (for VERITAS)
+version: "fuji_v2_default_2025-11-26"
+
+meta:
+  name: "FUJI Default Policy v2"
+  description: >
+    VERITAS FUJI Gate のデフォルト安全ポリシー。
+    ・LLM Safety Headのカテゴリスコア
+    ・不確実性 / evidence の量
+    ・PII / 危険ワード
+    を統合して、allow / warn / human_review / deny を判定する。
+  updated_at: "2025-11-26"
+  owner: "VERITAS Local"
+  notes:
+    - "コード側では、policy が無い場合は従来のハードコード値にフォールバックすること。"
+    - "human_review アクションは、将来的には UI / Slack / CLI にフックして人間承認フローに使う。"
+
+# ============================================================
+# 1. グローバルしきい値（不確実性・エビデンス量など）
+# ============================================================
+
+thresholds:
+  # kernel.decide / doctor_report と整合させるためのベース
+  max_uncertainty: 0.60          # これ以上の不確実性なら FUJI 側で flag 寄りに扱う
+  min_evidence: 1                # evidence がこの件数未満なら flag
+  base_risk: 0.05                # 初期 risk のベースライン
+
+  # 「stakes」に応じた override（0〜1スケール）
+  stakes:
+    low:
+      max_uncertainty: 0.70      # stakes <= 0.3
+      min_evidence: 1
+    default:
+      max_uncertainty: 0.60      # 0.3 < stakes < 0.7
+      min_evidence: 1
+    high:
+      max_uncertainty: 0.50      # stakes >= 0.7
+      min_evidence: 2
+
+# 既存の draft も保持（コード側で使うならこちらを参照してもOK）
+base_thresholds:
+  default: 0.50   # 実際には thresholds.stakes.default.max_uncertainty に相当
+  high_stakes: 0.35
+  low_stakes: 0.70
+
+# ============================================================
+# 2. Safety Head カテゴリごとのポリシー
+# ============================================================
+
+# LLM Safety Head が返してくる "category" → ポリシー
+categories:
+  PII:
+    max_risk_allow: 0.20
+    action_on_exceed: "human_review"   # or "warn" / "deny"
+    description: "個人情報の漏洩リスク。PII は通常 modify/人間レビューで止める。"
+  self_harm:
+    max_risk_allow: 0.05
+    action_on_exceed: "deny"
+    description: "自傷行為・自殺に関する支援要請。高リスクは常に deny。"
+  illicit:
+    max_risk_allow: 0.10
+    action_on_exceed: "deny"
+    description: "違法行為（犯罪、ハッキング、薬物製造 等）。"
+  violence:
+    max_risk_allow: 0.20
+    action_on_exceed: "human_review"
+    description: "暴力・テロ・過度な残虐表現。"
+  minors:
+    max_risk_allow: 0.15
+    action_on_exceed: "human_review"
+    description: "未成年に関わるセンシティブなコンテンツ。"
+  safety_head_error:
+    max_risk_allow: 0.00
+    action_on_exceed: "human_review"
+    description: "Safety Head 実行エラー時のフェイルセーフ。"
+
+# ============================================================
+# 3. risk_after_policy → アクションマッピング
+# ============================================================
+
+actions:
+  allow:
+    risk_upper: 0.40        # ≤ 0.40 なら allow
+    description: "通常の回答・決定として通して良い範囲。"
+  warn:
+    risk_upper: 0.65        # ≤ 0.65 なら warn（軽い注意・情報不足）
+    description: "ユーザへの注意喚起を付けて回答するレベル。"
+  human_review:
+    risk_upper: 0.85        # ≤ 0.85 なら人間レビュー
+    description: "AI単独で処理しない。人間の承認が必要。"
+  deny:
+    risk_upper: 1.00        # それ以上は deny
+    description: "回答・決定を拒否すべきレベル。"
+
+# ============================================================
+# 4. 危険ワード／ハードブロック（ルールベース）
+# ============================================================
+
+blocked_keywords:
+  # fuji.validate_action で即 reject に使うワード
+  hard_block:
+    - "kill"
+    - "murder"
+    - "harm"
+    - "exploit"
+    - "weapon"
+    - "bomb"
+    - "malware"
+    - "ransomware"
+    - "doxx"
+    - "毒"
+    - "殺"
+    - "爆弾"
+    - "銃"
+    - "兵器"
+    - "ハッキング"
+    - "違法"
+    - "クラッキング"
+  sensitive:
+    - "bio"
+    - "pathogen"
+    - "drug synthesis"
+    - "zero-day"
+    - "bypass"
+    - "unlock jail"
+    - "生物兵器"
+    - "毒物合成"
+    - "ゼロデイ"
+    - "脱獄"
+    - "暗号回避"
+
+# ============================================================
+# 5. PII / 個人情報ポリシー
+# ============================================================
+
+pii:
+  enabled: true
+  honor_safe_flag: true      # context.fuji_safe_applied / pii_already_masked を尊重する
+  # 伏せ字シグナル（queryに含まれていたら「マスク済み」扱いに寄せる）
+  masked_markers:
+    - "●"
+    - "〇"
+    - "[pii]"
+    - "[redacted]"
+
+  redact_kinds:
+    phone: true
+    email: true
+    address_jp: true
+    person_name_jp: true
+
+  instructions:
+    - "氏名・住所・電話・メールなどの個人情報は ● で伏せ字にしてください。"
+    - "固有名詞はイニシャル化（例：山田太郎→山田●●）。"
+    - "第三者が特定できる情報（学校名・勤務先など）は抽象化してください。"
+
+# ============================================================
+# 6. LLM Safety Head 設定（ヘッドのメタ情報）
+# ============================================================
+
+llm_safety:
+  enabled: true
+  model: "openai:gpt-4.1-mini"
+  max_categories: 5
+  # Safety Head のスコアをどう解釈するか（0〜1 スケール）
+  score_semantics:
+    0.0: "no risk"
+    0.5: "medium risk"
+    1.0: "max risk"
+
+# ============================================================
+# 7. 文脈ごとの override（stakes / mode などで上書き）
+# ============================================================
+
+overrides:
+  high_stakes:
+    when_stakes_gte: 0.7
+    thresholds:
+      max_uncertainty: 0.50
+      min_evidence: 2
+    # 例: high_stakes の場合は PII の max_risk_allow を少し厳しくする、なども可能
+    categories:
+      PII:
+        max_risk_allow: 0.15
+
+  low_stakes:
+    when_stakes_lte: 0.3
+    thresholds:
+      max_uncertainty: 0.70
+      min_evidence: 1
+
+  bench_mode:
+    when_mode_in: ["bench", "internal_eval"]
+    pii:
+      enabled: false        # ここでは PII は評価しても flag しない（ログ/ベンチ用途）
+    thresholds:
+      max_uncertainty: 0.80
+
+# ============================================================
+# 8. TrustLog / 監査メタ
+# ============================================================
+
+audit:
+  # FUJI Gate の決定を TrustLog にどこまで残すか
+  log_level: "full"          # "none" / "summary" / "full"
+  include:
+    - "status"
+    - "risk"
+    - "reasons"
+    - "violations"
+    - "categories"          # Safety Head のカテゴリ＆スコア
+  redact_before_log: true    # TrustLog に書く前に PII をマスクするか
+  max_log_size: 10000        # 1 レコードあたりの最大文字数（オーバー分は truncate）

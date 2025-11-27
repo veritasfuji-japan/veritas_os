@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import re
 import uuid
+import time                    # ★ 追加: latency計測
+import sys                     # ★ 追加: doctor起動用
+import subprocess              # ★ 追加: doctor起動用
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -496,7 +499,10 @@ async def decide(
       - WorldModel（world.simulate）による「一手先の世界予測」
       - FUJI Gate による最終安全判定
       - 決定ログを MemoryOS にエピソード保存
+      - ★ 決定結果を world_state.json と doctor_report に反映
     """
+    start_ts = time.time()   # ★ 追加: latency計測開始
+
     # ---- context を安全に固める & world_state を注入 ----
     ctx_raw: Dict[str, Any] = dict(context or {})
     user_id = ctx_raw.get("user_id") or "cli"
@@ -786,10 +792,10 @@ async def decide(
         }
     )
 
-    # FUJI Gate（★ここで positional で q_text を渡す → query キーワード問題を回避）
+    # FUJI Gate
     try:
         fuji_result = fuji_core.evaluate(
-            q_text,  # ← 第一引数として渡すので、fuji.evaluate 側の名前が text でも query でもOK
+            q_text,
             context={
                 "user_id": user_id,
                 "stakes": stakes,
@@ -891,12 +897,8 @@ async def decide(
         }
 
         try:
-            # まずは「ベクターモード」想定の呼び方
-            #   put("episodic", {"text":..., "tags":..., "meta":...})
             mem_core.MEM.put("episodic", episode_record)
         except TypeError:
-            # もし KVS モードだった場合はこちらにフォールバック
-            #   put(user_id, key, value)
             mem_core.MEM.put(
                 user_id,
                 f"decision:{req_id}",
@@ -907,6 +909,49 @@ async def decide(
         extras.setdefault("memory_log", {})
         extras["memory_log"]["error"] = repr(e)
 
+    # =======================================================
+    # ★ ここから: metrics / world_state / doctor フック
+    # =======================================================
+    latency_ms: int | None = None
+    try:
+        latency_ms = int((time.time() - start_ts) * 1000)
+        extras.setdefault("metrics", {})
+        extras["metrics"]["latency_ms"] = latency_ms
+    except Exception as e:
+        extras.setdefault("metrics", {})
+        extras["metrics"]["error"] = f"latency_failed:{repr(e)[:60]}"
+
+    # world_state.json 更新（decision history / progress）
+    try:
+        world_model.update_from_decision(
+            user_id=user_id,
+            query=q_text,
+            chosen=chosen,
+            gate=fuji_result,
+            values={"total": telos_score},
+            planner=extras.get("code_change_plan"),
+            latency_ms=latency_ms,
+        )
+    except Exception as e:
+        extras.setdefault("world_state_update", {})
+        extras["world_state_update"]["error"] = repr(e)
+
+    # doctor 自動実行（ctx.auto_doctor が False のときはスキップ）
+    auto_doctor = ctx.get("auto_doctor", True)
+    if auto_doctor:
+        try:
+            subprocess.Popen(
+                [sys.executable, "-m", "veritas_os.scripts.doctor"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            extras.setdefault("doctor", {})
+            extras["doctor"]["error"] = repr(e)
+
+    # =======================================================
+    # レスポンス構築
+    # =======================================================
     return {
         "request_id": req_id,
         "chosen": chosen,
@@ -934,6 +979,7 @@ async def decide(
             "fast_mode=True または mode='fast' の場合、WorldModel / env_tools / DebateOS / auto_adjust をスキップし、"
             "ローカルスコアのみで高速に決定します。"
             "また、各 decision は MemoryOS にエピソードとして保存され、次回以降の判断に活かされます。"
+            "最後に world_state.json を更新し、必要に応じて doctor.py を自動実行して doctor_report を更新します。"
         ),
         "extras": extras,
     }

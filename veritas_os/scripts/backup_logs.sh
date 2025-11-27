@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ##
-# VERITAS v3 backup_logs.sh
-# - decide.log / decide_*.json / doctor_report.json などを zip 化
+# VERITAS v1.0.0 backup_logs.sh
+# - scripts/logs 配下の decide_*.json / doctor_report.json などを zip 化
 # - 出力先: veritas_os/backups/
 # - Slack 通知 & rclone 同期対応
 ##
@@ -13,7 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 LOG_DIR="${REPO_ROOT}/scripts/logs"
-REPORT_DIR="${REPO_ROOT}/reports"
 OUT_DIR="${REPO_ROOT}/backups"
 
 TS="$(date +%Y%m%d_%H%M%S)"
@@ -25,9 +24,8 @@ NOTIFY_PY="${SCRIPT_DIR}/notify_slack.py"
 mkdir -p "${OUT_DIR}"
 
 echo "[backup] === VERITAS Backup Start ==="
-echo "[backup] LOG_DIR   : ${LOG_DIR}"
-echo "[backup] REPORT_DIR: ${REPORT_DIR}"
-echo "[backup] OUT_DIR   : ${OUT_DIR}"
+echo "[backup] LOG_DIR : ${LOG_DIR}"
+echo "[backup] OUT_DIR : ${OUT_DIR}"
 
 # ----- バックアップ対象を収集 -----
 cd "${REPO_ROOT}"
@@ -50,13 +48,25 @@ if compgen -G "scripts/logs/*.html" > /dev/null; then
   while IFS= read -r f; do files+=("$f"); done < <(compgen -G "scripts/logs/*.html")
 fi
 
-# doctor_report.json
-if [ -f "reports/doctor_report.json" ]; then
-  files+=("reports/doctor_report.json")
+# doctor_report.json / trust_log.json1 / world_state.json / consistency_certificate.json / memory.json
+if [ -f "scripts/logs/doctor_report.json" ]; then
+  files+=("scripts/logs/doctor_report.json")
+fi
+if [ -f "scripts/logs/trust_log.json1" ]; then
+  files+=("scripts/logs/trust_log.json1")
+fi
+if [ -f "scripts/logs/world_state.json" ]; then
+  files+=("scripts/logs/world_state.json")
+fi
+if [ -f "scripts/logs/consistency_certificate.json" ]; then
+  files+=("scripts/logs/consistency_certificate.json")
+fi
+if [ -f "scripts/logs/memory.json" ]; then
+  files+=("scripts/logs/memory.json")
 fi
 
 if [ "${#files[@]}" -eq 0 ]; then
-  echo "[backup] No files to archive under scripts/logs or reports."
+  echo "[backup] No files to archive under scripts/logs."
   echo "[backup] === Nothing to do (Completed) ==="
   exit 0
 fi
@@ -106,7 +116,7 @@ if [ -n "${SLACK_WEBHOOK_URL:-}" ] && [ -f "${NOTIFY_PY}" ]; then
 💾 Size: ${SIZE}"
 fi
 
-# ----- rclone 同期（任意・あれば） -----
+# ----- rclone 同期（任意） -----
 if command -v rclone >/dev/null 2>&1; then
   # remote 名 'veritas' は必要に応じて変更
   rclone sync "${OUT_DIR}" "veritas:VERITAS/backups" --checksum --exclude "*.sha256" || true
