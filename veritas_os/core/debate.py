@@ -1,6 +1,6 @@
 # veritas_os/core/debate.py
 """
-ReasonOS Multi-Agent Debate モジュール（MVP版）
+ReasonOS Multi-Agent Debate モジュール（強化MVP版）
 
 役割:
 - Planner が生成した options (steps) や過去の action 候補に対して、
@@ -20,6 +20,11 @@ import textwrap
 
 from . import llm_client
 from . import world as world_model
+
+
+# ============================
+#  System / User プロンプト
+# ============================
 
 
 def _build_system_prompt() -> str:
@@ -126,28 +131,60 @@ def _build_user_prompt(
     """)
 
 
+# ============================
+#  JSON パースまわり（強化版）
+# ============================
+
+
 def _safe_parse(raw: str) -> Dict[str, Any]:
     """
     LLM 出力から JSON を安全に取り出すユーティリティ。
-    - まずはそのまま json.loads
-    - 失敗したら { ... } の部分を抽出して再トライ
-    - それでもダメなら最小構造で返す
+
+    - Markdown の ```json / ``` コードブロックが付いていても処理する
+    - トップレベルが配列だけの場合は {"options": [...]} にラップする
+    - ダメな場合は最小構造で返す
     """
     if not raw:
         return {"options": [], "chosen_id": None}
 
+    cleaned = raw.strip()
+
+    # ```json ... ``` のようなコードブロックを除去
+    if cleaned.startswith("```"):
+        first_nl = cleaned.find("\n")
+        if first_nl != -1:
+            cleaned = cleaned[first_nl + 1 :]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
+    def _wrap(obj: Any) -> Dict[str, Any]:
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, list):
+            return {"options": obj, "chosen_id": None}
+        return {"options": [], "chosen_id": None}
+
+    # 1) そのままパース
     try:
-        return json.loads(raw)
+        obj = json.loads(cleaned)
+        return _wrap(obj)
     except Exception:
         pass
 
+    # 2) 先頭の '{' 〜 最後の '}' を抜き出して再トライ
     try:
-        start = raw.index("{")
-        end = raw.rindex("}") + 1
-        snippet = raw[start:end]
-        return json.loads(snippet)
+        start = cleaned.index("{")
+        end = cleaned.rindex("}") + 1
+        snippet = cleaned[start:end]
+        obj = json.loads(snippet)
+        return _wrap(obj)
     except Exception:
         return {"options": [], "chosen_id": None}
+
+
+# ============================
+#  フォールバック Debate
+# ============================
 
 
 def _fallback_debate(
@@ -187,12 +224,16 @@ def _fallback_debate(
     }
 
 
+# ============================
+#  メイン入口
+# ============================
+
+
 def run_debate(
     query: str,
     options: List[Dict[str, Any]],
     context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    
     """
     ReasonOS から呼び出すメイン入口。
 
@@ -209,10 +250,9 @@ def run_debate(
       "source": "openai_llm" or "fallback"
     }
     """
-
     ctx = dict(context or {})
 
-    # WorldModel スナップショット
+    # WorldModel スナップショット（失敗しても大丈夫なように try/except）
     try:
         world_snap = world_model.snapshot("veritas_agi")
     except Exception:
@@ -241,7 +281,7 @@ def run_debate(
         out_opts = parsed.get("options") or []
         chosen_id = parsed.get("chosen_id")
 
-        # ---- 入力 options を id -> option に展開 ----
+        # ---- 入力 options を id -> option に展開（ベース）----
         enriched_by_id: Dict[str, Dict[str, Any]] = {}
         for base in options:
             bid = base.get("id") or base.get("title") or "opt"
@@ -270,7 +310,7 @@ def run_debate(
         non_rejected = [o for o in enriched_list if not _is_rejected(o)]
 
         # ---- chosen 判定 ----
-        chosen = None
+        chosen: Optional[Dict[str, Any]] = None
 
         # 1) LLM が chosen_id を出していて、かつ却下でなければそれを採用
         if chosen_id and chosen_id in enriched_by_id:
@@ -280,18 +320,23 @@ def run_debate(
 
         # 2) それ以外の場合は「却下以外」の中から score 最大を選ぶ
         if chosen is None:
-            if non_rejected:
+            candidates = non_rejected if non_rejected else enriched_list
+            if candidates:
                 best = None
                 best_score = -1.0
-                for opt in non_rejected:
-                    s = float(opt.get("score", 0.0) or 0.0)
+                for opt in candidates:
+                    try:
+                        s = float(opt.get("score", 0.0) or 0.0)
+                    except Exception:
+                        s = 0.0
                     if s > best_score:
                         best_score = s
                         best = opt
                 chosen = best
-            else:
-                # ★ ここが重要：全候補が却下 → chosen は None にして返す
-                chosen = None
+
+        # 3) それでも chosen が決まらなければフォールバック
+        if chosen is None:
+            return _fallback_debate(options)
 
         return {
             "chosen": chosen,
@@ -301,4 +346,5 @@ def run_debate(
         }
 
     except Exception:
+        # LLM まわりで何かあったら安全側フォールバック
         return _fallback_debate(options)

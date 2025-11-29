@@ -1,56 +1,88 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 """
 VERITAS decide (CLI)
+
 - personas/styles/tones を前置きして /v1/decide を叩く
 - --apply-safe 指定時、FUJI が `modify` なら安全化して 2 回目を自動送信
 - --query-file / --input / --out で Self-Improve 用のバッチ実行にも使える
 """
 
-import os, sys, json, argparse, hmac, hashlib, time, uuid, requests, re
+from __future__ import annotations
+
+import os
+import sys
+import json
+import argparse
+import hmac
+import hashlib
+import time
+import uuid
+import re
 from pathlib import Path
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-# ===== 固定パス =====
-REPO_ROOT = Path("/Users/user/veritas_clean_test2/veritas_os")
-LOG_DIR   = REPO_ROOT / "scripts" / "logs"
+import requests
+
+# ===== REPO ルート検出 =====
+# 優先: VERITAS_REPO_ROOT 環境変数
+# 次点: このファイルからの相対位置（.../veritas_os/scripts/decide.py 想定）
+ENV_REPO_ROOT = os.environ.get("VERITAS_REPO_ROOT")
+if ENV_REPO_ROOT:
+    REPO_ROOT = Path(ENV_REPO_ROOT).expanduser().resolve()
+else:
+    REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# ログディレクトリ
+LOG_DIR = REPO_ROOT / "scripts" / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # テンプレート: veritas_os/templates/*
 TEMPLATE_ROOT = REPO_ROOT / "templates"
 
 # API 接続情報（環境変数が優先）
-API_BASE   = os.environ.get("VERITAS_API_BASE", "http://127.0.0.1:8000")
-API_KEY    = os.environ.get("VERITAS_API_KEY", "")
+API_BASE = os.environ.get("VERITAS_API_BASE", "http://127.0.0.1:8000")
+API_KEY = os.environ.get("VERITAS_API_KEY", "")
 API_SECRET = os.environ.get("VERITAS_API_SECRET", "")
 
-
 # デフォルト persona/style/tone
-DEFAULTS = {
+DEFAULTS: Dict[str, str] = {
     "persona": "default",
     "style": "concise",
     "tone": "friendly",
 }
 
-# ---------- helpers ----------
+# ============================
+# helpers
+# ============================
+
 def _load_text(p: Path) -> str:
     try:
         return p.read_text(encoding="utf-8").strip()
     except Exception:
         return ""
 
+
 def _load_template(kind: str, name: str) -> str:
+    """
+    templates/{kind}/{name}.txt を読み込む。
+    無ければ空文字を返す（preamble から自動的にスキップされる）。
+    """
+    if not name:
+        return ""
     return _load_text(TEMPLATE_ROOT / kind / f"{name}.txt")
+
 
 def _sign(ts: int, nonce: str, body: str) -> str:
     msg = f"{ts}\n{nonce}\n{body}"
     return hmac.new(API_SECRET.encode("utf-8"), msg.encode("utf-8"), hashlib.sha256).hexdigest()
 
-def _headers_for(body: str) -> dict:
-    ts    = int(time.time())
+
+def _headers_for(body: str) -> Dict[str, str]:
+    ts = int(time.time())
     nonce = uuid.uuid4().hex
-    sig   = _sign(ts, nonce, body)
+    sig = _sign(ts, nonce, body)
     return {
         "X-API-Key": API_KEY,
         "X-Timestamp": str(ts),
@@ -59,45 +91,73 @@ def _headers_for(body: str) -> dict:
         "Content-Type": "application/json",
     }
 
-def _post_decide(payload: dict) -> requests.Response:
+
+def _post_decide(payload: Dict[str, Any]) -> requests.Response:
     body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-    url  = f"{API_BASE}/v1/decide"
-    return requests.post(url, headers=_headers_for(body), data=body)
+    url = f"{API_BASE}/v1/decide"
+    # タイムアウト付き（ハング防止）
+    return requests.post(url, headers=_headers_for(body), data=body, timeout=120)
 
-# --- ざっくりPII検出（fuji.py と整合） ---
-_RE_PHONE  = re.compile(r'(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})')
-_RE_EMAIL  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-_RE_ADDRJP = re.compile(r'(東京都|都|道|府|県|市|区|町|村).{0,20}\d')
-_RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}')
 
-def _mask_with_redactions(text: str, redactions: list[str]) -> str:
+# --- ざっくり PII 検出（fuji.py と整合イメージ） ---
+_RE_PHONE = re.compile(r"(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})")
+_RE_EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_RE_ADDRJP = re.compile(r"(東京都|都|道|府|県|市|区|町|村).{0,20}\d")
+_RE_NAMEJP = re.compile(r"[\u4e00-\u9fff]{2,4}")
+
+
+def _mask_with_redactions(text: str, redactions: List[str]) -> str:
     """FUJI の redactions に合わせてざっくりマスク（過剰マスク可）"""
     if not text or not redactions:
         return text
+
     out = text
     changed = False
+
     if "電話" in redactions:
-        new = _RE_PHONE.sub("〇〇-〇〇〇〇-〇〇〇〇", out); changed |= (new != out); out = new
+        new = _RE_PHONE.sub("〇〇-〇〇〇〇-〇〇〇〇", out)
+        changed |= (new != out)
+        out = new
+
     if "メール" in redactions:
-        new = _RE_EMAIL.sub("xx@masked.xx", out);         changed |= (new != out); out = new
+        new = _RE_EMAIL.sub("xx@masked.xx", out)
+        changed |= (new != out)
+        out = new
+
     if "住所" in redactions:
-        new = _RE_ADDRJP.sub("〇〇県〇〇市〇〇", out);     changed |= (new != out); out = new
+        new = _RE_ADDRJP.sub("〇〇県〇〇市〇〇", out)
+        changed |= (new != out)
+        out = new
+
     if "個人名" in redactions:
-        new = _RE_NAMEJP.sub(lambda m: m.group(0)[0] + "●●", out); changed |= (new != out); out = new
+        new = _RE_NAMEJP.sub(lambda m: m.group(0)[0] + "●●", out)
+        changed |= (new != out)
+        out = new
+
+    # 任意の term も完全マスク（例えば会社名など）
     for term in redactions:
         if term and term in out:
             out = out.replace(term, "〇〇")
+
+    # 何も変わってない場合は、数字のみざっくりマスクしておく
     if not changed:
-        out = re.sub(r'\d{2,}', lambda m: '〇' * len(m.group(0)), out)
+        out = re.sub(r"\d{2,}", lambda m: "〇" * len(m.group(0)), out)
+
     return out
 
-def _save_txt(name: str, content: str):
+
+def _save_txt(name: str, content: str) -> None:
     (LOG_DIR / name).write_text(content, encoding="utf-8")
 
-def _save_json(name: str, obj: dict):
-    (LOG_DIR / name).write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
-def _write_out(path_str: str, obj: dict):
+def _save_json(name: str, obj: Dict[str, Any]) -> None:
+    (LOG_DIR / name).write_text(
+        json.dumps(obj, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _write_out(path_str: str, obj: Dict[str, Any]) -> None:
     """--out で指定された任意パスに JSON を保存"""
     try:
         p = Path(path_str)
@@ -107,8 +167,12 @@ def _write_out(path_str: str, obj: dict):
     except Exception as e:
         print(f"[decide.py] --out 保存に失敗しました: {e}")
 
-# ---------- main ----------
-def main():
+
+# ============================
+# main
+# ============================
+
+def main() -> None:
     if not API_KEY or not API_SECRET:
         print("❌ 環境変数 VERITAS_API_KEY / VERITAS_API_SECRET を設定してください。")
         sys.exit(1)
@@ -117,8 +181,8 @@ def main():
     # query は「なくてもよい」にして、--query-file と切り替え可能にする
     ap.add_argument("query", nargs="?", help="ユーザ質問（または --query-file を使用）")
     ap.add_argument("--persona", default=DEFAULTS["persona"])
-    ap.add_argument("--style",   default=DEFAULTS["style"])
-    ap.add_argument("--tone",    default=DEFAULTS["tone"])
+    ap.add_argument("--style", default=DEFAULTS["style"])
+    ap.add_argument("--tone", default=DEFAULTS["tone"])
     ap.add_argument("--min-evidence", type=int, default=2, help="必要エビデンス数(1-3推奨)")
     ap.add_argument("--options", nargs="*", default=[], help="選択肢（スペース/カンマ/スラッシュでもOK）")
     ap.add_argument("--apply-safe", action="store_true", help="FUJIがmodifyの時だけ安全化→再送する")
@@ -153,7 +217,7 @@ def main():
     else:
         if not args.query:
             ap.error("query か --query-file のどちらかを指定してください。")
-        query_text = args.query
+        query_text = args.query  # type: ignore[assignment]
 
     # ---- --input JSON をクエリ末尾に埋め込む ----
     final_query = query_text
@@ -167,33 +231,42 @@ def main():
 
         input_snippet = json.dumps(input_obj, ensure_ascii=False, indent=2)
         final_query = (
-            query_text
-            + "\n\n---\n以下の JSON 入力を踏まえて、弱点の整理や次アクションを提案してください。\n"
-            + "```json\n"
-            + input_snippet
-            + "\n```"
+            f"{query_text}\n\n---\n以下の JSON 入力を踏まえて、"
+            "弱点の整理や次アクションを提案してください。\n"
+            "```json\n"
+            f"{input_snippet}\n```"
         )
 
     # ---- templates → 前置き ----
     persona = _load_template("personas", args.persona)
-    style   = _load_template("styles",   args.style)
-    tone    = _load_template("tones",    args.tone)
+    style = _load_template("styles", args.style)
+    tone = _load_template("tones", args.tone)
 
-    preamble = "\n".join([t for t in [persona, style and f"Style: {style}", tone and f"Tone: {tone}"] if t])
-    context_query = f"{preamble}\n\nUser: {final_query}"
+    preamble_parts: List[str] = []
+    if persona:
+        preamble_parts.append(persona)
+    if style:
+        preamble_parts.append(f"Style: {style}")
+    if tone:
+        preamble_parts.append(f"Tone: {tone}")
+
+    preamble = "\n".join(preamble_parts).strip()
+    context_query = f"{preamble}\n\nUser: {final_query}" if preamble else f"User: {final_query}"
 
     # ---- options を正規化 ----
-    opts = args.options
-    if isinstance(opts, list):
-        if len(opts) == 1 and isinstance(opts[0], str):
-            opts = [s for s in re.split(r"[,/、\s]+", opts[0]) if s]
-    elif isinstance(opts, str):
-        opts = [s for s in re.split(r"[,/、\s]+", opts) if s]
+    opts_raw = args.options
+    if isinstance(opts_raw, list):
+        if len(opts_raw) == 1 and isinstance(opts_raw[0], str):
+            opts = [s for s in re.split(r"[,/、\s]+", opts_raw[0]) if s]
+        else:
+            opts = opts_raw
+    elif isinstance(opts_raw, str):
+        opts = [s for s in re.split(r"[,/、\s]+", opts_raw) if s]
     else:
         opts = []
 
     # ---- 1st request ----
-    payload1 = {
+    payload1: Dict[str, Any] = {
         "context": {
             "user_id": args.user_id,
             "query": context_query,
@@ -210,16 +283,18 @@ def main():
         r1 = _post_decide(payload1)
     except Exception as e:
         print("❌ VERITAS: decide.py 送信エラー:", e)
-        return
+        sys.exit(1)
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     _save_txt(f"decide_status_{ts}.txt", f"{r1.status_code}")
+
     try:
         res1 = r1.json()
     except Exception:
         _save_txt(f"decide_error_{ts}.txt", r1.text)
         print(r1.text)
-        return
+        sys.exit(1)
+
     _save_json(f"decide_first_{ts}.json", {"request": payload1, "response": res1})
 
     gate = (res1.get("gate") or {})
@@ -229,6 +304,7 @@ def main():
         or fuji.get("status")
         or res1.get("decision_status")
     )
+
     print("[DBG] gate.decision_status=", gate.get("decision_status"))
     print("[DBG] fuji.status=", fuji.get("status"))
     print("[DBG] root.decision_status=", res1.get("decision_status"))
@@ -245,7 +321,7 @@ def main():
     if status != "modify":
         _save_txt(
             f"decide_second_skipped_{ts}.txt",
-            f"skip: status={status}, gate={gate.get('decision_status')}, fuji={fuji.get('status')}"
+            f"skip: status={status}, gate={gate.get('decision_status')}, fuji={fuji.get('status')}",
         )
         if args.out:
             _write_out(args.out, res1)
@@ -253,21 +329,21 @@ def main():
         return
 
     # ---- FUJI modify → 自動安全化して 2nd request ----
-    redactions = fuji.get("redactions") or []
-    safe_notes = fuji.get("safe_instructions") or []
-    mods = fuji.get("modifications") or []
+    redactions: List[str] = fuji.get("redactions") or []
+    safe_notes: List[str] = fuji.get("safe_instructions") or []
+    mods: List[Dict[str, Any]] = fuji.get("modifications") or []
 
     # ① 質問テキストをマスク（final_query 全体を対象）
     safe_query = _mask_with_redactions(final_query, redactions)
     _save_txt(f"masked_query_{ts}.txt", safe_query)
 
     # ② 前置き付きの context.query もマスク版に置換
-    context_query2 = f"{preamble}\n\nUser: {safe_query}"
+    context_query2 = f"{preamble}\n\nUser: {safe_query}" if preamble else f"User: {safe_query}"
 
-    payload2 = {
+    payload2: Dict[str, Any] = {
         "context": {
             "user_id": args.user_id,
-            "query": context_query2,          # マスク済み前置き
+            "query": context_query2,  # マスク済み前置き
             "time_horizon": "mid",
             "telos_weights": {"W_Transcendence": 0.6, "W_Struggle": 0.4},
             "affect_hint": {"style": args.style},
@@ -275,42 +351,58 @@ def main():
             "fuji_mods": mods,
             "fuji_notes": safe_notes,
         },
-        "query": safe_query,                  # マスク済み本文
+        "query": safe_query,  # マスク済み本文
         "options": opts,
         "min_evidence": int(args.min_evidence),
     }
 
     # --- 送信前スナップショット（必ず作成） ---
-    _save_json(f"decide_second_attempt_{ts}.json", {"request": payload2, "note": "before_post"})
+    _save_json(
+        f"decide_second_attempt_{ts}.json",
+        {"request": payload2, "note": "before_post"},
+    )
 
+    r2: Optional[requests.Response] = None
     try:
         r2 = _post_decide(payload2)
-        _save_txt(f"decide_second_http_{ts}.txt", f"status={r2.status_code}\n{r2.text[:8000]}")
+        _save_txt(
+            f"decide_second_http_{ts}.txt",
+            f"status={r2.status_code}\n{r2.text[:8000]}",
+        )
         res2 = r2.json()
     except Exception as e:
+        status_code = getattr(r2, "status_code", None)
+        text_preview = getattr(r2, "text", "")[:8000] if r2 is not None else ""
         _save_txt(
             f"decide_second_error_{ts}.txt",
-            f"EXC={repr(e)}\nstatus={getattr(r2,'status_code',None)}\n{getattr(r2,'text','')[:8000]}"
+            f"EXC={repr(e)}\nstatus={status_code}\n{text_preview}",
         )
         print("❌ VERITAS: 2回目送信エラー:", e)
+        # 失敗した場合は 1 回目の結果を返して終わる
         print(json.dumps(res1, ensure_ascii=False, indent=2))
         return
 
-    final = dict(res2)
+    final: Dict[str, Any] = dict(res2)
     final.setdefault("extras", {})
     final["extras"].setdefault("fuji_applied", True)
     final["extras"].setdefault("fuji_first_gate", gate)
     final["extras"].setdefault("safe_instructions", safe_notes)
     final["extras"].setdefault("redactions", redactions)
 
-    print(f"[DBG] second.gate.decision_status= {(final.get('gate') or {}).get('decision_status')}")
-    print(f"[DBG] second.root.decision_status= {final.get('decision_status')}")
+    print(
+        "[DBG] second.gate.decision_status=",
+        (final.get("gate") or {}).get("decision_status"),
+    )
+    print("[DBG] second.root.decision_status=", final.get("decision_status"))
 
-    _save_json(f"decide_second_{ts}.json", {
-        "request": payload2,
-        "response": final,
-        "fuji_from_first": fuji
-    })
+    _save_json(
+        f"decide_second_{ts}.json",
+        {
+            "request": payload2,
+            "response": final,
+            "fuji_from_first": fuji,
+        },
+    )
 
     if args.out:
         _write_out(args.out, final)
@@ -318,6 +410,7 @@ def main():
     print(json.dumps(final, ensure_ascii=False, indent=2))
     print("✅ decide done")
     print("✅ full run completed")
+
 
 if __name__ == "__main__":
     main()

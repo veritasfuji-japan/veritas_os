@@ -1,3 +1,4 @@
+# veritas_os/api/pipeline.py など
 from __future__ import annotations
 
 import asyncio
@@ -1328,31 +1329,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[dataset] skip:", e)
 
-    # ---------- MemoryOS 自動記録（簡易 decision） ----------
-    try:
-        uid_auto = (context or {}).get("user_id", "anon")
-        mem.put(
-            uid_auto,
-            key=f"decision_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
-            value={
-                "query": query,
-                "chosen": payload.get("chosen"),
-                "values_total": float(
-                    payload.get("values", {}).get("total", 0.0)
-                ),
-                "gate_risk": float(
-                    payload.get("gate", {}).get("risk", 0.0)
-                ),
-                "decision_status": payload.get("decision_status"),
-                "telos_score": float(
-                    payload.get("telos_score", 0.0)
-                ),
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-            },
-        )
-        print(f"[MemoryOS] saved decision for {uid_auto}")
-    except Exception as e:
-        print("[MemoryOS] failed to save:", e)
+    
 
     # ---------- 決定レコードを LOG/DATASET に保存 ----------
     try:

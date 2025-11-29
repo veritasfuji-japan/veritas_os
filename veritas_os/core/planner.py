@@ -20,34 +20,7 @@ from . import memory as mem
 def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     """
     「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
-    - kernel 側の simple_qa モードと合わせて使うことを想定。
-    """
-    ctx = context or {}
-
-    # 明示フラグが立っていたらそれを最優先
-    if ctx.get("mode") == "simple_qa" or ctx.get("simple_qa"):
-        return True
-
-    q = (query or "").strip()
-
-    if not q:
-        return False
-
-    # 40文字以下 & 疑問形 & 「どう進める/計画」系が含まれないなら simple QA とみなす
-    is_short = len(q) <= 40
-    looks_question = ("?" in q) or ("？" in q) or q.endswith(("か", "かね", "かな", "でしょうか"))
-    has_plan_words = any(k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"])
-
-    if is_short and looks_question and not has_plan_words:
-        return True
-
-    return False
-
-
-def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
-    """
-    「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
-    - kernel 側の simple_qa モードと合わせて使うことを想定。
+    - kernel / pipeline 側の simple_qa モードと合わせて使うことを想定。
     - ※ AGI / VERITAS 系の問いはここでは simple_qa に絶対しない。
     """
     ctx = context or {}
@@ -95,6 +68,63 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
         return True
 
     return False
+
+
+def _simple_qa_plan(
+    query: str,
+    context: Dict[str, Any] | None = None,
+    world_snap: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    simple QA 用の最小プラン。
+    - LLM Planner を回さず、「1〜2ステップで答えを見る／メモる」レベルで完結させる。
+    - world_snap はあってもなくてもよい（メタ情報として raw に載せるだけ）。
+    """
+    q = (query or "").strip()
+
+    steps: List[Dict[str, Any]] = [
+        {
+            "id": "simple_qa",
+            "title": "シンプルQ&Aで回答を受け取る",
+            "detail": (
+                "DecisionOS からの1回の回答をそのまま受け取り、"
+                "追加の長期計画や重いAGIプランニングは行わない。"
+                f"質問: {q}"
+            ),
+            "why": (
+                "短いQ&A形式の問いであり、"
+                "複数ステップの行動計画を立てるよりも、"
+                "素早く答えを得ることが優先されるため。"
+            ),
+            "eta_hours": 0.05,
+            "risk": 0.01,
+            "dependencies": [],
+        },
+        {
+            "id": "note",
+            "title": "必要ならメモに残す",
+            "detail": (
+                "得られた回答のうち重要なポイントを1〜3行でメモに残す。"
+                "その場で追加の大きなタスクは立てず、"
+                "必要になったときに改めて /v1/decide を叩いて検討する。"
+            ),
+            "why": "軽い質問でも、後から見返せるメモがあると意思決定の一貫性が上がるため。",
+            "eta_hours": 0.05,
+            "risk": 0.01,
+            "dependencies": ["simple_qa"],
+        },
+    ]
+
+    return {
+        "steps": steps,
+        "raw": {
+            "mode": "simple_qa",
+            "query": q,
+            "world_snapshot": world_snap or {},
+            "context": context or {},
+        },
+        "source": "simple_qa",
+    }
 
 
 # ============================
@@ -661,12 +691,17 @@ def plan_for_veritas_agi(
 
     # ★ まず simple QA なら即リターン（LLMプランナーは使わない）
     if _is_simple_qa(query, ctx):
-        # simple QA でも一応 World のスナップショットは読んでおく（不要なら None でもOK）
         try:
-            world_snap_simple: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
+            world_snap_simple: Dict[str, Any] | None = world_model.snapshot(
+                "veritas_agi"
+            )
         except Exception:
             world_snap_simple = None
-        return _simple_qa_plan(query=query, context=ctx, world_snap=world_snap_simple)
+        return _simple_qa_plan(
+            query=query,
+            context=ctx,
+            world_snap=world_snap_simple,
+        )
 
     # ---- simple QA でなければ、AGI 用の重プランナーを使う ----
 
@@ -705,7 +740,7 @@ def plan_for_veritas_agi(
             user_prompt=user_prompt,
             extra_messages=None,
             temperature=0.25,
-            max_tokens=2000,  # 必要なら 1800〜2000 に上げてもOK
+            max_tokens=2000,
         )
 
         raw_text = res.get("text") if isinstance(res, dict) else str(res)

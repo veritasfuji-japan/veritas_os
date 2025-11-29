@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import re
 import uuid
-import time                    # ★ 追加: latency計測
-import sys                     # ★ 追加: doctor起動用
-import subprocess              # ★ 追加: doctor起動用
+import time                    # ★ latency計測
+import sys                     # ★ doctor起動用
+import subprocess              # ★ doctor起動用
 from datetime import datetime
 from typing import Any, Dict, List
 
@@ -18,7 +18,9 @@ from . import planner as planner_core    # ★ code_change_plan 用
 from . import agi_goals                  # ★ AGIゴール自己調整モジュール
 from . import memory as mem_core         # ★ MemoryOS
 from . import fuji as fuji_core          # ★ FUJI Gate
+from . import debate as debate_core
 from veritas_os.tools import call_tool   # env tools ラッパ用
+
 
 # ============================================================
 # 環境ツールラッパ（web_search / github_search など）
@@ -491,17 +493,21 @@ async def decide(
 ) -> Dict[str, Any]:
     """
     VERITAS kernel.decide:
+
       - 意図検出
       - Simple QA モード（time/date/weekday）はパイプラインをバイパス
+      - knowledge_qa（簡易ナレッジ質問）バイパス
       - MemoryOS 要約を取り込み
-      - Persona バイアス込みのローカルスコアリング
+      - env tools（web_search / github_search）実行（必要なときだけ）
+      - ★ PlannerOS(plan_for_veritas_agi / code_change_plan) による steps 生成
       - Multi-Agent DebateOS による再評価
       - WorldModel（world.simulate）による「一手先の世界予測」
       - FUJI Gate による最終安全判定
-      - 決定ログを MemoryOS にエピソード保存
-      - ★ 決定結果を world_state.json と doctor_report に反映
+      - Decision ログを MemoryOS にエピソード保存
+      - world_state.json / doctor_report フック
+      - ★ experiments / curriculum による「今日やる実験 / 今日の3タスク」生成
     """
-    start_ts = time.time()   # ★ 追加: latency計測開始
+    start_ts = time.time()   # ★ latency計測開始
 
     # ---- context を安全に固める & world_state を注入 ----
     ctx_raw: Dict[str, Any] = dict(context or {})
@@ -521,6 +527,7 @@ async def decide(
     critique: List[Dict[str, Any]] = []
     debate_logs: List[Dict[str, Any]] = []
     extras: Dict[str, Any] = {}
+    memory_evidence_count: int = 0
 
     mode = ctx.get("mode") or ""
     tw = (ctx.get("telos_weights") or {})
@@ -552,7 +559,7 @@ async def decide(
     except Exception:
         pass
 
-    # --- MemoryOS 要約を取得 ---
+    # --- MemoryOS 要約を取得（Planner には context 経由で伝える前提） ---
     try:
         memory_summary = mem_core.summarize_for_planner(
             user_id=user_id,
@@ -576,7 +583,7 @@ async def decide(
         dict(persona.get("bias_weights") or {})
     )
 
-    # WorldModel
+    # WorldModel（将来の auto_adjust / UI 用の軽い simulate）
     world_sim = None
     if not fast_mode:
         try:
@@ -640,14 +647,19 @@ async def decide(
     if env_logs:
         extras["env_tools"] = env_logs
 
-    # intent
+    # intent（旧DecisionOS互換のため一応残す）
     intent = _detect_intent(q_text)
 
-    # options
+    # =======================================================
+    # ★ Planner: code_change_plan 専用経路 or AGI Planner 経路
+    # =======================================================
+
     alts: List[Dict[str, Any]] = list(alternatives or [])
     alts = _filter_alts_by_intent(intent, q_text, alts)
 
-    # code_change_plan
+    planner_obj: Dict[str, Any] | None = None
+
+    # ---- 1) code_change_plan モード（bench → generate_code_tasks 経路） ----
     if intent == "plan" and mode == "code_change_plan":
         bench_payload = (
             ctx.get("bench_payload")
@@ -664,6 +676,7 @@ async def decide(
                 doctor_report=doctor_report,
             )
             extras["code_change_plan"] = code_plan
+            planner_obj = {"mode": "code_change_plan", "plan": code_plan}
 
             tasks = code_plan.get("tasks") or []
             alts = []
@@ -699,14 +712,50 @@ async def decide(
                 f"generate_code_tasks failed: {repr(e)[:120]}"
             )
 
+    # ---- 2) 通常 / VERITAS-AGI モード → 新 PlannerOS を必ず使う ----
     if not alts:
-        alts = _gen_options_by_intent(intent)
+        try:
+            planner_obj = planner_core.plan_for_veritas_agi(
+                context=ctx,
+                query=q_text,
+            )
+            steps = planner_obj.get("steps") or []
 
+            # Planner の steps を Debate 用 options にマッピング
+            alts = []
+            for idx, st in enumerate(steps, start=1):
+                if not isinstance(st, dict):
+                    continue
+                sid = st.get("id") or f"step_{idx}"
+                title = st.get("title") or f"step_{idx}"
+                detail = st.get("detail") or st.get("description") or ""
+
+                alt = _mk_option(
+                    title=title,
+                    description=detail,
+                    _id=sid,
+                )
+                alt["meta"] = st
+                alts.append(alt)
+
+        except Exception as e:
+            extras.setdefault("planner_error", {})
+            extras["planner_error"]["detail"] = repr(e)
+            # Planner が死んだら、従来の intent ベース fallback を使う
+            if not alts:
+                alts = _gen_options_by_intent(intent)
+
+    # Planner 情報を extras に格納
+    if planner_obj is not None:
+        extras["planner"] = planner_obj
+
+    # ---- 最終的な alternatives 整形・スコアリング ----
     alts = _dedupe_alts(alts)
-
     _score_alternatives(intent, q_text, alts, telos_score, stakes, persona_bias)
 
+    # =======================================================
     # DebateOS
+    # =======================================================
     chosen: Dict[str, Any] | None = None
 
     if fast_mode:
@@ -721,7 +770,7 @@ async def decide(
         )
     else:
         try:
-            debate_result = debate.run_debate(
+            debate_result = debate_core.run_debate(
                 query=q_text,
                 options=alts,
                 context={
@@ -782,7 +831,7 @@ async def decide(
     if isinstance(world_sim, dict) and isinstance(chosen, dict):
         chosen["world"] = world_sim
 
-    # Evidence
+    # Evidence（kernel 自身の evidence）
     evidence.append(
         {
             "source": "internal:kernel",
@@ -791,6 +840,36 @@ async def decide(
             "confidence": 0.8,
         }
     )
+
+    # =======================================================
+    # ★ MemoryOS から episodic evidence を追加
+    # =======================================================
+    try:
+        decision_snapshot = {
+            "request_id": req_id,
+            "query": q_text,
+            "context": ctx,
+            "chosen": chosen,
+            "alternatives": alts,
+            "evidence": evidence,
+            "extras": extras,
+            "telos_score": telos_score,
+        }
+
+        mem_evs = mem_core.get_evidence_for_decision(
+            decision_snapshot,
+            user_id=user_id,
+            top_k=max(min_evidence, 5),
+        )
+        if mem_evs:
+            evidence.extend(mem_evs)
+            memory_evidence_count = len(mem_evs)
+            extras.setdefault("memory", {})
+            extras["memory"]["evidence_count"] = memory_evidence_count
+            extras["memory"]["citations"] = mem_evs
+    except Exception as e:
+        extras.setdefault("memory", {})
+        extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
 
     # FUJI Gate
     try:
@@ -910,7 +989,7 @@ async def decide(
         extras["memory_log"]["error"] = repr(e)
 
     # =======================================================
-    # ★ ここから: metrics / world_state / doctor フック
+    # ★ metrics / world_state / doctor / experiments / curriculum
     # =======================================================
     latency_ms: int | None = None
     try:
@@ -929,7 +1008,7 @@ async def decide(
             chosen=chosen,
             gate=fuji_result,
             values={"total": telos_score},
-            planner=extras.get("code_change_plan"),
+            planner=extras.get("code_change_plan") or extras.get("planner"),
             latency_ms=latency_ms,
         )
     except Exception as e:
@@ -949,6 +1028,37 @@ async def decide(
             extras.setdefault("doctor", {})
             extras["doctor"]["error"] = repr(e)
 
+    # ---- 今日の「実験」と「カリキュラム」も extras にぶら下げる ----
+    try:
+        # ★ ここで初めて import（ローカル import なので循環しない）
+        from . import experiments as experiment_core
+        from . import curriculum as curriculum_core
+
+        try:
+            world_state_full = world_model.get_state()
+        except Exception:
+            world_state_full = None
+
+        value_ema_for_day = float(telos_score)
+
+        todays_exps = experiment_core.propose_experiments_for_today(
+            user_id=user_id,
+            world_state=world_state_full,
+            value_ema=value_ema_for_day,
+        )
+        todays_tasks = curriculum_core.plan_today(
+            user_id=user_id,
+            world_state=world_state_full,
+            value_ema=value_ema_for_day,
+        )
+
+        extras["experiments"] = [e.to_dict() for e in todays_exps]
+        extras["curriculum"] = [t.to_dict() for t in todays_tasks]
+
+    except Exception as e:
+        extras.setdefault("daily_plans", {})
+        extras["daily_plans"]["error"] = repr(e)
+
     # =======================================================
     # レスポンス構築
     # =======================================================
@@ -963,23 +1073,30 @@ async def decide(
         "fuji": fuji_result,
         "rsi_note": None,
         "summary": (
-            "意図検出＋Simple QA バイパス＋MemoryOS 要約＋学習バイアス＋Multi-Agent DebateOS＋"
-            "WorldModel予測＋FUJI Gate＋AGIゴール自己調整(auto_adjust_goals)＋fast_mode最適化＋"
-            "(必要に応じて)コード変更タスク優先度評価で最適案を選定しました。"
+            "意図検出＋Simple QA / knowledge QA バイパス＋MemoryOS 要約＋env tools＋"
+            "PlannerOS(plan_for_veritas_agi / code_change_plan)＋Multi-Agent DebateOS＋"
+            "WorldModel予測＋FUJI Gate＋AGIゴール自己調整(auto_adjust_goals)＋"
+            "Decision episodic logging＋world_state更新＋doctor自動実行＋"
+            "experiments / curriculum による『今日やる実験と3タスク』の提示を行いました。"
         ),
         "description": (
-            "与えられた選択肢がある場合はその中から選択し、無い場合は自動生成します。"
+            "与えられた選択肢がある場合はその中から選択し、無い場合は PlannerOS が steps を生成します。"
             "ローカル学習バイアスと Multi-Agent DebateOS により、徐々に“選択の癖”と安全性を反映します。"
-            "さらに WorldModel(world_state) を用いて、『この一手が世界にどう効きそうか』を軽く予測します。"
+            "WorldModel(world_state) を用いて、『この一手が世界にどう効きそうか』を軽く予測します。"
             "FUJI Gate で安全性を確認し、AGIゴール管理モジュール(auto_adjust_goals)で、"
             "progress / risk / telos に応じてゴール重みを自己調整します。"
             "mode=code_change_plan のときは、bench/world/doctor から生成したコード変更タスク群の中から、"
             "どれに着手すべきかを優先度付きで決定します。"
-            "time/date/weekday の simple QA は、AGIゴールや過去のdecisionを無視して即時回答します。"
             "fast_mode=True または mode='fast' の場合、WorldModel / env_tools / DebateOS / auto_adjust をスキップし、"
             "ローカルスコアのみで高速に決定します。"
-            "また、各 decision は MemoryOS にエピソードとして保存され、次回以降の判断に活かされます。"
-            "最後に world_state.json を更新し、必要に応じて doctor.py を自動実行して doctor_report を更新します。"
+            "各 decision は MemoryOS にエピソードとして保存され、"
+            "world_state.json や doctor_report の更新、および daily experiments / curriculum の提案に利用されます。"
         ),
         "extras": extras,
+        "memory_evidence_count": memory_evidence_count,
+        "memory_citations": extras.get("memory", {}).get("citations", []),
+        "memory_used_count": memory_evidence_count,
+        "meta": {
+            "memory_evidence_count": memory_evidence_count,
+        },
     }
