@@ -1,4 +1,3 @@
-# veritas_os/core/pipeline.py
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +6,6 @@ import json
 import os
 import secrets
 import time
-import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -15,7 +13,7 @@ from uuid import uuid4
 
 from fastapi import Request
 
-from veritas_os.core import (
+from . import (
     kernel as veritas_core,
     fuji as fuji_core,
     memory as mem,
@@ -25,10 +23,7 @@ from veritas_os.core import (
     llm_client,
     reason as reason_core,
     debate as debate_core,
-    experiment as experiment_core,
-    curriculum as curriculum_core,
 )
-
 from veritas_os.logging.paths import LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
 from veritas_os.logging.dataset_writer import (
     build_dataset_record,
@@ -36,38 +31,35 @@ from veritas_os.logging.dataset_writer import (
 )
 from veritas_os.api.schemas import DecideRequest, DecideResponse
 from veritas_os.api.evolver import load_persona
-from veritas_os.core.reason import generate_reason
 from veritas_os.tools.web_search import web_search
 from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide
 
+
 # =========================================================
-# Memory / MemoryModel 周りの初期化
+# Memory / MemoryModel 初期化
 # =========================================================
 
-# 既存の MemoryOS(KVS) は mem モジュールをそのまま使う
-MEM = mem
+MEM = mem  # 既存 MemoryOS KVS
 
-# MEM_VEC / MEM_CLF が無い環境でも動くようにガード
 try:
     from veritas_os.core.models import memory_model as memory_model_core
 
     MEM_VEC = getattr(memory_model_core, "MEM_VEC", None)
     MEM_CLF = getattr(memory_model_core, "MEM_CLF", None)
-    try:
-        # ある場合はきちんと import
-        from veritas_os.core.models.memory_model import predict_gate_label  # type: ignore
-    except Exception:
-        # 無い場合のフォールバック（常に 0.5）
+
+    if hasattr(memory_model_core, "predict_gate_label"):
+        from veritas_os.core.models.memory_model import (  # type: ignore
+            predict_gate_label,
+        )
+    else:
         def predict_gate_label(text: str) -> Dict[str, float]:
             return {"allow": 0.5}
-except Exception:
+except Exception:  # モデル無し環境での fallback
     MEM_VEC = None
     MEM_CLF = None
 
     def predict_gate_label(text: str) -> Dict[str, float]:
         return {"allow": 0.5}
-
-
 
 
 # =========================================================
@@ -123,6 +115,90 @@ async def call_core_decide(
     return await loop.run_in_executor(None, lambda: core_fn(**kw))
 
 
+def _to_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "y", "on")
+    return False
+
+
+def _to_float_or(v: Any, default: float) -> float:
+    if v in (None, "", "null", "None"):
+        return default
+    try:
+        return float(v)
+    except Exception:
+        return default
+
+
+def _to_dict(o: Any) -> Dict[str, Any]:
+    if isinstance(o, dict):
+        return o
+    if hasattr(o, "model_dump"):
+        return o.model_dump(exclude_none=True)  # type: ignore
+    if hasattr(o, "dict"):
+        return o.dict()  # type: ignore
+    return {}
+
+
+def _norm_alt(o: Any) -> Dict[str, Any]:
+    d = _to_dict(o) or {}
+    if "title" not in d and "text" in d:
+        d["title"] = d.pop("text")
+    d.setdefault("title", "")
+    d["description"] = (d.get("description") or d.get("text") or "")
+    d["score"] = _to_float_or(d.get("score", 1.0), 1.0)
+    d["score_raw"] = _to_float_or(d.get("score_raw", d["score"]), d["score"])
+    d["id"] = str(d.get("id") or uuid4().hex)
+    return d
+
+
+def _mem_model_path() -> str:
+    try:
+        from veritas_os.core.models import memory_model as mm
+
+        if hasattr(mm, "MODEL_FILE"):
+            return str(mm.MODEL_FILE)
+        if hasattr(mm, "MODEL_PATH"):
+            return str(mm.MODEL_PATH)
+    except Exception:
+        pass
+    return ""
+
+
+def _allow_prob(text: str) -> float:
+    d = predict_gate_label(text)
+    return float(d.get("allow", 0.0))
+
+
+def _clip01(x: float) -> float:
+    try:
+        return max(0.0, min(1.0, float(x)))
+    except Exception:
+        return 0.0
+
+
+def _load_valstats() -> Dict[str, Any]:
+    try:
+        with open(VAL_JSON, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {
+            "ema": 0.5,
+            "alpha": 0.2,
+            "n": 0,
+            "history": [],
+        }
+
+
+def _save_valstats(d: Dict[str, Any]) -> None:
+    with open(VAL_JSON, "w", encoding="utf-8") as f:
+        json.dump(d, f, ensure_ascii=False, indent=2)
+
+
 # =========================================================
 # メイン: 決定パイプライン
 # =========================================================
@@ -132,7 +208,7 @@ async def run_decide_pipeline(
     request: Request,
 ) -> Dict[str, Any]:
     """
-    /v1/decide の中身を HTTP から切り離してまとめた“頭脳側パイプライン”。
+    /v1/decide の中身を HTTP から切り離した“頭脳側パイプライン”。
     FastAPI 側はこれを呼んで payload(dict) を受け取り、そのまま返すだけ。
     """
     started_at = time.time()
@@ -146,14 +222,12 @@ async def run_decide_pipeline(
     telos: float = 0.0
     fuji_dict: Dict[str, Any] = {}
     alternatives: List[Dict[str, Any]] = []
-    chosen: Dict[str, Any] = {}
     extras_payload: Dict[str, Any] = {
         "safe_instructions": [],
         "redactions": [],
         "masked_example": None,
     }
     modifications: List[Any] = []
-    # ★ extras はこの dict だけを使う
     response_extras: Dict[str, Any] = {"metrics": {}}
 
     # ---------- Query / Context / user_id ----------
@@ -164,38 +238,19 @@ async def run_decide_pipeline(
     query = raw_query.strip()
     user_id = context.get("user_id") or body.get("user_id") or "anon"
 
-    # ---------- fast モード判定 ----------
-    def _to_bool(v: Any) -> bool:
-        if isinstance(v, bool):
-            return v
-        if isinstance(v, (int, float)):
-            return v != 0
-        if isinstance(v, str):
-            return v.strip().lower() in ("1", "true", "yes", "y", "on")
-        return False
-
-    # 1) ボディ直下の fast
+    # ---------- fast モード ----------
     fast_from_body = _to_bool(body.get("fast"))
-
-    # 2) context.fast / context.mode
     fast_from_ctx = _to_bool(context.get("fast")) or (
         isinstance(context.get("mode"), str)
         and context.get("mode").lower() == "fast"
     )
-
-    # 3) クエリパラメータ ?fast=1
     fast_from_query = _to_bool(request.query_params.get("fast"))
-
     fast_mode = fast_from_body or fast_from_ctx or fast_from_query
 
     if fast_mode:
-        # context に明示的に刻んで core に渡す
         context["fast"] = True
-        # mode が未設定なら "fast" をセット（既に mode があるなら上書きしない）
         if not context.get("mode"):
             context["mode"] = "fast"
-
-        # body 側にも反映（ロギング用）
         body["fast"] = True
 
     # === WorldOS: context に world_state を注入 ===
@@ -211,7 +266,7 @@ async def run_decide_pipeline(
         k in qlower for k in ["veritas", "agi", "protoagi", "プロトagi", "veritasのagi化"]
     )
 
-    # -------- PlannerOS: AGI/VERITAS 用の計画生成 ----------
+    # -------- PlannerOS ----------
     try:
         from veritas_os.core.planner import plan_for_veritas_agi
 
@@ -227,14 +282,13 @@ async def run_decide_pipeline(
         print("[PlannerOS] skipped:", e)
         plan = {"steps": [], "raw": None, "source": "fallback"}
 
-    # ひとまず planner 結果を extras に入れておく（あとで上書き調整可）
     response_extras["planner"] = {
         "steps": plan.get("steps", []),
         "raw": plan.get("raw"),
         "source": plan.get("source"),
     }
 
-    # ---------- MemoryOS: prior 取り込み ----------
+    # ---------- MemoryOS: prior / retrieval ----------
     recent_logs = mem.recent(user_id, limit=20)
     similar = [
         r
@@ -248,57 +302,69 @@ async def run_decide_pipeline(
         if t:
             prior_scores[t] = prior_scores.get(t, 0.0) + 1.0
 
-    # ---------- basics ----------
     request_id = body.get("request_id") or secrets.token_hex(16)
     min_ev = int(body.get("min_evidence") or 1)
 
-    # ---------- Memory retrieval + usage logging ----------
-    mem_hits: Dict[str, List[Dict[str, Any]]] = {}
+    # retrieval
+    mem_hits_raw: Any = None
     retrieved: List[Dict[str, Any]] = []
 
     try:
         if query:
-            # とりあえず全 kinds 対象で top-k を取りに行く
-            mem_hits = MEM.search(
+            mem_hits_raw = MEM.search(
                 query,
                 k=6,
                 kinds=["semantic", "skills", "episodic"],
                 min_sim=0.0,
-                user_id=user_id,  # ← ここで上の user_id を渡す
+                user_id=user_id,
             )
 
-        # ---- hits をフラット化してスコア順に並べる ----
-        if isinstance(mem_hits, dict):
-            for kind, hits in mem_hits.items():
+        flat_hits: List[Dict[str, Any]] = []
+
+        if isinstance(mem_hits_raw, dict):
+            for kind, hits in mem_hits_raw.items():
                 if not isinstance(hits, list):
                     continue
                 for h in hits:
                     if not isinstance(h, dict):
                         continue
+                    h = dict(h)
+                    h.setdefault("kind", kind)
+                    flat_hits.append(h)
 
-                    text = (
-                        h.get("text")
-                        or (h.get("value") or {}).get("text")
-                        or (h.get("value") or {}).get("query")
-                        or ""
-                    )
-                    if not text:
-                        continue
+        elif isinstance(mem_hits_raw, list):
+            for h in mem_hits_raw:
+                if isinstance(h, dict):
+                    flat_hits.append(h)
 
-                    retrieved.append(
-                        {
-                            "id": h.get("id") or h.get("key"),
-                            "kind": kind,
-                            "text": text,
-                            "score": float(h.get("score", 0.5)),
-                        }
-                    )
+        for h in flat_hits:
+            text = (
+                h.get("text")
+                or (h.get("value") or {}).get("text")
+                or (h.get("value") or {}).get("query")
+                or ""
+            )
+            if not text:
+                continue
 
-        # スコア順にソートして上位 3 件だけ evidence に採用
+            kind = (
+                h.get("kind")
+                or (h.get("meta") or {}).get("kind")
+                or "episodic"
+            )
+
+            retrieved.append(
+                {
+                    "id": h.get("id") or h.get("key"),
+                    "kind": kind,
+                    "text": text,
+                    "score": float(h.get("score", 0.5)),
+                }
+            )
+
         retrieved.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         top_hits = retrieved[:3]
 
-        # メトリクス更新
         metrics = response_extras.setdefault("metrics", {})
         metrics["mem_hits"] = len(retrieved)
         metrics["memory_evidence_count"] = len(top_hits)
@@ -322,17 +388,8 @@ async def run_decide_pipeline(
             f"(raw_hits={len(retrieved)})"
         )
 
-    except Exception as e:
-        print("[AGI-Retrieval] memory retrieval error:", repr(e))
-
-        # ---- Doctor Dashboard 用 usage log ----
         if retrieved:
-            cited_ids: List[str] = []
-            for r in retrieved[:3]:
-                cid = r.get("id") or (r.get("meta") or {}).get("uri")
-                if cid:
-                    cited_ids.append(str(cid))
-
+            cited_ids = [str(r.get("id")) for r in top_hits if r.get("id")]
             if cited_ids:
                 ts = datetime.utcnow().isoformat() + "Z"
                 mem.put(
@@ -346,34 +403,22 @@ async def run_decide_pipeline(
                     },
                 )
                 mem.add_usage(user_id, cited_ids)
-                print(f"[MemoryOS] usage logged: {len(cited_ids)} citations")
-
-        print(f"[AGI-Retrieval] Added memory evidences: {len(retrieved)}")
 
     except Exception as e:
-        # 失敗時もメトリクスをゼロで埋めておく
-        metrics = response_extras.setdefault("metrics", {})
-        metrics["mem_hits"] = 0
-        metrics["memory_evidence_count"] = 0
-        response_extras["memory_citations"] = []
-        response_extras["memory_used_count"] = 0
+        print("[AGI-Retrieval] memory retrieval error:", repr(e))
+        response_extras.setdefault("metrics", {})
+        response_extras["metrics"].setdefault("mem_hits", 0)
+        response_extras["metrics"].setdefault("memory_evidence_count", 0)
         response_extras.setdefault("env_tools", {})
         response_extras["env_tools"]["memory_error"] = repr(e)
-        print("[AGI-Retrieval] memory retrieval failed:", e)
 
-    except Exception as e:
-        print("[MemoryOS] search skipped:", e)
-        mem_hits = {}
-        retrieved = []
-
-    # ← try/except の外で「最終的な retrieved 長」に合わせてセット
     response_extras.setdefault("metrics", {})
     response_extras["metrics"]["mem_hits"] = len(retrieved)
 
-    # ---- ここからは成功・失敗どちらでも共通で実行 ----
+    # memory citations (extras)
     memory_citations_list: List[Dict[str, Any]] = []
     for r in retrieved[:10]:
-        cid = r.get("id") or (r.get("meta") or {}).get("uri")
+        cid = r.get("id")
         if cid:
             memory_citations_list.append(
                 {
@@ -386,16 +431,12 @@ async def run_decide_pipeline(
     response_extras["memory_citations"] = memory_citations_list
     response_extras["memory_used_count"] = len(memory_citations_list)
 
-    # ---------- WebSearch (Serper.dev) ----------
+    # ---------- WebSearch ----------
     try:
-    # AGI / research / 論文 みたいなクエリのときだけ Web 検索
         if any(k in qlower for k in ["agi", "research", "論文", "paper"]):
-            ws = web_search(query, max_results=5)  # ← 関数名を web_search に
-
-        # Chainlit からも見えるよう extras に結果を入れておく
+            ws = web_search(query, max_results=5)
             response_extras["web_search"] = ws
 
-        # evidence にも上位3件だけ載せる
             if ws.get("ok") and ws.get("results"):
                 for item in ws["results"][:3]:
                     evidence.append(
@@ -410,54 +451,17 @@ async def run_decide_pipeline(
         print("[WebSearch] skipped:", e)
 
     # ---------- options 正規化 ----------
-    def _to_dict(o: Any) -> Dict[str, Any]:
-        if isinstance(o, dict):
-            return o
-        if hasattr(o, "model_dump"):
-            return o.model_dump(exclude_none=True)  # type: ignore
-        if hasattr(o, "dict"):
-            return o.dict()  # type: ignore
-        return {}
-
-    def _to_float_or(v, default: float) -> float:
-        if v in (None, "", "null", "None"):
-            return default
-        try:
-            return float(v)
-        except Exception:
-            return default
-
-    def _norm_alt(o: Any) -> Dict[str, Any]:
-        d = _to_dict(o) or {}
-        if "title" not in d and "text" in d:
-            d["title"] = d.pop("text")
-        d.setdefault("title", "")
-        d["description"] = (d.get("description") or d.get("text") or "")
-        d["score"] = _to_float_or(d.get("score", 1.0), 1.0)
-        d["score_raw"] = _to_float_or(
-            d.get("score_raw", d["score"]), d["score"]
-        )
-        d["id"] = str(d.get("id") or uuid4().hex)
-        return d
-
     input_alts = body.get("options") or body.get("alternatives") or []
     if not isinstance(input_alts, list):
         input_alts = []
     input_alts = [_norm_alt(a) for a in input_alts]
 
-    # ---------- VERITAS / AGI クエリ向けのドメイン特化 alternatives ----------
+    # VERITAS / AGI クエリ向け alternatives (Planner → alt)
     if not input_alts and is_veritas_query:
         step_alts: List[Dict[str, Any]] = []
-
-        # 1) Planner の step から候補を生成
         for i, st in enumerate(plan.get("steps") or [], 1):
             title = st.get("title") or st.get("name") or f"Step {i}"
-            detail = (
-                st.get("detail")
-                or st.get("description")
-                or st.get("why")
-                or ""
-            )
+            detail = st.get("detail") or st.get("description") or st.get("why") or ""
             step_alts.append(
                 _norm_alt(
                     {
@@ -470,7 +474,6 @@ async def run_decide_pipeline(
                 )
             )
 
-        # 2) planner から取れなければ、ハードコード fallback
         if step_alts:
             input_alts = step_alts
         else:
@@ -515,7 +518,7 @@ async def run_decide_pipeline(
                 d["score_raw"] = d.get("score_raw", d.get("score", 1.0))
                 d["score"] = float(d.get("score", 1.0)) * (1.0 + 0.05 * boost)
 
-    # ---------- 過去の Plan を alternatives に注入（任意） ----------
+    # 過去の plan → alternatives
     try:
         plan_alts = []
         for r in recent_logs:
@@ -531,9 +534,7 @@ async def run_decide_pipeline(
                 continue
 
             first = steps[0]
-            step_title = (
-                first.get("title") or first.get("name") or "過去プランの継続"
-            )
+            step_title = first.get("title") or first.get("name") or "過去プランの継続"
 
             alt = _norm_alt(
                 {
@@ -554,7 +555,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[MemoryOS] plan→alternatives skipped:", e)
 
-    # --- C: episodic メモリから「過去の決定案」を alternatives に注入 ---
+    # episodic メモリから alternatives
     try:
         mem_alts: List[Dict[str, Any]] = []
 
@@ -620,7 +621,7 @@ async def run_decide_pipeline(
         print("[decide] core error:", e)
         raw = {}
 
-    # ---------- 吸収（安全） ----------
+    # ---------- 吸収 ----------
     if isinstance(raw, dict) and raw:
         raw_evi = raw.get("evidence")
         if isinstance(raw_evi, list):
@@ -648,7 +649,7 @@ async def run_decide_pipeline(
         ]
     alts = veritas_core._dedupe_alts(alts)
 
-    # --- worldmodel -------------------------------
+    # --- WorldModel boost ---
     try:
         boosted = []
         uid_for_world = (context or {}).get("user_id") or user_id or "anon"
@@ -673,23 +674,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[WorldModelOS] skip:", e)
 
-    # --- MemoryModel score boost (before choose) -------------------------------
-    def allow_prob(text: str) -> float:
-        d = predict_gate_label(text)
-        return float(d.get("allow", 0.0))
-
-    def _mem_model_path() -> str:
-        try:
-            from veritas_os.core import memory_model as mm
-
-            if hasattr(mm, "MODEL_FILE"):
-                return str(mm.MODEL_FILE)
-            if hasattr(mm, "MODEL_PATH"):
-                return str(mm.MODEL_PATH)
-        except Exception:
-            pass
-        return ""
-
+    # --- MemoryModel boost ---
     try:
         response_extras.setdefault("metrics", {})
         if MEM_VEC is not None and MEM_CLF is not None:
@@ -703,10 +688,8 @@ async def run_decide_pipeline(
             }
 
             for d in alts:
-                text = (d.get("title") or "") + " " + (
-                    d.get("description") or ""
-                )
-                p_allow = allow_prob(text)
+                text = (d.get("title") or "") + " " + (d.get("description") or "")
+                p_allow = _allow_prob(text)
                 base = float(d.get("score", 1.0))
                 d["score_raw"] = float(d.get("score_raw", base))
                 d["score"] = base * (1.0 + 0.10 * p_allow)
@@ -724,7 +707,7 @@ async def run_decide_pipeline(
             "path": _mem_model_path(),
         }
 
-    # --- world.utility / score を使って chosen を決定 ---
+    # --- chosen 決定 ---
     chosen = raw.get("chosen") if isinstance(raw, dict) else {}
     if not isinstance(chosen, dict) or not chosen:
         try:
@@ -787,7 +770,7 @@ async def run_decide_pipeline(
         }
     )
 
-    # ---------- ValueCore 評価 ----------
+    # ---------- ValueCore ----------
     try:
         vc = value_core.evaluate(query, context or {})
         values_payload = {
@@ -805,7 +788,7 @@ async def run_decide_pipeline(
             "rationale": "evaluation failed",
         }
 
-    # ---- EMA を読み取り（なければ 0.5）----
+    # ---- EMA 読込 ----
     value_ema = 0.5
     try:
         if VAL_JSON.exists():
@@ -814,13 +797,12 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[value_ema] load skipped:", e)
 
-    # input_alts / alts のいずれにも軽いブースト
-    BOOST_MAX = float(os.getenv("VERITAS_VALUE_BOOST_MAX", "0.05"))  # 上限5%
+    BOOST_MAX = float(os.getenv("VERITAS_VALUE_BOOST_MAX", "0.05"))
     boost = (value_ema - 0.5) * 2.0  # -1..+1
     boost = max(-1.0, min(1.0, boost)) * BOOST_MAX
 
-    def _apply_boost(arr):
-        out = []
+    def _apply_boost(arr: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
         for d in arr:
             try:
                 s = float(d.get("score", 1.0))
@@ -834,7 +816,7 @@ async def run_decide_pipeline(
     input_alts = _apply_boost(input_alts)
     alts = _apply_boost(alts)
 
-    # FUJIが出した risk を EMA で微調整（±15% まで）
+    # FUJI risk × EMA
     RISK_EMA_WEIGHT = float(os.getenv("VERITAS_RISK_EMA_WEIGHT", "0.15"))
     effective_risk = float(fuji_dict.get("risk", 0.0)) * (
         1.0 - RISK_EMA_WEIGHT * value_ema
@@ -846,61 +828,25 @@ async def run_decide_pipeline(
     telos_threshold = BASE_TELOS_TH - TELOS_EMA_DELTA * (value_ema - 0.5) * 2.0
     telos_threshold = max(0.35, min(0.75, telos_threshold))
 
-    # ---- ExperimentOS / CurriculumOS 用 world_state 事前取得 ----
+    # ---- world_state snapshot ----
     world_state = (
         (context or {}).get("world_state")
         or (context or {}).get("world")
         or {}
     )
 
-    # ---- ExperimentOS: 今日の実験候補 ----
+    # world.utility 生成
     try:
-        exps_today = experiment_core.propose_experiments_for_today(
-            user_id=user_id,
-            world_state=world_state,
-            value_ema=value_ema,
-        )
-        if exps_today:
-            response_extras["experiments_today"] = [
-                e.to_dict() for e in exps_today[:3]
-            ]
-    except Exception as e:
-        print("[ExperimentOS] skipped:", e)
-
-    # ---- CurriculumOS: 今日のカリキュラム ----
-    try:
-        tasks_today = curriculum_core.plan_today(
-            user_id=user_id,
-            world_state=world_state,
-            value_ema=value_ema,
-        )
-        if tasks_today:
-            response_extras["curriculum_today"] = [
-                t.to_dict() for t in tasks_today
-            ]
-    except Exception as e:
-        print("[CurriculumOS] skipped:", e)
-
-    # ---- world.utility: 実利スコア生成（Doctor/AGIメトリクス用） ----
-    try:
-        def _clip01(x: float) -> float:
-            try:
-                return max(0.0, min(1.0, float(x)))
-            except Exception:
-                return 0.0
-
         v_total = _clip01(values_payload.get("total", 0.5))
         t_val = _clip01(telos)
         r_val = _clip01(effective_risk)
 
         for d in alts:
             base = _clip01(d.get("score", 0.0))
-
             util = base
-            util *=  (0.5 + 0.5 * v_total)
+            util *= (0.5 + 0.5 * v_total)
             util *= (1.0 - r_val)
             util *= (0.5 + 0.5 * t_val)
-
             util = _clip01(util)
 
             d.setdefault("world", {})
@@ -926,7 +872,7 @@ async def run_decide_pipeline(
     decision_status, rejection_reason = "allow", None
     modifications = fuji_dict.get("modifications") or []
 
-    # ----- DebateOS の risk_delta を統合 -----
+    # DebateOS の risk_delta を統合
     try:
         if isinstance(debate, list) and debate:
             deb = debate[0]
@@ -944,7 +890,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[Debate→FUJI] merge failed:", e)
 
-    # --- 🔁 FUJI×ValueCore 相互参照（WorldModelOS連携） ---
+    # FUJI × World utility 連携（effective_risk 再調整）
     try:
         if alts:
             topw = max(
@@ -979,23 +925,7 @@ async def run_decide_pipeline(
         )
         chosen, alts = {}, []
 
-    # --- Value learning: store running stats + history ---
-    def _load_valstats():
-        try:
-            with open(VAL_JSON, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {
-                "ema": 0.5,
-                "alpha": 0.2,
-                "n": 0,
-                "history": [],
-            }
-
-    def _save_valstats(d):
-        with open(VAL_JSON, "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, indent=2)
-
+    # --- Value learning: EMA 更新 ---
     try:
         valstats = _load_valstats()
         alpha = float(valstats.get("alpha", 0.2))
@@ -1024,15 +954,13 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[value-learning] skip:", e)
 
-    # ----- extras -----
-    # 既存の raw 側の extras を安全にマージ
+    # ----- extras マージ -----
     try:
         prev_extras = dict(((raw or {}).get("extras") or {}))
     except Exception:
         prev_extras = {}
 
     try:
-        # metrics をマージして上書き
         metrics = {}
         metrics.update(prev_extras.get("metrics") or {})
         metrics.update(response_extras.get("metrics") or {})
@@ -1085,9 +1013,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[metrics] latency/memory_evidence skipped:", e)
 
-    # ============================
-    # MemoryOS retrieval (メタ情報だけ)
-    # ============================
+    # MemoryOS retrieval メタ
     try:
         mem_result = {
             "query": query,
@@ -1112,7 +1038,6 @@ async def run_decide_pipeline(
             ]
         )
 
-        # 1) decision 単位のフルログ
         mem.put(
             uid_mem,
             key=f"decision_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
@@ -1129,7 +1054,6 @@ async def run_decide_pipeline(
             },
         )
 
-        # 2) human 読みやすい episodic テキスト
         mem.put(
             uid_mem,
             key=f"episode_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
@@ -1153,7 +1077,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[MemoryOS] episodic save failed:", e)
 
-    # ---------- レスポンス ----------
+    # ---------- レスポンス dict 組み立て ----------
     res = {
         "request_id": request_id,
         "chosen": chosen,
@@ -1183,6 +1107,7 @@ async def run_decide_pipeline(
         "memory_used_count": response_extras.get("memory_used_count", 0),
         "plan": plan,
         "planner": response_extras.get("planner", plan),
+        "query": query,
     }
 
     # ---------- 監査ログ ----------
@@ -1203,10 +1128,7 @@ async def run_decide_pipeline(
             "plan_steps": len(plan.get("steps", [])) if isinstance(plan, dict) else 0,
         }
 
-    # ← ハッシュ連鎖つきログを保存する
         append_trust_log(audit_entry)
-
-    # シャドー版の保存
         write_shadow_decide(request_id, body, chosen, telos, fuji_dict)
 
     except Exception as e:
@@ -1219,9 +1141,8 @@ async def run_decide_pipeline(
         print("[model] decide response coerce:", e)
         payload = res
 
-    # 反省 (ReasonOS)
+    # ---------- ReasonOS 反省 & Value EMA 微調整 ----------
     try:
-        # ① いつもの reflection（ローカル評価）
         reflection = reason_core.reflect(
             {
                 "query": query,
@@ -1231,7 +1152,6 @@ async def run_decide_pipeline(
             }
         )
 
-        # ② 反省の “数値ブースト” を ValueCore EMA に微加算 (±0.1レンジ)
         vs_path = VAL_JSON
         valstats2: Dict[str, Any] = {}
         if vs_path.exists():
@@ -1249,7 +1169,6 @@ async def run_decide_pipeline(
             indent=2,
         )
 
-        # ★ meta_log.jsonl にも書き込む
         try:
             try:
                 nv = float(reflection.get("next_value_boost", 0.0))
@@ -1269,7 +1188,6 @@ async def run_decide_pipeline(
         except Exception as e2:
             print("[ReasonOS] meta_log append skipped:", e2)
 
-        # ③ Self-Refine 用テンプレ生成（あれば extras に積む）
         try:
             tmpl = await reason_core.generate_reflection_template(
                 query=query,
@@ -1281,10 +1199,10 @@ async def run_decide_pipeline(
             if tmpl:
                 response_extras.setdefault("reason_templates", [])
                 response_extras["reason_templates"].append(tmpl)
+                payload["extras"] = response_extras
         except Exception as e2:
             print("[ReasonOS] reflection_template failed:", e2)
 
-        # ④ OpenAI LLM で “自然文の反省” を生成（失敗時は reflection を fallback）
         try:
             llm_reason = reason_core.generate_reason(
                 query=query,
@@ -1294,7 +1212,6 @@ async def run_decide_pipeline(
                 context=context,
             )
 
-            # llm_reason は dict 想定 {"text": "...", "source": "..."}
             note_text = ""
             if isinstance(llm_reason, dict):
                 note_text = llm_reason.get("text") or ""
@@ -1302,12 +1219,9 @@ async def run_decide_pipeline(
                 note_text = llm_reason
 
             if not note_text:
-                # LLM が空なら、reflection の tip を note 化
                 tips = reflection.get("improvement_tips") or []
                 note_text = " / ".join(tips) if tips else "自動反省メモはありません。"
 
-            # Chainlit 側の format_reason は note/next_value_boost を参照するので、
-            # ここでまとめて payload["reason"] に格納する
             payload["reason"] = {
                 "note": note_text,
                 "next_value_boost": reflection.get("next_value_boost", 0.0),
@@ -1336,7 +1250,6 @@ async def run_decide_pipeline(
         planner_dict = extras_pl.get("planner") or {}
 
         if planner_dict:
-            # 1) KVS メモリ（時系列ログ）
             mem.put(
                 uid_plan,
                 key=f"plan_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
@@ -1349,7 +1262,6 @@ async def run_decide_pipeline(
                 },
             )
 
-            # 2) ざっくり読めるテキストも一応保存（検索用）
             steps = planner_dict.get("steps") or []
             if steps:
                 step_lines = []
@@ -1416,7 +1328,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[dataset] skip:", e)
 
-    # ---------- MemoryOS 自動記録 ----------
+    # ---------- MemoryOS 自動記録（簡易 decision） ----------
     try:
         uid_auto = (context or {}).get("user_id", "anon")
         mem.put(
@@ -1424,7 +1336,7 @@ async def run_decide_pipeline(
             key=f"decision_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
             value={
                 "query": query,
-                "chosen": chosen,
+                "chosen": payload.get("chosen"),
                 "values_total": float(
                     payload.get("values", {}).get("total", 0.0)
                 ),
@@ -1451,14 +1363,12 @@ async def run_decide_pipeline(
         latency_ms2 = int(metrics2.get("latency_ms", 0))
         mem_evidence_count = int(metrics2.get("mem_evidence_count", 0))
 
-        # 1) evidence リストを安全に拾う
         evidence_list: List[Dict[str, Any]] = []
         if isinstance(payload.get("evidence"), list):
             evidence_list = payload["evidence"]  # type: ignore
         elif isinstance(evidence, list):
             evidence_list = evidence  # type: ignore
 
-        # 2) memory 由来 evidence をカウント
         mem_evidence_count = 0
         for ev in evidence_list:
             if not isinstance(ev, dict):
@@ -1472,7 +1382,6 @@ async def run_decide_pipeline(
             ):
                 mem_evidence_count += 1
 
-        # 3) chosen が MemoryOS から来ている場合も 1 件としてカウント保証
         if isinstance(chosen, dict):
             src = str(chosen.get("source", "")).lower()
             if (
@@ -1483,7 +1392,6 @@ async def run_decide_pipeline(
             ):
                 mem_evidence_count = max(mem_evidence_count, 1)
 
-        # おまけ：metaにも入れておく
         meta_payload = payload.get("meta") or {}
         meta_payload["memory_evidence_count"] = mem_evidence_count
         payload["meta"] = meta_payload
@@ -1526,7 +1434,7 @@ async def run_decide_pipeline(
     except Exception as e:
         print("[persist] decide record skipped:", e)
 
-    # ======== ★ WorldState 更新（最新版） ========
+    # ======== WorldState 更新 ========
     try:
         uid_world = (context or {}).get("user_id") or user_id or "anon"
 

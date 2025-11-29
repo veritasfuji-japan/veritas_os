@@ -26,6 +26,11 @@ FUJI Gate v2 (Safety Head × Policy Engine × TrustLog)
 - decision dict を渡す新インターフェイスにも対応。
 - context["fuji_safe_applied"] or context["pii_already_masked"] が True の場合、
   PII 由来カテゴリーを弱めて risk を緩和する。
+
+リファクタリング:
+- fuji_core_decide(...) を追加し、SafetyHead 結果と policy からの
+  「純粋な判定コア」を分離。
+- fuji_gate(...) は SafetyHead 呼び出しと TrustLog などの I/O に集中。
 """
 
 from __future__ import annotations
@@ -466,7 +471,128 @@ def _apply_policy(
 
 
 # =========================================================
-# 3) FUJI Gate 本体
+# 3) FUJI コア判定（純粋ロジック）
+# =========================================================
+def fuji_core_decide(
+    *,
+    safety_head: SafetyHeadResult,
+    stakes: float,
+    telos_score: float,
+    evidence_count: int,
+    policy: Dict[str, Any] | None = None,
+    safe_applied: bool = False,
+    min_evidence: int = DEFAULT_MIN_EVIDENCE,
+) -> Dict[str, Any]:
+    """
+    SafetyHead の結果と、stakes / telos / evidence_count / policy だけから
+    最終的な status / decision_status / risk / reasons などを決める“純粋ロジック”。
+
+    - ファイルI/O無し
+    - TrustLog無し
+    - call_tool無し
+    """
+    policy = policy or POLICY
+
+    categories = list(safety_head.categories)
+    risk = float(safety_head.risk_score)
+    base_reasons: List[str] = []
+    guidance = safety_head.rationale or ""
+
+    # --- heuristic_fallback の「name_like だけ PII」誤検出を潰す ---
+    if safety_head.model == "heuristic_fallback":
+        raw = safety_head.raw or {}
+        pii_hits = raw.get("pii_hits") or []
+        rationale_lower = (safety_head.rationale or "").lower()
+
+        is_name_like_only = False
+
+        # 1) pii_hits があるが phone/email/address が含まれないケース
+        if pii_hits:
+            safe_hits = [h for h in pii_hits if h in ("phone", "email", "address")]
+            if not safe_hits:
+                is_name_like_only = True
+
+        # 2) rationale 内に name_like が現れるが他の PII がないケース
+        if "name_like" in rationale_lower and not any(
+            k in rationale_lower for k in ("phone", "email", "address", "電話", "メール", "住所")
+        ):
+            is_name_like_only = True
+
+        if is_name_like_only and any(str(c).upper() == "PII" for c in categories):
+            categories = [c for c in categories if str(c).upper() != "PII"]
+            risk = max(risk, 0.05)
+            risk = min(risk, 0.20)
+            base_reasons.append("fallback_pii_ignored(name_like_only)")
+
+            guidance = (
+                "日本語テキスト中の人名らしき表現（name_like）は、"
+                "この環境では PII として扱わないポリシーにより無視されました。"
+            )
+
+    # --- 既に PII セーフ化済みの場合の緩和 ---
+    if safe_applied:
+        filtered = [
+            c for c in categories
+            if str(c).lower() not in ("pii", "pii_exposure")
+        ]
+        if len(filtered) < len(categories):
+            categories = filtered
+            risk = min(risk, 0.40)
+            base_reasons.append("pii_safe_applied")
+
+    # --- evidence 不足ペナルティ ---
+    if evidence_count < int(min_evidence):
+        categories.append("low_evidence")
+        risk = min(1.0, risk + 0.10)
+        base_reasons.append(f"low_evidence({evidence_count}/{min_evidence})")
+
+    # --- telos_score による軽いスケーリング ---
+    telos_clamped = max(0.0, min(1.0, telos_score))
+    risk *= (1.0 + 0.10 * telos_clamped)
+    risk = min(1.0, max(0.0, risk))
+
+    # --- Policy Engine 適用 ---
+    pol_res = _apply_policy(
+        risk=risk,
+        categories=categories,
+        stakes=stakes,
+        telos_score=telos_score,
+        policy=policy,
+    )
+
+    status = pol_res["status"]
+    decision_status = pol_res["decision_status"]
+    violations = pol_res.get("violations", [])
+    violation_details = pol_res.get("violation_details", [])
+    final_risk = pol_res["risk"]
+    reasons = base_reasons + pol_res["reasons"]
+
+    # guidance 補足
+    if "low_evidence" in categories:
+        guidance += (
+            "\n\n補足: エビデンスが不足している可能性があります。"
+            "出典や前提条件を明示すると、より安定した判断ができます。"
+        )
+
+    return {
+        "status": status,
+        "decision_status": decision_status,
+        "reasons": reasons,
+        "violations": violations,
+        "violation_details": violation_details,
+        "risk": float(final_risk),
+        "guidance": guidance or None,
+        "policy_version": pol_res.get("policy_version"),
+        "meta": {
+            "policy_version": pol_res.get("policy_version"),
+            "safety_head_model": safety_head.model,
+            "safe_applied": safe_applied,
+        },
+    }
+
+
+# =========================================================
+# 4) FUJI Gate 本体（SafetyHead + TrustLog ラッパ）
 # =========================================================
 def fuji_gate(
     text: str,
@@ -493,81 +619,25 @@ def fuji_gate(
     sh = run_safety_head(text, ctx, alts)
     latency_ms = int((time.time() - t0) * 1000)
 
-    categories = list(sh.categories)
-    risk = float(sh.risk_score)
-    base_reasons: List[str] = []
-
-    # --- heuristic_fallback の「name_like だけ PII」誤検出をここで潰す ---
-    if sh.model == "heuristic_fallback":
-        raw = sh.raw or {}
-        pii_hits = raw.get("pii_hits") or []
-        rationale_lower = (sh.rationale or "").lower()
-
-        is_name_like_only = False
-
-        # 1) pii_hits があるが phone/email/address が含まれないケース
-        if pii_hits:
-            safe_hits = [h for h in pii_hits if h in ("phone", "email", "address")]
-            if not safe_hits:
-                is_name_like_only = True
-
-        # 2) それでも検出できない場合は rationale 文字列で "name_like" を見る
-        if "name_like" in rationale_lower and not any(
-            k in rationale_lower for k in ("phone", "email", "address", "電話", "メール", "住所")
-        ):
-            is_name_like_only = True
-
-        if is_name_like_only and any(str(c).upper() == "PII" for c in categories):
-            categories = [c for c in categories if str(c).upper() != "PII"]
-            risk = max(risk, 0.05)
-            risk = min(risk, 0.20)
-            base_reasons.append("fallback_pii_ignored(name_like_only)")
-
-            # ★ ここを追加
-            sh.rationale = (
-                "日本語テキスト中の人名らしき表現（name_like）は、"
-                "この環境では PII として扱わないポリシーにより無視されました。"
-            )
-
-    if safe_applied:
-        filtered = [c for c in categories if str(c).lower() not in ("pii", "pii_exposure")]
-        if len(filtered) < len(categories):
-            categories = filtered
-            risk = min(risk, 0.40)
-            base_reasons.append("pii_safe_applied")
-
-    if len(ev) < DEFAULT_MIN_EVIDENCE:
-        categories.append("low_evidence")
-        risk = min(1.0, risk + 0.10)
-        base_reasons.append(f"low_evidence({len(ev)}/{DEFAULT_MIN_EVIDENCE})")
-
-    # telos_score による軽いスケーリング
-    risk *= (1.0 + 0.10 * max(0.0, min(1.0, telos_score)))
-    risk = min(1.0, max(0.0, risk))
-
-    # ---------- 2) Policy Engine ----------
-    policy = POLICY
-    pol_res = _apply_policy(
-        risk=risk,
-        categories=categories,
+    # ---------- 2) コア判定ロジック（純粋関数） ----------
+    core_res = fuji_core_decide(
+        safety_head=sh,
         stakes=stakes,
         telos_score=telos_score,
-        policy=policy,
+        evidence_count=len(ev),
+        policy=POLICY,
+        safe_applied=safe_applied,
+        min_evidence=DEFAULT_MIN_EVIDENCE,
     )
 
-    status = pol_res["status"]
-    decision_status = pol_res["decision_status"]
-    violations = pol_res.get("violations", [])                # str のリスト
-    violation_details = pol_res.get("violation_details", [])  # dict のリスト
-    final_risk = pol_res["risk"]
-    reasons = base_reasons + pol_res["reasons"]
-
-    guidance = sh.rationale or ""
-    if "low_evidence" in categories:
-        guidance += (
-            "\n\n補足: エビデンスが不足している可能性があります。"
-            "出典や前提条件を明示すると、より安定した判断ができます。"
-        )
+    status = core_res["status"]
+    decision_status = core_res["decision_status"]
+    violations = core_res.get("violations", [])
+    violation_details = core_res.get("violation_details", [])
+    final_risk = core_res["risk"]
+    reasons = list(core_res.get("reasons", []))
+    guidance = core_res.get("guidance") or ""
+    policy_version = core_res.get("policy_version")
 
     # ---------- 3) TrustLog への記録 ----------
     try:
@@ -578,12 +648,12 @@ def fuji_gate(
             "risk_score": float(sh.risk_score),
             "risk_after_policy": float(final_risk),
             "categories": list(sh.categories),
-            "categories_effective": categories,
+            "categories_effective": violations or list(sh.categories),
             "stakes": stakes,
             "telos_score": telos_score,
             "status": status,
             "decision_status": decision_status,
-            "policy_version": pol_res.get("policy_version"),
+            "policy_version": policy_version,
             "safe_applied": safe_applied,
             "latency_ms": latency_ms,
             "safety_head_model": sh.model,
@@ -603,9 +673,15 @@ def fuji_gate(
         },
         {
             "kind": "policy_engine",
-            "policy_version": pol_res.get("policy_version"),
+            "policy_version": policy_version,
         },
     ]
+
+    meta = dict(core_res.get("meta") or {})
+    meta.setdefault("policy_version", policy_version)
+    meta.setdefault("safety_head_model", sh.model)
+    meta.setdefault("safe_applied", safe_applied)
+    meta["latency_ms"] = latency_ms
 
     return {
         "status": status,
@@ -619,16 +695,12 @@ def fuji_gate(
         "modifications": [],
         "redactions": [],
         "safe_instructions": [],
-        "meta": {
-            "policy_version": pol_res.get("policy_version"),
-            "safety_head_model": sh.model,
-            "safe_applied": safe_applied,
-        },
+        "meta": meta,
     }
 
 
 # =========================================================
-# 4) 旧 API 互換ラッパ
+# 5) 旧 API 互換ラッパ
 # =========================================================
 def validate_action(action_text: Any, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
@@ -697,7 +769,7 @@ def posthoc_check(
 
 
 # =========================================================
-# 5) evaluate ラッパ（旧/新インターフェイス互換）
+# 6) evaluate ラッパ（旧/新インターフェイス互換）
 # =========================================================
 def evaluate(
     decision_or_query: Any,
@@ -756,6 +828,7 @@ __all__ = [
     "MAX_UNCERTAINTY",
     "SafetyHeadResult",
     "run_safety_head",
+    "fuji_core_decide",
     "fuji_gate",
     "evaluate",
     "validate_action",
