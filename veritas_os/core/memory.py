@@ -1,3 +1,14 @@
+# veritas_os/core/memory.py (改善版)
+"""
+MemoryOS - 改善版
+
+主な改善点:
+1. 組み込みベクトル検索実装（sentence-transformers）
+2. インデックス管理の改善
+3. より詳細なログとデバッグ情報
+4. フォールバック戦略の強化
+"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +19,10 @@ import os
 import time
 import threading
 from contextlib import contextmanager
+import logging
+import pickle
+
+logger = logging.getLogger(__name__)
 
 # OS 判定
 IS_WIN = os.name == "nt"
@@ -15,60 +30,400 @@ IS_WIN = os.name == "nt"
 if not IS_WIN:
     try:
         import fcntl  # type: ignore
-    except ImportError:  # 非POSIX環境の保険
+    except ImportError:
         fcntl = None  # type: ignore
 else:
     fcntl = None  # type: ignore
 
-# ▼ ここで安全に joblib を読み込む
+# joblib
 try:
     from joblib import load as joblib_load
 except ImportError:
     joblib_load = None
 
-# ▼ ベクトルメモリ / メモリ分類モデル（あれば使う）
-try:
-    from veritas_os.core.models import memory_model as memory_model_core
+# ============================
+# ベクトル検索モジュール（組み込み）
+# ============================
 
-    MEM_VEC = getattr(memory_model_core, "MEM_VEC", None)
-    MEM_CLF = getattr(memory_model_core, "MEM_CLF", None)
+
+class VectorMemory:
+    """
+    組み込みベクトルメモリ実装
+
+    sentence-transformers を使用してテキストの埋め込みを生成し、
+    コサイン類似度で検索を行う。
+    """
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        index_path: Optional[Path] = None,
+        embedding_dim: int = 384,
+    ):
+        self.model_name = model_name
+        self.index_path = index_path
+        self.embedding_dim = embedding_dim
+
+        # データストア
+        self.documents: List[Dict[str, Any]] = []
+        self.embeddings: Optional[Any] = None  # numpy array
+
+        # モデルのロード
+        self.model = None
+        self._load_model()
+
+        # インデックスのロード
+        if index_path and index_path.exists():
+            self._load_index()
+
+    def _load_model(self):
+        """埋め込みモデルをロード"""
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            self.model = SentenceTransformer(self.model_name)
+            logger.info(f"[VectorMemory] Loaded model: {self.model_name}")
+        except ImportError:
+            logger.warning(
+                "[VectorMemory] sentence-transformers not available. "
+                "Install with: pip install sentence-transformers"
+            )
+            self.model = None
+        except Exception as e:
+            logger.error(f"[VectorMemory] Failed to load model: {e}")
+            self.model = None
+
+    def _load_index(self):
+        """永続化されたインデックスをロード"""
+        if not self.index_path or not self.index_path.exists():
+            return
+
+        try:
+            with open(self.index_path, "rb") as f:
+                data = pickle.load(f)
+
+            self.documents = data.get("documents", [])
+            self.embeddings = data.get("embeddings")
+
+            logger.info(
+                f"[VectorMemory] Loaded index: {len(self.documents)} documents"
+            )
+        except Exception as e:
+            logger.error(f"[VectorMemory] Failed to load index: {e}")
+
+    def _save_index(self):
+        """インデックスを永続化"""
+        if not self.index_path:
+            return
+
+        try:
+            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+
+            data = {
+                "documents": self.documents,
+                "embeddings": self.embeddings,
+                "model_name": self.model_name,
+                "embedding_dim": self.embedding_dim,
+            }
+
+            with open(self.index_path, "wb") as f:
+                pickle.dump(data, f)
+
+            logger.info(
+                f"[VectorMemory] Saved index: {len(self.documents)} documents"
+            )
+        except Exception as e:
+            logger.error(f"[VectorMemory] Failed to save index: {e}")
+
+    def add(
+        self,
+        kind: str,
+        text: str,
+        tags: Optional[List[str]] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """
+        ドキュメントを追加してインデックスを更新
+
+        Args:
+            kind: ドキュメント種別（"semantic", "episodic" など）
+            text: テキスト内容
+            tags: タグのリスト
+            meta: メタデータ
+
+        Returns:
+            成功したかどうか
+        """
+        if not self.model:
+            logger.warning("[VectorMemory] Model not loaded, cannot add document")
+            return False
+
+        if not text or not text.strip():
+            return False
+
+        try:
+            import numpy as np
+
+            # 埋め込み生成
+            embedding = self.model.encode([text])[0]
+
+            # ドキュメント追加
+            doc = {
+                "id": f"{kind}_{len(self.documents)}_{int(time.time())}",
+                "kind": kind,
+                "text": text,
+                "tags": tags or [],
+                "meta": meta or {},
+                "ts": time.time(),
+            }
+            self.documents.append(doc)
+
+            # 埋め込み配列を更新
+            if self.embeddings is None:
+                self.embeddings = embedding.reshape(1, -1)
+            else:
+                self.embeddings = np.vstack([self.embeddings, embedding])
+
+            # 定期的に保存（100件ごと）
+            if len(self.documents) % 100 == 0 and self.index_path:
+                self._save_index()
+
+            logger.debug(f"[VectorMemory] Added document: {doc['id']}")
+            return True
+
+        except Exception as e:
+            logger.error(f"[VectorMemory] Failed to add document: {e}")
+            return False
+
+    def search(
+        self,
+        query: str,
+        k: int = 10,
+        kinds: Optional[List[str]] = None,
+        min_sim: float = 0.0,
+    ) -> List[Dict[str, Any]]:
+        """
+        ベクトル検索を実行
+
+        Args:
+            query: 検索クエリ
+            k: 返す最大件数
+            kinds: フィルタするドキュメント種別
+            min_sim: 最小類似度閾値（0.0-1.0）
+
+        Returns:
+            検索結果のリスト（スコア降順）
+        """
+        if not self.model:
+            logger.debug("[VectorMemory] Model not loaded")
+            return []
+
+        if not query or not query.strip():
+            return []
+
+        if not self.documents or self.embeddings is None:
+            logger.debug("[VectorMemory] No documents in index")
+            return []
+
+        try:
+            # クエリの埋め込み生成
+            query_embedding = self.model.encode([query])[0]
+
+            # コサイン類似度計算
+            similarities = self._cosine_similarity(query_embedding, self.embeddings)
+
+            # 結果を構築
+            results: List[Dict[str, Any]] = []
+            for idx, sim in enumerate(similarities):
+                if sim < min_sim:
+                    continue
+
+                doc = self.documents[idx]
+
+                # kinds フィルタリング
+                if kinds and doc.get("kind") not in kinds:
+                    continue
+
+                results.append(
+                    {
+                        "id": doc["id"],
+                        "text": doc["text"],
+                        "score": float(sim),
+                        "kind": doc["kind"],
+                        "tags": doc.get("tags", []),
+                        "meta": doc.get("meta", {}),
+                        "ts": doc.get("ts"),
+                    }
+                )
+
+            # スコア降順でソート
+            results.sort(key=lambda x: x["score"], reverse=True)
+
+            # 上位k件を返す
+            top_results = results[:k]
+
+            logger.info(
+                f"[VectorMemory] Search '{query[:50]}...' "
+                f"found {len(top_results)}/{len(results)} hits"
+            )
+
+            return top_results
+
+        except Exception as e:
+            logger.error(f"[VectorMemory] Search failed: {e}")
+            return []
+
+    @staticmethod
+    def _cosine_similarity(vec: Any, matrix: Any) -> Any:
+        """コサイン類似度を計算"""
+        try:
+            import numpy as np
+
+            # ベクトルを正規化
+            vec_norm = vec / (np.linalg.norm(vec) + 1e-10)
+            matrix_norm = matrix / (
+                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
+            )
+
+            # 内積 = コサイン類似度
+            similarities = np.dot(matrix_norm, vec_norm)
+
+            return similarities
+
+        except Exception as e:
+            logger.error(f"[VectorMemory] Cosine similarity calculation failed: {e}")
+            import numpy as np
+
+            return np.zeros(len(matrix))
+
+    def rebuild_index(self, documents: List[Dict[str, Any]]):
+        """
+        既存のドキュメントリストからインデックスを再構築
+
+        Args:
+            documents: ドキュメントのリスト
+        """
+        if not self.model:
+            logger.warning("[VectorMemory] Model not loaded, cannot rebuild index")
+            return
+
+        logger.info(
+            f"[VectorMemory] Rebuilding index for {len(documents)} documents..."
+        )
+
+        self.documents = []
+        self.embeddings = None
+
+        for doc in documents:
+            text = doc.get("text", "")
+            if not text:
+                continue
+
+            self.add(
+                kind=doc.get("kind", "semantic"),
+                text=text,
+                tags=doc.get("tags"),
+                meta=doc.get("meta"),
+            )
+
+        self._save_index()
+        logger.info(
+            f"[VectorMemory] Index rebuilt: {len(self.documents)} documents indexed"
+        )
+
+
+# ============================
+# 旧コードとの互換性レイヤー
+# ============================
+
+# 外部モジュールからの読み込み試行（後方互換性）
+memory_model_core = None
+try:
+    # 通常インストール時
+    from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
 except Exception:
-    MEM_VEC = None
+    try:
+        # パッケージとしてでなくローカルから叩く場合の保険
+        from .models import memory_model as memory_model_core  # type: ignore
+    except Exception:
+        memory_model_core = None
+
+if memory_model_core is not None:
+    MEM_VEC_EXTERNAL = getattr(memory_model_core, "MEM_VEC", None)
+    MEM_CLF = getattr(memory_model_core, "MEM_CLF", None)
+else:
+    MEM_VEC_EXTERNAL = None
     MEM_CLF = None
 
-# ============================
-# モデル関連（旧：memory_model.pkl）
-# ============================
+# SimpleMemVec のようなダミー実装は無視して VectorMemory を優先する
+if MEM_VEC_EXTERNAL is not None and MEM_VEC_EXTERNAL.__class__.__name__ == "SimpleMemVec":
+    logger.info(
+        "[VectorMemory] Detected SimpleMemVec as external MEM_VEC; "
+        "ignoring and using built-in VectorMemory instead"
+    )
+    MEM_VEC_EXTERNAL = None
 
-# veritas_os/core/memory.py から見て
-# REPO_ROOT = .../veritas_os
+# モデル関連（旧: memory_model.pkl）
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "core" / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.pkl"
+VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.pkl"
 
-print("[MemoryModel] module loaded from:", __file__)
+logger.info(f"[MemoryModel] module loaded from: {__file__}")
 
+# memory_model.pkl のロード（分類器用）
 if joblib_load and MEMORY_MODEL_PATH.exists():
     try:
         MODEL = joblib_load(MEMORY_MODEL_PATH)
-        print(f"[MemoryModel] loaded: {MEMORY_MODEL_PATH}")
+        logger.info(f"[MemoryModel] loaded: {MEMORY_MODEL_PATH}")
     except Exception as e:
         MODEL = None
-        print("[MemoryModel] load skipped:", e)
+        logger.warning(f"[MemoryModel] load skipped: {e}")
 else:
     MODEL = None
-    print("[MemoryModel] load skipped: model file missing or joblib not available")
+    logger.info(
+        "[MemoryModel] load skipped: model file missing or joblib not available"
+    )
+
+# VectorMemory インスタンスの初期化
+MEM_VEC = None
+try:
+    # 外部 MEM_VEC を使うかどうかの判定
+    use_external = False
+    if MEM_VEC_EXTERNAL is not None:
+        ext_model = getattr(MEM_VEC_EXTERNAL, "model", None)
+
+        # 「ちゃんと埋め込みモデルが載っている」場合だけ採用
+        if ext_model is not None:
+            use_external = True
+        else:
+            logger.info(
+                "[VectorMemory] External MEM_VEC found "
+                f"({MEM_VEC_EXTERNAL.__class__.__name__}), "
+                "but model is None → ignore and use built-in VectorMemory"
+            )
+
+    if use_external:
+        MEM_VEC = MEM_VEC_EXTERNAL
+        logger.info(
+            "[VectorMemory] Using external MEM_VEC implementation "
+            f"({MEM_VEC_EXTERNAL.__class__.__name__})"
+        )
+    else:
+        # デフォルトは組み込み VectorMemory
+        MEM_VEC = VectorMemory(index_path=VECTOR_INDEX_PATH)
+        logger.info("[VectorMemory] Using built-in VectorMemory implementation")
+
+except Exception as e:
+    logger.error(f"[VectorMemory] Initialization failed: {e}")
+    MEM_VEC = None
 
 
 def predict_decision_status(query_text: str) -> str:
     """
     （暫定）クエリテキストから「決定ステータス」を推定するヘルパー。
-
-    前提:
-    - memory_model.pkl は sklearn の Pipeline or モデルで、
-      .predict([text]) が動く
     """
     if MODEL is None:
         return "unknown"
@@ -76,18 +431,13 @@ def predict_decision_status(query_text: str) -> str:
         pred = MODEL.predict([query_text])[0]
         return str(pred)
     except Exception as e:
-        print("[MemoryModel] predict_decision_status error:", e)
+        logger.error(f"[MemoryModel] predict_decision_status error: {e}")
         return "unknown"
 
 
 def predict_gate_label(text: str) -> Dict[str, float]:
     """
     FUJI/ValueCore から使える gate 用ラッパー。
-
-    優先順:
-      1) MEM_CLF (core.models.memory_model 側で学習した分類器)
-      2) 上記が無い場合は memory_model.pkl (MODEL) の predict_proba
-      3) どちらもダメなら {"allow": 0.5}
     """
     prob_allow = 0.5
 
@@ -101,11 +451,10 @@ def predict_gate_label(text: str) -> Dict[str, float]:
                 idx = classes.index("allow")
                 prob_allow = float(probs[idx])
             else:
-                # "allow" クラス名が無い場合は最大値を採用
                 prob_allow = float(max(probs))
             return {"allow": prob_allow}
         except Exception as e:
-            print("[MemoryModel] MEM_CLF.predict_proba error:", e)
+            logger.error(f"[MemoryModel] MEM_CLF.predict_proba error: {e}")
 
     # 2) MODEL (memory_model.pkl) に predict_proba があれば使う
     if MODEL is not None and hasattr(MODEL, "predict_proba"):
@@ -118,7 +467,7 @@ def predict_gate_label(text: str) -> Dict[str, float]:
             else:
                 prob_allow = float(max(probs))
         except Exception as e:
-            print("[MemoryModel] MODEL.predict_proba error:", e)
+            logger.error(f"[MemoryModel] MODEL.predict_proba error: {e}")
 
     return {"allow": prob_allow}
 
@@ -133,7 +482,6 @@ MEM_PATH_ENV = os.getenv("VERITAS_MEMORY_PATH")
 if MEM_PATH_ENV:
     MEM_PATH = Path(MEM_PATH_ENV).expanduser()
 else:
-    # config で決めた scripts/logs/memory.json を統一で使う
     MEM_PATH = cfg.memory_path
 
 DATA_DIR = MEM_PATH.parent
@@ -144,13 +492,11 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ファイルロック（multi-process 対応）
 # ============================
 
+
 @contextmanager
 def locked_memory(path: Path, timeout: float = 5.0) -> Any:
     """
     memory.json 用のシンプルな排他ロック。
-
-    - POSIX: fcntl.flock による排他ロック
-    - Windows: .lock ファイルを用いた簡易ロック
     """
     start = time.time()
     lockfile: Optional[Path] = None
@@ -162,7 +508,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
         fh = open(path, "a+", encoding="utf-8")
         while True:
             try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[arg-type]
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore
                 break
             except BlockingIOError:
                 if time.time() - start > timeout:
@@ -173,9 +519,9 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             yield
         finally:
             try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)  # type: ignore[arg-type]
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)  # type: ignore
             except Exception as e:
-                print("[MemoryOS] unlock failed:", e)
+                logger.error(f"[MemoryOS] unlock failed: {e}")
             fh.close()
     else:
         # Windows or 非POSIX: .lock ファイルで排他
@@ -198,7 +544,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                 if lockfile.exists():
                     lockfile.unlink()
             except Exception as e:
-                print("[MemoryOS] lockfile cleanup failed:", e)
+                logger.error(f"[MemoryOS] lockfile cleanup failed: {e}")
 
 
 # ============================
@@ -217,28 +563,22 @@ class MemoryStore:
         self._cache_data: Optional[List[Dict[str, Any]]] = None
         self._cache_mtime: float = 0.0
         self._cache_loaded_at: float = 0.0
-        self._cache_ttl: float = float(
-            os.getenv("VERITAS_MEMORY_CACHE_TTL", "5.0")
-        )  # 秒
+        self._cache_ttl: float = float(os.getenv("VERITAS_MEMORY_CACHE_TTL", "5.0"))
         self._cache_lock = threading.RLock()
 
         # 初期ファイル生成
         if not self.path.exists():
-            # 最初の生成だけはロック範囲内で空配列を書き込む
             self._save_all([])
 
     @classmethod
     def load(cls, path: Path) -> "MemoryStore":
         return cls(path)
 
-    # ---- 内部ヘルパー ----
-
     def _normalize(self, raw: Any) -> List[Dict[str, Any]]:
-        # 既に list 形式ならそのまま
         if isinstance(raw, list):
             return raw
 
-        # 旧形式 {"users": {...}} からのマイグレーション
+        # 旧形式からのマイグレーション
         if isinstance(raw, dict) and "users" in raw:
             migrated: List[Dict[str, Any]] = []
             for uid, udata in (raw.get("users") or {}).items():
@@ -252,7 +592,7 @@ class MemoryStore:
                                 "ts": time.time(),
                             }
                         )
-            print("[MemoryOS] migrated old dict-format → list-format")
+            logger.info("[MemoryOS] migrated old dict-format → list-format")
             return migrated
 
         return []
@@ -263,13 +603,7 @@ class MemoryStore:
         copy: bool = True,
         use_cache: bool = True,
     ) -> List[Dict[str, Any]]:
-        """
-        memory.json 全体を読み込む。
-
-        - use_cache=True かつ TTL 内で、ファイルの mtime が変わっていなければ
-          インメモリキャッシュを返す。
-        - それ以外は locked_memory でファイルからロードしてキャッシュ更新。
-        """
+        """memory.json 全体を読み込む"""
         # キャッシュチェック
         if use_cache and self._cache_ttl > 0:
             with self._cache_lock:
@@ -290,7 +624,7 @@ class MemoryStore:
                     return data
 
         if not self.path.exists():
-            print(f"[MemoryOS][DEBUG] memory file not found: {self.path}")
+            logger.debug(f"[MemoryOS] memory file not found: {self.path}")
             data: List[Dict[str, Any]] = []
         else:
             try:
@@ -298,11 +632,11 @@ class MemoryStore:
                     with open(self.path, "r", encoding="utf-8") as f:
                         raw = json.load(f)
                 data = self._normalize(raw)
-                print(
-                    f"[MemoryOS][DEBUG] loaded {len(data)} records from {self.path}"
-                )
+            except json.JSONDecodeError as e:
+                logger.error(f"[MemoryOS] JSON decode error: {e}")
+                data = []
             except Exception as e:
-                print(f"[MemoryOS][DEBUG] load failed: {e!r}")
+                logger.error(f"[MemoryOS] load error: {e}")
                 data = []
 
         # キャッシュ更新
@@ -318,80 +652,78 @@ class MemoryStore:
             return [dict(r) for r in data]
         return data
 
-    def _save_all(self, data: List[Dict[str, Any]]) -> None:
-        """
-        memory.json 全体を書き出す。
+    def _save_all(self, data: List[Dict[str, Any]]) -> bool:
+        """memory.json 全体を保存"""
+        try:
+            with locked_memory(self.path):
+                with open(self.path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
 
-        - locked_memory による排他
-        - tmp ファイルへの書き出し + os.replace によるアトミック更新
-        - fsync 失敗時は warning を出す
-        """
-        tmp_path = self.path.with_suffix(self.path.suffix + ".tmp")
-        with locked_memory(self.path):
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-                f.flush()
-                try:
-                    os.fsync(f.fileno())
-                except OSError as e:
-                    # 一部環境では fsync 不要な場合もあるので warning のみにする
-                    print("[MemoryOS] fsync failed (non-fatal):", e)
-            os.replace(tmp_path, self.path)
-
-        # キャッシュ更新
-        with self._cache_lock:
-            self._cache_data = [dict(r) for r in data]
-            try:
-                self._cache_mtime = self.path.stat().st_mtime
-            except FileNotFoundError:
+            # キャッシュ無効化
+            with self._cache_lock:
+                self._cache_data = None
                 self._cache_mtime = 0.0
-            self._cache_loaded_at = time.time()
+                self._cache_loaded_at = 0.0
 
-    # ---- 公開 API（KVS） ----
+            return True
+        except Exception as e:
+            logger.error(f"[MemoryOS] save error: {e}")
+            return False
 
-    def put(self, user_id: str, key: str, value: Any = None) -> bool:
-        """value が渡されなかった場合でも安全に処理する。"""
-        if value is None:
-            value = {}
+    def put(self, user_id: str, key: str, value: Any) -> bool:
+        """KVS put 操作"""
+        data = self._load_all(copy=True)
 
-        # 書き込み前は必ずディスクから最新を取り直す（use_cache=False）
-        data = self._load_all(copy=True, use_cache=False)
-        data.append(
-            {
-                "user_id": user_id,
-                "key": key,
-                "value": value,
-                "ts": time.time(),
-            }
-        )
-        self._save_all(data)
-        return True
+        # 既存レコードを探す
+        found = False
+        for r in data:
+            if r.get("user_id") == user_id and r.get("key") == key:
+                r["value"] = value
+                r["ts"] = time.time()
+                found = True
+                break
 
-    def append_history(self, user_id: str, record: Dict[str, Any]) -> bool:
-        key = f"history_{int(time.time())}"
-        return self.put(user_id, key, record)
+        # 新規レコード
+        if not found:
+            data.append(
+                {
+                    "user_id": user_id,
+                    "key": key,
+                    "value": value,
+                    "ts": time.time(),
+                }
+            )
 
-    def add_usage(self, user_id: str, cited_ids: Optional[List[str]] = None) -> bool:
-        record = {
-            "used": True,
-            "citations": cited_ids or [],
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-        }
-        key = f"usage_{int(time.time())}"
-        return self.put(user_id, key, record)
+        return self._save_all(data)
 
     def get(self, user_id: str, key: str) -> Any:
-        for r in reversed(self._load_all(copy=False)):
+        """KVS get 操作"""
+        data = self._load_all(copy=True)
+        for r in data:
             if r.get("user_id") == user_id and r.get("key") == key:
                 return r.get("value")
         return None
 
     def list_all(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """全レコードをリスト"""
         data = self._load_all(copy=True)
         if user_id:
-            data = [r for r in data if r.get("user_id") == user_id]
+            return [r for r in data if r.get("user_id") == user_id]
         return data
+
+    def append_history(self, user_id: str, record: Dict[str, Any]) -> bool:
+        """履歴を追加"""
+        key = f"history_{int(time.time())}"
+        return self.put(user_id, key, record)
+
+    def add_usage(self, user_id: str, cited_ids: Optional[List[str]] = None) -> bool:
+        """使用状況を記録"""
+        key = f"usage_{int(time.time())}"
+        value = {
+            "cited_ids": cited_ids or [],
+            "ts": time.time(),
+        }
+        return self.put(user_id, key, value)
 
     def recent(
         self,
@@ -399,6 +731,7 @@ class MemoryStore:
         limit: int = 20,
         contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """最近のレコードを取得"""
         items = self.list_all(user_id)
         items.sort(key=lambda r: r.get("ts", 0), reverse=True)
 
@@ -417,21 +750,20 @@ class MemoryStore:
 
         return items[:limit]
 
-    # ---- DebateOS / PlanOS 互換 + simple semantic search ----
-
     def _simple_score(self, query: str, text: str) -> float:
+        """シンプルな類似度スコア計算"""
         q = (query or "").strip().lower()
         t = (text or "").strip().lower()
         if not q or not t:
             return 0.0
 
-        # まず「部分一致」があるだけで 0.5 点
+        # 部分一致
         if q in t or t in q:
             base = 0.5
         else:
             base = 0.0
 
-        # スペース区切りトークン一致も見る
+        # トークン一致
         q_tokens = set(q.split())
         t_tokens = set(t.split())
         if q_tokens and t_tokens:
@@ -440,34 +772,27 @@ class MemoryStore:
         else:
             token_score = 0.0
 
-        # 両方合成（最大 1.0）
         return min(1.0, base + 0.5 * token_score)
 
     def search(
         self,
         query: str,
         k: int = 10,
-        kinds: Optional[List[str]] = None,
+        kinds: Optional[List[str]] = None,  # 現状 "episodic" のみ
         min_sim: float = 0.0,
         user_id: Optional[str] = None,
         **kwargs,
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        旧スタイルの episodic メモリ検索。
-        - memory.json に蓄積された decision / episodic ログを対象にする
-        - query との簡易類似度でソートして返す
-        - 戻り値は {"episodic": [ ... ]} 形式
-        """
+        """KVSベースの検索（フォールバック用）"""
         query = (query or "").strip()
         if not query:
             return {}
 
         data = self._load_all(copy=True)
         episodic: List[Dict[str, Any]] = []
-        target_user = user_id  # 指定があればそれを使う
+        target_user = user_id
 
         for r in data:
-            # user_id 指定があればそれだけ、なければ全ユーザー対象
             if target_user and r.get("user_id") != target_user:
                 continue
 
@@ -475,11 +800,7 @@ class MemoryStore:
             if not isinstance(val, dict):
                 continue
 
-            text = str(
-                val.get("text")
-                or val.get("query")
-                or ""
-            ).strip()
+            text = str(val.get("text") or val.get("query") or "").strip()
             if not text:
                 continue
 
@@ -488,6 +809,10 @@ class MemoryStore:
                 continue
 
             tags = val.get("tags") or []
+            kind = val.get("kind", "episodic")
+
+            if kinds and kind not in kinds:
+                continue
 
             episodic.append(
                 {
@@ -499,7 +824,7 @@ class MemoryStore:
                     "meta": {
                         "user_id": r.get("user_id"),
                         "created_at": r.get("ts"),
-                        "kind": "episodic",
+                        "kind": kind,
                     },
                 }
             )
@@ -507,7 +832,8 @@ class MemoryStore:
         episodic.sort(key=lambda x: x.get("score", 0.0), reverse=True)
         if not episodic:
             return {}
-        print(f"[MemoryOS][DEBUG] episodic hits={len(episodic)}")
+
+        logger.debug(f"[MemoryOS][KVS] episodic hits={len(episodic)}")
         return {"episodic": episodic[:k]}
 
     def put_episode(
@@ -518,16 +844,10 @@ class MemoryStore:
         **kwargs,
     ) -> str:
         """
-        server.py 側から
+        エピソードを追加。
 
-            new_id = MEM.put_episode(
-                text=episode_text,
-                tags=[...],
-                meta={...},
-            )
-
-        の形で呼ばれても動くようにしたラッパー。
-        戻り値: 追加されたエピソードの key (例: "episode_1736312345")
+        - KVS に保存
+        - 可能なら VectorMemory にも同時に追加
         """
         record: Dict[str, Any] = {
             "text": text,
@@ -535,19 +855,30 @@ class MemoryStore:
             "meta": meta or {},
         }
 
-        # 互換用：追加の kwargs も value の中に押し込んでおく
         for k, v in kwargs.items():
             if k not in record:
                 record[k] = v
 
-        # meta 内に user_id があればそれを使う。なければ "episodic"
         user_id = (record.get("meta") or {}).get("user_id", "episodic")
         key = f"episode_{int(time.time())}"
 
+        # KVS
         self.put(user_id, key, record)
-        return key
 
-    # ---- Planner 用サマリ ----
+        # ベクトルインデックスにも追加
+        global MEM_VEC
+        if MEM_VEC is not None:
+            try:
+                MEM_VEC.add(
+                    kind="episodic",
+                    text=text,
+                    tags=tags or [],
+                    meta=meta or {},
+                )
+            except Exception as e:
+                logger.warning(f"[MemoryOS] put_episode MEM_VEC.add error: {e}")
+
+        return key
 
     def summarize_for_planner(
         self,
@@ -555,9 +886,7 @@ class MemoryStore:
         query: str,
         limit: int = 8,
     ) -> str:
-        """
-        Planner 用に「最近の関連エピソード」を1つのテキストにまとめる。
-        """
+        """Planner用のサマリ生成（KVS検索ベース）"""
         res = self.search(query=query, k=limit, user_id=user_id)
         episodic = res.get("episodic") or []
 
@@ -599,12 +928,8 @@ def _hits_to_evidence(
     *,
     source_prefix: str = "memory",
 ) -> List[Dict[str, Any]]:
-    """
-    Memory / MEM_VEC.search のヒット結果(list[dict])を
-    /v1/decide 用の evidence(list[Dict]) に変換する。
-    """
+    """検索結果をEvidence形式に変換"""
     evidence: List[Dict[str, Any]] = []
-
     for h in hits:
         if not isinstance(h, dict):
             continue
@@ -613,22 +938,13 @@ def _hits_to_evidence(
         if not text:
             continue
 
-        meta = h.get("meta") or {}
-        kind = meta.get("kind") or "episodic"
-        uri = meta.get("uri") or meta.get("url") or None
-
-        score = h.get("score")
-        try:
-            confidence = float(score) if score is not None else 0.7
-        except Exception:
-            confidence = 0.7
-
         evidence.append(
             {
-                "source": f"{source_prefix}:{kind}",
-                "uri": uri,
-                "snippet": text[:300],
-                "confidence": confidence,
+                "source": f"{source_prefix}:{h.get('id', 'unknown')}",
+                "text": text,
+                "score": h.get("score", 0.0),
+                "tags": h.get("tags", []),
+                "meta": h.get("meta", {}),
             }
         )
 
@@ -641,13 +957,7 @@ def get_evidence_for_decision(
     user_id: Optional[str] = None,
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
-    """
-    decision_snapshot(dict) から query を取り出し、
-    MemoryOS（MEM_VEC or KVS）を検索して evidence を返す。
-    """
-    if not isinstance(decision, dict):
-        return []
-
+    """決定のためのエビデンスを取得"""
     q = (
         decision.get("query")
         or (decision.get("chosen") or {}).get("query")
@@ -685,10 +995,7 @@ def get_evidence_for_query(
     user_id: Optional[str] = None,
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
-    """
-    テスト用 / デバッグ用のユーティリティ。
-    決定スナップショットが無くても query だけで MemoryEvidence を試す。
-    """
+    """クエリのためのエビデンスを取得"""
     query = (query or "").strip()
     if not query:
         return []
@@ -703,48 +1010,38 @@ def get_evidence_for_query(
 # ==== グローバル MEM 初期化 ====
 try:
     MEM = MemoryStore.load(MEM_PATH)
-    print(f"[MemoryOS] initialized at {MEM_PATH}")
+    logger.info(f"[MemoryOS] initialized at {MEM_PATH}")
 except Exception as e:
-    print(f"[MemoryOS] init failed: {e}")
+    logger.error(f"[MemoryOS] init failed: {e}")
     MEM = MemoryStore.load(MEM_PATH)
 
 # 他モジュールで MEM を直接使えるようにする
 import builtins
+
 builtins.MEM = MEM
 
 
 # ============================
-# 関数 API（既存コード互換＋ベクトル対応）
+# 関数 API（改善版）
 # ============================
 
 
 def put(*args, **kwargs) -> bool:
     """
-    グローバル関数版 put。
+    グローバル関数版 put
 
-    呼び出しモードは4パターン：
-
-    1) 旧 KVS モード
-       put(user_id, key, value)
-       put(user_id, key=..., value=...)
-
-    2) ベクトル / エピソードモード
-       put(kind, {"text": ..., "tags": [...], "meta": {...}})
-
-    3) kwargs 指定
-       put(user_id=..., key=..., value=...)
-
-    4) それ以外は TypeError
+    呼び出しモード:
+    1) KVS: put(user_id, key, value)
+    2) ベクトル: put(kind, {"text": ..., "tags": [...], "meta": {...}})
     """
-
-    # ---- 1) user_id だけ位置引数で、key/value が kwargs ----
+    # user_id + key/value kwargs
     if len(args) == 1 and "key" in kwargs:
         user_id = args[0]
         key = kwargs["key"]
         value = kwargs.get("value")
         return MEM.put(user_id, key, value)
 
-    # ---- 2) kind + dict （ベクトル / エピソードモード）----
+    # kind + dict (ベクトルモード)
     if len(args) == 2 and isinstance(args[1], dict):
         kind = str(args[0] or "semantic")
         doc = dict(args[1])
@@ -755,23 +1052,27 @@ def put(*args, **kwargs) -> bool:
         if not text and not doc:
             return False
 
+        # ベクトルインデックスに追加
         if MEM_VEC is not None:
             try:
                 base_text = text or json.dumps(doc, ensure_ascii=False)
-                MEM_VEC.add(kind=kind, text=base_text, tags=tags, meta=meta)
+                success = MEM_VEC.add(kind=kind, text=base_text, tags=tags, meta=meta)
+                if success:
+                    logger.debug(f"[MemoryOS] Added to vector index: {kind}")
             except Exception as e:
-                print("[MemoryOS] MEM_VEC.add error (fallback to KVS):", e)
+                logger.warning(f"[MemoryOS] MEM_VEC.add error (fallback to KVS): {e}")
 
+        # KVSにも保存
         user_id = meta.get("user_id", kind)
         key = f"{kind}_{int(time.time())}"
         return MEM.put(user_id, key, doc)
 
-    # ---- 3) 完全位置引数 3つ（従来 KVS モード）----
+    # 完全位置引数 (KVSモード)
     if len(args) >= 3:
         user_id, key, value = args[0], args[1], args[2]
         return MEM.put(user_id, key, value)
 
-    # ---- 4) kwargs だけで指定された場合 ----
+    # kwargs 指定
     if "user_id" in kwargs and "key" in kwargs:
         return MEM.put(kwargs["user_id"], kwargs["key"], kwargs.get("value"))
 
@@ -805,6 +1106,35 @@ def recent(
     return MEM.recent(user_id, limit=limit, contains=contains)
 
 
+def _dedup_hits(hits: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    """
+    ヒット結果を (text, user_id) 単位で去重しつつ k 件までに制限する。
+    順序は元のリストの順を維持する。
+    """
+    unique: List[Dict[str, Any]] = []
+    seen = set()
+
+    for h in hits:
+        if not isinstance(h, dict):
+            continue
+
+        text = str(h.get("text") or "")
+        meta = h.get("meta") or {}
+        uid = str((meta or {}).get("user_id") or "")
+
+        key = (text, uid)
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique.append(h)
+
+        if len(unique) >= k:
+            break
+
+    return unique
+
+
 def search(
     query: str,
     k: int = 10,
@@ -814,20 +1144,18 @@ def search(
     **kwargs,
 ) -> List[Dict[str, Any]]:
     """
-    グローバル関数版 search。
+    グローバル関数版 search（改善版）
 
     優先順:
-      1) MEM_VEC があればベクトル検索を試す
-         - 非空の list[dict] または
-           dict 内の "hits" / "episodic" / "results" が list[dict] のときだけ採用
-      2) それ以外（0件 or エラー）は、KVS ベースの simple search にフォールバック
+    1) MEM_VEC があればベクトル検索
+    2) エラーまたは0件 → KVS simple search にフォールバック
 
-    戻り値はいずれも list[dict] を返す。
+    戻り値: list[dict]
     """
 
-    # -------------------------
-    # 1) ベクトル検索（あれば優先）
-    # -------------------------
+    # ===========================
+    # 1) ベクトル検索（優先）
+    # ===========================
     if MEM_VEC is not None:
         try:
             raw = MEM_VEC.search(
@@ -839,11 +1167,11 @@ def search(
 
             candidates: Optional[List[Dict[str, Any]]] = None
 
-            # パターンA: そのまま list[dict]
+            # パターンA: list[dict]
             if isinstance(raw, list):
                 candidates = [h for h in raw if isinstance(h, dict)]
 
-            # パターンB: dict の中に hits / episodic / results があるケース
+            # パターンB: dict{"hits"/"episodic"/"results": list}
             elif isinstance(raw, dict):
                 for key in ("hits", "episodic", "results"):
                     v = raw.get(key)
@@ -852,29 +1180,42 @@ def search(
                         if candidates:
                             break
 
-            # 非空ならそのまま返す
             if candidates:
-                return candidates
+                unique = _dedup_hits(candidates, k)
+                logger.info(
+                    f"[MemoryOS] Vector search returned "
+                    f"{len(unique)} unique hits (raw={len(candidates)})"
+                )
+                return unique
 
-            # ここまで来たら「0件ヒット」扱い → KVS にフォールバック
-            print("[MemoryOS] MEM_VEC.search returned no hits; fallback to KVS")
+            logger.info(
+                "[MemoryOS] MEM_VEC.search returned no hits; fallback to KVS"
+            )
 
         except TypeError:
-            # 旧シグネチャ (MEM_VEC.search(query, k)) へのフォールバック
+            # 旧シグネチャへのフォールバック
             try:
-                raw = MEM_VEC.search(query, k=k)
+                raw = MEM_VEC.search(query, k=k)  # type: ignore[call-arg]
                 if isinstance(raw, list) and raw:
-                    return [h for h in raw if isinstance(h, dict)]
-                print("[MemoryOS] MEM_VEC.search(old sig) no hits; fallback to KVS")
+                    hits = [h for h in raw if isinstance(h, dict)]
+                    unique = _dedup_hits(hits, k)
+                    logger.info(
+                        f"[MemoryOS] Vector search (old sig) returned "
+                        f"{len(unique)} unique hits (raw={len(hits)})"
+                    )
+                    return unique
+                logger.info(
+                    "[MemoryOS] MEM_VEC.search(old sig) no hits; fallback to KVS"
+                )
             except Exception as e:
-                print("[MemoryOS] MEM_VEC.search(old sig) error:", e)
+                logger.warning(f"[MemoryOS] MEM_VEC.search(old sig) error: {e}")
 
         except Exception as e:
-            print("[MemoryOS] MEM_VEC.search error:", e)
+            logger.warning(f"[MemoryOS] MEM_VEC.search error: {e}")
 
-    # -------------------------
+    # ===========================
     # 2) フォールバック: KVS simple search
-    # -------------------------
+    # ===========================
     res = MEM.search(
         query=query,
         k=k,
@@ -884,18 +1225,27 @@ def search(
         **kwargs,
     )
 
-    # MemoryStore.search は {"episodic": [...]} を返す実装
+    hits: List[Dict[str, Any]] = []
+
+    # MemoryStore.search は {"episodic": [...]} を返す想定
     if isinstance(res, dict) and "episodic" in res:
-        hits = res["episodic"]
-        if isinstance(hits, list):
-            return [h for h in hits if isinstance(h, dict)]
+        episodic = res.get("episodic") or []
+        if isinstance(episodic, list):
+            hits = [h for h in episodic if isinstance(h, dict)]
+
+    # list で返ってきた場合
+    elif isinstance(res, list):
+        hits = [h for h in res if isinstance(h, dict)]
+
+    if not hits:
         return []
 
-    # 念のため、すでに list で返ってきた場合もハンドリング
-    if isinstance(res, list):
-        return [h for h in res if isinstance(h, dict)]
-
-    return []
+    unique = _dedup_hits(hits, k)
+    logger.info(
+        f"[MemoryOS] KVS search returned "
+        f"{len(unique)} unique hits (raw={len(hits)})"
+    )
+    return unique
 
 
 def summarize_for_planner(
@@ -905,3 +1255,66 @@ def summarize_for_planner(
 ) -> str:
     """Planner から直接呼べるラッパー"""
     return MEM.summarize_for_planner(user_id=user_id, query=query, limit=limit)
+
+
+def rebuild_vector_index():
+    """
+    既存のmemory.jsonからベクトルインデックスを再構築
+
+    使用例:
+        from veritas_os.core import memory
+        memory.rebuild_vector_index()
+    """
+    global MEM_VEC
+
+    if MEM_VEC is None:
+        logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
+        return
+
+    if not hasattr(MEM_VEC, "rebuild_index"):
+        logger.error(
+            "[MemoryOS] Cannot rebuild index: MEM_VEC has no rebuild_index()"
+        )
+        return
+
+    logger.info("[MemoryOS] Starting vector index rebuild...")
+
+    # memory.jsonから全データを読み込み
+    all_data = MEM.list_all()
+
+    # ベクトル化可能なドキュメントを抽出
+    documents: List[Dict[str, Any]] = []
+    for record in all_data:
+        value = record.get("value")
+        if not isinstance(value, dict):
+            continue
+
+        text = value.get("text", "")
+        if not text or not text.strip():
+            continue
+
+        meta = value.get("meta", {}) or {}
+        meta = {
+            "user_id": record.get("user_id"),
+            "created_at": record.get("ts"),
+            **meta,
+        }
+
+        documents.append(
+            {
+                "kind": value.get("kind", "episodic"),
+                "text": text,
+                "tags": value.get("tags", []),
+                "meta": meta,
+            }
+        )
+
+    logger.info(f"[MemoryOS] Found {len(documents)} documents to index")
+
+    # インデックス再構築
+    MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
+
+    logger.info("[MemoryOS] Vector index rebuild complete")
+
+
+

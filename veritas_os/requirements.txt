@@ -9,6 +9,7 @@ pydantic==2.8.2
 python-dotenv==1.0.1
 orjson==3.10.7
 PyYAML>=6.0
+pip install sentence-transformers --break-system-packages
 # --- Model / Decision Engine ---
 joblib>=1.4.0
 scikit-learn>=1.5.0
