@@ -708,7 +708,7 @@ async def run_decide_pipeline(
             "path": _mem_model_path(),
         }
 
-    # --- chosen 決定 ---
+    # --- chosen 決定（pre-Debate） ---
     chosen = raw.get("chosen") if isinstance(raw, dict) else {}
     if not isinstance(chosen, dict) or not chosen:
         try:
@@ -722,6 +722,62 @@ async def run_decide_pipeline(
             chosen = max(alts, key=_choice_key)
         except Exception:
             chosen = alts[0] if alts else {}
+
+    # ---------- DebateOS ----------
+    debate_result: Dict[str, Any] = {}
+    try:
+        debate_result = debate_core.run_debate(
+            query=query,
+            options=alts,
+            context={
+                "user_id": user_id,
+                "stakes": (context or {}).get("stakes"),
+                "telos_weights": (context or {}).get("telos_weights"),
+            },
+        )
+    except Exception as e:
+        print("[DebateOS] skipped:", e)
+        debate_result = {}
+
+    if isinstance(debate_result, dict):
+        deb_opts = debate_result.get("options") or []
+        if isinstance(deb_opts, list) and deb_opts:
+            # run_debate が元 options をマージした enriched options を返す前提
+            alts = deb_opts
+
+        deb_chosen = debate_result.get("chosen")
+        if isinstance(deb_chosen, dict) and deb_chosen:
+            chosen = deb_chosen
+
+        # 互換用: debate は「options のリスト」として保持
+        if isinstance(deb_opts, list):
+            debate = deb_opts
+
+        # extras に Debate 情報を保存（raw はフル JSON）
+        try:
+            response_extras.setdefault("debate", {})
+            response_extras["debate"].update(
+                {
+                    "source": debate_result.get("source"),
+                    "raw": debate_result.get("raw"),
+                }
+            )
+        except Exception as e:
+            print("[DebateOS] extras attach skipped:", e)
+
+        # 却下候補数から簡易 risk_delta を計算して 1件目に埋め込む
+        try:
+            rejected_cnt = 0
+            for o in deb_opts:
+                v = str(o.get("verdict") or "").strip()
+                if v in ("却下", "reject", "Rejected", "NG"):
+                    rejected_cnt += 1
+            if rejected_cnt > 0 and deb_opts:
+                # 最大 +0.20 まで
+                risk_delta = min(0.20, 0.05 * rejected_cnt)
+                deb_opts[0]["risk_delta"] = risk_delta
+        except Exception as e:
+            print("[DebateOS] risk_delta heuristic skipped:", e)
 
     # ---------- FUJI 事前チェック ----------
     try:
@@ -1328,8 +1384,6 @@ async def run_decide_pipeline(
         )
     except Exception as e:
         print("[dataset] skip:", e)
-
-    
 
     # ---------- 決定レコードを LOG/DATASET に保存 ----------
     try:

@@ -427,3 +427,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main_cli(bench_id=args.bench_id)
+

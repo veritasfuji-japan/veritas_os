@@ -10,6 +10,74 @@ from typing import Any, Dict, List, Optional
 from . import llm_client
 from . import world as world_model
 from . import memory as mem
+from . import code_planner  # ★ 追加
+
+
+# ============================
+#  共通: step 正規化ヘルパ
+# ============================
+
+
+def _normalize_step(
+    step: Dict[str, Any],
+    default_eta_hours: float = 1.0,
+    default_risk: float = 0.1,
+) -> Dict[str, Any]:
+    """
+    1つの step に対して、eta_hours / risk / dependencies を必ず埋める。
+    すでに値がある場合はそのまま尊重し、欠けているものだけ補完する。
+    """
+    s: Dict[str, Any] = dict(step)
+
+    # eta_hours
+    if "eta_hours" not in s:
+        try:
+            s["eta_hours"] = float(default_eta_hours)
+        except Exception:
+            s["eta_hours"] = 1.0
+
+    # risk
+    if "risk" not in s:
+        try:
+            s["risk"] = float(default_risk)
+        except Exception:
+            s["risk"] = 0.1
+
+    # dependencies
+    deps = s.get("dependencies")
+    if not isinstance(deps, list):
+        s["dependencies"] = []
+    else:
+        # list だが要素が変な場合はとりあえず str 化
+        s["dependencies"] = [str(d) for d in deps]
+
+    return s
+
+
+def _normalize_steps_list(
+    steps: List[Dict[str, Any]] | None,
+    default_eta_hours: float = 1.0,
+    default_risk: float = 0.1,
+) -> List[Dict[str, Any]]:
+    """
+    steps のリストに対して _normalize_step を一括適用。
+    None や不正要素が混ざっていても「まともな dict だけ」を採用する。
+    """
+    if not isinstance(steps, list):
+        return []
+
+    normalized: List[Dict[str, Any]] = []
+    for st in steps:
+        if not isinstance(st, dict):
+            continue
+        normalized.append(
+            _normalize_step(
+                st,
+                default_eta_hours=default_eta_hours,
+                default_risk=default_risk,
+            )
+        )
+    return normalized
 
 
 # ============================
@@ -115,6 +183,14 @@ def _simple_qa_plan(
         },
     ]
 
+    steps = _normalize_steps_list(steps, default_eta_hours=0.05, default_risk=0.01)
+
+    # World snapshot から簡易ステージ推定
+    try:
+        from_stage = _infer_veritas_stage(world_snap)
+    except Exception:
+        from_stage = "S1_bootstrap"
+
     return {
         "steps": steps,
         "raw": {
@@ -122,6 +198,10 @@ def _simple_qa_plan(
             "query": q,
             "world_snapshot": world_snap or {},
             "context": context or {},
+        },
+        "meta": {
+            "stage": from_stage,
+            "query_type": "simple_qa",
         },
         "source": "simple_qa",
     }
@@ -360,7 +440,7 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
     if cleaned.startswith("```"):
         first_newline = cleaned.find("\n")
         if first_newline != -1:
-            cleaned = cleaned[first_newline + 1:]
+            cleaned = cleaned[first_newline + 1 :]
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
 
@@ -448,7 +528,7 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
                     depth -= 1
                     if depth == 0 and buf_start is not None:
                         # 1つのオブジェクト終了
-                        obj_str = text[buf_start: i + 1]
+                        obj_str = text[buf_start : i + 1]
                         try:
                             obj = json.loads(obj_str)
                             objs.append(obj)
@@ -477,27 +557,33 @@ def _fallback_plan(query: str) -> Dict[str, Any]:
     ここは「超安全なミニプラン」を返す。
     """
     q = (query or "").strip()
+    steps = [
+        {
+            "id": "step1",
+            "title": "問いを1段階だけ具体化する",
+            "detail": f"次にやるべきことを1つに絞ってメモに書き出す。元の問い: {q}",
+            "why": "まずは問題を具体化することで、過剰なリスクを避けつつ前進できるため。",
+        },
+        {
+            "id": "step2",
+            "title": "今日中にできる最小アクションを決める",
+            "detail": "明日以降に回さず、今日30分以内でできる作業を1つ決めて実行する。",
+            "why": "決定を先延ばしにせず、小さな前進を積み重ねるため。",
+            "dependencies": ["step1"],
+        },
+    ]
+    steps = _normalize_steps_list(steps, default_eta_hours=0.5, default_risk=0.05)
     return {
-        "steps": [
-            {
-                "id": "step1",
-                "title": "問いを1段階だけ具体化する",
-                "detail": f"次にやるべきことを1つに絞ってメモに書き出す。元の問い: {q}",
-                "why": "まずは問題を具体化することで、過剰なリスクを避けつつ前進できるため。",
-                "eta_hours": 0.25,
-                "risk": 0.05,
-                "dependencies": [],
-            },
-            {
-                "id": "step2",
-                "title": "今日中にできる最小アクションを決める",
-                "detail": "明日以降に回さず、今日30分以内でできる作業を1つ決めて実行する。",
-                "why": "決定を先延ばしにせず、小さな前進を積み重ねるため。",
-                "eta_hours": 0.5,
-                "risk": 0.05,
-                "dependencies": ["step1"],
-            },
-        ]
+        "steps": steps,
+        "raw": {
+            "mode": "fallback_minimal",
+            "query": q,
+        },
+        "meta": {
+            "stage": "S1_bootstrap",
+            "query_type": "fallback",
+        },
+        "source": "fallback_minimal",
     }
 
 
@@ -561,6 +647,7 @@ def _fallback_plan_for_stage(
                 "title": "world_state.json が正しく更新されているか確認",
                 "detail": "Swagger または curl で /v1/decide を2〜3回叩き、veritas_agi の progress / decision_count が変化しているか確認する。",
                 "why": "WorldModelが動いていることが、AGI化ループの土台になるため。",
+                "dependencies": ["doc_readme"],
             },
         ]
 
@@ -577,6 +664,7 @@ def _fallback_plan_for_stage(
                 "title": "extras.veritas_agi.hint が返っているか確認",
                 "detail": "/v1/decide のレスポンス extras.veritas_agi.hint を確認し、WorldModel由来の『次の一手』が出ているか確認する。",
                 "why": "World側の『次の一手』とPlannerのステージ設計がずれていないかを確かめるため。",
+                "dependencies": ["doc_os_relations"],
             },
         ]
 
@@ -593,6 +681,7 @@ def _fallback_plan_for_stage(
                 "title": "schemas.py とレスポンスの整合性チェック",
                 "detail": "DecideResponse に extras.veritas_agi / values.ema などが反映されているか確認する。",
                 "why": "実データ構造とスキーマの齟齬をなくし、将来の自動解析や学習に備えるため。",
+                "dependencies": ["swagger_docs"],
             },
         ]
 
@@ -609,6 +698,7 @@ def _fallback_plan_for_stage(
                 "title": "world_state.json からplannerへのフィードバック項目を1個増やす",
                 "detail": "例えば、最近のavg_world_utilityが低い場合は『安全な改善タスク』を優先するステップを追加するなど、小さなフィードバックルールを入れる。",
                 "why": "WorldModel→Plannerへのフィードバックが入ると、『状態依存の成長』に一歩近づくため。",
+                "dependencies": ["decision_analyzer"],
             },
         ]
 
@@ -625,6 +715,7 @@ def _fallback_plan_for_stage(
                 "title": "選んだユースケース用の /v1/decide テンプレを作る",
                 "detail": "例:『過去○件の決定ログを踏まえて、次の1週間の行動計画を出して』など、毎週叩ける定型クエリを作る。",
                 "why": "人間の仕事の大部分を『定例ループ』としてVERITASに乗せる準備になるため。",
+                "dependencies": ["usecase_select"],
             },
         ]
 
@@ -658,11 +749,18 @@ def _fallback_plan_for_stage(
             }
         ]
 
+    steps = _normalize_steps_list(steps, default_eta_hours=1.0, default_risk=0.1)
+
     return {
         "steps": steps,
         "raw": {
             "stage": stage,
             "world_snapshot": world_snap or {},
+            "query": q,
+        },
+        "meta": {
+            "stage": stage,
+            "query_type": "stage_fallback",
         },
         "source": "stage_fallback",
     }
@@ -732,7 +830,6 @@ def plan_for_veritas_agi(
 
     raw_text: str = ""
     parsed: Dict[str, Any] = {}
-    plan: Dict[str, Any]
 
     try:
         res = llm_client.chat(
@@ -754,13 +851,19 @@ def plan_for_veritas_agi(
 
         # 1) 正常ケース
         if isinstance(steps_obj, list) and len(steps_obj) > 0:
+            steps = _normalize_steps_list(steps_obj, default_eta_hours=1.0, default_risk=0.1)
             plan = {
-                "steps": steps_obj,
+                "steps": steps,
                 "raw": {
                     "parsed": parsed,
                     "text": raw_text,
                     "stage": stage,
                     "world_snapshot": world_snap or {},
+                    "query": (query or "").strip(),
+                },
+                "meta": {
+                    "stage": stage,
+                    "query_type": "llm",
                 },
                 "source": "openai_llm",
             }
@@ -776,6 +879,67 @@ def plan_for_veritas_agi(
         plan = _fallback_plan_for_stage(query, stage, world_snap)
 
     return plan
+
+def generate_code_tasks(
+    bench: Optional[Dict[str, Any]] = None,
+    world_state: Optional[Dict[str, Any]] = None,
+    doctor_report: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    kernel.decide(code_change_planモード) から呼ばれるラッパー。
+
+    - code_planner.generate_code_change_plan(...) を叩いて
+      CodeChangePlan を dict に変換
+    - その上で kernel 用の「tasks」配列を組み立てて返す
+    """
+
+    bench = bench or {}
+    # bench_id は bench に入っていればそれを優先、なければデフォルト
+    bench_id = bench.get("bench_id") or "agi_veritas_self_hosting"
+
+    # CodeChangePlan を生成
+    plan_obj = code_planner.generate_code_change_plan(
+        bench_id=bench_id,
+        world_state=world_state,
+        doctor_report=doctor_report,
+        bench_log=bench or None,
+    )
+    plan_dict = plan_obj.to_dict()
+
+    tasks: List[Dict[str, Any]] = []
+
+    for idx, ch in enumerate(plan_dict.get("changes", []), start=1):
+        if not isinstance(ch, dict):
+            continue
+
+        task_id = ch.get("id") or f"code_change_{idx}"
+        title = ch.get("title") or f"コード変更 {idx}"
+        desc = ch.get("description") or ""
+
+        task: Dict[str, Any] = {
+            "id": task_id,
+            "title": title,
+            "detail": desc,
+            "kind": "code_change",
+            "module": ch.get("target_module") or ch.get("module") or "unknown",
+            "path": ch.get("target_path") or ch.get("path") or "",
+            "priority": ch.get("priority", "medium"),
+            "risk": ch.get("risk", "medium"),
+            "impact": ch.get("impact", "medium"),
+            "suggested_functions": ch.get("suggested_functions", []),
+            "meta": {
+                "bench_id": bench_id,
+                "source": "code_planner.generate_code_change_plan",
+            },
+        }
+        tasks.append(task)
+
+    return {
+        "bench_id": bench_id,
+        "plan": plan_dict,  # CodeChangePlan の full dict
+        "tasks": tasks,     # kernel.decide が alternatives に変換する元
+    }
+
 
 
 # ============================
@@ -992,55 +1156,67 @@ def generate_plan(
     steps: List[Dict[str, Any]] = []
 
     # Step 1: 状況整理
-    steps.append({
-        "id": "analyze",
-        "title": "状況整理",
-        "detail": (
-            "問い合わせ内容を整理し、前提条件・制約・目的をテキストで書き出す。\n"
-            f"query: {q}"
-        ),
-        "priority": 1,
-        "eta_minutes": 5,
-    })
+    steps.append(
+        {
+            "id": "analyze",
+            "title": "状況整理",
+            "detail": (
+                "問い合わせ内容を整理し、前提条件・制約・目的をテキストで書き出す。\n"
+                f"query: {q}"
+            ),
+            "priority": 1,
+            "eta_minutes": 5,
+        }
+    )
 
     # Step 2: 情報収集（必要な場合だけ）
     if any(k in q for k in ["調べ", "リサーチ", "情報", "データ", "証拠"]):
-        steps.append({
-            "id": "research",
-            "title": "必要な情報の収集",
-            "detail": "関連する資料・ログ・証拠・外部情報を洗い出し、重要度順にリスト化する。",
-            "priority": 2,
-            "eta_minutes": 15,
-        })
+        steps.append(
+            {
+                "id": "research",
+                "title": "必要な情報の収集",
+                "detail": "関連する資料・ログ・証拠・外部情報を洗い出し、重要度順にリスト化する。",
+                "priority": 2,
+                "eta_minutes": 15,
+            }
+        )
 
     # Step 3: chosen の具体化
-    steps.append({
-        "id": "execute_core",
-        "title": f"コアアクションの実行: {chosen_title}",
-        "detail": (
-            "decide() が選んだアクションを、1つの具体的な作業に落とし込んで着手する。\n"
-            f"説明: {chosen_desc}"
-        ),
-        "priority": 3,
-        "eta_minutes": 20,
-    })
+    steps.append(
+        {
+            "id": "execute_core",
+            "title": f"コアアクションの実行: {chosen_title}",
+            "detail": (
+                "decide() が選んだアクションを、1つの具体的な作業に落とし込んで着手する。\n"
+                f"説明: {chosen_desc}"
+            ),
+            "priority": 3,
+            "eta_minutes": 20,
+        }
+    )
 
     # Step 4: ログ・記録
-    steps.append({
-        "id": "log",
-        "title": "実行内容のログ化",
-        "detail": "実行した内容・使った判断基準・気づきをVERITASログ/メモに記録する。（将来の学習用）",
-        "priority": 4,
-        "eta_minutes": 5,
-    })
+    steps.append(
+        {
+            "id": "log",
+            "title": "実行内容のログ化",
+            "detail": "実行した内容・使った判断基準・気づきをVERITASログ/メモに記録する。（将来の学習用）",
+            "priority": 4,
+            "eta_minutes": 5,
+        }
+    )
 
     # Step 5: 振り返り
-    steps.append({
-        "id": "reflect",
-        "title": "振り返りと次の一手",
-        "detail": "今回の決定の良かった点・不安点を書き出し、次に相談/実装したいテーマを1つ決める。",
-        "priority": 5,
-        "eta_minutes": 10,
-    })
+    steps.append(
+        {
+            "id": "reflect",
+            "title": "振り返りと次の一手",
+            "detail": "今回の決定の良かった点・不安点を書き出し、次に相談/実装したいテーマを1つ決める。",
+            "priority": 5,
+            "eta_minutes": 10,
+        }
+    )
 
     return steps
+
+

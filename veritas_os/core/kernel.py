@@ -1,36 +1,47 @@
-# veritas_os/core/kernel.py
+
+# veritas_os/core/kernel.py (v2-compatible)
 # -*- coding: utf-8 -*-
+"""
+VERITAS kernel.py v2-compatible - 後方互換性を維持した二重実行解消版
+
+★ 重要: 既存の decide() シグネチャは変更しない
+★ context 内のフラグで二重実行をスキップ判定
+"""
 from __future__ import annotations
 
 import re
 import uuid
-import time                    # ★ latency計測
-import sys                     # ★ doctor起動用
-import subprocess              # ★ doctor起動用
+import time
+import sys
+import subprocess
 from datetime import datetime
 from typing import Any, Dict, List
 
-from . import adapt              # persona 学習
-from . import evidence as evos   # いまは未使用だが将来のために残す
-from . import debate             # Multi-Agent ReasonOS (DebateOS)
-from . import world as world_model       # ★ WorldModel / world.simulate / inject_state_into_context
-from . import planner as planner_core    # ★ code_change_plan 用
-from . import agi_goals                  # ★ AGIゴール自己調整モジュール
-from . import memory as mem_core         # ★ MemoryOS
-from . import fuji as fuji_core          # ★ FUJI Gate
+from . import adapt
+from . import evidence as evos
+from . import debate
+from . import world as world_model
+from . import planner as planner_core
+from . import agi_goals
+from . import memory as mem_core
+from . import fuji as fuji_core
 from . import debate as debate_core
-from veritas_os.tools import call_tool   # env tools ラッパ用
+from . import value_core
+from . import affect as affect_core  # ★ NEW: ReasonOS / AffectOS
+
+try:  # 任意: 戦略レイヤー（なければ無視）
+    from . import strategy as strategy_core  # type: ignore
+except Exception:  # pragma: no cover
+    strategy_core = None  # type: ignore
+
+from veritas_os.tools import call_tool
 
 
 # ============================================================
-# 環境ツールラッパ（web_search / github_search など）
+# 環境ツールラッパ
 # ============================================================
 
 def run_env_tool(kind: str, **kwargs) -> dict:
-    """
-    VERITAS から外部環境ツール(web_search / github_search など)を叩く薄いラッパー。
-    decide 内では **必ずこの関数経由** で呼ぶ。
-    """
     try:
         return call_tool(kind, **kwargs)
     except Exception as e:
@@ -78,16 +89,22 @@ def _mk_option(title: str, description: str = "", _id: str | None = None) -> Dic
     }
 
 
+# ============================================================
+# Intent 検出（事前コンパイル済み正規表現）
+# ============================================================
+
+INTENT_PATTERNS = {
+    "weather": re.compile(r"(天気|気温|降水|雨|晴れ|weather|forecast)", re.I),
+    "health": re.compile(r"(疲れ|だる|体調|休む|回復|睡眠|寝|サウナ)", re.I),
+    "learn": re.compile(r"(とは|仕組み|なぜ|how|why|教えて|違い|比較)", re.I),
+    "plan": re.compile(r"(計画|進め|やるべき|todo|最小ステップ|スケジュール|plan)", re.I),
+}
+
+
 def _detect_intent(q: str) -> str:
     q = (q or "").strip().lower()
-    rules = {
-        "weather": r"(天気|気温|降水|雨|晴れ|weather|forecast)",
-        "health": r"(疲れ|だる|体調|休む|回復|睡眠|寝|サウナ)",
-        "learn": r"(とは|仕組み|なぜ|how|why|教えて|違い|比較)",
-        "plan": r"(計画|進め|やるべき|todo|最小ステップ|スケジュール|plan)",
-    }
-    for name, pat in rules.items():
-        if re.search(pat, q):
+    for name, pattern in INTENT_PATTERNS.items():
+        if pattern.search(q):
             return name
     return "plan"
 
@@ -119,7 +136,7 @@ def _gen_options_by_intent(intent: str) -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# intent による alternatives のフィルタリング
+# alternatives フィルタリング・重複排除・スコアリング
 # ============================================================
 
 def _filter_alts_by_intent(
@@ -127,10 +144,6 @@ def _filter_alts_by_intent(
     q: str,
     alts: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """
-    intent に合わない過去オプションを落とすフィルタ。
-    まずは weather 用: 天気と無関係な episodic オプションを弾く。
-    """
     if not alts:
         return alts
 
@@ -149,11 +162,6 @@ def _filter_alts_by_intent(
 
 
 def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    alternatives の重複を減らす:
-      - title + description が同じものは1つにまとめる
-      - title == 'None' や空のものは落とす
-    """
     if not alts:
         return alts
 
@@ -208,18 +216,40 @@ def _score_alternatives(
     telos_score: float,
     stakes: float,
     persona_bias: Dict[str, float] | None,
+    ctx: Dict[str, Any] | None = None,
 ) -> None:
+    """
+    alternatives に対して
+    - intent 固有のヒューリスティック
+    - persona_bias（ValueCore 用）
+    - Telos スコア
+    を掛け合わせて score / score_raw を更新する。
+
+    value_core / strategy_core が定義されていればそれも利用し、
+    未定義なら従来ロジックだけでスコアリングする。
+    """
     ql = (q or "").lower()
     bias = persona_bias or {}
+    ctx = ctx or {}
+
+    # value_core / OptionScore が利用可能かどうかを事前チェック
+    vc_compute = getattr(value_core, "compute_value_score", None)
+    OptionScore = getattr(value_core, "OptionScore", None)
+    has_value_core = callable(vc_compute) and OptionScore is not None
 
     def _kw_hit(title: str, kws: List[str]) -> bool:
         t = (title or "").lower()
         return any(k in t for k in kws)
 
+    if not alts:
+        return
+
     for a in alts:
         base = _safe_float(a.get("score"), 1.0)
         title = a.get("title", "") or ""
+        desc = a.get("description", "") or ""
 
+        # ---- intent ヒューリスティック ----
         if intent == "weather" and _kw_hit(title, ["予報", "降水", "傘", "天気"]):
             base += 0.4
         elif intent == "health" and _kw_hit(title, ["休息", "回復", "散歩", "サウナ", "睡眠"]):
@@ -229,42 +259,106 @@ def _score_alternatives(
         elif intent == "plan" and _kw_hit(title, ["最小", "情報収集", "休息", "リファクタ", "テスト"]):
             base += 0.3
 
+        # クエリ内容と候補タイトルの組み合わせによる微調整
         if any(k in ql for k in ["雨", "降水", "umbrella", "forecast"]) and "傘" in title:
             base += 0.2
 
+        # stakes が高い場合は「休息・情報収集寄り」をやや優遇
         if stakes >= 0.7 and _kw_hit(title, ["休息", "回復", "情報"]):
             base += 0.2
 
+        # ---- persona bias ----
         by_title = bias.get(title.lower(), 0.0)
         by_fuzzy = adapt.fuzzy_bias_lookup(bias, title)
         by_id = bias.get(f"@id:{a.get('id')}", 0.0)
         bias_boost = max(by_title, by_fuzzy, by_id)
         base *= (1.0 + 0.3 * bias_boost)
 
+        # ---- Telos スコアによる全体スケール ----
         base *= (0.9 + 0.2 * max(0.0, min(1.0, telos_score)))
+
+        # ---- value_core があれば ValueScore を乗算 ----
+        if has_value_core:
+            try:
+                persona_weight = float(bias_boost)
+            except Exception:
+                persona_weight = 0.0
+
+            try:
+                opt_score = OptionScore(
+                    id=str(a.get("id") or ""),
+                    title=title,
+                    description=desc,
+                    base_score=base,
+                    telos_score=float(telos_score),
+                    stakes=float(stakes),
+                    persona_bias=persona_weight,
+                    world_projection=a.get("world"),
+                )
+                vscore = float(vc_compute(opt_score))
+                base *= vscore
+            except Exception:
+                # value_core 内部でエラーが出ても全体は止めない
+                pass
 
         a["score_raw"] = _safe_float(a.get("score"), 1.0)
         a["score"] = round(base, 4)
 
+    # ---- strategy_core 側でさらにランク付けしたい場合のフック ----
+    if strategy_core is not None and hasattr(strategy_core, "score_options"):
+        try:
+            scored = strategy_core.score_options(
+                intent=intent,
+                query=q,
+                options=alts,
+                telos_score=telos_score,
+                stakes=stakes,
+                persona_bias=bias,
+                context=ctx,
+            )
+            if isinstance(scored, list) and scored:
+                # 戻り値の各要素に score があれば kernel 側に反映
+                score_map = {}
+                for o in scored:
+                    oid = o.get("id")
+                    if not oid:
+                        continue
+                    score_map[oid] = _safe_float(o.get("score"), 0.0)
+
+                for a in alts:
+                    oid = a.get("id")
+                    if not oid:
+                        continue
+                    if oid in score_map:
+                        a["score"] = round(score_map[oid], 4)
+        except Exception:
+            # strategy_core が壊れていても decide 全体は止めない
+            pass
+
 
 # ============================================================
-# Simple QA モード
+# Simple QA モード（事前コンパイル済み正規表現）
 # ============================================================
+
+SIMPLE_QA_PATTERNS = {
+    "time": re.compile(r"^(今|いま).*(何時|なんじ)[？?]?$"),
+    "weekday": re.compile(r"^(今日|きょう).*(何曜日|なんようび)[？?]?$"),
+    "date": re.compile(r"^(今日|きょう).*(何日|なんにち|日付)[？?]?$"),
+    "time_en": re.compile(r"^what time is it[？?]?$", re.I),
+    "weekday_en": re.compile(r"^what day is it[？?]?$", re.I),
+}
+
+AGI_BLOCK_KEYWORDS = [
+    "agi", "ＡＧＩ", "veritas", "ヴェリタス", "ベリタス",
+    "プロトagi", "proto-agi",
+]
+
 
 def _detect_simple_qa(q: str) -> str | None:
     q = (q or "").strip()
     ql = q.lower()
 
-    agi_block_keywords = [
-        "agi",
-        "ＡＧＩ",
-        "veritas",
-        "ヴェリタス",
-        "ベリタス",
-        "プロトagi",
-        "proto-agi",
-    ]
-    if any(k in ql for k in agi_block_keywords):
+    if any(k in ql for k in AGI_BLOCK_KEYWORDS):
         return None
 
     if len(q) > 25:
@@ -272,18 +366,15 @@ def _detect_simple_qa(q: str) -> str | None:
 
     qj = q.replace("　", " ")
 
-    if re.search(r"^(今|いま).*(何時|なんじ)[？?]?$", qj):
+    if SIMPLE_QA_PATTERNS["time"].search(qj):
         return "time"
-
-    if re.search(r"^(今日|きょう).*(何曜日|なんようび)[？?]?$", qj):
+    if SIMPLE_QA_PATTERNS["weekday"].search(qj):
         return "weekday"
-
-    if re.search(r"^(今日|きょう).*(何日|なんにち|日付)[？?]?$", qj):
+    if SIMPLE_QA_PATTERNS["date"].search(qj):
         return "date"
-
-    if re.search(r"^what time is it[？?]?$", ql):
+    if SIMPLE_QA_PATTERNS["time_en"].search(ql):
         return "time"
-    if re.search(r"^what day is it[？?]?$", ql):
+    if SIMPLE_QA_PATTERNS["weekday_en"].search(ql):
         return "weekday"
     if "today" in ql and "date" in ql and len(ql) < 40:
         return "date"
@@ -298,6 +389,9 @@ def _handle_simple_qa(
     req_id: str,
     telos_score: float,
 ) -> Dict[str, Any]:
+    """
+    Simple QA の戻り値を DecideResponse 完全互換に修正
+    """
     now = datetime.now()
     answer_str = ""
     title = ""
@@ -347,7 +441,8 @@ def _handle_simple_qa(
         }
     }
 
-    decision = {
+    # DecideResponse 完全互換
+    return {
         "request_id": req_id,
         "chosen": chosen,
         "alternatives": [chosen],
@@ -355,18 +450,47 @@ def _handle_simple_qa(
         "critique": [],
         "debate": [],
         "telos_score": telos_score,
-        "fuji": {"status": "allow", "reasons": [], "violations": [], "risk": 0.05},
+        "fuji": {
+            "status": "allow",
+            "decision_status": "allow",
+            "reasons": [],
+            "violations": [],
+            "risk": 0.05,
+            "checks": [],
+            "guidance": None,
+            "modifications": [],
+            "redactions": [],
+            "safe_instructions": [],
+        },
         "rsi_note": None,
-        "summary": "simple QA モードで直接回答しました（DebateOS / WorldModel / AGI自己調整はスキップ）。",
-        "description": (
-            "「今何時？」「今日何曜日？」などの単純質問だったため、"
-            "過去のAGIゴールやpersonaバイアスを無視して、システム時刻から直接回答しました。"
-        ),
+        "summary": "simple QA モードで直接回答しました。",
+        "description": description,
         "extras": extras,
+        "gate": {
+            "risk": 0.05,
+            "telos_score": telos_score,
+            "decision_status": "allow",
+            "reason": None,
+            "modifications": [],
+        },
+        "values": {
+            "scores": {},
+            "total": telos_score,
+            "top_factors": [],
+            "rationale": "simple QA",
+        },
+        "persona": adapt.load_persona(),
+        "version": "veritas-api 1.x",
+        "decision_status": "allow",
+        "rejection_reason": None,
+        "memory_citations": [],
+        "memory_used_count": 0,
+        "memory_evidence_count": 0,
+        "meta": {
+            "kind": "simple_qa",
+            "memory_evidence_count": 0,
+        },
     }
-    decision.setdefault("meta", {})
-    decision["meta"]["kind"] = "simple_qa"
-    return decision
 
 
 # ============================================================
@@ -381,13 +505,10 @@ def _detect_knowledge_qa(q: str) -> bool:
 
     if re.search(r"とは[？?]?$", q):
         return True
-
     if re.search(r"(どこ|どこにある)[？?]?$", q):
         return True
-
     if re.search(r"(誰|だれ)[？?]?$", q):
         return True
-
     if any(k in q for k in ["県庁所在地", "首都", "人口", "面積", "標高"]):
         return True
 
@@ -430,10 +551,7 @@ def _handle_knowledge_qa(
         answer_desc = " / ".join(answer_desc_parts)
     else:
         answer_title = f"知識QA: {q} に対する明確な回答を取得できませんでした"
-        answer_desc = (
-            "knowledge_qa モードで web_search を試みましたが、有効な結果が見つかりませんでした。"
-            f"error={search_res.get('error')}"
-        )
+        answer_desc = f"error={search_res.get('error')}"
 
     chosen = {
         "id": uuid.uuid4().hex,
@@ -459,7 +577,7 @@ def _handle_knowledge_qa(
         }
     }
 
-    decision = {
+    return {
         "request_id": req_id,
         "chosen": chosen,
         "alternatives": [chosen],
@@ -467,22 +585,52 @@ def _handle_knowledge_qa(
         "critique": [],
         "debate": [],
         "telos_score": telos_score,
-        "fuji": {"status": "allow", "reasons": [], "violations": [], "risk": 0.05},
+        "fuji": {
+            "status": "allow",
+            "decision_status": "allow",
+            "reasons": [],
+            "violations": [],
+            "risk": 0.05,
+            "checks": [],
+            "guidance": None,
+            "modifications": [],
+            "redactions": [],
+            "safe_instructions": [],
+        },
         "rsi_note": None,
-        "summary": "knowledge_qa モードで web_search の結果から直接回答しました（DebateOS / WorldModel / AGI自己調整はスキップ）。",
-        "description": (
-            "「○○とは？」「どこ？」「誰？」などの一般知識系の質問だったため、"
-            "過去のAGIゴールやpersonaバイアスを無視して、web_search の上位結果から直接回答しました。"
-        ),
+        "summary": "knowledge_qa モードで直接回答しました。",
+        "description": answer_desc,
         "extras": extras,
+        "gate": {
+            "risk": 0.05,
+            "telos_score": telos_score,
+            "decision_status": "allow",
+            "reason": None,
+            "modifications": [],
+        },
+        "values": {
+            "scores": {},
+            "total": telos_score,
+            "top_factors": [],
+            "rationale": "knowledge QA",
+        },
+        "persona": adapt.load_persona(),
+        "version": "veritas-api 1.x",
+        "decision_status": "allow",
+        "rejection_reason": None,
+        "memory_citations": [],
+        "memory_used_count": 0,
+        "memory_evidence_count": 0,
+        "meta": {
+            "kind": "knowledge_qa",
+            "memory_evidence_count": 0,
+        },
     }
-    decision.setdefault("meta", {})
-    decision["meta"]["kind"] = "knowledge_qa"
-    return decision
 
 
 # ============================================================
-# decide 本体
+# decide 本体 (v2-compatible)
+# ★ シグネチャは元のまま維持
 # ============================================================
 
 async def decide(
@@ -492,31 +640,34 @@ async def decide(
     min_evidence: int = 1,
 ) -> Dict[str, Any]:
     """
-    VERITAS kernel.decide:
-
-      - 意図検出
-      - Simple QA モード（time/date/weekday）はパイプラインをバイパス
-      - knowledge_qa（簡易ナレッジ質問）バイパス
-      - MemoryOS 要約を取り込み
-      - env tools（web_search / github_search）実行（必要なときだけ）
-      - ★ PlannerOS(plan_for_veritas_agi / code_change_plan) による steps 生成
-      - Multi-Agent DebateOS による再評価
-      - WorldModel（world.simulate）による「一手先の世界予測」
-      - FUJI Gate による最終安全判定
-      - Decision ログを MemoryOS にエピソード保存
-      - world_state.json / doctor_report フック
-      - ★ experiments / curriculum による「今日やる実験 / 今日の3タスク」生成
+    VERITAS kernel.decide v2-compatible:
+    
+    ★ シグネチャは元のまま維持（後方互換性）
+    ★ context 内のフラグで二重実行をスキップ判定
     """
-    start_ts = time.time()   # ★ latency計測開始
+    start_ts = time.time()
 
-    # ---- context を安全に固める & world_state を注入 ----
+    # ---- context を安全に固める ----
     ctx_raw: Dict[str, Any] = dict(context or {})
     user_id = ctx_raw.get("user_id") or "cli"
 
-    ctx: Dict[str, Any] = world_model.inject_state_into_context(
-        context=ctx_raw,
-        user_id=user_id,
-    )
+    # スキップ理由を記録
+    skip_reasons: Dict[str, str] = {}
+
+    # ★ WorldModel 注入: pipeline が既に実行済みならスキップ
+    if ctx_raw.get("_world_state_injected"):
+        ctx = ctx_raw
+        skip_reasons["world_model_inject"] = "already_injected_by_pipeline"
+    else:
+        try:
+            ctx = world_model.inject_state_into_context(
+                context=ctx_raw,
+                user_id=user_id,
+            )
+            ctx["_world_state_injected"] = True
+        except Exception as e:
+            ctx = ctx_raw
+            print(f"[kernel] world_model.inject_state_into_context failed: {e}")
 
     fast_mode = bool(ctx.get("fast") or ctx.get("mode") == "fast")
 
@@ -559,33 +710,53 @@ async def decide(
     except Exception:
         pass
 
-    # --- MemoryOS 要約を取得（Planner には context 経由で伝える前提） ---
-    try:
-        memory_summary = mem_core.summarize_for_planner(
-            user_id=user_id,
-            query=q_text,
-            limit=8,
-        )
-        ctx["memory_summary"] = memory_summary
+    # ★ Pipeline から渡された evidence があればそれを使用
+    pipeline_evidence = ctx.get("_pipeline_evidence")
+    if pipeline_evidence and isinstance(pipeline_evidence, list):
+        evidence.extend(pipeline_evidence)
+        memory_evidence_count = len(pipeline_evidence)
         extras["memory"] = {
-            "summary": memory_summary,
-            "source": "MemoryOS.summarize_for_planner",
+            "source": "pipeline_provided",
+            "evidence_count": memory_evidence_count,
         }
-    except Exception as e:
-        extras["memory"] = {
-            "error": f"memory summarize failed: {repr(e)[:80]}",
-            "source": "MemoryOS.summarize_for_planner",
-        }
+        skip_reasons["memory_search"] = "provided_by_pipeline"
+    else:
+        # MemoryOS 要約を取得
+        try:
+            memory_summary = mem_core.summarize_for_planner(
+                user_id=user_id,
+                query=q_text,
+                limit=8,
+            )
+            ctx["memory_summary"] = memory_summary
+            extras["memory"] = {
+                "summary": memory_summary,
+                "source": "MemoryOS.summarize_for_planner",
+            }
+        except Exception as e:
+            extras["memory"] = {
+                "error": f"memory summarize failed: {repr(e)[:80]}",
+            }
 
     # Persona
-    persona = adapt.load_persona()
-    persona_bias: Dict[str, float] = adapt.clean_bias_weights(
-        dict(persona.get("bias_weights") or {})
-    )
+    try:
+        persona = adapt.load_persona()
+        persona_bias: Dict[str, float] = adapt.clean_bias_weights(
+            dict(persona.get("bias_weights") or {})
+        )
+    except Exception as e:
+        persona = {}
+        persona_bias = {}
+        print(f"[kernel] adapt.load_persona failed: {e}")
 
-    # WorldModel（将来の auto_adjust / UI 用の軽い simulate）
+    # WorldModel simulate
     world_sim = None
-    if not fast_mode:
+    if ctx.get("_world_sim_done"):
+        world_sim = ctx.get("_world_sim_result")
+        skip_reasons["world_simulate"] = "already_done_by_pipeline"
+    elif fast_mode:
+        skip_reasons["world_simulate"] = "fast_mode"
+    else:
         try:
             world_sim = world_model.simulate(
                 user_id=user_id,
@@ -599,18 +770,18 @@ async def decide(
         except Exception as e:
             extras["world"] = {
                 "error": f"world.simulate failed: {repr(e)[:80]}",
-                "source": "world.simulate()",
             }
-    else:
-        extras["world"] = {
-            "skipped": True,
-            "reason": "fast_mode",
-            "source": "world.simulate()",
-        }
 
-    # env tools
+    # ★ env tools: pipeline から渡されていればスキップ
     env_logs: Dict[str, Any] = {}
-    if not fast_mode:
+    pipeline_env = ctx.get("_pipeline_env_tools")
+    if pipeline_env and isinstance(pipeline_env, dict):
+        env_logs = pipeline_env
+        skip_reasons["env_tools"] = "provided_by_pipeline"
+    elif fast_mode:
+        env_logs["skipped"] = {"reason": "fast_mode"}
+        skip_reasons["env_tools"] = "fast_mode"
+    else:
         try:
             ql = q_text.lower()
 
@@ -638,20 +809,17 @@ async def decide(
                         query=q_text,
                         max_results=3,
                     )
-
         except Exception as e:
             env_logs["error"] = f"run_env_tool failed: {repr(e)[:200]}"
-    else:
-        env_logs["skipped"] = {"reason": "fast_mode"}
 
     if env_logs:
         extras["env_tools"] = env_logs
 
-    # intent（旧DecisionOS互換のため一応残す）
+    # intent
     intent = _detect_intent(q_text)
 
     # =======================================================
-    # ★ Planner: code_change_plan 専用経路 or AGI Planner 経路
+    # ★ Planner: pipeline から渡されていればスキップ
     # =======================================================
 
     alts: List[Dict[str, Any]] = list(alternatives or [])
@@ -659,13 +827,32 @@ async def decide(
 
     planner_obj: Dict[str, Any] | None = None
 
-    # ---- 1) code_change_plan モード（bench → generate_code_tasks 経路） ----
-    if intent == "plan" and mode == "code_change_plan":
-        bench_payload = (
-            ctx.get("bench_payload")
-            or ctx.get("bench")
-            or {}
-        )
+    # ★ Pipeline から planner_result が渡されていれば使用
+    pipeline_planner = ctx.get("_pipeline_planner")
+    if pipeline_planner and isinstance(pipeline_planner, dict):
+        planner_obj = pipeline_planner
+        skip_reasons["planner"] = "provided_by_pipeline"
+        
+        steps = pipeline_planner.get("steps") or []
+        if steps and not alts:
+            for idx, st in enumerate(steps, start=1):
+                if not isinstance(st, dict):
+                    continue
+                sid = st.get("id") or f"step_{idx}"
+                title = st.get("title") or f"step_{idx}"
+                detail = st.get("detail") or st.get("description") or ""
+
+                alt = _mk_option(
+                    title=title,
+                    description=detail,
+                    _id=sid,
+                )
+                alt["meta"] = st
+                alts.append(alt)
+
+    # code_change_plan モード
+    elif intent == "plan" and mode == "code_change_plan":
+        bench_payload = ctx.get("bench_payload") or ctx.get("bench") or {}
         world_state_for_tasks = ctx.get("world_state")
         doctor_report = ctx.get("doctor_report")
 
@@ -690,10 +877,7 @@ async def decide(
                 module = t.get("module") or "unknown"
                 path = t.get("path") or ""
 
-                desc_parts = [
-                    f"kind={kind}",
-                    f"module={module}",
-                ]
+                desc_parts = [f"kind={kind}", f"module={module}"]
                 if path:
                     desc_parts.append(f"path={path}")
                 if t.get("detail"):
@@ -708,12 +892,10 @@ async def decide(
                 alts.append(alt)
 
         except Exception as e:
-            extras["code_change_plan_error"] = (
-                f"generate_code_tasks failed: {repr(e)[:120]}"
-            )
+            extras["code_change_plan_error"] = f"generate_code_tasks failed: {repr(e)[:120]}"
 
-    # ---- 2) 通常 / VERITAS-AGI モード → 新 PlannerOS を必ず使う ----
-    if not alts:
+    # 通常モード → PlannerOS 呼び出し
+    if not alts and planner_obj is None:
         try:
             planner_obj = planner_core.plan_for_veritas_agi(
                 context=ctx,
@@ -721,7 +903,6 @@ async def decide(
             )
             steps = planner_obj.get("steps") or []
 
-            # Planner の steps を Debate 用 options にマッピング
             alts = []
             for idx, st in enumerate(steps, start=1):
                 if not isinstance(st, dict):
@@ -741,17 +922,15 @@ async def decide(
         except Exception as e:
             extras.setdefault("planner_error", {})
             extras["planner_error"]["detail"] = repr(e)
-            # Planner が死んだら、従来の intent ベース fallback を使う
             if not alts:
                 alts = _gen_options_by_intent(intent)
 
-    # Planner 情報を extras に格納
     if planner_obj is not None:
         extras["planner"] = planner_obj
 
-    # ---- 最終的な alternatives 整形・スコアリング ----
+    # alternatives 整形・スコアリング
     alts = _dedupe_alts(alts)
-    _score_alternatives(intent, q_text, alts, telos_score, stakes, persona_bias)
+    _score_alternatives(intent, q_text, alts, telos_score, stakes, persona_bias, ctx)
 
     # =======================================================
     # DebateOS
@@ -759,15 +938,16 @@ async def decide(
     chosen: Dict[str, Any] | None = None
 
     if fast_mode:
-        chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
-        debate_logs.append(
-            {
-                "summary": "fast_mode のため DebateOS をスキップし、ローカルスコア最大案を採択しました。",
-                "risk_delta": 0.0,
-                "suggested_choice_id": chosen.get("id"),
-                "source": "fast_mode_local",
-            }
-        )
+        if alts:
+            chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
+        else:
+            chosen = _mk_option("デフォルト選択")
+        debate_logs.append({
+            "summary": "fast_mode のため DebateOS をスキップ",
+            "risk_delta": 0.0,
+            "suggested_choice_id": chosen.get("id"),
+            "source": "fast_mode_local",
+        })
     else:
         try:
             debate_result = debate_core.run_debate(
@@ -791,36 +971,32 @@ async def decide(
                 "source": debate_result.get("source", "openai_llm"),
             }
 
-            debate_logs.append(
-                {
-                    "summary": "Multi-Agent DebateOS により候補が評価されました。",
-                    "risk_delta": 0.0,
-                    "suggested_choice_id": chosen.get("id") if isinstance(chosen, dict) else None,
-                    "source": debate_result.get("source", "openai_llm"),
-                }
-            )
+            debate_logs.append({
+                "summary": "Multi-Agent DebateOS により候補が評価されました。",
+                "risk_delta": 0.0,
+                "suggested_choice_id": chosen.get("id") if isinstance(chosen, dict) else None,
+                "source": debate_result.get("source", "openai_llm"),
+            })
 
             alts = _dedupe_alts(enriched_alts)
 
         except Exception as e:
-            chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
-            debate_logs.append(
-                {
-                    "summary": f"DebateOS フォールバック (例外: {repr(e)[:80]})",
-                    "risk_delta": 0.0,
-                    "suggested_choice_id": chosen.get("id"),
-                    "source": "fallback",
-                }
-            )
+            if alts:
+                chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
+            else:
+                chosen = _mk_option("フォールバック選択")
+            debate_logs.append({
+                "summary": f"DebateOS フォールバック (例外: {repr(e)[:80]})",
+                "risk_delta": 0.0,
+                "suggested_choice_id": chosen.get("id"),
+                "source": "fallback",
+            })
 
     if chosen is None:
         chosen = {
             "id": f"debate_reject_all_{uuid.uuid4().hex[:8]}",
             "title": "全ての候補案がDebateOSにより却下されました",
-            "description": (
-                "質問内容と無関係、または安全性・目的適合性の観点から不適切と判断されたため、"
-                "既存の候補からは何も選択していません。"
-            ),
+            "description": "質問内容と無関係、または安全性の観点から不適切と判断されました。",
             "score": 0.0,
             "score_raw": 0.0,
             "verdict": "reject_all",
@@ -831,45 +1007,42 @@ async def decide(
     if isinstance(world_sim, dict) and isinstance(chosen, dict):
         chosen["world"] = world_sim
 
-    # Evidence（kernel 自身の evidence）
-    evidence.append(
-        {
-            "source": "internal:kernel",
-            "uri": None,
-            "snippet": f"query='{q_text}' evaluated with {len(alts)} alternatives (mode={mode})",
-            "confidence": 0.8,
-        }
-    )
+    # Evidence
+    evidence.append({
+        "source": "internal:kernel",
+        "uri": None,
+        "snippet": f"query='{q_text}' evaluated with {len(alts)} alternatives (mode={mode})",
+        "confidence": 0.8,
+    })
 
-    # =======================================================
-    # ★ MemoryOS から episodic evidence を追加
-    # =======================================================
-    try:
-        decision_snapshot = {
-            "request_id": req_id,
-            "query": q_text,
-            "context": ctx,
-            "chosen": chosen,
-            "alternatives": alts,
-            "evidence": evidence,
-            "extras": extras,
-            "telos_score": telos_score,
-        }
+    # MemoryOS から episodic evidence（pipeline 未提供時のみ）
+    if not pipeline_evidence:
+        try:
+            decision_snapshot = {
+                "request_id": req_id,
+                "query": q_text,
+                "context": ctx,
+                "chosen": chosen,
+                "alternatives": alts,
+                "evidence": evidence,
+                "extras": extras,
+                "telos_score": telos_score,
+            }
 
-        mem_evs = mem_core.get_evidence_for_decision(
-            decision_snapshot,
-            user_id=user_id,
-            top_k=max(min_evidence, 5),
-        )
-        if mem_evs:
-            evidence.extend(mem_evs)
-            memory_evidence_count = len(mem_evs)
+            mem_evs = mem_core.get_evidence_for_decision(
+                decision_snapshot,
+                user_id=user_id,
+                top_k=max(min_evidence, 5),
+            )
+            if mem_evs:
+                evidence.extend(mem_evs)
+                memory_evidence_count = len(mem_evs)
+                extras.setdefault("memory", {})
+                extras["memory"]["evidence_count"] = memory_evidence_count
+                extras["memory"]["citations"] = mem_evs
+        except Exception as e:
             extras.setdefault("memory", {})
-            extras["memory"]["evidence_count"] = memory_evidence_count
-            extras["memory"]["citations"] = mem_evs
-    except Exception as e:
-        extras.setdefault("memory", {})
-        extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
+            extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
 
     # FUJI Gate
     try:
@@ -902,8 +1075,65 @@ async def decide(
         extras.setdefault("fuji_error", {})
         extras["fuji_error"]["detail"] = repr(e)
 
+    # =======================================================
+    # AffectOS / ReasonOS: 自己評価 & 理由 & Self-Refine テンプレ
+    # =======================================================
+    try:
+        affect_meta = affect_core.reflect({
+            "query": q_text,
+            "chosen": chosen,
+            "gate": fuji_result,
+            "values": {
+                "total": float(telos_score),
+                # 現時点では ema = total として扱う
+                "ema": float(telos_score),
+            },
+        })
+        extras.setdefault("affect", {})
+        extras["affect"]["meta"] = affect_meta
+    except Exception as e:
+        extras.setdefault("affect", {})
+        extras["affect"]["meta_error"] = repr(e)
+
+    # 自然文 Reason（なぜこの決定が妥当か）
+    try:
+        reason_natural = affect_core.generate_reason(
+            query=q_text,
+            planner=extras.get("planner"),
+            values={"total": float(telos_score)},
+            gate=fuji_result,
+            context={
+                "user_id": user_id,
+                "mode": mode,
+                "intent": intent,
+            },
+        )
+        extras.setdefault("affect", {})
+        extras["affect"]["natural"] = reason_natural
+    except Exception as e:
+        extras.setdefault("affect", {})
+        extras["affect"]["natural_error"] = repr(e)
+
+    # Self-Refine 用テンプレ（高リスク or 高 stakes のときだけ）
+    try:
+        risk_val = float(fuji_result.get("risk", 0.0))
+        if (not fast_mode) and (stakes >= 0.7 or risk_val >= 0.5):
+            refl_tmpl = await affect_core.generate_reflection_template(
+                query=q_text,
+                chosen=chosen,
+                gate=fuji_result,
+                values={"total": float(telos_score)},
+                planner=extras.get("planner") or {},
+            )
+            if refl_tmpl:
+                extras.setdefault("affect", {})
+                extras["affect"]["reflection_template"] = refl_tmpl
+    except Exception as e:
+        extras.setdefault("affect", {})
+        extras["affect"]["reflection_template_error"] = repr(e)
+
     # 学習＋AGIゴール自己調整
-    if not fast_mode:
+    if not fast_mode and not ctx.get("_agi_goals_adjusted_by_pipeline"):
         try:
             persona2 = adapt.update_persona_bias_from_history(window=50)
 
@@ -935,12 +1165,6 @@ async def decide(
 
             extras.setdefault("agi_goals", {})
             extras["agi_goals"]["last_auto_adjust"] = {
-                "world_progress": world_snap.get("progress")
-                                   or world_snap.get("predicted_progress")
-                                   or world_snap.get("base_progress"),
-                "world_risk": world_snap.get("last_risk")
-                               or world_snap.get("predicted_risk")
-                               or world_snap.get("base_risk"),
                 "value_ema": value_ema,
                 "fuji_risk": fuji_risk,
             }
@@ -950,74 +1174,77 @@ async def decide(
             extras["agi_goals"]["error"] = repr(e)
     else:
         extras.setdefault("agi_goals", {})
-        extras["agi_goals"]["skipped"] = {"reason": "fast_mode"}
+        extras["agi_goals"]["skipped"] = {"reason": "fast_mode or pipeline"}
 
-    # =======================================================
-    # ★ Decision ログを MemoryOS にエピソードとして保存
-    # =======================================================
-    try:
-        episode_text = (
-            f"[query] {q_text}\n"
-            f"[chosen] {chosen.get('title')}\n"
-            f"[mode] {mode}\n"
-            f"[intent] {intent}\n"
-            f"[telos_score] {telos_score}"
-        )
-
-        episode_record = {
-            "text": episode_text,
-            "tags": ["episode", "decide", "veritas"],
-            "meta": {
-                "user_id": user_id,
-                "request_id": req_id,
-                "mode": mode,
-                "intent": intent,
-            },
-        }
-
+    # Decision ログを MemoryOS に保存（pipeline で保存済みならスキップ）
+    if not ctx.get("_episode_saved_by_pipeline"):
         try:
-            mem_core.MEM.put("episodic", episode_record)
-        except TypeError:
-            mem_core.MEM.put(
-                user_id,
-                f"decision:{req_id}",
-                episode_record,
+            episode_text = (
+                f"[query] {q_text}\n"
+                f"[chosen] {chosen.get('title')}\n"
+                f"[mode] {mode}\n"
+                f"[intent] {intent}\n"
+                f"[telos_score] {telos_score}"
             )
 
-    except Exception as e:
-        extras.setdefault("memory_log", {})
-        extras["memory_log"]["error"] = repr(e)
+            episode_record = {
+                "text": episode_text,
+                "tags": ["episode", "decide", "veritas"],
+                "meta": {
+                    "user_id": user_id,
+                    "request_id": req_id,
+                    "mode": mode,
+                    "intent": intent,
+                },
+            }
+
+            try:
+                mem_core.MEM.put("episodic", episode_record)
+            except TypeError:
+                mem_core.MEM.put(
+                    user_id,
+                    f"decision:{req_id}",
+                    episode_record,
+                )
+
+        except Exception as e:
+            extras.setdefault("memory_log", {})
+            extras["memory_log"]["error"] = repr(e)
+    else:
+        skip_reasons["episode_save"] = "already_saved_by_pipeline"
 
     # =======================================================
-    # ★ metrics / world_state / doctor / experiments / curriculum
+    # metrics / world_state / doctor
     # =======================================================
     latency_ms: int | None = None
     try:
         latency_ms = int((time.time() - start_ts) * 1000)
         extras.setdefault("metrics", {})
         extras["metrics"]["latency_ms"] = latency_ms
-    except Exception as e:
-        extras.setdefault("metrics", {})
-        extras["metrics"]["error"] = f"latency_failed:{repr(e)[:60]}"
+    except Exception:
+        pass
 
-    # world_state.json 更新（decision history / progress）
-    try:
-        world_model.update_from_decision(
-            user_id=user_id,
-            query=q_text,
-            chosen=chosen,
-            gate=fuji_result,
-            values={"total": telos_score},
-            planner=extras.get("code_change_plan") or extras.get("planner"),
-            latency_ms=latency_ms,
-        )
-    except Exception as e:
-        extras.setdefault("world_state_update", {})
-        extras["world_state_update"]["error"] = repr(e)
+    # world_state.json 更新（Pipeline が行う場合はスキップ）
+    if not ctx.get("_world_state_updated_by_pipeline"):
+        try:
+            world_model.update_from_decision(
+                user_id=user_id,
+                query=q_text,
+                chosen=chosen,
+                gate=fuji_result,
+                values={"total": telos_score},
+                planner=extras.get("code_change_plan") or extras.get("planner"),
+                latency_ms=latency_ms,
+            )
+        except Exception as e:
+            extras.setdefault("world_state_update", {})
+            extras["world_state_update"]["error"] = repr(e)
+    else:
+        skip_reasons["world_state_update"] = "already_done_by_pipeline"
 
-    # doctor 自動実行（ctx.auto_doctor が False のときはスキップ）
+    # doctor 自動実行
     auto_doctor = ctx.get("auto_doctor", True)
-    if auto_doctor:
+    if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
         try:
             subprocess.Popen(
                 [sys.executable, "-m", "veritas_os.scripts.doctor"],
@@ -1028,36 +1255,42 @@ async def decide(
             extras.setdefault("doctor", {})
             extras["doctor"]["error"] = repr(e)
 
-    # ---- 今日の「実験」と「カリキュラム」も extras にぶら下げる ----
-    try:
-        # ★ ここで初めて import（ローカル import なので循環しない）
-        from . import experiments as experiment_core
-        from . import curriculum as curriculum_core
-
+    # experiments / curriculum
+    if not ctx.get("_daily_plans_generated_by_pipeline"):
         try:
-            world_state_full = world_model.get_state()
-        except Exception:
-            world_state_full = None
+            from . import experiments as experiment_core
+            from . import curriculum as curriculum_core
 
-        value_ema_for_day = float(telos_score)
+            try:
+                world_state_full = world_model.get_state()
+            except Exception:
+                world_state_full = None
 
-        todays_exps = experiment_core.propose_experiments_for_today(
-            user_id=user_id,
-            world_state=world_state_full,
-            value_ema=value_ema_for_day,
-        )
-        todays_tasks = curriculum_core.plan_today(
-            user_id=user_id,
-            world_state=world_state_full,
-            value_ema=value_ema_for_day,
-        )
+            value_ema_for_day = float(telos_score)
 
-        extras["experiments"] = [e.to_dict() for e in todays_exps]
-        extras["curriculum"] = [t.to_dict() for t in todays_tasks]
+            todays_exps = experiment_core.propose_experiments_for_today(
+                user_id=user_id,
+                world_state=world_state_full,
+                value_ema=value_ema_for_day,
+            )
+            todays_tasks = curriculum_core.plan_today(
+                user_id=user_id,
+                world_state=world_state_full,
+                value_ema=value_ema_for_day,
+            )
 
-    except Exception as e:
-        extras.setdefault("daily_plans", {})
-        extras["daily_plans"]["error"] = repr(e)
+            extras["experiments"] = [e.to_dict() for e in todays_exps]
+            extras["curriculum"] = [t.to_dict() for t in todays_tasks]
+
+        except Exception as e:
+            extras.setdefault("daily_plans", {})
+            extras["daily_plans"]["error"] = repr(e)
+    else:
+        skip_reasons["daily_plans"] = "already_generated_by_pipeline"
+
+    # スキップ理由を extras に記録
+    if skip_reasons:
+        extras["_skip_reasons"] = skip_reasons
 
     # =======================================================
     # レスポンス構築
@@ -1072,31 +1305,17 @@ async def decide(
         "telos_score": telos_score,
         "fuji": fuji_result,
         "rsi_note": None,
-        "summary": (
-            "意図検出＋Simple QA / knowledge QA バイパス＋MemoryOS 要約＋env tools＋"
-            "PlannerOS(plan_for_veritas_agi / code_change_plan)＋Multi-Agent DebateOS＋"
-            "WorldModel予測＋FUJI Gate＋AGIゴール自己調整(auto_adjust_goals)＋"
-            "Decision episodic logging＋world_state更新＋doctor自動実行＋"
-            "experiments / curriculum による『今日やる実験と3タスク』の提示を行いました。"
-        ),
-        "description": (
-            "与えられた選択肢がある場合はその中から選択し、無い場合は PlannerOS が steps を生成します。"
-            "ローカル学習バイアスと Multi-Agent DebateOS により、徐々に“選択の癖”と安全性を反映します。"
-            "WorldModel(world_state) を用いて、『この一手が世界にどう効きそうか』を軽く予測します。"
-            "FUJI Gate で安全性を確認し、AGIゴール管理モジュール(auto_adjust_goals)で、"
-            "progress / risk / telos に応じてゴール重みを自己調整します。"
-            "mode=code_change_plan のときは、bench/world/doctor から生成したコード変更タスク群の中から、"
-            "どれに着手すべきかを優先度付きで決定します。"
-            "fast_mode=True または mode='fast' の場合、WorldModel / env_tools / DebateOS / auto_adjust をスキップし、"
-            "ローカルスコアのみで高速に決定します。"
-            "各 decision は MemoryOS にエピソードとして保存され、"
-            "world_state.json や doctor_report の更新、および daily experiments / curriculum の提案に利用されます。"
-        ),
+        "summary": "kernel.decide v2-compatible",
+        "description": "二重実行解消版（後方互換性維持＋AffectOS連携）",
         "extras": extras,
         "memory_evidence_count": memory_evidence_count,
         "memory_citations": extras.get("memory", {}).get("citations", []),
         "memory_used_count": memory_evidence_count,
         "meta": {
             "memory_evidence_count": memory_evidence_count,
+            "kernel_version": "v2-compatible",
         },
     }
+
+
+

@@ -22,6 +22,10 @@ from . import llm_client
 from . import world as world_model
 
 
+# 型エイリアス
+DebateResult = Dict[str, Any]
+
+
 # ============================
 #  System / User プロンプト
 # ============================
@@ -132,6 +136,110 @@ def _build_user_prompt(
 
 
 # ============================
+#  共通ユーティリティ
+# ============================
+
+
+def _is_rejected(opt: Dict[str, Any]) -> bool:
+    """verdict が「却下」系かどうかを判定。"""
+    v = str(opt.get("verdict") or "").strip()
+    return v in ("却下", "reject", "Rejected", "NG")
+
+
+def _calc_risk_delta(
+    chosen: Optional[Dict[str, Any]],
+    options: List[Dict[str, Any]],
+) -> float:
+    """
+    Debate 結果から「リスク増減（risk_delta）」を推定する。
+
+    正方向: リスク増加（危険寄り）
+    負方向: リスク減少（安全寄り）
+
+    FUJI 側のリスクスコアに加算されることを前提とした値なので、
+    -0.30〜+0.50 程度にクリップしておく。
+    """
+    # 何も選べなかった場合は「全体的に不安」扱いでやや危険寄り
+    if not chosen:
+        return 0.30
+
+    delta = 0.0
+
+    safety_view = str(chosen.get("safety_view") or "").lower()
+    critic_view = str(chosen.get("critic_view") or "").lower()
+    verdict     = str(chosen.get("verdict") or "").strip()
+    try:
+        score = float(chosen.get("score") or chosen.get("score_raw") or 0.5)
+    except Exception:
+        score = 0.5
+
+    # 1) safety_view 内の危険ワードで加点
+    risk_keywords = {
+        "危険": 0.15,
+        "重大": 0.12,
+        "リスク": 0.08,
+        "問題": 0.05,
+        "違反": 0.20,
+        "禁止": 0.18,
+        "illegal": 0.20,
+        "ban": 0.15,
+    }
+    for kw, w in risk_keywords.items():
+        if kw in safety_view:
+            delta += w
+
+    # 2) verdict による調整
+    if verdict == "要検討":
+        delta += 0.05
+    elif verdict == "却下":
+        delta += 0.25
+    elif verdict == "採用推奨":
+        # 安全寄りなら少しだけマイナス方向もあり得る
+        if "問題なし" in safety_view or "安全" in safety_view:
+            delta -= 0.05
+
+    # 3) score が低いほど不安 → 少しリスク増
+    if score < 0.5:
+        delta += (0.5 - score) * 0.2
+    elif score > 0.8:
+        # 自信が高く、他にリスク要因がなければわずかにリスク減
+        if "問題" not in safety_view and "危険" not in safety_view:
+            delta -= (score - 0.8) * 0.05
+
+    # 4) critic_view に強い否定があれば追加加点
+    if any(w in critic_view for w in ["致命", "深刻", "重大", "critical"]):
+        delta += 0.10
+
+    # 上限・下限 clip
+    delta = max(-0.30, min(0.50, delta))
+    return round(delta, 3)
+
+
+def _build_debate_summary(
+    chosen: Optional[Dict[str, Any]],
+    options: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """モニタリング・デバッグ用の簡易サマリ."""
+    total = len(options)
+    rejected_count = len([o for o in options if _is_rejected(o)])
+
+    try:
+        chosen_score = float(
+            (chosen or {}).get("score") or (chosen or {}).get("score_raw") or 0.0
+        )
+    except Exception:
+        chosen_score = 0.0
+
+    return {
+        "total_options": total,
+        "rejected_count": rejected_count,
+        "chosen_score": chosen_score,
+        "chosen_verdict": (chosen or {}).get("verdict"),
+        "source": "debate.v1",
+    }
+
+
+# ============================
 #  JSON パースまわり（強化版）
 # ============================
 
@@ -189,7 +297,7 @@ def _safe_parse(raw: str) -> Dict[str, Any]:
 
 def _fallback_debate(
     options: List[Dict[str, Any]]
-) -> Dict[str, Any]:
+) -> DebateResult:
     """
     LLM が壊れたときのフォールバック：
     - とりあえず最初の候補を選ぶ
@@ -201,6 +309,14 @@ def _fallback_debate(
             "chosen": None,
             "raw": None,
             "source": "fallback",
+            "risk_delta": 0.30,  # 「判断不能 = やや危険寄り」扱い
+            "debate_summary": {
+                "total_options": 0,
+                "rejected_count": 0,
+                "chosen_score": 0.0,
+                "chosen_verdict": None,
+                "source": "debate.v1",
+            },
         }
 
     enriched: List[Dict[str, Any]] = []
@@ -216,11 +332,17 @@ def _fallback_debate(
         o["summary"] = "LLM 失敗により、最初の候補を暫定選択。"
         enriched.append(o)
 
+    chosen = enriched[0]
+    risk_delta = _calc_risk_delta(chosen, enriched)
+    summary = _build_debate_summary(chosen, enriched)
+
     return {
         "options": enriched,
-        "chosen": enriched[0],
+        "chosen": chosen,
         "raw": None,
         "source": "fallback",
+        "risk_delta": risk_delta,
+        "debate_summary": summary,
     }
 
 
@@ -233,7 +355,7 @@ def run_debate(
     query: str,
     options: List[Dict[str, Any]],
     context: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+) -> DebateResult:
     """
     ReasonOS から呼び出すメイン入口。
 
@@ -247,7 +369,9 @@ def run_debate(
       "chosen": {...},        # enriched option (score 等付き)
       "options": [...],       # enriched options
       "raw": { ... },         # LLM 生JSON
-      "source": "openai_llm" or "fallback"
+      "source": "openai_llm" or "fallback",
+      "risk_delta": float,    # FUJI リスクに加算する値（-0.3〜+0.5 目安）
+      "debate_summary": {...} # デバッグ / 監視用サマリ
     }
     """
     ctx = dict(context or {})
@@ -303,10 +427,6 @@ def run_debate(
         enriched_list = list(enriched_by_id.values())
 
         # ---- verdict が "却下" のものは基本的に最終候補から除外 ----
-        def _is_rejected(opt: Dict[str, Any]) -> bool:
-            v = str(opt.get("verdict") or "").strip()
-            return v in ("却下", "reject", "Rejected", "NG")
-
         non_rejected = [o for o in enriched_list if not _is_rejected(o)]
 
         # ---- chosen 判定 ----
@@ -338,11 +458,17 @@ def run_debate(
         if chosen is None:
             return _fallback_debate(options)
 
+        # ---- risk_delta / debate_summary を付与 ----
+        risk_delta = _calc_risk_delta(chosen, enriched_list)
+        summary = _build_debate_summary(chosen, enriched_list)
+
         return {
             "chosen": chosen,
             "options": enriched_list,
             "raw": parsed,
             "source": "openai_llm",
+            "risk_delta": risk_delta,
+            "debate_summary": summary,
         }
 
     except Exception:
