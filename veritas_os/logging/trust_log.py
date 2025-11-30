@@ -1,4 +1,5 @@
 # veritas_os/logging/trust_log.py
+# 完全修正版: 論文の式 hₜ = SHA256(hₜ₋₁ || rₜ) に完全準拠
 from __future__ import annotations
 
 import json
@@ -24,8 +25,7 @@ def _compute_sha256(payload: dict) -> str:
     - それを UTF-8 でエンコードして sha256 に通す
     """
     try:
-        s = json.dumps(payload, sort_keys=True, 
-ensure_ascii=False).encode("utf-8")
+        s = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     except Exception:
         s = repr(payload).encode("utf-8", "ignore")
     return hashlib.sha256(s).hexdigest()
@@ -40,7 +40,7 @@ def get_last_hash() -> str | None:
             if not lines:
                 return None
             last = json.loads(lines[-1])
-            return last.get("sha256_self")
+            return last.get("sha256")  # sha256_self ではなく sha256
     except Exception:
         return None
     return None
@@ -84,8 +84,24 @@ def _save_json(items: list) -> None:
 def append_trust_log(entry: dict) -> None:
     """
     決定ごとの監査ログ（軽量）を JSONL + JSON に保存。
-    - 直前のログから sha256_prev を引き継ぐ
-    - 自分の内容から sha256 を計算して付与
+    
+    論文の式に従った実装:
+        hₜ = SHA256(hₜ₋₁ || rₜ)
+    
+    where:
+        hₜ₋₁ = 直前のハッシュ値 (sha256_prev)
+        rₜ   = 現在のエントリ (JSON化、sha256とsha256_prevを除外)
+        ||   = 文字列連結
+        hₜ   = 現在のハッシュ値 (sha256)
+    
+    実装詳細:
+        1. 直前のハッシュ値 (sha256_prev) を取得
+        2. 現在のエントリに sha256_prev をセット
+        3. エントリから sha256 と sha256_prev を除外してJSON化 (rₜ)
+        4. sha256_prev + rₜ を連結
+        5. SHA-256ハッシュを計算して sha256 にセット
+        6. JSONLとJSONファイルに保存
+    
     - JSONL は 5000 行でローテーション（rotate.py 側）
     - trust_log.json は最新 MAX_JSON_ITEMS 件だけ保持
     """
@@ -103,10 +119,24 @@ def append_trust_log(entry: dict) -> None:
     entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     entry["sha256_prev"] = sha256_prev
 
-    # 自分自身のハッシュを計算（まだ sha256 は含めない）
+    # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
+    # エントリから sha256 と sha256_prev を除外（これが rₜ）
     hash_payload = dict(entry)
     hash_payload.pop("sha256", None)
-    entry["sha256"] = _compute_sha256(hash_payload)
+    hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
+    
+    # rₜ を JSON化（キーをソートして一意性を保証）
+    entry_json = json.dumps(hash_payload, sort_keys=True, ensure_ascii=False)
+    
+    # hₜ₋₁ || rₜ を結合
+    if sha256_prev:
+        combined = sha256_prev + entry_json
+    else:
+        # 最初のエントリの場合は rₜ のみ
+        combined = entry_json
+    
+    # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
+    entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
     # ---- JSONL に1行追記 ----
     with open_trust_log_for_append() as f:
@@ -140,8 +170,7 @@ def write_shadow_decide(
 
     rec = {
         "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds") + 
-"Z",
+        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "query": (
             body.get("query")
             or (body.get("context") or {}).get("query")
@@ -154,3 +183,4 @@ def write_shadow_decide(
 
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rec, f, ensure_ascii=False, indent=2)
+

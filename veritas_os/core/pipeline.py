@@ -312,16 +312,19 @@ async def run_decide_pipeline(
 
     try:
         if query:
-            mem_hits_raw = MEM.search(
-                query,
-                k=6,
+            # ★ ここを MEM.search → mem.search に変更
+            #    → memory.VectorMemory + KVS フォールバックを両方使う経路になる
+            mem_hits_raw = mem.search(
+                query=query,
+                k=8,  # ちょっとだけ増やす（必要なら 6 に戻してOK）
                 kinds=["semantic", "skills", "episodic"],
-                min_sim=0.0,
+                min_sim=0.30,  # ベクトル類似度の下限。ノイズが多ければ 0.35〜0.4 に上げる
                 user_id=user_id,
             )
 
         flat_hits: List[Dict[str, Any]] = []
 
+        # list でも dict でも一応ハンドル（互換性維持）
         if isinstance(mem_hits_raw, dict):
             for kind, hits in mem_hits_raw.items():
                 if not isinstance(hits, list):
@@ -336,7 +339,7 @@ async def run_decide_pipeline(
         elif isinstance(mem_hits_raw, list):
             for h in mem_hits_raw:
                 if isinstance(h, dict):
-                    flat_hits.append(h)
+                    flat_hits.append(dict(h))
 
         for h in flat_hits:
             text = (
@@ -363,8 +366,25 @@ async def run_decide_pipeline(
                 }
             )
 
+        # スコア順にソート
         retrieved.sort(key=lambda r: r.get("score", 0.0), reverse=True)
         top_hits = retrieved[:3]
+
+        # ===== ここからログ強化部分 =====
+        print(
+            f"[AGI-Retrieval] query={query!r} user_id={user_id} "
+            f"raw_hits={len(retrieved)} top_hits={len(top_hits)}"
+        )
+        for i, r in enumerate(top_hits, start=1):
+            snippet = r["text"]
+            if len(snippet) > 120:
+                snippet = snippet[:117] + "..."
+            print(
+                "  "
+                + f"#{i} score={r.get('score', 0.0):.3f} "
+                f"kind={r.get('kind')} id={r.get('id')} text={snippet}"
+            )
+        # ===== ログ強化ここまで =====
 
         metrics = response_extras.setdefault("metrics", {})
         metrics["mem_hits"] = len(retrieved)
@@ -384,6 +404,7 @@ async def run_decide_pipeline(
                 }
             )
 
+        # 元のシンプルな統計ログは残しておく
         print(
             f"[AGI-Retrieval] Added memory evidences: {len(top_hits)} "
             f"(raw_hits={len(retrieved)})"
@@ -415,6 +436,7 @@ async def run_decide_pipeline(
 
     response_extras.setdefault("metrics", {})
     response_extras["metrics"]["mem_hits"] = len(retrieved)
+
 
     # memory citations (extras)
     memory_citations_list: List[Dict[str, Any]] = []
