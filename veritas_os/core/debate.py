@@ -1,15 +1,12 @@
 # veritas_os/core/debate.py
 """
-ReasonOS Multi-Agent Debate モジュール（強化MVP版）
+ReasonOS Multi-Agent Debate モジュール（実用性改善版）
 
-役割:
-- Planner が生成した options (steps) や過去の action 候補に対して、
-  「複数の視点（Architect / Critic / Safety / Judge）」で評価を行い、
-  最終的な chosen を決める。
-
-前提:
-- options は {id, title, description(or detail)} を持つ dict のリスト
-- llm_client.chat() が利用可能
+主な改善点:
+1. 全候補却下時の degraded mode（最善候補 + 警告付き選択）
+2. 却下理由の明確化と構造化
+3. 段階的フォールバック（normal → degraded → safe_fallback）
+4. より詳細なログとメタデータ
 """
 
 from __future__ import annotations
@@ -17,13 +14,36 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 import json
 import textwrap
+import logging
 
 from . import llm_client
 from . import world as world_model
 
 
+logger = logging.getLogger(__name__)
+
 # 型エイリアス
 DebateResult = Dict[str, Any]
+
+
+# ============================
+#  設定と定数
+# ============================
+
+
+class DebateMode:
+    """Debate の動作モード"""
+    NORMAL = "normal"          # 通常モード：非却下候補から選択
+    DEGRADED = "degraded"      # 劣化モード：全候補却下時、最善を警告付きで選択
+    SAFE_FALLBACK = "safe_fallback"  # 安全フォールバック：LLM失敗時
+
+
+# スコア閾値設定
+SCORE_THRESHOLDS = {
+    "normal_min": 0.4,      # 通常選択の最低スコア
+    "degraded_min": 0.2,    # 劣化モード最低スコア（これ以下は絶対選ばない）
+    "warning_threshold": 0.6,  # これ以下は警告を付ける
+}
 
 
 # ============================
@@ -53,15 +73,25 @@ def _build_system_prompt() -> str:
        - 上記3つの観点を踏まえ、「総合スコア」を 0.0〜1.0 でつけ、
          もっとも優先すべき候補を1つ選ぶ。
 
+    【重要な評価基準】
+    - verdict は以下の3つのみ使用：
+      * "採用推奨" (score 0.6以上が目安)
+      * "要検討" (score 0.3-0.6が目安、リスクはあるが検討価値あり)
+      * "却下" (score 0.3未満、または重大な問題あり)
+    
+    - 全候補を却下するのは、本当に全てが実行不可能な場合のみ
+    - 少しでも前進できる候補があれば、リスクを明記した上で「要検討」を検討する
+
     出力フォーマットは **必ず JSON のみ** とし、次の形式に従ってください：
 
     {
       "options": [
         {
-          "id": "step1",             // 入力で渡された id をそのまま使う
-          "score": 0.82,             // 0.0〜1.0 の総合スコア
-          "score_raw": 0.82,         // 同じ値でよい（互換用）
-          "verdict": "採用推奨",       // "採用推奨" / "要検討" / "却下" のいずれか
+          "id": "step1",
+          "score": 0.82,
+          "score_raw": 0.82,
+          "verdict": "採用推奨",
+          "rejection_reason": null,
           "architect_view": "短いコメント",
           "critic_view": "短いコメント",
           "safety_view": "短いコメント",
@@ -71,9 +101,8 @@ def _build_system_prompt() -> str:
       "chosen_id": "step1"
     }
 
+    - rejection_reason: "却下"の場合のみ、理由を簡潔に記載（"safety_risk", "infeasible", "value_conflict" など）
     - JSON 以外の文章は絶対に書かないでください。
-    - options の並び順は入力と同じでも、ソートしても構いません。
-    - score は相対評価で構いませんが、最も良い候補は 0.7〜1.0 の範囲にしてください。
     """)
 
 
@@ -85,10 +114,6 @@ def _build_user_prompt(
 ) -> str:
     """
     Debate に渡す user プロンプトを組み立てる。
-    - query: ユーザーの元の問い
-    - options: Planner + その他候補で構成された一覧
-    - context: stakes, telos_weights, user_id など
-    - world_snapshot: world.snapshot("veritas_agi") 等
     """
     q = (query or "").strip()
 
@@ -132,6 +157,8 @@ def _build_user_prompt(
 
     上記の候補から、「最小ステップで前進しつつ、リスクが低く、ユーザーの長期的利益に資する」
     ものを選び、指定された JSON 形式で出力してください。
+    
+    【重要】全候補を却下するのは最終手段です。少しでも価値がある候補は「要検討」として残してください。
     """)
 
 
@@ -146,6 +173,14 @@ def _is_rejected(opt: Dict[str, Any]) -> bool:
     return v in ("却下", "reject", "Rejected", "NG")
 
 
+def _get_score(opt: Dict[str, Any]) -> float:
+    """候補からスコアを安全に取得"""
+    try:
+        return float(opt.get("score") or opt.get("score_raw") or 0.0)
+    except Exception:
+        return 0.0
+
+
 def _calc_risk_delta(
     chosen: Optional[Dict[str, Any]],
     options: List[Dict[str, Any]],
@@ -155,11 +190,7 @@ def _calc_risk_delta(
 
     正方向: リスク増加（危険寄り）
     負方向: リスク減少（安全寄り）
-
-    FUJI 側のリスクスコアに加算されることを前提とした値なので、
-    -0.30〜+0.50 程度にクリップしておく。
     """
-    # 何も選べなかった場合は「全体的に不安」扱いでやや危険寄り
     if not chosen:
         return 0.30
 
@@ -168,10 +199,7 @@ def _calc_risk_delta(
     safety_view = str(chosen.get("safety_view") or "").lower()
     critic_view = str(chosen.get("critic_view") or "").lower()
     verdict     = str(chosen.get("verdict") or "").strip()
-    try:
-        score = float(chosen.get("score") or chosen.get("score_raw") or 0.5)
-    except Exception:
-        score = 0.5
+    score = _get_score(chosen)
 
     # 1) safety_view 内の危険ワードで加点
     risk_keywords = {
@@ -194,23 +222,20 @@ def _calc_risk_delta(
     elif verdict == "却下":
         delta += 0.25
     elif verdict == "採用推奨":
-        # 安全寄りなら少しだけマイナス方向もあり得る
         if "問題なし" in safety_view or "安全" in safety_view:
             delta -= 0.05
 
-    # 3) score が低いほど不安 → 少しリスク増
+    # 3) score が低いほど不安
     if score < 0.5:
         delta += (0.5 - score) * 0.2
     elif score > 0.8:
-        # 自信が高く、他にリスク要因がなければわずかにリスク減
         if "問題" not in safety_view and "危険" not in safety_view:
             delta -= (score - 0.8) * 0.05
 
-    # 4) critic_view に強い否定があれば追加加点
+    # 4) critic_view に強い否定があれば追加
     if any(w in critic_view for w in ["致命", "深刻", "重大", "critical"]):
         delta += 0.10
 
-    # 上限・下限 clip
     delta = max(-0.30, min(0.50, delta))
     return round(delta, 3)
 
@@ -218,46 +243,74 @@ def _calc_risk_delta(
 def _build_debate_summary(
     chosen: Optional[Dict[str, Any]],
     options: List[Dict[str, Any]],
+    mode: str,
 ) -> Dict[str, Any]:
-    """モニタリング・デバッグ用の簡易サマリ."""
+    """モニタリング・デバッグ用の詳細サマリ"""
     total = len(options)
     rejected_count = len([o for o in options if _is_rejected(o)])
-
-    try:
-        chosen_score = float(
-            (chosen or {}).get("score") or (chosen or {}).get("score_raw") or 0.0
-        )
-    except Exception:
-        chosen_score = 0.0
+    
+    scores = [_get_score(o) for o in options]
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+    max_score = max(scores) if scores else 0.0
+    min_score = min(scores) if scores else 0.0
 
     return {
         "total_options": total,
         "rejected_count": rejected_count,
-        "chosen_score": chosen_score,
+        "accepted_count": total - rejected_count,
+        "mode": mode,
+        "chosen_score": _get_score(chosen) if chosen else 0.0,
         "chosen_verdict": (chosen or {}).get("verdict"),
-        "source": "debate.v1",
+        "avg_score": round(avg_score, 3),
+        "max_score": round(max_score, 3),
+        "min_score": round(min_score, 3),
+        "source": "debate.v2_improved",
     }
 
 
+def _create_warning_message(
+    chosen: Dict[str, Any],
+    mode: str,
+    all_rejected: bool,
+) -> str:
+    """警告メッセージを生成"""
+    score = _get_score(chosen)
+    verdict = chosen.get("verdict", "")
+    
+    warnings = []
+    
+    if mode == DebateMode.DEGRADED:
+        warnings.append("⚠️ 全候補が通常基準を満たしませんでした")
+        warnings.append(f"最もスコアの高い候補（{score:.2f}）を選択しましたが、慎重な検討が必要です")
+    
+    if score < SCORE_THRESHOLDS["warning_threshold"]:
+        warnings.append(f"⚠️ 選択候補のスコアが低めです（{score:.2f}）")
+    
+    if verdict == "却下":
+        warnings.append("⚠️ この候補は本来却下対象ですが、他に選択肢がありません")
+    elif verdict == "要検討":
+        warnings.append("ℹ️ この候補にはリスクがあります。実行前に詳細を確認してください")
+    
+    safety_view = str(chosen.get("safety_view") or "")
+    if any(kw in safety_view for kw in ["危険", "リスク", "問題", "違反"]):
+        warnings.append(f"⚠️ 安全性の懸念: {chosen.get('safety_view', '')}")
+    
+    return "\n".join(warnings) if warnings else ""
+
+
 # ============================
-#  JSON パースまわり（強化版）
+#  JSON パース
 # ============================
 
 
 def _safe_parse(raw: str) -> Dict[str, Any]:
-    """
-    LLM 出力から JSON を安全に取り出すユーティリティ。
-
-    - Markdown の ```json / ``` コードブロックが付いていても処理する
-    - トップレベルが配列だけの場合は {"options": [...]} にラップする
-    - ダメな場合は最小構造で返す
-    """
+    """LLM 出力から JSON を安全に取り出す"""
     if not raw:
         return {"options": [], "chosen_id": None}
 
     cleaned = raw.strip()
 
-    # ```json ... ``` のようなコードブロックを除去
+    # ```json ... ``` 除去
     if cleaned.startswith("```"):
         first_nl = cleaned.find("\n")
         if first_nl != -1:
@@ -279,7 +332,7 @@ def _safe_parse(raw: str) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # 2) 先頭の '{' 〜 最後の '}' を抜き出して再トライ
+    # 2) {} を抜き出して再トライ
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
@@ -291,7 +344,79 @@ def _safe_parse(raw: str) -> Dict[str, Any]:
 
 
 # ============================
-#  フォールバック Debate
+#  選択ロジック（改善版）
+# ============================
+
+
+def _select_best_candidate(
+    enriched_list: List[Dict[str, Any]],
+    min_score: float,
+    allow_rejected: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    指定条件で最良の候補を選択
+    
+    Args:
+        enriched_list: 評価済み候補リスト
+        min_score: 最低スコア閾値
+        allow_rejected: 却下候補も許可するか
+    """
+    candidates = enriched_list
+    
+    if not allow_rejected:
+        candidates = [o for o in enriched_list if not _is_rejected(o)]
+    
+    # スコアフィルタリング
+    candidates = [o for o in candidates if _get_score(o) >= min_score]
+    
+    if not candidates:
+        return None
+    
+    # 最高スコアを選択
+    best = max(candidates, key=lambda o: _get_score(o))
+    return best
+
+
+def _create_degraded_choice(
+    enriched_list: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """
+    全候補却下時の degraded mode 選択
+    
+    戦略:
+    1. スコア 0.2 以上の中から最善を選ぶ
+    2. それでもなければ、却下候補含めて最善を選ぶ
+    3. 警告メッセージを付与
+    """
+    # 戦略1: 却下だがスコアが最低限ある候補
+    degraded_min = SCORE_THRESHOLDS["degraded_min"]
+    candidate = _select_best_candidate(
+        enriched_list,
+        min_score=degraded_min,
+        allow_rejected=True
+    )
+    
+    if candidate:
+        logger.warning(
+            f"DebateOS: Degraded mode - 選択候補 '{candidate.get('title')}' "
+            f"(score: {_get_score(candidate):.2f}, verdict: {candidate.get('verdict')})"
+        )
+        return candidate
+    
+    # 戦略2: スコアに関わらず最善
+    if enriched_list:
+        candidate = max(enriched_list, key=lambda o: _get_score(o))
+        logger.warning(
+            f"DebateOS: Emergency fallback - 最低基準未満ですが選択: "
+            f"'{candidate.get('title')}' (score: {_get_score(candidate):.2f})"
+        )
+        return candidate
+    
+    return None
+
+
+# ============================
+#  フォールバック
 # ============================
 
 
@@ -299,23 +424,25 @@ def _fallback_debate(
     options: List[Dict[str, Any]]
 ) -> DebateResult:
     """
-    LLM が壊れたときのフォールバック：
-    - とりあえず最初の候補を選ぶ
-    - score は全部 0.5 にしておく
+    LLM 失敗時の安全フォールバック
     """
     if not options:
         return {
             "options": [],
             "chosen": None,
             "raw": None,
-            "source": "fallback",
-            "risk_delta": 0.30,  # 「判断不能 = やや危険寄り」扱い
+            "source": DebateMode.SAFE_FALLBACK,
+            "mode": DebateMode.SAFE_FALLBACK,
+            "risk_delta": 0.30,
+            "warnings": ["⚠️ 候補が存在しないため選択できません"],
             "debate_summary": {
                 "total_options": 0,
                 "rejected_count": 0,
+                "accepted_count": 0,
+                "mode": DebateMode.SAFE_FALLBACK,
                 "chosen_score": 0.0,
                 "chosen_verdict": None,
-                "source": "debate.v1",
+                "source": "debate.v2_improved",
             },
         }
 
@@ -326,6 +453,7 @@ def _fallback_debate(
         o["score"] = 0.5
         o["score_raw"] = 0.5
         o["verdict"] = "要検討"
+        o["rejection_reason"] = None
         o["architect_view"] = "フォールバック: Architect 評価なし"
         o["critic_view"] = "フォールバック: Critic 評価なし"
         o["safety_view"] = "フォールバック: Safety 評価なし"
@@ -334,20 +462,25 @@ def _fallback_debate(
 
     chosen = enriched[0]
     risk_delta = _calc_risk_delta(chosen, enriched)
-    summary = _build_debate_summary(chosen, enriched)
+    summary = _build_debate_summary(chosen, enriched, DebateMode.SAFE_FALLBACK)
+    
+    warning = _create_warning_message(chosen, DebateMode.SAFE_FALLBACK, False)
+    warning = "⚠️ LLM評価失敗により安全フォールバックを使用\n" + warning
 
     return {
         "options": enriched,
         "chosen": chosen,
         "raw": None,
-        "source": "fallback",
+        "source": DebateMode.SAFE_FALLBACK,
+        "mode": DebateMode.SAFE_FALLBACK,
         "risk_delta": risk_delta,
+        "warnings": warning.split("\n") if warning else [],
         "debate_summary": summary,
     }
 
 
 # ============================
-#  メイン入口
+#  メイン入口（改善版）
 # ============================
 
 
@@ -357,41 +490,47 @@ def run_debate(
     context: Optional[Dict[str, Any]] = None,
 ) -> DebateResult:
     """
-    ReasonOS から呼び出すメイン入口。
+    ReasonOS から呼び出すメイン入口（実用性改善版）
+
+    主な改善:
+    - 全候補却下時に degraded mode で最善候補を選択
+    - 明確な警告メッセージ
+    - より詳細なログとメタデータ
 
     入力:
-      - query: decide に渡された元クエリ（例: "veritasを活用したい"）
+      - query: decide に渡された元クエリ
       - options: Planner や MemoryOS などから集めた候補一覧
-      - context: stakes / telos_weights / user_id など（任意）
+      - context: stakes / telos_weights / user_id など
 
     戻り値:
     {
-      "chosen": {...},        # enriched option (score 等付き)
-      "options": [...],       # enriched options
-      "raw": { ... },         # LLM 生JSON
-      "source": "openai_llm" or "fallback",
-      "risk_delta": float,    # FUJI リスクに加算する値（-0.3〜+0.5 目安）
-      "debate_summary": {...} # デバッグ / 監視用サマリ
+      "chosen": {...},
+      "options": [...],
+      "raw": {...},
+      "source": "openai_llm",
+      "mode": "normal" | "degraded" | "safe_fallback",
+      "risk_delta": float,
+      "warnings": [str, ...],
+      "debate_summary": {...}
     }
     """
     ctx = dict(context or {})
 
-    # WorldModel スナップショット（失敗しても大丈夫なように try/except）
+    # WorldModel スナップショット
     try:
         world_snap = world_model.snapshot("veritas_agi")
     except Exception:
         world_snap = {}
 
     if not options:
+        logger.warning("DebateOS: No options provided")
         return _fallback_debate(options)
 
     system_prompt = _build_system_prompt()
     user_prompt = _build_user_prompt(query, options, ctx, world_snap)
 
-    raw_text: str = ""
-    parsed: Dict[str, Any] = {}
-
     try:
+        # LLM 呼び出し
         res = llm_client.chat(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -405,7 +544,7 @@ def run_debate(
         out_opts = parsed.get("options") or []
         chosen_id = parsed.get("chosen_id")
 
-        # ---- 入力 options を id -> option に展開（ベース）----
+        # 入力 options をベースに enriched dict を構築
         enriched_by_id: Dict[str, Dict[str, Any]] = {}
         for base in options:
             bid = base.get("id") or base.get("title") or "opt"
@@ -413,7 +552,7 @@ def run_debate(
             base_copy.setdefault("id", bid)
             enriched_by_id[bid] = base_copy
 
-        # ---- LLM 側の評価結果をマージ ----
+        # LLM 評価結果をマージ
         for o in out_opts:
             if not isinstance(o, dict):
                 continue
@@ -426,51 +565,77 @@ def run_debate(
 
         enriched_list = list(enriched_by_id.values())
 
-        # ---- verdict が "却下" のものは基本的に最終候補から除外 ----
-        non_rejected = [o for o in enriched_list if not _is_rejected(o)]
-
-        # ---- chosen 判定 ----
+        # ============================
+        # 選択ロジック（3段階フォールバック）
+        # ============================
+        
         chosen: Optional[Dict[str, Any]] = None
+        mode = DebateMode.NORMAL
+        all_rejected = False
 
-        # 1) LLM が chosen_id を出していて、かつ却下でなければそれを採用
-        if chosen_id and chosen_id in enriched_by_id:
-            cand = enriched_by_id[chosen_id]
-            if not _is_rejected(cand):
-                chosen = cand
-
-        # 2) それ以外の場合は「却下以外」の中から score 最大を選ぶ
+        # 【フェーズ1】通常モード: 非却下 & スコア閾値以上
+        non_rejected = [o for o in enriched_list if not _is_rejected(o)]
+        
+        if non_rejected:
+            # LLM が chosen_id を指定していればそれを優先（ただし却下でないこと）
+            if chosen_id and chosen_id in enriched_by_id:
+                cand = enriched_by_id[chosen_id]
+                if not _is_rejected(cand) and _get_score(cand) >= SCORE_THRESHOLDS["normal_min"]:
+                    chosen = cand
+            
+            # chosen_id がダメなら最高スコアを選択
+            if chosen is None:
+                chosen = _select_best_candidate(
+                    non_rejected,
+                    min_score=SCORE_THRESHOLDS["normal_min"],
+                    allow_rejected=False
+                )
+        
+        # 【フェーズ2】Degraded モード: 全候補却下時
         if chosen is None:
-            candidates = non_rejected if non_rejected else enriched_list
-            if candidates:
-                best = None
-                best_score = -1.0
-                for opt in candidates:
-                    try:
-                        s = float(opt.get("score", 0.0) or 0.0)
-                    except Exception:
-                        s = 0.0
-                    if s > best_score:
-                        best_score = s
-                        best = opt
-                chosen = best
-
-        # 3) それでも chosen が決まらなければフォールバック
+            logger.warning("DebateOS: All candidates rejected or below threshold, entering degraded mode")
+            all_rejected = True
+            mode = DebateMode.DEGRADED
+            chosen = _create_degraded_choice(enriched_list)
+        
+        # 【フェーズ3】最終フォールバック
         if chosen is None:
+            logger.error("DebateOS: Failed to select any candidate, using safe fallback")
             return _fallback_debate(options)
 
-        # ---- risk_delta / debate_summary を付与 ----
+        # ============================
+        # 結果の組み立て
+        # ============================
+        
         risk_delta = _calc_risk_delta(chosen, enriched_list)
-        summary = _build_debate_summary(chosen, enriched_list)
+        summary = _build_debate_summary(chosen, enriched_list, mode)
+        warning_msg = _create_warning_message(chosen, mode, all_rejected)
+        warnings = [w for w in warning_msg.split("\n") if w.strip()]
+
+        # ログ出力
+        if mode == DebateMode.NORMAL:
+            logger.info(
+                f"DebateOS: Selected '{chosen.get('title')}' "
+                f"(score: {_get_score(chosen):.2f}, verdict: {chosen.get('verdict')})"
+            )
+        else:
+            logger.warning(
+                f"DebateOS: Degraded selection '{chosen.get('title')}' "
+                f"(score: {_get_score(chosen):.2f}, verdict: {chosen.get('verdict')})"
+            )
 
         return {
             "chosen": chosen,
             "options": enriched_list,
             "raw": parsed,
             "source": "openai_llm",
+            "mode": mode,
             "risk_delta": risk_delta,
+            "warnings": warnings,
             "debate_summary": summary,
         }
 
-    except Exception:
-        # LLM まわりで何かあったら安全側フォールバック
+    except Exception as e:
+        logger.error(f"DebateOS: LLM call failed: {e}")
         return _fallback_debate(options)
+
