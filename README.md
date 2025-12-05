@@ -1,94 +1,108 @@
-# VERITAS OS — Proto-AGI Decision OS / Public API
+# VERITAS OS v2.0 — Proto-AGI Decision OS
 
-This repository contains **VERITAS OS**, a Proto-AGI framework that wraps an LLM
-(e.g. OpenAI API) as a:
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
+[![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/status-Production%20Ready%20(98%25)-green.svg)]()
 
-> **“Safe, consistent, and auditable decision-making OS”**
+**Version**: 2.0.0  
+**Release Date**: 2025-12-01  
+**Author**: Takeshi Fujishita
 
-instead of “just a chatbot”.
+This repository contains **VERITAS OS** — a Proto-AGI framework that wraps an LLM  
+(e.g. **OpenAI GPT-4.1-mini**) as a **safe, consistent, and auditable decision OS**.
 
-VERITAS OS treats the LLM as a low-level reasoning engine and builds on top of it
-a full **Decision OS / Agent OS** with safety, memory, value functions, world
-state, and trust-logs.
-System prompts are currently written in Japanese but can be easily localized.---
+- Mental model: **“LLM = CPU”**, **“VERITAS OS = Decision / Agent OS on top”**
+
+**Readmes**
+
+- **English README** (this file)
+- **Japanese README**: `README_JP.md`
+
+---
 
 ## 🔥 TL;DR
-![IMG_1157](https://github.com/user-attachments/assets/c76cef57-485e-40b3-917f-62dc2a7e535b)
 
+- **VERITAS OS = an OS layer that wraps an LLM as a Proto-AGI Decision Engine**
+- A single `POST /v1/decide` runs a **deterministic multi-stage pipeline**:
 
-- **VERITAS OS = OS-layer that wraps an LLM as a Proto-AGI Decision OS**
-- A single call to **`/v1/decide`** executes:
+```text
+Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
+Local FastAPI server with OpenAPI 3.1 / Swagger UI (no external deps after startup)
 
-  `Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog`
+Bundled subsystems: MemoryOS / WorldModel / ValueCore / FUJI Gate / TrustLog / Doctor Dashboard
 
-- Exposed as a **local FastAPI (uvicorn) service**, callable from **OpenAPI 3.1 +
-  Swagger Editor/Studio**
-- Includes **MemoryOS / WorldModel / ValueCore / FUJI Gate / Doctor Dashboard**
-  as an integrated stack
-- Goal: an **experimental backbone for using LLMs as safe, repeatable, and
-  auditable AGI skeletons**
+Goal: research & experimentation platform for using LLMs as
+safe, reproducible, and cryptographically auditable Proto-AGI skeletons
 
-Conceptually:
+📑 Table of Contents
+What can it do?
 
-- **LLM ≈ CPU**
-- **VERITAS OS ≈ Decision / Agent OS that runs on top of it**
+Context Schema (for AGI tasks)
 
----
+Directory Layout
 
-## 🎯 1. What can it do?
+core/ Module Responsibilities
 
-### 1.1 `/v1/decide` — Full decision loop
-![IMG_1159](https://github.com/user-attachments/assets/f072aef0-beb1-4b26-9bfc-3e5b4bda21a3)
+LLM Client
 
-`POST /v1/decide` always returns a structured JSON payload containing:
+TrustLog & Dataset
 
-- `chosen`  
-  The selected action (with `action`, `rationale`, `uncertainty`).
-- `alternatives[]`  
-  Other viable options that were considered.
-- `evidence[]`  
-  Evidence items referenced during the decision.
-- `critique[]`  
-  Self-critique of the candidate plan.
-- `debate[]`  
-  Multi-view internal debate (e.g. pro/contra/third view).
-- `telos_score`  
-  Alignment with the current value function.
-- `fuji`  
-  Safety/ethics decision (`allow | modify | block | abstain`).
-- `trust_log`  
-  Hash-chained log entries (`sha256_prev`) for auditability.
+Doctor Dashboard
 
-Because the **decision process** (not only the answer) is serialized,
-VERITAS is intended to be useful for:
+Quickstart
 
-- AGI research
-- AI safety / alignment experiments
-- Auditable decision-making systems
+Development Guide
 
----
+Troubleshooting
 
-### 1.2 Other APIs
+License
 
-All endpoints require an **`X-API-Key`** header.
+Contributing / Acknowledgements / Contact
 
-| Method | Path                             | Description                                       |
-|--------|----------------------------------|---------------------------------------------------|
-| GET    | `/health`                        | Health check for the server                       |
-| POST   | `/v1/decide`                     | Full decision loop                                |
-| POST   | `/v1/fuji/validate`             | Safety / ethics validation for a single action    |
-| POST   | `/v1/memory/put`                | Store a key/value pair in persistent memory       |
-| GET    | `/v1/memory/get`                | Retrieve a value from persistent memory           |
-| GET    | `/v1/logs/trust/{request_id}`   | Retrieve immutable hash-chained trust log entries |
+🎯 1. What can it do?
+1.1 /v1/decide — Full Decision Loop
+POST /v1/decide always returns a structured JSON with the full decision context:
 
----
+Field	Description
+chosen	Selected action (description, rationale, uncertainty, utility, risk, etc.)
+alternatives[]	Other candidate actions / options
+evidence[]	Evidence used (MemoryOS / WorldModel / web, etc.)
+critique[]	Self-critique and identified weaknesses
+debate[]	Pseudo multi-agent debate results (pro / con / third-party views)
+telos_score	Alignment score vs. ValueCore’s value function
+fuji	FUJI Gate safety / ethics judgement (allow / modify / rejected)
+gate.decision_status	Final decision status (Enum DecisionStatus)
+trust_log	Hash-chained TrustLog entry with sha256_prev (for auditability)
 
-## 🧠 2. Context schema (for AGI-style tasks)
+The key property:
 
-AGI-like **meta-decision** tasks are expressed via a `Context` object
-(OpenAPI 3.1 excerpt):
+“Why was this action chosen?” is always represented in a structured way.
 
-```yaml
+This makes VERITAS OS suitable for:
+
+AGI research
+
+AI Safety experiments
+
+Enterprise / regulated-environment audit pipelines
+
+1.2 Other APIs
+All protected endpoints require X-API-Key authentication.
+
+Method	Path	Description
+GET	/health	Server health check
+POST	/v1/decide	Full decision loop
+POST	/v1/fuji/validate	Safety / ethics validation for a single action
+POST	/v1/memory/put	Persist information into MemoryOS
+GET	/v1/memory/get	Retrieve from MemoryOS
+GET	/v1/logs/trust/{id}	Immutable TrustLog entry (hash chain) by ID
+
+🧠 2. Context Schema (for AGI tasks)
+For meta-decision tasks (AGI-ish planning, self-improvement, etc.) VERITAS expects a Context object:
+
+yaml
+コードをコピーする
 Context:
   type: object
   required: [user_id, query]
@@ -96,8 +110,8 @@ Context:
     user_id:      { type: string }
     session_id:   { type: string }
     query:        { type: string, description: "User request / problem statement" }
-    goals:        { type: array,  items: { type: string } }
-    constraints:  { type: array,  items: { type: string } }
+    goals:        { type: array, items: { type: string } }
+    constraints:  { type: array, items: { type: string } }
     time_horizon: { type: string, enum: ["short", "mid", "long"] }
     preferences:  { type: object }
     tools_allowed:
@@ -111,27 +125,30 @@ Context:
     affect_hint:
       type: string
       enum: ["calm", "focused", "empathetic", "concise"]
+Typical queries you can hand off to /v1/decide:
 
-With this schema you can ask VERITAS to decide, for example:
-	•	The optimal next steps of an AGI research plan
-	•	The next move in a self-improvement loop
-	•	An experimental plan that respects strict safety boundaries
+“What is the optimal next step in my AGI research plan?”
 
-by sending such a context directly to /v1/decide, and delegating
-the top-level decision to the OS.
+“How should I design my self-improvement loop?”
 
-⸻
+“Within my safety boundaries, how far can I push this experiment?”
 
-🏗 3. Repository layout (veritas_clean_test2)
+The OS decides both the multi-step plan and the immediate next action.
 
-The top-level layout (simplified, based on the current working tree):
-
+🏗 3. Directory Layout
+3.1 Root Layout
+text
+コードをコピーする
 veritas_clean_test2/
 ├── chainlit_app.py
 ├── chainlit.md
 ├── data/
 │   └── value_stats.json
 ├── docs/
+│   ├── images/
+│   │   ├── architecture.png
+│   │   ├── pipeline.png
+│   │   └── modules.png
 │   ├── agi_self_hosting.md
 │   ├── bench_summary.md
 │   ├── fail_safe.md
@@ -139,249 +156,618 @@ veritas_clean_test2/
 │   ├── metrics.md
 │   ├── module_responsibilities.md
 │   ├── self_improvement_commands.md
-│   ├── worldmodelstep1.md
-│   └── ...
+│   └── worldmodelstep1.md
 ├── veritas_os/
 │   ├── api/
 │   ├── core/
+│   ├── logging/
 │   ├── scripts/
 │   ├── templates/
 │   ├── tools/
-│   ├── README.md
-│   ├── README_ENGLISH.md
+│   ├── README.md            # Module-level notes
+│   ├── README_ENGLISH.md    # (Optional) extra English docs
 │   └── requirements.txt
 ├── reports/
 ├── backups/
 ├── datasets/
-└── .gitignore
+├── veritas.sh               # Helper shell script for local usage
+├── .gitignore
+└── LICENSE
+Auto-generated directories such as __pycache__ are omitted.
 
-The interesting part for researchers is mainly veritas_os/,
-especially core/ and api/.
-
-⸻
-
-🧩 4. veritas_os/core/ module responsibilities
-![IMG_1160](https://github.com/user-attachments/assets/cf029b29-1fbe-4264-9223-4c6a29ed22eb)
-
-This directory is the heart of VERITAS OS.
-Below is a map of the main *.py modules so that researchers/engineers
-can navigate the codebase quickly.
-
-4.1 Core OS layer
-	•	kernel.py
+3.2 veritas_os/core/ Overview
+text
+コードをコピーする
+veritas_os/core/
+├── __init__.py
+├── adapt.py
+├── affect.py
+├── agi_goals.py
+├── code_planner.py
+├── config.py
+├── critique.py
+├── curriculum.py
+├── debate.py
+├── decision_status.py
+├── doctor.py
+├── evidence.py
+├── experiment.py
+├── fuji.py
+├── identity.py
+├── kernel.py
+├── llm_client.py
+├── logging.py
+├── memory.py
+├── pipeline.py
+├── planner.py
+├── reason.py
+├── reflection.py
+├── rsi.py
+├── sanitize.py
+├── strategy.py
+├── tools.py
+├── value_core.py
+├── world.py
+├── world_model.py.old       # legacy world model prototype
+└── models/
+    ├── __init__.py
+    ├── memory_model.py
+    ├── memory_model.py.old  # legacy variant
+    └── vector_index.pkl     # vector index for MemoryOS
+🧩 4. core/ Module Responsibilities
+4.1 Core OS Layer
+kernel.py
 Global orchestrator of VERITAS.
-Called from /v1/decide and runs:
+
+Entry point for /v1/decide
+
+Executes full pipeline:
+
+text
+コードをコピーする
 Planner → Evidence → Critique → Debate → FUJI → World/Memory update
-then assembles the final DecideResult.
-	•	pipeline.py
-Defines the stage structure and execution flow of the decision
-process:
-which OS component runs when, and which metrics are collected.
-	•	planner.py (PlannerOS)
-Builds multi-step task plans from query / goals / constraints.
-Produces not only “the next move”, but a steps[] plan for
-short-/mid-term horizons.
-	•	reason.py (ReasonOS)
-Manages chain-of-thought style reasoning with the LLM.
-Generates internal reasoning text informed by evidence & critique, and
-backs DecideResponse.trace / rationale.
-	•	strategy.py
-High-level strategy policy:
-exploration vs exploitation, how much risk to take, etc.
-Switches macro decision patterns.
-	•	world.py / world_model.py (WorldOS / WorldModel)
-Builds a snapshot of world state from recent decisions & memory:
-project progression, cumulative risk, pending tasks, etc.
-Stored as JSON world_state and passed into future /v1/decide calls.
+Assembles the final DecideResult JSON
 
-⸻
+pipeline.py
+Defines the stages and execution flow of the decision pipeline:
 
-4.2 Safety, value, and self-improvement layer
-	•	fuji.py (FUJI Gate)
+Which OS modules are called and in what order
+
+Which metrics are collected at which stage
+
+planner.py (PlannerOS)
+Transforms query / goals / constraints into a multi-step plan.
+
+Produces both:
+
+the immediate next action, and
+
+a longer-horizon plan steps[]
+
+reason.py (ReasonOS)
+Handles internal reasoning / chain-of-thought.
+
+Integrates Evidence / Critique into coherent reasoning
+
+Provides the trace / rationale backbone of DecideResponse
+
+strategy.py
+High-level strategy controller (experimental):
+
+Exploration vs exploitation
+
+How much risk to take now vs later
+
+Switches between macro decision patterns
+
+world.py / world_model.py.old (WorldOS / WorldModel)
+Maintains snapshots of the world state:
+
+Ongoing projects / progress
+
+Accumulated risk / pending tasks
+
+Stored as JSON (world_state) and passed forward into future /v1/decide calls
+
+4.2 Safety / Value / Self-Improvement Layer
+fuji.py (FUJI Gate)
 Final safety / ethics / compliance gate.
-Internally computes:
-	•	risk_score
-	•	violations[] (which policies are hit)
-	•	status: allow | modify | block | abstain
-Also exposed as a standalone API via /v1/fuji/validate.
-	•	value_core.py (ValueCore)
-Maintains VERITAS’s internal Value EMA (Exponential Moving Average).
-Each decision updates a scalar notion of “goodness” of behavior.
-Used to compute telos_score and next_value_boost.
-	•	reflection.py (ReflectionOS)
-Performs self-reflection from decision logs and Doctor reports:
-detects patterns such as “where does it fail more often?”,
-and feeds these insights back into Planner / ValueCore.
-	•	adapt.py
-Entry point for future self-adaptation / self-improvement
-algorithms.
-Currently experimental and tied to RSI and benchmark utilities.
-	•	rsi.py
-Notes and prototypes for Recursive Self-Improvement (RSI).
-Describes which information should be fed into the next learning cycle.
 
-⸻
+Outputs:
 
-4.3 Evidence, critique, and debate layer
-	•	evidence.py (EvidenceOS)
-Collects evidence candidates from Web search (optional),
-MemoryOS, WorldModel, etc., and scores them by relevance/reliability.
-Produces the structure used in DecideResponse.evidence[].
-	•	critique.py (CritiqueOS)
-Prompts the LLM to critique its own plan:
-surface missing risks, flawed assumptions, weak reasoning, etc.
-Output is consumed by FUJI and DebateOS.
-		•	debate.py (DebateOS)
-Runs pseudo multi-agent debates (pro, con, third-party views).
-Structures arguments for each side, then summarizes them and feeds the
-result back into chosen.
+risk_score
 
-⸻
+violations[] (which policies were triggered)
 
-4.4 MemoryOS layer
-	•	memory.py (MemoryOS front-end)
-Manages long-term memory, usually stored in
-scripts/logs/memory.json.
-Saves episodes, decisions, and metadata; provides search via
-MemoryOS.search().
-Internally uses the modules under core/memory/.
-	•	core/memory/embedder.py
-Generates embedding vectors for memory entries.
-Currently uses a lightweight model + caching.
-	•	core/memory/engine.py
-Core nearest-neighbor search engine (cosine similarity etc.).
-Handles episodic.index.npz / semantic.index.npz and provides
-high-speed search.
-	•	core/memory/index_cosine.py
-CosineIndex implementation.
-Exposes low-level add() / search() APIs used by MemoryOS.
-	•	core/memory/store.py
-Simple storage abstraction (e.g. JSONL).
-Keeps index and raw data consistent.
+status: allow | modify | rejected
 
-⸻
+Usable standalone via POST /v1/fuji/validate.
 
-4.5 LLM client & logging
-	•	llm_client.py
-Central wrapper for accessing OpenAI (or other) LLM APIs.
-Handles model selection, retries, timeouts, etc.
-Upper layers can treat it as a simple function call.
-	•	logging.py (common log utilities)
-Helpers for writing decision/safety logs.
-Log folder layout is defined in core/logging/paths.py.
-	•	core/logging/dataset_writer.py
-Exports decision logs as training datasets, e.g.
-datasets/dataset.jsonl.
-	•	core/logging/paths.py
-Central definition of local paths for logs, reports, backups, etc.
-Integrates with environment variables such as VERITAS_DATA_DIR.
+decision_status.py
+Enum for normalized decision status used across the OS:
 
-⸻
+python
+コードをコピーする
+class DecisionStatus(str, Enum):
+    ALLOW    = "allow"
+    MODIFY   = "modify"
+    REJECTED = "rejected"
+String constants for backward compatibility are also provided.
 
-4.6 Tone / style, curriculum, experiments
-	•	affect.py
-Controls tone & affect of responses
-(e.g. calm, focused, empathetic).
-Linked to Context.affect_hint, modifies LLM prompts accordingly.
-	•	curriculum.py
-Logic for building self-training / self-evaluation curricula.
-Cooperates with benchmarks under docs/ and datasets/ to decide
-“which tasks to practice next”.
-	•	experiment.py
-Utilities for AGI experiments and benchmarks.
-Contains code for A/B testing and measuring Decision OS behavior.
+value_core.py (ValueCore)
+Manages VERITAS’ Value EMA (Exponential Moving Average).
 
-⸻
+Logs a scalar “goodness” metric for each decision
 
-4.7 Sanitization & utilities
-	•	sanitize.py
-Removes dangerous content, PII, control characters from prompts and
-responses.
-Separate from FUJI, this is “pure text cleaning”.
-	•	tools.py
-Small shared utilities: date formatting, ID generation, helpers used by
-multiple modules.
-	•	identity.py
-VERITAS instance ID / version / metadata.
-Used by Doctor Dashboard and logs to show “who this system is”.
+Used to compute telos_score and for future policy adjustments
 
-⸻
+reflection.py (ReflectionOS)
+Performs self-reflection based on past decisions and Doctor Reports:
 
-🚀 5. Running the API server
+When / where failures are likely
 
-	1.	Clone
+Which questions / patterns the system is weak at
 
-git clone https://github.com/veritasfuji-japan/veritas_clean_test2.git
-cd veritas_clean_test2
+Feedback into Planner / ValueCore
 
-	2.	Create virtualenv
+adapt.py / rsi.py
+Entry points for future self-adaptation / RSI (recursive self-improvement) logic.
 
-python3.11 -m venv .venv
-source .venv/bin/activate
+Experimental implementations & notes
 
-3.	Install dependencies
+Decides which information flows into the next learning cycle
 
-pip install -r requirements.txt
-export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+4.3 Evidence / Critique / Debate
+evidence.py (EvidenceOS)
+Gathers candidate evidence from:
 
-	4.	Start the server
+MemoryOS
 
-python3 -m uvicorn veritas_os.api.server:app --reload --port 8000
+WorldModel
 
-5.	Call from Swagger / OpenAPI
+(Optionally) web / external tools
 
-	•	Load the OpenAPI 3.1 schema into Swagger Editor / Studio
-	•	Make sure servers[0].url = http://127.0.0.1:8000
-	•	Use Authorize to set X-API-Key
-	•	Call POST /v1/decide with a sample JSON body and verify the response
+Then scores them by relevance / reliability and populates evidence[].
 
-⸻
+critique.py (CritiqueOS)
+LLM-driven self-critique and verification.
 
-📊 6. Doctor Dashboard
+Surfaces hidden risks
 
-Generate a self-diagnosis report and HTML dashboard:
+Exposes incorrect assumptions
 
+Feeds into FUJI / DebateOS
+
+debate.py (DebateOS)
+Runs pseudo multi-agent debates:
+
+Pro / con / third-party viewpoints
+
+Aggregates arguments into structured debate[]
+
+Influences final chosen action
+
+4.4 MemoryOS
+memory.py (MemoryOS Frontend)
+Manages long-term memory centered around scripts/logs/memory.json:
+
+Stores episodes / decisions / metadata
+
+Supports similarity-based retrieval of past decisions
+
+Internally uses core/models/memory_model.py and vector_index.pkl
+
+models/memory_model.py / models/vector_index.pkl
+Implements the embedding model and vector index used by MemoryOS.
+
+Handles vectorization and nearest-neighbor search
+
+Provides basic semantic memory capabilities
+
+4.5 LLM Client & Logging
+llm_client.py
+Single entry point for LLM calls.
+
+Current assumption: OpenAI, tuned for gpt-4.1-mini (or equivalent)
+
+Controlled via environment variables:
+
+bash
+コードをコピーする
+export OPENAI_API_KEY="sk-..."
+export LLM_PROVIDER="openai"      # currently effectively 'openai'
+export LLM_MODEL="gpt-4.1-mini"
+export LLM_TIMEOUT="60"
+export LLM_MAX_RETRIES="3"
+Centralizes retry / timeout / logging
+
+A multi-provider interface exists (Claude / Gemini / local models) but is primarily future work in v2.0
+
+logging.py
+Shared logging utilities across the OS.
+
+Implements the TrustLog hash chain as described in the paper:
+
+text
+コードをコピーする
+hₜ = SHA256(hₜ₋₁ || rₜ)
+sha256_prev and sha256 are automatically filled
+
+Log entries are appended as JSONL
+
+Supports cryptographic verification of the decision history
+
+4.6 Logging / Dataset / Paths
+veritas_os/logging/dataset_writer.py
+Converts decision logs into a reusable dataset for future training.
+
+Main features:
+
+build_dataset_record(req, res, meta, eval_meta)
+→ builds a normalized record per decision
+
+append_dataset_record(record, path=DATASET_JSONL)
+→ appends to datasets/dataset.jsonl
+
+get_dataset_stats()
+→ aggregates statistics: status distribution, memory usage, average score, date range
+
+search_dataset(query, status, memory_used, limit)
+→ simple search API over dataset.jsonl
+
+Records include DecisionStatus-based labels:
+
+labels.status = "allow" | "modify" | "rejected"
+
+plus memory_used, telos_score, utility, etc.
+
+This allows extracting “good & safe decisions” as supervised training data.
+
+veritas_os/logging/paths.py
+Centralized path definitions for:
+
+Logs
+
+Reports
+
+Backups
+
+Datasets
+
+Works together with environment variables such as VERITAS_DATA_DIR.
+
+4.7 Affect / Curriculum / Experiment / Tools
+affect.py
+Controls response tone / affect:
+
+Modes like calm, focused, empathetic, concise
+
+Driven by Context.affect_hint
+
+Modifies prompt style fed into the LLM
+
+curriculum.py / experiment.py
+Self-training and AGI experiment utilities:
+
+Generate curricula from benchmarks (e.g., docs/bench_summary.md)
+
+Run experiments / A/B tests on the decision pipeline
+
+sanitize.py
+Text sanitization layer for:
+
+PII removal
+
+Control characters
+
+Potentially dangerous content
+
+This is separate from FUJI Gate and focuses on pure text cleaning.
+
+tools.py / identity.py
+tools.py: Common utility functions (IDs, datetime formatting, etc.)
+
+identity.py: System identity & metadata:
+
+System ID
+
+Version
+
+“Self-intro” information used in Doctor Dashboard and logs
+
+🧠 5. LLM Client
+Current v2.0 assumptions:
+
+Provider: OpenAI
+
+Model: gpt-4.1-mini (or compatible) via Chat Completions API
+
+Other providers (Claude, Gemini, local LLMs) have interface stubs but are not primary paths yet.
+
+Example environment configuration:
+
+bash
+コードをコピーする
+export OPENAI_API_KEY="sk-..."
+export LLM_PROVIDER="openai"
+export LLM_MODEL="gpt-4.1-mini"
+export LLM_TIMEOUT="60"
+export LLM_MAX_RETRIES="3"
+llm_client.chat(...) is used by Planner / Evidence / Critique / Debate / FUJI
+so you can swap models centrally without touching the rest of the OS.
+
+🔐 6. TrustLog & Dataset
+6.1 TrustLog (Hash-Chain Audit Log)
+Implementation: veritas_os/core/logging.py
+
+Output: e.g., scripts/logs/trust_log*.jsonl
+
+Format: JSON Lines (1 entry per line)
+
+Each entry contains:
+
+sha256_prev: previous entry’s sha256
+
+sha256: SHA256(sha256_prev || entry_without_hashes)
+
+You can merge and re-hash logs while preserving integrity:
+
+bash
+コードをコピーする
+cd veritas_os
+python -m veritas_os.api.merge_trust_logs \
+  --out scripts/logs/trust_log_merged.jsonl
+Default: auto-discover existing logs, deduplicate by request_id / timestamp
+
+--no-rehash can disable recomputation (recommended to keep rehash ON)
+
+6.2 Dataset Output
+Decisions can be exported as training data via dataset_writer.py:
+
+python
+コードをコピーする
+from veritas_os.logging.dataset_writer import (
+    build_dataset_record,
+    append_dataset_record,
+    get_dataset_stats,
+    search_dataset,
+)
+Output file: datasets/dataset.jsonl
+
+Contains:
+
+labels.status = allow / modify / rejected
+
+memory_used, telos_score, utility, risk, etc.
+
+This makes it easy to build “safe & high-quality decision datasets” for:
+
+Fine-tuning
+
+Offline evaluation
+
+Safety analysis
+
+📊 7. Doctor Dashboard
+The Doctor Dashboard visualizes the health of VERITAS OS.
+
+7.1 Generating the Report
+bash
+コードをコピーする
 cd veritas_os/scripts
 source ../.venv/bin/activate
 python generate_report.py
+Outputs:
 
-Artifacts:
-	•	scripts/logs/doctor_report.json
-	•	scripts/logs/doctor_dashboard.html
+scripts/logs/doctor_report.json
 
-The dashboard shows, for example:
-	•	Number of decide calls over time
-	•	FUJI decision distribution
-	•	Memory hit counts
-	•	Value EMA evolution
-	•	Frequency of unsafe / modified actions
-	•	Latency distribution
+scripts/logs/doctor_dashboard.html
 
-All in a browser-friendly view.
+Typical contents:
 
-⸻
+Number of /v1/decide calls over time
 
-✅ 7. Verified environment
+FUJI decision distribution (allow / modify / rejected)
 
-This setup has been tested with:
-	•	macOS
-	•	Python 3.11.x
-	•	uvicorn + fastapi
-	•	OpenAI API (gpt-series models)
-	•	Swagger Editor / Swagger Studio
+MemoryOS hit counts
 
-⸻
+Value EMA evolution
 
-🧵 8. Summary
-	•	VERITAS OS is an OS-layer that wraps an LLM as an AGI-style decision
-engine
-	•	Decision / Safety / Memory / Value / WorldModel / TrustLog are integrated
-into one coherent stack
-	•	The project targets researchers & companies who want to reproduce AGI / AI
-Safety / Alignment experiments locally, with a focus on:
-	•	repeatability
-	•	auditability
-	•	safety-gated decision-making
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
+Frequency of unsafe / modified actions
+
+Latency distribution
+
+Open doctor_dashboard.html in a browser to inspect.
+
+7.2 Authenticated Dashboard Server (Optional)
+You can serve the dashboard with HTTP Basic Auth using dashboard_server.py:
+
+bash
+コードをコピーする
+export DASHBOARD_USERNAME="veritas"
+export DASHBOARD_PASSWORD="your_secure_password"
+export VERITAS_LOG_DIR="/path/to/veritas_os/scripts/logs"  # optional
+
+python veritas_os/api/dashboard_server.py
+# or
+python veritas_os/scripts/dashboard_server.py
+Endpoints:
+
+UI: http://localhost:8000/ or /dashboard
+
+Status API: GET http://localhost:8000/api/status
+→ Returns drive_sync_status.json as JSON
+
+Health (no auth): GET /health
+
+🚀 8. Quickstart
+8.1 Installation
+bash
+コードをコピーする
+# 1. Clone
+git clone https://github.com/veritasfuji-japan/veritas_clean_test2.git
+cd veritas_clean_test2
+
+# 2. Virtualenv
+python3.11 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r veritas_os/requirements.txt
+
+# 4. Required environment variables
+export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+export VERITAS_API_KEY="your-secret-api-key"  # used for X-API-Key auth
+8.2 Start the API Server
+bash
+コードをコピーする
+python3 -m uvicorn veritas_os.api.server:app --reload --port 8000
+8.3 Test via Swagger UI
+Open: http://127.0.0.1:8000/docs
+
+Click “Authorize”
+
+Add header X-API-Key with your VERITAS_API_KEY value
+
+Select POST /v1/decide
+
+Use a sample payload like:
+
+json
+コードをコピーする
+{
+  "query": "Should I check tomorrow’s weather before going out?",
+  "context": {
+    "user_id": "test_user",
+    "goals": ["health", "efficiency"],
+    "constraints": ["time limit"]
+  }
+}
+8.4 Test via curl
+bash
+コードをコピーする
+curl -X POST "http://127.0.0.1:8000/v1/decide" \
+  -H "X-API-Key: your-secret-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Should I check tomorrow's weather before going out?",
+    "context": {
+      "user_id": "test_user",
+      "goals": ["health", "efficiency"]
+    }
+  }'
+🛠 9. Development Guide
+9.1 Dev Environment
+bash
+コードをコピーする
+# Dev dependencies (if present)
+pip install -r requirements-dev.txt
+
+# pre-commit hooks (if configured)
+pre-commit install
+9.2 Tests
+bash
+コードをコピーする
+# Unit tests
+pytest tests/
+
+# Coverage
+pytest --cov=veritas_os tests/
+9.3 Code Quality
+bash
+コードをコピーする
+# Linting
+flake8 veritas_os/
+pylint veritas_os/
+
+# Formatting
+black veritas_os/
+isort veritas_os/
+
+# Type checking
+mypy veritas_os/
+❓ 10. Troubleshooting
+OPENAI_API_KEY not found
+Set the environment variable:
+
+bash
+コードをコピーする
+echo $OPENAI_API_KEY
+export OPENAI_API_KEY="sk-..."
+Port 8000 already in use
+Use another port:
+
+bash
+コードをコピーする
+uvicorn veritas_os.api.server:app --reload --port 8001
+Memory not persisted
+Check VERITAS_DATA_DIR and filesystem permissions:
+
+bash
+コードをコピーする
+export VERITAS_DATA_DIR="/path/to/veritas_data"
+mkdir -p "$VERITAS_DATA_DIR"
+TrustLog verification fails
+Verify merged logs:
+
+bash
+コードをコピーする
+cd veritas_os/scripts
+python verify_trust_log.py          # if implemented
+# or
+python ../api/merge_trust_logs.py --out logs/trust_log_merged.jsonl
+📜 11. License
+text
+コードをコピーする
 Copyright (c) 2025 Takeshi Fujishita
 All Rights Reserved.
+For academic use, please cite the DOI:
+
+bibtex
+コードをコピーする
+@software{veritas_os_2025,
+  author = {Fujishita, Takeshi},
+  title  = {VERITAS OS: Proto-AGI Decision OS},
+  year   = {2025},
+  doi    = {10.5281/zenodo.17688094},
+  url    = {https://github.com/veritasfuji-japan/veritas_clean_test2}
+}
+🤝 12. Contributing / Acknowledgements / Contact
+Contributing
+Pull requests are welcome:
+
+Fork the repository
+
+Create a feature branch:
+git checkout -b feature/AmazingFeature
+
+Commit your changes:
+git commit -m "Add some AmazingFeature"
+
+Push to your branch:
+git push origin feature/AmazingFeature
+
+Open a Pull Request
+
+If present, please check CONTRIBUTING.md for details.
+
+Acknowledgements
+This project is influenced by:
+
+OpenAI GPT series
+
+Anthropic Claude
+
+The AI Safety research community
+
+The AGI research community
+
+Contact
+GitHub Issues: https://github.com/veritasfuji-japan/veritas_clean_test2/issues
+
+Email: veritas.fuji@gmail.com
+
+VERITAS OS v2.0 — Safe, Auditable, Proto-AGI Decision OS
+
+Copyright © 2025
+Takeshi Fujishita. All Rights Reserved.

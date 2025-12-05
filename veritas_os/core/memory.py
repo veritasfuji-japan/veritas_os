@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from uuid import uuid4
 import json
 import os
 import time
@@ -1029,6 +1030,67 @@ builtins.MEM = MEM
 # ============================
 
 
+def add(
+    *,
+    user_id: str,
+    text: str,
+    kind: str = "note",
+    source_label: Optional[str] = None,
+    meta: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    MemoryOS に「1件のテキスト」を追加するためのユーティリティ。
+
+    例: import_pdf_to_memory.py からの呼び出しを想定
+
+        memory.add(
+            user_id="fujishita",
+            text="PDFから切り出したチャンク",
+            kind="doc",
+            source_label="VERITAS_Zenodo_JP",
+            meta={"page": 3},
+        )
+    """
+    global MEM_VEC
+
+    if not text or not text.strip():
+        raise ValueError("[MemoryOS.add] text is empty")
+
+    entry_meta: Dict[str, Any] = dict(meta or {})
+    # user_id / source_label も meta に刻んでおく
+    entry_meta.setdefault("user_id", user_id)
+    if source_label is not None:
+        entry_meta.setdefault("source_label", source_label)
+
+    record: Dict[str, Any] = {
+        "kind": kind,
+        "text": text,
+        "tags": tags or [],
+        "meta": entry_meta,
+    }
+
+    # ---- 1) KVS に保存 ----
+    key = f"{kind}_{int(time.time())}_{uuid4().hex[:8]}"
+    ok = MEM.put(user_id, key, record)
+    if not ok:
+        logger.error("[MemoryOS.add] MEM.put failed")
+
+    # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
+    if MEM_VEC is not None:
+        try:
+            MEM_VEC.add(
+                kind=kind,
+                text=text,
+                tags=tags or [],
+                meta=entry_meta,
+            )
+        except Exception as e:
+            logger.warning(f"[MemoryOS.add] MEM_VEC.add error: {e}")
+
+    return record
+
+
 def put(*args, **kwargs) -> bool:
     """
     グローバル関数版 put
@@ -1503,8 +1565,6 @@ def distill_memory_for_user(
     return doc
 
 
-
-
 def rebuild_vector_index():
     """
     既存のmemory.jsonからベクトルインデックスを再構築
@@ -1563,6 +1623,7 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
+
 
 
 

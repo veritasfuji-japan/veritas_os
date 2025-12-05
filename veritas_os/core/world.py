@@ -1,34 +1,155 @@
 # veritas_os/core/world.py
+"""
+VERITAS WorldOS - Unified World State Management
+
+統合版: world_model.pyとworld.pyの機能を統合
+- プロジェクトベースの状態管理（from world_model.py）
+- 外部知識統合（from world.py）
+- Kosmos因果モデル（from world.py）
+- AGI Research統合（from world.py）
+"""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, asdict
-from pathlib import Path
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
 import json
+import math
 import os
+from copy import deepcopy
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
-# === パス設定（最新版） ===
-# このファイル: .../veritas_clean_test2/veritas_os/core/world.py
-BASE_DIR = Path(__file__).resolve().parents[2]     # veritas_clean_test2
-VERITAS_DIR = BASE_DIR / "veritas_os"
+# =========================
+# ファイルパス設定
+# =========================
 
-# 環境変数優先、なければ scripts/logs 下に保存
-default_world_state = VERITAS_DIR / "scripts" / "logs" / "world_state.json"
-WORLD_STATE_PATH = Path(os.getenv("VERITAS_WORLD_STATE", str(default_world_state)))
+# ベースのデータディレクトリ（環境変数優先、なければ ~/veritas）
+DATA_DIR = Path(os.getenv("VERITAS_DATA_DIR", "~/veritas")).expanduser()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# WorldModel ファイルパス
+WORLD_PATH = Path(
+    os.getenv("VERITAS_WORLD_STATE", str(DATA_DIR / "world_state.json"))
+).expanduser()
+
+DEFAULT_USER_ID = "global"
+
+# =========================
+# WorldState データ構造（従来インターフェース）
+# =========================
+
+@dataclass
+class WorldState:
+    """
+    ユーザー/プロジェクトごとのワールド状態
+    従来のインターフェースとの互換性を維持
+    """
+    user_id: str = DEFAULT_USER_ID
+
+    # 決定ログから学ぶ統計
+    decisions: int = 0
+    avg_latency_ms: float = 0.0
+    avg_risk: float = 0.0          # FUJI risk の移動平均
+    avg_value: float = 0.5         # ValueCore total の移動平均(0〜1)
+
+    # 進行中のプラン
+    active_plan_id: Optional[str] = None
+    active_plan_title: Optional[str] = None
+    active_plan_steps: int = 0
+    active_plan_done: int = 0      # 完了したステップ数 (0〜active_plan_steps)
+
+    # 最新コンテキスト
+    last_query: str = ""
+    last_chosen_title: str = ""
+    last_decision_status: str = "unknown"
+
+    # メタ
+    last_updated: str = ""
+
+    def progress(self) -> float:
+        """プラン進捗率 0〜1"""
+        if not self.active_plan_steps:
+            return 0.0
+        return max(0.0, min(1.0, self.active_plan_done / float(self.active_plan_steps)))
 
 
-# ============================================================
-# 基本ユーティリティ
-# ============================================================
+@dataclass
+class WorldTransition:
+    """
+    因果モデル用: 1 decision に対応する「予測 vs 観測」の記録
+    """
+    ts: str
+    user_id: str
+    project_id: str
+    query: str
+
+    # 予測
+    predicted_utility: float
+    predicted_risk: float
+    predicted_value: float
+
+    # 観測
+    observed_gate_status: str
+    observed_risk: float
+    observed_value: float
+    observed_latency_ms: Optional[float] = None
+
+    # 差分（学習用）
+    prediction_error: float = 0.0
+
+
+# =========================
+# WorldModel ファイルのスキーマ
+# =========================
+
+DEFAULT_WORLD: Dict[str, Any] = {
+    "schema_version": "2.0.0",
+    "updated_at": None,
+    "meta": {
+        "version": "2.0",
+        "created_at": None,
+        "last_users": {},
+    },
+    "projects": [],   # プロジェクトベース管理
+    "veritas": {      # VERITAS全体のトップレベル状態
+        "progress": 0.0,
+        "decision_count": 0,
+        "last_risk": 0.0,
+    },
+    "metrics": {      # 全体メトリクス
+        "value_ema": 0.0,
+        "latency_ms_median": 0.0,
+        "error_rate": 0.0,
+    },
+    "external_knowledge": {  # 外部知識統合
+        "agi_research_events": [],
+        "agi_research": {},
+    },
+    "history": {      # 因果履歴
+        "decisions": [],
+        "transitions": [],
+    },
+}
+
+
+# =========================
+# ユーティリティ関数
+# =========================
 
 def _now_iso() -> str:
+    """現在時刻をISO 8601形式で返す"""
     return datetime.now(timezone.utc).isoformat()
+
+
+def _clip01(x: float) -> float:
+    """値を0.0〜1.0にクリップ"""
+    return max(0.0, min(1.0, float(x)))
 
 
 def _get_memory_path() -> Path:
     """
-    MemoryOS 用の memory.json のパスを推定する。
+    MemoryOS 用の memory.json のパスを推定する
 
     優先順位:
     1) VERITAS_MEMORY_PATH
@@ -43,41 +164,37 @@ def _get_memory_path() -> Path:
     if log_dir_env:
         return Path(log_dir_env) / "memory.json"
 
-    return WORLD_STATE_PATH.parent / "memory.json"
+    return WORLD_PATH.parent / "memory.json"
 
 
-# ============================================================
-# AGI リサーチ用の軽量サマリ読取
-# ============================================================
+# =========================
+# 外部知識統合（from world.py）
+# =========================
 
 def _load_memory_agi_summary(state: dict) -> dict:
     """
     world_state.json 内の external_knowledge から
-    AGI 論文リサーチの要約だけを取り出して、LLM 用に軽量サマリ化する。
-    期待している構造:
+    AGI 論文リサーチの要約だけを取り出して、LLM 用に軽量サマリ化する
 
-    state["external_knowledge"] = {
-        "agi_research_events": [
-            {
-                "kind": "agi_research",
-                "ts": ...,
-                "query": "...",
-                "papers": [
-                    {"title": "...", "url": "...", "snippet": "..."},
-                    ...
-                ],
-                "summary": "..."
-            },
-            ...
-        ],
-        ... (他のキーがあってもOK)
-    }
+    期待している構造:
+    state["external_knowledge"]["agi_research_events"] = [
+        {
+            "kind": "agi_research",
+            "ts": ...,
+            "query": "...",
+            "papers": [
+                {"title": "...", "url": "...", "snippet": "..."},
+                ...
+            ],
+            "summary": "..."
+        },
+        ...
+    ]
     """
     try:
         ext = state.get("external_knowledge") or {}
         events = ext.get("agi_research_events") or []
 
-        # イベントが無い / 形式がおかしい場合は空
         if not isinstance(events, list) or not events:
             return {}
 
@@ -103,6 +220,7 @@ def _load_memory_agi_summary(state: dict) -> dict:
             "last_query": last.get("query"),
             "last_titles": titles[:5],
             "last_urls": urls[:5],
+            "last_summary": last.get("summary", ""),
         }
 
     except Exception as e:
@@ -112,18 +230,16 @@ def _load_memory_agi_summary(state: dict) -> dict:
 
 def _ensure_v2_shape(state: dict) -> dict:
     """
-    v1 互換を保ちつつ、因果モデル用の最低限のフィールドを保証する。
-    ※ 既存 world_state.json を壊さないように「足りないキーだけ追加」する。
+    v1 互換を保ちつつ、v2.0 の最低限のフィールドを保証する
+    既存 world_state.json を壊さないように「足りないキーだけ追加」
     """
+    # メタ情報
     meta = state.setdefault("meta", {})
     meta.setdefault("version", "2.0")
     meta.setdefault("created_at", _now_iso())
+    meta.setdefault("last_users", {})
 
-    # プロジェクト・習慣
-    state.setdefault("projects", {})
-    state.setdefault("habits", {})
-
-    # VERITAS 全体のトップレベル状態（因果モデル用）
+    # VERITAS 全体のトップレベル状態
     veritas = state.setdefault("veritas", {})
     veritas.setdefault("progress", 0.0)
     veritas.setdefault("decision_count", 0)
@@ -135,296 +251,506 @@ def _ensure_v2_shape(state: dict) -> dict:
     metrics.setdefault("latency_ms_median", 0.0)
     metrics.setdefault("error_rate", 0.0)
 
-    # 直近の遷移情報
-    state.setdefault("last_transition", None)
+    # プロジェクト管理
+    if "projects" not in state:
+        state["projects"] = []
 
-    # 因果履歴（簡易ログ）
+    # 因果履歴
     history = state.setdefault("history", {})
     history.setdefault("decisions", [])
+    history.setdefault("transitions", [])
 
-    # 外部知識（MemoryOS 等）からのサマリ領域
-    state.setdefault("external_knowledge", {})
+    # 外部知識
+    ext = state.setdefault("external_knowledge", {})
+    ext.setdefault("agi_research_events", [])
+    ext.setdefault("agi_research", {})
+
+    # スキーマ
+    state.setdefault("schema_version", "2.0.0")
+    state.setdefault("updated_at", _now_iso())
 
     return state
 
 
-def _load_state() -> dict:
+# =========================
+# ファイル読み書き
+# =========================
+
+def _load_world() -> Dict[str, Any]:
     """world_state.json を読み込む（なければデフォルト構造）"""
     try:
-        if WORLD_STATE_PATH.exists():
-            with WORLD_STATE_PATH.open("r", encoding="utf-8") as f:
+        if WORLD_PATH.exists():
+            with WORLD_PATH.open("r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict):
-                state = _ensure_v2_shape(data)
-            else:
-                state = _ensure_v2_shape({})
-        else:
-            state = _ensure_v2_shape({})
+
+            if not isinstance(data, dict):
+                data = deepcopy(DEFAULT_WORLD)
+
+            # 古い形式（user_id -> state dict）からの移行処理
+            if "projects" not in data and "schema_version" not in data:
+                # legacy: { "user_id": {...}, "other_user": {...} }
+                projects: List[Dict[str, Any]] = []
+                for uid, raw in data.items():
+                    if not isinstance(raw, dict):
+                        continue
+
+                    metrics = {
+                        "decisions": int(raw.get("decisions", 0)),
+                        "avg_latency_ms": float(raw.get("avg_latency_ms", 0.0)),
+                        "avg_risk": float(raw.get("avg_risk", 0.0)),
+                        "avg_value": float(raw.get("avg_value", 0.5)),
+                        "active_plan_steps": int(raw.get("active_plan_steps", 0)),
+                        "active_plan_done": int(raw.get("active_plan_done", 0)),
+                    }
+
+                    last = {
+                        "query": raw.get("last_query", ""),
+                        "chosen_title": raw.get("last_chosen_title", ""),
+                        "decision_status": raw.get("last_decision_status", "unknown"),
+                    }
+
+                    projects.append({
+                        "project_id": f"{uid}:default",
+                        "owner_user_id": uid,
+                        "title": f"Default Project for {uid}",
+                        "objective": "",
+                        "status": "active",
+                        "created_at": raw.get("last_updated") or _now_iso(),
+                        "last_decision_at": raw.get("last_updated"),
+                        "metrics": metrics,
+                        "last": last,
+                        "decisions": [],
+                    })
+
+                data = {
+                    "schema_version": "2.0.0",
+                    "updated_at": _now_iso(),
+                    "projects": projects,
+                }
+
+            return _ensure_v2_shape(data)
+
+        # ファイルが存在しない場合はデフォルト
+        default_state = deepcopy(DEFAULT_WORLD)
+        default_state["meta"]["created_at"] = _now_iso()
+        return _ensure_v2_shape(default_state)
+
     except Exception as e:
-        print("[world] load_state error:", e)
-        state = _ensure_v2_shape({})
-
-    # ★ external_knowledge.agi_research_events から要約を作り直して agi_research に入れる
-    try:
-        agi_meta = _load_memory_agi_summary(state)
-        if agi_meta:
-            ek = state.setdefault("external_knowledge", {})
-            ek["agi_research"] = agi_meta
-    except Exception as e:
-        print("[world] agi_research_summary merge error:", e)
-
-    return state
+        print("[world] load error:", e)
+        default_state = deepcopy(DEFAULT_WORLD)
+        default_state["meta"]["created_at"] = _now_iso()
+        return _ensure_v2_shape(default_state)
 
 
-def _save_state(state: dict) -> None:
+def _save_world(world: Dict[str, Any]) -> None:
     """world_state.json に保存"""
     try:
-        state = _ensure_v2_shape(state)
-        state.setdefault("meta", {})["updated_at"] = _now_iso()
-        WORLD_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with WORLD_STATE_PATH.open("w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
-        # デバッグ用ログ（必ず1回はこれが出るか確認）
-        print("[world] state saved ->", WORLD_STATE_PATH)
+        world = _ensure_v2_shape(world)
+        world["updated_at"] = _now_iso()
+        world["schema_version"] = "2.0.0"
+
+        WORLD_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+        with WORLD_PATH.open("w", encoding="utf-8") as f:
+            json.dump(world, f, ensure_ascii=False, indent=2)
+
+        print(f"[world] state saved -> {WORLD_PATH}")
+
     except Exception as e:
-        print("[world] save_state error:", e)
+        print("[world] save error:", e)
 
 
-# ============================================================
-# 因果モデル用クラス（状態→予測→観測→更新）
-# ============================================================
+# =========================
+# プロジェクト管理
+# =========================
 
-@dataclass
-class WorldTransition:
+def _get_or_create_default_project(world: Dict[str, Any], user_id: str) -> Dict[str, Any]:
     """
-    1 decision に対応する「予測 vs 観測」の記録
+    デフォルトプロジェクトを取得または作成
+
+    - projects が list / dict / 変な値 どれでも安全に扱う
+    - dict の場合は list に正規化して world["projects"] に戻す
+    - list 内に str などが混じっていても dict 以外は無視
     """
-    decision_id: str
-    prediction: Dict[str, float]   # 例: {"delta_progress": 0.1, "delta_risk": 0.02}
-    observation: Dict[str, float]  # 実測値
-    error: Dict[str, float]        # observation - prediction
-    decided_at: str                # ISO8601
-    applied_at: Optional[str] = None
+    proj_id = f"{user_id}:default"
+    projects = world.get("projects")
 
+    # --- 1) dict -> list に正規化（古い world_model 由来など） ---
+    if isinstance(projects, dict):
+        normalized: List[Dict[str, Any]] = []
+        for pid, p in projects.items():
+            if not isinstance(p, dict):
+                continue
+            q = dict(p)
+            q.setdefault("project_id", pid)
+            normalized.append(q)
+        projects = normalized
+        world["projects"] = projects
 
-class WorldModel:
-    """
-    VERITAS WorldModel v2:
-    - state: world_state.json の中身（_load_state/_save_state と共有）
-    - predict_transition: decision 前の「期待変化」を計算
-    - observe_transition: decision 後の「実測変化」を抽出
-    - apply_transition: state を更新し、last_transition に記録
-    """
+    # --- 2) list 以外だったら、素直に作り直す ---
+    if not isinstance(projects, list):
+        projects = []
+        world["projects"] = projects
 
-    def __init__(self, path: Path = WORLD_STATE_PATH):
-        self.path = path
-        self.state: Dict[str, Any] = _load_state()
+    # --- 3) 既存 list から該当プロジェクトを探す（dict だけ見る） ---
+    for p in projects:
+        if not isinstance(p, dict):
+            # 文字列など壊れかけ要素は無視
+            continue
+        if p.get("project_id") == proj_id:
+            return p
 
-    # ---------- 基本 I/O ----------
-    def save(self) -> None:
-        _save_state(self.state)
-
-    def get_state(self) -> Dict[str, Any]:
-        return self.state
-
-    # ---------- ① 予測（prediction） ----------
-    def predict_transition(self, decision_payload: Dict[str, Any]) -> Dict[str, float]:
-        """
-        decision_payload: /v1/decide のリクエスト or FUJI/values 付きレスポンスなど。
-        ここでは単純なヒューリスティックからスタート。
-        """
-        telos_total = (
-            decision_payload.get("values", {}).get("total")
-            if isinstance(decision_payload.get("values"), dict)
-            else None
-        )
-        fuji_risk = (
-            decision_payload.get("fuji", {}).get("risk")
-            if isinstance(decision_payload.get("fuji"), dict)
-            else None
-        )
-
-        current_progress = float(self.state.get("veritas", {}).get("progress", 0.0))
-        current_risk = float(self.state.get("veritas", {}).get("last_risk", 0.0))
-
-        # value_ema 的な「どれだけ攻めているか」をざっくり反映
-        if telos_total is None:
-            delta_progress = 0.0
-        else:
-            try:
-                telos_total_f = float(telos_total)
-            except Exception:
-                telos_total_f = 0.5
-            # 0.5 を基準に「どれだけプラスか」で progress 期待値を変える
-            delta_progress = max(0.0, telos_total_f - 0.5)
-
-        # リスクは「現在の last_risk とのズレ」を予測
-        if fuji_risk is None:
-            delta_risk = 0.0
-        else:
-            try:
-                fuji_risk_f = float(fuji_risk)
-            except Exception:
-                fuji_risk_f = current_risk
-            delta_risk = fuji_risk_f - current_risk
-
-        return {
-            "delta_progress": float(delta_progress),
-            "delta_risk": float(delta_risk),
-        }
-
-    # ---------- ② 観測（observation） ----------
-    def observe_transition(self, kernel_response: Dict[str, Any]) -> Dict[str, float]:
-        """
-        kernel_response: /v1/decide の結果 (extras.metrics / veritas_agi.snapshot / fuji.risk など)
-        """
-        veritas_snapshot = (
-            kernel_response.get("veritas_agi", {}) or {}
-        ).get("snapshot", {})
-
-        new_progress = float(
-            veritas_snapshot.get(
-                "progress",
-                self.state.get("veritas", {}).get("progress", 0.0),
-            )
-        )
-
-        new_risk = float(
-            (kernel_response.get("fuji", {}) or {}).get(
-                "risk",
-                self.state.get("veritas", {}).get("last_risk", 0.0),
-            )
-        )
-
-        current_progress = float(self.state.get("veritas", {}).get("progress", 0.0))
-        current_risk = float(self.state.get("veritas", {}).get("last_risk", 0.0))
-
-        delta_progress = new_progress - current_progress
-        delta_risk = new_risk - current_risk
-
-        # latency 等も観測に反映（メディアンはかなり雑でOK。あとで改善）
-        metrics = (kernel_response.get("extras", {}) or {}).get("metrics", {})
-        latency_ms = metrics.get("latency_ms")
-        if latency_ms is not None:
-            try:
-                self.state["metrics"]["latency_ms_median"] = float(latency_ms)
-            except Exception:
-                pass
-
-        # state.veritas 側はまだここでは更新しない（apply_transition で更新）
-        return {
-            "delta_progress": float(delta_progress),
-            "delta_risk": float(delta_risk),
-        }
-
-    # ---------- ③ 更新（update） ----------
-    def apply_transition(
-        self,
-        decision_id: str,
-        prediction: Dict[str, float],
-        observation: Dict[str, float],
-    ) -> WorldTransition:
-        """
-        prediction / observation から error を計算し、
-        world_state を更新する。
-        """
-        current_progress = float(self.state.get("veritas", {}).get("progress", 0.0))
-        current_risk = float(self.state.get("veritas", {}).get("last_risk", 0.0))
-        current_decisions = int(self.state.get("veritas", {}).get("decision_count", 0))
-
-        error = {
-            key: float(observation.get(key, 0.0) - prediction.get(key, 0.0))
-            for key in set(prediction) | set(observation)
-        }
-
-        # 実観測値で state を更新
-        new_progress = current_progress + observation.get("delta_progress", 0.0)
-        new_risk = current_risk + observation.get("delta_risk", 0.0)
-
-        self.state["veritas"]["progress"] = float(new_progress)
-        self.state["veritas"]["last_risk"] = float(new_risk)
-        self.state["veritas"]["decision_count"] = current_decisions + 1
-
-        transition = WorldTransition(
-            decision_id=decision_id,
-            prediction=prediction,
-            observation=observation,
-            error=error,
-            decided_at=_now_iso(),
-            applied_at=_now_iso(),
-        )
-        self.state["last_transition"] = asdict(transition)
-
-        self.save()
-        return transition
-
-
-# ============================================================
-# 既存のシンプル API（そのまま利用 or WorldModel と共存）
-# ============================================================
-
-# --- 生 state の取得・更新 ---
-
-def get_state() -> dict:
-    return _load_state()
-
-
-def set_state(update: Dict[str, Any]) -> dict:
-    st = _load_state()
-    st.update(update)
-    _save_state(st)
-    return st
-
-
-def _ensure_project(state: dict, pid: str, name: str) -> dict:
-    """projects[pid] がなければ初期化して返す"""
-    projects = state.setdefault("projects", {})
-    proj = projects.get(pid)
-    if not isinstance(proj, dict):
-        proj = {
-            "name": name,
-            "status": "in_progress",
-            "progress": 0.0,
-            "last_decision_ts": None,
-            "last_query": None,
-            "last_gate_status": None,
-            "last_value_total": None,
-            "last_plan_steps": 0,
-            "decision_count": 0,
-            "last_risk": 0.3,
-            "last_latency_ms": None,
-            "notes": "",
-        }
-        projects[pid] = proj
+    # --- 4) 見つからなければ新規作成 ---
+    proj = {
+        "project_id": proj_id,
+        "owner_user_id": user_id,
+        "title": f"Default Project for {user_id}",
+        "objective": "",
+        "status": "active",
+        "tags": [],
+        "created_at": _now_iso(),
+        "last_decision_at": None,
+        "metrics": {
+            "decisions": 0,
+            "avg_latency_ms": 0.0,
+            "avg_risk": 0.0,
+            "avg_value": 0.5,
+            "active_plan_steps": 0,
+            "active_plan_done": 0,
+        },
+        "last": {
+            "query": "",
+            "chosen_title": "",
+            "decision_status": "unknown",
+        },
+        "decisions": [],
+    }
+    projects.append(proj)
+    world["projects"] = projects
     return proj
 
 
-# ==== context への注入 ====
-def inject_state_into_context(context: dict, user_id: str) -> dict:
-    """
-    決定前に /v1/decide の context に世界状態を混ぜる。
 
-    - ctx["world_state"] : 生の world_state（後方互換用）
-    - ctx["world"]       : LLM が読みやすい要約（projects など）
-    - ctx["world"]["external_knowledge"] : AGI 論文リサーチの軽量サマリ
+def _ensure_project(state: dict, project_id: str, title: str) -> dict:
+    """指定されたproject_idのプロジェクトを取得または作成"""
+    projects = state.setdefault("projects", [])
+
+    # list形式の場合
+    if isinstance(projects, list):
+        for p in projects:
+            if p.get("project_id") == project_id:
+                return p
+
+        # 新規作成
+        proj = {
+            "project_id": project_id,
+            "title": title,
+            "status": "active",
+            "created_at": _now_iso(),
+            "decision_count": 0,
+            "progress": 0.0,
+            "last_risk": 0.0,
+            "notes": "",
+        }
+        projects.append(proj)
+        return proj
+
+    # dict形式の場合（後方互換）
+    elif isinstance(projects, dict):
+        if project_id not in projects:
+            projects[project_id] = {
+                "name": title,
+                "status": "active",
+                "created_at": _now_iso(),
+                "decision_count": 0,
+                "progress": 0.0,
+                "last_risk": 0.0,
+                "notes": "",
+            }
+        return projects[project_id]
+
+    # その他の場合は新規作成
+    else:
+        state["projects"] = []
+        proj = {
+            "project_id": project_id,
+            "title": title,
+            "status": "active",
+            "created_at": _now_iso(),
+            "decision_count": 0,
+            "progress": 0.0,
+            "last_risk": 0.0,
+            "notes": "",
+        }
+        state["projects"].append(proj)
+        return proj
+
+
+def _project_to_worldstate(user_id: str, proj: Dict[str, Any]) -> WorldState:
+    """プロジェクトデータをWorldStateに変換"""
+    m = proj.get("metrics") or {}
+    last = proj.get("last") or {}
+
+    return WorldState(
+        user_id=user_id,
+        decisions=int(m.get("decisions", 0)),
+        avg_latency_ms=float(m.get("avg_latency_ms", 0.0)),
+        avg_risk=float(m.get("avg_risk", 0.0)),
+        avg_value=float(m.get("avg_value", 0.5)),
+        active_plan_id=proj.get("active_plan_id"),
+        active_plan_title=proj.get("active_plan_title"),
+        active_plan_steps=int(m.get("active_plan_steps", m.get("metrics", {}).get("active_plan_steps", 0))),
+        active_plan_done=int(m.get("active_plan_done", m.get("metrics", {}).get("active_plan_done", 0))),
+        last_query=last.get("query", ""),
+        last_chosen_title=last.get("chosen_title", ""),
+        last_decision_status=last.get("decision_status", "unknown"),
+        last_updated=proj.get("last_decision_at") or "",
+    )
+
+
+# =========================
+# Public API - 基本操作
+# =========================
+
+def load_state(user_id: str = DEFAULT_USER_ID) -> WorldState:
+    """
+    ユーザーのワールド状態を読み込む
+
+    Args:
+        user_id: ユーザーID（デフォルト: "global"）
+
+    Returns:
+        WorldState: ワールド状態
+    """
+    world = _load_world()
+    proj = _get_or_create_default_project(world, user_id)
+    return _project_to_worldstate(user_id, proj)
+
+
+def save_state(state: WorldState) -> None:
+    """
+    ワールド状態を保存
+
+    Args:
+        state: 保存するWorldState
+    """
+    world = _load_world()
+    proj = _get_or_create_default_project(world, state.user_id)
+
+    m = proj.setdefault("metrics", {})
+    m["decisions"] = int(state.decisions)
+    m["avg_latency_ms"] = float(state.avg_latency_ms)
+    m["avg_risk"] = float(state.avg_risk)
+    m["avg_value"] = float(state.avg_value)
+    m["active_plan_steps"] = int(state.active_plan_steps)
+    m["active_plan_done"] = int(state.active_plan_done)
+
+    proj["active_plan_id"] = state.active_plan_id
+    proj["active_plan_title"] = state.active_plan_title
+
+    last = proj.setdefault("last", {})
+    last["query"] = state.last_query
+    last["chosen_title"] = state.last_chosen_title
+    last["decision_status"] = state.last_decision_status
+    proj["last_decision_at"] = state.last_updated or _now_iso()
+
+    _save_world(world)
+
+
+def get_state(user_id: str = DEFAULT_USER_ID) -> dict:
+    """
+    生のワールド状態を取得（後方互換用）
+
+    Args:
+        user_id: ユーザーID（現在は未使用・将来拡張用）
+
+    Returns:
+        dict: 生のワールド状態
+    """
+    return _load_world()
+
+
+# =========================
+# Public API - 決定後の更新
+# =========================
+
+def update_from_decision(
+    *,
+    user_id: str,
+    query: str,
+    chosen: Dict[str, Any],
+    gate: Dict[str, Any],
+    values: Dict[str, Any],
+    planner: Optional[Dict[str, Any]] = None,
+    latency_ms: Optional[float] = None,
+) -> WorldState:
+    """
+    決定結果からワールド状態を更新
+
+    Args:
+        user_id: ユーザーID
+        query: クエリ
+        chosen: 選択された決定
+        gate: FUJIゲート結果
+        values: Value評価結果
+        planner: プランナー結果（オプション）
+        latency_ms: レイテンシ（オプション）
+
+    Returns:
+        WorldState: 更新後のワールド状態
+    """
+    world = _load_world()
+    proj = _get_or_create_default_project(world, user_id)
+    metrics = proj.setdefault("metrics", {})
+    last = proj.setdefault("last", {})
+
+    # 決定回数
+    decisions = int(metrics.get("decisions", 0)) + 1
+    metrics["decisions"] = decisions
+
+    # 移動平均（ema_alpha=0.2）
+    alpha = 0.2
+    risk = float(gate.get("risk", 0.0))
+    val = float(values.get("total", values.get("ema", 0.5)))
+    prev_risk = float(metrics.get("avg_risk", 0.0))
+    prev_val = float(metrics.get("avg_value", 0.5))
+    metrics["avg_risk"] = (1 - alpha) * prev_risk + alpha * risk
+    metrics["avg_value"] = (1 - alpha) * prev_val + alpha * val
+
+    if latency_ms is not None:
+        prev_lat = float(metrics.get("avg_latency_ms", 0.0))
+        metrics["avg_latency_ms"] = (1 - alpha) * prev_lat + alpha * float(latency_ms)
+
+    # プラン情報を反映
+    if planner:
+        steps = planner.get("steps") or []
+        proj["active_plan_id"] = planner.get("id") or planner.get("plan_id")
+        proj["active_plan_title"] = planner.get("title") or planner.get("name")
+        metrics["active_plan_steps"] = int(len(steps) or metrics.get("active_plan_steps", 0))
+
+        done = 0
+        for s in steps:
+            if isinstance(s, dict) and s.get("done"):
+                done += 1
+        if done:
+            metrics["active_plan_done"] = done
+
+    # 最新決定
+    last["query"] = query
+    last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
+    last["decision_status"] = gate.get("decision_status") or "unknown"
+    proj["last_decision_at"] = _now_iso()
+
+    # 決定スナップショットを蓄積（Kosmos解析用）
+    req_id = chosen.get("request_id") or values.get("request_id") or ""
+    proj.setdefault("decisions", []).append({
+        "request_id": req_id,
+        "ts": proj["last_decision_at"],
+        "query": query,
+        "chosen_title": last["chosen_title"],
+        "decision_status": last["decision_status"],
+        "avg_value_after": metrics["avg_value"],
+        "avg_risk_after": metrics["avg_risk"],
+    })
+
+    # VERITAS全体の状態も更新
+    veritas = world.setdefault("veritas", {})
+    veritas["decision_count"] = int(veritas.get("decision_count", 0)) + 1
+    veritas["last_risk"] = risk
+
+    # 因果履歴に追加
+    history = world.setdefault("history", {})
+    decisions_hist = history.setdefault("decisions", [])
+
+    decisions_hist.append({
+        "ts": proj["last_decision_at"],
+        "user_id": user_id,
+        "project_id": proj.get("project_id", f"{user_id}:default"),
+        "query": query,
+        "chosen_id": chosen.get("id"),
+        "chosen_title": last["chosen_title"],
+        "gate_status": gate.get("status"),
+        "gate_risk": risk,
+        "value_total": val,
+        "plan_steps": len(planner.get("steps", [])) if planner else 0,
+    })
+
+    # 履歴が長くなりすぎないように最新200件だけ残す
+    if len(decisions_hist) > 200:
+        history["decisions"] = decisions_hist[-200:]
+
+    # ユーザー情報を記録
+    meta = world.setdefault("meta", {})
+    last_users = meta.setdefault("last_users", {})
+    last_users[user_id] = {
+        "last_seen": proj["last_decision_at"],
+        "last_project": proj.get("project_id"),
+    }
+
+    _save_world(world)
+
+    # WorldState に変換して返す
+    return _project_to_worldstate(user_id, proj)
+
+
+# =========================
+# Public API - コンテキスト注入
+# =========================
+
+def inject_state_into_context(context: Dict[str, Any], user_id: str = DEFAULT_USER_ID) -> Dict[str, Any]:
+    """
+    決定前にコンテキストにワールド状態を注入
+
+    Args:
+        context: 既存のコンテキスト
+        user_id: ユーザーID
+
+    Returns:
+        dict: 拡張されたコンテキスト
     """
     ctx = dict(context or {})
-    state = _load_state()
+    state_data = _load_world()
 
-    # 互換用：全体 state をそのまま入れておく
-    ctx["world_state"] = state
+    # 後方互換用: 全体stateをそのまま入れておく
+    ctx["world_state"] = state_data
 
-    projects = state.get("projects", {})
-    veritas_proj = projects.get("veritas_agi", {})
+    # WorldStateオブジェクト
+    st = load_state(user_id)
 
-    # LLM 用の軽いサマリー
+    # 基本的なワールド情報を flatten して LLＭ から参照しやすくする
+    ctx.setdefault("world_state", {}).update({
+        "decisions": st.decisions,
+        "avg_latency_ms": st.avg_latency_ms,
+        "avg_risk": st.avg_risk,
+        "avg_value": st.avg_value,
+        "plan_progress": st.progress(),
+        "active_plan_title": st.active_plan_title,
+        "last_query": st.last_query,
+        "last_chosen_title": st.last_chosen_title,
+        "last_decision_status": st.last_decision_status,
+        "last_updated": st.last_updated,
+    })
+
+    # LLM用の軽量サマリー
+    projects = state_data.get("projects", [])
+    veritas_proj: Dict[str, Any] = {}
+
+    # プロジェクトリストから veritas_agi を探す
+    if isinstance(projects, list):
+        for p in projects:
+            if p.get("project_id") == "veritas_agi" or "veritas" in p.get("project_id", "").lower():
+                veritas_proj = p
+                break
+    elif isinstance(projects, dict):
+        veritas_proj = projects.get("veritas_agi", {})
+
     world_summary = {
         "projects": {
             "veritas_agi": {
-                "name": veritas_proj.get("name", "VERITASのAGI化"),
+                "name": veritas_proj.get("title") or veritas_proj.get("name", "VERITASのAGI化"),
                 "status": veritas_proj.get("status", "unknown"),
                 "progress": float(veritas_proj.get("progress", 0.0) or 0.0),
-                "last_decision_ts": veritas_proj.get("last_decision_ts"),
+                "last_decision_ts": veritas_proj.get("last_decision_at") or veritas_proj.get("last_decision_ts"),
                 "notes": veritas_proj.get("notes", ""),
                 "decision_count": int(veritas_proj.get("decision_count", 0) or 0),
                 "last_risk": float(veritas_proj.get("last_risk", 0.3) or 0.3),
@@ -432,306 +758,248 @@ def inject_state_into_context(context: dict, user_id: str) -> dict:
         },
     }
 
-    # ★ AGI 論文リサーチの軽量サマリを world に混ぜる
-    agi_summary = _load_memory_agi_summary(state)
+    # AGI 論文リサーチの軽量サマリを追加
+    agi_summary = _load_memory_agi_summary(state_data)
     world_summary["external_knowledge"] = agi_summary
 
     ctx["world"] = world_summary
 
-    # user 情報も軽くメタに刻む
-    meta = state.setdefault("meta", {})
+    # ユーザー情報を記録
+    meta = state_data.setdefault("meta", {})
     last_users = meta.setdefault("last_users", {})
     last_users[user_id] = {
         "last_seen": _now_iso(),
-        "last_project": "veritas_agi" if "veritas_agi" in projects else None,
+        "last_project": veritas_proj.get("project_id") if veritas_proj else None,
     }
-    _save_state(state)
+    _save_world(state_data)
 
     return ctx
 
 
-# ==== 決定結果から world_state を更新（既存 API） ====
-def update_from_decision(
-    *,
+# =========================
+# Public API - シミュレーション
+# =========================
+
+def simulate(
+    option: Optional[Dict[str, Any]] = None,
+    context: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    **_: Any,
+) -> Dict[str, Any]:
+    """
+    オプションごとのワールドシミュレーション（レガシー互換版）
+
+    サポートする呼び出しパターン:
+        simulate(option, context)
+        simulate(option=..., context=..., user_id="...")
+        simulate(user_id="...")  ← 古い呼び出しも許容
+
+    Args:
+        option: 評価するオプション（なければ {}）
+        context: 現在のコンテキスト（なければ {}）
+        user_id: （任意）状態ロード用
+        **_:  余分なキーワード引数を受け取って無視（互換性のため）
+
+    Returns:
+        dict: シミュレーション結果（utility, confidence, etc.）
+    """
+    # デフォルト生成（古い world.simulate(user_id="...") 呼び出し対策）
+    if option is None:
+        option = {}
+    if context is None:
+        context = {}
+
+    # まず context から world_state を拾う
+    st_dict = (context or {}).get("world_state") or {}
+
+    # context に world_state が無くて user_id が指定されている場合は、
+    # load_state() から最低限の情報を構成（レガシー互換用）
+    if (not st_dict) and user_id:
+        st = load_state(user_id)
+        st_dict = {
+            "decisions": st.decisions,
+            "avg_latency_ms": st.avg_latency_ms,
+            "avg_risk": st.avg_risk,
+            "avg_value": st.avg_value,
+            "plan_progress": st.progress(),
+            "active_plan_title": st.active_plan_title,
+            "last_query": st.last_query,
+            "last_chosen_title": st.last_chosen_title,
+            "last_decision_status": st.last_decision_status,
+            "last_updated": st.last_updated,
+        }
+
+    avg_value = float(st_dict.get("avg_value", 0.5))          # 0〜1
+    avg_risk = float(st_dict.get("avg_risk", 0.0))            # 0〜1
+    progress = float(st_dict.get("plan_progress", 0.0))       # 0〜1
+
+    base = float(option.get("score", 1.0))
+    # 0〜1 にざっくり正規化
+    base01 = _clip01(base / 2.0)
+
+    util = base01
+    util *= 0.4 + 0.6 * _clip01(avg_value)      # 価値が高いほど↑
+    util *= 1.0 - 0.5 * _clip01(avg_risk)       # リスクが高いほど↓
+    util *= 0.7 + 0.3 * _clip01(progress)       # 進行中プランと整合するほど↑
+
+    util = _clip01(util)
+
+    # 信頼度は「決定回数が多いほど↑」
+    decisions = int(st_dict.get("decisions", 0))
+    confidence = 1.0 - math.exp(-decisions / 50.0)  # 0〜1 に漸近
+
+    return {
+        "utility": util,
+        "confidence": confidence,
+        "avg_value": avg_value,
+        "avg_risk": avg_risk,
+        "plan_progress": progress,
+    }
+
+
+
+
+def simulate_decision(
+    option: Optional[Dict[str, Any]] = None,
+    context: Optional[Dict[str, Any]] = None,
+    world_state: Optional[Dict[str, Any]] = None,
+    user_id: Optional[str] = None,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """
+    決定のシミュレーション（旧 world.py との互換用）
+
+    Args:
+        option: 評価するオプション（なければ {}）
+        context: 現在のコンテキスト（なければ {}）
+        world_state: ワールド状態（あれば context に埋め込む）
+        user_id: （任意）ユーザーID
+        **kwargs: その他のキーワード引数はそのまま simulate に渡す
+
+    Returns:
+        dict: シミュレーション結果
+    """
+    if option is None:
+        option = {}
+    if context is None:
+        context = {}
+
+    ctx = dict(context or {})
+    if world_state:
+        ctx["world_state"] = world_state
+
+    return simulate(option=option, context=ctx, user_id=user_id, **kwargs)
+
+
+
+
+# =========================
+# 後方互換API
+# =========================
+
+def update_state_from_decision(
     user_id: str,
     query: str,
     chosen: dict,
     gate: dict,
-    values: dict | None = None,
-    planner: dict | None = None,
-    latency_ms: int | None = None,
 ) -> None:
-    """
-    /v1/decide の結果から world_state を更新する。
-    ★ 今は「VERITASのAGI化」プロジェクトに無条件で積み上げる（絶対更新用）。
-    """
-    state = _load_state()
-    now = _now_iso()
-
-    # ここでは query 内容に関係なく、必ず veritas_agi に記録する
-    project_id = "veritas_agi"
-    proj = _ensure_project(state, project_id, "VERITASのAGI化")
-
-    proj["status"] = "in_progress"
-    proj["last_decision_ts"] = now
-    proj["last_query"] = query
-    proj["last_gate_status"] = (gate or {}).get("status")
-
-    if isinstance(values, dict):
-        try:
-            proj["last_value_total"] = float(values.get("total", 0.0))
-        except Exception:
-            proj["last_value_total"] = None
-
-    proj["decision_count"] = int(proj.get("decision_count") or 0) + 1
-
-    # planner からステップ数などを反映
-    if isinstance(planner, dict):
-        steps = planner.get("steps") or []
-        if isinstance(steps, list):
-            proj["last_plan_steps"] = len(steps)
-
-            # 超ざっくり：プランが通るたびに progress を少しずつ上げる
-            prev = float(proj.get("progress") or 0.0)
-            proj["progress"] = min(1.0, round(prev + 0.02, 3))
-
-            if steps:
-                titles = [st.get("title") or st.get("name") or "" for st in steps]
-                proj["notes"] = " / ".join([t for t in titles[:5] if t])
-
-    # gate の risk なども反映
-    try:
-        gate_risk = float((gate or {}).get("risk", 0.0))
-    except Exception:
-        gate_risk = 0.0
-    proj["last_risk"] = gate_risk
-
-    if latency_ms is not None:
-        try:
-            proj["last_latency_ms"] = int(latency_ms)
-        except Exception:
-            proj["last_latency_ms"] = None
-
-    # user 情報を meta に記録
-    meta = state.setdefault("meta", {})
-    last_users = meta.setdefault("last_users", {})
-    last_users[user_id] = {
-        "last_seen": now,
-        "last_project": project_id,
-    }
-
-    # ★★★ 因果履歴（decision history）を追加 ★★★
-    history = state.setdefault("history", {})
-    decisions = history.setdefault("decisions", [])
-
-    entry = {
-        "ts": now,
-        "user_id": user_id,
-        "project_id": project_id,
-        "query": query,
-        "chosen_id": (chosen or {}).get("id"),
-        "chosen_title": (chosen or {}).get("title"),
-        "gate_status": (gate or {}).get("status"),
-        "gate_risk": gate_risk,
-        "value_total": proj.get("last_value_total"),
-        "plan_steps": proj.get("last_plan_steps"),
-    }
-    decisions.append(entry)
-
-    # 履歴が長くなりすぎないように最新200件だけ残す
-    if len(decisions) > 200:
-        history["decisions"] = decisions[-200:]
-
-    _save_state(state)
-
-
-# ==== 後方互換ラッパー（既存コードが使っているかもしれない） ====
-def update_state_from_decision(user_id: str, query: str, chosen: dict, gate: dict):
-    """
-    旧版互換のための薄いラッパー。
-    新しい update_from_decision を簡易パラメータで呼ぶ。
-    """
+    """後方互換用のラッパー関数"""
     update_from_decision(
         user_id=user_id,
         query=query,
         chosen=chosen,
         gate=gate,
-        values=None,
-        planner=None,
-        latency_ms=None,
+        values={},
     )
 
 
-# ============================================================
-# 軽量シミュレーション / スナップショット / ヒント
-# ============================================================
+# =========================
+# Public API - VERITAS AGI Hint
+# =========================
 
-def simulate(user_id: str, query: str, chosen: dict | None = None) -> dict:
+def next_hint_for_veritas_agi(user_id: str = DEFAULT_USER_ID) -> Dict[str, Any]:
     """
-    AGI 化ステップ2: 世界モデルの簡易シミュレーション。
+    VERITAS / AGI 用の「次にやると良い一歩」を WorldState から返す。
 
-    - 現在の progress / risk を読み出し、
-      「このクエリを実行したら progress がどれだけ伸びそうか」を
-      ごく簡単なルールで推定する。
+    - /v1/decide 内の extras["veritas_agi"] で使うことを想定
+    - いまは簡易ルールベースだが、将来は Kosmos 因果モデルや
+      external_knowledge を組み合わせて強化可能。
     """
-    state = _load_state()
-    projects = state.get("projects", {})
-    proj = projects.get("veritas_agi", {})
+    world = _load_world()
+    st = load_state(user_id)
 
-    current_progress = float(proj.get("progress", 0.0))
-    current_risk = float(proj.get("last_risk", 0.3))
+    decision_count = int(st.decisions)
+    progress = float(st.progress())
+    avg_value = float(st.avg_value)
+    avg_risk = float(st.avg_risk)
 
-    try:
-        if isinstance(query, str):
-            q_raw = query
-        else:
-            q_raw = json.dumps(query, ensure_ascii=False)
-    except Exception:
-        q_raw = str(query)
+    veritas_top = world.get("veritas", {})
+    total_decisions = int(veritas_top.get("decision_count", decision_count))
 
-    q = q_raw.lower()
+    agi_summary = _load_memory_agi_summary(world)
+    agi_events = int(agi_summary.get("count", 0))
 
-    # 超ざっくりなヒューリスティック
-    delta = 0.0
-    if any(k in q for k in ["plan", "ステップ", "実装", "行程表"]):
-        delta = 0.02
-    elif any(k in q for k in ["構想", "アイデア", "design", "設計"]):
-        delta = 0.01
-
-    predicted_progress = min(1.0, round(current_progress + delta, 3))
-    predicted_risk = max(0.0, min(1.0, round(current_risk * 0.98, 3)))
-
-    return {
-        "predicted_progress": predicted_progress,
-        "predicted_risk": predicted_risk,
-        "base_progress": current_progress,
-        "base_risk": current_risk,
-        "note": "world.simulate() heuristic prediction",
-    }
-
-
-def snapshot(project_id: str = "veritas_agi") -> dict:
-    """
-    world_state.json から指定プロジェクトの状態だけを取り出す軽いヘルパー。
-    decide 以外（CLI や DASH）からも再利用できるようにしておく。
-    """
-    state = _load_state()
-    proj = (state.get("projects") or {}).get(project_id) or {}
-    try:
-        progress = float(proj.get("progress", 0.0))
-    except Exception:
-        progress = 0.0
-
-    return {
-        "id": project_id,
-        "name": proj.get("name", "VERITASのAGI化"),
-        "status": proj.get("status", "unknown"),
-        "progress": progress,
-        "decision_count": int(proj.get("decision_count") or 0),
-        "last_risk": float(proj.get("last_risk", 0.0) or 0.0),
-        "last_decision_ts": proj.get("last_decision_ts"),
-        "notes": proj.get("notes", ""),
-    }
-
-
-def next_hint_for_veritas_agi() -> dict:
-    """
-    world_state.json から「VERITAS AGIプロジェクトの次の一手」を返す。
-
-    返り値は必ず dict で、少なくとも:
-      - project_id
-      - phase
-      - suggested_query
-      - decision_count
-      - progress
-      - last_risk
-      - external_knowledge
-      - snapshot  (既存の snapshot() をそのまま利用)
-    を含む。
-    """
-    # 現在の状態を取得
-    state = _load_state()
-    projects = state.get("projects") or {}
-    proj = projects.get("veritas_agi") or {}
-
-    decision_count = int(proj.get("decision_count") or 0)
-    try:
-        progress = float(proj.get("progress") or 0.0)
-    except Exception:
-        progress = 0.0
-    try:
-        last_risk = float(proj.get("last_risk") or 0.0)
-    except Exception:
-        last_risk = 0.0
-
-    # external_knowledge（AGIリサーチの要約）
-    ek = state.get("external_knowledge") or {}
-    # _load_memory_agi_summary が作るサマリを優先
-    agi_meta = ek.get("agi_research") or _load_memory_agi_summary(state) or {}
-    ext_count = int(agi_meta.get("count") or 0)
-    ext_last_query = agi_meta.get("last_query")
-    ext_titles = agi_meta.get("last_titles") or []
-
-    # ===== フェーズ判定 =====
-    # decision_count と progress / ext_count からざっくりフェーズを決める
-    if ext_count == 0:
-        phase = "knowledge_bootstrap"
-    elif decision_count < 30 or progress < 0.1:
-        phase = "spec"   # AGI定義・ゴール整理フェーズ
-    elif decision_count < 100 or progress < 0.4:
-        phase = "arch"   # アーキテクチャ具体化フェーズ
+    # 雑だけどわかりやすいステージ分岐
+    if decision_count < 5:
+        hint = "まずは /v1/decide を複数回まわして、WorldState にログを溜めるフェーズです。"
+        focus = "collect_decisions"
+    elif progress < 0.3:
+        hint = "Planner / FUJI / ValueCore の一貫性チェックを優先してください（MVPの安定化フェーズ）。"
+        focus = "stabilize_pipeline"
+    elif agi_events < 1:
+        hint = "少なくとも1回は AGI 関連のリサーチクエリを投げて external_knowledge を埋めると良いです。"
+        focus = "seed_agi_research"
+    elif progress < 0.7:
+        hint = "AGI研究ログと実際の decide ログを見比べて、『どのタスクで VERITAS をベンチするか』を決める段階です。"
+        focus = "design_benchmarks"
     else:
-        phase = "impl"   # 実装・検証フェーズ
-
-    # ===== フェーズごとの suggested_query =====
-    if phase == "knowledge_bootstrap":
-        suggested_query = (
-            "AGI定義に関する代表的な論文や定義を3つ挙げ、それぞれの観点を要約した上で、"
-            "Hendrycksの定義も含めて、VERITASのAGIゴール案にどう反映すべきか提案して。"
-        )
-    elif phase == "spec":
-        suggested_query = (
-            "HendrycksのAGI定義を前提に、VERITASのAGIゴールを3フェーズ（短期/中期/長期）に分けて整理し、"
-            "それぞれのフェーズで『何ができればAGIレベルと言えるか』を具体的な評価指標付きで提案して。"
-        )
-    elif phase == "arch":
-        suggested_query = (
-            "VERITASのDecision OSを、人間の仕事の大部分をループで回せる『認知OS』として設計し直す場合に、"
-            "必要なモジュール構成（WorldModel/MemoryOS/Planner/Executor/ValueCore/FUJI 等）と、"
-            "各モジュール間のデータフローを、図解テキストレベルで設計して。"
-        )
-    else:  # impl
-        suggested_query = (
-            "VERITASを実務レベルでAGIに近づけるために、まずどのタスク自動化（ループ実装や外部ツール統合）"
-            "から着手すべきかを、優先順位付きのロードマップとして提案して。"
-            "特にVERITAS開発に直結するタスクを重視して。"
-        )
-
-    # 既存の snapshot をそのまま利用（前の仕様も壊さない）
-    snap = snapshot("veritas_agi")
+        hint = "第三者レビュー（友人・研究者）に見せる準備として、README / アーキ図 / 最小デモを整えるフェーズです。"
+        focus = "external_review"
 
     return {
-        "project_id": "veritas_agi",
-        "phase": phase,
-        "suggested_query": suggested_query,
-        "decision_count": decision_count,
+        "user_id": user_id,
+        "decisions_user": decision_count,
+        "decisions_total": total_decisions,
         "progress": progress,
-        "last_risk": last_risk,
-        "external_knowledge": {
-            "count": ext_count,
-            "last_query": ext_last_query,
-            "last_titles": ext_titles,
-        },
-        "snapshot": snap,
+        "avg_value": avg_value,
+        "avg_risk": avg_risk,
+        "agi_research_events": agi_events,
+        "focus": focus,
+        "hint": hint,
     }
 
 
-# ============================================================
-# WorldModel を外から使う用の軽いヘルパー
-# ============================================================
+# =========================
+# エクスポート
+# =========================
 
-def get_world_model() -> WorldModel:
-    """
-    kernel などから簡単に呼べるファクトリ。
-    """
-    return WorldModel()
+__all__ = [
+    # データクラス
+    "WorldState",
+    "WorldTransition",
+
+    # 基本操作
+    "load_state",
+    "save_state",
+    "get_state",
+
+    # 決定後の更新
+    "update_from_decision",
+    "update_state_from_decision",  # 後方互換
+
+    # コンテキスト操作
+    "inject_state_into_context",
+
+    # シミュレーション
+    "simulate",
+    "simulate_decision",  # 後方互換
+
+    # AGI hint
+    "next_hint_for_veritas_agi",
+
+    # 定数
+    "DEFAULT_USER_ID",
+    "WORLD_PATH",
+]
+
+
