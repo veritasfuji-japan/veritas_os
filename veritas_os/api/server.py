@@ -374,8 +374,8 @@ def memory_put(body: dict):
         legacy_saved = False
         if value:  # 旧仕様が来ている場合のみ
             try:
-                # mem でも MEM でもOKだが、統一のため MEM を使用
-                MEM.put(user_id, key, value)
+                # mem でも MEM でもOKだが、統一のため MEMORY_STORE を使用
+                MEMORY_STORE.put(user_id, key, value)
                 legacy_saved = True
             except Exception as e:
                 print("[MemoryOS][legacy] Error:", e)
@@ -401,10 +401,10 @@ def memory_put(body: dict):
                 meta_for_store.setdefault("user_id", user_id)
                 meta_for_store.setdefault("kind", kind)
 
-                # ★ MEM は veritas_os.core.memory のグローバル MemoryStore
-                if hasattr(MEM, "put_episode"):
+                # ★ MEMORY_STORE は veritas_os.core.memory のグローバル MemoryStore
+                if hasattr(MEMORY_STORE, "put_episode"):
                     # put_episode は episode_xxx という key を返す（memory.py 側修正版）
-                    new_id = MEM.put_episode(
+                    new_id = MEMORY_STORE.put_episode(
                         text=text_clean,
                         tags=tags,
                         meta=meta_for_store,
@@ -412,7 +412,7 @@ def memory_put(body: dict):
                 else:
                     # 互換フォールバック（古い memory.py 用）
                     episode_key = f"episode_{int(time.time())}"
-                    MEM.put(
+                    MEMORY_STORE.put(
                         user_id,
                         episode_key,
                         {
@@ -449,24 +449,68 @@ def memory_put(body: dict):
 
 @app.post("/v1/memory/search")
 async def memory_search(payload: dict):
-    q = payload.get("query", "")
-    kinds = payload.get("kinds")
-    k = int(payload.get("k", 8))
-    min_sim = float(payload.get("min_sim", 0.25))
+    """
+    ベクトル検索エンドポイント
+    
+    Request:
+        {
+            "query": "検索クエリ",
+            "kinds": ["semantic", "episodic"] (optional),
+            "k": 8 (optional, default: 8),
+            "min_sim": 0.25 (optional, default: 0.25),
+            "user_id": "user123" (optional)
+        }
+    
+    Response:
+        {
+            "ok": true,
+            "hits": [
+                {
+                    "text": "...",
+                    "score": 0.85,
+                    "tags": [...],
+                    "meta": {...}
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        q = payload.get("query", "")
+        kinds = payload.get("kinds")  # None or ["semantic", "episodic"]
+        k = int(payload.get("k", 8))
+        min_sim = float(payload.get("min_sim", 0.25))
+        user_id = payload.get("user_id")  # Noneの場合は全ユーザー検索
 
-    hits = MEMORY_STORE.search(
-        query=q,
-        k=k,
-        kinds=kinds,
-        min_sim=min_sim,
-        user_id=user_id,   # 全ユーザーから検索（必要なら将来 user_id も渡す）
-    )
-    return {"ok": True, "hits": hits}
+        hits = MEMORY_STORE.search(
+            query=q,
+            k=k,
+            kinds=kinds,
+            min_sim=min_sim,
+        )
+        
+        # user_id フィルタリング（オプション）
+        if user_id:
+            hits = [
+                h for h in hits
+                if h.get("meta", {}).get("user_id") == user_id
+            ]
+        
+        return {"ok": True, "hits": hits, "count": len(hits)}
+    
+    except Exception as e:
+        print("[MemoryOS][search] Error:", e)
+        return {"ok": False, "error": str(e), "hits": []}
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
 def memory_get(body: dict):
-    return {"value": mem.get(body["user_id"], body["key"])}
+    """レガシーKV取得"""
+    try:
+        value = MEMORY_STORE.get(body["user_id"], body["key"])
+        return {"ok": True, "value": value}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "value": None}
 
 
 # ==============================
@@ -536,4 +580,5 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
 

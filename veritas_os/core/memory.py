@@ -1,4 +1,4 @@
-# veritas_os/core/memory.py (改善版)
+# veritas_os/core/memory.py (改善版 + MemoryDistill)
 """
 MemoryOS - 改善版
 
@@ -7,13 +7,15 @@ MemoryOS - 改善版
 2. インデックス管理の改善
 3. より詳細なログとデバッグ情報
 4. フォールバック戦略の強化
+5. Memory Distill（episodic → semantic 要約）の追加
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from uuid import uuid4
 import json
 import os
 import time
@@ -40,6 +42,7 @@ try:
     from joblib import load as joblib_load
 except ImportError:
     joblib_load = None
+
 
 # ============================
 # ベクトル検索モジュール（組み込み）
@@ -477,6 +480,7 @@ def predict_gate_label(text: str) -> Dict[str, float]:
 # ============================
 
 from .config import cfg
+from . import llm_client
 
 MEM_PATH_ENV = os.getenv("VERITAS_MEMORY_PATH")
 if MEM_PATH_ENV:
@@ -1026,6 +1030,67 @@ builtins.MEM = MEM
 # ============================
 
 
+def add(
+    *,
+    user_id: str,
+    text: str,
+    kind: str = "note",
+    source_label: Optional[str] = None,
+    meta: Optional[Dict[str, Any]] = None,
+    tags: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """
+    MemoryOS に「1件のテキスト」を追加するためのユーティリティ。
+
+    例: import_pdf_to_memory.py からの呼び出しを想定
+
+        memory.add(
+            user_id="fujishita",
+            text="PDFから切り出したチャンク",
+            kind="doc",
+            source_label="VERITAS_Zenodo_JP",
+            meta={"page": 3},
+        )
+    """
+    global MEM_VEC
+
+    if not text or not text.strip():
+        raise ValueError("[MemoryOS.add] text is empty")
+
+    entry_meta: Dict[str, Any] = dict(meta or {})
+    # user_id / source_label も meta に刻んでおく
+    entry_meta.setdefault("user_id", user_id)
+    if source_label is not None:
+        entry_meta.setdefault("source_label", source_label)
+
+    record: Dict[str, Any] = {
+        "kind": kind,
+        "text": text,
+        "tags": tags or [],
+        "meta": entry_meta,
+    }
+
+    # ---- 1) KVS に保存 ----
+    key = f"{kind}_{int(time.time())}_{uuid4().hex[:8]}"
+    ok = MEM.put(user_id, key, record)
+    if not ok:
+        logger.error("[MemoryOS.add] MEM.put failed")
+
+    # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
+    if MEM_VEC is not None:
+        try:
+            MEM_VEC.add(
+                kind=kind,
+                text=text,
+                tags=tags or [],
+                meta=entry_meta,
+            )
+        except Exception as e:
+            logger.warning(f"[MemoryOS.add] MEM_VEC.add error: {e}")
+
+    return record
+
+
 def put(*args, **kwargs) -> bool:
     """
     グローバル関数版 put
@@ -1257,6 +1322,249 @@ def summarize_for_planner(
     return MEM.summarize_for_planner(user_id=user_id, query=query, limit=limit)
 
 
+# ============================
+# Memory Distill（episodic → semantic）
+# ============================
+
+
+def _build_distill_prompt(user_id: str, episodes: List[Dict[str, Any]]) -> str:
+    """
+    エピソードのリストから、LLM に投げる要約プロンプトを組み立てる。
+    """
+    lines: List[str] = []
+    lines.append(
+        "You are VERITAS OS's Memory Distill module.\n"
+        "Your job is to compress the user's recent episodic memories into a concise, "
+        "useful long-term note that VERITAS can reuse later."
+    )
+    lines.append("")
+    lines.append(f"Target user_id: {user_id}")
+    lines.append("")
+    lines.append("Here are recent episodic records (newest first):")
+
+    for i, ep in enumerate(episodes, start=1):
+        ts = ep.get("ts")
+        try:
+            ts_f = float(ts)
+            ts_str = datetime.fromtimestamp(ts_f, tz=timezone.utc).isoformat()
+        except Exception:
+            ts_str = "unknown"
+
+        text = str(ep.get("text") or "").strip()
+        tags = ep.get("tags") or []
+        tag_str = f" tags={tags}" if tags else ""
+
+        if len(text) > 300:
+            text_short = text[:297] + "..."
+        else:
+            text_short = text
+
+        lines.append(f"- #{i} [{ts_str}]{tag_str} {text_short}")
+
+    lines.append("")
+    lines.append(
+        "Please write a Japanese summary that captures:\n"
+        "1. The main topics and decisions the user is working on\n"
+        "2. Ongoing projects or threads (e.g., VERITAS, 労働紛争, 音楽制作)\n"
+        "3. Open TODOs or follow-ups that seem important\n"
+        "4. Any stable preferences or values that appear\n"
+        "\n"
+        "Format:\n"
+        "「概要」セクション: 箇条書きで3〜7行\n"
+        "「プロジェクト別ノート」セクション: VERITAS / 労働紛争 / 音楽 / その他 に分けて\n"
+        "「TODO / Next Actions」セクション: 箇条書きで3〜10行\n"
+    )
+
+    return "\n".join(lines)
+
+
+def distill_memory_for_user(
+    user_id: str,
+    *,
+    max_items: int = 200,
+    min_text_len: int = 20,
+    tags: Optional[List[str]] = None,
+    model: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    指定ユーザーの episodic メモリをまとめて「長期記憶ノート（semantic）」に蒸留する。
+
+    戻り値:
+        保存した semantic メモリの dict（失敗時は None）
+    """
+    # 1) memory.json から対象ユーザーのレコードを取得
+    try:
+        all_records = MEM.list_all(user_id=user_id)
+    except Exception as e:
+        logger.error(f"[MemoryDistill] list_all failed for user={user_id}: {e}")
+        return None
+
+    episodic: List[Dict[str, Any]] = []
+    filter_tags = set(tags or [])
+
+    for r in all_records:
+        value = r.get("value") or {}
+        if not isinstance(value, dict):
+            continue
+
+        kind = str(value.get("kind") or "episodic")
+        if kind != "episodic":
+            continue
+
+        text = str(value.get("text") or "").strip()
+        if len(text) < min_text_len:
+            continue
+
+        ep_tags = value.get("tags") or []
+
+        # tags 指定がある場合は、そのタグを含むものだけ対象
+        if filter_tags and not (filter_tags & set(ep_tags)):
+            continue
+
+        ep = {
+            "text": text,
+            "tags": ep_tags,
+            "ts": r.get("ts") or time.time(),
+        }
+        episodic.append(ep)
+
+    if not episodic:
+        logger.info(f"[MemoryDistill] no episodic records for user={user_id}")
+        return None
+
+    # 新しい順にソートして max_items までに圧縮
+    episodic.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+    target_eps = episodic[:max_items]
+
+    # 2) プロンプト生成
+    prompt = _build_distill_prompt(user_id, target_eps)
+    system_msg = "You are VERITAS Memory Distill module."
+
+    # 3) LLM コール (llm_client モジュールを直接叩く)
+    try:
+        import inspect
+
+        chat_fn = None
+        # 優先順で関数を探す
+        if hasattr(llm_client, "chat_completion"):
+            chat_fn = llm_client.chat_completion
+        elif hasattr(llm_client, "call_chat"):
+            chat_fn = llm_client.call_chat
+        elif hasattr(llm_client, "chat"):
+            chat_fn = llm_client.chat
+
+        if chat_fn is None:
+            logger.error(
+                "[MemoryDistill] llm_client has no chat function "
+                "(expected chat_completion / call_chat / chat)"
+            )
+            return None
+
+        sig = inspect.signature(chat_fn)
+        param_names = list(sig.parameters.keys())
+
+        # chat_fn が受け取れる引数だけ詰める
+        common_kwargs: Dict[str, Any] = {}
+        if "model" in param_names:
+            common_kwargs["model"] = model or None
+        if "max_tokens" in param_names:
+            common_kwargs["max_tokens"] = 1024
+
+        resp = None
+
+        # --- パターン1: system / user / prompt をそのまま受ける系 ---
+        if "system" in param_names and ("user" in param_names or "prompt" in param_names):
+            kwargs = dict(common_kwargs)
+            kwargs["system"] = system_msg
+            if "user" in param_names:
+                kwargs["user"] = prompt
+            else:
+                kwargs["prompt"] = prompt
+            resp = chat_fn(**kwargs)
+
+        # --- パターン2: system_prompt / user_prompt 方式 ---
+        elif "system_prompt" in param_names and "user_prompt" in param_names:
+            kwargs = dict(common_kwargs)
+            # まずキーワード引数で試す
+            try:
+                resp = chat_fn(
+                    system_prompt=system_msg,
+                    user_prompt=prompt,
+                    **kwargs,
+                )
+            except TypeError:
+                # キーワードがダメな実装の場合は位置引数で再トライ
+                resp = chat_fn(system_msg, prompt, **kwargs)
+
+        # --- パターン3: system がなく、prompt / user / 位置引数でまとめて渡す系 ---
+        else:
+            combined = f"{system_msg}\n\nUser:\n{prompt}"
+            kwargs = dict(common_kwargs)
+
+            if "prompt" in param_names:
+                kwargs["prompt"] = combined
+                resp = chat_fn(**kwargs)
+            elif "user" in param_names:
+                kwargs["user"] = combined
+                resp = chat_fn(**kwargs)
+            else:
+                # 最終手段: 先頭の位置引数として渡す
+                resp = chat_fn(combined, **kwargs)
+
+    except TypeError as e:
+        logger.error(f"[MemoryDistill] LLM call TypeError: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"[MemoryDistill] LLM call failed: {e}")
+        return None
+
+    # 4) レスポンスからテキストを取り出す
+    summary_text = ""
+
+    if isinstance(resp, dict):
+        summary_text = (
+            resp.get("text")
+            or resp.get("content")
+            or resp.get("output")
+            or ""
+        )
+    elif isinstance(resp, str):
+        summary_text = resp
+    else:
+        summary_text = str(getattr(resp, "text", "") or "")
+
+    summary_text = str(summary_text).strip()
+    if not summary_text:
+        logger.error("[MemoryDistill] empty summary_text from LLM")
+        return None
+
+    # 5) semantic メモリとして永続化
+    meta = {
+        "user_id": user_id,
+        "source": "distill_memory_for_user",
+        "item_count": len(target_eps),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    doc: Dict[str, Any] = {
+        "kind": "semantic",
+        "text": summary_text,
+        "tags": (tags or []) + ["memory_distill", "summary", "long_term"],
+        "meta": meta,
+    }
+
+    ok = put("semantic", doc)
+    if not ok:
+        logger.error("[MemoryDistill] failed to save semantic memory")
+        return None
+
+    logger.info(
+        f"[MemoryDistill] semantic note saved for user={user_id} "
+        f"(items={len(target_eps)}, chars={len(summary_text)})"
+    )
+    return doc
+
+
 def rebuild_vector_index():
     """
     既存のmemory.jsonからベクトルインデックスを再構築
@@ -1315,6 +1623,9 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
+
+
+
 
 
 

@@ -1,14 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""VERITAS Doctor (stable)
+"""VERITAS Doctor (enhanced with TrustLog validation)
 veritas_os/scripts/logs 配下のログを解析して、
 同じフォルダに doctor_report.json を出力する。
+
+v2.0 新機能:
+- TrustLog ハッシュチェーン検証
+- より詳細な診断情報
 """
 
 import os
 import json
 import glob
+import hashlib
+import statistics
+from pathlib import Path
+from datetime import datetime
+
+# ==== パス定義 ====
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""VERITAS Doctor (enhanced with TrustLog validation)
+veritas_os/scripts/logs 配下のログを解析して、
+同じフォルダに doctor_report.json を出力する。
+
+v2.0 新機能:
+- TrustLog ハッシュチェーン検証
+- より詳細な診断情報
+"""
+
+import os
+import json
+import glob
+import hashlib
 import statistics
 from pathlib import Path
 from datetime import datetime
@@ -22,10 +48,9 @@ REPO_ROOT = HERE.parent                         # .../veritas_os
 LOG_DIR = HERE / "logs"                         # .../veritas_os/scripts/logs
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-# 監査用 JSONL（任意で使う場合）
+# 監査用 JSONL
 TRUST_LOG_JSON = LOG_DIR / "trust_log.jsonl"
-# 互換のための別名（昔の変数名）
-LOG_JSONL = TRUST_LOG_JSON
+LOG_JSONL = TRUST_LOG_JSON  # 互換のための別名
 
 # ダッシュボード用レポート出力先
 REPORT_PATH = LOG_DIR / "doctor_report.json"
@@ -38,6 +63,155 @@ PATTERNS = [
 
 # キーワード辞書（必要に応じて増やしてOK）
 KW_LIST = ["交渉", "天気", "疲れ", "音楽", "VERITAS"]
+
+
+# ---- TrustLog validation -------------------------------------------
+def compute_hash_for_entry(prev_hash: str | None, entry: dict) -> str:
+    """
+    論文の式に従ったハッシュ計算: hₜ = SHA256(hₜ₋₁ || rₜ)
+    
+    Args:
+        prev_hash: 直前のハッシュ値 (hₜ₋₁)
+        entry: 現在のエントリ (rₜ)
+    
+    Returns:
+        計算されたハッシュ値 (hₜ)
+    """
+    # エントリをコピーして、sha256とsha256_prevを除外
+    payload = dict(entry)
+    payload.pop("sha256", None)
+    payload.pop("sha256_prev", None)
+    
+    # rₜ を JSON化（キーをソートして一意性を保証）
+    entry_json = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    
+    # hₜ₋₁ || rₜ を結合
+    if prev_hash:
+        combined = prev_hash + entry_json
+    else:
+        # 最初のエントリの場合は rₜ のみ
+        combined = entry_json
+    
+    # SHA-256計算
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+
+def analyze_trustlog() -> dict:
+    """
+    TrustLog (trust_log.jsonl) のハッシュチェーン検証
+    
+    Returns:
+        {
+            "status": "✅ 正常" | "⚠️ チェーン破損" | "not_found",
+            "entries": int,
+            "chain_valid": bool | None,
+            "chain_breaks": int,
+            "first_break": dict | None,
+            "hash_mismatches": int,
+            "first_mismatch": dict | None,
+            "last_hash": str | None,
+            "created_at": str | None,
+        }
+    """
+    if not TRUST_LOG_JSON.exists():
+        return {
+            "status": "not_found",
+            "entries": 0,
+            "chain_valid": None,
+            "chain_breaks": 0,
+            "hash_mismatches": 0,
+            "first_break": None,
+            "first_mismatch": None,
+            "last_hash": None,
+            "created_at": None,
+        }
+    
+    total_entries = 0
+    chain_valid = True
+    chain_breaks = []
+    hash_mismatches = []
+    prev_hash = None
+    last_hash = None
+    last_created_at = None
+    
+    try:
+        with open(TRUST_LOG_JSON, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    entry = json.loads(line)
+                    total_entries += 1
+                    
+                    sha_prev = entry.get("sha256_prev")
+                    sha_self = entry.get("sha256")
+                    
+                    # 1. チェーン連続性の検証
+                    if sha_prev != prev_hash:
+                        chain_valid = False
+                        chain_breaks.append({
+                            "line": i,
+                            "expected_prev": prev_hash,
+                            "actual_prev": sha_prev,
+                            "request_id": entry.get("request_id", "unknown"),
+                        })
+                    
+                    # 2. ハッシュ値の検証（論文の式に従う）
+                    calc_hash = compute_hash_for_entry(sha_prev, entry)
+                    if calc_hash != sha_self:
+                        chain_valid = False
+                        hash_mismatches.append({
+                            "line": i,
+                            "expected_hash": calc_hash[:16] + "...",
+                            "actual_hash": (sha_self[:16] + "...") if sha_self else None,
+                            "request_id": entry.get("request_id", "unknown"),
+                        })
+                    
+                    prev_hash = sha_self
+                    last_hash = sha_self
+                    
+                    # 最終作成日時を記録
+                    if "created_at" in entry:
+                        last_created_at = entry["created_at"]
+                    
+                except json.JSONDecodeError:
+                    # 破損行は無視して続行
+                    continue
+    
+    except Exception as e:
+        return {
+            "status": f"error: {str(e)}",
+            "entries": 0,
+            "chain_valid": False,
+            "chain_breaks": 0,
+            "hash_mismatches": 0,
+            "first_break": None,
+            "first_mismatch": None,
+            "last_hash": None,
+            "created_at": None,
+        }
+    
+    # ステータス判定
+    if total_entries == 0:
+        status = "empty"
+    elif chain_valid:
+        status = "✅ 正常"
+    else:
+        status = "⚠️ チェーン破損"
+    
+    return {
+        "status": status,
+        "entries": total_entries,
+        "chain_valid": chain_valid,
+        "chain_breaks": len(chain_breaks),
+        "hash_mismatches": len(hash_mismatches),
+        "first_break": chain_breaks[0] if chain_breaks else None,
+        "first_mismatch": hash_mismatches[0] if hash_mismatches else None,
+        "last_hash": last_hash[:16] + "..." if last_hash else None,
+        "created_at": last_created_at,
+    }
 
 
 # ---- helpers -----------------------------------------------------------
@@ -98,7 +272,7 @@ def analyze_logs():
 
     # TRUST_LOG_JSON がなくても、とりあえず警告だけでOK
     if not files and not os.path.exists(LOG_JSONL):
-        print("⚠️ .veritas 内に解析対象のログが見つかりません。")
+        print("⚠️ scripts/logs 内に解析対象のログが見つかりません。")
         return
 
     found_total  = len(files)
@@ -164,23 +338,11 @@ def analyze_logs():
         metrics[cat]["count"] += 1
         parsed += 1
 
-    # 監査 JSONL（任意）を読むだけ読んで最終時刻の補助に使う
-    last_check = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        if os.path.exists(LOG_JSONL) and os.path.getsize(LOG_JSONL) > 0:
-            with open(LOG_JSONL, "r", encoding="utf-8") as f:
-                tail = f.readlines()[-20:]
-            for line in reversed(tail):
-                try:
-                    obj = json.loads(line.strip())
-                    ts  = (obj.get("created_at") or "").replace("Z", "")
-                    if ts:
-                        last_check = ts
-                        break
-                except Exception:
-                    continue
-    except Exception:
-        pass
+    # ✨ TrustLog 健全性チェック（新機能）
+    trustlog_stats = analyze_trustlog()
+    
+    # 最終診断時刻（TrustLogから取得、なければ現在時刻）
+    last_check = trustlog_stats.get("created_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     avg_unc = round(statistics.mean(uncertainties), 3) if uncertainties else 0.0
 
@@ -193,6 +355,7 @@ def analyze_logs():
         "keywords":          keywords,
         "last_check":        last_check,
         "by_category":       {k: v["count"] for k, v in metrics.items()},
+        "trustlog":          trustlog_stats,  # ✨ TrustLog統計を追加
         "generated_at":      datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "source_dir":        str(LOG_DIR),
     }
@@ -202,7 +365,7 @@ def analyze_logs():
         json.dump(result, f, ensure_ascii=False, indent=2)
 
     # ---- console summary ------------------------------------------------
-    print("\n== VERITAS Doctor Report ==")
+    print("\n== VERITAS Doctor Report (Enhanced) ==")
     print("✓ 検出(総):", found_total)
     print("✓ 解析OK :", parsed)
     print("↪ スキップ: 0B=", skipped_zero, ", JSON=", skipped_bad)
@@ -210,8 +373,35 @@ def analyze_logs():
     print("🔑 キーワード出現頻度:", keywords)
     print("📅 最終診断時刻:", last_check)
     print("📊 カテゴリ内訳:", {k: v["count"] for k, v in metrics.items()})
-    print("✅ 保存完了:", REPORT_PATH)
+    
+    # ✨ TrustLog診断結果を表示
+    print("\n🔒 TrustLog 診断:")
+    print(f"   ステータス: {trustlog_stats['status']}")
+    print(f"   総エントリ数: {trustlog_stats['entries']}")
+    
+    if trustlog_stats['status'] == 'not_found':
+        print("   ⚠️ trust_log.jsonl が見つかりません")
+    elif trustlog_stats['chain_valid']:
+        print("   ✅ ハッシュチェーン検証: PASSED")
+        if trustlog_stats['last_hash']:
+            print(f"   🔑 最終ハッシュ: {trustlog_stats['last_hash']}")
+    else:
+        print(f"   ❌ ハッシュチェーン検証: FAILED")
+        if trustlog_stats['chain_breaks'] > 0:
+            print(f"   ⚠️ チェーン破損: {trustlog_stats['chain_breaks']} 箇所")
+            if trustlog_stats['first_break']:
+                fb = trustlog_stats['first_break']
+                print(f"      最初の破損: Line {fb['line']} (ID: {fb['request_id']})")
+        if trustlog_stats['hash_mismatches'] > 0:
+            print(f"   ⚠️ ハッシュ不一致: {trustlog_stats['hash_mismatches']} 件")
+            if trustlog_stats['first_mismatch']:
+                fm = trustlog_stats['first_mismatch']
+                print(f"      最初の不一致: Line {fm['line']} (ID: {fm['request_id']})")
+    
+    print("\n✅ 保存完了:", REPORT_PATH)
 
 
 if __name__ == "__main__":
     analyze_logs()
+
+

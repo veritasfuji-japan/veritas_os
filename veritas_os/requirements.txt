@@ -17,6 +17,7 @@ scikit-learn>=1.5.0
 # --- OpenAI / LLM Integration ---
 openai>=1.0.0
 requests>=2.31.0
+anthropic>=0.7.0    #Claude API (将来用)
 
 # --- CLI / Dashboard Tools ---
 matplotlib>=3.8.0
@@ -25,6 +26,6 @@ matplotlib>=3.8.0
 jinja2>=3.1.0         # HTML dashboard template rendering
 numpy>=1.26.0         # sklearn & plotting backend
 pandas>=2.2.0         # doctor/analyze logs, summary CSV
-
+pdfplumber>=0.11.0
 # --- System Tools (optional but stable) ---
 psutil>=5.9.0         # health check / process monitor

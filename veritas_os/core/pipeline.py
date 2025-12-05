@@ -306,37 +306,86 @@ async def run_decide_pipeline(
     request_id = body.get("request_id") or secrets.token_hex(16)
     min_ev = int(body.get("min_evidence") or 1)
 
+    # ---- MemoryOS retrieval config (doc を見るかどうか) ----
+    raw_memory_kinds = context.get("memory_kinds") or body.get("memory_kinds")
+    want_doc = False
+    if isinstance(raw_memory_kinds, list):
+        lowered = {str(k).lower() for k in raw_memory_kinds}
+        if "doc" in lowered:
+            want_doc = True
+
+    # VERITAS / 論文 / research / paper / Zenodo 系クエリは自動で doc も見る
+    if is_veritas_query or any(
+        key in qlower for key in ["論文", "paper", "zenodo", "veritas os", "protoagi", "プロトagi"]
+    ):
+        want_doc = True
+
     # retrieval
     mem_hits_raw: Any = None
+    doc_hits_raw: Any = None
     retrieved: List[Dict[str, Any]] = []
 
     try:
         if query:
-            mem_hits_raw = MEM.search(
-                query,
-                k=6,
-                kinds=["semantic", "skills", "episodic"],
-                min_sim=0.0,
+            # ベース: semantic / skills / episodic
+            mem_hits_raw = mem.search(
+                query=query,
+                k=8,
+                kinds=["semantic", "skills", "episodic", "doc"],
+                min_sim=0.30,
                 user_id=user_id,
             )
 
+            # VERITAS / 論文モードのときは doc メモリも追加で検索
+            if want_doc:
+                try:
+                    doc_hits_raw = mem.search(
+                        query=query,
+                        k=5,
+                        kinds=["doc"],
+                        user_id=user_id,
+                    )
+                except Exception as e:
+                    print("[AGI-Retrieval] doc search error:", repr(e))
+
         flat_hits: List[Dict[str, Any]] = []
 
-        if isinstance(mem_hits_raw, dict):
-            for kind, hits in mem_hits_raw.items():
-                if not isinstance(hits, list):
-                    continue
-                for h in hits:
+        def _append_hits(src, default_kind=None):
+            if not src:
+                return
+            if isinstance(src, dict):
+                for kind, hits in src.items():
+                    if not isinstance(hits, list):
+                        continue
+                    for h in hits:
+                        if not isinstance(h, dict):
+                            continue
+                        h = dict(h)
+                        h.setdefault("kind", kind or default_kind or "episodic")
+                        flat_hits.append(h)
+            elif isinstance(src, list):
+                for h in src:
                     if not isinstance(h, dict):
                         continue
                     h = dict(h)
-                    h.setdefault("kind", kind)
+                    if default_kind and not h.get("kind"):
+                        h["kind"] = default_kind
                     flat_hits.append(h)
 
-        elif isinstance(mem_hits_raw, list):
-            for h in mem_hits_raw:
-                if isinstance(h, dict):
-                    flat_hits.append(h)
+        _append_hits(mem_hits_raw)
+        _append_hits(doc_hits_raw, default_kind="doc")
+
+        # id / key ベースで重複除去
+        seen_ids = set()
+        deduped: List[Dict[str, Any]] = []
+        for h in flat_hits:
+            _id = h.get("id") or h.get("key")
+            if _id is not None:
+                if _id in seen_ids:
+                    continue
+                seen_ids.add(_id)
+            deduped.append(h)
+        flat_hits = deduped
 
         for h in flat_hits:
             text = (
@@ -363,8 +412,39 @@ async def run_decide_pipeline(
                 }
             )
 
+        # スコア順にソート
         retrieved.sort(key=lambda r: r.get("score", 0.0), reverse=True)
-        top_hits = retrieved[:3]
+
+        # top_hits の決定: doc を優先採用（VERITAS/論文クエリ時）
+        if want_doc:
+            doc_only = [r for r in retrieved if r.get("kind") == "doc"]
+            non_doc = [r for r in retrieved if r.get("kind") != "doc"]
+
+            top_hits: List[Dict[str, Any]] = []
+            for r in doc_only[:3]:
+                top_hits.append(r)
+
+            remaining = max(0, 3 - len(top_hits))
+            if remaining > 0:
+                top_hits.extend(non_doc[:remaining])
+        else:
+            top_hits = retrieved[:3]
+
+        # ===== ここからログ強化部分 =====
+        print(
+            f"[AGI-Retrieval] query={query!r} user_id={user_id} "
+            f"raw_hits={len(retrieved)} top_hits={len(top_hits)} want_doc={want_doc}"
+        )
+        for i, r in enumerate(top_hits, start=1):
+            snippet = r["text"]
+            if len(snippet) > 120:
+                snippet = snippet[:117] + "..."
+            print(
+                "  "
+                + f"#{i} score={r.get('score', 0.0):.3f} "
+                f"kind={r.get('kind')} id={r.get('id')} text={snippet}"
+            )
+        # ===== ログ強化ここまで =====
 
         metrics = response_extras.setdefault("metrics", {})
         metrics["mem_hits"] = len(retrieved)
@@ -375,15 +455,21 @@ async def run_decide_pipeline(
             if len(snippet) > 200:
                 snippet = snippet[:197] + "..."
 
+            # doc メモリは confidence を底上げ（論文ソースを優先して読ませる）
+            conf = max(0.3, min(1.0, r.get("score", 0.5)))
+            if r.get("kind") == "doc" and conf < 0.75:
+                conf = 0.75
+
             evidence.append(
                 {
                     "source": f"memory:{r.get('kind','')}",
                     "uri": r.get("id"),
                     "snippet": snippet,
-                    "confidence": max(0.3, min(1.0, r.get("score", 0.5))),
+                    "confidence": conf,
                 }
             )
 
+        # 元のシンプルな統計ログは残しておく
         print(
             f"[AGI-Retrieval] Added memory evidences: {len(top_hits)} "
             f"(raw_hits={len(retrieved)})"
@@ -1410,6 +1496,7 @@ async def run_decide_pipeline(
                 or "episodic" in src
                 or "semantic" in src
                 or "skills" in src
+                or "doc" in src
             ):
                 mem_evidence_count += 1
 
@@ -1420,6 +1507,7 @@ async def run_decide_pipeline(
                 or "episodic" in src
                 or "semantic" in src
                 or "skills" in src
+                or "doc" in src
             ):
                 mem_evidence_count = max(mem_evidence_count, 1)
 
@@ -1501,4 +1589,5 @@ async def run_decide_pipeline(
         print("[WorldModel] next_hint_for_veritas_agi skipped:", e)
 
     return payload
+
     

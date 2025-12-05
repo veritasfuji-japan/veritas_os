@@ -1,76 +1,344 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-from pathlib import Path
-import os
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+VERITAS Dashboard Server - 認証機能付き完全版
+
+HTTP Basic 認証によりダッシュボードと API を保護します。
+
+環境変数:
+    DASHBOARD_USERNAME: ダッシュボードのユーザー名（デフォルト: veritas）
+    DASHBOARD_PASSWORD: ダッシュボードのパスワード（デフォルト: change_me_in_production）
+    VERITAS_LOG_DIR: ログディレクトリのパス
+
+Usage (直叩き):
+    export DASHBOARD_USERNAME="your_username"
+    export DASHBOARD_PASSWORD="your_secure_password"
+    python dashboard_server.py
+
+Usage (モジュールとして):
+    python -m veritas_os.api.dashboard_server
+"""
+
+from __future__ import annotations
+
 import json
+import os
+import secrets
+from pathlib import Path
 
-app = FastAPI(title="VERITAS Dashboard")
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
-# === パス設定 ===
-# このファイル: .../veritas_clean_test2/veritas_os/api/dashboard_server.py
-BASE_DIR = Path(__file__).resolve().parents[1]  # .../veritas_clean_test2/veritas_os
+app = FastAPI(title="VERITAS Dashboard", version="1.0.0")
+security = HTTPBasic()
 
-# 環境変数 VERITAS_LOG_DIR があればそちらを優先
+# ===== 認証設定 =====
+
+DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "change_me_in_production")
+
+
+def verify_credentials(
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> str:
+    """
+    Verify HTTP Basic Auth credentials.
+
+    Args:
+        credentials: HTTP Basic Auth credentials
+
+    Returns:
+        Username if authenticated
+
+    Raises:
+        HTTPException: If authentication fails
+    """
+    correct_username = secrets.compare_digest(
+        credentials.username, DASHBOARD_USERNAME
+    )
+    correct_password = secrets.compare_digest(
+        credentials.password, DASHBOARD_PASSWORD
+    )
+
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
+
+# ===== パス設定 =====
+
+BASE_DIR = Path(__file__).resolve().parents[1]
 default_log_dir = BASE_DIR / "scripts" / "logs"
-LOG_DIR = Path(os.getenv("VERITAS_LOG_DIR", str(default_log_dir)))
-
+LOG_DIR = Path(os.getenv("VERITAS_LOG_DIR", str(default_log_dir))).expanduser()
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-REPORT_HTML = LOG_DIR / "report.html"
+REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
 STATUS_JSON = LOG_DIR / "drive_sync_status.json"
 
-# === HTMLダッシュボード ===
-# 置換: /dashboard をテンプレで返す
+
+# ===== HTMLダッシュボード（認証必須） =====
+
+@app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
-async def get_dashboard():
-    return HTMLResponse("""
-<!doctype html><meta charset="utf-8">
+async def get_dashboard(username: str = Depends(verify_credentials)) -> HTMLResponse:
+    """
+    Display VERITAS dashboard with Google Drive sync status.
+    Requires HTTP Basic authentication.
+    """
+    html = """<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VERITAS Dashboard</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,monospace;background:#121212;color:#e0e0e0;padding:24px}
-.card{border:1px solid #444;padding:12px;border-radius:8px;margin:8px 0;background:#111}
-.badge{padding:2px 6px;border-radius:8px}
-.badge.ok{background:#14532d;color:#d1fae5}
-.badge.ng{background:#7f1d1d;color:#fee2e2}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+  color: #e0e0e0;
+  padding: 24px;
+  min-height: 100vh;
+}
+.container { max-width: 1200px; margin: 0 auto; }
+h1 {
+  font-size: 2.5rem;
+  margin-bottom: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.subtitle { color: #999; margin-bottom: 32px; }
+.card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  backdrop-filter: blur(10px);
+}
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.badge.ok { background: #14532d; color: #d1fae5; }
+.badge.ng { background: #7f1d1d; color: #fee2e2; }
+.info-row { margin: 12px 0; display: flex; align-items: center; }
+.info-label {
+  min-width: 180px;
+  color: #999;
+  font-weight: 500;
+}
+.info-value {
+  font-family: 'Monaco', 'Courier New', monospace;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.loading {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+footer {
+  text-align: center;
+  color: #666;
+  margin-top: 48px;
+  font-size: 0.875rem;
+}
+a.button-link {
+  padding: 8px 16px;
+  border-radius: 8px;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.2s;
+}
+a.button-link:hover {
+  filter: brightness(1.1);
+}
 </style>
-<h1>VERITAS Dashboard</h1>
-<div id="sync" class="card">Loading...</div>
+</head>
+<body>
+<div class="container">
+  <h1>🧠 VERITAS Dashboard</h1>
+  <div class="subtitle">Real-time monitoring &amp; system status</div>
+
+  <div id="sync" class="card">
+    <div class="loading"></div> Loading...
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom: 16px;">📄 Quick Links</h3>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+      <a href="/download/report"
+         class="button-link"
+         style="background: rgba(102, 126, 234, 0.2); border: 1px solid #667eea; color: #667eea;">
+        📥 Download Report
+      </a>
+      <a href="/api/status"
+         target="_blank"
+         class="button-link"
+         style="background: rgba(118, 75, 162, 0.2); border: 1px solid #764ba2; color: #764ba2;">
+        🔗 API Status
+      </a>
+    </div>
+  </div>
+
+  <footer>
+    VERITAS OS v2.0 | Authenticated Session: <span id="user"></span>
+  </footer>
+</div>
+
 <script>
-async function load(){
-  try{
-    const r = await fetch('/api/status'); const s = await r.json();
-    const ok = s.ok ? 'badge ok' : 'badge ng';
+async function loadStatus() {
+  try {
+    const response = await fetch('/api/status');
+    if (response.status === 401) {
+      document.getElementById('sync').innerHTML =
+        '<h3>🔒 Authentication Required</h3><p>Please refresh and enter credentials.</p>';
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+    const statusBadge = data.ok
+      ? '<span class="badge ok">✅ OK</span>'
+      : '<span class="badge ng">❌ FAILED</span>';
+
     document.getElementById('sync').innerHTML =
-      `<b>Google Drive Sync</b> <span class="${ok}">${s.ok?'OK':'FAILED'}</span><br>
-       Last Run (UTC): <code>${s.ended_at_utc||''}</code><br>
-       Destination: <code>${s.dst||''}</code><br>
-       Transferred files: <code>${s.transferred_files??0}</code>`;
-  }catch(e){
-    document.getElementById('sync').innerHTML='Status not found';
+      '<h3 style="margin-bottom: 16px;">☁️ Google Drive Sync Status ' + statusBadge + '</h3>' +
+      '<div class="info-row">' +
+        '<span class="info-label">Last Run (UTC):</span>' +
+        '<span class="info-value">' + (data.ended_at_utc || 'N/A') + '</span>' +
+      '</div>' +
+      '<div class="info-row">' +
+        '<span class="info-label">Duration:</span>' +
+        '<span class="info-value">' + ((data.duration_sec != null ? data.duration_sec : 0)) + 's</span>' +
+      '</div>' +
+      '<div class="info-row">' +
+        '<span class="info-label">Destination:</span>' +
+        '<span class="info-value">' + (data.dst || 'N/A') + '</span>' +
+      '</div>' +
+      '<div class="info-row">' +
+        '<span class="info-label">Transferred Files:</span>' +
+        '<span class="info-value">' + ((data.transferred_files != null ? data.transferred_files : 0)) + '</span>' +
+      '</div>';
+  } catch (error) {
+    console.error('Error loading status:', error);
+    document.getElementById('sync').innerHTML =
+      '<h3>⚠️ Status Unavailable</h3><p>Could not load sync status. Check if drive_sync_status.json exists.</p>';
   }
 }
-load(); setInterval(load, 10000);
+
+// Initial load
+loadStatus();
+
+// Auto-refresh every 10 seconds
+setInterval(loadStatus, 10000);
+
+// Display username (injected from server)
+document.getElementById('user').textContent = '{{USERNAME}}';
 </script>
-""")
-# === Drive SyncステータスAPI ===
+</body>
+</html>
+"""
+    # username を埋め込む（CSS/JS の { } を壊さないために単純置換）
+    html = html.replace("{{USERNAME}}", username)
+    return HTMLResponse(html)
+
+
+# ===== Drive Sync ステータス API（認証必須） =====
+
 @app.get("/api/status", response_class=JSONResponse)
-async def get_status():
+async def get_status(username: str = Depends(verify_credentials)) -> JSONResponse:
+    """
+    Get Google Drive sync status.
+    Requires HTTP Basic authentication.
+
+    Returns:
+        JSON object with sync status
+    """
     if STATUS_JSON.exists():
         try:
             data = json.loads(STATUS_JSON.read_text(encoding="utf-8"))
-            return data
-        except json.JSONDecodeError:
-            return JSONResponse({"error": "invalid JSON"}, status_code=500)
+            # data はそのまま返す（ok, ended_at_utc, duration_sec などを想定）
+            return JSONResponse(data)
+        except json.JSONDecodeError as e:
+            return JSONResponse(
+                {"error": "invalid JSON", "detail": str(e)},
+                status_code=500,
+            )
     else:
-        return JSONResponse({"error": "status file not found"}, status_code=404)
+        return JSONResponse(
+            {"error": "status file not found", "path": str(STATUS_JSON)},
+            status_code=404,
+        )
 
-# === HTMLレポートをダウンロード用に ===
+
+# ===== HTMLレポートをダウンロード（認証必須） =====
+
 @app.get("/download/report", response_class=FileResponse)
-async def download_report():
+async def download_report(username: str = Depends(verify_credentials)):
+    """
+    Download the latest HTML report.
+    Requires HTTP Basic authentication.
+    """
     if REPORT_HTML.exists():
-        return FileResponse(REPORT_HTML)
-    return JSONResponse({"error": "not found"}, status_code=404)
+        return FileResponse(
+            REPORT_HTML,
+            filename="doctor_dashboard.html",
+            media_type="text/html",
+        )
+    return JSONResponse(
+        {"error": "report not found", "path": str(REPORT_HTML)},
+        status_code=404,
+    )
+
+
+# ===== Health Check（認証不要） =====
+
+@app.get("/health")
+async def health_check() -> dict:
+    """Health check endpoint (no authentication required)."""
+    return {"status": "ok", "service": "VERITAS Dashboard"}
+
 
 if __name__ == "__main__":
     import uvicorn
+
+    print("=" * 60)
+    print("🔐 VERITAS Dashboard Server (Authenticated)")
+    print("=" * 60)
+    print(f"   Username: {DASHBOARD_USERNAME}")
+    if DASHBOARD_PASSWORD == "change_me_in_production":
+        print(f"   Password: ⚠️  DEFAULT PASSWORD (INSECURE)")
+        print("   ⚠️  Please set DASHBOARD_PASSWORD environment variable!")
+    else:
+        print(f"   Password: {'*' * len(DASHBOARD_PASSWORD)}")
+    print(f"   Log Directory: {LOG_DIR}")
+    print("=" * 60)
+    print("   Access: http://localhost:8000")
+    print("   API:    http://localhost:8000/api/status")
+    print("=" * 60)
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
