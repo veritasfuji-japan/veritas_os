@@ -569,6 +569,42 @@ def get_state(user_id: str = DEFAULT_USER_ID) -> dict:
     """
     return _load_world()
 
+def snapshot(project: str) -> Dict[str, Any]:
+    """
+    後方互換用の WorldModel スナップショット API。
+
+    - 典型的な呼び出し: snapshot("veritas_agi")
+    - 返り値は {"progress": float, "decision_count": int, ...} のような dict を想定
+    - 内部では get_state() を読み、可能な範囲で progress / decision_count を埋める。
+    """
+
+    state = get_state() or {}
+
+    # 1) すでに project キーがトップレベルにある場合はそのまま返す
+    proj = state.get(project)
+    if isinstance(proj, dict):
+        return proj
+
+    # 2) "veritas" ルートに progress / decision_count があるケースを優先
+    ver = state.get("veritas")
+    if isinstance(ver, dict):
+        return {
+            "progress": float(ver.get("progress", 0.0) or 0.0),
+            "decision_count": int(ver.get("decision_count", 0) or 0),
+        }
+
+    # 3) 最後の保険として、state 自体に progress などがあればそれを使う
+    if isinstance(state, dict) and (
+        "progress" in state or "decision_count" in state
+    ):
+        return {
+            "progress": float(state.get("progress", 0.0) or 0.0),
+            "decision_count": int(state.get("decision_count", 0) or 0),
+        }
+
+    # 4) 何も取れない場合は空 dict（呼び出し側でデフォルト処理される想定）
+    return {}
+
 
 # =========================
 # Public API - 決定後の更新

@@ -41,10 +41,11 @@ env/
 scripts/logs/
 logs/
 reports/
-*.log
-*.csv
 *.tmp
 *.bak
+logs/*.csv
+reports/*.csv
+
 
 # doctor/consistency/trustlog 等すべて
 doctor_report.json
@@ -90,6 +91,25 @@ backups/
 *.bak
 *.out
 *.cache
+
+# ============================
+# Test / Coverage / Build
+# ============================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+.mypy_cache/
+.ruff_cache/
+
+.tox/
+.nox/
+.eggs/
+*.egg-info
+dist/
+build/
+
 
 # ============================
 # Others (不要な生成物)

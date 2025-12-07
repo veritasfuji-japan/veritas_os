@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from fastapi import Request
 
-from . import (
+from veritas_os.core import (
     kernel as veritas_core,
     fuji as fuji_core,
     memory as mem,
@@ -83,22 +83,25 @@ async def call_core_decide(
     kw: Dict[str, Any] = {}
     ctx = dict(context or {})
 
-    # query を context にも埋める
-    if "query" not in params and query:
+    # ★ query は常に context にも埋める（テストもこれを期待している）
+    if query:
         ctx.setdefault("query", query)
         ctx.setdefault("prompt", query)
         ctx.setdefault("text", query)
 
+    # ctx / context を渡す
     if "ctx" in params:
         kw["ctx"] = ctx
     elif "context" in params:
         kw["context"] = ctx
 
+    # alternatives / options
     if "options" in params:
         kw["options"] = alternatives or []
     elif "alternatives" in params:
         kw["alternatives"] = alternatives or []
 
+    # min_evidence / k / top_k
     if "min_evidence" in params:
         kw["min_evidence"] = min_evidence
     elif "k" in params:
@@ -106,14 +109,25 @@ async def call_core_decide(
     elif "top_k" in params:
         kw["top_k"] = min_evidence
 
+    # query 引数を直接受けるパターンにも対応
     if "query" in params:
         kw["query"] = query
 
+    # sync / async 両対応
     if inspect.iscoroutinefunction(core_fn):
         return await core_fn(**kw)
 
-    loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(None, lambda: core_fn(**kw))
+    # asyncio ループがある場合はその executor を使う（asyncio backend 用）
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # asyncio ループが無い場合（例: anyio backend=trio）→素直に同期実行
+        return core_fn(**kw)
+    else:
+        return await loop.run_in_executor(None, lambda: core_fn(**kw))
+
+
+
 
 
 def _to_bool(v: Any) -> bool:
@@ -147,14 +161,25 @@ def _to_dict(o: Any) -> Dict[str, Any]:
 
 def _norm_alt(o: Any) -> Dict[str, Any]:
     d = _to_dict(o) or {}
-    if "title" not in d and "text" in d:
-        d["title"] = d.pop("text")
+
+    # text を先に退避しておく（後で title / description の両方に使う）
+    text = d.get("text")
+
+    # text から title を補完（ただし text は pop しない）
+    if "title" not in d and text:
+        d["title"] = text
+
     d.setdefault("title", "")
-    d["description"] = (d.get("description") or d.get("text") or "")
+
+    # description がなければ text で補完
+    d["description"] = (d.get("description") or text or "")
+
     d["score"] = _to_float_or(d.get("score", 1.0), 1.0)
     d["score_raw"] = _to_float_or(d.get("score_raw", d["score"]), d["score"])
     d["id"] = str(d.get("id") or uuid4().hex)
+
     return d
+
 
 
 def _mem_model_path() -> str:
@@ -291,11 +316,22 @@ async def run_decide_pipeline(
 
     # ---------- MemoryOS: prior / retrieval ----------
     recent_logs = mem.recent(user_id, limit=20)
-    similar = [
-        r
-        for r in recent_logs
-        if query and query[:8] in str(((r.get("value") or {}).get("query") or ""))
-    ]
+    similar = []
+    for r in recent_logs:
+        # 型チェック: r が辞書か
+        if not isinstance(r, dict):
+            continue
+
+        # 型チェック: r.get("value") が辞書か
+        value = r.get("value")
+        if not isinstance(value, dict):
+            continue
+
+        # クエリマッチング
+        r_query = value.get("query", "")
+        if query and query[:8] in str(r_query):
+            similar.append(r)
+            
     prior_scores: Dict[str, float] = {}
     for r in similar:
         c = (r.get("value") or {}).get("chosen") or {}

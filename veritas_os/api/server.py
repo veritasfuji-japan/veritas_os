@@ -512,25 +512,40 @@ async def memory_search(payload: dict):
         min_sim = float(payload.get("min_sim", 0.25))
         user_id = payload.get("user_id")  # Noneの場合は全ユーザー検索
 
-        hits = MEMORY_STORE.search(
+        raw_hits = MEMORY_STORE.search(
             query=q,
             k=k,
             kinds=kinds,
             min_sim=min_sim,
         )
-        
-        # user_id フィルタリング（オプション）
-        if user_id:
-            hits = [
-                h for h in hits
-                if h.get("meta", {}).get("user_id") == user_id
-            ]
-        
-        return {"ok": True, "hits": hits, "count": len(hits)}
-    
+
+        norm_hits = []
+        for h in raw_hits:
+            # パターンA: dict 形式（text/score/meta などを含む）で返ってくる場合
+            if isinstance(h, dict):
+                meta = h.get("meta") or {}
+                if user_id:
+                    # meta.user_id が一致するものだけ残す
+                    if meta.get("user_id") == user_id:
+                        norm_hits.append(h)
+                else:
+                    norm_hits.append(h)
+
+            else:
+                # パターンB: 文字列や単純なIDで返ってくる場合
+                # user_id フィルタはできないので:
+                # - user_id 指定ありならスキップ
+                # - 指定なしなら、そのまま id としてラップして返す
+                if user_id:
+                    continue
+                norm_hits.append({"id": h})
+
+        return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
+
     except Exception as e:
         print("[MemoryOS][search] Error:", e)
-        return {"ok": False, "error": str(e), "hits": []}
+        return {"ok": False, "error": str(e), "hits": [], "count": 0}
+
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
