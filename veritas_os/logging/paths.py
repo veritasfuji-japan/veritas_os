@@ -12,10 +12,17 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # ---- ログ周り ----
 
-# logs のルート（環境変数で上書きも可）
-LOG_ROOT = Path(
-    os.getenv("VERITAS_LOG_ROOT", str(SCRIPTS_DIR / "logs"))
-).expanduser()
+# ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う
+DATA_BASE = os.getenv("VERITAS_DATA_DIR")
+if DATA_BASE:
+    # 例: /tmp/pytest-xxx など
+    LOG_ROOT = Path(DATA_BASE).expanduser()
+else:
+    # 従来どおり VERITAS_LOG_ROOT → scripts/logs の順で使う
+    LOG_ROOT = Path(
+        os.getenv("VERITAS_LOG_ROOT", str(SCRIPTS_DIR / "logs"))
+    ).expanduser()
+
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
 
 # trust_log など通常ログ
@@ -61,3 +68,4 @@ __all__ = [
     "VAL_JSON",
     "META_LOG",
 ]
+

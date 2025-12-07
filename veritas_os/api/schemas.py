@@ -191,6 +191,10 @@ class DecideResponse(BaseModel):
     # persist 用に付けている meta（memory_evidence_count など）
     meta: Dict[str, Any] = Field(default_factory=dict)
 
+    # ★ 監査用 TrustLog（必須ではないので Optional）
+    trust_log: Optional[Dict[str, Any]] = None
+
+
 
 DecideResponse.model_rebuild()
 

@@ -74,19 +74,42 @@ SHADOW_DIR.mkdir(parents=True, exist_ok=True)
 # API Key & HMAC 認証
 # ==============================
 
-API_KEY = (os.getenv("VERITAS_API_KEY") or cfg.api_key or "").strip()
-if not API_KEY:
+# ← これは「デフォルト値」としてだけ使う
+API_KEY_DEFAULT = (os.getenv("VERITAS_API_KEY") or cfg.api_key or "").strip()
+if not API_KEY_DEFAULT:
     print("[WARN] VERITAS_API_KEY 未設定（開発時のみ許容）")
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def _get_expected_api_key() -> str:
+    """
+    毎リクエストごとに期待される API キーを取得する。
+    - env > cfg.api_key の優先順位
+    - pytest の monkeypatch.setenv にも対応
+    """
+    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
+    if env_key:
+        return env_key
+
+    return API_KEY_DEFAULT  # cfg.api_key などを含む
+
+
 def require_api_key(x_api_key: str = Security(api_key_scheme)):
+    expected = (_get_expected_api_key() or "").strip()
+
+    # サーバ側がキー未設定の場合
+    if not expected:
+        raise HTTPException(status_code=500, detail="Server API key not configured")
+
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
-    if not secrets.compare_digest(x_api_key.strip(), API_KEY):
+
+    if not secrets.compare_digest(x_api_key.strip(), expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
+
     return True
+
 
 
 # ---- HMAC signature / replay ----
@@ -313,7 +336,14 @@ async def decide(req: DecideRequest, request: Request):
     ロジック本体は veritas_os.core.pipeline.run_decide_pipeline 側に集約。
     """
     payload = await decision_pipeline.run_decide_pipeline(req=req, request=request)
+
+    # ★ テスト互換: trust_log キーを必ず付ける
+    if "trust_log" not in payload:
+        payload["trust_log"] = None
+
+    # 既存の挙動に合わせて JSONResponse で返す
     return JSONResponse(content=payload, status_code=200)
+
 
 
 # ==============================
