@@ -163,14 +163,19 @@ def write_shadow_decide(
     shadow_dir = LOG_DIR / "DASH"
     shadow_dir.mkdir(parents=True, exist_ok=True)
 
-    ts_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+    # タイムゾーン付きの UTC 時刻を使用（utcnow() は非推奨）
+    now_utc = datetime.now(timezone.utc)
+
+    # ファイル名用タイムスタンプ（ミリ秒まで）
+    ts_str = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
     out = shadow_dir / f"decide_{ts_str}.json"
 
     fuji_safe = fuji if isinstance(fuji, dict) else {}
 
     rec = {
         "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        # ISO8601 + "Z"（UTC）に正規化
+        "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": (
             body.get("query")
             or (body.get("context") or {}).get("query")
@@ -183,4 +188,5 @@ def write_shadow_decide(
 
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rec, f, ensure_ascii=False, indent=2)
+
 

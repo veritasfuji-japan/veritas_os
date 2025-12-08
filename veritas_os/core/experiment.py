@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from veritas_os.core.time_utils import utc_now
 
 
 @dataclass
@@ -43,7 +43,7 @@ def propose_experiments_for_today(
     - value_ema が低いときはリスク低め、高いときは少し攻めた実験も混ざる
     """
     world_state = world_state or {}
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = utc_now().strftime("%Y-%m-%d")
 
     veritas = (world_state.get("veritas") or world_state.get("veritas_agi") or {}) or {}
     progress = float(veritas.get("progress", 0.0) or 0.0)

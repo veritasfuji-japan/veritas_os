@@ -1,4 +1,4 @@
-# veritas/api/server.py
+# veritas_os/api/server.py
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +20,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY  # noqa: F401
+
+from veritas_os.core.time_utils import utc_now_iso_z
 
 # ---- VERITAS core 層 ----
 from veritas_os.core import fuji as fuji_core, memory as mem, value_core
@@ -34,6 +35,7 @@ from veritas_os.logging.dataset_writer import (
 )
 from veritas_os.logging.paths import LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
 from veritas_os.core.memory import MEM as MEMORY_STORE
+
 # ---- API 層 ----
 from veritas_os.api.schemas import (
     DecideRequest,
@@ -44,6 +46,7 @@ from veritas_os.api.schemas import (
 )
 from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED
 from veritas_os.api.evolver import load_persona
+
 
 # ==============================
 # 環境 & パス初期化
@@ -69,6 +72,7 @@ LOG_JSON = LOG_DIR / "trust_log.json"
 LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 SHADOW_DIR = LOG_DIR / "DASH"
 SHADOW_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # ==============================
 # API Key & HMAC 認証
@@ -109,7 +113,6 @@ def require_api_key(x_api_key: str = Security(api_key_scheme)):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     return True
-
 
 
 # ---- HMAC signature / replay ----
@@ -345,7 +348,6 @@ async def decide(req: DecideRequest, request: Request):
     return JSONResponse(content=payload, status_code=200)
 
 
-
 # ==============================
 # FUJI quick validate
 # ==============================
@@ -481,7 +483,7 @@ def memory_put(body: dict):
 async def memory_search(payload: dict):
     """
     ベクトル検索エンドポイント
-    
+
     Request:
         {
             "query": "検索クエリ",
@@ -490,7 +492,7 @@ async def memory_search(payload: dict):
             "min_sim": 0.25 (optional, default: 0.25),
             "user_id": "user123" (optional)
         }
-    
+
     Response:
         {
             "ok": true,
@@ -547,7 +549,6 @@ async def memory_search(payload: dict):
         return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
-
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
 def memory_get(body: dict):
     """レガシーKV取得"""
@@ -585,7 +586,7 @@ def metrics():
         "decide_files": len(files),
         "trust_jsonl_lines": lines,
         "last_decide_at": last_at,
-        "server_time": datetime.utcnow().isoformat() + "Z",
+        "server_time": utc_now_iso_z(),
     }
 
 
@@ -625,5 +626,6 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
 
 

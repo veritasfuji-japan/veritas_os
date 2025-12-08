@@ -608,6 +608,7 @@ class MemoryStore:
         use_cache: bool = True,
     ) -> List[Dict[str, Any]]:
         """memory.json 全体を読み込む"""
+        #
         # キャッシュチェック
         if use_cache and self._cache_ttl > 0:
             with self._cache_lock:
@@ -905,11 +906,15 @@ class MemoryStore:
             ts = ep.get("ts")
             if ts:
                 try:
-                    ts_str = datetime.utcfromtimestamp(float(ts)).isoformat() + "Z"
+        # Python 3.14 以降での推奨パターン（UTCの timezone-aware datetime）
+                    dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+        # 既存仕様に合わせて naive + "Z" にする場合
+                    ts_str = dt.replace(tzinfo=None).isoformat() + "Z"
                 except Exception:
                     ts_str = "unknown"
             else:
                 ts_str = "unknown"
+
 
             tag_str = f" tags={tags}" if tags else ""
             if len(text) > 120:
@@ -1246,6 +1251,17 @@ def search(
                             break
 
             if candidates:
+                # user_id指定があればフィルタ（meta.user_id が一致 or 未指定）
+                if user_id is not None:
+                    filtered: List[Dict[str, Any]] = []
+                    for h in candidates:
+                        meta = h.get("meta") or {}
+                        uid = meta.get("user_id")
+                        if uid is None or uid == user_id:
+                            filtered.append(h)
+                    if filtered:
+                        candidates = filtered
+
                 unique = _dedup_hits(candidates, k)
                 logger.info(
                     f"[MemoryOS] Vector search returned "
@@ -1382,10 +1398,12 @@ def distill_memory_for_user(
     user_id: str,
     *,
     max_items: int = 200,
-    min_text_len: int = 20,
+    min_text_len: int = 10,
     tags: Optional[List[str]] = None,
     model: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
+
+
     """
     指定ユーザーの episodic メモリをまとめて「長期記憶ノート（semantic）」に蒸留する。
 
@@ -1522,12 +1540,22 @@ def distill_memory_for_user(
     summary_text = ""
 
     if isinstance(resp, dict):
-        summary_text = (
-            resp.get("text")
-            or resp.get("content")
-            or resp.get("output")
-            or ""
-        )
+        # 典型的な OpenAI / LLM スタイルのレスポンスも一応ハンドル
+        if "choices" in resp:
+            try:
+                summary_text = (
+                    resp["choices"][0]["message"]["content"]
+                    or ""
+                )
+            except Exception:
+                summary_text = ""
+        if not summary_text:
+            summary_text = (
+                resp.get("text")
+                or resp.get("content")
+                or resp.get("output")
+                or ""
+            )
     elif isinstance(resp, str):
         summary_text = resp
     else:
@@ -1623,6 +1651,7 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
+
 
 
 

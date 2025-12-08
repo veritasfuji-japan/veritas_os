@@ -1,4 +1,4 @@
-# veritas_os/api/pipeline.py など
+# veritas_os/core/pipeline.py など
 from __future__ import annotations
 
 import asyncio
@@ -7,7 +7,6 @@ import json
 import os
 import secrets
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 from uuid import uuid4
@@ -25,6 +24,7 @@ from veritas_os.core import (
     reason as reason_core,
     debate as debate_core,
 )
+from veritas_os.core.time_utils import utc_now, utc_now_iso_z
 from veritas_os.logging.paths import LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
 from veritas_os.logging.dataset_writer import (
     build_dataset_record,
@@ -53,6 +53,7 @@ try:
             predict_gate_label,
         )
     else:
+
         def predict_gate_label(text: str) -> Dict[str, float]:
             return {"allow": 0.5}
 except Exception:  # モデル無し環境での fallback
@@ -66,6 +67,7 @@ except Exception:  # モデル無し環境での fallback
 # =========================================================
 # 汎用ヘルパー
 # =========================================================
+
 
 async def call_core_decide(
     core_fn,
@@ -127,9 +129,6 @@ async def call_core_decide(
         return await loop.run_in_executor(None, lambda: core_fn(**kw))
 
 
-
-
-
 def _to_bool(v: Any) -> bool:
     if isinstance(v, bool):
         return v
@@ -181,7 +180,6 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
     return d
 
 
-
 def _mem_model_path() -> str:
     try:
         from veritas_os.core.models import memory_model as mm
@@ -228,6 +226,7 @@ def _save_valstats(d: Dict[str, Any]) -> None:
 # =========================================================
 # メイン: 決定パイプライン
 # =========================================================
+
 
 async def run_decide_pipeline(
     req: DecideRequest,
@@ -331,7 +330,7 @@ async def run_decide_pipeline(
         r_query = value.get("query", "")
         if query and query[:8] in str(r_query):
             similar.append(r)
-            
+
     prior_scores: Dict[str, float] = {}
     for r in similar:
         c = (r.get("value") or {}).get("chosen") or {}
@@ -514,7 +513,7 @@ async def run_decide_pipeline(
         if retrieved:
             cited_ids = [str(r.get("id")) for r in top_hits if r.get("id")]
             if cited_ids:
-                ts = datetime.utcnow().isoformat() + "Z"
+                ts = utc_now_iso_z()
                 mem.put(
                     user_id,
                     key=f"memory_use_{ts}",
@@ -834,6 +833,7 @@ async def run_decide_pipeline(
     chosen = raw.get("chosen") if isinstance(raw, dict) else {}
     if not isinstance(chosen, dict) or not chosen:
         try:
+
             def _choice_key(d: Dict[str, Any]) -> float:
                 w = (d.get("world") or {}).get("utility")
                 try:
@@ -1116,7 +1116,7 @@ async def run_decide_pipeline(
         hist = valstats.get("history", [])
         hist.append(
             {
-                "ts": datetime.utcnow().isoformat() + "Z",
+                "ts": utc_now_iso_z(),
                 "ema": ema_new,
                 "value": v_val,
             }
@@ -1206,7 +1206,7 @@ async def run_decide_pipeline(
     # ---------- Episodic / Decision Memory logging ----------
     try:
         uid_mem = (context or {}).get("user_id") or user_id or "anon"
-        ts = datetime.utcnow().isoformat() + "Z"
+        ts = utc_now_iso_z()
 
         episode_text = "\n".join(
             [
@@ -1219,7 +1219,7 @@ async def run_decide_pipeline(
 
         mem.put(
             uid_mem,
-            key=f"decision_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+            key=f"decision_{utc_now().strftime('%Y%m%d_%H%M%S')}",
             value={
                 "kind": "decision",
                 "query": query,
@@ -1235,7 +1235,7 @@ async def run_decide_pipeline(
 
         mem.put(
             uid_mem,
-            key=f"episode_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+            key=f"episode_{utc_now().strftime('%Y%m%d_%H%M%S')}",
             value={
                 "kind": "episodic",
                 "text": episode_text,
@@ -1295,7 +1295,7 @@ async def run_decide_pipeline(
 
         audit_entry = {
             "request_id": request_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": utc_now().isoformat(),
             "context": context,
             "query": query,
             "chosen": chosen,
@@ -1356,7 +1356,7 @@ async def run_decide_pipeline(
 
             META_LOG.parent.mkdir(parents=True, exist_ok=True)
             entry = {
-                "created_at": datetime.utcnow().isoformat() + "Z",
+                "created_at": utc_now_iso_z(),
                 "request_id": request_id,
                 "next_value_boost": nv,
                 "value_ema": ema2,
@@ -1431,13 +1431,13 @@ async def run_decide_pipeline(
         if planner_dict:
             mem.put(
                 uid_plan,
-                key=f"plan_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                key=f"plan_{utc_now().strftime('%Y%m%d_%H%M%S')}",
                 value={
                     "kind": "plan",
                     "query": query,
                     "chosen": payload.get("chosen"),
                     "planner": planner_dict,
-                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "timestamp": utc_now_iso_z(),
                 },
             )
 
@@ -1455,14 +1455,13 @@ async def run_decide_pipeline(
 
                 mem.put(
                     uid_plan,
-                    key=f"plan_text_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}",
+                    key=f"plan_text_{utc_now().strftime('%Y%m%d_%H%M%S')}",
                     value={
                         "kind": "plan_text",
                         "query": query,
                         "text": plan_text,
                         "tags": ["plan", "veritas", "decide"],
-                        "timestamp": datetime.utcnow().isoformat()
-                        + "Z",
+                        "timestamp": utc_now_iso_z(),
                     },
                 )
 
@@ -1556,7 +1555,7 @@ async def run_decide_pipeline(
 
         persist = {
             "request_id": request_id,
-            "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "ts": utc_now_iso_z(timespec="seconds"),
             "query": query,
             "chosen": chosen,
             "decision_status": payload.get("decision_status") or "unknown",
@@ -1575,7 +1574,7 @@ async def run_decide_pipeline(
             "world": world_snapshot,
         }
 
-        stamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         fname = f"decide_{stamp}.json"
 
         (LOG_DIR / fname).write_text(
@@ -1625,5 +1624,6 @@ async def run_decide_pipeline(
         print("[WorldModel] next_hint_for_veritas_agi skipped:", e)
 
     return payload
+
 
     
