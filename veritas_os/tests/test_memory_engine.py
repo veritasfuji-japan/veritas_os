@@ -10,7 +10,8 @@ memory/engine.py インターフェイス層のテスト。
   （＝将来の実装差し替えに耐えられるプロトコルになっていること）
 """
 
-from typing import List, Dict, Any
+from typing import Any, Dict, Optional, List
+
 
 import numpy as np
 import pytest
