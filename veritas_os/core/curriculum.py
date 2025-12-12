@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 超簡易なインメモリ保存（とりあえず動かす用）
 _USER_TASKS: Dict[str, List["CurriculumTask"]] = {}
@@ -31,13 +31,18 @@ class CurriculumTask:
         return asdict(self)
 
 
+def _today_str() -> str:
+    """UTCベースの今日の日付を YYYY-MM-DD 文字列で返す（tz-aware版）。"""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
 def load_tasks(user_id: str) -> List[CurriculumTask]:
     """
     今日分が既に作られていれば取得。なければ空リスト。
     - 実ストレージは後で差し替え前提。今はインメモリ。
     """
     tasks = _USER_TASKS.get(user_id, [])
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = _today_str()
     return [t for t in tasks if t.id.startswith(today)]
 
 
@@ -79,7 +84,7 @@ def generate_daily_curriculum(
     - value_ema が低い時は「メンテ・健康・負荷低め」寄り
       高い時は「開発・実験」寄りに少しシフト
     """
-    today = datetime.utcnow().strftime("%Y-%m-%d")
+    today = _today_str()
     stage = _stage_from_world(world_state)
 
     tasks: List[CurriculumTask] = []
@@ -194,3 +199,4 @@ def plan_today(
         world_state=world_state,
         value_ema=value_ema,
     )
+

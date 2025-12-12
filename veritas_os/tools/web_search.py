@@ -1,22 +1,54 @@
 # veritas_os/tools/web_search.py
+"""
+VERITAS OS 用 Web検索アダプタ（Serper.dev 経由）
+
+- 通常クエリ: そのまま Serper に投げて結果を返す
+- AGI 系クエリ:
+    - クエリを AGI / 論文サイト寄りにブースト
+    - 返ってきた結果のうち、AGI っぽいものだけをフィルタ
+    - 1件も残らない場合は「0件」として返す（error = "no_agi_like_results"）
+
+戻り値のフォーマット:
+
+    {
+        "ok": bool,                 # True/False
+        "results": [
+            {"title": str, "url": str, "snippet": str},
+            ...
+        ],
+        "error": Optional[str],     # 失敗時 or 特殊条件時のエラー種別
+        "meta": {                   # 補助情報（あれば）
+            "raw_count": int,           # 元の結果件数
+            "agi_filter_applied": bool, # AGI フィルタを適用したか
+            "agi_result_count": int,    # フィルタ後の件数
+            "boosted_query": str | None # AGI クエリ時のブースト後クエリ
+        }
+    }
+
+※ env:
+    VERITAS_WEBSEARCH_URL : Serper.dev のエンドポイント URL
+    VERITAS_WEBSEARCH_KEY : Serper.dev の API キー（X-API-KEY）
+"""
+
 import os
-import requests
 from typing import Any, Dict, List
 
-WEBSEARCH_URL = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
-WEBSEARCH_KEY = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
+import requests
+
+WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
+WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
 # ---------------------------------
 # AGI 系クエリ用キーワード/サイト
 # ---------------------------------
-AGI_KEYWORDS = [
+AGI_KEYWORDS: List[str] = [
     "agi",
     "artificial general intelligence",
     "人工汎用知能",
     "人工一般知能",
 ]
 
-AGI_SITES = [
+AGI_SITES: List[str] = [
     "arxiv.org",
     "openreview.net",
     "deepmind.com",
@@ -28,7 +60,7 @@ AGI_SITES = [
 
 def _is_agi_query(q: str) -> bool:
     """クエリが AGI 関連っぽいかどうかをざっくり判定"""
-    q_low = q.lower()
+    q_low = (q or "").lower()
     if "agi" in q_low:
         return True
     if "人工汎用知能" in q_low or "人工一般知能" in q_low:
@@ -80,7 +112,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "Content-Type": "application/json",
         }
 
-        agi_query = _is_agi_query(query)
+        agi_query = _is_agi_query(query or "")
 
         # ---- ① クエリブースト ----
         boosted_query = query
@@ -93,14 +125,14 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "OR site:alignmentforum.org OR site:lesswrong.com"
             )
 
-        payload = {
+        payload: Dict[str, Any] = {
             "q": boosted_query,
             "num": int(max_results * 2),  # 余裕をもって多めに取ってくる
         }
 
         resp = requests.post(WEBSEARCH_URL, headers=headers, json=payload, timeout=15)
         resp.raise_for_status()
-        data = resp.json()
+        data: Dict[str, Any] = resp.json()
 
         organic = data.get("organic") or []
         raw_items: List[Dict[str, Any]] = []
@@ -174,3 +206,4 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "results": [],
             "error": f"WEBSEARCH_API error: {repr(e)}",
         }
+

@@ -1,4 +1,4 @@
-# veritas/api/server.py
+# veritas_os/api/server.py
 from __future__ import annotations
 
 import asyncio
@@ -20,7 +20,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY  # noqa: F401
+
+from veritas_os.core.time_utils import utc_now_iso_z
 
 # ---- VERITAS core 層 ----
 from veritas_os.core import fuji as fuji_core, memory as mem, value_core
@@ -34,6 +35,7 @@ from veritas_os.logging.dataset_writer import (
 )
 from veritas_os.logging.paths import LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
 from veritas_os.core.memory import MEM as MEMORY_STORE
+
 # ---- API 層 ----
 from veritas_os.api.schemas import (
     DecideRequest,
@@ -44,6 +46,7 @@ from veritas_os.api.schemas import (
 )
 from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED
 from veritas_os.api.evolver import load_persona
+
 
 # ==============================
 # 環境 & パス初期化
@@ -70,22 +73,45 @@ LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 SHADOW_DIR = LOG_DIR / "DASH"
 SHADOW_DIR.mkdir(parents=True, exist_ok=True)
 
+
 # ==============================
 # API Key & HMAC 認証
 # ==============================
 
-API_KEY = (os.getenv("VERITAS_API_KEY") or cfg.api_key or "").strip()
-if not API_KEY:
+# ← これは「デフォルト値」としてだけ使う
+API_KEY_DEFAULT = (os.getenv("VERITAS_API_KEY") or cfg.api_key or "").strip()
+if not API_KEY_DEFAULT:
     print("[WARN] VERITAS_API_KEY 未設定（開発時のみ許容）")
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
+def _get_expected_api_key() -> str:
+    """
+    毎リクエストごとに期待される API キーを取得する。
+    - env > cfg.api_key の優先順位
+    - pytest の monkeypatch.setenv にも対応
+    """
+    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
+    if env_key:
+        return env_key
+
+    return API_KEY_DEFAULT  # cfg.api_key などを含む
+
+
 def require_api_key(x_api_key: str = Security(api_key_scheme)):
+    expected = (_get_expected_api_key() or "").strip()
+
+    # サーバ側がキー未設定の場合
+    if not expected:
+        raise HTTPException(status_code=500, detail="Server API key not configured")
+
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
-    if not secrets.compare_digest(x_api_key.strip(), API_KEY):
+
+    if not secrets.compare_digest(x_api_key.strip(), expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
+
     return True
 
 
@@ -284,11 +310,15 @@ def write_shadow_decide(
     pipeline 側実装と揃えてある。
     """
     SHADOW_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+    # timezone-aware UTC を使用（datetime.utcnow の deprecation 回避）
+    now_utc = datetime.now(timezone.utc)
+
+    ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
     out = SHADOW_DIR / f"decide_{ts}.json"
     rec = {
         "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": (body.get("query") or (body.get("context") or {}).get("query") or ""),
         "chosen": chosen,
         "telos_score": float(telos_score or 0.0),
@@ -313,6 +343,12 @@ async def decide(req: DecideRequest, request: Request):
     ロジック本体は veritas_os.core.pipeline.run_decide_pipeline 側に集約。
     """
     payload = await decision_pipeline.run_decide_pipeline(req=req, request=request)
+
+    # ★ テスト互換: trust_log キーを必ず付ける
+    if "trust_log" not in payload:
+        payload["trust_log"] = None
+
+    # 既存の挙動に合わせて JSONResponse で返す
     return JSONResponse(content=payload, status_code=200)
 
 
@@ -368,7 +404,7 @@ def memory_put(body: dict):
     try:
         # ---- 旧フォーマット（レガシーKV）対応 ----
         user_id = body.get("user_id", "anon")
-        key = body.get("key") or f"memory_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         value = body.get("value") or {}
 
         legacy_saved = False
@@ -451,7 +487,7 @@ def memory_put(body: dict):
 async def memory_search(payload: dict):
     """
     ベクトル検索エンドポイント
-    
+
     Request:
         {
             "query": "検索クエリ",
@@ -460,7 +496,7 @@ async def memory_search(payload: dict):
             "min_sim": 0.25 (optional, default: 0.25),
             "user_id": "user123" (optional)
         }
-    
+
     Response:
         {
             "ok": true,
@@ -482,25 +518,39 @@ async def memory_search(payload: dict):
         min_sim = float(payload.get("min_sim", 0.25))
         user_id = payload.get("user_id")  # Noneの場合は全ユーザー検索
 
-        hits = MEMORY_STORE.search(
+        raw_hits = MEMORY_STORE.search(
             query=q,
             k=k,
             kinds=kinds,
             min_sim=min_sim,
         )
-        
-        # user_id フィルタリング（オプション）
-        if user_id:
-            hits = [
-                h for h in hits
-                if h.get("meta", {}).get("user_id") == user_id
-            ]
-        
-        return {"ok": True, "hits": hits, "count": len(hits)}
-    
+
+        norm_hits = []
+        for h in raw_hits:
+            # パターンA: dict 形式（text/score/meta などを含む）で返ってくる場合
+            if isinstance(h, dict):
+                meta = h.get("meta") or {}
+                if user_id:
+                    # meta.user_id が一致するものだけ残す
+                    if meta.get("user_id") == user_id:
+                        norm_hits.append(h)
+                else:
+                    norm_hits.append(h)
+
+            else:
+                # パターンB: 文字列や単純なIDで返ってくる場合
+                # user_id フィルタはできないので:
+                # - user_id 指定ありならスキップ
+                # - 指定なしなら、そのまま id としてラップして返す
+                if user_id:
+                    continue
+                norm_hits.append({"id": h})
+
+        return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
+
     except Exception as e:
         print("[MemoryOS][search] Error:", e)
-        return {"ok": False, "error": str(e), "hits": []}
+        return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
@@ -540,7 +590,7 @@ def metrics():
         "decide_files": len(files),
         "trust_jsonl_lines": lines,
         "last_decide_at": last_at,
-        "server_time": datetime.utcnow().isoformat() + "Z",
+        "server_time": utc_now_iso_z(),
     }
 
 
@@ -580,5 +630,7 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
+
 
 

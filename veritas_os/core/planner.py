@@ -592,34 +592,45 @@ def _fallback_plan(query: str) -> Dict[str, Any]:
 # ============================
 
 
-def _infer_veritas_stage(world_snap: Optional[Dict[str, Any]]) -> str:
+def _infer_veritas_stage(world_state: Optional[Dict[str, Any]]) -> str:
     """
-    world.snapshot('veritas_agi') から progress / decision_count を見てステージを決める。
+    VERITAS / AGI ベンチ用の進捗ステージ推定。
+
+    test_planner.py の仕様:
+      (progress, expected_stage)
+        0.0  -> S1_bootstrap
+        0.1  -> S2_arch_doc
+        0.2  -> S3_api_polish
+        0.4  -> S4_decision_analytics
+        0.6  -> S5_real_usecase
+        0.8  -> S6_llm_integration
+        0.95 -> S7_demo_review
     """
-    if not isinstance(world_snap, dict):
+
+    if not world_state:
+        # まだ world_state がないときは完全初期状態扱い
         return "S1_bootstrap"
 
     try:
-        p = float(world_snap.get("progress", 0.0) or 0.0)
-        n = int(world_snap.get("decision_count", 0) or 0)
-    except Exception:
-        p, n = 0.0, 0
+        progress = float(world_state.get("progress") or 0.0)
+    except (TypeError, ValueError):
+        progress = 0.0
 
-    # progressベースでざっくりステージを決定
-    if p < 0.05:
+    # progress のレンジで段階を決める
+    # 0.0 → S1, 0.1 → S2, 0.2 → S3, 0.4 → S4, 0.6 → S5, 0.8 → S6, 0.95 → S7
+    if progress < 0.05:
         return "S1_bootstrap"
-    elif p < 0.15:
+    if progress < 0.15:
         return "S2_arch_doc"
-    elif p < 0.30:
+    if progress < 0.35:
         return "S3_api_polish"
-    elif p < 0.50:
+    if progress < 0.55:
         return "S4_decision_analytics"
-    elif p < 0.70:
+    if progress < 0.70:
         return "S5_real_usecase"
-    elif p < 0.90:
+    if progress < 0.90:
         return "S6_llm_integration"
-    else:
-        return "S7_demo_review"
+    return "S7_demo_review"
 
 
 def _fallback_plan_for_stage(

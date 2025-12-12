@@ -1,12 +1,13 @@
 from typing import Any, Dict, List
 import re
-from pathlib import Path   
+from pathlib import Path
 import json
-from datetime import datetime  # ← FIX: datetime インポート追加
+from datetime import datetime, timezone
 from .schemas import PersonaState
 from ..core.config import cfg
 
 PERSONA_JSON = cfg.log_dir / "persona.json"
+
 
 def _extract_keywords(text: str, k: int = 6) -> List[str]:
     """テキストからキーワードを抽出（長い順に最大k個）"""
@@ -30,21 +31,25 @@ def load_persona() -> dict:
 def save_persona(p: PersonaState) -> None:
     """PersonaStateをpersona.jsonに保存"""
     try:
-        # FIX: 新しいインスタンスを作成（immutable対応）
+        # 新しいインスタンスを作成（immutable対応）
         updated = PersonaState(
             name=p.name,
             style=p.style,
             tone=p.tone,
             principles=p.principles,
-            last_updated=datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            last_updated=(
+                datetime.now(timezone.utc)
+                .isoformat(timespec="seconds")
+                .replace("+00:00", "Z")
+            ),
         )
-        
+
         # ディレクトリが存在しない場合は作成
         PERSONA_JSON.parent.mkdir(parents=True, exist_ok=True)
-        
+
         PERSONA_JSON.write_text(
-            json.dumps(updated.dict(), ensure_ascii=False, indent=2),
-            encoding="utf-8"
+            json.dumps(updated.model_dump(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
     except Exception as e:
         print(f"[persona] save failed: {e}")
@@ -54,7 +59,7 @@ def apply_persona(chosen: dict, persona: PersonaState) -> dict:
     """決定にペルソナメタデータを付与"""
     if not chosen or not persona:
         return chosen or {}
-    
+
     enriched = dict(chosen)
     meta = enriched.setdefault("_persona", {})
     meta["name"] = persona.name
@@ -68,13 +73,13 @@ def evolve_persona(persona: PersonaState, evo: dict) -> PersonaState:
     """キーワードに基づいてペルソナスタイルを進化"""
     if not evo or not persona:
         return persona
-    
+
     kws = (evo or {}).get("insights", {}).get("keywords", [])
-    
+
     # 研究/実証系キーワードでスタイル進化
     if any(k in kws for k in ["研究", "実証", "検証"]):
         if "evidence-first" not in persona.style:
-            # FIX: 新しいインスタンスを返す（immutable対応）
+            # 新しいインスタンスを返す（immutable対応）
             return PersonaState(
                 name=persona.name,
                 style=persona.style + ", evidence-first",
@@ -82,14 +87,14 @@ def evolve_persona(persona: PersonaState, evo: dict) -> PersonaState:
                 principles=persona.principles,
                 last_updated=persona.last_updated,
             )
-    
+
     return persona
 
 
 def generate_suggestions(
     query: str,
     chosen: dict[str, Any],
-    alts: list[dict[str, Any]]
+    alts: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """決定後の行動提案とフォローアップを生成"""
     text = (chosen or {}).get("text") or (chosen or {}).get("answer") or ""
@@ -123,3 +128,4 @@ def generate_suggestions(
         "next_prompts": next_prompts,
         "notes": notes,
     }
+

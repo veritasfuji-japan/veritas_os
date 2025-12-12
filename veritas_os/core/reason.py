@@ -1,12 +1,12 @@
+# veritas_os/core/reason.py
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict, List
 import asyncio
 import json
-import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from . import llm_client
 
@@ -22,9 +22,8 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 LOG_DIR = SCRIPTS_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-# ★ Doctor が読むのに合わせて .jsonl に統一
+# Doctor / Reason 用メタログ（JSON Lines）
 META_LOG = LOG_DIR / "meta_log.jsonl"
-print("[ReasonOS] META_LOG path:", META_LOG)
 
 
 # ============================
@@ -41,6 +40,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
     chosen = decision.get("chosen") or {}
     gate = decision.get("gate") or {}
     values = decision.get("values") or {}
+
     # ValueCore total（0〜1想定）
     v_total = float(values.get("total", 0.5))
     ema = float(values.get("ema", v_total))
@@ -94,8 +94,12 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     # JSON Lines 形式で1行ずつ追記
-    with open(META_LOG, "a", encoding="utf-8") as f:
-        f.write(json.dumps(out, ensure_ascii=False) + "\n")
+    try:
+        with open(META_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(out, ensure_ascii=False) + "\n")
+    except Exception:
+        # ログ書き込み失敗は本体ロジックに影響させない
+        pass
 
     return out
 
@@ -104,7 +108,23 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
 # ② LLM による自然文 Reason 生成
 # ============================
 
-def generate_reason(*, query, planner=None, values=None, gate=None, context=None):
+def generate_reason(
+    *,
+    query: str,
+    planner: Dict[str, Any] | None = None,
+    values: Dict[str, Any] | None = None,
+    gate: Dict[str, Any] | None = None,
+    context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """
+    Planner / Values / Gate / Context をまとめて LLM に渡し、
+    「なぜこの decision が妥当なのか」の自然文 Reason を生成する。
+    """
+    planner = planner or {}
+    values = values or {}
+    gate = gate or {}
+    context = context or {}
+
     system_prompt = """
 あなたは VERITAS OS の Reason モジュールです。
 以下の情報を踏まえ、なぜこの decision が妥当なのかを
@@ -130,7 +150,7 @@ def generate_reason(*, query, planner=None, values=None, gate=None, context=None
 上記を踏まえて「理由(Reason)」を日本語で簡潔に書いてください。
 """
 
-    # ★ llm_client.chat を呼び出す
+    # llm_client.chat は {"text": "...", "source": "..."} を返す想定
     llm_res = llm_client.chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
@@ -138,12 +158,15 @@ def generate_reason(*, query, planner=None, values=None, gate=None, context=None
         max_tokens=800,
     )
 
-    # chat() は {"text": "...", "source": "..."} を返す想定
-    text = llm_res.get("text", "")
+    text = ""
+    if isinstance(llm_res, dict):
+        text = llm_res.get("text", "") or ""
+    elif isinstance(llm_res, str):
+        text = llm_res
 
     return {
         "text": text,
-        "source": llm_res.get("source", "openai_llm"),
+        "source": (llm_res.get("source") if isinstance(llm_res, dict) else "openai_llm"),
     }
 
 
@@ -256,7 +279,7 @@ async def generate_reflection_template(
     # ついでに meta_log にも記録しておく（任意）
     try:
         meta = {
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "type": "reflection_template",
             "query": query[:200],
             "pattern": pattern,
@@ -268,3 +291,4 @@ async def generate_reflection_template(
         print("[ReasonOS] reflection_template meta_log skipped:", e)
 
     return tmpl
+

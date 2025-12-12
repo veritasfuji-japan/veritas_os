@@ -19,7 +19,6 @@ from typing import Any, Dict, List
 
 from . import adapt
 from . import evidence as evos
-from . import debate
 from . import world as world_model
 from . import planner as planner_core
 from . import agi_goals
@@ -87,6 +86,20 @@ def _mk_option(title: str, description: str = "", _id: str | None = None) -> Dic
         "description": description,
         "score": 1.0,
     }
+
+
+def _safe_load_persona() -> Dict[str, Any]:
+    """
+    persona.json 破損などで adapt.load_persona() が失敗しても
+    kernel 全体を落とさないためのラッパ。
+    """
+    try:
+        p = adapt.load_persona()
+        if isinstance(p, dict):
+            return p
+        return {}
+    except Exception:
+        return {}
 
 
 # ============================================================
@@ -336,6 +349,31 @@ def _score_alternatives(
             pass
 
 
+def _score_alternatives_with_value_core_and_persona(
+    intent: str,
+    q: str,
+    alts: List[Dict[str, Any]],
+    telos_score: float,
+    stakes: float,
+    persona_bias: Dict[str, float] | None,
+    ctx: Dict[str, Any] | None = None,
+) -> None:
+    """
+    ★ 後方互換ラッパ
+    旧バージョンから呼ばれている名前を維持するための薄い wrapper。
+    実装は _score_alternatives() に委譲する。
+    """
+    return _score_alternatives(
+        intent=intent,
+        q=q,
+        alts=alts,
+        telos_score=telos_score,
+        stakes=stakes,
+        persona_bias=persona_bias,
+        ctx=ctx,
+    )
+
+
 # ============================================================
 # Simple QA モード（事前コンパイル済み正規表現）
 # ============================================================
@@ -479,7 +517,7 @@ def _handle_simple_qa(
             "top_factors": [],
             "rationale": "simple QA",
         },
-        "persona": adapt.load_persona(),
+        "persona": _safe_load_persona(),
         "version": "veritas-api 1.x",
         "decision_status": "allow",
         "rejection_reason": None,
@@ -525,6 +563,14 @@ def _handle_knowledge_qa(
     req_id: str,
     telos_score: float,
 ) -> Dict[str, Any]:
+    """
+    Web検索ベースの軽量な知識QA。
+    ★ 旧バージョンとの互換性を保ちつつ、FUJI Gate を通すように修正済み。
+    """
+    user_id = ctx.get("user_id") or "cli"
+    stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
+    mode = ctx.get("mode") or ""
+
     search_res = run_env_tool(
         "web_search",
         query=q,
@@ -577,6 +623,51 @@ def _handle_knowledge_qa(
         }
     }
 
+    # ★ FUJI Gate を通す（高リスク用途での一貫性確保）
+    try:
+        fuji_result = fuji_core.evaluate(
+            q,
+            context={
+                "user_id": user_id,
+                "stakes": stakes,
+                "mode": mode,
+                "telos_score": telos_score,
+                "fuji_safe_applied": ctx.get("fuji_safe_applied", False),
+            },
+            evidence=evidence,
+            alternatives=[chosen],
+        )
+    except Exception as e:
+        fuji_result = {
+            "status": "allow",
+            "decision_status": "allow",
+            "rejection_reason": None,
+            "reasons": [f"fuji_error:{repr(e)[:80]}"],
+            "violations": [],
+            "risk": 0.05,
+            "checks": [],
+            "guidance": None,
+            "modifications": [],
+            "redactions": [],
+            "safe_instructions": [],
+        }
+
+    gate = {
+        "risk": float(fuji_result.get("risk", 0.05)),
+        "telos_score": float(telos_score),
+        "decision_status": fuji_result.get("decision_status", fuji_result.get("status", "allow")),
+        "reason": None,
+        "modifications": fuji_result.get("modifications", []),
+    }
+
+    values = {
+        "scores": {},
+        "total": float(telos_score),
+        "top_factors": [],
+        "rationale": "knowledge QA",
+    }
+
+    # DecideResponse 完全互換
     return {
         "request_id": req_id,
         "chosen": chosen,
@@ -585,39 +676,17 @@ def _handle_knowledge_qa(
         "critique": [],
         "debate": [],
         "telos_score": telos_score,
-        "fuji": {
-            "status": "allow",
-            "decision_status": "allow",
-            "reasons": [],
-            "violations": [],
-            "risk": 0.05,
-            "checks": [],
-            "guidance": None,
-            "modifications": [],
-            "redactions": [],
-            "safe_instructions": [],
-        },
+        "fuji": fuji_result,
         "rsi_note": None,
         "summary": "knowledge_qa モードで直接回答しました。",
         "description": answer_desc,
         "extras": extras,
-        "gate": {
-            "risk": 0.05,
-            "telos_score": telos_score,
-            "decision_status": "allow",
-            "reason": None,
-            "modifications": [],
-        },
-        "values": {
-            "scores": {},
-            "total": telos_score,
-            "top_factors": [],
-            "rationale": "knowledge QA",
-        },
-        "persona": adapt.load_persona(),
+        "gate": gate,
+        "values": values,
+        "persona": _safe_load_persona(),
         "version": "veritas-api 1.x",
-        "decision_status": "allow",
-        "rejection_reason": None,
+        "decision_status": gate["decision_status"],
+        "rejection_reason": fuji_result.get("rejection_reason"),
         "memory_citations": [],
         "memory_used_count": 0,
         "memory_evidence_count": 0,
@@ -1293,8 +1362,26 @@ async def decide(
         extras["_skip_reasons"] = skip_reasons
 
     # =======================================================
-    # レスポンス構築
+    # レスポンス構築（旧 DecideResponse 互換 shape に寄せる）
     # =======================================================
+    gate = {
+        "risk": float(fuji_result.get("risk", 0.05)),
+        "telos_score": float(telos_score),
+        "decision_status": fuji_result.get("decision_status", fuji_result.get("status", "allow")),
+        "reason": None,
+        "modifications": fuji_result.get("modifications", []),
+    }
+
+    values = {
+        "scores": {},
+        "total": float(telos_score),
+        "top_factors": [],
+        "rationale": "kernel.decide v2-compatible",
+    }
+
+    decision_status = gate["decision_status"]
+    rejection_reason = fuji_result.get("rejection_reason")
+
     return {
         "request_id": req_id,
         "chosen": chosen,
@@ -1315,7 +1402,16 @@ async def decide(
             "memory_evidence_count": memory_evidence_count,
             "kernel_version": "v2-compatible",
         },
+        # 旧 DecideResponse との互換フィールド
+        "gate": gate,
+        "values": values,
+        "persona": persona,
+        "version": "veritas-api 1.x",
+        "decision_status": decision_status,
+        "rejection_reason": rejection_reason,
     }
+
+
 
 
 
