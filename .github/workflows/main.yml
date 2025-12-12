@@ -6,9 +6,20 @@ on:
   pull_request:
     branches: [ main ]
 
+# 同一ブランチで連打されたら古い実行をキャンセル
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# 権限は最小（artifact uploadに十分）
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: test (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       fail-fast: false
@@ -19,10 +30,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
 
       - name: Install dependencies
         run: |
@@ -32,15 +44,33 @@ jobs:
 
       - name: Run tests (with coverage)
         env:
-          # テストが環境変数必須ならダミーで埋める（秘密鍵は入れない）
+          # CIでは実キー禁止。コードが必須ならダミーで満たす。
           OPENAI_API_KEY: "DUMMY_FOR_CI"
           VERITAS_API_KEY: "DUMMY_FOR_CI"
+          # 余計なインタラクティブ挙動を避ける
+          PYTHONUNBUFFERED: "1"
         run: |
-          pytest -q veritas_os/tests --maxfail=1 \
-            --cov=veritas_os --cov-report=term-missing --cov-report=xml:coverage.xml
+          mkdir -p test-reports coverage-html
+          pytest -q veritas_os/tests \
+            --cov=veritas_os \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-report=html:coverage-html \
+            --junitxml=test-reports/pytest.xml
 
-      - name: Upload coverage artifact
+      - name: Upload test report (junit)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-${{ matrix.python-version }}
+          path: test-reports/pytest.xml
+
+      - name: Upload coverage (xml + html)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-${{ matrix.python-version }}
-          path: coverage.xml
+          path: |
+            coverage.xml
+            coverage-html
+
