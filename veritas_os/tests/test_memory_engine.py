@@ -9,6 +9,7 @@ memory/engine.py インターフェイス層のテスト。
   型的・インターフェイス的に問題なく動くこと
   （＝将来の実装差し替えに耐えられるプロトコルになっていること）
 """
+from __future__ import annotations
 
 from typing import Any, Dict, Optional, List
 
