@@ -906,15 +906,14 @@ class MemoryStore:
             ts = ep.get("ts")
             if ts:
                 try:
-        # Python 3.14 以降での推奨パターン（UTCの timezone-aware datetime）
+                    # Python 3.14 以降での推奨パターン（UTCの timezone-aware datetime）
                     dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-        # 既存仕様に合わせて naive + "Z" にする場合
+                    # 既存仕様に合わせて naive + "Z" にする場合
                     ts_str = dt.replace(tzinfo=None).isoformat() + "Z"
                 except Exception:
                     ts_str = "unknown"
             else:
                 ts_str = "unknown"
-
 
             tag_str = f" tags={tags}" if tags else ""
             if len(text) > 120:
@@ -1402,8 +1401,6 @@ def distill_memory_for_user(
     tags: Optional[List[str]] = None,
     model: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
-
-
     """
     指定ユーザーの episodic メモリをまとめて「長期記憶ノート（semantic）」に蒸留する。
 
@@ -1651,6 +1648,7 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
+
 
 
 

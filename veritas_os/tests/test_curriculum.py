@@ -1,6 +1,6 @@
 # veritas_os/tests/test_curriculum.py
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 import veritas_os.core.curriculum as curriculum
@@ -8,7 +8,8 @@ from veritas_os.core.curriculum import CurriculumTask
 
 
 def _today_prefix() -> str:
-    return datetime.utcnow().strftime("%Y-%m-%d")
+    # UTC の「今日」文字列（本体側と揃える）
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def _reset_user_tasks():
@@ -231,4 +232,5 @@ def test_plan_today_generates_once_and_reuses():
     # _USER_TASKS も変わらず3件
     assert user_id in curriculum._USER_TASKS  # type: ignore[attr-defined]
     assert len(curriculum._USER_TASKS[user_id]) == 3  # type: ignore[attr-defined]
+
 

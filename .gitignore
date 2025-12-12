@@ -57,3 +57,11 @@ backup/
 *.bak
 *.tmp
 *.temp
+
+# Coverage
+.coverage
+**/.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+

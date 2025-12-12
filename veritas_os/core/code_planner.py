@@ -17,6 +17,8 @@ import json
 import os
 from dataclasses import dataclass, asdict
 from datetime import datetime
+from datetime import datetime, timezone
+
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -81,7 +83,9 @@ def _safe_float(x: Any, default: float = 0.0) -> float:
 
 
 def _now_iso() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return datetime.now(timezone.utc).isoformat()
+    # もし "Z" が好きなら:
+    # return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ==== データ構造（コード変更プラン） ====

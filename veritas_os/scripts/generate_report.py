@@ -2,13 +2,13 @@
 # -*- coding: utf-8 -*-
 
 """
-VERITAS Doctor Dashboard Generator v2.4 (local .veritas layout)
+VERITAS Doctor Dashboard Generator v2.5 (local .veritas layout)
 - decide_*.json / decide_first_*.json を自動検出して集計
 - ログ: veritas_os/scripts/logs
-- MemoryOS / ValueEMA: veritas_os/.veritas/
+- MemoryOS / ValueEMA: 優先的に veritas_os/.veritas/ を参照し、
+  なければ scripts/logs や project_root/data をフォールバック
 """
 
-import os
 import json
 import glob
 import base64
@@ -18,13 +18,24 @@ import datetime
 import collections
 from pathlib import Path
 
-import matplotlib.pyplot as plt
+# ---- Matplotlib はあれば使う（なければグラフなしでHTMLだけ出す）----
+HAS_MPL = False
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt  # type: ignore
+    HAS_MPL = True
 
-# Matplotlib設定
-plt.rcParams.update({
-    "font.family": "AppleGothic",
-    "axes.unicode_minus": False,
-})
+    # フォント設定（フォールバック付き）
+    try:
+        plt.rcParams.update({
+            "font.family": "AppleGothic",
+            "axes.unicode_minus": False,
+        })
+    except Exception:
+        pass
+except Exception:
+    plt = None  # type: ignore
 
 REPO_ROOT   = Path(__file__).resolve().parents[1]   # .../veritas_os
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -37,20 +48,32 @@ LOG_DIR = SCRIPTS_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
+# doctor.py が doctor_report.json を書くので、ここでも同じ名前で上書きして OK
 REPORT_JSON = LOG_DIR / "doctor_report.json"
 
-# Value は data/value_stats.json を見る
+# Value は .veritas/value_stats.json または project_root/data/value_stats.json を見る
 DATA_DIR = PROJECT_ROOT / "data"
-VAL_JSON = DATA_DIR / "value_stats.json"
+VERITAS_DIR = REPO_ROOT / ".veritas"
 
-# Memory は今まで通り logs/memory.json を見る（ここは今動いているのでそのまま）
-MEM_JSON = LOG_DIR / "memory.json"
+VALUE_CANDIDATES = [
+    VERITAS_DIR / "value_stats.json",
+    DATA_DIR / "value_stats.json",
+]
+
+MEMORY_CANDIDATES = [
+    VERITAS_DIR / "memory.json",
+    LOG_DIR / "memory.json",
+]
 
 # ---------- 共通関数 ----------
 def b64_png_from_fig(fig):
+    if not HAS_MPL:
+        return None
     buf = io.BytesIO()
     fig.savefig(buf, format="png", bbox_inches="tight")
-    plt.close(fig)
+    if HAS_MPL:
+        import matplotlib.pyplot as _plt  # type: ignore
+        _plt.close(fig)
     buf.seek(0)
     return base64.b64encode(buf.read()).decode("ascii")
 
@@ -71,6 +94,13 @@ def _as_list(v):
     if isinstance(v, (list, tuple)):
         return list(v)
     return [v]
+
+def _pick_existing(candidates):
+    for p in candidates:
+        if isinstance(p, Path) and p.exists():
+            return p
+    # どれも無ければ先頭をデフォルトとして返す
+    return candidates[0]
 
 # ---------- データ収集 ----------
 def collect_decisions():
@@ -107,18 +137,15 @@ def collect_decisions():
             if not isinstance(metrics, dict):
                 metrics = {}
 
-            # decision_status（FUJI を優先）
-            status = None
-
+            # FUJI ステータス（生）と決定ステータス
             fuji_status = ""
             if isinstance(fuji, dict):
                 fuji_status = (fuji.get("status") or "").lower()
 
+            status = None
             if fuji_status in ("modify", "rejected", "allow"):
-                if fuji_status == "modify":
-                    status = "modify"
-                else:
-                    status = fuji_status  # "allow" or "rejected"
+                # FUJI が明示されている場合はそれを優先
+                status = "modify" if fuji_status == "modify" else fuji_status
 
             if not status and isinstance(gate, dict):
                 status = (gate.get("decision_status") or "").lower()
@@ -129,8 +156,8 @@ def collect_decisions():
             if not status:
                 status = (j.get("decision_status") or "unknown").lower()
 
-            # latency_ms を候補から総当たり
-            latency_ms = (
+            # latency_ms を候補から総当たり（文字列も許容）
+            latency_ms_raw = (
                 metrics.get("latency_ms")
                 or (j.get("meta") or {}).get("latency_ms")
                 or j.get("latency_ms")
@@ -140,6 +167,12 @@ def collect_decisions():
                 or j.get("duration_ms")
                 or j.get("elapsed_ms")
             )
+            latency_ms = None
+            if latency_ms_raw is not None:
+                try:
+                    latency_ms = float(latency_ms_raw)
+                except Exception:
+                    latency_ms = None
 
             # memory evidence 件数
             mem_evi_count = None
@@ -175,6 +208,7 @@ def collect_decisions():
                 "file": str(p),
                 "mtime": mtime_str,
                 "status": status,
+                "fuji_status": fuji_status or "unknown",
                 "latency_ms": latency_ms,
                 "mem_evidence": mem_evi_count,
                 "risk": (gate.get("risk") if isinstance(gate, dict) else None),
@@ -190,10 +224,12 @@ def analyze_memory():
     used_memories = 0
     citation_count = 0
 
-    if not MEM_JSON.exists():
+    mem_path = _pick_existing(MEMORY_CANDIDATES)
+
+    if not mem_path.exists():
         return {"total_memories": 0, "used_memories": 0, "citation_count": 0, "hit_rate": 0.0}
 
-    data = read_json(MEM_JSON)
+    data = read_json(mem_path)
 
     mem_list = []
     if isinstance(data, list):
@@ -306,17 +342,23 @@ def build_report():
     decides = collect_decisions()
     total = len(decides)
 
-        # FUJI のステータスを優先してカウント（なければ従来の status）
+    # FUJI のステータスを優先してカウント（なければ従来の status）
     counter_status = collections.Counter([
         (d.get("fuji_status") or d.get("status") or "unknown")
         for d in decides
     ])
 
     # Latency
-    latencies = [
-        int(d["latency_ms"]) for d in decides
-        if isinstance(d.get("latency_ms"), (int, float))
-    ]
+    latencies = []
+    for d in decides:
+        v = d.get("latency_ms")
+        if v is None:
+            continue
+        try:
+            latencies.append(int(float(v)))
+        except Exception:
+            continue
+
     avg_latency = int(sum(latencies) / len(latencies)) if latencies else None
     p95_latency = (
         sorted(latencies)[int(0.95 * (len(latencies) - 1))]
@@ -324,7 +366,7 @@ def build_report():
     )
 
     # Memory evidence
-    mem_counts = [int(d.get("mem_evidence", 0)) for d in decides]
+    mem_counts = [int(d.get("mem_evidence", 0) or 0) for d in decides]
     avg_mem_evidence = round(sum(mem_counts) / len(mem_counts), 2) if mem_counts else 0.0
 
     # FUJI 分布
@@ -348,81 +390,81 @@ def build_report():
     days = sorted(bucket.keys())
     counts = [bucket[d] for d in days]
 
+    # ---- グラフ生成（Matplotlib がある場合だけ）----
     img_decisions = None
-    if days:
-        fig1 = plt.figure()
-        plt.plot(range(len(days)), counts, marker="o")
-        plt.title("決定数の推移（日次）")
-        plt.xlabel("日付")
-        plt.ylabel("件数")
-        img_decisions = b64_png_from_fig(fig1)
-
     img_red = None
-    if red_terms:
-        keys, vals = zip(*red_terms.most_common(10))
-        fig2 = plt.figure()
-        plt.bar(keys, vals)
-        plt.title("Redaction 頻度 Top10")
-        plt.xticks(rotation=15)
-        img_red = b64_png_from_fig(fig2)
-
     img_mods = None
-    if mod_terms:
-        keys, vals = zip(*mod_terms.most_common(10))
-        fig3 = plt.figure()
-        plt.bar(keys, vals)
-        plt.title("FUJI Modifications 頻度 Top10")
-        plt.xticks(rotation=15)
-        img_mods = b64_png_from_fig(fig3)
-
     img_latency = None
-    if latencies:
-        fig4 = plt.figure()
-        plt.plot(range(len(latencies)), latencies, marker=".")
-        plt.title("Latency 推移（ms）")
-        plt.xlabel("ログ順（最新=右）")
-        plt.ylabel("ms")
-        img_latency = b64_png_from_fig(fig4)
-
     img_mem = None
-    if mem_counts:
-        fig5 = plt.figure()
-        plt.plot(range(len(mem_counts)), mem_counts, marker="o")
-        plt.title("Memory evidence 件数の推移")
-        plt.xlabel("ログ順（最新=右）")
-        plt.ylabel("件")
-        img_mem = b64_png_from_fig(fig5)
-
     img_fuji = None
-    if fuji_counts:
-        keys, vals = zip(*fuji_counts.items())
-        fig6 = plt.figure()
-        plt.bar(keys, vals)
-        plt.title("FUJI 判定ステータス分布")
-        plt.xticks(rotation=10)
-        img_fuji = b64_png_from_fig(fig6)
-
-    # Value EMA history
     img_ema = None
-    try:
-        hist = []
-        if VAL_JSON.exists():
-            with open(VAL_JSON, encoding="utf-8") as f:
-                vs = json.load(f)
 
-                # ① 一般的な dict 形式 {"ema":..,"history":[...]} を優先
-                if isinstance(vs, dict):
-                    h = vs.get("history", [])
-                    if isinstance(h, list):
-                        hist = h
+    if HAS_MPL:
+        if days:
+            fig1 = plt.figure()
+            plt.plot(range(len(days)), counts, marker="o")
+            plt.title("決定数の推移（日次）")
+            plt.xlabel("日付(インデックス)")
+            plt.ylabel("件数")
+            img_decisions = b64_png_from_fig(fig1)
 
-                # ② もしファイル全体がリスト形式でも、そのまま履歴として扱う
-                elif isinstance(vs, list):
-                    hist = vs
+        if red_terms:
+            keys, vals = zip(*red_terms.most_common(10))
+            fig2 = plt.figure()
+            plt.bar(keys, vals)
+            plt.title("Redaction 頻度 Top10")
+            plt.xticks(rotation=15)
+            img_red = b64_png_from_fig(fig2)
 
-        # 実データがあればプロット
-        emas = []
-        if hist:
+        if mod_terms:
+            keys, vals = zip(*mod_terms.most_common(10))
+            fig3 = plt.figure()
+            plt.bar(keys, vals)
+            plt.title("FUJI Modifications 頻度 Top10")
+            plt.xticks(rotation=15)
+            img_mods = b64_png_from_fig(fig3)
+
+        if latencies:
+            fig4 = plt.figure()
+            plt.plot(range(len(latencies)), latencies, marker=".")
+            plt.title("Latency 推移（ms）")
+            plt.xlabel("ログ順（最新=右）")
+            plt.ylabel("ms")
+            img_latency = b64_png_from_fig(fig4)
+
+        if mem_counts:
+            fig5 = plt.figure()
+            plt.plot(range(len(mem_counts)), mem_counts, marker="o")
+            plt.title("Memory evidence 件数の推移")
+            plt.xlabel("ログ順（最新=右）")
+            plt.ylabel("件")
+            img_mem = b64_png_from_fig(fig5)
+
+        if fuji_counts:
+            keys, vals = zip(*fuji_counts.items())
+            fig6 = plt.figure()
+            plt.bar(keys, vals)
+            plt.title("FUJI 判定ステータス分布")
+            plt.xticks(rotation=10)
+            img_fuji = b64_png_from_fig(fig6)
+
+        # Value EMA history
+        try:
+            hist = []
+            val_path = _pick_existing(VALUE_CANDIDATES)
+
+            if val_path.exists():
+                with open(val_path, encoding="utf-8") as f:
+                    vs = json.load(f)
+
+                    if isinstance(vs, dict):
+                        h = vs.get("history", [])
+                        if isinstance(h, list):
+                            hist = h
+                    elif isinstance(vs, list):
+                        hist = vs
+
+            emas = []
             for item in hist:
                 if not isinstance(item, dict):
                     continue
@@ -431,20 +473,17 @@ def build_report():
                 except Exception:
                     continue
 
-        if emas:
-            xs = list(range(len(emas)))
-            fig_ema = plt.figure()
-            plt.plot(xs, emas, marker="o")
-            plt.title("Value EMA の推移")
-            plt.xlabel("ログ順（最新=右）")
-            plt.ylabel("EMA")
-            img_ema = b64_png_from_fig(fig_ema)
-        else:
+            if emas:
+                xs = list(range(len(emas)))
+                fig_ema = plt.figure()
+                plt.plot(xs, emas, marker="o")
+                plt.title("Value EMA の推移")
+                plt.xlabel("ログ順（最新=右）")
+                plt.ylabel("EMA")
+                img_ema = b64_png_from_fig(fig_ema)
+        except Exception as e:
+            print("[report] ema history skipped:", e)
             img_ema = None
-
-    except Exception as e:
-        print("[report] ema history skipped:", e)
-        img_ema = None
 
     # 学習効果の可視化（meta_log / world.utility）
     meta_files = glob.glob(str(LOG_DIR / "meta_log*.jsonl"))
@@ -457,41 +496,54 @@ def build_report():
         try:
             with open(f, "r", encoding="utf-8") as fp:
                 for line in fp:
-                    j = json.loads(line)
+                    try:
+                        j = json.loads(line)
+                    except Exception:
+                        continue
                     if "next_value_boost" in j:
-                        reason_boosts.append(float(j["next_value_boost"]))
+                        try:
+                            reason_boosts.append(float(j["next_value_boost"]))
+                        except Exception:
+                            continue
         except Exception:
             pass
 
     for f in decide_files:
         try:
-            j = json.load(open(f, "r", encoding="utf-8"))
-            alts = []
-            if isinstance(j.get("alternatives"), list):
-                alts.extend(j["alternatives"])
-            if isinstance(j.get("chosen"), dict):
-                alts.append(j["chosen"])
-            for a in alts:
-                world = a.get("world", {}) or {}
+            with open(f, "r", encoding="utf-8") as fp:
+                j = json.load(fp)
+        except Exception:
+            continue
+
+        alts = []
+        if isinstance(j.get("alternatives"), list):
+            alts.extend(j["alternatives"])
+        if isinstance(j.get("chosen"), dict):
+            alts.append(j["chosen"])
+        for a in alts:
+            if not isinstance(a, dict):
+                continue
+            world = a.get("world", {}) or {}
+            try:
                 if "utility" in world:
                     world_utils.append(float(world["utility"]))
-        except Exception:
-            pass
+            except Exception:
+                continue
 
     avg_reason_boost = round(statistics.mean(reason_boosts), 4) if reason_boosts else 0.0
     avg_world_utility = round(statistics.mean(world_utils), 4) if world_utils else 0.0
 
+    # value_ema (最新値)
     value_ema = 0.5
     try:
-        if VAL_JSON.exists():
-            with open(VAL_JSON, encoding="utf-8") as f:
+        val_path = _pick_existing(VALUE_CANDIDATES)
+        if val_path.exists():
+            with open(val_path, encoding="utf-8") as f:
                 vs = json.load(f)
 
                 if isinstance(vs, dict):
                     value_ema = float(vs.get("ema", 0.5))
-
                 elif isinstance(vs, list) and vs:
-                    # リスト形式の場合は最後の要素の ema を採用
                     last = vs[-1]
                     if isinstance(last, dict):
                         value_ema = float(last.get("ema", 0.5))
@@ -518,25 +570,29 @@ def build_report():
         "avg_reason_boost": avg_reason_boost,
         "avg_world_utility": avg_world_utility,
         "benchmarks": bench_stats,
+        "has_matplotlib": HAS_MPL,
     }
 
     with open(REPORT_JSON, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
 
-    ema_block = f"<img src='data:image/png;base64,{img_ema}'/>" if img_ema else "<i>データなし</i>"
+    ema_block = (
+        f"<img src='data:image/png;base64,{img_ema}'/>"
+        if img_ema
+        else ("<i>Matplotlib が無効のためグラフなし</i>" if not HAS_MPL else "<i>データなし</i>")
+    )
     status_str = json.dumps(report["status_counts"], ensure_ascii=False)
 
-
-# Benchmarks セクション用 HTML
-    bench_rows_html = ""
+    # Benchmarks セクション用 HTML
     if bench_stats:
+        bench_rows_html = ""
         for bid, st in bench_stats.items():
             name = st.get("name") or ""
             runs = st.get("runs")
             ok_200 = st.get("ok_200")
             avg_el = st.get("avg_elapsed_sec")
             avg_tel = st.get("avg_telos_score")
-            fuji_counts = st.get("fuji_counts") or {}
+            fuji_counts_row = st.get("fuji_counts") or {}
 
             bench_rows_html += f"""
       <tr>
@@ -546,11 +602,16 @@ def build_report():
         <td style="text-align:right">{ok_200}</td>
         <td style="text-align:right">{avg_el if avg_el is not None else 'N/A'}</td>
         <td style="text-align:right">{avg_tel if avg_tel is not None else 'N/A'}</td>
-        <td><code>{json.dumps(fuji_counts, ensure_ascii=False)}</code></td>
+        <td><code>{json.dumps(fuji_counts_row, ensure_ascii=False)}</code></td>
       </tr>
 """
     else:
         bench_rows_html = "<tr><td colspan='7'><i>ベンチマーク結果なし</i></td></tr>"
+
+    def img_or_placeholder(img_b64):
+        if img_b64:
+            return f"<img src='data:image/png;base64,{img_b64}'/>"
+        return "<i>Matplotlib が無効のためグラフなし</i>" if not HAS_MPL else "<i>データなし</i>"
 
     html = f"""<!doctype html>
 <html lang="ja"><meta charset="utf-8">
@@ -559,6 +620,7 @@ def build_report():
 <h1>🩺 VERITAS Doctor Dashboard</h1>
 <p>生成日時: {report['generated_at']}</p>
 <p>データ元フォルダ: <code>{report['source_folder']}</code></p>
+<p>Matplotlib: {"ON" if HAS_MPL else "OFF (グラフはテキストのみ)"}</p>
 
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
   <h3>サマリー</h3>
@@ -585,27 +647,27 @@ def build_report():
 
 <h3>決定数の推移</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
-  {"<img src='data:image/png;base64," + img_decisions + "'/>" if img_decisions else "<i>データなし</i>"}
+  {img_or_placeholder(img_decisions)}
 </div>
 
 <h3>Redaction 頻度</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
-  {"<img src='data:image/png;base64," + img_red + "'/>" if img_red else "<i>データなし</i>"}
+  {img_or_placeholder(img_red)}
 </div>
 
 <h3>Latency 推移（ms）</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
-  {"<img src='data:image/png;base64," + img_latency + "'/>" if img_latency else "<i>データなし</i>"}
+  {img_or_placeholder(img_latency)}
 </div>
 
 <h3>Memory evidence 件数の推移</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
-  {"<img src='data:image/png;base64," + img_mem + "'/>" if img_mem else "<i>データなし</i>"}
+  {img_or_placeholder(img_mem)}
 </div>
 
 <h3>FUJI 判定ステータス分布</h3>
 <div style="background:#161b22;padding:16px;border-radius:8px;max-width:900px">
-  {"<img src='data:image/png;base64," + img_fuji + "'/>" if img_fuji else "<i>データなし</i>"}
+  {img_or_placeholder(img_fuji)}
 </div>
 
 <h3>Value EMA の推移</h3>
@@ -642,3 +704,4 @@ def build_report():
 
 if __name__ == "__main__":
     build_report()
+

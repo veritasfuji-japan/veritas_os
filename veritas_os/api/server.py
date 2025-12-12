@@ -310,11 +310,15 @@ def write_shadow_decide(
     pipeline 側実装と揃えてある。
     """
     SHADOW_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+    # timezone-aware UTC を使用（datetime.utcnow の deprecation 回避）
+    now_utc = datetime.now(timezone.utc)
+
+    ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
     out = SHADOW_DIR / f"decide_{ts}.json"
     rec = {
         "request_id": request_id,
-        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
         "query": (body.get("query") or (body.get("context") or {}).get("query") or ""),
         "chosen": chosen,
         "telos_score": float(telos_score or 0.0),
@@ -400,7 +404,7 @@ def memory_put(body: dict):
     try:
         # ---- 旧フォーマット（レガシーKV）対応 ----
         user_id = body.get("user_id", "anon")
-        key = body.get("key") or f"memory_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+        key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         value = body.get("value") or {}
 
         legacy_saved = False
@@ -626,6 +630,7 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
 
 
 

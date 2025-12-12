@@ -1,4 +1,5 @@
-# veritas_os/core/pipeline.py など
+# veritas_os/core/pipeline.py
+
 from __future__ import annotations
 
 import asyncio
@@ -1174,7 +1175,8 @@ async def run_decide_pipeline(
 
     # ----- metrics 追記: latency_ms / mem_evidence_count -----
     try:
-        duration_ms = int((time.time() - started_at) * 1000)
+        # ★ 超高速パスでも 0 にならないように最低 1ms を保証
+        duration_ms = max(1, int((time.time() - started_at) * 1000))
 
         mem_evi_cnt = 0
         for ev in (evidence or []):
@@ -1477,6 +1479,12 @@ async def run_decide_pipeline(
 
     # ---------- データセット ----------
     try:
+        # ★ metrics で計算した latency_ms を優先しつつ、無ければ再計算
+        metrics_for_ds = (response_extras.get("metrics") or {})
+        duration_ms_ds = int(metrics_for_ds.get("latency_ms", 0))
+        if duration_ms_ds <= 0:
+            duration_ms_ds = max(1, int((time.time() - started_at) * 1000))
+
         meta_ds = {
             "session_id": (context or {}).get("user_id") or "anon",
             "request_id": request_id,
@@ -1487,8 +1495,7 @@ async def run_decide_pipeline(
             "kernel_version": os.getenv(
                 "VERITAS_KERNEL_VERSION", "core-kernel 0.x"
             ),
-            "git_commit": os.getenv("VERITAS_GIT_COMMIT"),
-            "latency_ms": int((time.time() - started_at) * 1000),
+            "latency_ms": duration_ms_ds,  # ★ ここも 1ms 以上を保証
         }
         eval_meta = {
             "task_type": "decision",
@@ -1624,6 +1631,7 @@ async def run_decide_pipeline(
         print("[WorldModel] next_hint_for_veritas_agi skipped:", e)
 
     return payload
+
 
 
     

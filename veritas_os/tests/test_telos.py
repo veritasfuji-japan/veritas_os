@@ -3,7 +3,7 @@
 
 import math
 
-from veritas_os.api import telos
+import veritas_os.api.telos as telos
 
 
 def test_telos_score_default_context_is_clamped_and_not_nan():
@@ -60,7 +60,7 @@ def test_telos_score_horizon_short_mid_long():
     assert 0.0 <= s_mid <= 1.0
     assert 0.0 <= s_long <= 1.0
 
-        # デフォルトの TelosConfig を前提にした期待関係
+    # デフォルトの TelosConfig を前提にした期待関係
     # horizon_factor としては short < mid < long だが、
     # clamp(0..1) のため mid / long がどちらも 1.0 に張り付くケースを許容する。
     assert s_short < s_mid
@@ -152,6 +152,3 @@ def test_telos_weights_normalization_and_alias_keys():
     assert math.isclose(wt + ws, 1.0, rel_tol=1e-9)
     assert math.isclose(wt, 2.0 / 3.0, rel_tol=1e-9)
     assert math.isclose(ws, 1.0 / 3.0, rel_tol=1e-9)
-
-
-

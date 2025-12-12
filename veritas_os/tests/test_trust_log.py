@@ -1,12 +1,12 @@
-# tests/test_trust_log.py
+# veritas_os/tests/test_trust_log.py
 from __future__ import annotations
 
 import json
 import hashlib
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict
 
 from datetime import datetime
-import re
 
 import pytest
 
@@ -89,6 +89,64 @@ def test_compute_sha256_handles_unserializable_objects():
     assert re.fullmatch(r"[0-9a-f]{64}", h)
 
 
+def test_calc_sha256_matches_manual_hash():
+    payload = {"x": "y"}
+    h = trust_log.calc_sha256(payload)
+    expected = hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    assert h == expected
+
+
+# ============================
+#  _load_logs_json / _save_json のテスト
+# ============================
+
+
+def test_load_logs_json_handles_dict_list_and_invalid(temp_log_env):
+    # dict 形式 + items キー
+    obj = {"items": [{"a": 1}, "bad", 123]}
+    temp_log_env["json"].write_text(json.dumps(obj), encoding="utf-8")
+    items = trust_log._load_logs_json()
+    assert items == [{"a": 1}]
+
+    # 配列ルート
+    obj2 = [{"b": 2}, "x"]
+    temp_log_env["json"].write_text(json.dumps(obj2), encoding="utf-8")
+    items2 = trust_log._load_logs_json()
+    assert items2 == [{"b": 2}]
+
+    # items が list ではないケース
+    obj3 = {"items": "not-a-list"}
+    temp_log_env["json"].write_text(json.dumps(obj3), encoding="utf-8")
+    items3 = trust_log._load_logs_json()
+    assert items3 == []
+
+    # 壊れた JSON → except 側に落ちて [] になる
+    temp_log_env["json"].write_text("{not valid json", encoding="utf-8")
+    items4 = trust_log._load_logs_json()
+    assert items4 == []
+
+
+def test_save_json_writes_items(temp_log_env):
+    data = [{"x": 1}, {"y": 2}]
+    trust_log._save_json(data)
+
+    text = temp_log_env["json"].read_text(encoding="utf-8")
+    obj = json.loads(text)
+    assert isinstance(obj, dict)
+    assert obj["items"] == data
+
+def test_load_logs_json_non_collection_returns_empty(temp_log_env):
+    # dict でも list でもない JSON を書き込む（int など）
+    trust_log.LOG_JSON.write_text("123", encoding="utf-8")
+
+    items = trust_log._load_logs_json()
+
+    # 変な値は全部捨てて空リストになる想定
+    assert items == []
+
+
 # ============================
 #  get_last_hash のテスト
 # ============================
@@ -115,6 +173,11 @@ def test_get_last_hash_reads_last_line_sha256(temp_log_env):
 
     last = trust_log.get_last_hash()
     assert last == "bbb222"
+
+
+def test_get_last_hash_invalid_json_returns_none(temp_log_env):
+    temp_log_env["jsonl"].write_text("not a json\n", encoding="utf-8")
+    assert trust_log.get_last_hash() is None
 
 
 # ============================
@@ -164,6 +227,8 @@ def test_append_trust_log_chain_integrity_and_jsonl_json(temp_log_env):
     assert second["request_id"] == "r2"
     assert first["sha256_prev"] is None
     assert second["sha256_prev"] == first["sha256"]
+    assert "created_at" in first
+    assert "created_at" in second
 
     # チェーンハッシュの式に完全準拠しているか検証
     expected_h1 = _recompute_chain_hash(None, first)
@@ -240,7 +305,36 @@ def test_write_shadow_decide_creates_snapshot_file(temp_log_env):
     # fuji は status フィールドのみ取り出されている
     assert rec["fuji"] == {"level": "ok"}
 
-    # created_at が ISO8601 っぽい文字列になっていることだけざっくり確認
+    # created_at が ISO8601 (UTC, "Z" 付き) でパース可能であることを確認
     assert isinstance(rec["created_at"], str)
-    assert len(rec["created_at"]) >= 10  # YYYY-MM-DD くらいはある
+    dt = datetime.fromisoformat(rec["created_at"].replace("Z", "+00:00"))
+    assert dt.tzinfo is not None
+
+
+def test_write_shadow_decide_falls_back_to_context_query_and_none_fuji(temp_log_env):
+    # body["query"] が無く、context.query が使われるケース
+    request_id = "req-ctx"
+    body = {
+        "context": {"query": "from context"},
+    }
+
+    trust_log.write_shadow_decide(
+        request_id=request_id,
+        body=body,
+        chosen={},
+        telos_score=0.0,
+        fuji={},  # status キーが無い → None
+    )
+
+    shadow_dir = trust_log.LOG_DIR / "DASH"
+    files = sorted(shadow_dir.glob("decide_*.json"))
+    assert files
+
+    with open(files[-1], "r", encoding="utf-8") as f:
+        rec = json.load(f)
+
+    assert rec["request_id"] == request_id
+    assert rec["query"] == "from context"
+    assert rec["fuji"] is None
+
 

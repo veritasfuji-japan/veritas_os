@@ -1,24 +1,72 @@
 # veritas/core/adapt.py
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import json, os
-from pathlib import Path
+
+import json
+import os
 from collections import Counter
-from typing import Any, Dict, List, Tuple
-from .config import cfg  # 追加
+from pathlib import Path
+from typing import Any, Dict, List
 
-# ==== NEW: プロジェクト内に保存する ============
+from .config import cfg  # VERITAS の設定オブジェクト
+
+
+# ==== NEW: プロジェクト内に保存するパス ============================
 # 例: .../veritas_clean_test2/veritas_os/scripts/logs
-VERITAS_DIR = cfg.log_dir          # = .../veritas_os/scripts/logs
+VERITAS_DIR = cfg.log_dir  # = Path(.../veritas_os/scripts/logs)
 PERSONA_JSON = str(VERITAS_DIR / "persona.json")
-TRUST_JSONL  = str(VERITAS_DIR / "trust_log.jsonl")
+TRUST_JSONL = str(VERITAS_DIR / "trust_log.jsonl")
 
 
-def _safe_float(x, d=0.0):
+def _safe_float(x: Any, d: float = 0.0) -> float:
+    """float 化できなければデフォルト d を返す簡易ユーティリティ。"""
     try:
         return float(x)
     except Exception:
         return d
+
+
+# =====================================
+#  persona のデフォルト定義 & ヘルパ
+# =====================================
+def _default_persona() -> Dict[str, Any]:
+    """常に同じ shape を返すデフォルト persona."""
+    return {
+        "name": "VERITAS",
+        "style": "direct, strategic, honest",
+        "bias_weights": {},
+    }
+
+
+def _ensure_persona(obj: Any) -> Dict[str, Any]:
+    """
+    ロード結果 obj を「安全な persona dict」に矯正する。
+
+    - dict 以外 → デフォルト persona
+    - dict の場合も name/style/bias_weights が欠けていれば補完
+    """
+    if not isinstance(obj, dict):
+        persona = _default_persona()
+    else:
+        base = _default_persona()
+        name = obj.get("name")
+        style = obj.get("style")
+        bias = obj.get("bias_weights")
+
+        if isinstance(name, str) and name.strip():
+            base["name"] = name
+        if isinstance(style, str) and style.strip():
+            base["style"] = style
+        if isinstance(bias, dict):
+            base["bias_weights"] = bias
+
+        persona = base
+
+    # bias_weights は必ずクリーンにして返す
+    persona["bias_weights"] = clean_bias_weights(
+        dict(persona.get("bias_weights") or {})
+    )
+    return persona
 
 
 # =====================================
@@ -41,10 +89,7 @@ def clean_bias_weights(
 
     tmp: Dict[str, float] = {}
     for k, v in bias.items():
-        try:
-            x = float(v)
-        except Exception:
-            x = 0.0
+        x = _safe_float(v, d=0.0)
 
         # 0..1 にクリップ
         if x < 0.0:
@@ -80,37 +125,30 @@ def clean_bias_weights(
 #  persona のロード／セーブ
 # =====================================
 def load_persona(path: str = PERSONA_JSON) -> Dict[str, Any]:
-    persona: Dict[str, Any]
+    """
+    persona.json をロードして安全な dict にして返す。
+
+    - ファイルなし / 壊れた JSON / list など dict 以外 → デフォルト
+    - dict でも name/style/bias_weights が欠けていれば補完
+    """
+    raw: Any
     try:
         with open(path, "r", encoding="utf-8") as f:
-            persona = json.load(f) or {}
+            raw = json.load(f)
     except Exception:
-        persona = {
-            "name": "VERITAS",
-            "style": "direct, strategic, honest",
-            "bias_weights": {},
-        }
+        raw = None
 
-    if not isinstance(persona, dict):
-        persona = {
-            "name": "VERITAS",
-            "style": "direct, strategic, honest",
-            "bias_weights": {},
-        }
-
-    # 必ずここで bias_weights をクリーンにして返す
-    persona["bias_weights"] = clean_bias_weights(
-        dict(persona.get("bias_weights") or {})
-    )
+    persona = _ensure_persona(raw)
     return persona
 
 
 def save_persona(persona: Dict[str, Any], path: str = PERSONA_JSON) -> None:
+    """
+    persona をクリーンアップして JSON で保存。
+    """
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    persona = dict(persona or {})
-    persona["bias_weights"] = clean_bias_weights(
-        dict(persona.get("bias_weights") or {})
-    )
+
+    persona = _ensure_persona(persona)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(persona, f, ensure_ascii=False, indent=2)
 
@@ -118,7 +156,10 @@ def save_persona(persona: Dict[str, Any], path: str = PERSONA_JSON) -> None:
 # =====================================
 #  trust_log から履歴を読む
 # =====================================
-def read_recent_decisions(jsonl_path: str = TRUST_JSONL, window: int = 50) -> List[Dict[str, Any]]:
+def read_recent_decisions(
+    jsonl_path: str = TRUST_JSONL,
+    window: int = 50,
+) -> List[Dict[str, Any]]:
     """trust_log.jsonl から直近 window 件の chosen を抽出（なければ空）"""
     items: List[Dict[str, Any]] = []
     try:
@@ -132,48 +173,80 @@ def read_recent_decisions(jsonl_path: str = TRUST_JSONL, window: int = 50) -> Li
                     # 決定ログを想定：shadow_decide書式 or append_trust_log派生
                     chosen = obj.get("chosen") or {}
                     if chosen:
-                        items.append({"id": chosen.get("id"), "title": chosen.get("title")})
+                        items.append(
+                            {
+                                "id": chosen.get("id"),
+                                "title": chosen.get("title"),
+                            }
+                        )
                 except Exception:
+                    # 1行壊れていても全体は止めない
                     pass
     except FileNotFoundError:
         return []
+
     # 後ろ（新しい）から window 件
     return items[-window:]
 
 
 def compute_bias_from_history(decisions: List[Dict[str, Any]]) -> Dict[str, float]:
-    """頻度→確率（weight）。title 優先、なければ id で集計。"""
+    """
+    頻度→確率（weight）。title 優先、なければ id で集計。
+
+    テスト仕様に合わせて：
+    - title が存在していて非空 → title.lower() で集計
+    - title が存在していて空/None → id で集計
+    - title キー自体が存在しない場合も → id で集計
+    """
     keys: List[str] = []
+
     for d in decisions:
-        t = (d.get("title") or "").strip()
-        if t:
-            keys.append(t.lower())
-        elif d.get("id"):
-            keys.append(f"@id:{d['id']}")
+        if not isinstance(d, dict):
+            continue
+
+        has_title_key = "title" in d
+        raw_title = d.get("title") if has_title_key else None
+        title_str = (raw_title or "").strip() if isinstance(raw_title, str) else ""
+
+        if has_title_key and title_str:
+            # 1) title が非空 → title 優先
+            keys.append(title_str.lower())
+        else:
+            # 2) title なし or 空 → id で集計
+            if d.get("id"):
+                keys.append(f"@id:{d['id']}")
+
     if not keys:
         return {}
+
     cnt = Counter(keys)
-    total = sum(cnt.values())
+    total = float(sum(cnt.values()))
+    if total <= 0.0:
+        return {k: 0.0 for k in cnt.keys()}
+
     return {k: v / total for k, v in cnt.items()}
 
 
 def merge_bias_to_persona(
     persona: Dict[str, Any],
     new_bias: Dict[str, float],
-    alpha: float = 0.25
+    alpha: float = 0.25,
 ) -> Dict[str, Any]:
     """
-    単純EMAマージ：new = (1-alpha)*old + alpha*new
+    単純 EMA マージ：new = (1-alpha)*old + alpha*new
+
     （途中で clean_bias_weights を挟んで、値の暴走を防ぐ）
     """
-    persona = dict(persona or {})
+    persona = _ensure_persona(persona)
     old = clean_bias_weights(dict(persona.get("bias_weights") or {}))
-    nb  = clean_bias_weights(dict(new_bias or {}))
+    nb = clean_bias_weights(dict(new_bias or {}))
 
     merged: Dict[str, float] = {}
     keys = set(old.keys()) | set(nb.keys())
     for k in keys:
-        merged[k] = (1.0 - alpha) * float(old.get(k, 0.0)) + alpha * float(nb.get(k, 0.0))
+        merged[k] = (1.0 - alpha) * float(old.get(k, 0.0)) + alpha * float(
+            nb.get(k, 0.0)
+        )
 
     persona["bias_weights"] = clean_bias_weights(merged)
     return persona
@@ -186,28 +259,48 @@ def fuzzy_bias_lookup(bias_weights: Dict[str, float], title: str) -> float:
     """
     if not bias_weights or not title:
         return 0.0
+
     t = title.lower()
     best = 0.0
+
     for k, w in bias_weights.items():
         if k.startswith("@id:"):
             # id一致は kernel 側で処理するのでここはスキップ
             continue
+
         # 3文字以上のトークンで部分一致
         toks = [x for x in k.split() if len(x) >= 3] or [k]
-        if any(tok in t for tok in toks):
+        if any(tok in t for tok in toks) or k == t:
             best = max(best, float(w))
-        elif k == t:
-            best = max(best, float(w))
+
     return best
 
 
 def update_persona_bias_from_history(window: int = 50) -> Dict[str, Any]:
-    """履歴→バイアス計算→persona.json に反映して返す"""
+    """
+    trust_log 履歴 → バイアス計算 → persona.json に反映して返す。
+    """
     persona = load_persona()
-    recent  = read_recent_decisions(TRUST_JSONL, window=window)
-    bias    = compute_bias_from_history(recent)
+    recent = read_recent_decisions(TRUST_JSONL, window=window)
+    bias = compute_bias_from_history(recent)
     if not bias:
         return persona
+
     persona = merge_bias_to_persona(persona, bias, alpha=0.25)
     save_persona(persona)
     return persona
+
+
+__all__ = [
+    "_safe_float",
+    "clean_bias_weights",
+    "load_persona",
+    "save_persona",
+    "read_recent_decisions",
+    "compute_bias_from_history",
+    "merge_bias_to_persona",
+    "fuzzy_bias_lookup",
+    "update_persona_bias_from_history",
+]
+
+

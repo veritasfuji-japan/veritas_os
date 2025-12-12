@@ -1,7 +1,7 @@
+# -*- coding: utf-8 -*-
 # veritas_os/tests/test_memory_extra.py
 
-import re
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
@@ -160,7 +160,7 @@ class DummyVecSearch:
 def test_search_vector_path_with_user_filter_and_dedup(monkeypatch):
     vec = DummyVecSearch()
     monkeypatch.setattr(mem_mod, "MEM_VEC", vec)
-    # KVS 側は使われないが安全のためスタブ
+
     class DummyMem:
         def search(self, **kwargs):
             raise AssertionError("KVS search should not be called")
@@ -257,6 +257,46 @@ def test_search_kvs_fallback_list_result(monkeypatch):
     assert len(hits) == 2
     texts = {h["text"] for h in hits}
     assert texts == {"L1", "L2"}
+
+
+# ============================
+# predict_decision_status / predict_gate_label
+# ============================
+
+
+def test_predict_decision_status_without_model_returns_unknown(monkeypatch):
+    monkeypatch.setattr(mem_mod, "MODEL", None)
+    assert mem_mod.predict_decision_status("anything") == "unknown"
+
+
+class DummyClfAllowHigh:
+    def __init__(self, prob):
+        # classes_ に "allow" を含める
+        self.classes_ = ["deny", "allow"]
+        self._prob = prob
+
+    def predict_proba(self, X):
+        # X の長さに関係なく単一行を返す
+        return [[1.0 - self._prob, self._prob]]
+
+
+def test_predict_gate_label_uses_mem_clf_when_available(monkeypatch):
+    # MEM_CLF を優先して使うパス
+    monkeypatch.setattr(mem_mod, "MEM_CLF", DummyClfAllowHigh(0.9))
+    monkeypatch.setattr(mem_mod, "MODEL", None)
+
+    probs = mem_mod.predict_gate_label("some text")
+    assert "allow" in probs
+    assert abs(probs["allow"] - 0.9) < 1e-6
+
+
+def test_predict_gate_label_falls_back_to_model_when_mem_clf_none(monkeypatch):
+    monkeypatch.setattr(mem_mod, "MEM_CLF", None)
+    monkeypatch.setattr(mem_mod, "MODEL", DummyClfAllowHigh(0.8))
+
+    probs = mem_mod.predict_gate_label("other text")
+    assert "allow" in probs
+    assert abs(probs["allow"] - 0.8) < 1e-6
 
 
 # ============================
@@ -474,9 +514,8 @@ def test_build_distill_prompt_format():
 
 class DummyLLMChatCompletion:
     def chat_completion(self, *args, **kwargs):
-        # combined が position 引数で飛んでくるケースにも対応
+        # LLM スタブ
         return "これは要約です。"
-
 
 
 class DummyMemListAll(DummyMemAdd):
@@ -599,15 +638,10 @@ def test_rebuild_vector_index_mem_vec_none(monkeypatch):
         def list_all(self, user_id=None):
             raise AssertionError("list_all should not be called when MEM_VEC is None")
 
-    # ❌ ここが DummyMem([]) になっているはずなので…
-    # monkeypatch.setattr(mem_mod, "MEM", DummyMem([]))
-
-    # ✅ 引数なしで呼ぶ
     monkeypatch.setattr(mem_mod, "MEM", DummyMem())
 
-    # ここで例外にならず return だけすればOK
+    # MEM_VEC が None の場合は何もせず return される
     mem_mod.rebuild_vector_index()
-
 
 
 def test_rebuild_vector_index_no_rebuild_index(monkeypatch):
@@ -622,14 +656,10 @@ def test_rebuild_vector_index_no_rebuild_index(monkeypatch):
                 "list_all should not be called when MEM_VEC has no rebuild_index"
             )
 
-    # ❌ ここが DummyMem([]) になっているはずなので…
-    # monkeypatch.setattr(mem_mod, "MEM", DummyMem([]))
-
-    # ✅ 引数なしで呼ぶ
     monkeypatch.setattr(mem_mod, "MEM", DummyMem())
 
+    # rebuild_index メソッドがない場合も何もせず return
     mem_mod.rebuild_vector_index()
-
 
 
 class DummyVecRebuild:
@@ -704,4 +734,6 @@ def test_rebuild_vector_index_happy_path(monkeypatch):
         meta = doc["meta"]
         assert meta["user_id"] == rec["user_id"]
         assert meta["created_at"] == rec["ts"]
+
+
 
