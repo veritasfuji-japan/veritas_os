@@ -11,7 +11,7 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# 権限は最小（artifact uploadに十分）
+# 権限は最小（テスト実行とartifact uploadに十分）
 permissions:
   contents: read
 
@@ -25,6 +25,14 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
+      # CIでは実キー禁止。コードが必須ならダミーで満たす。
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
 
     steps:
       - name: Checkout
@@ -43,15 +51,10 @@ jobs:
           pip install pytest pytest-cov
 
       - name: Run tests (with coverage)
-        env:
-          # CIでは実キー禁止。コードが必須ならダミーで満たす。
-          OPENAI_API_KEY: "DUMMY_FOR_CI"
-          VERITAS_API_KEY: "DUMMY_FOR_CI"
-          # 余計なインタラクティブ挙動を避ける
-          PYTHONUNBUFFERED: "1"
         run: |
           mkdir -p test-reports coverage-html
           pytest -q veritas_os/tests \
+            --maxfail=1 \
             --cov=veritas_os \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
@@ -64,6 +67,7 @@ jobs:
         with:
           name: pytest-${{ matrix.python-version }}
           path: test-reports/pytest.xml
+          if-no-files-found: error
 
       - name: Upload coverage (xml + html)
         if: always()
@@ -73,4 +77,4 @@ jobs:
           path: |
             coverage.xml
             coverage-html
-
+          if-no-files-found: error
