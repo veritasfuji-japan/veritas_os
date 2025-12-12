@@ -4,6 +4,7 @@
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-Production%20Ready%20(98%25)-green.svg)]()
+![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/ci.yml/badge.svg?branch=main)
 
 **Version**: 2.0.0  
 **Release Date**: 2025-12-01  
