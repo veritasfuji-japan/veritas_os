@@ -1166,7 +1166,7 @@ async def decide(
 
     # 自然文 Reason（なぜこの決定が妥当か）
     try:
-        reason_natural = affect_core.generate_reason(
+        reason_natural = reason_core.generate_reason(
             query=q_text,
             planner=extras.get("planner"),
             values={"total": float(telos_score)},
@@ -1187,7 +1187,7 @@ async def decide(
     try:
         risk_val = float(fuji_result.get("risk", 0.0))
         if (not fast_mode) and (stakes >= 0.7 or risk_val >= 0.5):
-            refl_tmpl = await affect_core.generate_reflection_template(
+            refl_tmpl = await reason_core.generate_reflection_template(
                 query=q_text,
                 chosen=chosen,
                 gate=fuji_result,

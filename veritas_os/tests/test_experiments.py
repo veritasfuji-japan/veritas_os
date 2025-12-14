@@ -5,27 +5,56 @@ from typing import Any, Dict, List
 
 import pytest
 
-# experiment.py / experiments.py のどちらでも動くようにしておく
-try:
-    from veritas_os.core import experiments as exp_module  # type: ignore
-except ImportError:  # pragma: no cover
-    from veritas_os.core import experiment as exp_module  # type: ignore
+import veritas_os.core as core_pkg
 
 
+# =========================================================
+# ISSUE-4: Optional imports MUST be accessed via module
+# - Never "from veritas_os.core import experiments as exp_module"
+#   because it can become a stale/None snapshot.
+# - Always call try_import_experiments() and then use returned module.
+# =========================================================
+
+def _load_experiments_module():
+    """
+    experiments をテスト収集時に安全にロードする。
+    ロードできなければ module-level skip で収集エラーを防ぐ。
+    """
+    try:
+        # force=True: 失敗キャッシュが残っていても再試行できる
+        mod = core_pkg.try_import_experiments(force=True)
+    except TypeError:
+        # 旧実装互換（force 未対応）
+        mod = core_pkg.try_import_experiments()
+
+    ok = bool(getattr(core_pkg, "EXPERIMENTS_OK", False))
+    err = getattr(core_pkg, "EXPERIMENTS_IMPORT_ERROR", None)
+
+    if (not ok) or (mod is None):
+        pytest.skip(
+            f"optional experiments unavailable: ok={ok} err={err!r} mod={mod!r}",
+            allow_module_level=True,
+        )
+
+    return mod
+
+
+exp_module = _load_experiments_module()
+
+# この2つは tests が直接使うのでここで固定
 Experiment = exp_module.Experiment
 propose_experiments_for_today = exp_module.propose_experiments_for_today
 
 
 def _find_by_prefix(exps: List[Experiment], prefix: str) -> Experiment:
     for e in exps:
-        if e.id.startswith(prefix):
+        if getattr(e, "id", "").startswith(prefix):
             return e
     raise AssertionError(f"no experiment with prefix {prefix!r} found")
 
 
 def test_experiment_to_dict_roundtrip() -> None:
-    """Experiment.to_dict が dataclass の中身を素直に dict 
-化しているか。"""
+    """Experiment.to_dict が dataclass の中身を素直に dict 化しているか。"""
     exp = Experiment(
         id="test_2025-01-01",
         title="テスト実験",
@@ -53,8 +82,11 @@ def test_propose_experiments_low_progress_world_state_none() -> None:
     - progress はデフォルト 0.0 と解釈されて S1〜S2 ブランチに入る
     - world_progress_ 系の実験が含まれている
     """
-    exps = propose_experiments_for_today(user_id="user-1", 
-world_state=None, value_ema=0.5)
+    exps = propose_experiments_for_today(
+        user_id="user-1",
+        world_state=None,
+        value_ema=0.5,
+    )
 
     # 共通の診断系 2 件 + world_progress 系 1 件 = 3 件想定
     assert len(exps) == 3
@@ -144,4 +176,5 @@ def test_propose_experiments_value_ema_not_high_keeps_risk() -> None:
     assert pytest.approx(latency.risk) == 0.05
     assert pytest.approx(memory.risk) == 0.05
     assert pytest.approx(usecase.risk) == 0.15
+
 

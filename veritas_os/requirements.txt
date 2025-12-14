@@ -27,6 +27,7 @@ numpy>=1.26.0
 pandas>=2.2.0
 pdfplumber>=0.11.0
 trio
+brew install ripgrep
 
 # --- System Tools (optional but stable) ---
 psutil>=5.9.0

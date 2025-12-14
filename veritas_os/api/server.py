@@ -1,121 +1,398 @@
 # veritas_os/api/server.py
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import hmac
+import importlib
 import json
 import os
 import re
 import secrets
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from uuid import uuid4  # 今後の拡張用に残しておく
+from types import SimpleNamespace
+from typing import Any, Dict, Optional, Tuple
 
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 
-from veritas_os.core.time_utils import utc_now_iso_z
+# ---- API層（ここは基本 “安定” 前提）----
+from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
+from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED  # noqa: F401
 
-# ---- VERITAS core 層 ----
-from veritas_os.core import fuji as fuji_core, memory as mem, value_core
-from veritas_os.core.config import cfg
-from veritas_os.core import pipeline as decision_pipeline
-
-# ---- ログ／メモリ層 ----
-from veritas_os.logging.dataset_writer import (
-    build_dataset_record,
-    append_dataset_record,
-)
-from veritas_os.logging.paths import LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
-from veritas_os.core.memory import MEM as MEMORY_STORE
-
-# ---- API 層 ----
-from veritas_os.api.schemas import (
-    DecideRequest,
-    DecideResponse,
-    FujiDecision,
-    ChatRequest,
-    ValuesOut,
-)
-from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED
-from veritas_os.api.evolver import load_persona
-
-
-# ==============================
-# 環境 & パス初期化
-# ==============================
+# ============================================================
+# ISSUE-4 方針:
+# - import時に “重い/脆い” モジュールを確定importしない
+# - /health は必ず 200
+# - /v1/decide は依存が壊れてたら 503 で返す（落ちない）
+# ============================================================
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
-load_dotenv(REPO_ROOT / ".env")
+START_TS = time.time()
 
-app = FastAPI(title="VERITAS Public API", version="1.0.1")
+# ---- .env（dotenv が無い/壊れていても server import は落とさない）----
+try:
+    from dotenv import load_dotenv  # type: ignore
+
+    load_dotenv(REPO_ROOT / ".env")
+except Exception as e:
+    print(f"[WARN] dotenv load failed: {type(e).__name__}: {e}")
+
+
+def utc_now_iso_z() -> str:
+    """UTC now helper（time_utils 依存を排除）"""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+# ==============================
+# Backward-compat exports (TESTS EXPECT THESE)
+# ==============================
+# tests monkeypatch:
+# - server.value_core.append_trust_log
+# - server.fuji_core.validate_action / validate
+# - server.MEMORY_STORE.search/get
+# - server.LOG_DIR / LOG_JSON / LOG_JSONL / SHADOW_DIR
+#
+# これらは import 時に必ず存在させる。実体は lazy import で後から差し替える。
+
+_DEFAULT_LOG_DIR = (REPO_ROOT / "logs").resolve()
+_DEFAULT_LOG_JSON = _DEFAULT_LOG_DIR / "trust_log.json"
+_DEFAULT_LOG_JSONL = _DEFAULT_LOG_DIR / "trust_log.jsonl"
+_DEFAULT_SHADOW_DIR = _DEFAULT_LOG_DIR / "DASH"
+
+LOG_DIR: Path = _DEFAULT_LOG_DIR
+LOG_JSON: Path = _DEFAULT_LOG_JSON
+LOG_JSONL: Path = _DEFAULT_LOG_JSONL
+SHADOW_DIR: Path = _DEFAULT_SHADOW_DIR
+
+
+def _effective_log_paths() -> Tuple[Path, Path, Path]:
+    """
+    tests が LOG_DIR だけ patch した場合でも LOG_JSON/LOG_JSONL が追随するようにする。
+    tests が LOG_JSON/LOG_JSONL を明示 patch した場合はそれを尊重。
+    """
+    global LOG_DIR, LOG_JSON, LOG_JSONL
+
+    log_dir = LOG_DIR
+    log_json = LOG_JSON
+    log_jsonl = LOG_JSONL
+
+    if log_json == _DEFAULT_LOG_JSON and log_dir != _DEFAULT_LOG_DIR:
+        log_json = log_dir / "trust_log.json"
+    if log_jsonl == _DEFAULT_LOG_JSONL and log_dir != _DEFAULT_LOG_DIR:
+        log_jsonl = log_dir / "trust_log.jsonl"
+
+    return log_dir, log_json, log_jsonl
+
+
+def _effective_shadow_dir() -> Path:
+    """
+    tests が LOG_DIR だけ patch した場合でも SHADOW_DIR が追随するようにする。
+    tests が SHADOW_DIR を明示 patch した場合はそれを尊重。
+    """
+    global SHADOW_DIR
+    log_dir, _, _ = _effective_log_paths()
+
+    shadow = SHADOW_DIR
+    if shadow == _DEFAULT_SHADOW_DIR and log_dir != _DEFAULT_LOG_DIR:
+        shadow = log_dir / "DASH"
+    return shadow
+
+
+# ==============================
+# Placeholder stubs (tests expect attributes to EXIST at import time)
+# ==============================
+
+def _is_placeholder(obj: Any) -> bool:
+    return bool(getattr(obj, "__veritas_placeholder__", False))
+
+
+def _fuji_validate_stub(action: str, context: dict) -> dict:
+    return {
+        "status": "allow",
+        "reasons": ["stub"],
+        "violations": [],
+        "risk": 0.0,
+        "modifications": [],
+        "action": action,
+    }
+
+
+def _append_trust_log_stub(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+def _memory_search_stub(*args: Any, **kwargs: Any):
+    return []
+
+
+def _memory_get_stub(*args: Any, **kwargs: Any):
+    return None
+
+
+# place-holders that are always present (so monkeypatch.setattr won’t fail)
+fuji_core: Any = SimpleNamespace(
+    __veritas_placeholder__=True,
+    validate_action=_fuji_validate_stub,
+    validate=_fuji_validate_stub,
+)
+value_core: Any = SimpleNamespace(
+    __veritas_placeholder__=True,
+    append_trust_log=_append_trust_log_stub,
+)
+MEMORY_STORE: Any = SimpleNamespace(
+    __veritas_placeholder__=True,
+    search=_memory_search_stub,
+    get=_memory_get_stub,
+)
+
+
+# ==============================
+# Lazy import helpers / caches
+# ==============================
+
+@dataclass
+class _LazyState:
+    obj: Any = None
+    err: Optional[str] = None
+    attempted: bool = False
+
+
+_cfg_state = _LazyState()
+_pipeline_state = _LazyState()
+_fuji_state = _LazyState()
+_value_core_state = _LazyState()
+_memory_store_state = _LazyState()
+
+
+def _errstr(e: Exception) -> str:
+    return f"{type(e).__name__}: {e}"
+
+
+def get_cfg() -> Any:
+    """
+    cfg は “無い/壊れてる” 可能性があるので必ずフォールバックを返す。
+    CORS設定など起動に関わるため、ここで絶対に例外を外へ出さない。
+    """
+    global _cfg_state
+    if _cfg_state.obj is not None:
+        return _cfg_state.obj
+
+    if _cfg_state.attempted and _cfg_state.err is not None:
+        return _cfg_state.obj
+
+    _cfg_state.attempted = True
+    try:
+        mod = importlib.import_module("veritas_os.core.config")
+        cfg = getattr(mod, "cfg")
+        _cfg_state.obj = cfg
+        _cfg_state.err = None
+        return cfg
+    except Exception as e:
+        _cfg_state.err = _errstr(e)
+        _cfg_state.obj = SimpleNamespace(
+            cors_allow_origins=["*"],
+            api_key="",
+        )
+        print(f"[WARN] cfg import failed -> fallback: {_cfg_state.err}")
+        return _cfg_state.obj
+
+
+def get_decision_pipeline() -> Optional[Any]:
+    """
+    pipeline は壊れていても server を落とさない。
+    /v1/decide 呼び出し時に 503 へ変換する。
+    """
+    global _pipeline_state
+    if _pipeline_state.obj is not None:
+        return _pipeline_state.obj
+    if _pipeline_state.attempted and _pipeline_state.err is not None:
+        return None
+
+    _pipeline_state.attempted = True
+    try:
+        p = importlib.import_module("veritas_os.core.pipeline")
+        _pipeline_state.obj = p
+        _pipeline_state.err = None
+        return p
+    except Exception as e:
+        _pipeline_state.err = _errstr(e)
+        _pipeline_state.obj = None
+        print(f"[WARN] decision pipeline import failed: {_pipeline_state.err}")
+        return None
+
+
+def get_fuji_core() -> Optional[Any]:
+    """
+    - tests: monkeypatch server.fuji_core を「任意のオブジェクト」に差し替える
+      → その場合は絶対にそれを尊重して返す（lazy import で上書きしない）
+    - prod : placeholder のままなら lazy import して module を返す（差し替え）
+    """
+    global _fuji_state, fuji_core
+
+    # ★最重要: monkeypatch で placeholder 以外が入っていたら、それを無条件で尊重
+    # （validate_action/validate を持っていなくても返す。無ければ endpoint 側で 500）
+    if not _is_placeholder(fuji_core):
+        return fuji_core
+
+    # tests が placeholder の中身だけ差し替えた場合も尊重
+    if getattr(fuji_core, "validate_action", None) is not _fuji_validate_stub:
+        return fuji_core
+    if getattr(fuji_core, "validate", None) is not _fuji_validate_stub:
+        return fuji_core
+
+    if _fuji_state.obj is not None:
+        return _fuji_state.obj
+    if _fuji_state.attempted and _fuji_state.err is not None:
+        return None
+
+    _fuji_state.attempted = True
+    try:
+        m = importlib.import_module("veritas_os.core.fuji")
+        _fuji_state.obj = m
+        _fuji_state.err = None
+        fuji_core = m
+        return m
+    except Exception as e:
+        _fuji_state.err = _errstr(e)
+        _fuji_state.obj = None
+        print(f"[WARN] fuji_core import failed: {_fuji_state.err}")
+        return None
+
+
+
+def get_value_core() -> Optional[Any]:
+    """
+    - tests: monkeypatch server.value_core.append_trust_log
+    - prod : placeholder のままなら lazy import して module を返す（差し替え）
+    """
+    global _value_core_state, value_core
+
+    if _is_placeholder(value_core):
+        if getattr(value_core, "append_trust_log", None) is not _append_trust_log_stub:
+            return value_core
+    else:
+        if hasattr(value_core, "append_trust_log"):
+            return value_core
+
+    if _value_core_state.obj is not None:
+        return _value_core_state.obj
+    if _value_core_state.attempted and _value_core_state.err is not None:
+        return None
+
+    _value_core_state.attempted = True
+    try:
+        m = importlib.import_module("veritas_os.core.value_core")
+        _value_core_state.obj = m
+        _value_core_state.err = None
+        value_core = m
+        return m
+    except Exception as e:
+        _value_core_state.err = _errstr(e)
+        _value_core_state.obj = None
+        print(f"[WARN] value_core import failed: {_value_core_state.err}")
+        return None
+
+
+def get_memory_store() -> Optional[Any]:
+    """
+    - tests: monkeypatch server.MEMORY_STORE.search/get
+    - prod : placeholder のままなら veritas_os.core.memory の MEM を lazy 取得して更新
+    """
+    global _memory_store_state, MEMORY_STORE
+
+    if _is_placeholder(MEMORY_STORE):
+        if getattr(MEMORY_STORE, "search", None) is not _memory_search_stub:
+            return MEMORY_STORE
+        if getattr(MEMORY_STORE, "get", None) is not _memory_get_stub:
+            return MEMORY_STORE
+    else:
+        if any(hasattr(MEMORY_STORE, a) for a in ("search", "get", "put", "put_episode", "recent", "add_usage")):
+            return MEMORY_STORE
+
+    if _memory_store_state.obj is not None:
+        return _memory_store_state.obj
+    if _memory_store_state.attempted and _memory_store_state.err is not None:
+        return None
+
+    _memory_store_state.attempted = True
+    try:
+        m = importlib.import_module("veritas_os.core.memory")
+        store = getattr(m, "MEM", None)
+        if store is None:
+            # module-style memory (search/put/get on module)
+            if any(hasattr(m, a) for a in ("search", "put", "get")):
+                store = m
+            else:
+                raise RuntimeError("MEM not found in veritas_os.core.memory")
+        _memory_store_state.obj = store
+        _memory_store_state.err = None
+        MEMORY_STORE = store
+        return store
+    except Exception as e:
+        _memory_store_state.err = _errstr(e)
+        _memory_store_state.obj = None
+        print(f"[WARN] memory store import failed: {_memory_store_state.err}")
+        return None
+
+
+# ==============================
+# FastAPI app init (must not crash)
+# ==============================
+
+cfg = get_cfg()
+
+app = FastAPI(title="VERITAS Public API", version="1.0.2")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cfg.cors_allow_origins,
+    allow_origins=getattr(cfg, "cors_allow_origins", ["*"]) or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-START_TS = time.time()
-
-# trust_log / shadow_decide のパス
-LOG_JSON = LOG_DIR / "trust_log.json"
-LOG_JSONL = LOG_DIR / "trust_log.jsonl"
-SHADOW_DIR = LOG_DIR / "DASH"
-SHADOW_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ==============================
 # API Key & HMAC 認証
 # ==============================
 
-# ← これは「デフォルト値」としてだけ使う
-API_KEY_DEFAULT = (os.getenv("VERITAS_API_KEY") or cfg.api_key or "").strip()
+API_KEY_DEFAULT = (os.getenv("VERITAS_API_KEY") or getattr(cfg, "api_key", "") or "").strip()
 if not API_KEY_DEFAULT:
-    print("[WARN] VERITAS_API_KEY 未設定（開発時のみ許容）")
+    print("[WARN] VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def _get_expected_api_key() -> str:
-    """
-    毎リクエストごとに期待される API キーを取得する。
-    - env > cfg.api_key の優先順位
-    - pytest の monkeypatch.setenv にも対応
-    """
     env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
     if env_key:
         return env_key
+    return (API_KEY_DEFAULT or "").strip()
 
-    return API_KEY_DEFAULT  # cfg.api_key などを含む
 
-
-def require_api_key(x_api_key: str = Security(api_key_scheme)):
+def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
+    """
+    テスト契約:
+    - サーバ側の API Key が未設定なら 500
+    - ヘッダが無い/不一致なら 401
+    """
     expected = (_get_expected_api_key() or "").strip()
-
-    # サーバ側がキー未設定の場合
     if not expected:
         raise HTTPException(status_code=500, detail="Server API key not configured")
-
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
-
     if not secrets.compare_digest(x_api_key.strip(), expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
-
     return True
 
 
-# ---- HMAC signature / replay ----
+# ---- HMAC signature / replay (optional) ----
 API_SECRET = (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
 _NONCE_TTL_SEC = 300
 _nonce_store: Dict[str, float] = {}
@@ -144,19 +421,17 @@ async def verify_signature(
     x_signature: Optional[str] = Header(default=None, alias="X-Signature"),
 ):
     """
-    CLI 署名テスト用の HMAC 検証。
-    必須にしたい場合はエンドポイント側の dependencies に Depends(verify_signature) を追加。
+    HMAC 認証を使う場合のみ dependencies に入れて使う想定。
+    （ISSUE-4上、未使用でも存在してOK）
     """
     if not API_SECRET:
         raise HTTPException(status_code=500, detail="Server secret missing")
     if not (x_api_key and x_timestamp and x_nonce and x_signature):
         raise HTTPException(status_code=401, detail="Missing auth headers")
-
     try:
         ts = int(x_timestamp)
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid timestamp")
-
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         raise HTTPException(status_code=401, detail="Timestamp out of range")
     if not _check_and_register_nonce(x_nonce):
@@ -165,7 +440,6 @@ async def verify_signature(
     body_bytes = await request.body()
     body = body_bytes.decode("utf-8") if body_bytes else ""
     payload = f"{ts}\n{x_nonce}\n{body}"
-
     mac = hmac.new(API_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
     if not hmac.compare_digest(mac, (x_signature or "").lower()):
         raise HTTPException(status_code=401, detail="Invalid signature")
@@ -175,47 +449,46 @@ async def verify_signature(
 # ---- rate limit（簡易）----
 _RATE_LIMIT = 60
 _RATE_WINDOW = 60.0
-_rate_bucket: Dict[str, tuple[int, float]] = {}
+_rate_bucket: Dict[str, Tuple[int, float]] = {}
 
 
-def enforce_rate_limit(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")
-):
+def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+    """
+    テスト契約:
+    - X-API-Key が無いなら 401
+    """
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
-    count, start = _rate_bucket.get(x_api_key, (0, time.time()))
+
+    key = x_api_key.strip()
+    count, start = _rate_bucket.get(key, (0, time.time()))
     now = time.time()
 
     if now - start > _RATE_WINDOW:
-        _rate_bucket[x_api_key] = (1, now)
+        _rate_bucket[key] = (1, now)
         return True
 
     if count + 1 > _RATE_LIMIT:
         raise HTTPException(status_code=429, detail="Rate limit exceeded")
 
-    _rate_bucket[x_api_key] = (count + 1, start)
+    _rate_bucket[key] = (count + 1, start)
     return True
 
 
 # ==============================
-# 共通ユーティリティ
+# Common utilities
 # ==============================
 
 def redact(text: str) -> str:
-    """
-    メモリ保存時などに軽く PII マスクするための簡易 redactor。
-    """
     if not text:
         return text
-    # email
     text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
-    # phone (かなりラフ)
     text = re.sub(r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b", "[redacted:phone]", text)
     return text
 
 
 # ==============================
-# 422 エラーの見やすい返却
+# 422 error handler
 # ==============================
 
 def _decide_example() -> dict:
@@ -242,8 +515,13 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 
 
 # ==============================
-# Health / Status
+# Health / Status (must always work)
 # ==============================
+
+@app.get("/")
+def root():
+    return {"ok": True, "service": "veritas-api", "server_time": utc_now_iso_z()}
+
 
 @app.get("/health")
 @app.get("/v1/health")
@@ -257,8 +535,12 @@ def health():
 def status():
     return {
         "ok": True,
-        "version": "veritas-api 1.0.1",
+        "version": "veritas-api 1.0.2",
         "uptime": int(time.time() - START_TS),
+        "server_time": utc_now_iso_z(),
+        "pipeline_ok": get_decision_pipeline() is not None,
+        "cfg_error": _cfg_state.err,
+        "pipeline_error": _pipeline_state.err,
     }
 
 
@@ -266,10 +548,23 @@ def status():
 # Trust log helpers（server 側でも軽く読めるように）
 # ==============================
 
-def _load_logs_json() -> list:
+def _load_logs_json(path: Optional[Path] = None) -> list:
+    """
+    tests 互換:
+      - _load_logs_json() を引数なしで呼ばれても動く
+      - LOG_DIR だけ patch されても追随（effective paths）
+    """
     try:
-        with open(LOG_JSON, "r", encoding="utf-8") as f:
+        if path is None:
+            _, log_json, _ = _effective_log_paths()
+            path = log_json
+
+        if not path.exists():
+            return []
+
+        with open(path, "r", encoding="utf-8") as f:
             obj = json.load(f)
+
         if isinstance(obj, dict):
             return obj.get("items", [])
         if isinstance(obj, list):
@@ -279,23 +574,37 @@ def _load_logs_json() -> list:
         return []
 
 
-def _save_json(items: list) -> None:
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_JSON, "w", encoding="utf-8") as f:
+def _save_json(path: Path, items: list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump({"items": items}, f, ensure_ascii=False, indent=2)
 
 
 def append_trust_log(entry: dict) -> None:
     """
-    pipeline 側でも同名関数を持っているが、
-    server側から直接書きたいケース向けの軽量ヘルパー。
+    server 単体でも最低限 trust log が書けるフォールバック。
+    （tests互換のため server.LOG_DIR patch に追随）
     """
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_JSONL, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    items = _load_logs_json()
+    log_dir, log_json, log_jsonl = _effective_log_paths()
+
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"[WARN] LOG_DIR mkdir failed: {_errstr(e)}")
+        return
+
+    try:
+        with open(log_jsonl, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        print(f"[WARN] write trust_log.jsonl failed: {_errstr(e)}")
+
+    items = _load_logs_json(log_json)
     items.append(entry)
-    _save_json(items)
+    try:
+        _save_json(log_json, items)
+    except Exception as e:
+        print(f"[WARN] write trust_log.json failed: {_errstr(e)}")
 
 
 def write_shadow_decide(
@@ -305,17 +614,17 @@ def write_shadow_decide(
     telos_score: float,
     fuji: dict,
 ) -> None:
-    """
-    ざっくり Doctor 用の「1 decide の影ログ」を保存。
-    pipeline 側実装と揃えてある。
-    """
-    SHADOW_DIR.mkdir(parents=True, exist_ok=True)
+    shadow_dir = _effective_shadow_dir()
 
-    # timezone-aware UTC を使用（datetime.utcnow の deprecation 回避）
+    try:
+        shadow_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"[WARN] SHADOW_DIR mkdir failed: {_errstr(e)}")
+        return
+
     now_utc = datetime.now(timezone.utc)
-
     ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    out = SHADOW_DIR / f"decide_{ts}.json"
+    out = shadow_dir / f"decide_{ts}.json"
     rec = {
         "request_id": request_id,
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -324,8 +633,11 @@ def write_shadow_decide(
         "telos_score": float(telos_score or 0.0),
         "fuji": (fuji or {}).get("status"),
     }
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(rec, f, ensure_ascii=False, indent=2)
+    try:
+        with open(out, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[WARN] write shadow decide failed: {_errstr(e)}")
 
 
 # ==============================
@@ -338,17 +650,38 @@ def write_shadow_decide(
     dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
 )
 async def decide(req: DecideRequest, request: Request):
-    """
-    VERITAS のメイン Decision API。
-    ロジック本体は veritas_os.core.pipeline.run_decide_pipeline 側に集約。
-    """
-    payload = await decision_pipeline.run_decide_pipeline(req=req, request=request)
+    p = get_decision_pipeline()
+    if p is None:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "decision_pipeline unavailable",
+                "detail": _pipeline_state.err,
+                "trust_log": None,  # ★互換
+            },
+        )
+
+    try:
+        payload = await p.run_decide_pipeline(req=req, request=request)
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "decision_pipeline execution failed",
+                "detail": _errstr(e),
+                "trust_log": None,  # ★互換
+            },
+        )
 
     # ★ テスト互換: trust_log キーを必ず付ける
-    if "trust_log" not in payload:
+    if isinstance(payload, dict) and "trust_log" not in payload:
         payload["trust_log"] = None
+    # ★ 念のため ok も（pipeline側で入るが壊れてても補完）
+    if isinstance(payload, dict) and "ok" not in payload:
+        payload["ok"] = True
 
-    # 既存の挙動に合わせて JSONResponse で返す
     return JSONResponse(content=payload, status_code=200)
 
 
@@ -356,35 +689,46 @@ async def decide(req: DecideRequest, request: Request):
 # FUJI quick validate
 # ==============================
 
+def _call_fuji(fc: Any, action: str, context: dict) -> dict:
+    """
+    validate_action / validate の微妙なシグネチャ差を吸収する。
+    """
+    if hasattr(fc, "validate_action"):
+        fn = fc.validate_action
+        try:
+            return fn(action=action, context=context)
+        except TypeError:
+            return fn(action, context)
+    if hasattr(fc, "validate"):
+        fn = fc.validate
+        try:
+            return fn(action=action, context=context)
+        except TypeError:
+            try:
+                return fn(action, context)  # type: ignore
+            except TypeError:
+                return fn(action)  # type: ignore
+    raise RuntimeError("fuji_core has neither validate_action nor validate")
+
+
 @app.post(
     "/v1/fuji/validate",
     response_model=FujiDecision,
     dependencies=[Depends(require_api_key)],
 )
 def fuji_validate(payload: dict):
-    """
-    FUJIゲートの単体テスト用エンドポイント。
-    現在の fuji_core は validate_action(action, context) を提供している前提に合わせる。
-    古い実装で validate(...) があればそちらにもフォールバック。
-    """
+    fc = get_fuji_core()
+    if fc is None:
+        raise HTTPException(status_code=503, detail=f"fuji_core unavailable: {_fuji_state.err}")
+
     action = payload.get("action", "") or ""
     context = payload.get("context") or {}
 
-    # 新API: validate_action を優先
-    if hasattr(fuji_core, "validate_action"):
-        result = fuji_core.validate_action(action, context)
+    try:
+        result = _call_fuji(fc, action, context)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"fuji validate failed: {_errstr(e)}")
 
-    # 互換用: もし古い fuji_core に validate があれば使う
-    elif hasattr(fuji_core, "validate"):
-        result = fuji_core.validate(action, context)  # type: ignore
-
-    else:
-        raise HTTPException(
-            status_code=500,
-            detail="fuji_core has neither validate_action nor validate",
-        )
-
-    # result は dict 想定（FujiDecision でバリデーションされる）
     return JSONResponse(content=result)
 
 
@@ -392,34 +736,75 @@ def fuji_validate(payload: dict):
 # Memory API
 # ==============================
 
+def _store_put(store: Any, user_id: str, key: str, value: dict) -> None:
+    if not hasattr(store, "put"):
+        raise RuntimeError("store.put not found")
+    fn = store.put
+    try:
+        fn(user_id, key=key, value=value)
+        return
+    except TypeError:
+        pass
+    try:
+        fn(user_id, key, value)
+        return
+    except TypeError:
+        fn(key, value)  # type: ignore
+
+
+def _store_get(store: Any, user_id: str, key: str) -> Any:
+    if not hasattr(store, "get"):
+        raise RuntimeError("store.get not found")
+    fn = store.get
+    try:
+        return fn(user_id, key=key)
+    except TypeError:
+        try:
+            return fn(user_id, key)
+        except TypeError:
+            return fn(key)  # type: ignore
+
+
+def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float, user_id: Optional[str]) -> Any:
+    if not hasattr(store, "search"):
+        raise RuntimeError("store.search not found")
+    fn = store.search
+    # prefer richest signature
+    try:
+        return fn(query=query, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
+    except TypeError:
+        pass
+    try:
+        return fn(query=query, k=k, kinds=kinds, min_sim=min_sim)
+    except TypeError:
+        pass
+    try:
+        return fn(query=query, k=k)
+    except TypeError:
+        return fn(query)
+
+
 @app.post("/v1/memory/put")
 def memory_put(body: dict):
-    """
-    後方互換:
-      - 旧: {user_id, key, value}
-    新方式:
-      - {kind: "semantic"|"episodic"|"skills", text, tags?, meta?}
-      - 両方同時に来たら両方保存（レガシー＆新MemoryOS）
-    """
+    store = get_memory_store()
+    if store is None:
+        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}"}
+
     try:
-        # ---- 旧フォーマット（レガシーKV）対応 ----
         user_id = body.get("user_id", "anon")
         key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         value = body.get("value") or {}
 
         legacy_saved = False
-        if value:  # 旧仕様が来ている場合のみ
+        if value:
             try:
-                # mem でも MEM でもOKだが、統一のため MEMORY_STORE を使用
-                MEMORY_STORE.put(user_id, key, value)
+                _store_put(store, user_id, key, value)
                 legacy_saved = True
             except Exception as e:
                 print("[MemoryOS][legacy] Error:", e)
 
-        # ---- 新フォーマット（MemoryOS episodic 用）----
-        # デフォルトは semantic に入れる（短文の知識/要約向け）
         kind = (body.get("kind") or "semantic").strip().lower()
-        if kind not in ("semantic", "episodic", "skills"):
+        if kind not in ("semantic", "episodic", "skills", "doc", "plan"):
             kind = "semantic"
 
         text = (body.get("text") or "").strip()
@@ -430,45 +815,31 @@ def memory_put(body: dict):
         if text:
             try:
                 text_clean = redact(text)
-
-                # MemoryStore に「エピソード」として保存
-                # meta に user_id / kind も入れておく
                 meta_for_store = dict(meta)
                 meta_for_store.setdefault("user_id", user_id)
                 meta_for_store.setdefault("kind", kind)
 
-                # ★ MEMORY_STORE は veritas_os.core.memory のグローバル MemoryStore
-                if hasattr(MEMORY_STORE, "put_episode"):
-                    # put_episode は episode_xxx という key を返す（memory.py 側修正版）
-                    new_id = MEMORY_STORE.put_episode(
+                if hasattr(store, "put_episode"):
+                    new_id = store.put_episode(
                         text=text_clean,
                         tags=tags,
                         meta=meta_for_store,
                     )
                 else:
-                    # 互換フォールバック（古い memory.py 用）
                     episode_key = f"episode_{int(time.time())}"
-                    MEMORY_STORE.put(
+                    _store_put(
+                        store,
                         user_id,
                         episode_key,
-                        {
-                            "text": text_clean,
-                            "tags": tags,
-                            "meta": meta_for_store,
-                        },
+                        {"text": text_clean, "tags": tags, "meta": meta_for_store},
                     )
                     new_id = episode_key
-
             except Exception as e:
                 print("[MemoryOS][vector] Error:", e)
 
-        # ---- 応答 ----
         return {
             "ok": True,
-            "legacy": {
-                "saved": legacy_saved,
-                "key": key if legacy_saved else None,
-            },
+            "legacy": {"saved": legacy_saved, "key": key if legacy_saved else None},
             "vector": {
                 "saved": bool(new_id),
                 "id": new_id,
@@ -485,63 +856,29 @@ def memory_put(body: dict):
 
 @app.post("/v1/memory/search")
 async def memory_search(payload: dict):
-    """
-    ベクトル検索エンドポイント
+    store = get_memory_store()
+    if store is None:
+        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}", "hits": [], "count": 0}
 
-    Request:
-        {
-            "query": "検索クエリ",
-            "kinds": ["semantic", "episodic"] (optional),
-            "k": 8 (optional, default: 8),
-            "min_sim": 0.25 (optional, default: 0.25),
-            "user_id": "user123" (optional)
-        }
-
-    Response:
-        {
-            "ok": true,
-            "hits": [
-                {
-                    "text": "...",
-                    "score": 0.85,
-                    "tags": [...],
-                    "meta": {...}
-                },
-                ...
-            ]
-        }
-    """
     try:
         q = payload.get("query", "")
-        kinds = payload.get("kinds")  # None or ["semantic", "episodic"]
+        kinds = payload.get("kinds")
         k = int(payload.get("k", 8))
         min_sim = float(payload.get("min_sim", 0.25))
-        user_id = payload.get("user_id")  # Noneの場合は全ユーザー検索
+        user_id = payload.get("user_id")
 
-        raw_hits = MEMORY_STORE.search(
-            query=q,
-            k=k,
-            kinds=kinds,
-            min_sim=min_sim,
-        )
+        raw_hits = _store_search(store, query=q, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
 
         norm_hits = []
-        for h in raw_hits:
-            # パターンA: dict 形式（text/score/meta などを含む）で返ってくる場合
+        for h in (raw_hits or []):
             if isinstance(h, dict):
                 meta = h.get("meta") or {}
                 if user_id:
-                    # meta.user_id が一致するものだけ残す
                     if meta.get("user_id") == user_id:
                         norm_hits.append(h)
                 else:
                     norm_hits.append(h)
-
             else:
-                # パターンB: 文字列や単純なIDで返ってくる場合
-                # user_id フィルタはできないので:
-                # - user_id 指定ありならスキップ
-                # - 指定なしなら、そのまま id としてラップして返す
                 if user_id:
                     continue
                 norm_hits.append({"id": h})
@@ -555,9 +892,12 @@ async def memory_search(payload: dict):
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
 def memory_get(body: dict):
-    """レガシーKV取得"""
+    store = get_memory_store()
+    if store is None:
+        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}", "value": None}
+
     try:
-        value = MEMORY_STORE.get(body["user_id"], body["key"])
+        value = _store_get(store, body["user_id"], body["key"])
         return {"ok": True, "value": value}
     except Exception as e:
         return {"ok": False, "error": str(e), "value": None}
@@ -569,9 +909,10 @@ def memory_get(body: dict):
 
 @app.get("/v1/metrics")
 def metrics():
-    from glob import glob
+    shadow_dir = _effective_shadow_dir()
+    _, _, log_jsonl = _effective_log_paths()
 
-    files = sorted(glob(str(SHADOW_DIR / "decide_*.json")))
+    files = sorted(shadow_dir.glob("decide_*.json"))
     last_at = None
     if files:
         try:
@@ -581,16 +922,22 @@ def metrics():
             pass
 
     lines = 0
-    if LOG_JSONL.exists():
-        with open(LOG_JSONL, encoding="utf-8") as f:
-            for _ in f:
-                lines += 1
+    try:
+        if log_jsonl.exists():
+            with open(log_jsonl, encoding="utf-8") as f:
+                for _ in f:
+                    lines += 1
+    except Exception as e:
+        print(f"[WARN] read trust_log.jsonl failed: {_errstr(e)}")
 
     return {
         "decide_files": len(files),
         "trust_jsonl_lines": lines,
         "last_decide_at": last_at,
         "server_time": utc_now_iso_z(),
+        "pipeline_ok": get_decision_pipeline() is not None,
+        "pipeline_error": _pipeline_state.err,
+        "cfg_error": _cfg_state.err,
     }
 
 
@@ -601,35 +948,49 @@ def metrics():
 @app.post("/v1/trust/feedback")
 def trust_feedback(body: dict):
     """
-    人間からのフィードバックを trust_log.jsonl に記録する簡易API。
-    Swagger から:
-      {
-        "user_id": "test_user",
-        "score": 0.9,
-        "note": "今日のプランはかなり良い",
-        "source": "swagger"
-      }
-    みたいに送ればOK。
+    人間からのフィードバックを trust_log に記録する簡易API。
     """
+    vc = get_value_core()
+    if vc is None:
+        return {"status": "error", "detail": f"value_core unavailable: {_value_core_state.err}"}
+
     try:
         uid = (body.get("user_id") or "anon")
         score = body.get("score", 0.5)
         note = body.get("note") or ""
         source = body.get("source") or "manual"
-
         extra = {"api": "/v1/trust/feedback"}
 
-        value_core.append_trust_log(
-            user_id=uid,
-            score=score,
-            note=note,
-            source=source,
-            extra=extra,
-        )
-        return {"status": "ok", "user_id": uid}
+        if hasattr(vc, "append_trust_log"):
+            vc.append_trust_log(
+                user_id=uid,
+                score=score,
+                note=note,
+                source=source,
+                extra=extra,
+            )
+            return {"status": "ok", "user_id": uid}
+
+        return {"status": "error", "detail": "value_core.append_trust_log not found"}
+
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
