@@ -6,12 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
-# 同一ブランチで連打されたら古い実行をキャンセル
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# 権限は最小（テスト実行とartifact uploadに十分）
 permissions:
   contents: read
 
@@ -30,7 +28,6 @@ jobs:
       PYTHONUNBUFFERED: "1"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_PYTHON_VERSION_WARNING: "1"
-      # CIでは実キー禁止。コードが必須ならダミーで満たす。
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
 
@@ -46,12 +43,16 @@ jobs:
 
       - name: Install dependencies
         run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
           python -m pip install --upgrade pip
           pip install -r veritas_os/requirements.txt
           pip install pytest pytest-cov
 
       - name: Run tests (with coverage)
         run: |
+          set -euxo pipefail
           mkdir -p test-reports coverage-html
           pytest -q veritas_os/tests \
             --maxfail=1 \
