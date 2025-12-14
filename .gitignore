@@ -13,7 +13,9 @@ core/config.py
 *.pyd
 *.so
 .mypy_cache/
+# local venv
 .venv/
+.venv*/
 venv/
 
 # --- 環境変数・秘密情報 ---

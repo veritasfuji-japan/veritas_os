@@ -43,24 +43,24 @@ jobs:
 
       - name: Install dependencies
         run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y ripgrep
           python -m pip install --upgrade pip
           pip install -r veritas_os/requirements.txt
           pip install pytest pytest-cov
 
       - name: Run tests (with coverage)
+        id: pytest
         run: |
-          set -euxo pipefail
           mkdir -p test-reports coverage-html
+          set +e
           pytest -q veritas_os/tests \
-            --maxfail=1 \
             --cov=veritas_os \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
             --junitxml=test-reports/pytest.xml
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          set -e
 
       - name: Upload test report (junit)
         if: always()
@@ -78,4 +78,9 @@ jobs:
           path: |
             coverage.xml
             coverage-html
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Fail job if tests failed
+        if: steps.pytest.outputs.exit_code != '0'
+        run: exit 1
+
