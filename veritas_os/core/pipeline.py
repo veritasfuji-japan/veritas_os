@@ -565,10 +565,13 @@ def _memory_add_usage(store: Any, user_id: Any, cited_ids: List[str]) -> None:
 # =========================================================
 # Optional: WebSearch adapter (do not crash import)
 # =========================================================
+
+_tool_web_search = None
 try:
     from veritas_os.tools.web_search import web_search as _tool_web_search  # type: ignore
 except Exception:
-    _tool_web_search = None  # type: ignore[assignment]
+    # optional dependency / env missing in CI or local
+    _tool_web_search = None
 
 
 async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
@@ -577,18 +580,46 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     """
     fn = globals().get("web_search")
     if not callable(fn):
-        fn = _tool_web_search
+        fn = globals().get("_tool_web_search")
     if not callable(fn):
         return None
 
     try:
         ws = fn(query, max_results=max_results)  # type: ignore[misc]
-        # async stub support
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
     except Exception:
         return None
+
+
+def _normalize_web_payload(payload: Any) -> Optional[Dict[str, Any]]:
+    """
+    web_search の戻り値を {"ok": bool, "results": list} に正規化する。
+    tools.web_search の contract を基本として、異形も吸収する。
+    """
+    if payload is None:
+        return None
+
+    if isinstance(payload, dict):
+        out = dict(payload)
+        # results が無い/壊れている場合の救済
+        if "results" not in out or not isinstance(out.get("results"), list):
+            for k in ("items", "hits", "organic", "organic_results"):
+                if isinstance(out.get(k), list):
+                    out["results"] = out[k]
+                    break
+        out.setdefault("results", [])
+        # ok が無ければ「取得できた扱い」で True
+        if "ok" not in out:
+            out["ok"] = True
+        return out
+
+    if isinstance(payload, list):
+        return {"ok": True, "results": payload}
+
+    s = str(payload)
+    return {"ok": True, "results": [{"title": s, "url": "", "snippet": s}]}
 
 
 
@@ -1122,7 +1153,7 @@ async def run_decide_pipeline(
     response_extras["memory_citations"] = memory_citations_list
     response_extras["memory_used_count"] = int(len(memory_citations_list))
 
-        # =========================================================
+    # =========================================================
     # WebSearch (optional / best-effort) + contract  [COMPLETE]
     # =========================================================
     web_evidence: List[Dict[str, Any]] = []
