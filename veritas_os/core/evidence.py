@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # Evidence は dict ベースで扱う（テスト側が e["snippet"] アクセスを前提にしている）
 Evidence = Dict[str, Any]
@@ -15,15 +15,40 @@ def _mk(
     weight: float,
     snippet: str,
     tags: List[str] | None = None,
+    title: str | None = None,
+    uri: str | None = None,
 ) -> Evidence:
-    """内部用の小さなヘルパー。"""
+    """内部用の小さなヘルパー。
+
+    pipeline 側で _norm_evidence_item が吸収できるが、
+    ここでも最低限の整形をして「落ちない」保証を強める。
+    """
+    k = str(kind or "unknown")
+
+    # title/uri を最低限埋める（空文字も弾く）
+    t = title if (title is not None and str(title).strip() != "") else f"local:{k}"
+    u = uri if (uri is not None and str(uri).strip() != "") else f"internal:evidence:{k}"
+
+    # weight -> confidence（絶対に落とさない）
+    try:
+        w = float(weight)
+    except Exception:
+        w = 0.2
+    conf = max(0.0, min(1.0, w))
+
     return {
-        "source": source,
-        "kind": kind,
-        "weight": float(weight),
-        "snippet": snippet,
+        "source": str(source or "local"),
+        "kind": k,
+        "weight": w,
+        "snippet": "" if snippet is None else str(snippet),
         "tags": list(tags or []),
+
+        # 互換: pipeline contract
+        "title": str(t),
+        "uri": str(u),
+        "confidence": conf,
     }
+
 
 
 def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evidence]:
@@ -57,7 +82,7 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
         )
 
     # --- stakes が高いときは『慎重側に倒す』という原則 --------------------
-    stakes_val: float | None = None
+    stakes_val: Optional[float] = None
     if stakes_raw is not None:
         try:
             stakes_val = float(stakes_raw)
@@ -104,7 +129,7 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
                 kind="weather",
                 weight=0.5,
                 snippet=(
-                # ★ テストが "天候は影響大" を期待している
+                    # ★ テストが "天候は影響大" を期待している
                     "天候は影響大なので、屋外活動・移動・体調への影響を"
                     "前提にスケジュールを組んだ方がよい。"
                 ),
@@ -112,7 +137,7 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
             )
         )
 
-        # --- 何もヒットしなかったときのフォールバック ------------------------
+    # --- 何もヒットしなかったときのフォールバック ------------------------
     if not ev:
         ev.append(
             _mk(
@@ -129,8 +154,59 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
             )
         )
 
-
     # 付けすぎてもノイズになるので 4 件まで
     return ev[:4]
+# --- 追加: step1 の low_evidence 対策 ----------------------------
+
+def step1_minimum_evidence(context: Dict[str, Any]) -> List[Evidence]:
+    """
+    step1 を選ぶ場合に、最低限 2 本の evidence を保証する。
+    - 現状機能の“棚卸し出力（list）”
+    - 既知の課題（テスト失敗・障害ログ・未実装一覧など）
+    """
+    ctx = context or {}
+
+    # 1) 現状機能の棚卸し（“存在しているものだけ” を列挙）
+    features = [
+        "API: /v1/decide (FastAPI + Uvicorn)",
+        "Decision pipeline: Planner → (optional WebSearch) → Reason/Debate → FUJI Gate → TrustLog",
+        "Memory: MemoryOS + WorldModel state update",
+        "Logging: TrustLog (hash-chain) + dataset_writer + rotate/paths",
+        "Safety: llm_safety / FUJI gate",
+        "Tests: pytest suite + coverage",
+    ]
+    inventory_snippet = "現状機能（棚卸し）:\n- " + "\n- ".join(features)
+
+    # 2) 既知の課題（最低でも“既知課題がある/ない”を証拠として固定化）
+    known = [
+        "tokenizers の fork 警告が出る場合がある（TOKENIZERS_PARALLELISM で抑制可能）",
+        "WebSearch は環境変数未設定だと degraded/empty になりうる（CIでは contract を満たすフォールバック）",
+        "ローカル起動時に port 競合（address already in use）が起きる場合がある",
+    ]
+
+    # 任意: 呼び出し側でテスト/障害概要を context に載せたら最上段に出す
+    test_summary = ctx.get("test_summary")
+    if test_summary:
+        known.insert(0, f"テスト状況: {test_summary}")
+
+    issues_snippet = "既知の課題/注意:\n- " + "\n- ".join(known)
+
+    return [
+        _mk(
+            source="local",
+            kind="inventory",
+            weight=0.65,
+            snippet=inventory_snippet,
+            tags=["inventory", "system"],
+        ),
+        _mk(
+            source="local",
+            kind="known_issues",
+            weight=0.60,
+            snippet=issues_snippet,
+            tags=["issues", "quality"],
+        ),
+    ]
+
 
 

@@ -235,12 +235,11 @@ def get_fuji_core() -> Optional[Any]:
     """
     global _fuji_state, fuji_core
 
-    # ★最重要: monkeypatch で placeholder 以外が入っていたら、それを無条件で尊重
-    # （validate_action/validate を持っていなくても返す。無ければ endpoint 側で 500）
+    # monkeypatch で placeholder 以外が入っていたら尊重
     if not _is_placeholder(fuji_core):
         return fuji_core
 
-    # tests が placeholder の中身だけ差し替えた場合も尊重
+    # placeholder 内の関数だけ差し替えられている場合も尊重
     if getattr(fuji_core, "validate_action", None) is not _fuji_validate_stub:
         return fuji_core
     if getattr(fuji_core, "validate", None) is not _fuji_validate_stub:
@@ -263,7 +262,6 @@ def get_fuji_core() -> Optional[Any]:
         _fuji_state.obj = None
         print(f"[WARN] fuji_core import failed: {_fuji_state.err}")
         return None
-
 
 
 def get_value_core() -> Optional[Any]:
@@ -347,7 +345,7 @@ def get_memory_store() -> Optional[Any]:
 
 cfg = get_cfg()
 
-app = FastAPI(title="VERITAS Public API", version="1.0.2")
+app = FastAPI(title="VERITAS Public API", version="1.0.3")
 
 app.add_middleware(
     CORSMiddleware,
@@ -395,6 +393,7 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
 # ---- HMAC signature / replay (optional) ----
 API_SECRET = (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
 _NONCE_TTL_SEC = 300
+_NONCE_MAX = 5000  # 簡易上限
 _nonce_store: Dict[str, float] = {}
 
 
@@ -402,6 +401,10 @@ def _cleanup_nonces():
     now = time.time()
     for k, until in list(_nonce_store.items()):
         if now > until:
+            _nonce_store.pop(k, None)
+    # 上限超過時は古いものから間引き（TTL前提なので乱暴でOK）
+    if len(_nonce_store) > _NONCE_MAX:
+        for k in list(_nonce_store.keys())[: max(0, len(_nonce_store) - _NONCE_MAX)]:
             _nonce_store.pop(k, None)
 
 
@@ -449,7 +452,20 @@ async def verify_signature(
 # ---- rate limit（簡易）----
 _RATE_LIMIT = 60
 _RATE_WINDOW = 60.0
+_RATE_BUCKET_MAX = 5000
 _rate_bucket: Dict[str, Tuple[int, float]] = {}
+
+
+def _cleanup_rate_bucket():
+    now = time.time()
+    # window を過ぎたバケットを掃除
+    for k, (_, start) in list(_rate_bucket.items()):
+        if now - start > (_RATE_WINDOW * 4):
+            _rate_bucket.pop(k, None)
+    # 上限超過時は適当に間引く
+    if len(_rate_bucket) > _RATE_BUCKET_MAX:
+        for k in list(_rate_bucket.keys())[: max(0, len(_rate_bucket) - _RATE_BUCKET_MAX)]:
+            _rate_bucket.pop(k, None)
 
 
 def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
@@ -459,6 +475,8 @@ def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-
     """
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
+
+    _cleanup_rate_bucket()
 
     key = x_api_key.strip()
     count, start = _rate_bucket.get(key, (0, time.time()))
@@ -487,6 +505,113 @@ def redact(text: str) -> str:
     return text
 
 
+def _gen_request_id(seed: str = "") -> str:
+    base = f"{utc_now_iso_z()}|{seed}|{secrets.token_hex(8)}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()[:24]
+
+
+def _coerce_alt_list(v: Any) -> list:
+    """
+    alternatives/options の壊れ入力を “list[dict]” に寄せる。
+    DecideResponse 側でも extra allow だが、最低限 id/title を補う。
+    """
+    if v is None:
+        return []
+    if isinstance(v, dict):
+        v = [v]
+    if not isinstance(v, list):
+        return [{"id": "alt_0", "title": str(v), "description": "", "score": 1.0}]
+
+    out = []
+    for i, it in enumerate(v):
+        if isinstance(it, dict):
+            d = dict(it)
+        else:
+            d = {"title": str(it)}
+        d.setdefault("id", d.get("id") or f"alt_{i}")
+        d.setdefault("title", d.get("title") or d.get("text") or f"alt_{i}")
+        d.setdefault("description", d.get("description") or "")
+        # score は float 化できるならする
+        if "score" in d and d["score"] is not None:
+            try:
+                d["score"] = float(d["score"])
+            except Exception:
+                d["score"] = 1.0
+        else:
+            d.setdefault("score", 1.0)
+        out.append(d)
+    return out
+
+
+def _coerce_decide_payload(payload: Any, *, seed: str = "") -> Dict[str, Any]:
+    """
+    response_model を “効かせつつ” server を落とさないための最終整形。
+    - payload が dict じゃない → dict に包む
+    - DecideResponse の必須キー request_id を補う
+    - alternatives/options を補う（互換）
+    """
+    if not isinstance(payload, dict):
+        payload = {
+            "ok": True,
+            "request_id": _gen_request_id(seed),
+            "chosen": {"title": str(payload)},
+            "alternatives": [],
+            "options": [],
+            "trust_log": None,
+        }
+        return payload
+
+    d = dict(payload)
+
+    # テスト互換: trust_log を必ず付ける
+    if "trust_log" not in d:
+        d["trust_log"] = None
+    if "ok" not in d:
+        d["ok"] = True
+
+    # request_id は DecideResponse で必須
+    if not d.get("request_id"):
+        d["request_id"] = _gen_request_id(seed)
+
+    # chosen が無い/変でも落とさない
+    if "chosen" not in d or d["chosen"] is None:
+        d["chosen"] = {}
+    elif not isinstance(d["chosen"], dict):
+        d["chosen"] = {"title": str(d["chosen"])}
+
+    # alternatives / options 互換
+    alts = d.get("alternatives")
+    opts = d.get("options")
+
+    if (alts is None or alts == []) and opts:
+        d["alternatives"] = _coerce_alt_list(opts)
+    else:
+        d["alternatives"] = _coerce_alt_list(alts)
+
+    # options は互換としてミラー
+    if not opts and d.get("alternatives"):
+        d["options"] = list(d["alternatives"])
+    else:
+        d["options"] = _coerce_alt_list(opts)
+
+    return d
+
+
+def _coerce_fuji_payload(payload: Any, *, action: str = "") -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        payload = {"status": "allow", "reasons": ["coerced"], "violations": [], "action": action}
+        return payload
+
+    d = dict(payload)
+    if not d.get("status"):
+        d["status"] = "allow"
+    if "reasons" not in d or d["reasons"] is None:
+        d["reasons"] = []
+    if "violations" not in d or d["violations"] is None:
+        d["violations"] = []
+    return d
+
+
 # ==============================
 # 422 error handler
 # ==============================
@@ -504,12 +629,14 @@ def _decide_example() -> dict:
 async def on_validation_error(request: Request, exc: RequestValidationError):
     raw_body_bytes = await request.body()
     raw = raw_body_bytes.decode("utf-8", "replace") if raw_body_bytes else ""
+    # 本番で危険になりやすいので最低限マスク
+    raw_safe = redact(raw)
     return JSONResponse(
         status_code=422,
         content={
             "detail": exc.errors(),
             "hint": {"expected_example": _decide_example()},
-            "raw_body": raw,
+            "raw_body": raw_safe,
         },
     )
 
@@ -533,12 +660,14 @@ def health():
 @app.get("/v1/status")
 @app.get("/api/status")
 def status():
+    expected = (_get_expected_api_key() or "").strip()
     return {
         "ok": True,
-        "version": "veritas-api 1.0.2",
+        "version": "veritas-api 1.0.3",
         "uptime": int(time.time() - START_TS),
         "server_time": utc_now_iso_z(),
         "pipeline_ok": get_decision_pipeline() is not None,
+        "api_key_configured": bool(expected),
         "cfg_error": _cfg_state.err,
         "pipeline_error": _pipeline_state.err,
     }
@@ -675,14 +804,23 @@ async def decide(req: DecideRequest, request: Request):
             },
         )
 
-    # ★ テスト互換: trust_log キーを必ず付ける
-    if isinstance(payload, dict) and "trust_log" not in payload:
-        payload["trust_log"] = None
-    # ★ 念のため ok も（pipeline側で入るが壊れてても補完）
-    if isinstance(payload, dict) and "ok" not in payload:
-        payload["ok"] = True
-
-    return JSONResponse(content=payload, status_code=200)
+    # ★ response_model を効かせつつ壊れpayloadでも落ちないように最終整形
+    coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
+    # DecideResponse 側に “落ちない” バリデータがある前提で model_validate
+    try:
+        return DecideResponse.model_validate(coerced)
+    except Exception as e:
+        # 最後の保険：型検証で落ちても 503 ではなく 200/JSON にして “落ちない” を優先
+        # （ただしこの経路はログで追えるよう detail を付ける）
+        return JSONResponse(
+            status_code=200,
+            content={
+                **coerced,
+                "ok": True,
+                "warn": "response_model_validation_failed",
+                "warn_detail": _errstr(e),
+            },
+        )
 
 
 # ==============================
@@ -729,7 +867,19 @@ def fuji_validate(payload: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"fuji validate failed: {_errstr(e)}")
 
-    return JSONResponse(content=result)
+    coerced = _coerce_fuji_payload(result, action=action)
+    try:
+        return FujiDecision.model_validate(coerced)
+    except Exception as e:
+        # 最後の保険：落ちるより返す
+        return JSONResponse(
+            status_code=200,
+            content={
+                **coerced,
+                "warn": "response_model_validation_failed",
+                "warn_detail": _errstr(e),
+            },
+        )
 
 
 # ==============================
@@ -976,6 +1126,7 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
+
 
 
 

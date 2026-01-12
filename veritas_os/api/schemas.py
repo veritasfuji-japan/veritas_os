@@ -1,13 +1,70 @@
 # veritas_os/api/schemas.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Literal, Union
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from typing import Any, Dict, List, Optional, Literal, Union, Iterable, Mapping
+from uuid import uuid4
+
+from pydantic import (
+    BaseModel,
+    Field,
+    ConfigDict,
+    model_validator,
+    field_validator,
+)
+
+# =========================
+# Helpers (robust coercion)
+# =========================
+
+
+def _is_mapping(x: Any) -> bool:
+    return isinstance(x, Mapping)
+
+
+def _as_list(v: Any) -> List[Any]:
+    """
+    Robustly coerce v into a Python list.
+    - None -> []
+    - dict -> [dict]
+    - scalar -> [scalar]
+    - iterable (tuple/set/generator) -> list(iterable)
+    - list -> list
+    """
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return v
+    if _is_mapping(v):
+        return [v]
+    if isinstance(v, (str, int, float, bool)):
+        return [v]
+    # other iterables: tuple/set/generator/etc
+    if isinstance(v, Iterable):
+        try:
+            return list(v)
+        except Exception:
+            return [v]
+    return [v]
+
+
+def _coerce_context(v: Any) -> Dict[str, Any]:
+    """
+    Accept Context | dict | anything -> dict
+    """
+    if v is None:
+        return {}
+    if isinstance(v, Context):
+        return v.model_dump()
+    if _is_mapping(v):
+        return dict(v)
+    # last resort
+    return {"raw": v}
 
 
 # =========================
 # Core context / options
 # =========================
+
 
 class Context(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -26,9 +83,7 @@ class Context(BaseModel):
     preferences: Optional[List[str]] = None
     telos_weights: Optional[Dict[str, float]] = None
     affect_hint: Optional[Dict[str, str]] = None
-    response_style: Optional[
-        Literal["logic", "emotional", "business", "expert", "casual"]
-    ] = None
+    response_style: Optional[Literal["logic", "emotional", "business", "expert", "casual"]] = None
 
 
 class Option(BaseModel):
@@ -38,7 +93,7 @@ class Option(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     score: Optional[float] = None
-    text: Optional[str] = None        # 互換（title の別名）
+    text: Optional[str] = None  # 互換（title の別名）
     score_raw: Optional[float] = None
 
     @model_validator(mode="after")
@@ -52,6 +107,7 @@ class Option(BaseModel):
 # =========================
 # Evidence / critique / debate
 # =========================
+
 
 class ValuesOut(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -84,11 +140,11 @@ class EvidenceItem(BaseModel):
         if not self.source:
             self.source = "unknown"
 
-        # uri: url/link/href 互換
+        # uri: url/link/href/URI 互換
         if self.uri is None:
             u = None
-            if isinstance(getattr(self, "__pydantic_extra__", None), dict):
-                ex = self.__pydantic_extra__ or {}
+            ex = getattr(self, "__pydantic_extra__", None)
+            if isinstance(ex, dict):
                 u = ex.get("url") or ex.get("link") or ex.get("href") or ex.get("URI")
             if u:
                 self.uri = str(u)
@@ -131,6 +187,7 @@ class DebateView(BaseModel):
 # Safety / trust
 # =========================
 
+
 class FujiDecision(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -147,7 +204,10 @@ class TrustLog(BaseModel):
     sources: List[str] = Field(default_factory=list)
     critics: List[str] = Field(default_factory=list)
     checks: List[str] = Field(default_factory=list)
-    approver: str
+
+    # 実運用の落下を避けるため、デフォルトを持たせる（必須思想なら外してOK）
+    approver: str = "system"
+
     sha256_prev: Optional[str] = None
 
 
@@ -155,12 +215,13 @@ class TrustLog(BaseModel):
 # API I/O（Request）
 # =========================
 
+
 class AltItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     id: Optional[str] = None
     title: Optional[str] = None
-    text: Optional[str] = None        # 互換（title の別名）
+    text: Optional[str] = None  # 互換（title の別名）
     description: Optional[str] = None
     score: Optional[float] = None
     score_raw: Optional[float] = None
@@ -175,26 +236,83 @@ class AltItem(BaseModel):
 AltIn = Union[AltItem, Option, Dict[str, Any]]
 
 
+def _altin_to_altitem(x: Any) -> AltItem:
+    """
+    Accept AltItem | Option | dict | scalar and normalize to AltItem.
+    """
+    if x is None:
+        return AltItem()
+    if isinstance(x, AltItem):
+        return x
+    if isinstance(x, Option):
+        d = x.model_dump()
+        # Option.text/title unify already, but keep it safe
+        return AltItem.model_validate(d)
+    if _is_mapping(x):
+        return AltItem.model_validate(dict(x))
+    # scalar fallback
+    return AltItem(title=str(x))
+
+
 class DecideRequest(BaseModel):
-    # 未知フィールドも保持（将来拡張・Swagger差異に強い）
+    """
+    完全互換の受け口（落ちない）:
+    - context: Context/dict/anything -> dict に正規化
+    - alternatives/options: list/dict/Option/AltItem/scalar 混在OK
+    - options -> alternatives 片寄せ（alternatives 優先）
+    """
     model_config = ConfigDict(extra="allow")
 
     query: str = ""
     context: Dict[str, Any] = Field(default_factory=dict)
 
-    # ★ 新旧どちらでも受けられるよう両方定義
-    alternatives: Optional[List[AltItem]] = None
-    options: Optional[List[AltItem]] = None
+    # ★ 受け口は AltIn にする（dict/Option/AltItem 全受け）
+    alternatives: Optional[List[AltIn]] = None
+    options: Optional[List[AltIn]] = None
 
     min_evidence: int = 1
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
-    # 受信後に options -> alternatives へ片寄せ（alternatives 優先）
+    @field_validator("context", mode="before")
+    @classmethod
+    def _coerce_context_before(cls, v: Any) -> Dict[str, Any]:
+        return _coerce_context(v)
+
+    @field_validator("alternatives", mode="before")
+    @classmethod
+    def _coerce_alternatives_before(cls, v: Any) -> List[AltItem]:
+        # None -> []
+        if v is None:
+            return []
+        # dict/scalar/iterable -> list
+        items = _as_list(v)
+        return [_altin_to_altitem(x) for x in items]
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _coerce_options_before(cls, v: Any) -> List[AltItem]:
+        if v is None:
+            return []
+        items = _as_list(v)
+        return [_altin_to_altitem(x) for x in items]
+
     @model_validator(mode="after")
     def _unify_options(self) -> "DecideRequest":
-        if (self.alternatives is None or len(self.alternatives) == 0) and self.options:
-            self.alternatives = self.options
+        # alternatives 優先。無ければ options を採用
+        alts = list(self.alternatives or [])
+        opts = list(self.options or [])
+        if (not alts) and opts:
+            self.alternatives = opts
+            alts = opts
+
+        # 互換で options も同値に揃える（クライアント期待がある場合）
+        if alts and (not opts):
+            self.options = list(alts)
+
+        # ここで型を AltItem に確定（field_validator で済んでいる想定だが保険）
+        self.alternatives = [x if isinstance(x, AltItem) else _altin_to_altitem(x) for x in (self.alternatives or [])]
+        self.options = [x if isinstance(x, AltItem) else _altin_to_altitem(x) for x in (self.options or [])]
         return self
 
 
@@ -202,11 +320,13 @@ class DecideRequest(BaseModel):
 # API I/O（Response）
 # =========================
 
+
 class Alt(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: str
-    title: str
+    # 実運用で id 欠落が起きやすいのでデフォルトを持たせ、後段で補完
+    id: str = ""
+    title: str = ""
     description: str = ""
     score: float = 1.0
     score_raw: Optional[float] = None
@@ -214,6 +334,15 @@ class Alt(BaseModel):
     # WorldModel / Meta 情報を落とさないようにする
     world: Optional[Dict[str, Any]] = None
     meta: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def _ensure_id_title(self) -> "Alt":
+        if not self.id:
+            self.id = uuid4().hex
+        if not self.title:
+            # title 空は最悪 "option-<id>" に寄せる
+            self.title = f"option-{self.id[:8]}"
+        return self
 
 
 class Gate(BaseModel):
@@ -229,26 +358,29 @@ class Gate(BaseModel):
 
 class DecideResponse(BaseModel):
     """
-    ★狙い：
-    - pipeline が model_validate → model_dump を挟んでも evidence(特に source="web") が消えない
-    - evidence が str/dict/BaseModel 混在でも受け取って正規化する
+    ★狙い（完全版）：
+    - model_validate → model_dump を挟んでも evidence が消えない
+    - evidence / critique / debate / alternatives が dict / str / BaseModel 混在でも落ちない
+    - list_type エラーの根絶（dict/tuple/set/generator も安全に list 化）
+    - alternatives/options のミラー互換
     """
     model_config = ConfigDict(extra="allow")
 
-    request_id: str
+    request_id: str = ""
     chosen: Dict[str, Any] = Field(default_factory=dict)
-    alternatives: List[Alt] = Field(default_factory=list)
 
-    # 互換のために残すが、通常は alternatives と同じものを返す
+    alternatives: List[Alt] = Field(default_factory=list)
+    # 互換のために残す（通常は alternatives と同じ）
     options: List[Alt] = Field(default_factory=list)
 
     values: Optional[ValuesOut] = None
 
-    # ★ここが重要：Any ではなく EvidenceItem で受ける（落ちにくい）
     evidence: List[EvidenceItem] = Field(default_factory=list)
 
+    # critique/debate は “何が来ても落とさない” を最優先
     critique: List[Any] = Field(default_factory=list)
     debate: List[Any] = Field(default_factory=list)
+
     telos_score: float = 0.0
     fuji: Dict[str, Any] = Field(default_factory=dict)
     rsi_note: Optional[Dict[str, Any]] = None
@@ -258,7 +390,7 @@ class DecideResponse(BaseModel):
     version: str = "veritas-api 1.x"
     evo: Optional[Dict[str, Any]] = None
 
-    # ここから下が /v1/decide 側に合わせた拡張分
+    # /v1/decide 側に合わせた拡張分
     decision_status: Literal["allow", "modify", "rejected"] = "allow"
     rejection_reason: Optional[str] = None
 
@@ -271,47 +403,89 @@ class DecideResponse(BaseModel):
     planner: Optional[Dict[str, Any]] = None
     reason: Optional[Any] = None
 
-    # persist 用に付けている meta（memory_evidence_count など）
+    # persist 用 meta
     meta: Dict[str, Any] = Field(default_factory=dict)
 
-    # ★ 監査用 TrustLog（必須ではないので Optional）
-    trust_log: Optional[Dict[str, Any]] = None
+    # 監査用 TrustLog（入ってくる形が dict/TrustLog どちらでも OK にしたい）
+    trust_log: Optional[Union[TrustLog, Dict[str, Any]]] = None
 
-    @model_validator(mode="after")
-    def _unify_and_sanitize(self) -> "DecideResponse":
-        # alternatives があって options が空ならミラー（互換）
-        if self.alternatives and not self.options:
-            self.options = list(self.alternatives)
+    # -------------------------
+    # BEFORE validators（落ちる前に整形）
+    # -------------------------
 
-        # evidence が壊れて/混在して来ても必ず EvidenceItem に寄せる
-        fixed: List[EvidenceItem] = []
-        raw_list: List[Any] = list(self.evidence or [])
+    @field_validator("request_id", mode="before")
+    @classmethod
+    def _coerce_request_id(cls, v: Any) -> str:
+        if v is None or v == "":
+            return uuid4().hex
+        return str(v)
 
-        for ev in raw_list:
+    @field_validator("critique", mode="before")
+    @classmethod
+    def _coerce_critique_to_list(cls, v: Any) -> List[Any]:
+        return _as_list(v)
+
+    @field_validator("debate", mode="before")
+    @classmethod
+    def _coerce_debate_to_list(cls, v: Any) -> List[Any]:
+        return _as_list(v)
+
+    @field_validator("alternatives", mode="before")
+    @classmethod
+    def _coerce_alts(cls, v: Any) -> List[Any]:
+        # dict/scalar/list/iterable すべて list 化
+        return _as_list(v)
+
+    @field_validator("options", mode="before")
+    @classmethod
+    def _coerce_opts(cls, v: Any) -> List[Any]:
+        return _as_list(v)
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def _coerce_evidence_to_list_of_dicts(cls, v: Any) -> List[Any]:
+        """
+        evidence が
+          - dict 単体
+          - str 単体
+          - list の中に str / dict / BaseModel / その他
+        で来ても “EvidenceItem が食える形” に寄せてから型解決させる。
+        """
+        if v is None:
+            return []
+
+        # dict 単体 → list 化
+        if _is_mapping(v):
+            v = [dict(v)]
+
+        # str 単体 → list 化（テキスト証拠）
+        if isinstance(v, str):
+            return [{"source": "text", "snippet": v, "confidence": 0.5}]
+
+        # list/iterable 化
+        items = _as_list(v)
+
+        out: List[Any] = []
+        for ev in items:
+            # EvidenceItem はそのまま
             if isinstance(ev, EvidenceItem):
-                fixed.append(ev)
+                out.append(ev)
                 continue
 
-            # str -> EvidenceItem
-            if isinstance(ev, str):
-                fixed.append(EvidenceItem(source="text", snippet=ev, confidence=0.5))
+            # Pydantic BaseModel は dict 化して情報保持
+            if isinstance(ev, BaseModel):
+                out.append(ev.model_dump())
                 continue
 
-            # dict -> EvidenceItem
-            if isinstance(ev, dict):
+            # dict
+            if _is_mapping(ev):
                 d = dict(ev)
-
-                # source を必ず埋める（テスト契約: web ソース evidence の存在）
                 if not d.get("source"):
                     d["source"] = "unknown"
-
-                # uri 互換
                 if d.get("uri") is None:
-                    u = d.get("url") or d.get("link") or d.get("href")
+                    u = d.get("url") or d.get("link") or d.get("href") or d.get("URI")
                     if u:
                         d["uri"] = str(u)
-
-                # snippet 互換
                 if not d.get("snippet"):
                     if d.get("text"):
                         d["snippet"] = str(d.get("text"))
@@ -321,17 +495,107 @@ class DecideResponse(BaseModel):
                         d["snippet"] = str(d.get("uri"))
                     else:
                         d["snippet"] = ""
-
-                fixed.append(EvidenceItem.model_validate(d))
+                out.append(d)
                 continue
 
-            # その他 -> stringify
-            fixed.append(EvidenceItem(source="unknown", snippet=str(ev), confidence=0.3))
+            # str
+            if isinstance(ev, str):
+                out.append({"source": "text", "snippet": ev, "confidence": 0.5})
+                continue
 
-        self.evidence = fixed
+            # その他
+            out.append({"source": "unknown", "snippet": str(ev), "confidence": 0.3})
+
+        return out
+
+    @field_validator("trust_log", mode="before")
+    @classmethod
+    def _coerce_trust_log(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, TrustLog):
+            return v
+        if _is_mapping(v):
+            # dict ならそのまま。後段で TrustLog に寄せる
+            return dict(v)
+        # 変な型は raw として保持
+        return {"raw": str(v)}
+
+    # -------------------------
+    # AFTER validator（互換・最終整形）
+    # -------------------------
+
+    @model_validator(mode="after")
+    def _unify_and_sanitize(self) -> "DecideResponse":
+        # alternatives があって options が空ならミラー（互換）
+        if self.alternatives and not self.options:
+            self.options = list(self.alternatives)
+
+        # options があって alternatives が空なら寄せる（逆互換も強化）
+        if self.options and not self.alternatives:
+            self.alternatives = list(self.options)
+
+        # alternatives/options を “必ず Alt” に寄せ切る
+        fixed_alts: List[Alt] = []
+        for a in list(self.alternatives or []):
+            if isinstance(a, Alt):
+                fixed_alts.append(a)
+            elif isinstance(a, BaseModel):
+                fixed_alts.append(Alt.model_validate(a.model_dump()))
+            elif _is_mapping(a):
+                fixed_alts.append(Alt.model_validate(dict(a)))
+            elif isinstance(a, str):
+                fixed_alts.append(Alt(title=a))
+            else:
+                fixed_alts.append(Alt(title=str(a)))
+        self.alternatives = fixed_alts
+
+        fixed_opts: List[Alt] = []
+        for o in list(self.options or []):
+            if isinstance(o, Alt):
+                fixed_opts.append(o)
+            elif isinstance(o, BaseModel):
+                fixed_opts.append(Alt.model_validate(o.model_dump()))
+            elif _is_mapping(o):
+                fixed_opts.append(Alt.model_validate(dict(o)))
+            elif isinstance(o, str):
+                fixed_opts.append(Alt(title=o))
+            else:
+                fixed_opts.append(Alt(title=str(o)))
+        self.options = fixed_opts
+
+        # critique/debate は “必ず list” を最終保証
+        self.critique = _as_list(self.critique)
+        self.debate = _as_list(self.debate)
+
+        # evidence は BEFORE でほぼ正規化済みだが、最後に “必ず EvidenceItem” に寄せ切る
+        fixed_ev: List[EvidenceItem] = []
+        for ev in list(self.evidence or []):
+            if isinstance(ev, EvidenceItem):
+                fixed_ev.append(ev)
+            elif isinstance(ev, BaseModel):
+                fixed_ev.append(EvidenceItem.model_validate(ev.model_dump()))
+            elif _is_mapping(ev):
+                fixed_ev.append(EvidenceItem.model_validate(dict(ev)))
+            elif isinstance(ev, str):
+                fixed_ev.append(EvidenceItem(source="text", snippet=ev, confidence=0.5))
+            else:
+                fixed_ev.append(EvidenceItem(source="unknown", snippet=str(ev), confidence=0.3))
+        self.evidence = fixed_ev
+
+        # trust_log を “可能なら TrustLog” に寄せる（落とさない）
+        if self.trust_log is not None and not isinstance(self.trust_log, TrustLog):
+            if _is_mapping(self.trust_log):
+                try:
+                    self.trust_log = TrustLog.model_validate(dict(self.trust_log))
+                except Exception:
+                    # 壊れてても残す（監査上、消すよりマシ）
+                    self.trust_log = dict(self.trust_log)
+
         return self
 
 
+# forward refs を確実に解決
 DecideResponse.model_rebuild()
 
 
@@ -362,4 +626,6 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
     memory_auto_put: bool = True
     persona_evolve: bool = True
+
+
 

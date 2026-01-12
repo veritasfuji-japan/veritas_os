@@ -3,34 +3,22 @@
 """
 FUJI Gate v2 (Safety Head × Policy Engine × TrustLog)
 
-- Safety Head:
-    LLM もしくは専用安全モデルを叩き、
-      risk_score ∈ [0,1], categories[], rationale
-    を返す「統計的安全ヘッド」。
+PoC仕様（楽天想定）：
+- low_evidence のときは allow に倒さず、必ず「補う/止める」へ寄せる
+  - 高リスク/高ステークス => deny/rejected
+  - それ以外              => needs_human_review/modify
+- low_evidence のときは必ず followups（追加調査アクション）を返す
 
-- Policy Engine:
-    YAML / 内蔵ポリシー定義に基づき、
-      risk_score × categories × stakes × telos_score
-    から
-      status: "allow" | "allow_with_warning" | "needs_human_review" | "deny"
-    を決定する純粋ルール層（監査可能）。
+重要（矛盾を100%潰すための不変条件）:
+- status は内部状態: allow | allow_with_warning | needs_human_review | deny
+- decision_status は外部API向け: allow | modify | rejected
+- status == "deny"           => decision_status == "rejected" かつ rejection_reason != None
+- decision_status == "rejected" => rejection_reason != None
+- status != "deny"           => rejection_reason == None
+- validate_action（pre-check）では evidence が無いことが多いので、
+  デフォルトで low_evidence を強制しない（= enforce_low_evidence は evidence が渡された時のみON）
 
-- TrustLog:
-    1 回の evaluate ごとに、
-      safety_head 出力・policy_version・最終 status
-    を JSONL + ハッシュチェーンに append する。
-
-互換ポイント:
-- kernel.decide からは fuji.evaluate(query, context=..., evidence=..., alternatives=...)
-  の旧インターフェイスで呼べる。
-- decision dict を渡す新インターフェイスにも対応。
-- context["fuji_safe_applied"] or context["pii_already_masked"] が True の場合、
-  PII 由来カテゴリーを弱めて risk を緩和する。
-
-リファクタリング:
-- fuji_core_decide(...) を追加し、SafetyHead 結果と policy からの
-  「純粋な判定コア」を分離。
-- fuji_gate(...) は SafetyHead 呼び出しと TrustLog などの I/O に集中。
+Safety / Policy / TrustLog は監査可能な形で残す。
 """
 
 from __future__ import annotations
@@ -61,14 +49,12 @@ try:
     from veritas_os.logging.trust_log import append_trust_event
 except Exception:  # pragma: no cover
     def append_trust_event(event: Dict[str, Any]) -> None:
-        # 何もしないダミー（本番では veritas_os.logging.trust_log を使う）
         return
 
 
 try:
     import yaml  # ポリシーファイル用
 except Exception:  # pragma: no cover
-    # PyYAML が無い場合は None。_load_policy が自動で DEFAULT にフォールバックする。
     yaml = None  # type: ignore
 
 
@@ -77,6 +63,9 @@ except Exception:  # pragma: no cover
 # =========================================================
 DEFAULT_MIN_EVIDENCE = 1
 MAX_UNCERTAINTY = 0.60
+
+# PoCモードON: export VERITAS_POC_MODE=1
+_ENV_POC_MODE = os.getenv("VERITAS_POC_MODE", "0") == "1"
 
 # 危険・違法系の簡易ワード（Safety Head が落ちた時の fallback 用）
 BANNED_KEYWORDS = {
@@ -94,6 +83,14 @@ _RE_EMAIL  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
 _RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
 # 人名っぽい漢字 2〜4 文字だが、日本語文では誤検出だらけになるので PII 判定には使わない
 _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}')
+
+
+# PoC向け：高リスクっぽい業務ドメイン判定（テキスト含意）
+RISKY_KEYWORDS_POC = re.compile(
+    r"(法務|契約|労働|規制|コンプライアンス|金融|融資|投資|医療|診断|個人情報|マイナンバー|"
+    r"セキュリティ|脆弱性|攻撃|ハッキング|監査|不正|犯罪|詐欺)",
+    re.IGNORECASE
+)
 
 
 # =========================================================
@@ -118,6 +115,14 @@ def _now_iso() -> str:
 def _safe_float(x: Any, default: float = 0.0) -> float:
     try:
         return float(x)
+    except Exception:
+        return default
+
+
+def _safe_int(x: Any, default: int) -> int:
+    try:
+        v = int(x)
+        return v if v >= 0 else default
     except Exception:
         return default
 
@@ -158,6 +163,72 @@ def _policy_path() -> Path:
     return root_dir / "policies" / "fuji_default.yaml"
 
 
+def _ctx_bool(ctx: Dict[str, Any], key: str, default: bool) -> bool:
+    v = ctx.get(key, default)
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    if isinstance(v, str):
+        return v.strip().lower() in ("1", "true", "yes", "y", "on")
+    return default
+
+
+def _is_high_risk_context(*, risk: float, stakes: float, categories: List[str], text: str) -> bool:
+    """
+    PoC用：low_evidence 時に rejected へ寄せるかどうかの判定。
+    """
+    if stakes >= 0.7:
+        return True
+    if risk >= 0.7:
+        return True
+
+    cats = {str(c).strip().lower() for c in (categories or [])}
+    # safetyカテゴリが混じる場合は強く寄せる
+    if any(c in cats for c in ("self_harm", "illicit", "violence", "minors", "pii")):
+        return True
+
+    if RISKY_KEYWORDS_POC.search(text or ""):
+        return True
+
+    return False
+
+
+def _build_followups(text: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    PoCで「止める/補う」がレスポンスに必ず出るようにする。
+    UI/監査ログどちらでも見せやすい構造。
+    """
+    q = (text or "").strip()
+    scope_hint = str(context.get("scope", "") or "").strip()
+    return [
+        {
+            "type": "web_search",
+            "title": "一次ソースで裏取り（独立ソース2件以上）",
+            "query": q,
+            "acceptance": "公式/一次情報 + 信頼できる独立ソースの2件以上",
+        },
+        {
+            "type": "clarify",
+            "title": "前提条件の確認（PoC要件）",
+            "questions": [
+                "PoCのゴール（監査ログ/意思決定支援/安全ゲート）の最優先は？",
+                "評価指標（正確性/再現性/説明可能性/速度）の優先順位は？",
+                f"この判断のスコープ（対象業務・対象期間・制約）は？{(' / hint: ' + scope_hint) if scope_hint else ''}",
+            ],
+        },
+        {
+            "type": "evidence_request",
+            "title": "追加エビデンス投入（社内ルール/要件）",
+            "items": [
+                "PoC要件定義（対象業務、判断ポイント、想定入力/出力）",
+                "セキュリティ/法務制約（禁止事項・承認フロー・保管要件）",
+                "成功条件（KPI、合格ライン、評価手順）",
+            ],
+        },
+    ]
+
+
 # ---------------------------------------------------------
 # デフォルトポリシー（YAML がなくても動く）
 # ---------------------------------------------------------
@@ -193,20 +264,13 @@ _DEFAULT_POLICY: Dict[str, Any] = {
             "max_risk_allow": 0.00,
             "action_on_exceed": "human_review",
         },
+        # low_evidence の強制はコード側で実施（PoCモード時）
     },
     "actions": {
-        "allow": {
-            "risk_upper": 0.40,
-        },
-        "warn": {
-            "risk_upper": 0.65,
-        },
-        "human_review": {
-            "risk_upper": 0.85,
-        },
-        "deny": {
-            "risk_upper": 1.00,
-        },
+        "allow": {"risk_upper": 0.40},
+        "warn": {"risk_upper": 0.65},
+        "human_review": {"risk_upper": 0.85},
+        "deny": {"risk_upper": 1.00},
     },
 }
 
@@ -215,7 +279,6 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
     """
     FUJI ポリシーを YAML からロード。
     - 読み込みに失敗 / ファイルなし / PyYAMLなし の場合は _DEFAULT_POLICY を返す。
-    - ここではログを出さず、静かにフォールバックする（上位で必要なら meta で確認）。
     """
     if yaml is None:
         return dict(_DEFAULT_POLICY)
@@ -252,28 +315,19 @@ def reload_policy() -> Dict[str, Any]:
 # =========================================================
 def _fallback_safety_head(text: str) -> SafetyHeadResult:
     """
-    env tool が使えない場合の簡易 fallback:
-    - 危険キーワード / PII を簡易検査して risk / categories を推定。
-    - 日本語文全体が「name_like」と誤検出されないように、
-      人名パターン（_RE_NAMEJP）は PII 判定には使わない。
+    env tool が使えない場合の簡易 fallback。
     """
     t = _normalize_text(text)
     categories: List[str] = []
     risk = 0.05
     rationale_parts: List[str] = []
 
-    # ---------- 危険・違法系キーワード ----------
-    hits = [w for w in BANNED_KEYWORDS if w in t] + [
-        w for w in SENSITIVE_KEYWORDS if w in t
-    ]
+    hits = [w for w in BANNED_KEYWORDS if w in t] + [w for w in SENSITIVE_KEYWORDS if w in t]
     if hits:
         categories.append("illicit")
         risk = max(risk, 0.8)
-        rationale_parts.append(
-            f"危険・違法系キーワード検出: {', '.join(sorted(set(hits)))}"
-        )
+        rationale_parts.append(f"危険・違法系キーワード検出: {', '.join(sorted(set(hits)))}")
 
-    # ---------- PII（電話・メール・住所のみ） ----------
     pii_hits: List[str] = []
     if _RE_PHONE.search(text):
         pii_hits.append("phone")
@@ -282,33 +336,21 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
     if _RE_ADDRJP.search(text):
         pii_hits.append("address")
 
-    # ※ _RE_NAMEJP（漢字2〜4文字）は、日本語文だと誤検出だらけになるので
-    #    ここでは PII 判定に使わない。
-    # if _RE_NAMEJP.search(text):
-    #     pii_hits.append("name_like")
-
+    # _RE_NAMEJP は誤検出が多いので PII 判定に使わない
     if pii_hits:
         categories.append("PII")
-        # PII のみなら中くらいのリスクにとどめる
         risk = max(risk, 0.35)
         rationale_parts.append(f"PII パターン検出: {', '.join(pii_hits)}")
 
-    # ---------- 何もヒットしなかった場合 ----------
     if not categories:
-        rationale_parts.append(
-            "特段の危険キーワードや PII パターンは検出されませんでした。"
-        )
+        rationale_parts.append("特段の危険キーワードや PII パターンは検出されませんでした。")
 
     return SafetyHeadResult(
         risk_score=min(1.0, risk),
         categories=sorted(set(categories)),
         rationale=" / ".join(rationale_parts),
         model="heuristic_fallback",
-        raw={
-            "fallback": True,
-            "hits": hits,
-            "pii_hits": pii_hits,
-        },
+        raw={"fallback": True, "hits": hits, "pii_hits": pii_hits},
     )
 
 
@@ -321,7 +363,6 @@ def run_safety_head(
     LLM もしくは専用 safety モデルを env_tool 経由で呼び出す。
     """
     ctx = context or {}
-
     try:
         res = call_tool(
             "llm_safety",
@@ -367,13 +408,9 @@ def _apply_policy(
     policy: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    risk / categories / stakes / telos_score と policy 設定から、
-      status / decision_status / reasons / violations / risk / policy_version
-    を決定する。
-
-    互換性のため:
-    - violations        : str（カテゴリ名）のリスト  ← 旧 pipeline 用
-    - violation_details : dict のリスト              ← 新しい詳細情報はこちら
+    監査可能ルール層（pure rule）。
+    - status: allow|allow_with_warning|needs_human_review|deny
+    - decision_status: allow|modify|rejected   （外部API向け正規化）
     """
     base = policy.get("base_thresholds") or {}
 
@@ -387,7 +424,6 @@ def _apply_policy(
     cat_cfg = policy.get("categories") or {}
     actions = policy.get("actions") or {}
 
-    # ここは「詳細」用
     violation_details: List[Dict[str, Any]] = []
 
     # カテゴリごとの違反チェック
@@ -405,7 +441,6 @@ def _apply_policy(
                 }
             )
 
-    # カテゴリ違反がある場合は、そのアクションを「最も厳しいもの」に寄せる
     precedence = {"deny": 3, "human_review": 2, "warn": 1, "allow": 0}
     final_action = "allow"
 
@@ -417,7 +452,6 @@ def _apply_policy(
                 best = act
         final_action = best
     else:
-        # 違反なしの場合は risk × actions で決定
         def _act_key(item: Any) -> float:
             _, conf = item
             return float(conf.get("risk_upper", 1.0))
@@ -428,43 +462,37 @@ def _apply_policy(
                 final_action = act
                 break
 
+    # 正規化（不変条件の土台）
     if final_action == "allow":
         status = "allow"
         decision_status = "allow"
     elif final_action == "warn":
         status = "allow_with_warning"
-        decision_status = "allow"
+        decision_status = "modify"
     elif final_action == "human_review":
         status = "needs_human_review"
-        decision_status = "hold"
+        decision_status = "modify"
     else:
         status = "deny"
-        decision_status = "deny"
+        decision_status = "rejected"
 
     reasons: List[str] = [
         f"policy_action={final_action},risk={risk:.3f},stakes={stakes:.2f},base_thr={base_thr:.2f}"
     ]
     if violation_details:
         reasons.append(
-            "category_violations="
-            + ",".join(
-                sorted(
-                    {v["category"] for v in violation_details if "category" in v}
-                )
-            )
+            "category_violations=" + ",".join(sorted({v["category"] for v in violation_details if "category" in v}))
         )
 
-    # 旧 pipeline 互換用に「カテゴリ名だけ」のリストも出す
-    violation_categories = sorted(
-        {v["category"] for v in violation_details if "category" in v}
-    )
+    violation_categories = sorted({v["category"] for v in violation_details if "category" in v})
 
     return {
+        "policy_action": final_action,
         "status": status,
         "decision_status": decision_status,
         "reasons": reasons,
-        "violations": violation_categories,      # ← ここは str のリスト
-        "violation_details": violation_details,  # ← 詳細はこちら
+        "violations": violation_categories,
+        "violation_details": violation_details,
         "risk": float(risk),
         "policy_version": policy.get("version", "fuji_v2_unknown"),
     }
@@ -482,14 +510,18 @@ def fuji_core_decide(
     policy: Dict[str, Any] | None = None,
     safe_applied: bool = False,
     min_evidence: int = DEFAULT_MIN_EVIDENCE,
+    text: str = "",
+    poc_mode: bool = False,
 ) -> Dict[str, Any]:
     """
-    SafetyHead の結果と、stakes / telos / evidence_count / policy だけから
-    最終的な status / decision_status / risk / reasons などを決める“純粋ロジック”。
+    Pure logic:
+    - call_toolなし
+    - TrustLogなし
+    - I/Oなし
 
-    - ファイルI/O無し
-    - TrustLog無し
-    - call_tool無し
+    NOTE:
+    - _apply_policy() が {"policy_action": "..."} を返す実装になっているのが理想。
+      無い場合でも reasons から policy_action=... をパースして矛盾を潰す。
     """
     policy = policy or POLICY
 
@@ -497,6 +529,49 @@ def fuji_core_decide(
     risk = float(safety_head.risk_score)
     base_reasons: List[str] = []
     guidance = safety_head.rationale or ""
+
+    # -------------------------------
+    # 内部ユーティリティ（この関数内だけで完結）
+    # -------------------------------
+    def _extract_policy_action(pol_res: Dict[str, Any], reasons: List[str]) -> str | None:
+        pa = pol_res.get("policy_action")
+        if isinstance(pa, str) and pa:
+            return pa
+
+        # fallback: reasons から policy_action=xxx を拾う
+        for r in reasons:
+            if r.startswith("policy_action="):
+                tail = r.split("=", 1)[1]
+                # "allow,risk=..." 形式を想定
+                return tail.split(",", 1)[0].strip()
+        return None
+
+    def _mark_policy_pre_and_final_gate(
+        reasons: List[str],
+        *,
+        policy_action: str | None,
+        final_gate: str,
+    ) -> None:
+        """
+        PoC Gate が最終判定を上書きした場合に、
+        - policy_action=... を policy_action_pre_poc=... に置換（矛盾を100%潰す）
+        - final_gate=... を必ず追加（監査/UIで一発で分かる）
+        """
+        pre = policy_action or "unknown"
+
+        replaced = False
+        for i, r in enumerate(reasons):
+            if r.startswith("policy_action="):
+                reasons[i] = f"policy_action_pre_poc={pre}"
+                replaced = True
+                break
+
+        # 元の policy_action= が存在しない場合でも明示しておく（監査で追える）
+        if not replaced:
+            reasons.append(f"policy_action_pre_poc={pre}")
+
+        # 最終判定が PoC Gate 由来だと一目で分かるようにする
+        reasons.append(f"final_gate={final_gate}")
 
     # --- heuristic_fallback の「name_like だけ PII」誤検出を潰す ---
     if safety_head.model == "heuristic_fallback":
@@ -506,13 +581,11 @@ def fuji_core_decide(
 
         is_name_like_only = False
 
-        # 1) pii_hits があるが phone/email/address が含まれないケース
         if pii_hits:
             safe_hits = [h for h in pii_hits if h in ("phone", "email", "address")]
             if not safe_hits:
                 is_name_like_only = True
 
-        # 2) rationale 内に name_like が現れるが他の PII がないケース
         if "name_like" in rationale_lower and not any(
             k in rationale_lower for k in ("phone", "email", "address", "電話", "メール", "住所")
         ):
@@ -523,7 +596,6 @@ def fuji_core_decide(
             risk = max(risk, 0.05)
             risk = min(risk, 0.20)
             base_reasons.append("fallback_pii_ignored(name_like_only)")
-
             guidance = (
                 "日本語テキスト中の人名らしき表現（name_like）は、"
                 "この環境では PII として扱わないポリシーにより無視されました。"
@@ -531,17 +603,15 @@ def fuji_core_decide(
 
     # --- 既に PII セーフ化済みの場合の緩和 ---
     if safe_applied:
-        filtered = [
-            c for c in categories
-            if str(c).lower() not in ("pii", "pii_exposure")
-        ]
+        filtered = [c for c in categories if str(c).lower() not in ("pii", "pii_exposure")]
         if len(filtered) < len(categories):
             categories = filtered
             risk = min(risk, 0.40)
             base_reasons.append("pii_safe_applied")
 
     # --- evidence 不足ペナルティ ---
-    if evidence_count < int(min_evidence):
+    low_ev = evidence_count < int(min_evidence)
+    if low_ev:
         categories.append("low_evidence")
         risk = min(1.0, risk + 0.10)
         base_reasons.append(f"low_evidence({evidence_count}/{min_evidence})")
@@ -564,31 +634,117 @@ def fuji_core_decide(
     decision_status = pol_res["decision_status"]
     violations = pol_res.get("violations", [])
     violation_details = pol_res.get("violation_details", [])
-    final_risk = pol_res["risk"]
+    final_risk = float(pol_res["risk"])
     reasons = base_reasons + pol_res["reasons"]
+    policy_version = pol_res.get("policy_version")
 
-    # guidance 補足
-    if "low_evidence" in categories:
-        guidance += (
-            "\n\n補足: エビデンスが不足している可能性があります。"
-            "出典や前提条件を明示すると、より安定した判断ができます。"
+    # policy_action（PoCで上書きする時に“pre判定”として保持）
+    policy_action_pre = _extract_policy_action(pol_res, reasons)
+
+    rejection_reason: str | None = None
+    followups: List[Dict[str, Any]] = []
+    final_gate: str | None = None  # meta にも入れる
+
+    # -------------------------------
+    # PoC強制ルール：low_evidence は allow にしない（※PoCモード時のみ）
+    # -------------------------------
+    if poc_mode and low_ev:
+        hi = _is_high_risk_context(
+            risk=final_risk,
+            stakes=stakes,
+            categories=list(set(list(categories) + list(safety_head.categories))),
+            text=text,
         )
+
+        # PoC: followups を必ず返す（空contextでなく最低限の情報を渡す）
+        followups = _build_followups(
+            text,
+            {
+                "stakes": stakes,
+                "telos_score": telos_score,
+                "min_evidence": int(min_evidence),
+                "evidence_count": int(evidence_count),
+            },
+        )
+
+        if hi:
+            # 高リスク/高ステークスなら止める
+            status = "deny"
+            decision_status = "rejected"
+            rejection_reason = "poc_low_evidence_high_risk"
+            reasons.append("poc_low_evidence_high_risk -> rejected")
+
+            # ★矛盾潰し：policy_action=... を pre 判定にリネームして final_gate を明示
+            final_gate = "poc_low_evidence_high_risk_reject"
+            _mark_policy_pre_and_final_gate(
+                reasons,
+                policy_action=policy_action_pre,
+                final_gate=final_gate,
+            )
+
+        else:
+            # 低〜中リスクでも allow を許さず “補う/保留”へ
+            status = "needs_human_review"
+            decision_status = "modify"
+            reasons.append("poc_low_evidence -> modify")
+
+            final_gate = "poc_low_evidence_modify"
+            _mark_policy_pre_and_final_gate(
+                reasons,
+                policy_action=policy_action_pre,
+                final_gate=final_gate,
+            )
+
+        # guidance を監査向けに明確化
+        guidance += (
+            "\n\n[PoC Gate] エビデンス不足のため、判断を確定せず「追加調査/前提確認」を要求します。"
+            "（監査上、“止める/補う”を優先）"
+        )
+
+    # -------------------------------
+    # 不変条件の最後の保険（ここはそのまま強い）
+    # -------------------------------
+    if status == "deny" and decision_status != "rejected":
+        decision_status = "rejected"
+        rejection_reason = rejection_reason or "policy_deny_coerce"
+        reasons.append("invariant_fix: deny=>rejected")
+
+    if decision_status == "rejected" and not rejection_reason:
+        rejection_reason = "policy_or_poc_gate_reject"
+        reasons.append("invariant_fix: rejected needs rejection_reason")
+
+    if decision_status != "rejected":
+        rejection_reason = None
+
+    # PoCで上書きしていないのに policy_action= が残っていても矛盾ではないが、
+    # PoC時だけ “pre_poc” にしたい要件なので、ここでは触らない。
 
     return {
         "status": status,
         "decision_status": decision_status,
+        "rejection_reason": rejection_reason,
         "reasons": reasons,
         "violations": violations,
         "violation_details": violation_details,
         "risk": float(final_risk),
         "guidance": guidance or None,
-        "policy_version": pol_res.get("policy_version"),
+        "policy_version": policy_version,
+        "followups": followups,
         "meta": {
-            "policy_version": pol_res.get("policy_version"),
+            "policy_version": policy_version,
             "safety_head_model": safety_head.model,
             "safe_applied": safe_applied,
+            "poc_mode": bool(poc_mode),
+            "low_evidence": bool(low_ev),
+            "evidence_count": int(evidence_count),
+            "min_evidence": int(min_evidence),
+
+            # ★監査・デバッグのために保持（PoC上書き時の「矛盾」を論理的に解消）
+            "policy_action_pre_poc": policy_action_pre,
+            "final_gate": final_gate,
         },
     }
+
 
 
 # =========================================================
@@ -602,49 +758,72 @@ def fuji_gate(
     alternatives: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """
-    単一テキスト（query 等）に対して、
-      Safety Head → Policy Engine → TrustLog
-    を通した最終ゲート判定を行う。
+    単一テキスト（query 等）に対して Safety → Policy → TrustLog を通す。
     """
     ctx = context or {}
-    ev = evidence or []
     alts = alternatives or []
+
+    # evidence が「渡されたか」を区別（validate_action 事故を防ぐ）
+    evidence_provided = evidence is not None
+    ev = evidence or []
 
     stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
     telos_score = _safe_float(ctx.get("telos_score", ctx.get("value_ema", 0.5)), 0.5)
     safe_applied = bool(ctx.get("fuji_safe_applied") or ctx.get("pii_already_masked"))
+
+    # ★ PoC: min_evidence をリクエストから受け取れるようにする
+    min_evidence = _safe_int(
+        ctx.get("min_evidence") or ctx.get("fuji_min_evidence") or os.getenv("VERITAS_MIN_EVIDENCE", DEFAULT_MIN_EVIDENCE),
+        DEFAULT_MIN_EVIDENCE
+    )
+
+    # ★ PoC: モード切替（context優先、次にENV）
+    poc_mode = _ctx_bool(ctx, "poc_mode", _ENV_POC_MODE)
+
+    # ★ 重要: pre-check（validate_action）では low_evidence を強制しないのがデフォルト
+    enforce_low_evidence = _ctx_bool(ctx, "enforce_low_evidence", evidence_provided)
+    evidence_count_for_gate = len(ev) if enforce_low_evidence else int(min_evidence)
 
     # ---------- 1) Safety Head ----------
     t0 = time.time()
     sh = run_safety_head(text, ctx, alts)
     latency_ms = int((time.time() - t0) * 1000)
 
-    # ---------- 2) コア判定ロジック（純粋関数） ----------
+    # ---------- 2) コア判定 ----------
     core_res = fuji_core_decide(
         safety_head=sh,
         stakes=stakes,
         telos_score=telos_score,
-        evidence_count=len(ev),
+        evidence_count=evidence_count_for_gate,
         policy=POLICY,
         safe_applied=safe_applied,
-        min_evidence=DEFAULT_MIN_EVIDENCE,
+        min_evidence=min_evidence,
+        text=text,
+        poc_mode=poc_mode,
     )
 
     status = core_res["status"]
     decision_status = core_res["decision_status"]
+    rejection_reason = core_res.get("rejection_reason")
     violations = core_res.get("violations", [])
     violation_details = core_res.get("violation_details", [])
     final_risk = core_res["risk"]
     reasons = list(core_res.get("reasons", []))
     guidance = core_res.get("guidance") or ""
     policy_version = core_res.get("policy_version")
+    meta = dict(core_res.get("meta") or {})
+    followups = list(core_res.get("followups") or [])
 
-    # ---------- 3) TrustLog への記録 ----------
+    # followups は「PoCモード × low_evidence」の時は必ず返す（ここでも保険）
+    if poc_mode and bool(meta.get("low_evidence")) and not followups:
+        followups = _build_followups(text, ctx)
+
+    # ---------- 3) TrustLog ----------
     try:
         event = {
             "ts": _now_iso(),
             "event": "fuji_evaluate",
-            "text_preview": text[:200],
+            "text_preview": (text or "")[:200],
             "risk_score": float(sh.risk_score),
             "risk_after_policy": float(final_risk),
             "categories": list(sh.categories),
@@ -653,17 +832,26 @@ def fuji_gate(
             "telos_score": telos_score,
             "status": status,
             "decision_status": decision_status,
+            "rejection_reason": rejection_reason,
             "policy_version": policy_version,
             "safe_applied": safe_applied,
             "latency_ms": latency_ms,
             "safety_head_model": sh.model,
             "violation_details": violation_details,
+            "followups_count": len(followups),
+            "meta": {
+                "poc_mode": bool(poc_mode),
+                "enforce_low_evidence": bool(enforce_low_evidence),
+                "low_evidence": bool(meta.get("low_evidence")),
+                "evidence_count": int(meta.get("evidence_count", evidence_count_for_gate)),
+                "min_evidence": int(meta.get("min_evidence", min_evidence)),
+            },
         }
         append_trust_event(event)
     except Exception as e:  # pragma: no cover
         reasons.append(f"trustlog_error:{repr(e)[:80]}")
 
-    checks = [
+    checks: List[Dict[str, Any]] = [
         {
             "kind": "safety_head",
             "model": sh.model,
@@ -676,23 +864,52 @@ def fuji_gate(
             "policy_version": policy_version,
         },
     ]
+    if poc_mode:
+        checks.append(
+            {
+                "kind": "poc_low_evidence_gate",
+                "enabled": True,
+                "enforce_low_evidence": bool(enforce_low_evidence),
+                "min_evidence": int(min_evidence),
+                "evidence_count": int(len(ev)),
+                "evidence_count_effective": int(evidence_count_for_gate),
+                "low_evidence": bool(meta.get("low_evidence")),
+            }
+        )
 
-    meta = dict(core_res.get("meta") or {})
     meta.setdefault("policy_version", policy_version)
     meta.setdefault("safety_head_model", sh.model)
     meta.setdefault("safe_applied", safe_applied)
+    meta.setdefault("poc_mode", bool(poc_mode))
+    meta.setdefault("enforce_low_evidence", bool(enforce_low_evidence))
     meta["latency_ms"] = latency_ms
 
+    # 不変条件の最後の保険（ここでも矛盾を消す）
+    if status == "deny" and decision_status != "rejected":
+        decision_status = "rejected"
+        rejection_reason = rejection_reason or "policy_deny_coerce"
+        reasons.append("invariant_fix@fuji_gate: deny=>rejected")
+    if decision_status == "rejected" and not rejection_reason:
+        rejection_reason = "policy_or_poc_gate_reject"
+        reasons.append("invariant_fix@fuji_gate: rejected needs rejection_reason")
+    if decision_status != "rejected":
+        rejection_reason = None
+
     return {
-        "status": status,
-        "decision_status": decision_status,
-        "rejection_reason": None if status != "deny" else "policy_deny",
+        "status": status,                    # 内部状態
+        "decision_status": decision_status,  # 外部API向け
+        "rejection_reason": rejection_reason,
         "reasons": reasons,
         "violations": violations,
         "risk": round(float(final_risk), 3),
         "checks": checks,
         "guidance": guidance or None,
-        "modifications": [],
+
+        # PoCで刺さる：止める/補うのアクションセット
+        "followups": followups,
+
+        # 既存UI互換（modifications を見てる場合）
+        "modifications": followups,
         "redactions": [],
         "safe_instructions": [],
         "meta": meta,
@@ -704,15 +921,19 @@ def fuji_gate(
 # =========================================================
 def validate_action(action_text: Any, context: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    v1 互換の簡易ラッパ。
-    - 旧コードが validate_action を呼んでいても落ちないようにする。
-    """
-    res = fuji_gate(text=_to_text(action_text), context=context or {})
-    st = res.get("status")
+    v1互換：status を ok/modify/rejected に寄せる。
 
-    if st == "allow":
+    注意:
+    - validate_action は「pre-check」で evidence が未投入なことが多い。
+      そのため fuji_gate 側のデフォルト（enforce_low_evidence=False when evidence is None）
+      により、低エビデンスだけで即 reject にならない。
+    """
+    res = fuji_gate(text=_to_text(action_text), context=context or {}, evidence=None)
+    ds = res.get("decision_status")
+
+    if ds == "allow":
         status = "ok"
-    elif st == "deny":
+    elif ds == "rejected":
         status = "rejected"
     else:
         status = "modify"
@@ -722,7 +943,7 @@ def validate_action(action_text: Any, context: Dict[str, Any] | None = None) -> 
         "reasons": res.get("reasons", []),
         "violations": res.get("violations", []),
         "risk": res.get("risk", 0.0),
-        "modifications": [],
+        "modifications": res.get("followups") or res.get("modifications") or [],
         "redactions": [],
         "safe_instructions": res.get("guidance") or "",
     }
@@ -736,8 +957,7 @@ def posthoc_check(
     max_uncertainty: float = MAX_UNCERTAINTY,
 ) -> Dict[str, Any]:
     """
-    v1 互換のダミー実装。
-    - いまは FUJI v2 に統合されているので、minimum な flag 判定のみ行う。
+    v1互換：最低限の flag 判定のみ
     """
     ev = evidence or []
     status = "ok"
@@ -778,13 +998,8 @@ def evaluate(
     alternatives: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """
-    使い勝手ラッパ。
-
-    1) dict が渡された場合（新仕様）:
-        decision_snapshot を想定して、そこから query/context/evidence/alternatives を拾う。
-
-    2) 文字列が渡された場合（旧仕様）:
-        fuji.evaluate(query, context=..., evidence=..., alternatives=...)
+    1) dict: decision_snapshot
+    2) str : 旧 query
     """
     if isinstance(decision_or_query, dict):
         dec = decision_or_query
@@ -818,7 +1033,7 @@ def evaluate(
     return fuji_gate(
         text=query_str,
         context=context or {},
-        evidence=evidence or [],
+        evidence=evidence,  # None/[] を区別したいのでそのまま渡す
         alternatives=alternatives or [],
     )
 
@@ -835,4 +1050,7 @@ __all__ = [
     "posthoc_check",
     "reload_policy",
 ]
+
+
+
 

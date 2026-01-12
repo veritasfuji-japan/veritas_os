@@ -1,0 +1,25 @@
+[run]
+branch = True
+source =
+    veritas_os
+omit =
+    */veritas_os/tests/*
+    */veritas_os/**/tests/*
+    */tests/*
+    */__init__.py
+
+[report]
+show_missing = True
+omit =
+    */veritas_os/tests/*
+    */veritas_os/**/tests/*
+    */tests/*
+    */__init__.py
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    raise NotImplementedError
+
+
+

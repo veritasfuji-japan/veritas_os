@@ -1,10 +1,11 @@
 
 # veritas_os/core/planner.py
-
 from __future__ import annotations
 
 import json
 import textwrap
+import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from . import llm_client
@@ -12,11 +13,43 @@ from . import world as world_model
 from . import memory as mem
 from . import code_planner  # ★ 追加
 
+logger = logging.getLogger(__name__)
+
+# ============================
+#  step1（棚卸し）意図判定
+# ============================
+
+def _wants_inventory_step(query: str, context: Dict[str, Any] | None = None) -> bool:
+    """
+    「棚卸し/現状整理/step1で進めて」など、inventory(step1)系を明示的に求めているか。
+    ここで True のときだけ step1 を“特別扱い”してよい前提にする。
+    """
+    _ = context or {}
+    q = (query or "").strip()
+    if not q:
+        return False
+    ql = q.lower()
+
+    # 明示の step 指定
+    if "step1" in ql or "step 1" in ql:
+        return True
+
+    # 棚卸し/現状整理
+    if "棚卸" in q or "棚おろし" in q:
+        return True
+    if ("現状" in q) and ("整理" in q or "把握" in q or "棚卸" in q):
+        return True
+
+    # 英語寄り
+    if "inventory" in ql:
+        return True
+
+    return False
+
 
 # ============================
 #  共通: step 正規化ヘルパ
 # ============================
-
 
 def _normalize_step(
     step: Dict[str, Any],
@@ -29,26 +62,22 @@ def _normalize_step(
     """
     s: Dict[str, Any] = dict(step)
 
-    # eta_hours
     if "eta_hours" not in s:
         try:
             s["eta_hours"] = float(default_eta_hours)
         except Exception:
             s["eta_hours"] = 1.0
 
-    # risk
     if "risk" not in s:
         try:
             s["risk"] = float(default_risk)
         except Exception:
             s["risk"] = 0.1
 
-    # dependencies
     deps = s.get("dependencies")
     if not isinstance(deps, list):
         s["dependencies"] = []
     else:
-        # list だが要素が変な場合はとりあえず str 化
         s["dependencies"] = [str(d) for d in deps]
 
     return s
@@ -84,7 +113,6 @@ def _normalize_steps_list(
 #  simple QA 判定 & プラン
 # ============================
 
-
 def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     """
     「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
@@ -93,7 +121,6 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     """
     ctx = context or {}
 
-    # 明示フラグが立っていたらそれを最優先
     if ctx.get("mode") == "simple_qa" or ctx.get("simple_qa"):
         return True
 
@@ -103,9 +130,6 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
 
     q_lower = q.lower()
 
-    # =========================================
-    # ★ AGI / VERITAS 系キーワードは simple_qa から除外
-    # =========================================
     agi_block_keywords = [
         "agi",
         "ＡＧＩ",
@@ -118,9 +142,6 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     if any(k in q or k in q_lower for k in agi_block_keywords):
         return False
 
-    # =========================================
-    # ここから本来の「軽い質問」判定
-    # =========================================
     is_short = len(q) <= 40
     looks_question = (
         ("?" in q)
@@ -128,8 +149,7 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
         or q.endswith(("か", "かね", "かな", "でしょうか"))
     )
     has_plan_words = any(
-        k in q
-        for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
+        k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
     )
 
     if is_short and looks_question and not has_plan_words:
@@ -145,8 +165,6 @@ def _simple_qa_plan(
 ) -> Dict[str, Any]:
     """
     simple QA 用の最小プラン。
-    - LLM Planner を回さず、「1〜2ステップで答えを見る／メモる」レベルで完結させる。
-    - world_snap はあってもなくてもよい（メタ情報として raw に載せるだけ）。
     """
     q = (query or "").strip()
 
@@ -185,7 +203,6 @@ def _simple_qa_plan(
 
     steps = _normalize_steps_list(steps, default_eta_hours=0.05, default_risk=0.01)
 
-    # World snapshot から簡易ステージ推定
     try:
         from_stage = _infer_veritas_stage(world_snap)
     except Exception:
@@ -211,11 +228,9 @@ def _simple_qa_plan(
 #  LLM PlannerOS (メイン)
 # ============================
 
-
 def _build_system_prompt() -> str:
     """
     PlannerOS 用の system プロンプト。
-    VERITAS 全体の文脈で「安全で実行可能なステップ計画」を組む役割。
     """
     return textwrap.dedent("""
     あなたは「VERITAS OS」の Planner モジュールです。
@@ -223,7 +238,6 @@ def _build_system_prompt() -> str:
     - 最小ステップで前進できる
     - 安全で、リスクが低い
     - 実行可能で、具体的な
-
     行動プラン（ステップのリスト）を作ることです。
 
     必ず JSON だけを返してください。前後に説明文やコメントを書かないでください。
@@ -232,7 +246,7 @@ def _build_system_prompt() -> str:
     {
       "steps": [
         {
-          "id": "step1",
+          "id": "s1",
           "title": "短い日本語タイトル",
           "detail": "やることを1〜3文で説明",
           "why": "このステップが有効な理由",
@@ -249,95 +263,27 @@ def _build_system_prompt() -> str:
     - dependencies には、依存している step の id を配列で入れてください（なければ空配列）。
 
     =====================================================
-    【情報質問(Q&A系)の問いの扱い（回りくどさを防ぐ最重要ルール） 
+    【情報質問(Q&A系)の扱い（回りくどさ防止）】
     =====================================================
-
-    ユーザーの問いが、主に「情報を知りたいだけ」の質問だと判断した場合
-    （例：「〜を教えて」「〜を知りたい」「〜を確認したい」
-          「〜に関する最近の論文」「最新の動向」など）は、
-    次のルールに必ず従ってください：
-
-    - DecisionOS がすでに「答えそのもの（要約・代表例など）」を提示済みであると仮定する。
-    - Planner の役割は「その情報をどう活かすか」「次に何を 1〜3 個だけやるか」を提案すること。
-    - 大規模なリサーチプロジェクト
-        例： 
-          - 「過去6ヶ月の論文を網羅的に調査する」
-          - 「関連論文を大量に収集して要約する」
-      のような、何日もかかる重いステップだけを並べることは **禁止**。
-    - ステップ数は 1〜3 個に抑え、
-      各ステップは「今日〜3日以内に終わる、小さく具体的な行動」にする。
-      例：
-        - 「いま得られた要点を1ページのメモにまとめる」
-        - 「重要そうな1本だけ論文を選んで、導入と結論だけ読む」
-        - 「得られたアイデアを VERITAS のどのモジュールに反映できるか、箇条書きで3つ書き出す」
-    - 「〜を検索する」「〜を収集する」「〜を調査する」だけのステップを並べるのは NG。
-      もし検索・調査が必要でも、それは1ステップまでにとどめ、
-      「その結果をどう意思決定や実装に活かすか」まで detail / why に必ず書くこと。
+    ユーザーの問いが「情報を知りたいだけ」の質問だと判断した場合
+    （例：「〜を教えて」「〜を知りたい」「〜を確認したい」「最新の動向」など）は、
+    - すでに主要情報は別モジュールから提示済みと仮定する
+    - Planner は「その情報をどう活かすか」の小さな具体アクションを 1〜3 個だけ提案する
+    - 何日もかかる網羅調査だけを並べるのは禁止
 
     =====================================================
-    【最優先ルール】VERITAS 自己診断モード（必ず従うこと）
+    【step1(棚卸し)の誤爆防止ルール（重要）】
     =====================================================
-
-    次の2つの条件を **両方とも満たす場合**、
-    あなたは「通常モード」ではなく **自己診断モード ONLY** を使わなければなりません：
-
-    1. ユーザーの問いに「VERITAS」という語が含まれている
-    2. ユーザーの問いに「弱点」「ボトルネック」「設計レビュー」「アーキテクチャ」など
-       アーキテクチャ分析を示すキーワードのいずれかが含まれている
-
-    この 2 条件を満たした場合：
-
-    - steps は **必ず 1つだけ** にしてください。
-    - その唯一の step は、次のように構成します：
-
-      - id: "step1"
-      - title: "VERITASアーキテクチャの弱点と改善案の一覧"
-      - detail: **ここが最重要です。**
-        以下をすべて含む「実際の内容」を、十分に長い日本語テキストで書いてください。
-        ここでは「〜を列挙する」「〜を分析する」といった指示文ではなく、
-        実際に分析した結果そのものを書きます。
-
-        detail に含めるべき内容：
-          - 現在の VERITAS の技術的な弱点の一覧
-            - モジュール単位（例: kernel / planner / debate / memory / world / fuji / api / cli / storage / logging など）
-          - 各弱点ごとに：
-            - 何が問題か（技術的・設計的な観点）
-            - そのまま放置した場合の具体的リスク
-            - 改善案（なるべく具体的な設計方針・実装方針）
-            - 改善の優先度（例："高", "中", "低" のラベル）
-          - 全体としての総括：
-            - 今の VERITAS の強み
-            - 大きな弱点
-            - 「どこから手を付けるべきか」の推奨順
-
-        禁止事項：
-          - 「弱点をリストアップする」「〜を分析する」といった、
-            これから作業することを説明するだけの文章を書かないこと。
-          - 必ず、すでに分析が終わっている体で、
-            結果そのもの（弱点と改善案の具体的リスト）を書いてください。
-
-      - why:
-          上記の自己診断レポートを作ることが、
-          なぜ VERITAS の成長にとって重要かを 2〜3 文で説明してください。
-      - eta_hours:
-          4〜12 の範囲で、現実的だと思う値を設定してください。
-      - risk:
-          0.1〜0.3 の範囲で、主観的なリスク値を設定してください。
-      - dependencies: [] （空配列にしてください）
-
-    重要：
-    - 上記の「自己診断モード」の条件を満たす場合、
-      通常モードの「2〜7ステップに分解する」というルールは **無視** してください。
-    - 自己診断モードでは、steps は常に 1 つだけであり、
-      その唯一の step の detail が「長い技術レポート」の役割を果たします。
+    context.base.disallow_step1 が true の場合：
+    - id が "step1" の step を **出力してはいけません**
+    - 「棚卸し/現状整理の長文レポートを step1 に出す」形式も禁止です
+    代わりに、通常の 2〜7 steps（または情報質問なら 1〜3 steps）で答えてください。
 
     =====================================================
     【AGIベンチ / フレームワークモードへのヒント】
     =====================================================
     - context.agi.mode が "agi_framework" の場合でも、
       返す JSON フォーマットは上記と同じ {"steps":[...]} にしてください。
-    - output_spec や success_criteria などの情報は、
-      各 step.detail / step.why の中で反映して構いません。
     """)
 
 
@@ -349,21 +295,22 @@ def _build_user_prompt(
 ) -> str:
     """
     LLM に渡す user プロンプトを組み立てる。
-    world_state / MemoryOS の情報はあくまで「参考」として埋め込む。
     """
     q = (query or "").strip()
-
     world_snip = json.dumps(world or {}, ensure_ascii=False, indent=2)
     mem_snip = memory_text or "(MemoryOS からの重要メモはありません)"
 
-    # 軽いベースコンテキスト
+    wants_step1 = _wants_inventory_step(q, context)
+    disallow_step1 = not wants_step1
+
     base_ctx = {
         "stakes": context.get("stakes"),
         "telos_weights": context.get("telos_weights"),
         "user_id": context.get("user_id") or "anon",
+        "wants_step1_inventory": bool(wants_step1),
+        "disallow_step1": bool(disallow_step1),
     }
 
-    # AGIモード用の追加コンテキスト（ベンチ YAML から渡される想定）
     agi_ctx = {
         "mode": context.get("mode"),
         "goals": context.get("goals"),
@@ -375,36 +322,25 @@ def _build_user_prompt(
         "human_notes": context.get("human_notes"),
     }
 
-    ctx_snip = json.dumps(
-        {
-            "base": base_ctx,
-            "agi": agi_ctx,
-        },
-        ensure_ascii=False,
-        indent=2,
-    )
+    ctx_snip = json.dumps({"base": base_ctx, "agi": agi_ctx}, ensure_ascii=False, indent=2)
 
     return textwrap.dedent(f"""
     # ユーザーからの現在の問い / 状況
-
     {q}
 
     ---
 
     # VERITAS / AGI モードのコンテキスト
-
     {ctx_snip}
 
     ---
 
     # WorldModel のスナップショット（要約用）
-
     {world_snip}
 
     ---
 
     # MemoryOS からの重要なメモ（要約）
-
     {mem_snip}
 
     ---
@@ -415,28 +351,67 @@ def _build_user_prompt(
     重要：
     - 抽象的なスローガンではなく、「具体的に何をするか」が分かるようにしてください。
     - リスクが高い行動は避け、安全で合法的な範囲で計画してください。
-    - ユーザーの問いが「〜を教えて」「〜を知りたい」「〜を確認したい」
-      「〜に関する最近の論文」「最新の動向」などの **情報質問(Q&A系)** の場合、
-      すでに主要な情報は別モジュールから提示済みとみなし、
-      その情報を活かすための **小さな具体アクションを 1〜3 個だけ**
-      提案してください（大規模な長期リサーチ計画は避けること）。
-    - 出力は、指示された JSON 形式だけにしてください（余分な文章は禁止）。
+    - 情報質問(Q&A系)なら、小さな具体アクションを 1〜3 個だけに抑えてください。
+    - 出力は JSON 形式のみ（余分な文章は禁止）。
     """)
 
 
-def _safe_json_extract(raw: str) -> Dict[str, Any]:
+# ============================
+#  JSON Parse（救出強化 + テスト互換）
+# ============================
+
+_FENCE_RE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL | re.IGNORECASE)
+
+def _safe_parse(raw: Any) -> Dict[str, Any]:
     """
-    LLM の出力から JSON を安全に取り出す。
-    - Markdown の ```json / ``` コードブロックが付いていても処理する
-    - トップレベルが配列だけの場合は {"steps": [...]} にラップする
-    - JSON が途中で切れている場合でも、"steps" 配列内の完成しているオブジェクトだけ救出を試みる
+    テスト互換用（debate と同系）。
+    - dict -> dict
+    - list -> {"steps": list}
+    - str  -> fenced除去 + JSON救出
+    - その他 -> str化して救出
+    戻りは必ず {"steps": [...]} を含む dict。
+    """
+    if raw is None:
+        return {"steps": []}
+
+    if isinstance(raw, dict):
+        d = dict(raw)
+        # steps が list でなければ空に寄せる
+        if not isinstance(d.get("steps"), list):
+            if isinstance(d.get("steps"), dict):
+                d["steps"] = [d["steps"]]  # 変なモデル出力救済
+            else:
+                d.setdefault("steps", [])
+        return d
+
+    if isinstance(raw, list):
+        return {"steps": raw}
+
+    if not isinstance(raw, str):
+        raw = str(raw)
+
+    s = raw.strip()
+    if not s:
+        return {"steps": []}
+
+    m = _FENCE_RE.search(s)
+    if m:
+        s = m.group(1).strip()
+
+    return _safe_json_extract_core(s)
+
+
+def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
+    """
+    LLM の出力から JSON を安全に取り出す（救出エンジン）。
+    ※ _safe_parse が外側の互換層。
     """
     if not raw:
         return {"steps": []}
 
     cleaned = raw.strip()
 
-    # Markdown コードブロック除去（``` または ```json など）
+    # ``` の先頭/末尾だけ来た時も対策
     if cleaned.startswith("```"):
         first_newline = cleaned.find("\n")
         if first_newline != -1:
@@ -445,21 +420,28 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
             cleaned = cleaned[:-3].strip()
 
     def _wrap_if_needed(obj: Any) -> Dict[str, Any]:
-        """list だったら steps にラップ、dict ならそのまま、その他は空 steps。"""
         if isinstance(obj, list):
             return {"steps": obj}
         if isinstance(obj, dict):
+            if isinstance(obj.get("steps"), list):
+                return obj
+            # stepsが無い/壊れてる場合も必ず安定化
+            obj.setdefault("steps", [])
+            if isinstance(obj.get("steps"), dict):
+                obj["steps"] = [obj["steps"]]
+            elif not isinstance(obj.get("steps"), list):
+                obj["steps"] = []
             return obj
         return {"steps": []}
 
-    # --- 1) そのままパース ---
+    # 1) そのまま
     try:
         obj = json.loads(cleaned)
         return _wrap_if_needed(obj)
     except Exception:
         pass
 
-    # --- 2) 先頭の '{'〜最後の '}' を抜き出して再挑戦 ---
+    # 2) {} 抜き出し
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
@@ -469,10 +451,10 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
     except Exception:
         pass
 
-    # --- 3) 末尾を削りながら「全体として生きてる JSON」を探す ---
+    # 3) 末尾削り
     max_len = len(cleaned)
     attempts = 0
-    max_attempts = 400  # 過剰ループ防止
+    max_attempts = 500
 
     for cut in range(max_len, 1, -1):
         if attempts >= max_attempts:
@@ -488,12 +470,11 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
         except Exception:
             continue
 
-    # --- 4) それでもダメなら、"steps" 配列の中の「完成しているオブジェクト」だけ拾う ---
+    # 4) "steps":[{...},{...}] から dict だけ拾う（最後の保険）
     def _extract_step_objects(text: str) -> List[Dict[str, Any]]:
         idx = text.find('"steps"')
         if idx == -1:
             return []
-        # "steps" の後ろの '[' を探す
         idx = text.find("[", idx)
         if idx == -1:
             return []
@@ -527,16 +508,15 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
                 elif ch == "}":
                     depth -= 1
                     if depth == 0 and buf_start is not None:
-                        # 1つのオブジェクト終了
                         obj_str = text[buf_start : i + 1]
                         try:
                             obj = json.loads(obj_str)
-                            objs.append(obj)
+                            if isinstance(obj, dict):
+                                objs.append(obj)
                         except Exception:
-                            pass  # このオブジェクトは諦める
+                            pass
                         buf_start = None
                 elif ch == "]":
-                    # steps 配列の終わり
                     break
 
             i += 1
@@ -547,42 +527,66 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
     if step_objs:
         return {"steps": step_objs}
 
-    # --- 5) どうしても無理なら空 steps ---
     return {"steps": []}
 
 
-def _fallback_plan(query: str) -> Dict[str, Any]:
+def _safe_json_extract(raw: str) -> Dict[str, Any]:
     """
-    LLM が失敗したときの保険プラン。
-    ここは「超安全なミニプラン」を返す。
+    互換のため残す（既存コード/テストが参照する可能性）。
+    実体は _safe_parse → _safe_json_extract_core。
+    """
+    return _safe_parse(raw)
+
+
+# ============================
+#  fallback（超安全）
+# ============================
+
+def _fallback_plan(query: str, *, disallow_step1: bool = False) -> Dict[str, Any]:
+    """
+    LLM が失敗したときの保険プラン（超安全なミニプラン）。
+    ※ disallow_step1=True の時は id を step1 にしない（誤爆回避）。
     """
     q = (query or "").strip()
-    steps = [
-        {
-            "id": "step1",
-            "title": "問いを1段階だけ具体化する",
-            "detail": f"次にやるべきことを1つに絞ってメモに書き出す。元の問い: {q}",
-            "why": "まずは問題を具体化することで、過剰なリスクを避けつつ前進できるため。",
-        },
-        {
-            "id": "step2",
-            "title": "今日中にできる最小アクションを決める",
-            "detail": "明日以降に回さず、今日30分以内でできる作業を1つ決めて実行する。",
-            "why": "決定を先延ばしにせず、小さな前進を積み重ねるため。",
-            "dependencies": ["step1"],
-        },
-    ]
+
+    if disallow_step1:
+        steps = [
+            {
+                "id": "clarify",
+                "title": "問いを1段階だけ具体化する",
+                "detail": f"次にやるべきことを1つに絞ってメモに書き出す。元の問い: {q}",
+                "why": "まずは問題を具体化することで、過剰なリスクを避けつつ前進できるため。",
+            },
+            {
+                "id": "micro_action",
+                "title": "今日中にできる最小アクションを決める",
+                "detail": "明日以降に回さず、今日30分以内でできる作業を1つ決めて実行する。",
+                "why": "決定を先延ばしにせず、小さな前進を積み重ねるため。",
+                "dependencies": ["clarify"],
+            },
+        ]
+    else:
+        steps = [
+            {
+                "id": "step1",
+                "title": "問いを1段階だけ具体化する",
+                "detail": f"次にやるべきことを1つに絞ってメモに書き出す。元の問い: {q}",
+                "why": "まずは問題を具体化することで、過剰なリスクを避けつつ前進できるため。",
+            },
+            {
+                "id": "step2",
+                "title": "今日中にできる最小アクションを決める",
+                "detail": "明日以降に回さず、今日30分以内でできる作業を1つ決めて実行する。",
+                "why": "決定を先延ばしにせず、小さな前進を積み重ねるため。",
+                "dependencies": ["step1"],
+            },
+        ]
+
     steps = _normalize_steps_list(steps, default_eta_hours=0.5, default_risk=0.05)
     return {
         "steps": steps,
-        "raw": {
-            "mode": "fallback_minimal",
-            "query": q,
-        },
-        "meta": {
-            "stage": "S1_bootstrap",
-            "query_type": "fallback",
-        },
+        "raw": {"mode": "fallback_minimal", "query": q},
+        "meta": {"stage": "S1_bootstrap", "query_type": "fallback"},
         "source": "fallback_minimal",
     }
 
@@ -591,24 +595,8 @@ def _fallback_plan(query: str) -> Dict[str, Any]:
 #  WorldModel ステージ判定 & ステージ別フォールバック
 # ============================
 
-
 def _infer_veritas_stage(world_state: Optional[Dict[str, Any]]) -> str:
-    """
-    VERITAS / AGI ベンチ用の進捗ステージ推定。
-
-    test_planner.py の仕様:
-      (progress, expected_stage)
-        0.0  -> S1_bootstrap
-        0.1  -> S2_arch_doc
-        0.2  -> S3_api_polish
-        0.4  -> S4_decision_analytics
-        0.6  -> S5_real_usecase
-        0.8  -> S6_llm_integration
-        0.95 -> S7_demo_review
-    """
-
     if not world_state:
-        # まだ world_state がないときは完全初期状態扱い
         return "S1_bootstrap"
 
     try:
@@ -616,8 +604,6 @@ def _infer_veritas_stage(world_state: Optional[Dict[str, Any]]) -> str:
     except (TypeError, ValueError):
         progress = 0.0
 
-    # progress のレンジで段階を決める
-    # 0.0 → S1, 0.1 → S2, 0.2 → S3, 0.4 → S4, 0.6 → S5, 0.8 → S6, 0.95 → S7
     if progress < 0.05:
         return "S1_bootstrap"
     if progress < 0.15:
@@ -638,10 +624,6 @@ def _fallback_plan_for_stage(
     stage: str,
     world_snap: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    """
-    LLMが死んだときに使う、ステージ別の決め打ちプラン。
-    「Worldを読むステージ制プランナー」の縮小版。
-    """
     steps: List[Dict[str, Any]] = []
     q = (query or "").strip()
 
@@ -661,7 +643,6 @@ def _fallback_plan_for_stage(
                 "dependencies": ["doc_readme"],
             },
         ]
-
     elif stage == "S2_arch_doc":
         steps = [
             {
@@ -678,7 +659,6 @@ def _fallback_plan_for_stage(
                 "dependencies": ["doc_os_relations"],
             },
         ]
-
     elif stage == "S3_api_polish":
         steps = [
             {
@@ -695,7 +675,6 @@ def _fallback_plan_for_stage(
                 "dependencies": ["swagger_docs"],
             },
         ]
-
     elif stage == "S4_decision_analytics":
         steps = [
             {
@@ -712,7 +691,6 @@ def _fallback_plan_for_stage(
                 "dependencies": ["decision_analyzer"],
             },
         ]
-
     elif stage == "S5_real_usecase":
         steps = [
             {
@@ -729,7 +707,6 @@ def _fallback_plan_for_stage(
                 "dependencies": ["usecase_select"],
             },
         ]
-
     elif stage == "S6_llm_integration":
         steps = [
             {
@@ -739,8 +716,7 @@ def _fallback_plan_for_stage(
                 "why": "将来的にモデルを差し替えたり、複数モデルを使い分ける前提を作るため。",
             },
         ]
-
-    else:  # S7_demo_review など
+    else:
         steps = [
             {
                 "id": "demo_script",
@@ -764,15 +740,8 @@ def _fallback_plan_for_stage(
 
     return {
         "steps": steps,
-        "raw": {
-            "stage": stage,
-            "world_snapshot": world_snap or {},
-            "query": q,
-        },
-        "meta": {
-            "stage": stage,
-            "query_type": "stage_fallback",
-        },
+        "raw": {"stage": stage, "world_snapshot": world_snap or {}, "query": q},
+        "meta": {"stage": stage, "query_type": "stage_fallback"},
         "source": "stage_fallback",
     }
 
@@ -781,6 +750,45 @@ def _fallback_plan_for_stage(
 #  World × LLM ハイブリッド Planner
 # ============================
 
+def _try_get_memory_snippet(query: str, ctx: Dict[str, Any]) -> Optional[str]:
+    """
+    MemoryOS が実装差分でも落ちない安全取得。
+    - あれば 3〜5件くらいを短く連結
+    - 無ければ None
+    """
+    q = (query or "").strip()
+    if not q:
+        return None
+
+    try:
+        # よくある名前を順に試す（実装差分吸収）
+        if hasattr(mem, "search"):
+            hits = mem.search(q, top_k=5)  # type: ignore[arg-type]
+        elif hasattr(mem, "retrieve"):
+            hits = mem.retrieve(q, top_k=5)  # type: ignore[arg-type]
+        elif hasattr(mem, "query"):
+            hits = mem.query(q, top_k=5)  # type: ignore[arg-type]
+        else:
+            return None
+    except Exception:
+        return None
+
+    try:
+        if not hits:
+            return None
+        lines: List[str] = []
+        for h in hits[:5]:
+            if isinstance(h, str):
+                lines.append(h.strip())
+            elif isinstance(h, dict):
+                t = h.get("text") or h.get("content") or h.get("summary") or ""
+                if t:
+                    lines.append(str(t).strip())
+        out = "\n- " + "\n- ".join([ln for ln in lines if ln][:5])
+        return out.strip() if out.strip() else None
+    except Exception:
+        return None
+
 
 def plan_for_veritas_agi(
     context: Dict[str, Any],
@@ -788,33 +796,18 @@ def plan_for_veritas_agi(
 ) -> Dict[str, Any]:
     """
     VERITAS / AGI ベンチ用のメイン Planner（Worldステージ × LLM ハイブリッド版）。
-
-    - simple QA の場合: LLM を呼ばず simple_qa_plan を返す
-    - それ以外: world.snapshot('veritas_agi') を読み、progress から stage を決める
-                stage 情報を含めて LLM に steps を出させる
-                JSONパースに失敗 or エラー時は stage 別の決め打ちプランにフォールバック
     """
-
-    # ---- コンテキストの正規化 ----
     ctx: Dict[str, Any] = context or {}
 
-    # ★ まず simple QA なら即リターン（LLMプランナーは使わない）
+    # ★ まず simple QA なら即リターン
     if _is_simple_qa(query, ctx):
         try:
-            world_snap_simple: Dict[str, Any] | None = world_model.snapshot(
-                "veritas_agi"
-            )
+            world_snap_simple: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
         except Exception:
             world_snap_simple = None
-        return _simple_qa_plan(
-            query=query,
-            context=ctx,
-            world_snap=world_snap_simple,
-        )
+        return _simple_qa_plan(query=query, context=ctx, world_snap=world_snap_simple)
 
-    # ---- simple QA でなければ、AGI 用の重プランナーを使う ----
-
-    # WorldModel のスナップショット（veritas_agi プロジェクト）
+    # WorldModel snapshot
     try:
         world_snap: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
     except Exception:
@@ -822,13 +815,19 @@ def plan_for_veritas_agi(
 
     stage = _infer_veritas_stage(world_snap)
 
-    # MemoryOS はまだ任意。将来 summarize_for_planner を実装したら差し替え。
-    memory_text: Optional[str] = None
+    # step1 誤爆防止フラグ（prompt 側に伝える）
+    wants_step1 = _wants_inventory_step(query, ctx)
+    disallow_step1 = not wants_step1
 
-    # ---- LLM 用プロンプトを構築 ----
+    # MemoryOS（あれば使う・無ければ無視）
+    memory_text: Optional[str] = None
+    try:
+        memory_text = _try_get_memory_snippet(query, ctx)
+    except Exception:
+        memory_text = None
+
     system_prompt = _build_system_prompt()
 
-    # world に stage を埋め込んで LLM に渡す
     world_for_prompt: Dict[str, Any] = dict(world_snap or {})
     world_for_prompt["stage"] = stage
 
@@ -838,9 +837,6 @@ def plan_for_veritas_agi(
         world=world_for_prompt,
         memory_text=memory_text,
     )
-
-    raw_text: str = ""
-    parsed: Dict[str, Any] = {}
 
     try:
         res = llm_client.chat(
@@ -852,18 +848,33 @@ def plan_for_veritas_agi(
         )
 
         raw_text = res.get("text") if isinstance(res, dict) else str(res)
+
+        # NOTE: あなたの実装に合わせて関数名を統一
+        # 既存が _safe_json_extract ならそれを使う
         parsed = _safe_json_extract(raw_text)
 
         steps_obj: Any = None
         if isinstance(parsed, dict):
             steps_obj = parsed.get("steps")
-        if isinstance(parsed, list):
+        elif isinstance(parsed, list):
             steps_obj = parsed
 
-        # 1) 正常ケース
         if isinstance(steps_obj, list) and len(steps_obj) > 0:
-            steps = _normalize_steps_list(steps_obj, default_eta_hours=1.0, default_risk=0.1)
-            plan = {
+            original_steps = _normalize_steps_list(steps_obj, default_eta_hours=1.0, default_risk=0.1)
+            steps = original_steps
+
+            # disallow_step1 のときは step1 を落とす（ただし “空になったら戻す”）
+            if disallow_step1:
+                filtered = [s for s in original_steps if str(s.get("id") or "").lower() != "step1"]
+                if filtered:
+                    steps = filtered
+                else:
+                    logger.warning(
+                        "PlannerOS: step1 filter would empty steps; keeping original LLM steps (safety + test compatibility)"
+                    )
+                    steps = original_steps
+
+            return {
                 "steps": steps,
                 "raw": {
                     "parsed": parsed,
@@ -871,6 +882,8 @@ def plan_for_veritas_agi(
                     "stage": stage,
                     "world_snapshot": world_snap or {},
                     "query": (query or "").strip(),
+                    "memory_used": bool(memory_text),
+                    "disallow_step1": bool(disallow_step1),
                 },
                 "meta": {
                     "stage": stage,
@@ -879,91 +892,24 @@ def plan_for_veritas_agi(
                 "source": "openai_llm",
             }
 
-        # 2) 失敗ケース（steps が空 or パースできず）
-        else:
-            print("[Planner] steps missing; fallback to stage plan")
-            plan = _fallback_plan_for_stage(query, stage, world_snap)
+        logger.warning("PlannerOS: steps missing; fallback to stage plan")
+        return _fallback_plan_for_stage(query, stage, world_snap)
 
     except Exception as e:
-        print("[Planner] ERROR in plan_for_veritas_agi:", repr(e))
-        # 例外時もステージ別フォールバックを優先
-        plan = _fallback_plan_for_stage(query, stage, world_snap)
-
-    return plan
-
-def generate_code_tasks(
-    bench: Optional[Dict[str, Any]] = None,
-    world_state: Optional[Dict[str, Any]] = None,
-    doctor_report: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    """
-    kernel.decide(code_change_planモード) から呼ばれるラッパー。
-
-    - code_planner.generate_code_change_plan(...) を叩いて
-      CodeChangePlan を dict に変換
-    - その上で kernel 用の「tasks」配列を組み立てて返す
-    """
-
-    bench = bench or {}
-    # bench_id は bench に入っていればそれを優先、なければデフォルト
-    bench_id = bench.get("bench_id") or "agi_veritas_self_hosting"
-
-    # CodeChangePlan を生成
-    plan_obj = code_planner.generate_code_change_plan(
-        bench_id=bench_id,
-        world_state=world_state,
-        doctor_report=doctor_report,
-        bench_log=bench or None,
-    )
-    plan_dict = plan_obj.to_dict()
-
-    tasks: List[Dict[str, Any]] = []
-
-    for idx, ch in enumerate(plan_dict.get("changes", []), start=1):
-        if not isinstance(ch, dict):
-            continue
-
-        task_id = ch.get("id") or f"code_change_{idx}"
-        title = ch.get("title") or f"コード変更 {idx}"
-        desc = ch.get("description") or ""
-
-        task: Dict[str, Any] = {
-            "id": task_id,
-            "title": title,
-            "detail": desc,
-            "kind": "code_change",
-            "module": ch.get("target_module") or ch.get("module") or "unknown",
-            "path": ch.get("target_path") or ch.get("path") or "",
-            "priority": ch.get("priority", "medium"),
-            "risk": ch.get("risk", "medium"),
-            "impact": ch.get("impact", "medium"),
-            "suggested_functions": ch.get("suggested_functions", []),
-            "meta": {
-                "bench_id": bench_id,
-                "source": "code_planner.generate_code_change_plan",
-            },
-        }
-        tasks.append(task)
-
-    return {
-        "bench_id": bench_id,
-        "plan": plan_dict,  # CodeChangePlan の full dict
-        "tasks": tasks,     # kernel.decide が alternatives に変換する元
-    }
+        logger.error("PlannerOS: ERROR in plan_for_veritas_agi: %r", e)
+        # 例外時：まず stage_fallback。もしそれも失敗なら minimal fallback
+        try:
+            return _fallback_plan_for_stage(query, stage, world_snap)
+        except Exception:
+            return _fallback_plan(query, disallow_step1=disallow_step1)
 
 
 
 # ============================
-#  専用: bench → 「コード変更タスク」変換
+#  bench → 「コード変更タスク」変換（統合版）
 # ============================
-
 
 def _priority_from_risk_impact(risk: str | None, impact: str | None) -> str:
-    """
-    bench の change に付いている risk / impact からタスク優先度をざっくり決める。
-    - risk / impact は "high" / "medium" / "low" / None 想定（大文字小文字は無視）
-    - 何も無ければ "medium"
-    """
     r = (risk or "").lower()
     i = (impact or "").lower()
 
@@ -986,22 +932,75 @@ def _priority_from_risk_impact(risk: str | None, impact: str | None) -> str:
 
 
 def generate_code_tasks(
-    bench: Dict[str, Any],
-    world_state: Dict[str, Any] | None = None,
-    doctor_report: Dict[str, Any] | None = None,
+    bench: Optional[Dict[str, Any]] = None,
+    world_state: Optional[Dict[str, Any]] = None,
+    doctor_report: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
-    AGI ベンチ結果（bench）＋ world_state / doctor_report を入力に、
-    「実際のコード変更タスク」のリストを生成する専用プランナー。
-
-    ここは **LLM を使わず**、純ロジックで決める。
-    - bench["changes"] : どの module/path をどう変えるかの候補
-    - bench["tests"]   : どのテストケースを用意するか
-    - world_state      : 進捗・decision_count など（優先度調整用、今は meta 用）
-    - doctor_report    : 重大 issue があればタスク化する
+    優先順位:
+    0) bench に changes/tests が直接入っている場合 → それを信頼して「純ロジック」で tasks 化（テスト互換・決定論）
+    1) それ以外 → code_planner.generate_code_change_plan が使える場合はそれを優先
     """
     bench = bench or {}
+    bench_id = bench.get("bench_id") or "agi_veritas_self_hosting"
 
+    # ---- (0) bench直読みがあるなら code_planner を使わない（重要） ----
+    bench_changes = bench.get("changes")
+    bench_tests = bench.get("tests")
+    has_inline_changes = isinstance(bench_changes, list) and len(bench_changes) > 0
+    has_inline_tests = isinstance(bench_tests, list) and len(bench_tests) > 0
+    prefer_inline = has_inline_changes or has_inline_tests
+
+    # ---- (A) code_planner 優先経路（ただし prefer_inline のときはスキップ） ----
+    if not prefer_inline:
+        try:
+            plan_obj = code_planner.generate_code_change_plan(
+                bench_id=bench_id,
+                world_state=world_state,
+                doctor_report=doctor_report,
+                bench_log=bench or None,
+            )
+            plan_dict = plan_obj.to_dict()
+
+            tasks: List[Dict[str, Any]] = []
+            for idx, ch in enumerate(plan_dict.get("changes", []), start=1):
+                if not isinstance(ch, dict):
+                    continue
+
+                task_id = ch.get("id") or f"code_change_{idx}"
+                title = ch.get("title") or f"コード変更 {idx}"
+                desc = ch.get("description") or ""
+
+                tasks.append(
+                    {
+                        "id": task_id,
+                        "title": title,
+                        "detail": desc,
+                        "kind": "code_change",
+                        "module": ch.get("target_module") or ch.get("module") or "unknown",
+                        "path": ch.get("target_path") or ch.get("path") or "",
+                        "priority": ch.get("priority", "medium"),
+                        "risk": ch.get("risk", "medium"),
+                        "impact": ch.get("impact", "medium"),
+                        "suggested_functions": ch.get("suggested_functions", []),
+                        "meta": {
+                            "bench_id": bench_id,
+                            "source": "code_planner.generate_code_change_plan",
+                        },
+                    }
+                )
+
+            return {
+                "bench_id": bench_id,
+                "plan": plan_dict,
+                "tasks": tasks,
+            }
+
+        except Exception:
+            # code_planner が落ちたら純ロジックへ
+            pass
+
+    # ---- (B) bench直読みの純ロジック経路 ----
     world_snap = bench.get("world_snapshot") or {}
     doctor_summary = bench.get("doctor_summary") or {}
     bench_summary = bench.get("bench_summary") or {}
@@ -1009,20 +1008,17 @@ def generate_code_tasks(
     changes = bench.get("changes") or []
     tests = bench.get("tests") or []
 
-    # world_state が明示的に渡されていなければ、ファイルから読む（あれば）
     if world_state is None:
         try:
             world_state = world_model.get_state()
         except Exception:
             world_state = None
 
-    # doctor_report が無くても動く設計にする
     dr = doctor_report or {}
     dr_issues = dr.get("issues") or doctor_summary.get("top_issues") or []
 
-    tasks: List[Dict[str, Any]] = []
+    tasks2: List[Dict[str, Any]] = []
 
-    # ---- 1) bench.changes → code_change タスク ----
     for idx, ch in enumerate(changes, start=1):
         if not isinstance(ch, dict):
             continue
@@ -1034,7 +1030,6 @@ def generate_code_tasks(
         risk = ch.get("risk")
         impact = ch.get("impact")
         prio = _priority_from_risk_impact(risk, impact)
-
         suggested_funcs = ch.get("suggested_functions") or []
 
         detail_lines = []
@@ -1047,7 +1042,7 @@ def generate_code_tasks(
         if ch.get("reason"):
             detail_lines.append(f"理由: {ch['reason']}")
 
-        tasks.append(
+        tasks2.append(
             {
                 "id": f"code_change_{idx}",
                 "kind": "code_change",
@@ -1062,14 +1057,13 @@ def generate_code_tasks(
             }
         )
 
-    # ---- 2) tests → test タスク ----
     for idx, t in enumerate(tests, start=1):
         if not isinstance(t, dict):
             continue
         title = t.get("title") or "テストケースの追加"
         desc = t.get("description") or ""
         kind = t.get("kind") or "unit"
-        tasks.append(
+        tasks2.append(
             {
                 "id": f"test_{idx}",
                 "kind": "test",
@@ -1084,7 +1078,6 @@ def generate_code_tasks(
             }
         )
 
-    # ---- 3) doctor_report.issue → self_heal タスク ----
     for idx, issue in enumerate(dr_issues, start=1):
         if not isinstance(issue, dict):
             continue
@@ -1099,7 +1092,7 @@ def generate_code_tasks(
         if issue.get("recommendation"):
             detail_parts.append(f"推奨対応: {issue['recommendation']}")
 
-        tasks.append(
+        tasks2.append(
             {
                 "id": f"self_heal_{idx}",
                 "kind": "self_heal",
@@ -1113,13 +1106,15 @@ def generate_code_tasks(
             }
         )
 
-    # ---- 4) world_state に基づくメタ情報（あれば） ----
     meta: Dict[str, Any] = {
-        "bench_id": bench.get("bench_id"),
+        "bench_id": bench_id,
         "has_bench": bool(bench),
         "has_doctor_report": bool(dr),
         "progress": None,
         "decision_count": None,
+        "doctor_issue_count": len(dr_issues),
+        "source": "planner.generate_code_tasks",
+        "prefer_inline_bench": bool(prefer_inline),
     }
 
     try:
@@ -1130,11 +1125,8 @@ def generate_code_tasks(
     except Exception:
         pass
 
-    meta["doctor_issue_count"] = len(dr_issues)
-    meta["source"] = "planner.generate_code_tasks"
-
     return {
-        "tasks": tasks,
+        "tasks": tasks2,
         "meta": meta,
         "world_snapshot": world_snap,
         "doctor_summary": doctor_summary,
@@ -1142,22 +1134,16 @@ def generate_code_tasks(
     }
 
 
+
 # ============================
 #  後方互換: 旧 generate_plan
 # ============================
-
 
 def generate_plan(
     query: str,
     chosen: Dict[str, Any],
     context: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
-    """
-    旧バージョンとの互換用。
-    - もし他のコードが generate_plan() を使っていても壊れないように、
-      シンプルなルールベース版を維持しておく。
-    - /v1/decide のメイン経路は plan_for_veritas_agi() を使う。
-    """
     _ = context or {}
 
     q = (query or "").strip()
@@ -1166,7 +1152,6 @@ def generate_plan(
 
     steps: List[Dict[str, Any]] = []
 
-    # Step 1: 状況整理
     steps.append(
         {
             "id": "analyze",
@@ -1180,7 +1165,6 @@ def generate_plan(
         }
     )
 
-    # Step 2: 情報収集（必要な場合だけ）
     if any(k in q for k in ["調べ", "リサーチ", "情報", "データ", "証拠"]):
         steps.append(
             {
@@ -1192,7 +1176,6 @@ def generate_plan(
             }
         )
 
-    # Step 3: chosen の具体化
     steps.append(
         {
             "id": "execute_core",
@@ -1206,7 +1189,6 @@ def generate_plan(
         }
     )
 
-    # Step 4: ログ・記録
     steps.append(
         {
             "id": "log",
@@ -1217,7 +1199,6 @@ def generate_plan(
         }
     )
 
-    # Step 5: 振り返り
     steps.append(
         {
             "id": "reflect",
@@ -1229,5 +1210,7 @@ def generate_plan(
     )
 
     return steps
+
+
 
 
