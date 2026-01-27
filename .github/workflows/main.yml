@@ -28,7 +28,6 @@ jobs:
       PYTHONUNBUFFERED: "1"
       PIP_DISABLE_PIP_VERSION_CHECK: "1"
       PIP_NO_PYTHON_VERSION_WARNING: "1"
-      # テストがキー必須ならここでダミー注入（過去のCI互換）
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
 
@@ -47,24 +46,27 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
 
-          # 依存が requirements にあるなら入れる
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+          # プロジェクトが “パッケージ化” されていない前提なので editable install はしない
+          # requirements があれば優先して入れる
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [ -f requirements-dev.txt ]; then
+            python -m pip install -r requirements-dev.txt
+          fi
 
-          # pyproject/setup.cfg/setup.py の依存を確実に反映（重要）
-          pip install -e .
-
-          # 念のためテスト系
-          pip install pytest pytest-cov
+          # 最低限のテスト依存（requirements-dev にあっても二重OK）
+          python -m pip install pytest pytest-cov
 
       - name: Run tests (with coverage)
         id: pytest
-        continue-on-error: true
         run: |
           set -euxo pipefail
           mkdir -p test-reports coverage-html
+
           pytest -q veritas_os/tests \
             --cov=veritas_os \
+            --cov-config=.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
@@ -76,7 +78,7 @@ jobs:
         with:
           name: pytest-${{ matrix.python-version }}
           path: test-reports/pytest.xml
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Upload coverage (xml + html)
         if: always()
@@ -88,6 +90,3 @@ jobs:
             coverage-html
           if-no-files-found: warn
 
-      - name: Fail job if tests failed
-        if: steps.pytest.outcome == 'failure'
-        run: exit 1
