@@ -55,11 +55,21 @@ jobs:
             python -m pip install -r requirements-dev.txt
           fi
 
-          # 最低限のテスト依存（requirements-dev にあっても二重OK）
-          python -m pip install pytest pytest-cov
+          # CIでテスト収集(import)が落ちないための最低限を強制補完
+          # requirements-dev にあっても二重OK
+          python -m pip install \
+            requests \
+            fastapi \
+            "pydantic>=2" \
+            numpy \
+            httpx \
+            anyio \
+            pytest \
+            pytest-cov
 
       - name: Run tests (with coverage)
         id: pytest
+        continue-on-error: true
         run: |
           set -euxo pipefail
           mkdir -p test-reports coverage-html
@@ -90,3 +100,6 @@ jobs:
             coverage-html
           if-no-files-found: warn
 
+      - name: Fail job if tests failed
+        if: steps.pytest.outcome == 'failure'
+        run: exit 1
