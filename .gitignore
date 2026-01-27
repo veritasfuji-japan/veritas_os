@@ -8,11 +8,13 @@
 # --- Python 共通 ---
 __pycache__/
 *.py[cod]
-core/config.py
 *.pyo
 *.pyd
 *.so
 .mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
 # local venv
 .venv/
 .venv*/
@@ -24,19 +26,22 @@ venv/
 *.pem
 *.key
 
+# （推奨）ローカル専用設定だけを無視
+config.local.py
+secrets.local.json
+
 # --- VERITAS のローカルデータ / ログ ---
-# ローカルの「脳みそ・世界状態・価値ログ」
-datasets
+datasets/
 scripts/doctor_report.json
 trust_log.json
 trust_log.jsonl
 trust_log.json.*
 world_state.json
+world_state*.json
 value_core.json
 value_stats.json
 memory.json
 persona.json
-
 
 # メモリ用のベクトル・インデックス（再生成可能なデータ）
 memory/*.jsonl
@@ -65,5 +70,5 @@ backup/
 **/.coverage
 coverage.xml
 htmlcov/
-.pytest_cache/
-
+test-reports/
+coverage-html/
