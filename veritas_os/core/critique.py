@@ -43,6 +43,8 @@ from datetime import datetime, timezone
 
 Severity = str  # "high" | "med" | "low"
 
+# NOTE:
+# score が大きいほど重要度が高い
 _SEVERITY_SCORE: Dict[str, int] = {
     "low": 0,
     "med": 1,
@@ -55,6 +57,11 @@ def _now_iso() -> str:
 
 
 def _norm_severity(x: Any) -> Severity:
+    """
+    Critique item 側の severity は、安全側（med）へ正規化する。
+    ただし filter_by_severity の「未知指定」は別扱い（=0扱い）なので、
+    そちらは _severity_rank() を使用すること。
+    """
     try:
         s = str(x).lower().strip()
     except Exception:
@@ -64,6 +71,29 @@ def _norm_severity(x: Any) -> Severity:
     if s in ("low", "l"):
         return "low"
     return "med"
+
+
+def _severity_rank(x: Any, *, unknown_rank: int = 0) -> int:
+    """
+    重要度指定の rank 化。
+    - Critique item の severity だけでなく、filter の min_severity にも使う。
+    - filter の min_severity で未知値が来た場合、テスト契約上は 0 扱い（=全件通る）。
+    """
+    if x is None:
+        return int(unknown_rank)
+    try:
+        s = str(x).lower().strip()
+    except Exception:
+        return int(unknown_rank)
+
+    if s in ("high", "h", "critical", "crit"):
+        return _SEVERITY_SCORE["high"]
+    if s in ("med", "m", "medium"):
+        return _SEVERITY_SCORE["med"]
+    if s in ("low", "l"):
+        return _SEVERITY_SCORE["low"]
+    # unknown => 0 扱い（=全件通る）などに使う
+    return int(unknown_rank)
 
 
 def _as_float(x: Any, default: float = 0.0) -> float:
@@ -351,10 +381,17 @@ def filter_by_severity(
 ) -> List[Dict[str, Any]]:
     """
     重要度でクリティークをフィルタリングする。
-    """
-    threshold = _SEVERITY_SCORE.get(_norm_severity(min_severity), 0)
-    filtered: List[Dict[str, Any]] = []
 
+    重要: テスト契約
+      - min_severity="low"  => 全件
+      - min_severity="med"  => high + med
+      - min_severity="high" => high のみ
+      - min_severity が未知値 => デフォルト 0 扱いで全件通る
+        （ここで _norm_severity(min_severity) を使うと "med" に落ちてしまうので禁止）
+    """
+    threshold = _severity_rank(min_severity, unknown_rank=0)
+
+    filtered: List[Dict[str, Any]] = []
     for c in critiques or []:
         if not isinstance(c, dict):
             continue
@@ -471,7 +508,7 @@ def analyze_dict(
     }
 
 
-__version__ = "2.1.0"
+__version__ = "2.1.1"
 __author__ = "VERITAS Development Team"
 __all__ = [
     "analyze",
@@ -538,4 +575,5 @@ if __name__ == "__main__":
     summary = summarize_critiques(result1)
     print(summary)
     print("\n=== Self-Test Finished ===")
+
 

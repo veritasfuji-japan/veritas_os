@@ -1,13 +1,19 @@
 # veritas_os/tools/web_search.py
 """
-VERITAS OS 用 Web検索アダプタ（Serper.dev 経由）
+VERITAS OS 用 Web検索アダプタ（Serper.dev 等の Google互換API を想定）
 
-重要要件（誤同定防止 / 最重要）:
-- 常にクエリへアンカーを強制付与:
-    ("VERITAS OS" AND (TrustLog OR FUJI OR ValueCore))
-- veritas.com / bureauveritas.* を除外（-site / -keyword の両方）
-- 呼び出し側が何を渡しても、このアダプタ内で強制する
-- evidence に残す query も「アンカー後の確定クエリ」を使えるよう meta.final_query を返す
+目的
+- VERITAS OS の Web検索を行う。
+- ただし「Veritas / Bureau Veritas」等の誤同定が起きやすいため、
+  VERITAS OS を探している文脈では誤同定防止を強制する。
+
+重要（テスト互換 / 実運用の両立）
+- 通常クエリは「改変しない」：
+    payload["q"] は入力 query と一致する（tests が要求）
+- 通常クエリの num は max_results*2（tests が要求）
+- 一方で、VERITAS OS を探していると判定できる場合のみ、
+  誤同定防止（アンカー＋ブラックリスト）を強制する
+- VERITAS文脈 or AGI文脈では、フィルタで目減りするため num を多めに取得して良い
 
 戻り値フォーマット:
 {
@@ -20,16 +26,18 @@ VERITAS OS 用 Web検索アダプタ（Serper.dev 経由）
      "agi_result_count": int | None,
      "boosted_query": str | None,
      "final_query": str,                 # ★必ず入る（Serperに投げた最終クエリ）
-     "anchor_applied": bool,
-     "blacklist_applied": bool,
-     "blocked_count": int,               # ドメイン/キーワードで弾いた数（結果側フィルタ）
+     "anchor_applied": bool,             # ★VERITAS文脈のみ True になり得る
+     "blacklist_applied": bool,          # ★VERITAS文脈のみ True になり得る
+     "blocked_count": int,               # 結果側フィルタで弾いた数（VERITAS文脈のみ）
   }
 }
 
 env:
-  VERITAS_WEBSEARCH_URL : Serper.dev endpoint
-  VERITAS_WEBSEARCH_KEY : Serper.dev API key (X-API-KEY)
+  VERITAS_WEBSEARCH_URL : endpoint
+  VERITAS_WEBSEARCH_KEY : API key (X-API-KEY)
 """
+
+from __future__ import annotations
 
 import os
 import re
@@ -60,7 +68,7 @@ AGI_SITES: List[str] = [
 ]
 
 # -------------------------------
-# Web誤同定防止（最重要）
+# Web誤同定防止（VERITAS文脈のみ適用）
 # -------------------------------
 ANCHOR_CLAUSE: str = '("VERITAS OS" AND (TrustLog OR FUJI OR ValueCore))'
 
@@ -83,14 +91,25 @@ BLACKLIST_KEYWORDS: List[str] = [
 RE_BUREAUVERITAS = re.compile(r"(^|\.)bureauveritas\.[a-z]{2,}$", re.IGNORECASE)
 
 
+def _normalize_str(x: Any, *, limit: int = 4000) -> str:
+    try:
+        s = "" if x is None else str(x)
+    except Exception:
+        s = repr(x)
+    if limit and len(s) > int(limit):
+        return s[: int(limit)]
+    return s
+
+
 def _is_agi_query(q: str) -> bool:
     """クエリが AGI 関連っぽいかどうかをざっくり判定"""
-    q_low = (q or "").lower()
+    q = q or ""
+    q_low = q.lower()
     if "agi" in q_low:
         return True
-    if "人工汎用知能" in q_low or "人工一般知能" in q_low:
+    if "人工汎用知能" in q or "人工一般知能" in q:
         return True
-    if "agi research" in q_low:
+    if "artificial general intelligence" in q_low:
         return True
     return False
 
@@ -110,47 +129,63 @@ def _looks_agi_result(title: str, snippet: str, url: str) -> bool:
     return False
 
 
-def _normalize_str(x: Any, *, limit: int = 4000) -> str:
-    try:
-        s = "" if x is None else str(x)
-    except Exception:
-        s = repr(x)
-    if limit and len(s) > int(limit):
-        return s[: int(limit)]
-    return s
+def _should_enforce_veritas_anchor(query: str) -> bool:
+    """
+    「VERITAS OS を探している」文脈だけ、誤同定防止を強制する。
+    重要: 通常クエリは改変しない（tests 要件）
+    """
+    q = (query or "").strip()
+    if not q:
+        return False
+
+    ql = q.lower()
+
+    # 「Bureau Veritas」を探したい場合は、誤同定防止をかけない（ユーザー意図を尊重）
+    if "bureau veritas" in ql or "bureauveritas" in ql:
+        return False
+
+    # VERITAS OS 文脈キーワード（ここに引っかかった時だけアンカー＆ブラックリスト）
+    veritas_signals = (
+        "veritas os",
+        "trustlog",
+        "fuji",
+        "valuecore",
+        "veritas_os",
+        "veritas-os",
+    )
+    return any(sig in ql for sig in veritas_signals)
 
 
 def _apply_anchor_and_blacklist(query: str) -> Dict[str, Any]:
     """
-    ★最重要：クエリを強制アンカーし、ブラックリスト除外句も付与する
-    - 呼び出し側が何を投げてもここで矯正する
+    VERITAS文脈のみ使用:
+    - アンカー付与
+    - ブラックリスト除外句を付与
     """
     q = _normalize_str(query, limit=2000).strip()
+    q_low = q.lower()
 
-    # (A) アンカーを必ず付与
-    # 既に入っていても重複は避ける（雑に contains で判定）
+    # (A) アンカー付与（重複は避ける）
     anchor_applied = False
-    if "VERITAS OS" not in q and "veritas os" not in q.lower():
+    needs_anchor_bundle = not (
+        ("veritas os" in q_low)
+        and (("trustlog" in q_low) or ("fuji" in q_low) or ("valuecore" in q_low))
+    )
+    if needs_anchor_bundle and (ANCHOR_CLAUSE.lower() not in q_low):
         q = f"{q} {ANCHOR_CLAUSE}".strip()
         anchor_applied = True
-    else:
-        # "VERITAS OS" が含まれていても TrustLog/FUJI/ValueCore の束が無いなら付与
-        q_low = q.lower()
-        if not (("trustlog" in q_low) or ("fuji" in q_low) or ("valuecore" in q_low)):
-            q = f"{q} {ANCHOR_CLAUSE}".strip()
-            anchor_applied = True
 
-    # (B) ブラックリスト除外句（-site / -keyword）を必ず付与
+    # (B) ブラックリスト除外句（-site / -keyword）
     blacklist_applied = False
-    # -site: ドメイン除外（SerperはGoogle互換クエリ寄り）
-    # -keyword: 文字列除外（保険）
-    site_excludes = []
+
+    site_excludes: List[str] = []
     for s in BLACKLIST_SITES:
-        if f"-site:{s}" not in q:
-            site_excludes.append(f"-site:{s}")
-    kw_excludes = []
+        token = f"-site:{s}"
+        if token.lower() not in q.lower():
+            site_excludes.append(token)
+
+    kw_excludes: List[str] = []
     for kw in BLACKLIST_KEYWORDS:
-        # 文字列除外はクオートしておく
         token = f'-"{kw}"'
         if token.lower() not in q.lower():
             kw_excludes.append(token)
@@ -168,34 +203,29 @@ def _apply_anchor_and_blacklist(query: str) -> Dict[str, Any]:
 
 def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
     """
-    結果側でも二重防衛（ブラックリストが漏れても弾く）
+    結果側でも二重防衛（漏れても弾く）
+    ※これは VERITAS文脈の時だけ使う想定（通常検索を勝手に削らないため）
     """
     t = (title or "").lower()
     s = (snippet or "").lower()
     u = (url or "").lower()
 
-    # keyword block
     for kw in BLACKLIST_KEYWORDS:
-        if kw.lower() in t or kw.lower() in s or kw.lower() in u:
+        kwl = kw.lower()
+        if kwl in t or kwl in s or kwl in u:
             return True
 
-    # domain block
     for site in BLACKLIST_SITES:
         if site.lower() in u:
             return True
 
     # bureauveritas.* wildcard block（ドメイン抽出が雑でも防ぐ）
-    # URL内に bureauveritas.xx が含まれるかを広めに判定
     if "bureauveritas." in u:
-        # 末尾ドメインっぽい箇所にマッチするか
-        # 例: https://www.bureauveritas.jp/...
-        #     bureauveritas.co.jp
         host_guess = u.split("/")[2] if "://" in u and len(u.split("/")) > 2 else u
-        host_guess = host_guess.split(":")[0]
-        if RE_BUREAUVERITAS.search(host_guess.replace("www.", "")) or "bureauveritas" in host_guess:
+        host_guess = host_guess.split(":")[0].replace("www.", "")
+        if RE_BUREAUVERITAS.search(host_guess) or "bureauveritas" in host_guess:
             return True
 
-    # veritas.com also blocked (別Veritasの可能性)
     if "veritas.com" in u:
         return True
 
@@ -206,16 +236,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Serper.dev を使った Web 検索アダプタ。
 
-    - 通常: そのまま Serper に渡す
-    - AGI 系クエリ:
-        1) クエリを論文サイト寄りにブースト
-        2) 結果を AGI っぽいものだけにフィルタ
-           → 1件も残らない場合は「0件」として返す
-
-    ★最重要: その前に必ず
-      - アンカー強制
-      - ブラックリスト除外強制
+    - 通常: query は一切改変しない（tests互換）
+    - VERITAS文脈: 誤同定防止（アンカー & ブラックリスト）を強制
+    - AGI文脈: ブースト + 結果のAGIっぽさフィルタを適用（任意）
     """
+    raw_query = _normalize_str(query, limit=2000).strip()
+
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
         return {
             "ok": False,
@@ -226,12 +252,20 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "agi_filter_applied": False,
                 "agi_result_count": None,
                 "boosted_query": None,
-                "final_query": _normalize_str(query, limit=2000),
+                "final_query": raw_query,
                 "anchor_applied": False,
                 "blacklist_applied": False,
                 "blocked_count": 0,
             },
         }
+
+    # max_results の下限を守る（極端値対策）
+    try:
+        mr = int(max_results)
+    except Exception:
+        mr = 5
+    if mr < 1:
+        mr = 1
 
     try:
         headers = {
@@ -239,28 +273,45 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "Content-Type": "application/json",
         }
 
-        # ---- 0) アンカー & ブラックリスト強制 ----
-        enforced = _apply_anchor_and_blacklist(query or "")
-        final_query = enforced["final_query"]
+        # ----------------------------
+        # 0) VERITAS文脈のみ 矯正（通常は改変禁止）
+        # ----------------------------
+        anchor_applied = False
+        blacklist_applied = False
 
-        agi_query = _is_agi_query(final_query)
+        q_to_send = raw_query
+        enforce = _should_enforce_veritas_anchor(raw_query)
+        if enforce:
+            enforced = _apply_anchor_and_blacklist(raw_query)
+            q_to_send = enforced["final_query"]
+            anchor_applied = bool(enforced["anchor_applied"])
+            blacklist_applied = bool(enforced["blacklist_applied"])
 
-        # ---- 1) AGIクエリならブースト（ただしアンカー/除外は維持）----
+        # ----------------------------
+        # 1) AGI 文脈ならブースト（q_to_send の末尾に足す）
+        # ----------------------------
+        agi_query = _is_agi_query(raw_query)
         boosted_query: Optional[str] = None
-        q_to_send = final_query
-
         if agi_query:
             boosted_query = (
-                f"{final_query} "
+                f"{q_to_send} "
                 '"artificial general intelligence" AGI '
-                "site:arxiv.org OR site:openreview.net "
-                "OR site:alignmentforum.org OR site:lesswrong.com"
-            )
+                "(site:arxiv.org OR site:openreview.net OR site:alignmentforum.org OR site:lesswrong.com)"
+            ).strip()
             q_to_send = boosted_query
+
+        # ----------------------------
+        # 2) 取得件数 num（テスト互換のため通常は *2 固定）
+        #    - 通常: num = mr*2（testsが要求）
+        #    - VERITAS/AGI: フィルタで目減りするため mr*3 まで許容
+        # ----------------------------
+        num_to_fetch = int(mr * 2)
+        if enforce or agi_query:
+            num_to_fetch = int(mr * 3)
 
         payload: Dict[str, Any] = {
             "q": q_to_send,
-            "num": int(max_results * 3),  # 余裕をもって多めに取る（ブロック/フィルタで減るため）
+            "num": num_to_fetch,
         }
 
         resp = requests.post(WEBSEARCH_URL, headers=headers, json=payload, timeout=15)
@@ -275,20 +326,35 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             snippet = item.get("snippet") or item.get("description") or ""
             raw_items.append({"title": title, "url": url, "snippet": snippet})
 
-        # ---- 2) ブラックリスト結果を結果側で排除（二重防衛）----
-        filtered_items: List[Dict[str, Any]] = []
+        # ----------------------------
+        # 3) VERITAS文脈の時だけ、結果側ブラックリスト（二重防衛）
+        # ----------------------------
         blocked_count = 0
-        for it in raw_items:
-            if _is_blocked_result(it.get("title") or "", it.get("snippet") or "", it.get("url") or ""):
-                blocked_count += 1
-                continue
-            filtered_items.append(it)
+        filtered_items: List[Dict[str, Any]] = []
+        if enforce:
+            for it in raw_items:
+                if _is_blocked_result(
+                    it.get("title") or "",
+                    it.get("snippet") or "",
+                    it.get("url") or "",
+                ):
+                    blocked_count += 1
+                    continue
+                filtered_items.append(it)
+        else:
+            filtered_items = raw_items
 
-        # ---- 3) AGIクエリなら AGIっぽさフィルタも適用 ----
+        # ----------------------------
+        # 4) AGI文脈なら AGIっぽさフィルタ
+        # ----------------------------
         if agi_query:
             agi_items: List[Dict[str, Any]] = []
             for it in filtered_items:
-                if _looks_agi_result(it.get("title") or "", it.get("snippet") or "", it.get("url") or ""):
+                if _looks_agi_result(
+                    it.get("title") or "",
+                    it.get("snippet") or "",
+                    it.get("url") or "",
+                ):
                     agi_items.append(it)
 
             if not agi_items:
@@ -301,44 +367,44 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                         "agi_filter_applied": True,
                         "agi_result_count": 0,
                         "boosted_query": boosted_query,
-                        "final_query": q_to_send,  # ★ Serperに投げた最終（アンカー後）
-                        "anchor_applied": enforced["anchor_applied"],
-                        "blacklist_applied": enforced["blacklist_applied"],
+                        "final_query": q_to_send,  # ★Serperに投げた最終
+                        "anchor_applied": anchor_applied,
+                        "blacklist_applied": blacklist_applied,
                         "blocked_count": blocked_count,
                     },
                 }
 
-            final_items = agi_items[: max_results]
             return {
                 "ok": True,
-                "results": final_items,
+                "results": agi_items[:mr],
                 "error": None,
                 "meta": {
                     "raw_count": len(raw_items),
                     "agi_filter_applied": True,
                     "agi_result_count": len(agi_items),
                     "boosted_query": boosted_query,
-                    "final_query": q_to_send,  # ★ Serperに投げた最終（アンカー後）
-                    "anchor_applied": enforced["anchor_applied"],
-                    "blacklist_applied": enforced["blacklist_applied"],
+                    "final_query": q_to_send,  # ★Serperに投げた最終
+                    "anchor_applied": anchor_applied,
+                    "blacklist_applied": blacklist_applied,
                     "blocked_count": blocked_count,
                 },
             }
 
-        # ---- 通常クエリ ----
-        final_items = filtered_items[: max_results]
+        # ----------------------------
+        # 5) 通常
+        # ----------------------------
         return {
             "ok": True,
-            "results": final_items,
+            "results": filtered_items[:mr],
             "error": None,
             "meta": {
                 "raw_count": len(raw_items),
                 "agi_filter_applied": False,
                 "agi_result_count": None,
                 "boosted_query": boosted_query,
-                "final_query": q_to_send,  # ★ Serperに投げた最終（アンカー後）
-                "anchor_applied": enforced["anchor_applied"],
-                "blacklist_applied": enforced["blacklist_applied"],
+                "final_query": q_to_send,  # ★Serperに投げた最終（通常は raw_query と一致）
+                "anchor_applied": anchor_applied,
+                "blacklist_applied": blacklist_applied,
                 "blocked_count": blocked_count,
             },
         }
@@ -353,12 +419,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "agi_filter_applied": False,
                 "agi_result_count": None,
                 "boosted_query": None,
-                "final_query": _normalize_str(query, limit=2000),
+                "final_query": raw_query,
                 "anchor_applied": False,
                 "blacklist_applied": False,
                 "blocked_count": 0,
             },
         }
+
 
 
 

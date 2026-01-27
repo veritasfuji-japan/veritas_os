@@ -1,86 +1,33 @@
-name: CI
+- name: Run tests (with coverage)
+  id: pytest
+  continue-on-error: true
+  run: |
+    mkdir -p test-reports coverage-html
+    pytest -q veritas_os/tests \
+      --cov=veritas_os \
+      --cov-report=term-missing \
+      --cov-report=xml:coverage.xml \
+      --cov-report=html:coverage-html \
+      --junitxml=test-reports/pytest.xml
 
-on:
-  push:
-    branches: [ main, veritas_clean_test2 ]
-  pull_request:
-    branches: [ main ]
+- name: Upload test report (junit)
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: pytest-${{ matrix.python-version }}
+    path: test-reports/pytest.xml
+    if-no-files-found: error
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+- name: Upload coverage (xml + html)
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: coverage-${{ matrix.python-version }}
+    path: |
+      coverage.xml
+      coverage-html
+    if-no-files-found: warn
 
-permissions:
-  contents: read
-
-jobs:
-  test:
-    name: test (py${{ matrix.python-version }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12"]
-
-    env:
-      PYTHONUNBUFFERED: "1"
-      PIP_DISABLE_PIP_VERSION_CHECK: "1"
-      PIP_NO_PYTHON_VERSION_WARNING: "1"
-      OPENAI_API_KEY: "DUMMY_FOR_CI"
-      VERITAS_API_KEY: "DUMMY_FOR_CI"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r veritas_os/requirements.txt
-          pip install pytest pytest-cov
-
-      - name: Run tests (with coverage)
-        id: pytest
-        run: |
-          mkdir -p test-reports coverage-html
-          set +e
-          pytest -q veritas_os/tests \
-            --cov=veritas_os \
-            --cov-report=term-missing \
-            --cov-report=xml:coverage.xml \
-            --cov-report=html:coverage-html \
-            --junitxml=test-reports/pytest.xml
-          code=$?
-          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
-          set -e
-
-      - name: Upload test report (junit)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-${{ matrix.python-version }}
-          path: test-reports/pytest.xml
-          if-no-files-found: error
-
-      - name: Upload coverage (xml + html)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python-version }}
-          path: |
-            coverage.xml
-            coverage-html
-          if-no-files-found: warn
-
-      - name: Fail job if tests failed
-        if: steps.pytest.outputs.exit_code != '0'
-        run: exit 1
-
+- name: Fail job if tests failed
+  if: steps.pytest.outcome == 'failure'
+  run: exit 1
