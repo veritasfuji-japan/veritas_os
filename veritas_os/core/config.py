@@ -6,6 +6,13 @@ from pathlib import Path
 from dataclasses import dataclass, field
 
 
+def _parse_cors_origins(raw_value: str) -> list[str]:
+    """Parse comma-separated CORS origins from an env var into a clean list."""
+    if not raw_value:
+        return []
+    return [value.strip() for value in raw_value.split(",") if value.strip()]
+
+
 @dataclass
 class VeritasConfig:
     # ==== API ====
@@ -50,7 +57,11 @@ class VeritasConfig:
     creator_name: str = "fuji"
     product_name: str = "VERITAS"
 
-    cors_allow_origins: list[str] = field(default_factory=lambda: ["*"])
+    cors_allow_origins: list[str] = field(
+        default_factory=lambda: _parse_cors_origins(
+            os.getenv("VERITAS_CORS_ALLOW_ORIGINS", "")
+        )
+    )
 
     def __post_init__(self):
         # --- API alias ---

@@ -18,9 +18,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 import json
-import textwrap
 import logging
 import re
+import textwrap
 
 from . import llm_client
 from . import world as world_model
@@ -28,6 +28,35 @@ from . import world as world_model
 logger = logging.getLogger(__name__)
 
 DebateResult = Dict[str, Any]
+
+_DANGER_TERMS_JA = [
+    "自殺",
+    "自傷",
+    "死にたい",
+    "爆弾",
+    "銃",
+    "麻薬",
+    "ハッキング",
+    "ウイルス",
+    "侵入",
+    "殺す",
+    "暴力",
+    "テロ",
+    "違法",
+]
+
+_DANGER_PATTERNS_EN = [
+    re.compile(r"\bkill myself\b", re.IGNORECASE),
+    re.compile(r"\bweapon\b", re.IGNORECASE),
+    re.compile(r"\bguns?\b", re.IGNORECASE),
+    re.compile(r"\bdrugs?\b", re.IGNORECASE),
+    re.compile(r"\bmalware\b", re.IGNORECASE),
+    re.compile(r"\bvirus\b", re.IGNORECASE),
+    re.compile(r"\bcrack(?:ing)?\b", re.IGNORECASE),
+    re.compile(r"\bhack(?:ing)?\b", re.IGNORECASE),
+    re.compile(r"\bterror(?:ism|ist)?\b", re.IGNORECASE),
+    re.compile(r"\billegal\b", re.IGNORECASE),
+]
 
 
 # ============================
@@ -155,6 +184,11 @@ def _is_hard_blocked(opt: Dict[str, Any]) -> bool:
     return False
 
 
+def _normalize_text_for_scan(text: str) -> str:
+    """Normalize text for safety keyword scanning."""
+    return " ".join((text or "").lower().split())
+
+
 def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     """
     “念のため”の軽いヒューリスティクス保険。
@@ -168,16 +202,13 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
             str(opt.get("summary") or ""),
             str(opt.get("safety_view") or ""),
         ]
-    ).lower()
+    )
+    normalized = _normalize_text_for_scan(text)
 
-    danger_markers = [
-        "自殺", "自傷", "死にたい", "kill myself",
-        "爆弾", "weapon", "銃", "麻薬", "drug",
-        "ハッキング", "malware", "ウイルス", "crack", "侵入",
-        "殺す", "暴力", "terror", "テロ",
-        "違法", "illegal",
-    ]
-    return any(m in text for m in danger_markers)
+    if any(term in normalized for term in _DANGER_TERMS_JA):
+        return True
+
+    return any(pattern.search(normalized) for pattern in _DANGER_PATTERNS_EN)
 
 
 # ============================
@@ -756,6 +787,5 @@ def run_debate(
     except Exception as e:
         logger.error("DebateOS: LLM call or parse failed: %r", e)
         return _fallback_debate(base_options)
-
 
 
