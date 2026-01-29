@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append
+from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
 LOG_JSON = LOG_DIR / "trust_log.json"
@@ -77,8 +78,7 @@ def _load_logs_json() -> list:
 
 def _save_json(items: list) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    with open(LOG_JSON, "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=2)
+    atomic_write_json(LOG_JSON, {"items": items}, indent=2)
 
 
 def append_trust_log(entry: dict) -> None:
@@ -138,9 +138,12 @@ def append_trust_log(entry: dict) -> None:
     # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
     entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
-    # ---- JSONL に1行追記 ----
+    # ---- JSONL に1行追記 (with fsync for durability) ----
+    import os
     with open_trust_log_for_append() as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
 
     # ---- JSON(配列) を更新（最新 N 件だけ残す）----
     items.append(entry)
@@ -186,7 +189,6 @@ def write_shadow_decide(
         "fuji": fuji_safe.get("status"),
     }
 
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(rec, f, ensure_ascii=False, indent=2)
+    atomic_write_json(out, rec, indent=2)
 
 

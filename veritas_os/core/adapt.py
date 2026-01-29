@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .config import cfg  # VERITAS の設定オブジェクト
+from .atomic_io import atomic_write_json
 
 
 # ==== NEW: プロジェクト内に保存するパス ============================
@@ -144,13 +145,12 @@ def load_persona(path: str = PERSONA_JSON) -> Dict[str, Any]:
 
 def save_persona(persona: Dict[str, Any], path: str = PERSONA_JSON) -> None:
     """
-    persona をクリーンアップして JSON で保存。
+    persona をクリーンアップして JSON で保存（アトミック書き込み）。
     """
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
     persona = _ensure_persona(persona)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(persona, f, ensure_ascii=False, indent=2)
+    atomic_write_json(path, persona, indent=2)
 
 
 # =====================================
