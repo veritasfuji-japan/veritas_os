@@ -3,6 +3,7 @@ import json, time, uuid
 from typing import Dict, Any, List, Optional
 from .embedder import HashEmbedder
 from .index_cosine import CosineIndex
+from veritas_os.core.atomic_io import atomic_append_line
 
 # プロジェクトルート基準に変更
 BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
@@ -77,9 +78,8 @@ class MemoryStore:
             "text": item.get("text") or "",
             "meta": item.get("meta") or {},
         }
-        # JSONL へ追記
-        with open(FILES[kind], "a", encoding="utf-8") as f:
-            f.write(json.dumps(j, ensure_ascii=False) + "\n")
+        # JSONL へ追記（atomic append with fsync）
+        atomic_append_line(FILES[kind], json.dumps(j, ensure_ascii=False))
 
         # index へ追加（.npz も自動で更新）
         self.idx[kind].add(self.emb.embed([j["text"]]), [j["id"]])

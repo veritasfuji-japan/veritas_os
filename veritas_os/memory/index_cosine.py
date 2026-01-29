@@ -3,6 +3,8 @@ import numpy as np
 from pathlib import Path
 from typing import List, Tuple, Iterable, Optional, Any
 
+from veritas_os.core.atomic_io import atomic_write_npz
+
 
 class CosineIndex:
     """
@@ -38,7 +40,11 @@ class CosineIndex:
         if self.path is None:
             return
         try:
-            np.savez(self.path, vecs=self.vecs, ids=np.array(self.ids, dtype=object))
+            atomic_write_npz(
+                self.path,
+                vecs=self.vecs,
+                ids=np.array(self.ids, dtype=object)
+            )
         except Exception as e:
             print("[CosineIndex] save failed:", e)
 
