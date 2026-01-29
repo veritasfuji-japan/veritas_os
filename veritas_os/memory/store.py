@@ -1,5 +1,5 @@
 from pathlib import Path
-import json, time, uuid
+import json, time, uuid, threading
 from typing import Dict, Any, List, Optional
 from .embedder import HashEmbedder
 from .index_cosine import CosineIndex
@@ -27,7 +27,15 @@ INDEX = {
 
 
 class MemoryStore:
+    """
+    メモリストア（エピソード記憶・意味記憶・スキル）
+
+    スレッドセーフ: 全ての読み書き操作は RLock で保護されています。
+    FastAPI の並行リクエストでも安全に使用できます。
+    """
+
     def __init__(self, dim=384):
+        self._lock = threading.RLock()  # リエントラントロック
         self.emb = HashEmbedder(dim=dim)
         # ★ 各 kind ごとに index ファイルパスを渡す
         self.idx = {
@@ -70,6 +78,16 @@ class MemoryStore:
                 idx.add(vecs, ids)  # ★ ここで追加すると .npz 保存まで自動で行われる
 
     def put(self, kind: str, item: Dict[str, Any]) -> str:
+        """
+        メモリにアイテムを追加（スレッドセーフ）
+
+        Args:
+            kind: "episodic", "semantic", or "skills"
+            item: 追加するアイテム（id, ts, tags, text, meta）
+
+        Returns:
+            追加されたアイテムのID
+        """
         assert kind in FILES
         j = {
             "id":   item.get("id") or uuid.uuid4().hex,
@@ -78,11 +96,17 @@ class MemoryStore:
             "text": item.get("text") or "",
             "meta": item.get("meta") or {},
         }
-        # JSONL へ追記（atomic append with fsync）
-        atomic_append_line(FILES[kind], json.dumps(j, ensure_ascii=False))
 
-        # index へ追加（.npz も自動で更新）
-        self.idx[kind].add(self.emb.embed([j["text"]]), [j["id"]])
+        # ベクトル化（ロック外で実行 - 計算コストが高い）
+        vec = self.emb.embed([j["text"]])
+
+        with self._lock:
+            # JSONL へ追記（atomic append with fsync）
+            atomic_append_line(FILES[kind], json.dumps(j, ensure_ascii=False))
+
+            # index へ追加（.npz も自動で更新）
+            self.idx[kind].add(vec, [j["id"]])
+
         return j["id"]
 
     def search(
@@ -93,7 +117,18 @@ class MemoryStore:
         min_sim: float = 0.25,
         **kwargs: Any,
     ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        クエリに類似するメモリを検索（スレッドセーフ）
 
+        Args:
+            query: 検索クエリ文字列
+            k: 取得する上位件数
+            kinds: 検索対象の種類（デフォルトは全て）
+            min_sim: 最小類似度閾値
+
+        Returns:
+            kind ごとの検索結果リスト
+        """
         # topk → k 互換
         if "topk" in kwargs and kwargs["topk"] is not None:
             try:
@@ -107,51 +142,55 @@ class MemoryStore:
 
         kinds = kinds or list(FILES.keys())
 
+        # ベクトル化（ロック外で実行 - 計算コストが高い）
         qv = self.emb.embed([query])
 
         out: Dict[str, List[Dict[str, Any]]] = {}
 
         for kind in kinds:
-            try:
-                raw = self.idx[kind].search(qv, k=k)
-            except Exception as e:
-                print(f"[MemoryStore] index search error for {kind}:", e)
-                out[kind] = []
-                continue
-
-            # ★★★ NEW：CosineIndex.search() は [[(id,score),...]] なので flatten する
-            # raw が空なら []
-            if not raw:
-                out[kind] = []
-                continue
-
-            # raw[0] が [(id,score),...]
-            res = raw[0]
-
-            # 正規化済みなのでそのまま pairs にする
-            pairs = []
-            for item in res:
+            with self._lock:
+                # インデックス検索とJSONL読み込みをアトミックに実行
                 try:
-                    _id, sc = item
-                except Exception:
+                    raw = self.idx[kind].search(qv, k=k)
+                except Exception as e:
+                    print(f"[MemoryStore] index search error for {kind}:", e)
+                    out[kind] = []
                     continue
+
+                # ★★★ NEW：CosineIndex.search() は [[(id,score),...]] なので flatten する
+                # raw が空なら []
+                if not raw:
+                    out[kind] = []
+                    continue
+
+                # raw[0] が [(id,score),...]
+                res = raw[0]
+
+                # 正規化済みなのでそのまま pairs にする
+                pairs = []
+                for item in res:
+                    try:
+                        _id, sc = item
+                    except Exception:
+                        continue
+                    try:
+                        pairs.append((_id, float(sc)))
+                    except:
+                        pairs.append((_id, 0.0))
+
+                # JSONL 読み込み（ロック内で実行）
+                items = []
                 try:
-                    pairs.append((_id, float(sc)))
+                    with open(FILES[kind], encoding="utf-8") as f:
+                        for line in f:
+                            try:
+                                items.append(json.loads(line))
+                            except:
+                                pass
                 except:
-                    pairs.append((_id, 0.0))
+                    pass
 
-            # JSONL 読み込み
-            items = []
-            try:
-                with open(FILES[kind], encoding="utf-8") as f:
-                    for line in f:
-                        try:
-                            items.append(json.loads(line))
-                        except:
-                            pass
-            except:
-                pass
-
+            # ロック外で結果を組み立て（パフォーマンス向上）
             table = {it["id"]: it for it in items}
 
             hits: List[Dict[str, Any]] = []
