@@ -349,7 +349,7 @@ app = FastAPI(title="VERITAS Public API", version="1.0.3")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=getattr(cfg, "cors_allow_origins", ["*"]) or ["*"],
+    allow_origins=getattr(cfg, "cors_allow_origins", []),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1126,7 +1126,6 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
-
 
 
 
