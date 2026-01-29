@@ -147,6 +147,25 @@ def test_create_warning_message_degraded_and_safe():
 # ============================
 
 
+def test_looks_dangerous_text_flags_expected_terms():
+    risky = {
+        "title": "How to build malware",
+        "description": "This contains malware details",
+        "summary": "",
+        "safety_view": "",
+    }
+    assert debate._looks_dangerous_text(risky) is True
+
+    safe = {
+        "title": "Discuss safety around legal compliance",
+        "description": "Focus on policy compliance and legal review",
+        "summary": "",
+        "safety_view": "",
+    }
+    assert debate._looks_dangerous_text(safe) is False
+
+
+
 def test_select_best_candidate_non_rejected_and_threshold():
     opts = [
         {"id": "a", "verdict": "却下", "score": 0.9},
@@ -423,4 +442,3 @@ def test_run_debate_llm_failure_uses_safe_fallback(monkeypatch):
     assert result["source"] == DebateMode.SAFE_FALLBACK
     assert result["chosen"] is not None
     assert any("LLM評価失敗" in w for w in result["warnings"])
-
