@@ -1,11 +1,23 @@
 # veritas_os/logging/trust_log.py
-# 完全修正版: 論文の式 hₜ = SHA256(hₜ₋₁ || rₜ) に完全準拠
+# 正規TrustLog実装: 論文の式 hₜ = SHA256(hₜ₋₁ || rₜ) に完全準拠
+#
+# このモジュールがVERITASの唯一のTrustLog実装です。
+# 他のモジュールはここをインポートして使用してください。
+#
+# 機能:
+# - append_trust_log: ハッシュチェーン付きでエントリを追記
+# - iter_trust_log: ログをイテレート
+# - load_trust_log: 最近のエントリをまとめて取得
+# - get_trust_log_entry: request_id で単一エントリを取得
+# - verify_trust_log: ハッシュチェーンの整合性を検証
+# - iso_now: 監査用 UTC ISO8601 時刻
 from __future__ import annotations
 
 import json
 import hashlib
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Optional
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append
@@ -17,6 +29,36 @@ LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 
 # trust_log.json に保持する最大件数
 MAX_JSON_ITEMS = 2000
+
+
+# =============================================================================
+# ヘルパー関数
+# =============================================================================
+
+def iso_now() -> str:
+    """ISO8601 UTC時刻（監査ログ標準フォーマット）"""
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sha256(data: Any) -> str:
+    """UTF-8 / bytes から SHA-256 ハッシュを生成"""
+    if isinstance(data, bytes):
+        raw = data
+    else:
+        raw = str(data).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _normalize_entry_for_hash(entry: Dict[str, Any]) -> str:
+    """
+    sha256 計算用にエントリを正規化:
+    - sha256 / sha256_prev フィールドは除外
+    - sort_keys=True で JSON 化して順序を固定
+    """
+    payload = dict(entry)
+    payload.pop("sha256", None)
+    payload.pop("sha256_prev", None)
+    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 
 def _compute_sha256(payload: dict) -> str:
@@ -81,19 +123,19 @@ def _save_json(items: list) -> None:
     atomic_write_json(LOG_JSON, {"items": items}, indent=2)
 
 
-def append_trust_log(entry: dict) -> None:
+def append_trust_log(entry: dict) -> Dict[str, Any]:
     """
     決定ごとの監査ログ（軽量）を JSONL + JSON に保存。
-    
+
     論文の式に従った実装:
         hₜ = SHA256(hₜ₋₁ || rₜ)
-    
+
     where:
         hₜ₋₁ = 直前のハッシュ値 (sha256_prev)
         rₜ   = 現在のエントリ (JSON化、sha256とsha256_prevを除外)
         ||   = 文字列連結
         hₜ   = 現在のハッシュ値 (sha256)
-    
+
     実装詳細:
         1. 直前のハッシュ値 (sha256_prev) を取得
         2. 現在のエントリに sha256_prev をセット
@@ -101,9 +143,12 @@ def append_trust_log(entry: dict) -> None:
         4. sha256_prev + rₜ を連結
         5. SHA-256ハッシュを計算して sha256 にセット
         6. JSONLとJSONファイルに保存
-    
+
     - JSONL は 5000 行でローテーション（rotate.py 側）
     - trust_log.json は最新 MAX_JSON_ITEMS 件だけ保持
+
+    Returns:
+        sha256, sha256_prev が付与されたエントリ（渡された entry も更新される）
     """
     LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -152,6 +197,8 @@ def append_trust_log(entry: dict) -> None:
 
     _save_json(items)
 
+    return entry
+
 
 def write_shadow_decide(
     request_id: str,
@@ -192,3 +239,211 @@ def write_shadow_decide(
     atomic_write_json(out, rec, indent=2)
 
 
+# =============================================================================
+# TrustLog 読み出し系
+# =============================================================================
+
+def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
+    """
+    TrustLog を1行ずつイテレートするジェネレータ
+
+    Args:
+        reverse: True の場合、末尾から逆順に返す
+
+    Yields:
+        dict: 個々のログエントリ
+    """
+    if not LOG_JSONL.exists():
+        return
+
+    try:
+        if reverse:
+            with LOG_JSONL.open("rb") as f:
+                lines = f.readlines()
+            for line in reversed(lines):
+                line_str = line.decode("utf-8").strip()
+                if not line_str:
+                    continue
+                try:
+                    yield json.loads(line_str)
+                except json.JSONDecodeError:
+                    continue
+        else:
+            with LOG_JSONL.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        yield json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+    except Exception as e:
+        print(f"[WARN] trust_log iterate failed: {e}")
+        return
+
+
+def load_trust_log(limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """
+    TrustLog をまとめて読み込むユーティリティ
+
+    Args:
+        limit: 最大件数（None の場合は全件）
+
+    Returns:
+        list[dict]: 新しい順のエントリリスト
+    """
+    entries: List[Dict[str, Any]] = list(iter_trust_log(reverse=True))
+    if limit is not None:
+        entries = entries[:limit]
+    return entries
+
+
+def get_trust_log_entry(request_id: str) -> Optional[Dict[str, Any]]:
+    """
+    指定 request_id の TrustLog エントリを取得（末尾から検索）
+
+    Args:
+        request_id: /v1/decide の request_id
+
+    Returns:
+        dict | None: 対応するエントリ or 見つからない場合 None
+    """
+    if not request_id:
+        return None
+
+    for entry in iter_trust_log(reverse=True):
+        if entry.get("request_id") == request_id:
+            return entry
+    return None
+
+
+# =============================================================================
+# TrustLog 検証
+# =============================================================================
+
+def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
+    """
+    TrustLog 全体（または先頭から max_entries 件）について
+    ハッシュチェーンの整合性を検証する。
+
+    Returns:
+        {
+          "ok": bool,
+          "checked": int,
+          "broken": bool,
+          "broken_index": int | None,
+          "broken_reason": str | None,
+        }
+    """
+    if not LOG_JSONL.exists():
+        return {
+            "ok": True,
+            "checked": 0,
+            "broken": False,
+            "broken_index": None,
+            "broken_reason": None,
+        }
+
+    prev_hash: Optional[str] = None
+    checked = 0
+
+    try:
+        with LOG_JSONL.open("r", encoding="utf-8") as f:
+            for idx, line in enumerate(f):
+                if max_entries is not None and idx >= max_entries:
+                    break
+
+                line = line.strip()
+                if not line:
+                    continue
+
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    return {
+                        "ok": False,
+                        "checked": checked,
+                        "broken": True,
+                        "broken_index": idx,
+                        "broken_reason": "json_decode_error",
+                    }
+
+                # sha256_prev の整合性チェック
+                actual_prev = entry.get("sha256_prev")
+                if prev_hash is None:
+                    # 最初のエントリは sha256_prev が None のはず（もしくは存在しない）
+                    if actual_prev not in (None, ""):
+                        return {
+                            "ok": False,
+                            "checked": checked,
+                            "broken": True,
+                            "broken_index": idx,
+                            "broken_reason": "unexpected_sha256_prev_for_first_entry",
+                        }
+                else:
+                    if actual_prev != prev_hash:
+                        return {
+                            "ok": False,
+                            "checked": checked,
+                            "broken": True,
+                            "broken_index": idx,
+                            "broken_reason": "sha256_prev_mismatch",
+                        }
+
+                # sha256 の再計算チェック
+                expected_prev = prev_hash
+                entry_json = _normalize_entry_for_hash(entry)
+                if expected_prev:
+                    combined = expected_prev + entry_json
+                else:
+                    combined = entry_json
+                expected_hash = _sha256(combined)
+                if entry.get("sha256") != expected_hash:
+                    return {
+                        "ok": False,
+                        "checked": checked,
+                        "broken": True,
+                        "broken_index": idx,
+                        "broken_reason": "sha256_mismatch",
+                    }
+
+                # 状態更新
+                prev_hash = entry.get("sha256")
+                checked += 1
+
+        return {
+            "ok": True,
+            "checked": checked,
+            "broken": False,
+            "broken_index": None,
+            "broken_reason": None,
+        }
+
+    except Exception as e:
+        return {
+            "ok": False,
+            "checked": checked,
+            "broken": True,
+            "broken_index": checked,
+            "broken_reason": f"exception: {e}",
+        }
+
+
+# =============================================================================
+# 公開 API
+# =============================================================================
+
+__all__ = [
+    "iso_now",
+    "append_trust_log",
+    "iter_trust_log",
+    "load_trust_log",
+    "get_trust_log_entry",
+    "verify_trust_log",
+    "write_shadow_decide",
+    "get_last_hash",
+    "calc_sha256",
+    "LOG_JSON",
+    "LOG_JSONL",
+]
