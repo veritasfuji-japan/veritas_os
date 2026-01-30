@@ -25,12 +25,25 @@ Safety / Policy / TrustLog は監査可能な形で残す。
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 from datetime import datetime, timezone
 import time
 import os
 import re
+
+from .types import (
+    FujiInternalStatus,
+    FujiDecisionStatus,
+    FujiV1Status,
+    FujiViolation,
+    FujiFollowup,
+    FujiDecisionDict,
+    FujiV1Result,
+    SafetyHeadResultDict,
+    EvidenceDict,
+    ISOTimestamp,
+)
 
 # ---------------------------------------------------------
 # 依存モジュール（存在しない場合はフォールバック）
@@ -191,7 +204,7 @@ def _is_high_risk_context(*, risk: float, stakes: float, categories: List[str], 
     return False
 
 
-def _build_followups(text: str, context: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _build_followups(text: str, context: Dict[str, Any]) -> List[FujiFollowup]:
     """
     PoCで「止める/補う」がレスポンスに必ず出るようにする。
     """
