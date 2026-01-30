@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.exceptions import RequestValidationError
@@ -709,10 +709,13 @@ def _save_json(path: Path, items: list) -> None:
         json.dump({"items": items}, f, ensure_ascii=False, indent=2)
 
 
-def append_trust_log(entry: dict) -> None:
+def append_trust_log(entry: Dict[str, Any]) -> None:
     """
     server 単体でも最低限 trust log が書けるフォールバック。
     （tests互換のため server.LOG_DIR patch に追随）
+
+    Args:
+        entry: TrustLogエントリ辞書
     """
     log_dir, log_json, log_jsonl = _effective_log_paths()
 
@@ -738,10 +741,10 @@ def append_trust_log(entry: dict) -> None:
 
 def write_shadow_decide(
     request_id: str,
-    body: dict,
-    chosen: dict,
+    body: Dict[str, Any],
+    chosen: Dict[str, Any],
     telos_score: float,
-    fuji: dict,
+    fuji: Optional[Dict[str, Any]],
 ) -> None:
     shadow_dir = _effective_shadow_dir()
 

@@ -15,7 +15,18 @@ import time
 import sys
 import subprocess
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Union
+
+from .types import (
+    ToolResult,
+    OptionDict,
+    EvidenceDict,
+    FujiDecisionDict,
+    DecideResult,
+    ChosenDict,
+    DebateViewpoint,
+    CritiquePoint,
+)
 
 from . import adapt
 from . import evidence as evos
@@ -40,9 +51,28 @@ from veritas_os.tools import call_tool
 # 環境ツールラッパ
 # ============================================================
 
-def run_env_tool(kind: str, **kwargs) -> dict:
+def run_env_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
+    """環境ツールを実行し、結果を返す。
+
+    Args:
+        kind: ツールの種類 (例: "web_search", "memory_search")
+        **kwargs: ツール固有のパラメータ
+
+    Returns:
+        Dict[str, Any]: ツール実行結果 (ToolResult互換)
+            - ok: bool - 成功/失敗
+            - results: List[Dict] - 結果リスト
+            - error: Optional[str] - エラーメッセージ
+            - その他ツール固有のフィールド
+    """
     try:
-        return call_tool(kind, **kwargs)
+        result = call_tool(kind, **kwargs)
+        # 元の結果を保持しつつ、最低限のフィールドを保証
+        if not isinstance(result, dict):
+            result = {"raw": result}
+        result.setdefault("ok", True)
+        result.setdefault("results", [])
+        return result
     except Exception as e:
         return {
             "ok": False,
@@ -79,13 +109,23 @@ def _to_text(x: Any) -> str:
     return str(x)
 
 
-def _mk_option(title: str, description: str = "", _id: str | None = None) -> Dict[str, Any]:
-    return {
-        "id": _id or uuid.uuid4().hex,
-        "title": title,
-        "description": description,
-        "score": 1.0,
-    }
+def _mk_option(title: str, description: str = "", _id: Optional[str] = None) -> OptionDict:
+    """オプション辞書を生成する。
+
+    Args:
+        title: オプションのタイトル
+        description: オプションの説明
+        _id: オプションID (省略時は自動生成)
+
+    Returns:
+        OptionDict: 生成されたオプション辞書
+    """
+    return OptionDict(
+        id=_id or uuid.uuid4().hex,
+        title=title,
+        description=description,
+        score=1.0,
+    )
 
 
 def _safe_load_persona() -> Dict[str, Any]:
@@ -122,7 +162,7 @@ def _detect_intent(q: str) -> str:
     return "plan"
 
 
-def _gen_options_by_intent(intent: str) -> List[Dict[str, Any]]:
+def _gen_options_by_intent(intent: str) -> List[OptionDict]:
     if intent == "weather":
         return [
             _mk_option("天気アプリ/サイトで明日の予報を確認する"),
