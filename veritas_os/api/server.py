@@ -391,29 +391,56 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
 
 
 # ---- HMAC signature / replay (optional) ----
-API_SECRET = (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
+# ★ セキュリティ修正: シークレットはモジュールレベル変数に保持せず、関数経由で取得
+import threading
+
 _NONCE_TTL_SEC = 300
 _NONCE_MAX = 5000  # 簡易上限
 _nonce_store: Dict[str, float] = {}
+_nonce_lock = threading.Lock()  # ★ スレッドセーフ化
 
 
-def _cleanup_nonces():
+def _get_api_secret() -> bytes:
+    """
+    ★ セキュリティ修正: APIシークレットを毎回環境変数から取得。
+    モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
+    """
+    return (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
+
+
+# 後方互換: 既存コードが API_SECRET を参照している場合のプロパティ風アクセス
+@property
+def API_SECRET() -> bytes:
+    return _get_api_secret()
+
+
+def _cleanup_nonces_unsafe() -> None:
+    """内部用: ロック取得済み前提のクリーンアップ"""
     now = time.time()
-    for k, until in list(_nonce_store.items()):
-        if now > until:
-            _nonce_store.pop(k, None)
-    # 上限超過時は古いものから間引き（TTL前提なので乱暴でOK）
+    expired_keys = [k for k, until in _nonce_store.items() if now > until]
+    for k in expired_keys:
+        _nonce_store.pop(k, None)
+    # 上限超過時は古いものから間引き
     if len(_nonce_store) > _NONCE_MAX:
-        for k in list(_nonce_store.keys())[: max(0, len(_nonce_store) - _NONCE_MAX)]:
+        overflow = len(_nonce_store) - _NONCE_MAX
+        for k in list(_nonce_store.keys())[:overflow]:
             _nonce_store.pop(k, None)
+
+
+def _cleanup_nonces() -> None:
+    """★ スレッドセーフ版: ロックを取得してクリーンアップ"""
+    with _nonce_lock:
+        _cleanup_nonces_unsafe()
 
 
 def _check_and_register_nonce(nonce: str) -> bool:
-    _cleanup_nonces()
-    if nonce in _nonce_store:
-        return False
-    _nonce_store[nonce] = time.time() + _NONCE_TTL_SEC
-    return True
+    """★ スレッドセーフ版: nonceの重複チェックと登録"""
+    with _nonce_lock:
+        _cleanup_nonces_unsafe()
+        if nonce in _nonce_store:
+            return False
+        _nonce_store[nonce] = time.time() + _NONCE_TTL_SEC
+        return True
 
 
 async def verify_signature(
@@ -426,8 +453,10 @@ async def verify_signature(
     """
     HMAC 認証を使う場合のみ dependencies に入れて使う想定。
     （ISSUE-4上、未使用でも存在してOK）
+    ★ セキュリティ修正: シークレットは関数経由で取得
     """
-    if not API_SECRET:
+    api_secret = _get_api_secret()
+    if not api_secret:
         raise HTTPException(status_code=500, detail="Server secret missing")
     if not (x_api_key and x_timestamp and x_nonce and x_signature):
         raise HTTPException(status_code=401, detail="Missing auth headers")
@@ -443,54 +472,67 @@ async def verify_signature(
     body_bytes = await request.body()
     body = body_bytes.decode("utf-8") if body_bytes else ""
     payload = f"{ts}\n{x_nonce}\n{body}"
-    mac = hmac.new(API_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
+    mac = hmac.new(api_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
     if not hmac.compare_digest(mac, (x_signature or "").lower()):
         raise HTTPException(status_code=401, detail="Invalid signature")
     return True
 
 
 # ---- rate limit（簡易）----
+# ★ セキュリティ修正: スレッドセーフ化
 _RATE_LIMIT = 60
 _RATE_WINDOW = 60.0
 _RATE_BUCKET_MAX = 5000
 _rate_bucket: Dict[str, Tuple[int, float]] = {}
+_rate_lock = threading.Lock()  # ★ スレッドセーフ化
 
 
-def _cleanup_rate_bucket():
+def _cleanup_rate_bucket_unsafe() -> None:
+    """内部用: ロック取得済み前提のクリーンアップ"""
     now = time.time()
     # window を過ぎたバケットを掃除
-    for k, (_, start) in list(_rate_bucket.items()):
-        if now - start > (_RATE_WINDOW * 4):
-            _rate_bucket.pop(k, None)
+    expired_keys = [k for k, (_, start) in _rate_bucket.items() if now - start > (_RATE_WINDOW * 4)]
+    for k in expired_keys:
+        _rate_bucket.pop(k, None)
     # 上限超過時は適当に間引く
     if len(_rate_bucket) > _RATE_BUCKET_MAX:
-        for k in list(_rate_bucket.keys())[: max(0, len(_rate_bucket) - _RATE_BUCKET_MAX)]:
+        overflow = len(_rate_bucket) - _RATE_BUCKET_MAX
+        for k in list(_rate_bucket.keys())[:overflow]:
             _rate_bucket.pop(k, None)
+
+
+def _cleanup_rate_bucket() -> None:
+    """★ スレッドセーフ版: ロックを取得してクリーンアップ"""
+    with _rate_lock:
+        _cleanup_rate_bucket_unsafe()
 
 
 def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     """
     テスト契約:
     - X-API-Key が無いなら 401
+    ★ セキュリティ修正: スレッドセーフなレート制限
     """
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
 
-    _cleanup_rate_bucket()
-
     key = x_api_key.strip()
-    count, start = _rate_bucket.get(key, (0, time.time()))
     now = time.time()
 
-    if now - start > _RATE_WINDOW:
-        _rate_bucket[key] = (1, now)
+    with _rate_lock:
+        _cleanup_rate_bucket_unsafe()
+
+        count, start = _rate_bucket.get(key, (0, now))
+
+        if now - start > _RATE_WINDOW:
+            _rate_bucket[key] = (1, now)
+            return True
+
+        if count + 1 > _RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="Rate limit exceeded")
+
+        _rate_bucket[key] = (count + 1, start)
         return True
-
-    if count + 1 > _RATE_LIMIT:
-        raise HTTPException(status_code=429, detail="Rate limit exceeded")
-
-    _rate_bucket[key] = (count + 1, start)
-    return True
 
 
 # ==============================

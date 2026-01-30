@@ -28,6 +28,9 @@ from .types import (
     CritiquePoint,
 )
 
+import asyncio
+import inspect
+
 from . import adapt
 from . import evidence as evos
 from . import world as world_model
@@ -38,6 +41,12 @@ from . import fuji as fuji_core
 from . import debate as debate_core
 from . import value_core
 from . import affect as affect_core  # ★ NEW: ReasonOS / AffectOS
+
+# ★ セキュリティ修正: reason_core のインポート（存在しない場合は None）
+try:
+    from . import reason as reason_core
+except Exception:  # pragma: no cover
+    reason_core = None  # type: ignore
 
 # ★ QA処理を分離モジュールからインポート
 from .kernel_qa import (
@@ -225,17 +234,26 @@ def _filter_alts_by_intent(
 
 
 def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    alternatives リストの重複排除と正規化。
+    ★ セキュリティ修正: None/不正な型に対する防御的なハンドリング
+    """
     if not alts:
-        return alts
+        return []
 
     cleaned: List[Dict[str, Any]] = []
     for d in alts:
         if not isinstance(d, dict):
             continue
 
-        title = (d.get("title") or "").strip()
-        desc = (d.get("description") or "").strip()
+        # ★ 安全なstr取得: Noneや非文字列を空文字に変換
+        raw_title = d.get("title")
+        raw_desc = d.get("description")
 
+        title = (str(raw_title) if raw_title is not None else "").strip()
+        desc = (str(raw_desc) if raw_desc is not None else "").strip()
+
+        # "none" 文字列は無効とみなす
         if title.lower() == "none":
             if desc:
                 title = desc[:40]
@@ -253,20 +271,40 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
     best: Dict[tuple, Dict[str, Any]] = {}
     for d in cleaned:
-        key = (d["title"], d["description"])
-        score = float(d.get("score", 0))
+        # ★ 安全なキー生成: 必ず文字列であることを保証
+        title_key = str(d.get("title") or "")
+        desc_key = str(d.get("description") or "")
+        key = (title_key, desc_key)
+
+        # ★ 安全なスコア取得
+        raw_score = d.get("score")
+        try:
+            score = float(raw_score) if raw_score is not None else 0.0
+        except (TypeError, ValueError):
+            score = 0.0
 
         prev = best.get(key)
-        if prev is None or score > float(prev.get("score", 0)):
+        if prev is None:
             best[key] = d
+        else:
+            # ★ 安全な比較
+            try:
+                prev_score = float(prev.get("score", 0))
+            except (TypeError, ValueError):
+                prev_score = 0.0
+            if score > prev_score:
+                best[key] = d
 
     result = []
-    seen = set()
+    seen: set = set()
     for d in cleaned:
-        key = (d["title"], d["description"])
+        title_key = str(d.get("title") or "")
+        desc_key = str(d.get("description") or "")
+        key = (title_key, desc_key)
         if key in seen:
             continue
-        result.append(best[key])
+        if key in best:
+            result.append(best[key])
         seen.add(key)
 
     return result
@@ -892,38 +930,59 @@ async def decide(
         extras["affect"]["meta_error"] = repr(e)
 
     # 自然文 Reason（なぜこの決定が妥当か）
+    # ★ セキュリティ修正: reason_core の存在チェックと安全な呼び出し
     try:
-        reason_natural = reason_core.generate_reason(
-            query=q_text,
-            planner=extras.get("planner"),
-            values={"total": float(telos_score)},
-            gate=fuji_result,
-            context={
-                "user_id": user_id,
-                "mode": mode,
-                "intent": intent,
-            },
-        )
-        extras.setdefault("affect", {})
-        extras["affect"]["natural"] = reason_natural
+        if reason_core is not None and hasattr(reason_core, "generate_reason"):
+            gen_reason_fn = reason_core.generate_reason
+            reason_args = {
+                "query": q_text,
+                "planner": extras.get("planner"),
+                "values": {"total": float(telos_score)},
+                "gate": fuji_result,
+                "context": {
+                    "user_id": user_id,
+                    "mode": mode,
+                    "intent": intent,
+                },
+            }
+            # ★ async/sync を安全に判定して呼び出し
+            if asyncio.iscoroutinefunction(gen_reason_fn):
+                reason_natural = await gen_reason_fn(**reason_args)
+            else:
+                reason_natural = gen_reason_fn(**reason_args)
+
+            extras.setdefault("affect", {})
+            extras["affect"]["natural"] = reason_natural
+        else:
+            extras.setdefault("affect", {})
+            extras["affect"]["natural_error"] = "reason_core.generate_reason not available"
     except Exception as e:
         extras.setdefault("affect", {})
         extras["affect"]["natural_error"] = repr(e)
 
     # Self-Refine 用テンプレ（高リスク or 高 stakes のときだけ）
+    # ★ セキュリティ修正: reason_core の存在チェックと安全な async 呼び出し
     try:
         risk_val = float(fuji_result.get("risk", 0.0))
         if (not fast_mode) and (stakes >= 0.7 or risk_val >= 0.5):
-            refl_tmpl = await reason_core.generate_reflection_template(
-                query=q_text,
-                chosen=chosen,
-                gate=fuji_result,
-                values={"total": float(telos_score)},
-                planner=extras.get("planner") or {},
-            )
-            if refl_tmpl:
-                extras.setdefault("affect", {})
-                extras["affect"]["reflection_template"] = refl_tmpl
+            if reason_core is not None and hasattr(reason_core, "generate_reflection_template"):
+                gen_refl_fn = reason_core.generate_reflection_template
+                refl_args = {
+                    "query": q_text,
+                    "chosen": chosen,
+                    "gate": fuji_result,
+                    "values": {"total": float(telos_score)},
+                    "planner": extras.get("planner") or {},
+                }
+                # ★ async/sync を安全に判定して呼び出し
+                if asyncio.iscoroutinefunction(gen_refl_fn):
+                    refl_tmpl = await gen_refl_fn(**refl_args)
+                else:
+                    refl_tmpl = gen_refl_fn(**refl_args)
+
+                if refl_tmpl:
+                    extras.setdefault("affect", {})
+                    extras["affect"]["reflection_template"] = refl_tmpl
     except Exception as e:
         extras.setdefault("affect", {})
         extras["affect"]["reflection_template_error"] = repr(e)
