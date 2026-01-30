@@ -196,7 +196,7 @@ def get_cfg() -> Any:
     except Exception as e:
         _cfg_state.err = _errstr(e)
         _cfg_state.obj = SimpleNamespace(
-            cors_allow_origins=["*"],
+            cors_allow_origins=[],
             api_key="",
         )
         print(f"[WARN] cfg import failed -> fallback: {_cfg_state.err}")
@@ -1171,7 +1171,6 @@ def trust_feedback(body: dict):
     except Exception as e:
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": str(e)}
-
 
 
 
