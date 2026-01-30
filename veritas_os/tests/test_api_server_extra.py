@@ -134,6 +134,23 @@ def test_get_expected_api_key_falls_back_to_default(monkeypatch):
     assert got == "cfg-key"
 
 
+def test_get_cfg_fallback_disables_cors(monkeypatch):
+    """
+    get_cfg が失敗したときに CORS を完全拒否するフォールバックになること。
+    """
+    monkeypatch.setattr(server, "_cfg_state", server._LazyState())
+
+    def _raise_import_error(*args, **kwargs):
+        raise ImportError("boom")
+
+    monkeypatch.setattr(server.importlib, "import_module", _raise_import_error)
+
+    cfg = server.get_cfg()
+
+    assert cfg.cors_allow_origins == []
+    assert cfg.api_key == ""
+
+
 def test_require_api_key_server_not_configured(monkeypatch):
     """
     サーバ側の API キー未設定パス（500）
@@ -852,7 +869,6 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
-
 
 
 
