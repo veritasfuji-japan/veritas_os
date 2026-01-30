@@ -477,7 +477,7 @@ def _apply_policy(
 # =========================================================
 def fuji_core_decide(
     *,
-    safety_head: SafetyHeadResult,
+    safety_head: SafetyHeadResult | None,
     stakes: float,
     telos_score: float,
     evidence_count: int,
@@ -487,10 +487,21 @@ def fuji_core_decide(
     text: str = "",
     poc_mode: bool = False,
 ) -> Dict[str, Any]:
+    """
+    ★ セキュリティ修正: 入力パラメータのnullチェック強化
+    """
     policy = policy or POLICY
 
-    categories = list(safety_head.categories or [])
-    risk = float(safety_head.risk_score)
+    # ★ safety_head が None の場合のフォールバック
+    if safety_head is None:
+        safety_head = _fallback_safety_head(text or "")
+
+    # ★ 安全なアクセス: categories と risk_score
+    categories = list(safety_head.categories or []) if safety_head.categories else []
+    try:
+        risk = float(safety_head.risk_score) if safety_head.risk_score is not None else 0.05
+    except (TypeError, ValueError):
+        risk = 0.05
     base_reasons: List[str] = []
     guidance = safety_head.rationale or ""
 
