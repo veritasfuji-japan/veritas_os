@@ -391,7 +391,7 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
 
 
 # ---- HMAC signature / replay (optional) ----
-# ★ セキュリティ修正: シークレットはモジュールレベル変数に保持せず、関数経由で取得
+# ★ セキュリティ修正: スレッドセーフ化
 import threading
 
 _NONCE_TTL_SEC = 300
@@ -399,19 +399,22 @@ _NONCE_MAX = 5000  # 簡易上限
 _nonce_store: Dict[str, float] = {}
 _nonce_lock = threading.Lock()  # ★ スレッドセーフ化
 
+# 後方互換: テストが monkeypatch.setattr(server, "API_SECRET", ...) を使用
+# 実際の検証時は _get_api_secret() を使用して毎回環境変数から取得
+API_SECRET: bytes = b""  # ★ テスト用プレースホルダー（実際は _get_api_secret() を使用）
+
 
 def _get_api_secret() -> bytes:
     """
     ★ セキュリティ修正: APIシークレットを毎回環境変数から取得。
-    モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
+    モジュールレベル変数に長時間保持しないことで、メモリダンプによる漏洩リスクを軽減。
+    テスト時は API_SECRET 変数を monkeypatch で上書き可能。
     """
+    # テスト用: API_SECRET が明示的に設定されていればそれを使用
+    global API_SECRET
+    if API_SECRET:
+        return API_SECRET
     return (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
-
-
-# 後方互換: 既存コードが API_SECRET を参照している場合のプロパティ風アクセス
-@property
-def API_SECRET() -> bytes:
-    return _get_api_secret()
 
 
 def _cleanup_nonces_unsafe() -> None:
