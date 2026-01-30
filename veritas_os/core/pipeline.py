@@ -33,7 +33,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
-from veritas_os.tools.web_search import web_search as tool_web_search
 
 
 try:
@@ -769,7 +768,6 @@ async def run_decide_pipeline(
     # -------------------------------
     
     def _now_iso() -> str:
-        from datetime import datetime, timezone
         return datetime.now(timezone.utc).isoformat()
     
     
@@ -2689,10 +2687,6 @@ async def run_decide_pipeline(
     # =========================================================
     # Low-evidence hardening (query hint only)
     # =========================================================
-    try:
-        from veritas_os.core import evidence as evidence_core  # type: ignore
-    except Exception:
-        evidence_core = None  # type: ignore
 
     def _query_is_step1_hint(q: Any) -> bool:
         try:

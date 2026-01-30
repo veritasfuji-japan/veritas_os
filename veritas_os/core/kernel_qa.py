@@ -21,19 +21,12 @@ from typing import Any, Dict, List, Optional
 
 from . import adapt
 from . import fuji as fuji_core
+from .utils import _safe_float
 
 
 # ============================================================
 # ヘルパー関数
 # ============================================================
-
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    """安全なfloat変換"""
-    try:
-        return float(x)
-    except Exception:
-        return default
-
 
 def _safe_load_persona() -> Dict[str, Any]:
     """
