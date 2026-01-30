@@ -147,6 +147,57 @@ def test_create_warning_message_degraded_and_safe():
 # ============================
 
 
+def test_looks_dangerous_text_flags_expected_terms():
+    risky = {
+        "title": "How to build malware",
+        "description": "This contains malware details",
+        "summary": "",
+        "safety_view": "",
+    }
+    assert debate._looks_dangerous_text(risky) is True
+
+    safe = {
+        "title": "Discuss safety around legal compliance",
+        "description": "Focus on policy compliance and legal review",
+        "summary": "",
+        "safety_view": "",
+    }
+    assert debate._looks_dangerous_text(safe) is False
+
+
+def test_sanitize_options_redacts_and_minimizes():
+    options = [
+        {
+            "id": "opt1",
+            "title": "Contact me at foo@example.com",
+            "description": "Call 090-1234-5678 for details",
+            "meta": {"secret": "should be removed"},
+        }
+    ]
+    sanitized = debate._sanitize_options_for_llm(options)
+    assert sanitized[0]["id"] == "opt1"
+    assert "foo@example.com" not in sanitized[0]["title"]
+    assert "090-1234-5678" not in sanitized[0]["description"]
+    assert "[redacted@email]" in sanitized[0]["title"]
+    assert "[redacted:phone]" in sanitized[0]["description"]
+    assert "meta" not in sanitized[0]
+
+
+def test_get_parallel_call_count_clamps(monkeypatch):
+    monkeypatch.setenv("VERITAS_DEBATE_PARALLEL_CALLS", "0")
+    assert debate._get_parallel_call_count() == 1
+
+    monkeypatch.setenv("VERITAS_DEBATE_PARALLEL_CALLS", "3")
+    assert debate._get_parallel_call_count() == 3
+
+    monkeypatch.setenv("VERITAS_DEBATE_PARALLEL_CALLS", "999")
+    assert debate._get_parallel_call_count() == 5
+
+    monkeypatch.setenv("VERITAS_DEBATE_PARALLEL_CALLS", "invalid")
+    assert debate._get_parallel_call_count() == 1
+
+
+
 def test_select_best_candidate_non_rejected_and_threshold():
     opts = [
         {"id": "a", "verdict": "却下", "score": 0.9},
@@ -423,4 +474,3 @@ def test_run_debate_llm_failure_uses_safe_fallback(monkeypatch):
     assert result["source"] == DebateMode.SAFE_FALLBACK
     assert result["chosen"] is not None
     assert any("LLM評価失敗" in w for w in result["warnings"])
-

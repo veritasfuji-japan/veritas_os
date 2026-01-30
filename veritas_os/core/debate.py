@@ -18,9 +18,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 import json
-import textwrap
 import logging
+import os
 import re
+import textwrap
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from . import llm_client
 from . import world as world_model
@@ -28,6 +30,40 @@ from . import world as world_model
 logger = logging.getLogger(__name__)
 
 DebateResult = Dict[str, Any]
+
+_DANGER_TERMS_JA = [
+    "自殺",
+    "自傷",
+    "死にたい",
+    "爆弾",
+    "銃",
+    "麻薬",
+    "ハッキング",
+    "ウイルス",
+    "侵入",
+    "殺す",
+    "暴力",
+    "テロ",
+    "違法",
+]
+
+_DANGER_PATTERNS_EN = [
+    re.compile(r"\bkill myself\b", re.IGNORECASE),
+    re.compile(r"\bweapon\b", re.IGNORECASE),
+    re.compile(r"\bguns?\b", re.IGNORECASE),
+    re.compile(r"\bdrugs?\b", re.IGNORECASE),
+    re.compile(r"\bmalware\b", re.IGNORECASE),
+    re.compile(r"\bvirus\b", re.IGNORECASE),
+    re.compile(r"\bcrack(?:ing)?\b", re.IGNORECASE),
+    re.compile(r"\bhack(?:ing)?\b", re.IGNORECASE),
+    re.compile(r"\bterror(?:ism|ist)?\b", re.IGNORECASE),
+    re.compile(r"\billegal\b", re.IGNORECASE),
+]
+
+_EMAIL_RE = re.compile(r"\b[\w\.-]+@[\w\.-]+\.\w+\b")
+_PHONE_RE = re.compile(r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b")
+
+_MAX_PARALLEL_CALLS = 5
 
 
 # ============================
@@ -155,6 +191,89 @@ def _is_hard_blocked(opt: Dict[str, Any]) -> bool:
     return False
 
 
+def _normalize_text_for_scan(text: str) -> str:
+    """Normalize text for safety keyword scanning."""
+    return " ".join((text or "").lower().split())
+
+
+def _redact_pii(text: str) -> str:
+    """Redact basic PII patterns in text to reduce leakage risk."""
+    if not text:
+        return ""
+    redacted = _EMAIL_RE.sub("[redacted@email]", text)
+    return _PHONE_RE.sub("[redacted:phone]", redacted)
+
+
+def _sanitize_options_for_llm(options: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Minimize option fields and redact PII before LLM calls."""
+    sanitized: List[Dict[str, Any]] = []
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        title = _redact_pii(str(opt.get("title") or ""))
+        description = _redact_pii(str(opt.get("description") or ""))
+        if not title:
+            title = description or "候補"
+        sanitized.append(
+            {
+                "id": opt.get("id") or title,
+                "title": title,
+                "description": description,
+            }
+        )
+    return sanitized
+
+
+def _minimal_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a minimal context dictionary to reduce data exposure."""
+    return {
+        "user_id": "anon",
+        "stakes": None,
+        "telos_weights": None,
+    }
+
+
+def _get_parallel_call_count() -> int:
+    """Read desired parallel call count from env with safe bounds."""
+    raw = os.getenv("VERITAS_DEBATE_PARALLEL_CALLS", "1")
+    try:
+        count = int(raw)
+    except ValueError:
+        return 1
+    return max(1, min(_MAX_PARALLEL_CALLS, count))
+
+
+def _run_parallel_llm_calls(
+    system_prompt: str,
+    user_prompt: str,
+    calls: int,
+) -> Optional[str]:
+    """Run multiple LLM calls in parallel and return the first response."""
+    if calls <= 1:
+        return None
+
+    def _call() -> Optional[str]:
+        res = llm_client.chat(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            extra_messages=None,
+            temperature=0.25,
+            max_tokens=1000,
+        )
+        return res.get("text") if isinstance(res, dict) else str(res)
+
+    with ThreadPoolExecutor(max_workers=calls) as executor:
+        futures = [executor.submit(_call) for _ in range(calls)]
+        for future in as_completed(futures):
+            try:
+                raw_text = future.result()
+            except Exception:
+                continue
+            if raw_text:
+                return raw_text
+    return None
+
+
 def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     """
     “念のため”の軽いヒューリスティクス保険。
@@ -168,16 +287,13 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
             str(opt.get("summary") or ""),
             str(opt.get("safety_view") or ""),
         ]
-    ).lower()
+    )
+    normalized = _normalize_text_for_scan(text)
 
-    danger_markers = [
-        "自殺", "自傷", "死にたい", "kill myself",
-        "爆弾", "weapon", "銃", "麻薬", "drug",
-        "ハッキング", "malware", "ウイルス", "crack", "侵入",
-        "殺す", "暴力", "terror", "テロ",
-        "違法", "illegal",
-    ]
-    return any(m in text for m in danger_markers)
+    if any(term in normalized for term in _DANGER_TERMS_JA):
+        return True
+
+    return any(pattern.search(normalized) for pattern in _DANGER_PATTERNS_EN)
 
 
 # ============================
@@ -623,17 +739,26 @@ def run_debate(
         base_options.append(x)
 
     system_prompt = _build_system_prompt()
-    user_prompt = _build_user_prompt(query, base_options, ctx, world_snap)
+    parallel_calls = _get_parallel_call_count()
+    if parallel_calls > 1:
+        safe_query = _redact_pii(str(query or ""))
+        safe_options = _sanitize_options_for_llm(base_options)
+        safe_context = _minimal_context(ctx)
+        user_prompt = _build_user_prompt(safe_query, safe_options, safe_context, {})
+    else:
+        user_prompt = _build_user_prompt(query, base_options, ctx, world_snap)
 
     try:
-        res = llm_client.chat(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            extra_messages=None,
-            temperature=0.25,
-            max_tokens=1000,
-        )
-        raw_text = res.get("text") if isinstance(res, dict) else str(res)
+        raw_text = _run_parallel_llm_calls(system_prompt, user_prompt, parallel_calls)
+        if not raw_text:
+            res = llm_client.chat(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                extra_messages=None,
+                temperature=0.25,
+                max_tokens=1000,
+            )
+            raw_text = res.get("text") if isinstance(res, dict) else str(res)
 
         # ★ テスト互換的にも _safe_parse を経由してOK
         parsed = _safe_parse(raw_text)
@@ -756,6 +881,3 @@ def run_debate(
     except Exception as e:
         logger.error("DebateOS: LLM call or parse failed: %r", e)
         return _fallback_debate(base_options)
-
-
-
