@@ -1,22 +1,44 @@
 # veritas_os/tests/test_logging_core_trustlog.py
+"""
+core/logging.py ラッパーと logging/trust_log.py 正規実装のテスト。
+
+core/logging.py は後方互換性のためのラッパーであり、
+実際の実装は logging/trust_log.py にあります。
+"""
 
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import veritas_os.core.logging as core_logging
+import veritas_os.logging.trust_log as trust_log_impl
+import veritas_os.logging.paths as log_paths
 
 
 def _setup_tmp_trust_log(tmp_path, monkeypatch):
     """
-    core_logging.cfg.trust_log_path を一時ファイルに切り替えるヘルパー。
-    ここでディレクトリも作っておく。
+    trust_log の LOG_DIR, LOG_JSON, LOG_JSONL を一時ディレクトリに切り替えるヘルパー。
     """
-    log_path = tmp_path / "trust_log.jsonl"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr(core_logging.cfg, "trust_log_path", str(log_path), 
-raising=False)
-    return log_path
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_jsonl = log_dir / "trust_log.jsonl"
+    log_json = log_dir / "trust_log.json"
+
+    # paths モジュールをパッチ（rotate.py が参照する）
+    monkeypatch.setattr(log_paths, "LOG_DIR", log_dir)
+    monkeypatch.setattr(log_paths, "LOG_JSONL", log_jsonl)
+    monkeypatch.setattr(log_paths, "LOG_JSON", log_json)
+
+    # 正規実装のパスをパッチ
+    monkeypatch.setattr(trust_log_impl, "LOG_DIR", log_dir)
+    monkeypatch.setattr(trust_log_impl, "LOG_JSONL", log_jsonl)
+    monkeypatch.setattr(trust_log_impl, "LOG_JSON", log_json)
+
+    # ラッパーにもエクスポートされているのでそちらもパッチ
+    monkeypatch.setattr(core_logging, "LOG_JSONL", log_jsonl)
+    monkeypatch.setattr(core_logging, "LOG_JSON", log_json)
+
+    return log_jsonl
 
 
 def test_iso_now_returns_utc_iso():
@@ -29,22 +51,19 @@ def test_iso_now_returns_utc_iso():
 
 def test_append_and_iter_and_load_and_get(tmp_path, monkeypatch):
     """
-    append_trust_log → iter_trust_log → load_trust_log → 
-get_trust_log_entry
-    の一連の正常系をまとめて検証。
+    append_trust_log → iter_trust_log → load_trust_log →
+    get_trust_log_entry の一連の正常系をまとめて検証。
     """
     log_path = _setup_tmp_trust_log(tmp_path, monkeypatch)
 
     # 1件目
-    e1 = core_logging.append_trust_log({"request_id": "r1", "decision": 
-"allow"})
+    e1 = core_logging.append_trust_log({"request_id": "r1", "decision": "allow"})
     assert "sha256" in e1 and e1["sha256"]
     # 最初のエントリは sha256_prev が None のはず
     assert e1.get("sha256_prev") is None
 
     # 2件目
-    e2 = core_logging.append_trust_log({"request_id": "r2", "decision": 
-"reject"})
+    e2 = core_logging.append_trust_log({"request_id": "r2", "decision": "reject"})
     assert "sha256" in e2 and e2["sha256"]
     # 2件目の sha256_prev は 1件目の sha256 と一致する
     assert e2["sha256_prev"] == e1["sha256"]
@@ -117,4 +136,3 @@ def test_verify_trust_log_detects_tamper(tmp_path, monkeypatch):
     # どこかで sha256_mismatch が検出されるはず
     assert result["broken_reason"] == "sha256_mismatch"
     assert isinstance(result["broken_index"], int)
-

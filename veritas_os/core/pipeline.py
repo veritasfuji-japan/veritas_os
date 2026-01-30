@@ -60,61 +60,98 @@ def utc_now_iso_z(*, timespec: str = "seconds") -> str:
 # =========================================================
 # Safe imports (core modules)
 # =========================================================
+#
+# モジュールカテゴリ:
+# - REQUIRED: 必須。None の場合は Pipeline が機能しない
+# - RECOMMENDED: 推奨。None でも最低限動くが機能低下
+# - OPTIONAL: 任意。なくても正常動作
+#
+# ★ ISSUE-4 対応: インポート時にクラッシュしない設計を維持
+# ★ ただし、REQUIRED モジュールが None の場合は実行時にエラー
+# =========================================================
+
+def _to_bool(v: Any) -> bool:
+    """Convert value to bool (for env vars, config values, etc.)"""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return v != 0
+    if isinstance(v, str):
+        s = v.strip().lower()
+        if s in ("0", "false", "no", "n", "off", ""):
+            return False
+        return s in ("1", "true", "yes", "y", "on")
+    return False
+
 
 def _warn(msg: str) -> None:
-    # テストでstdoutが汚れても落ちない設計が優先。必要なら env で黙らせられる。
+    """警告メッセージを出力（環境変数で抑制可能）"""
     if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
         print(msg)
 
 
-# ---- kernel (required-ish; but must not crash import) ----
+def _check_required_modules() -> None:
+    """必須モジュールの存在を確認し、欠落時は明確なエラーを出す"""
+    missing = []
+    if veritas_core is None:
+        missing.append("kernel")
+    if fuji_core is None:
+        missing.append("fuji")
+    if missing:
+        raise ImportError(
+            f"[FATAL][pipeline] Required modules missing: {', '.join(missing)}. "
+            "Pipeline cannot function without these core modules."
+        )
+
+
+# ---- kernel (REQUIRED) ----
 try:
     from . import kernel as veritas_core  # type: ignore
 except Exception as e:  # pragma: no cover
     veritas_core = None  # type: ignore
-    _warn(f"[WARN][pipeline] kernel import failed: {repr(e)}")
+    _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
 
-# ---- fuji ----
+# ---- fuji (REQUIRED) ----
 try:
     from . import fuji as fuji_core  # type: ignore
 except Exception as e:  # pragma: no cover
     fuji_core = None  # type: ignore
-    _warn(f"[WARN][pipeline] fuji import failed: {repr(e)}")
+    _warn(f"[ERROR][pipeline] fuji import failed (REQUIRED): {repr(e)}")
 
-# ---- memory ----
+# ---- memory (RECOMMENDED) ----
 try:
     from . import memory as mem  # type: ignore
 except Exception as e:  # pragma: no cover
     mem = None  # type: ignore
-    _warn(f"[WARN][pipeline] memory import failed: {repr(e)}")
+    _warn(f"[WARN][pipeline] memory import failed (RECOMMENDED): {repr(e)}")
 
-# ---- value core ----
+# ---- value_core (RECOMMENDED) ----
 try:
     from . import value_core  # type: ignore
 except Exception as e:  # pragma: no cover
     value_core = None  # type: ignore
-    _warn(f"[WARN][pipeline] value_core import failed: {repr(e)}")
+    _warn(f"[WARN][pipeline] value_core import failed (RECOMMENDED): {repr(e)}")
 
-# ---- world model ----
+# ---- world model (RECOMMENDED) ----
 try:
     from . import world as world_model  # type: ignore
 except Exception as e:  # pragma: no cover
     world_model = None  # type: ignore
-    _warn(f"[WARN][pipeline] world import failed: {repr(e)}")
+    _warn(f"[WARN][pipeline] world import failed (RECOMMENDED): {repr(e)}")
 
-# ---- reason ----
+# ---- reason (OPTIONAL) ----
 try:
     from . import reason as reason_core  # type: ignore
 except Exception as e:  # pragma: no cover
     reason_core = None  # type: ignore
-    _warn(f"[WARN][pipeline] reason import failed: {repr(e)}")
+    _warn(f"[INFO][pipeline] reason import failed (OPTIONAL): {repr(e)}")
 
-# ---- debate ----
+# ---- debate (RECOMMENDED) ----
 try:
     from . import debate as debate_core  # type: ignore
 except Exception as e:  # pragma: no cover
     debate_core = None  # type: ignore
-    _warn(f"[WARN][pipeline] debate import failed: {repr(e)}")
+    _warn(f"[WARN][pipeline] debate import failed (RECOMMENDED): {repr(e)}")
 
 
 # =========================================================
@@ -138,19 +175,7 @@ except Exception:  # pragma: no cover
 # =========================================================
 # util helpers
 # =========================================================
-
-def _to_bool(v: Any) -> bool:
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, float)):
-        return v != 0
-    if isinstance(v, str):
-        s = v.strip().lower()
-        if s in ("0", "false", "no", "n", "off", ""):
-            return False
-        return s in ("1", "true", "yes", "y", "on")
-    return False
-
+# Note: _to_bool is defined earlier (needed before safe imports)
 
 def _to_float_or(v: Any, default: float) -> float:
     if v in (None, "", "null", "None"):
@@ -707,6 +732,9 @@ async def run_decide_pipeline(
       - backward compat key: metrics.mem_evidence_count
       - import-time failures must not break the request (ISSUE-4 style lazy import)
     """
+
+    # ★ 必須モジュールの存在確認（欠落時は明確なエラー）
+    _check_required_modules()
 
     # -------------------------------
     # local helpers (contract hardening)

@@ -371,6 +371,9 @@ def run_safety_head(
         fb.categories.append("safety_head_error")
         fb.rationale += f" / safety_head error: {repr(e)[:120]}"
         fb.raw.setdefault("safety_head_error", repr(e))
+        # ★ 不確実性を反映: LLM エラー時はベースリスクを 0.30 に引き上げ
+        # 理由: LLM が評価できなかった = 安全性を確認できていない
+        fb.risk_score = max(fb.risk_score, 0.30)
         return fb
 
 
