@@ -44,7 +44,7 @@ from .types import (
     EvidenceDict,
     ISOTimestamp,
 )
-from .utils import _safe_float
+from .utils import _safe_float, _to_text
 
 # ---------------------------------------------------------
 # 依存モジュール（存在しない場合はフォールバック）
@@ -138,17 +138,7 @@ def _safe_int(x: Any, default: int) -> int:
         return default
 
 
-def _to_text(x: Any) -> str:
-    if x is None:
-        return ""
-    if isinstance(x, str):
-        return x
-    if isinstance(x, dict):
-        for k in ("query", "title", "description", "text", "prompt"):
-            v = x.get(k)
-            if isinstance(v, str) and v:
-                return v
-    return str(x)
+# _to_text は utils.py から統合インポート済み
 
 
 def _normalize_text(s: str) -> str:

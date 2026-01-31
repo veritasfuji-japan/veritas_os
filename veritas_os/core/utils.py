@@ -171,6 +171,44 @@ def _truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
     return text[:max_len - len(suffix)] + suffix
 
 
+def _to_text(x: Any) -> str:
+    """
+    任意の値をテキスト文字列に変換する。
+
+    辞書の場合は一般的なテキストフィールド（query, title, description等）を探索し、
+    最初に見つかった非空文字列を返す。
+
+    Args:
+        x: 変換対象の値（None, str, dict, その他）
+
+    Returns:
+        テキスト文字列。Noneの場合は空文字列。
+
+    Examples:
+        >>> _to_text(None)
+        ''
+        >>> _to_text("hello")
+        'hello'
+        >>> _to_text({"title": "Test", "description": "Desc"})
+        'Test'
+        >>> _to_text({"query": "Search term"})
+        'Search term'
+        >>> _to_text(123)
+        '123'
+    """
+    if x is None:
+        return ""
+    if isinstance(x, str):
+        return x
+    if isinstance(x, dict):
+        # 一般的なテキストフィールドを優先順位で探索
+        for k in ("query", "title", "text", "description", "prompt"):
+            v = x.get(k)
+            if isinstance(v, str) and v:
+                return v
+    return str(x)
+
+
 __all__ = [
     # 数値変換
     "_safe_float",
@@ -181,4 +219,5 @@ __all__ = [
     # 辞書・文字列
     "_get_nested",
     "_truncate",
+    "_to_text",
 ]
