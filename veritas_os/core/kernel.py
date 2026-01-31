@@ -160,6 +160,29 @@ INTENT_PATTERNS = {
     "plan": re.compile(r"(計画|進め|やるべき|todo|最小ステップ|スケジュール|plan)", re.I),
 }
 
+INTENT_OPTION_TEMPLATES = {
+    "weather": [
+        "天気アプリ/サイトで明日の予報を確認する",
+        "降水確率が高い時間にリマインドを設定する",
+        "傘・レインウェア・防水靴を準備する",
+    ],
+    "health": [
+        "今日は休息し回復を最優先にする",
+        "15分の軽い散歩で血流を上げる",
+        "短時間サウナ＋十分な水分補給を行う",
+    ],
+    "learn": [
+        "一次情報（公式/論文）を調べる",
+        "要点を3行に要約する",
+        "学んだことを1つだけ行動に落とす",
+    ],
+    "plan": [
+        "最小ステップで前進する",
+        "情報収集を優先する",
+        "今日は休息し回復に充てる",
+    ],
+}
+
 
 def _detect_intent(q: str) -> str:
     q = (q or "").strip().lower()
@@ -170,29 +193,8 @@ def _detect_intent(q: str) -> str:
 
 
 def _gen_options_by_intent(intent: str) -> List[OptionDict]:
-    if intent == "weather":
-        return [
-            _mk_option("天気アプリ/サイトで明日の予報を確認する"),
-            _mk_option("降水確率が高い時間にリマインドを設定する"),
-            _mk_option("傘・レインウェア・防水靴を準備する"),
-        ]
-    if intent == "health":
-        return [
-            _mk_option("今日は休息し回復を最優先にする"),
-            _mk_option("15分の軽い散歩で血流を上げる"),
-            _mk_option("短時間サウナ＋十分な水分補給を行う"),
-        ]
-    if intent == "learn":
-        return [
-            _mk_option("一次情報（公式/論文）を調べる"),
-            _mk_option("要点を3行に要約する"),
-            _mk_option("学んだことを1つだけ行動に落とす"),
-        ]
-    return [
-        _mk_option("最小ステップで前進する"),
-        _mk_option("情報収集を優先する"),
-        _mk_option("今日は休息し回復に充てる"),
-    ]
+    templates = INTENT_OPTION_TEMPLATES.get(intent, INTENT_OPTION_TEMPLATES["plan"])
+    return [_mk_option(title) for title in templates]
 
 
 # ============================================================
@@ -1122,7 +1124,6 @@ async def decide(
         "decision_status": decision_status,
         "rejection_reason": rejection_reason,
     }
-
 
 
 
