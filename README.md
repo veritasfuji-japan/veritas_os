@@ -186,7 +186,13 @@ pytest
 pytest --cov=veritas_os
 ```
 
-> Note: Coverage badges are planned; CI is available via GitHub Actions.
+### CI / Quality Gate
+
+* GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix.
+* Coverage artifacts are stored as **XML/HTML** outputs (badges are not yet in place).
+* The CI job fails if tests fail, acting as a quality gate.
+
+> Note: Coverage badges are planned.
 
 ---
 
