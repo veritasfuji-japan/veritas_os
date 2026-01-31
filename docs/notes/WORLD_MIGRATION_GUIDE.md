@@ -106,17 +106,20 @@ simulate_decision(option, context, world_state)
 
 ```bash
 # 既存ファイルをバックアップ
+cd /workspace/veritas_os
 cp veritas_os/core/world.py veritas_os/core/world.py.backup
 cp veritas_os/core/world_model.py veritas_os/core/world_model.py.backup
 
 # データファイルもバックアップ
-cp ~/veritas/world_state.json ~/veritas/world_state.json.backup
+DATA_DIR="${VERITAS_DATA_DIR:-$HOME/veritas}"
+cp "${DATA_DIR}/world_state.json" "${DATA_DIR}/world_state.json.backup"
 ```
 
 ### Step 2: 統合版を配置
 
 ```bash
 # 統合版をworld.pyとして配置
+cd /workspace/veritas_os
 cp world.py veritas_os/core/world.py
 
 # world_model.pyは削除（または.oldにリネーム）
@@ -141,6 +144,7 @@ from veritas_os.core.world import update_from_decision
 
 ```bash
 # 基本動作テスト
+cd /workspace/veritas_os
 python -c "
 from veritas_os.core import world
 
@@ -547,7 +551,7 @@ cp ~/veritas/world_state.json ~/veritas/world_state.json.backup
 
 ### 最終ファイル
 
-**[world.py](computer:///mnt/user-data/outputs/world.py)** - 統合版（950行）
+**/workspace/veritas_os/veritas_os/core/world.py** - 統合版（950行）
 
 ---
 

@@ -4,6 +4,27 @@
 
 VERITAS OSのAGIベンチマークシステムと自己改善ループを完全に統合し、「ベンチ実行 → 結果分析 → タスク生成 → 実装 → 検証」のサイクルを実現します。
 
+## 現行環境仕様（前提）
+
+本ドキュメントのコマンドは、リポジトリ直下（例: `/workspace/veritas_os`）で
+Python 3.11 の仮想環境を有効化した前提で記載します。
+
+```bash
+cd /workspace/veritas_os
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+必要に応じて、以下の環境変数を設定してください。
+
+```bash
+export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+export VERITAS_API_KEY="your-secret-api-key"
+export LLM_PROVIDER="openai"
+export LLM_MODEL="gpt-4.1-mini"
+```
+
 ---
 
 ## システム構成
@@ -176,7 +197,7 @@ python scripts/bench_summary.py
 **出力例**:
 ```
 === VERITAS Bench Summary ===
-対象ディレクトリ: /path/to/logs/benchmarks
+対象ディレクトリ: /workspace/veritas_os/scripts/logs/benchmarks
 集計日時: 2025-01-30 14:40:00
 
 [agi_veritas_self_hosting] VERITAS self-hosting AGI research OS design
@@ -515,7 +536,7 @@ for bench_id, ts in sorted(times.items()):
 
 ```bash
 # cron設定例（毎週月曜 9:00）
-0 9 * * 1 cd /path/to/veritas_os && python scripts/run_benchmarks_improved.py --all
+0 9 * * 1 cd /workspace/veritas_os && python scripts/run_benchmarks_improved.py --all
 ```
 
 ### 2. Gitとの統合
