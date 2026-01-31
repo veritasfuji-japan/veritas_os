@@ -185,7 +185,7 @@ class VeritasConfig:
     api_key_str: str = field(
         default_factory=lambda: os.getenv(
             "VERITAS_API_KEY",
-            "YOUR_VERITAS_PUBLIC_API_KEY_HERE",
+            "",
         )
     )
     api_secret: str = field(
