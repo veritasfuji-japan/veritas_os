@@ -110,6 +110,45 @@ RISKY_KEYWORDS_POC = re.compile(
     re.IGNORECASE
 )
 
+_PROMPT_INJECTION_PATTERNS: List[tuple[re.Pattern[str], float, str]] = [
+    (
+        re.compile(
+            r"(ignore|disregard|override).{0,40}"
+            r"(system|previous|developer|safety|policy)",
+            re.IGNORECASE,
+        ),
+        0.4,
+        "override_instructions",
+    ),
+    (
+        re.compile(
+            r"(reveal|show|leak).{0,40}"
+            r"(system prompt|developer message|policy)",
+            re.IGNORECASE,
+        ),
+        0.4,
+        "reveal_system",
+    ),
+    (
+        re.compile(r"\b(jailbreak|dan|prompt injection)\b", re.IGNORECASE),
+        0.5,
+        "jailbreak_keyword",
+    ),
+    (
+        re.compile(
+            r"(bypass|disable).{0,30}(safety|guard|policy|filter)",
+            re.IGNORECASE,
+        ),
+        0.5,
+        "bypass_safety",
+    ),
+    (
+        re.compile(r"(act as|roleplay).{0,30}(system|developer|root)", re.IGNORECASE),
+        0.2,
+        "role_override",
+    ),
+]
+
 
 # =========================================================
 # データ構造
@@ -226,6 +265,26 @@ def _build_followups(text: str, context: Dict[str, Any]) -> List[FujiFollowup]:
             ],
         },
     ]
+
+
+def _detect_prompt_injection(text: str) -> Dict[str, Any]:
+    """
+    FUJI Gate に対するプロンプトインジェクションの兆候を検出する。
+
+    安全ヘッド自体をハックしようとする試行に対する防御層として、
+    ルールベースでシグナルを抽出しスコア化する。
+    """
+    score = 0.0
+    signals: List[str] = []
+    if not text:
+        return {"score": 0.0, "signals": signals}
+
+    for pattern, weight, label in _PROMPT_INJECTION_PATTERNS:
+        if pattern.search(text):
+            score += weight
+            signals.append(label)
+
+    return {"score": min(1.0, score), "signals": signals}
 
 
 # ---------------------------------------------------------
@@ -523,6 +582,18 @@ def fuji_core_decide(
     base_reasons: List[str] = []
     guidance = safety_head.rationale or ""
 
+    injection = _detect_prompt_injection(text)
+    injection_score = float(injection.get("score", 0.0) or 0.0)
+    injection_signals = list(injection.get("signals") or [])
+    if injection_score > 0.0:
+        categories.append("prompt_injection")
+        risk = min(1.0, risk + (0.15 * injection_score))
+        base_reasons.append(f"prompt_injection_score={injection_score:.2f}")
+        if injection_signals:
+            base_reasons.append(
+                "prompt_injection_signals=" + ",".join(sorted(injection_signals))
+            )
+
     def _extract_policy_action(pol_res: Dict[str, Any], reasons: List[str]) -> str | None:
         pa = pol_res.get("policy_action")
         if isinstance(pa, str) and pa:
@@ -750,6 +821,10 @@ def fuji_core_decide(
             "min_evidence": int(min_evidence),
             "policy_action_pre_poc": policy_action_pre,
             "final_gate": final_gate,
+            "prompt_injection": {
+                "score": float(injection_score),
+                "signals": sorted(injection_signals),
+            },
         },
     }
 
@@ -1054,8 +1129,6 @@ __all__ = [
     "posthoc_check",
     "reload_policy",
 ]
-
-
 
 
 
