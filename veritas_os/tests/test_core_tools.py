@@ -124,6 +124,24 @@ def test_call_tool_web_search_branch_uses_query_and_max_results(clean_tools_stat
     assert captured["max_results"] == 3
 
 
+def test_call_tool_normalizes_kind_for_registry_lookup(clean_tools_state):
+    captured: Dict[str, Any] = {}
+
+    def dummy_web_search(query: str, max_results: int = 5):
+        captured["query"] = query
+        captured["max_results"] = max_results
+        return {"ok": True, "results": [query], "error": None}
+
+    tools.ALLOWED_TOOLS.add("web_search")
+    tools.TOOL_REGISTRY["web_search"] = dummy_web_search
+
+    resp = tools.call_tool(" Web_Search ", query="veritas", max_results=1)
+    assert resp["ok"] is True
+    assert resp["results"] == ["veritas"]
+    assert captured["query"] == "veritas"
+    assert captured["max_results"] == 1
+
+
 # =========================
 # ツール管理 API
 # =========================
@@ -218,4 +236,3 @@ def test_get_tool_stats_counts_success_and_status(clean_tools_state):
     # success_rate が 0〜1 の範囲で、1/2 付近
     assert 0.0 <= stats["success_rate"] <= 1.0
     assert math.isclose(stats["success_rate"], 0.5, rel_tol=1e-6)
-
