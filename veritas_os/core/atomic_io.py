@@ -24,7 +24,7 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Union
 
 # Optional numpy support
 try:

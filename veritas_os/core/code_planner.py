@@ -16,13 +16,13 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, asdict
-from datetime import datetime
 from datetime import datetime, timezone
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import world as world_model
+from .utils import _safe_float
 
 # ==== パス設定 ====
 
@@ -75,17 +75,8 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
     return candidates[0][1]
 
 
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return default
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-    # もし "Z" が好きなら:
-    # return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ==== データ構造（コード変更プラン） ====

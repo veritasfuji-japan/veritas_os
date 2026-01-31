@@ -27,6 +27,7 @@ from .types import (
     DebateViewpoint,
     CritiquePoint,
 )
+from .utils import _safe_float
 
 import asyncio
 import inspect
@@ -106,13 +107,6 @@ def run_env_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 # ============================================================
 # ユーティリティ
 # ============================================================
-
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return default
-
 
 def _tokens(s: str) -> List[str]:
     s = (s or "").replace("　", " ").lower()

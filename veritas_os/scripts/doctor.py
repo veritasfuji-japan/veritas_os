@@ -19,27 +19,6 @@ from pathlib import Path
 from datetime import datetime
 
 # ==== パス定義 ====
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""VERITAS Doctor (enhanced with TrustLog validation)
-veritas_os/scripts/logs 配下のログを解析して、
-同じフォルダに doctor_report.json を出力する。
-
-v2.0 新機能:
-- TrustLog ハッシュチェーン検証
-- より詳細な診断情報
-"""
-
-import os
-import json
-import glob
-import hashlib
-import statistics
-from pathlib import Path
-from datetime import datetime
-
-# ==== パス定義 ====
 # doctor.py の場所: veritas_os/scripts/doctor.py を想定
 HERE = Path(__file__).resolve().parent          # .../veritas_os/scripts
 REPO_ROOT = HERE.parent                         # .../veritas_os
