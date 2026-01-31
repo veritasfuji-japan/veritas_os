@@ -280,12 +280,34 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
 
 _POLICY_PATH = _policy_path()
 POLICY: Dict[str, Any] = _load_policy(_POLICY_PATH)
+_POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime if _POLICY_PATH.exists() else 0.0
 
 
 def reload_policy() -> Dict[str, Any]:
-    global POLICY
-    POLICY = _load_policy(_policy_path())
+    """ポリシーを強制的にリロードする"""
+    global POLICY, _POLICY_MTIME
+    path = _policy_path()
+    POLICY = _load_policy(path)
+    _POLICY_MTIME = path.stat().st_mtime if path.exists() else 0.0
     return POLICY
+
+
+def _check_policy_hot_reload() -> None:
+    """
+    ポリシーファイルの変更を検知して自動リロードする。
+    validate() / validate_action() 呼び出し時に実行される。
+    """
+    global POLICY, _POLICY_MTIME
+    path = _policy_path()
+    if not path.exists():
+        return
+    try:
+        current_mtime = path.stat().st_mtime
+        if current_mtime > _POLICY_MTIME:
+            POLICY = _load_policy(path)
+            _POLICY_MTIME = current_mtime
+    except OSError:
+        pass  # ファイルアクセスエラーは無視
 
 
 # =========================================================
@@ -728,6 +750,9 @@ def fuji_gate(
     evidence: List[Dict[str, Any]] | None = None,
     alternatives: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
+    # ポリシーファイルのホットリロードチェック
+    _check_policy_hot_reload()
+
     ctx = context or {}
     alts = alternatives or []
 
