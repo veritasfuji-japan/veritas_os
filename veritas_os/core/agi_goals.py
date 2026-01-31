@@ -16,17 +16,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .utils import _safe_float
+
 
 # ============================================================
 # ユーティリティ
 # ============================================================
-
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return default
-
 
 def _clip01(x: float) -> float:
     if x < 0.0:

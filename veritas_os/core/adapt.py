@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from .config import cfg  # VERITAS の設定オブジェクト
 from .atomic_io import atomic_write_json
+from .utils import _safe_float
 
 
 # ==== NEW: プロジェクト内に保存するパス ============================
@@ -17,14 +18,6 @@ from .atomic_io import atomic_write_json
 VERITAS_DIR = cfg.log_dir  # = Path(.../veritas_os/scripts/logs)
 PERSONA_JSON = str(VERITAS_DIR / "persona.json")
 TRUST_JSONL = str(VERITAS_DIR / "trust_log.jsonl")
-
-
-def _safe_float(x: Any, d: float = 0.0) -> float:
-    """float 化できなければデフォルト d を返す簡易ユーティリティ。"""
-    try:
-        return float(x)
-    except Exception:
-        return d
 
 
 # =====================================
@@ -90,7 +83,7 @@ def clean_bias_weights(
 
     tmp: Dict[str, float] = {}
     for k, v in bias.items():
-        x = _safe_float(v, d=0.0)
+        x = _safe_float(v, default=0.0)
 
         # 0..1 にクリップ
         if x < 0.0:
@@ -292,7 +285,6 @@ def update_persona_bias_from_history(window: int = 50) -> Dict[str, Any]:
 
 
 __all__ = [
-    "_safe_float",
     "clean_bias_weights",
     "load_persona",
     "save_persona",

@@ -44,6 +44,7 @@ from .types import (
     EvidenceDict,
     ISOTimestamp,
 )
+from .utils import _safe_float
 
 # ---------------------------------------------------------
 # 依存モジュール（存在しない場合はフォールバック）
@@ -121,13 +122,6 @@ class SafetyHeadResult:
 # =========================================================
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def _safe_float(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
-    except Exception:
-        return default
 
 
 def _safe_int(x: Any, default: int) -> int:
