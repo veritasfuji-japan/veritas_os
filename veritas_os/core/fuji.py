@@ -73,12 +73,18 @@ except Exception:  # pragma: no cover
 
 # =========================================================
 # しきい値 & 簡易ヒューリスティック（フォールバック用）
+# ★ リファクタリング: config.fuji_cfg から設定を取得
 # =========================================================
-DEFAULT_MIN_EVIDENCE = 1
-MAX_UNCERTAINTY = 0.60
-
-# PoCモードON: export VERITAS_POC_MODE=1
-_ENV_POC_MODE = os.getenv("VERITAS_POC_MODE", "0") == "1"
+try:
+    from .config import fuji_cfg as _fuji_cfg
+    DEFAULT_MIN_EVIDENCE = _fuji_cfg.default_min_evidence
+    MAX_UNCERTAINTY = _fuji_cfg.max_uncertainty
+    _ENV_POC_MODE = _fuji_cfg.poc_mode
+except Exception:
+    # フォールバック: config が壊れていてもfuji.pyは動作する
+    DEFAULT_MIN_EVIDENCE = 1
+    MAX_UNCERTAINTY = 0.60
+    _ENV_POC_MODE = os.getenv("VERITAS_POC_MODE", "0") == "1"
 
 # 危険・違法系の簡易ワード（Safety Head が落ちた時の fallback 用）
 BANNED_KEYWORDS = {
@@ -601,18 +607,30 @@ def fuji_core_decide(
             )
 
     # --- 既に PII セーフ化済みの場合の緩和 ---
+    # ★ リファクタリング: 設定値から取得
+    try:
+        pii_safe_cap = _fuji_cfg.pii_safe_risk_cap
+    except Exception:
+        pii_safe_cap = 0.40
+
     if safe_applied:
         filtered = [c for c in categories if str(c).lower() not in ("pii", "pii_exposure")]
         if len(filtered) < len(categories):
             categories = filtered
-            risk = min(risk, 0.40)
+            risk = min(risk, pii_safe_cap)
             base_reasons.append("pii_safe_applied")
 
     # --- evidence 不足ペナルティ（テスト要件：guidance に文言を入れる） ---
+    # ★ リファクタリング: 設定値から取得
+    try:
+        low_ev_penalty = _fuji_cfg.low_evidence_risk_penalty
+    except Exception:
+        low_ev_penalty = 0.10
+
     low_ev = evidence_count < int(min_evidence)
     if low_ev:
         categories.append("low_evidence")
-        risk = min(1.0, risk + 0.10)
+        risk = min(1.0, risk + low_ev_penalty)
         base_reasons.append(f"low_evidence({evidence_count}/{min_evidence})")
 
         # ★ テスト期待：この文字列を guidance に含める
@@ -622,8 +640,14 @@ def fuji_core_decide(
             guidance = (guidance + ("\n\n" if guidance else "") + add_msg)
 
     # --- telos_score による軽いスケーリング ---
+    # ★ リファクタリング: 設定値から取得
+    try:
+        telos_risk_scale = _fuji_cfg.telos_risk_scale_factor
+    except Exception:
+        telos_risk_scale = 0.10
+
     telos_clamped = max(0.0, min(1.0, telos_score))
-    risk *= (1.0 + 0.10 * telos_clamped)
+    risk *= (1.0 + telos_risk_scale * telos_clamped)
     risk = min(1.0, max(0.0, risk))
 
     # --- Policy Engine 適用 ---

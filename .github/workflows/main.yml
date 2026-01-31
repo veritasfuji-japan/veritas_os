@@ -65,7 +65,8 @@ jobs:
             httpx \
             anyio \
             pytest \
-            pytest-cov
+            pytest-cov \
+            pytest-asyncio
 
       - name: Run tests (with coverage)
         id: pytest

@@ -1,9 +1,16 @@
 # veritas/core/config.py
+"""
+VERITAS OS 設定モジュール
+
+すべての設定値を一元管理し、マジックナンバーを排除します。
+環境変数による上書きも可能です。
+"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Dict, List, Any
 
 
 def _parse_cors_origins(raw_value: str) -> list[str]:
@@ -11,6 +18,165 @@ def _parse_cors_origins(raw_value: str) -> list[str]:
     if not raw_value:
         return []
     return [value.strip() for value in raw_value.split(",") if value.strip()]
+
+
+def _parse_float(env_key: str, default: float) -> float:
+    """環境変数からfloatを取得"""
+    val = os.getenv(env_key)
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except ValueError:
+        return default
+
+
+def _parse_int(env_key: str, default: int) -> int:
+    """環境変数からintを取得"""
+    val = os.getenv(env_key)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except ValueError:
+        return default
+
+
+# =============================================================================
+# スコアリング設定（kernel.py から外部化）
+# =============================================================================
+
+@dataclass
+class ScoringConfig:
+    """
+    alternatives スコアリングの設定値
+
+    kernel.py の _score_alternatives() で使用されるマジックナンバーを
+    設定として外部化したもの。
+    """
+    # Intent別ボーナス
+    intent_weather_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_INTENT_WEATHER_BONUS", 0.4)
+    )
+    intent_health_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_INTENT_HEALTH_BONUS", 0.4)
+    )
+    intent_learn_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_INTENT_LEARN_BONUS", 0.35)
+    )
+    intent_plan_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_INTENT_PLAN_BONUS", 0.3)
+    )
+
+    # クエリマッチングボーナス
+    query_match_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_QUERY_MATCH_BONUS", 0.2)
+    )
+
+    # High stakes時のボーナス
+    high_stakes_threshold: float = field(
+        default_factory=lambda: _parse_float("VERITAS_HIGH_STAKES_THRESHOLD", 0.7)
+    )
+    high_stakes_bonus: float = field(
+        default_factory=lambda: _parse_float("VERITAS_HIGH_STAKES_BONUS", 0.2)
+    )
+
+    # Persona bias 乗数
+    persona_bias_multiplier: float = field(
+        default_factory=lambda: _parse_float("VERITAS_PERSONA_BIAS_MULTIPLIER", 0.3)
+    )
+
+    # Telos スコアスケーリング
+    telos_scale_base: float = field(
+        default_factory=lambda: _parse_float("VERITAS_TELOS_SCALE_BASE", 0.9)
+    )
+    telos_scale_factor: float = field(
+        default_factory=lambda: _parse_float("VERITAS_TELOS_SCALE_FACTOR", 0.2)
+    )
+
+
+# =============================================================================
+# FUJI Gate 設定（fuji.py から外部化）
+# =============================================================================
+
+@dataclass
+class FujiConfig:
+    """
+    FUJI Gate の設定値
+
+    fuji.py の閾値やペナルティ値を設定として外部化。
+    """
+    # Evidence 関連
+    default_min_evidence: int = field(
+        default_factory=lambda: _parse_int("VERITAS_MIN_EVIDENCE", 1)
+    )
+    max_uncertainty: float = field(
+        default_factory=lambda: _parse_float("VERITAS_MAX_UNCERTAINTY", 0.60)
+    )
+    low_evidence_risk_penalty: float = field(
+        default_factory=lambda: _parse_float("VERITAS_LOW_EVIDENCE_PENALTY", 0.10)
+    )
+
+    # Safety Head エラー時のベースリスク
+    safety_head_error_base_risk: float = field(
+        default_factory=lambda: _parse_float("VERITAS_SAFETY_HEAD_ERROR_RISK", 0.30)
+    )
+
+    # Telos スコアによるリスクスケーリング
+    telos_risk_scale_factor: float = field(
+        default_factory=lambda: _parse_float("VERITAS_TELOS_RISK_SCALE", 0.10)
+    )
+
+    # PII safe applied 時のリスク上限
+    pii_safe_risk_cap: float = field(
+        default_factory=lambda: _parse_float("VERITAS_PII_SAFE_RISK_CAP", 0.40)
+    )
+
+    # name_like_only 時のリスク上限
+    name_like_only_risk_cap: float = field(
+        default_factory=lambda: _parse_float("VERITAS_NAME_LIKE_RISK_CAP", 0.20)
+    )
+
+    # PoC モード
+    poc_mode: bool = field(
+        default_factory=lambda: os.getenv("VERITAS_POC_MODE", "0") == "1"
+    )
+
+
+# =============================================================================
+# パイプライン設定
+# =============================================================================
+
+@dataclass
+class PipelineConfig:
+    """
+    決定パイプラインの設定値
+    """
+    # Memory 検索
+    memory_search_limit: int = field(
+        default_factory=lambda: _parse_int("VERITAS_MEMORY_SEARCH_LIMIT", 8)
+    )
+    evidence_top_k: int = field(
+        default_factory=lambda: _parse_int("VERITAS_EVIDENCE_TOP_K", 5)
+    )
+
+    # Planner
+    max_plan_steps: int = field(
+        default_factory=lambda: _parse_int("VERITAS_MAX_PLAN_STEPS", 10)
+    )
+
+    # Debate
+    debate_timeout_seconds: int = field(
+        default_factory=lambda: _parse_int("VERITAS_DEBATE_TIMEOUT", 30)
+    )
+
+    # Auto-adjust
+    persona_update_window: int = field(
+        default_factory=lambda: _parse_int("VERITAS_PERSONA_UPDATE_WINDOW", 50)
+    )
+    persona_bias_increment: float = field(
+        default_factory=lambda: _parse_float("VERITAS_PERSONA_BIAS_INCREMENT", 0.05)
+    )
 
 
 @dataclass
@@ -102,3 +268,8 @@ class VeritasConfig:
 
 
 cfg = VeritasConfig()
+
+# サブ設定インスタンス（各モジュールからインポート可能）
+scoring_cfg = ScoringConfig()
+fuji_cfg = FujiConfig()
+pipeline_cfg = PipelineConfig()
