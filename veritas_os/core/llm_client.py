@@ -275,8 +275,11 @@ def _get_headers(provider: str) -> Dict[str, str]:
     if provider == LLMProvider.GOOGLE.value:
         if not api_key:
             raise LLMError("GOOGLE_API_KEY not set")
-        # Gemini は URLパラメータで key を渡すのでヘッダは Content-Type だけ
-        return {"Content-Type": "application/json"}
+        # Gemini は x-goog-api-key ヘッダーで認証（URLパラメータより安全）
+        return {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        }
 
     if provider == LLMProvider.OLLAMA.value:
         return {"Content-Type": "application/json"}
@@ -363,10 +366,9 @@ def chat(
         extra_messages=extra_messages,
     )
 
-    # Gemini は endpoint + model + ?key=... の形式
+    # Gemini は endpoint + model + :generateContent の形式（認証はヘッダー経由）
     if provider == LLMProvider.GOOGLE.value:
-        api_key = _get_api_key(provider)
-        endpoint = f"{endpoint}/{model}:generateContent?key={api_key}"
+        endpoint = f"{endpoint}/{model}:generateContent"
 
     last_error: Optional[Exception] = None
 

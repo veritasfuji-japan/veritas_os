@@ -371,10 +371,12 @@ def test_chat_gemini_success(monkeypatch):
     seen = {}
 
     def fake_post(url, headers, json, timeout):
-        # model と key が URL に埋め込まれているはず
+        # model が URL に埋め込まれ、API keyはヘッダー経由
         seen["url"] = url
+        seen["headers"] = headers
         assert "gemini-pro" in url
-        assert "key=gk-test" in url
+        assert "key=" not in url  # URLにキーは含まれない
+        assert headers.get("x-goog-api-key") == "gk-test"  # ヘッダーで認証
         data = {
             "candidates": [
                 {"content": {"parts": [{"text": "hi from gemini"}]}}

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any
 import json, os, time
+import fcntl
 
 
 # === Utility: remove numbers to prevent ValueCore mis-detection ===
@@ -350,7 +351,12 @@ def append_trust_log(
             rec["extra"] = extra
 
         with log_file.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+                f.flush()
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
         # デバッグ用ログ
         print(f"[ValueCore] trust_log appended: user={user_id}, score={s}")
