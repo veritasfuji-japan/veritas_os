@@ -249,13 +249,18 @@ def rebuild_vector_index():
 #### 1. 依存関係のインストール
 
 ```bash
-pip install sentence-transformers --break-system-packages
+cd /workspace/veritas_os
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install sentence-transformers
 ```
 
 #### 2. ファイル置き換え
 
 ```bash
-cp memory_improved.py /path/to/veritas_os/core/memory.py
+cd /workspace/veritas_os
+cp memory_improved.py veritas_os/core/memory.py
 ```
 
 #### 3. インデックスの構築
@@ -466,8 +471,13 @@ Score: 0.701 | ReasonOS と PlannerOS の統合方針
 
 **解決策**:
 ```bash
-pip install sentence-transformers --break-system-packages
+cd /workspace/veritas_os
+source .venv/bin/activate
+pip install sentence-transformers
 ```
+
+**警告**: グローバル環境での `pip install --break-system-packages` は依存破壊の
+リスクがあります。必ず仮想環境（`.venv`）内で実行してください。
 
 ---
 

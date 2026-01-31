@@ -27,6 +27,7 @@ import asyncio
 import inspect
 import json
 import os
+import re
 import secrets
 import time
 from datetime import datetime, timezone
@@ -172,6 +173,13 @@ except Exception:  # pragma: no cover
     def load_persona() -> dict:  # type: ignore
         return {"name": "fallback", "mode": "minimal"}
 
+try:
+    from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
+    _HAS_SANITIZE = True
+except Exception:  # pragma: no cover
+    _mask_pii = None  # type: ignore
+    _HAS_SANITIZE = False
+
 
 # =========================================================
 # util helpers
@@ -196,6 +204,33 @@ def _to_dict(o: Any) -> Dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _redact_text(text: str) -> str:
+    """Return a PII-masked string for logs and memory persistence."""
+    if not text:
+        return text
+    if _HAS_SANITIZE and _mask_pii is not None:
+        try:
+            return _mask_pii(text)
+        except Exception:
+            pass
+    text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
+    text = re.sub(r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b", "[redacted:phone]", text)
+    return text
+
+
+def redact_payload(value: Any) -> Any:
+    """Recursively mask PII in strings before persisting logs or memory."""
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, dict):
+        return {k: redact_payload(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_payload(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(redact_payload(v) for v in value)
+    return value
 
 
 def _get_request_params(request: Any) -> Dict[str, Any]:
@@ -2824,6 +2859,7 @@ async def run_decide_pipeline(
             "critique_mode": (critique or {}).get("mode") if isinstance(critique, dict) else None,
             "critique_reason": (critique or {}).get("reason") if isinstance(critique, dict) else None,
         }
+        audit_entry = redact_payload(audit_entry)
         append_trust_log(audit_entry)
         write_shadow_decide(request_id, body, chosen, float(telos), fuji_dict)
     except Exception as e:
@@ -2845,11 +2881,8 @@ async def run_decide_pipeline(
         store2 = _get_memory_store()
         if store2 is not None:
             decision_key = f"decision_{request_id}"
-            _memory_put(
-                store2,
-                user_id,
-                key=decision_key,
-                value={
+            decision_value = redact_payload(
+                {
                     "kind": "decision",
                     "request_id": request_id,
                     "query": query,
@@ -2858,15 +2891,18 @@ async def run_decide_pipeline(
                     "values": payload.get("values"),
                     "extras": payload.get("extras"),
                     "created_at": utc_now_iso_z(),
-                },
+                }
             )
-
-            episode_key = f"episode_{int(time.time())}_{request_id[:8]}"
             _memory_put(
                 store2,
                 user_id,
-                key=episode_key,
-                value={
+                key=decision_key,
+                value=decision_value,
+            )
+
+            episode_key = f"episode_{int(time.time())}_{request_id[:8]}"
+            episode_value = redact_payload(
+                {
                     "kind": "episode",
                     "request_id": request_id,
                     "query": query,
@@ -2874,7 +2910,13 @@ async def run_decide_pipeline(
                     "decision_status": payload.get("decision_status"),
                     "rejection_reason": payload.get("rejection_reason"),
                     "created_at": utc_now_iso_z(),
-                },
+                }
+            )
+            _memory_put(
+                store2,
+                user_id,
+                key=episode_key,
+                value=episode_value,
             )
     except Exception as e:
         extras_tmp = payload.setdefault("extras", {})
