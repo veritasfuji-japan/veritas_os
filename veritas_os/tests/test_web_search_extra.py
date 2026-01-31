@@ -103,6 +103,13 @@ class TestIsBlockedResult:
             "https://www.veritas.com/product"
         ) is True
 
+    def test_blocks_veritas_com_without_scheme(self):
+        assert web_search_mod._is_blocked_result(
+            "Veritas Storage",
+            "backup solutions",
+            "veritas.com/product"
+        ) is True
+
     def test_allows_clean_result(self):
         assert web_search_mod._is_blocked_result(
             "Python Tutorial",
@@ -116,6 +123,20 @@ class TestIsBlockedResult:
             "ISO Certification",
             "Quality management",
             "https://www.bureauveritas.co.jp/services"
+        ) is True
+
+    def test_allows_veritas_substring_in_path(self):
+        assert web_search_mod._is_blocked_result(
+            "Example",
+            "Some snippet",
+            "https://example.com/path/veritas.com/info"
+        ) is False
+
+    def test_blocks_invalid_url_without_hostname(self):
+        assert web_search_mod._is_blocked_result(
+            "Example",
+            "Some snippet",
+            "http:///path/only"
         ) is True
 
 
