@@ -27,7 +27,7 @@ from .types import (
     DebateViewpoint,
     CritiquePoint,
 )
-from .utils import _safe_float
+from .utils import _safe_float, _to_text
 
 import asyncio
 import inspect
@@ -113,16 +113,7 @@ def _tokens(s: str) -> List[str]:
     return [t for t in s.split() if t]
 
 
-def _to_text(x: Any) -> str:
-    if x is None:
-        return ""
-    if isinstance(x, str):
-        return x
-    if isinstance(x, dict):
-        for k in ("title", "text", "description", "prompt"):
-            if k in x and isinstance(x[k], str):
-                return x[k]
-    return str(x)
+# _to_text は utils.py から統合インポート済み
 
 
 def _mk_option(title: str, description: str = "", _id: Optional[str] = None) -> OptionDict:
