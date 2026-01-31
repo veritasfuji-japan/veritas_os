@@ -134,13 +134,15 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
                 "meta": dict | None
             }
     """
+    normalized_kind = str(kind).strip().lower()
+
     # 許可チェック
-    if not allowed(kind):
-        error_msg = f"Tool not allowed: {kind}"
+    if not allowed(normalized_kind):
+        error_msg = f"Tool not allowed: {normalized_kind}"
         logger.error(error_msg)
 
         _log_tool_usage(
-            tool=kind,
+            tool=normalized_kind,
             args=kwargs,
             status="denied",
             error=error_msg,
@@ -152,19 +154,21 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             "error": error_msg,
             "meta": {
                 "status": "denied",
-                "reason": "not_in_whitelist" if kind not in ALLOWED_TOOLS else "blocked",
+                "reason": "not_in_whitelist"
+                if normalized_kind not in ALLOWED_TOOLS
+                else "blocked",
             },
         }
 
     # ツール実装の取得
-    tool_impl = TOOL_REGISTRY.get(kind)
+    tool_impl = TOOL_REGISTRY.get(normalized_kind)
 
     if not tool_impl:
-        error_msg = f"Tool implementation not found: {kind}"
+        error_msg = f"Tool implementation not found: {normalized_kind}"
         logger.error(error_msg)
 
         _log_tool_usage(
-            tool=kind,
+            tool=normalized_kind,
             args=kwargs,
             status="not_implemented",
             error=error_msg,
@@ -184,17 +188,17 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         start_time = datetime.now(timezone.utc)
 
         # ツール種別に応じた引数の正規化
-        if kind == "web_search":
+        if normalized_kind == "web_search":
             result = tool_impl(
                 query=kwargs.get("query", ""),
                 max_results=kwargs.get("max_results", 5),
             )
-        elif kind == "github_search":
+        elif normalized_kind == "github_search":
             result = tool_impl(
                 query=kwargs.get("query", ""),
                 max_results=kwargs.get("max_results", 5),
             )
-        elif kind == "llm_safety":
+        elif normalized_kind == "llm_safety":
             result = tool_impl(
                 text=kwargs.get("text", "") or kwargs.get("query", ""),
                 context=kwargs.get("context") or {},
@@ -210,24 +214,28 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 
         # 成功ログ
         _log_tool_usage(
-            tool=kind,
+            tool=normalized_kind,
             args=kwargs,
             status="success",
             latency_ms=latency_ms,
             result=result,
         )
 
-        logger.info(f"Tool executed successfully: {kind} (latency: {latency_ms}ms)")
+        logger.info(
+            "Tool executed successfully: %s (latency: %sms)",
+            normalized_kind,
+            latency_ms,
+        )
 
         # call_tool はツール実装の戻り値をそのまま返す
         return result
 
     except Exception as e:  # pragma: no cover - 例外パス
-        error_msg = f"Tool execution error: {kind} - {str(e)}"
+        error_msg = f"Tool execution error: {normalized_kind} - {str(e)}"
         logger.exception(error_msg)
 
         _log_tool_usage(
-            tool=kind,
+            tool=normalized_kind,
             args=kwargs,
             status="error",
             error=str(e),
@@ -469,6 +477,5 @@ __all__ = [
     "BLOCKED_TOOLS",
     "TOOL_REGISTRY",
 ]
-
 
 
