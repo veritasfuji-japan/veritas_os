@@ -317,94 +317,27 @@ def _score_alternatives(
     ctx: Dict[str, Any] | None = None,
 ) -> None:
     """
-    alternatives に対して
-    - intent 固有のヒューリスティック
-    - persona_bias（ValueCore 用）
-    - Telos スコア
-    を掛け合わせて score / score_raw を更新する。
+    alternatives に対してスコアリングを行う。
 
-    value_core / strategy_core が定義されていればそれも利用し、
-    未定義なら従来ロジックだけでスコアリングする。
+    ★ リファクタリング: kernel_stages.score_alternatives() に委譲。
+    設定値は config.scoring_cfg から取得されるため、マジックナンバーが排除されています。
     """
-    ql = (q or "").lower()
-    bias = persona_bias or {}
-    ctx = ctx or {}
+    from .kernel_stages import score_alternatives as _score_alts_impl
 
-    # value_core / OptionScore が利用可能かどうかを事前チェック
-    vc_compute = getattr(value_core, "compute_value_score", None)
-    OptionScore = getattr(value_core, "OptionScore", None)
-    has_value_core = callable(vc_compute) and OptionScore is not None
-
-    def _kw_hit(title: str, kws: List[str]) -> bool:
-        t = (title or "").lower()
-        return any(k in t for k in kws)
-
-    if not alts:
-        return
-
-    for a in alts:
-        base = _safe_float(a.get("score"), 1.0)
-        title = a.get("title", "") or ""
-        desc = a.get("description", "") or ""
-
-        # ---- intent ヒューリスティック ----
-        if intent == "weather" and _kw_hit(title, ["予報", "降水", "傘", "天気"]):
-            base += 0.4
-        elif intent == "health" and _kw_hit(title, ["休息", "回復", "散歩", "サウナ", "睡眠"]):
-            base += 0.4
-        elif intent == "learn" and _kw_hit(title, ["一次情報", "要約", "行動"]):
-            base += 0.35
-        elif intent == "plan" and _kw_hit(title, ["最小", "情報収集", "休息", "リファクタ", "テスト"]):
-            base += 0.3
-
-        # クエリ内容と候補タイトルの組み合わせによる微調整
-        if any(k in ql for k in ["雨", "降水", "umbrella", "forecast"]) and "傘" in title:
-            base += 0.2
-
-        # stakes が高い場合は「休息・情報収集寄り」をやや優遇
-        if stakes >= 0.7 and _kw_hit(title, ["休息", "回復", "情報"]):
-            base += 0.2
-
-        # ---- persona bias ----
-        by_title = bias.get(title.lower(), 0.0)
-        by_fuzzy = adapt.fuzzy_bias_lookup(bias, title)
-        by_id = bias.get(f"@id:{a.get('id')}", 0.0)
-        bias_boost = max(by_title, by_fuzzy, by_id)
-        base *= (1.0 + 0.3 * bias_boost)
-
-        # ---- Telos スコアによる全体スケール ----
-        base *= (0.9 + 0.2 * max(0.0, min(1.0, telos_score)))
-
-        # ---- value_core があれば ValueScore を乗算 ----
-        if has_value_core:
-            try:
-                persona_weight = float(bias_boost)
-            except Exception:
-                persona_weight = 0.0
-
-            try:
-                opt_score = OptionScore(
-                    id=str(a.get("id") or ""),
-                    title=title,
-                    description=desc,
-                    base_score=base,
-                    telos_score=float(telos_score),
-                    stakes=float(stakes),
-                    persona_bias=persona_weight,
-                    world_projection=a.get("world"),
-                )
-                vscore = float(vc_compute(opt_score))
-                base *= vscore
-            except Exception:
-                # value_core 内部でエラーが出ても全体は止めない
-                pass
-
-        a["score_raw"] = _safe_float(a.get("score"), 1.0)
-        a["score"] = round(base, 4)
+    _score_alts_impl(
+        intent=intent,
+        query=q,
+        alternatives=alts,
+        telos_score=telos_score,
+        stakes=stakes,
+        persona_bias=persona_bias,
+        context=ctx,
+    )
 
     # ---- strategy_core 側でさらにランク付けしたい場合のフック ----
     if strategy_core is not None and hasattr(strategy_core, "score_options"):
         try:
+            bias = persona_bias or {}
             scored = strategy_core.score_options(
                 intent=intent,
                 query=q,
@@ -412,10 +345,9 @@ def _score_alternatives(
                 telos_score=telos_score,
                 stakes=stakes,
                 persona_bias=bias,
-                context=ctx,
+                context=ctx or {},
             )
             if isinstance(scored, list) and scored:
-                # 戻り値の各要素に score があれば kernel 側に反映
                 score_map = {}
                 for o in scored:
                     oid = o.get("id")
@@ -430,7 +362,6 @@ def _score_alternatives(
                     if oid in score_map:
                         a["score"] = round(score_map[oid], 4)
         except Exception:
-            # strategy_core が壊れていても decide 全体は止めない
             pass
 
 
