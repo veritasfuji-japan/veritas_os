@@ -70,7 +70,8 @@ class MemoryStore:
                             or j.get("summary")
                             or j.get("snippet", "")
                         )
-                    except Exception:
+                    except (json.JSONDecodeError, KeyError, TypeError):
+                        # 不正なJSONまたは必須フィールド欠損をスキップ
                         continue
 
             if texts:
@@ -133,7 +134,7 @@ class MemoryStore:
         if "topk" in kwargs and kwargs["topk"] is not None:
             try:
                 k = int(kwargs.pop("topk"))
-            except:
+            except (ValueError, TypeError):
                 pass
 
         query = (query or "").strip()
@@ -171,11 +172,12 @@ class MemoryStore:
                 for item in res:
                     try:
                         _id, sc = item
-                    except Exception:
+                    except (ValueError, TypeError):
+                        # タプルアンパック失敗をスキップ
                         continue
                     try:
                         pairs.append((_id, float(sc)))
-                    except:
+                    except (ValueError, TypeError):
                         pairs.append((_id, 0.0))
 
                 # JSONL 読み込み（ロック内で実行）
@@ -185,10 +187,11 @@ class MemoryStore:
                         for line in f:
                             try:
                                 items.append(json.loads(line))
-                            except:
+                            except json.JSONDecodeError:
                                 pass
-                except:
-                    pass
+                except (OSError, IOError) as e:
+                    # ファイルアクセスエラーをログ出力
+                    print(f"[MemoryStore] Failed to read {FILES[kind]}: {e}")
 
             # ロック外で結果を組み立て（パフォーマンス向上）
             table = {it["id"]: it for it in items}
