@@ -110,11 +110,10 @@ def test_analyze_with_llm_parses_response(monkeypatch):
             return '{"dummy": true}'
 
     class DummyResponses:
-        def __init__(self):
-            self.last_kwargs: Dict[str, Any] | None = None
+        last_kwargs: Dict[str, Any] | None = None
 
         def create(self, **kwargs: Any) -> DummyResponse:
-            self.last_kwargs = kwargs
+            DummyResponses.last_kwargs = kwargs
             return DummyResponse()
 
     class DummyClient:
@@ -140,8 +139,26 @@ def test_analyze_with_llm_parses_response(monkeypatch):
     assert res["rationale"] == "test rationale"
     assert res["model"] == "dummy-safety-model"
     assert "latency_ms" in res["raw"]
+    assert res["raw"]["scoring"]["llm_risk"] == 0.9
     assert "response" in res["raw"]
     assert '"dummy": true' in res["raw"]["response"]
+    assert DummyResponses.last_kwargs["temperature"] == 0
+
+
+def test_score_risk_prefers_heuristic_override():
+    """ヒューリスティックが高い場合は決定論的に上書きされる。"""
+    heuristic = {
+        "risk_score": 0.6,
+        "categories": ["illicit"],
+    }
+    scored = llm_safety._score_risk(
+        llm_risk=0.2,
+        llm_categories=["PII"],
+        heuristic=heuristic,
+    )
+
+    assert scored["risk_score"] >= 0.6
+    assert "heuristic_risk_override" in scored["notes"]
 
 
 # -----------------------------
@@ -283,4 +300,3 @@ def test_run_uses_heuristic_when_no_llm(monkeypatch):
     assert res["ok"] is True
     assert res["model"] == "heuristic_fallback"
     assert res["risk_score"] == 0.05
-

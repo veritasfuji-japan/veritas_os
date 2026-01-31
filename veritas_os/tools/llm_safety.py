@@ -21,7 +21,6 @@ FUJI Gate から呼ばれる「安全ヘッド」。
 
 from __future__ import annotations
 from typing import Any, Dict, List
-from dataclasses import dataclass
 import os
 import re
 import time
@@ -37,9 +36,21 @@ except Exception:  # pragma: no cover
 # ヒューリスティック用キーワード
 # -------------------------------
 _BANNED = {
-    "harm", "kill", "exploit", "illegal", "weapon", "malware", "bomb", 
-"doxx",
-    "毒", "殺", "爆弾", "銃", "兵器", "ハッキング", "違法",
+    "harm",
+    "kill",
+    "exploit",
+    "illegal",
+    "weapon",
+    "malware",
+    "bomb",
+    "doxx",
+    "毒",
+    "殺",
+    "爆弾",
+    "銃",
+    "兵器",
+    "ハッキング",
+    "違法",
 }
 _SENSITIVE = {
     "bio", "pathogen", "drug synthesis", "zero-day", "bypass", "unlock jail",
@@ -104,6 +115,45 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
     }
 
 
+def _score_risk(
+    *,
+    llm_risk: float,
+    llm_categories: List[str],
+    heuristic: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    LLM 出力とヒューリスティックを決定論的に合成する。
+
+    - リスクは max(llm_risk, heuristic_risk) をベースに固定ルールで補正
+    - カテゴリは LLM を優先しつつ重複しない形で併合
+    """
+    heuristic_risk = float(heuristic.get("risk_score", 0.0) or 0.0)
+    heuristic_categories = [str(c) for c in (heuristic.get("categories") or [])]
+
+    combined_categories = list(llm_categories)
+    for cat in heuristic_categories:
+        if cat not in combined_categories:
+            combined_categories.append(cat)
+
+    notes: List[str] = []
+    combined_risk = max(llm_risk, heuristic_risk)
+
+    if heuristic_risk > llm_risk:
+        combined_risk = min(1.0, heuristic_risk + 0.05)
+        notes.append("heuristic_risk_override")
+
+    if "illicit" in heuristic_categories and "illicit" not in llm_categories:
+        combined_risk = min(1.0, max(combined_risk, 0.7))
+        notes.append("illicit_floor")
+
+    return {
+        "risk_score": combined_risk,
+        "categories": combined_categories,
+        "heuristic_risk": heuristic_risk,
+        "notes": notes,
+    }
+
+
 def _llm_available() -> bool:
     if OpenAI is None:
         return False
@@ -143,8 +193,8 @@ def _analyze_with_llm(
         "text": text,
         "stakes": stakes,
         "alternatives_preview": [
-            a.get("title") or a.get("description") or "" for a in 
-(alternatives or [])[:5]
+            a.get("title") or a.get("description") or ""
+            for a in (alternatives or [])[:5]
         ],
     }
 
@@ -152,6 +202,7 @@ def _analyze_with_llm(
     resp = client.responses.create(
         model=model_name,
         reasoning={"effort": "low"},
+        temperature=0,
         input=[
             {
                 "role": "system",
@@ -159,8 +210,7 @@ def _analyze_with_llm(
             },
             {
                 "role": "user",
-                "content": 
-f"CLASSIFY_THIS_INPUT:\n```json\n{user_payload}\n```",
+                "content": f"CLASSIFY_THIS_INPUT:\n```json\n{user_payload}\n```",
             },
         ],
         response_format={
@@ -197,14 +247,31 @@ f"CLASSIFY_THIS_INPUT:\n```json\n{user_payload}\n```",
     cats = out.get("categories") or []
     rat = out.get("rationale") or ""
 
+    heuristic = _heuristic_analyze(text)
+    scoring = _score_risk(
+        llm_risk=risk,
+        llm_categories=[str(c) for c in cats],
+        heuristic=heuristic,
+    )
+    scored_categories = scoring["categories"][:max_categories]
+    scored_risk = float(scoring["risk_score"])
+    scoring_notes = scoring.get("notes") or []
+    if scoring_notes:
+        rat = f"{rat} / scoring={'|'.join(scoring_notes)}"
+
     return {
         "ok": True,
-        "risk_score": max(0.0, min(1.0, risk)),
-        "categories": [str(c) for c in cats][:max_categories],
+        "risk_score": max(0.0, min(1.0, scored_risk)),
+        "categories": scored_categories,
         "rationale": str(rat),
         "model": model_name,
         "raw": {
             "latency_ms": latency_ms,
+            "scoring": {
+                "llm_risk": risk,
+                "heuristic_risk": scoring.get("heuristic_risk"),
+                "notes": scoring_notes,
+            },
             "response": resp.model_dump_json(),  # 監査用
         },
     }
@@ -220,8 +287,7 @@ def run(
     call_tool("llm_safety", ...) から呼ばれるエントリポイント。
     """
     # 強制ヒューリスティックモード（テスト・オフライン用）
-    if os.getenv("VERITAS_SAFETY_MODE", "").lower() in {"heuristic", 
-"local"}:
+    if os.getenv("VERITAS_SAFETY_MODE", "").lower() in {"heuristic", "local"}:
         return _heuristic_analyze(text)
 
     if _llm_available():
