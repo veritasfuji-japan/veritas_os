@@ -45,6 +45,7 @@ from .types import (
     ISOTimestamp,
 )
 from .utils import _safe_float, _to_text
+from .fuji_codes import build_fuji_rejection
 
 # ---------------------------------------------------------
 # 依存モジュール（存在しない場合はフォールバック）
@@ -182,6 +183,41 @@ def _safe_int(x: Any, default: int) -> int:
 
 def _normalize_text(s: str) -> str:
     return (s or "").replace("　", " ").strip().lower()
+
+
+def _resolve_trust_log_id(context: Dict[str, Any]) -> str:
+    """
+    Resolve a trust_log_id from context without altering existing TrustLog behavior.
+    """
+    if context.get("trust_log_id"):
+        return str(context["trust_log_id"])
+    if context.get("request_id"):
+        return str(context["request_id"])
+    return "TL-UNKNOWN"
+
+
+def _select_fuji_code(
+    *,
+    violations: List[str],
+    meta: Dict[str, Any],
+) -> str:
+    """
+    Select a FUJI standard code based on FUJI gate signals.
+    """
+    prompt_injection = meta.get("prompt_injection") or {}
+    if prompt_injection.get("score", 0.0) >= 0.4 or prompt_injection.get("signals"):
+        return "F-4001"
+
+    if "PII" in violations:
+        return "F-4003"
+
+    if meta.get("low_evidence"):
+        return "F-1002"
+
+    if any(v in {"illicit", "self_harm", "violence", "minors"} for v in violations):
+        return "F-3008"
+
+    return "F-3008"
 
 
 def _policy_path() -> Path:
@@ -972,10 +1008,19 @@ def fuji_gate(
     if decision_status != "deny":
         rejection_reason = None
 
+    rejection_payload = None
+    if decision_status == "deny":
+        code = _select_fuji_code(violations=violations, meta=meta)
+        rejection_payload = build_fuji_rejection(
+            code=code,
+            trust_log_id=_resolve_trust_log_id(ctx),
+        )
+
     return {
         "status": status,                    # 内部状態
         "decision_status": decision_status,  # 外部API向け（allow/hold/deny）
         "rejection_reason": rejection_reason,
+        "rejection": rejection_payload,
         "reasons": reasons,
         "violations": violations,
         "risk": round(float(final_risk), 3),
@@ -1129,7 +1174,5 @@ __all__ = [
     "posthoc_check",
     "reload_policy",
 ]
-
-
 
 
