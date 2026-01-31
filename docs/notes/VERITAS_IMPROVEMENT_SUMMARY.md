@@ -78,7 +78,8 @@ VERITAS OSの実用性向上のため、3つの主要コンポーネントを改
 
 ```bash
 # 1. ファイル配置
-cp debate_improved.py /path/to/veritas_os/core/debate.py
+cd /workspace/veritas_os
+cp debate_improved.py veritas_os/core/debate.py
 
 # 2. 動作確認
 python -c "from veritas_os.core import debate; print('OK')"
@@ -88,10 +89,14 @@ python -c "from veritas_os.core import debate; print('OK')"
 
 ```bash
 # 1. 依存関係インストール
-pip install sentence-transformers --break-system-packages
+cd /workspace/veritas_os
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install sentence-transformers
 
 # 2. ファイル配置
-cp memory_improved.py /path/to/veritas_os/core/memory.py
+cp memory_improved.py veritas_os/core/memory.py
 
 # 3. インデックス構築
 python -c "from veritas_os.core import memory; memory.rebuild_vector_index()"
@@ -104,17 +109,20 @@ python test_memory_vector.py
 
 ```bash
 # 1. ファイル配置
-cp run_benchmarks_improved.py /path/to/veritas_os/scripts/
-cp self_heal_tasks.py /path/to/veritas_os/scripts/
-chmod +x /path/to/veritas_os/scripts/*.py
+cd /workspace/veritas_os
+cp run_benchmarks_improved.py veritas_os/scripts/
+cp self_heal_tasks.py veritas_os/scripts/
+chmod +x veritas_os/scripts/*.py
 
 # 2. ベンチマーク実行
-cd /path/to/veritas_os
 python scripts/run_benchmarks_improved.py agi_mvp_plan.yaml
 
 # 3. タスク生成
 python scripts/self_heal_tasks.py --bench latest
 ```
+
+**警告**: グローバル環境での `pip install --break-system-packages` は依存破壊の
+リスクがあります。必ず仮想環境（`.venv`）内で実行してください。
 
 ---
 
@@ -286,7 +294,9 @@ ModuleNotFoundError: No module named 'sentence_transformers'
 
 **解決**:
 ```bash
-pip install sentence-transformers --break-system-packages
+cd /workspace/veritas_os
+source .venv/bin/activate
+pip install sentence-transformers
 ```
 
 #### 2. ベンチマークがタイムアウト

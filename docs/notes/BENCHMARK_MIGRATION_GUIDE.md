@@ -292,7 +292,7 @@ python scripts/run_benchmarks_enhanced.py agi_mvp_plan.yaml
 {
   "bench_id": "agi_mvp_plan",
   "name": "AGI MVP demo planning",
-  "yaml_path": "/path/to/benchmarks/agi_mvp_plan.yaml",
+  "yaml_path": "/workspace/veritas_os/benchmarks/agi_mvp_plan.yaml",
   "request": { ... },
   "status_code": 200,
   "elapsed_sec": 15.234,
@@ -311,6 +311,8 @@ python scripts/run_benchmarks_enhanced.py agi_mvp_plan.yaml
 
 ```bash
 # 依存関係を確認
+cd /workspace/veritas_os
+source .venv/bin/activate
 pip install requests pyyaml
 
 # Pythonバージョン確認（3.8+必要）

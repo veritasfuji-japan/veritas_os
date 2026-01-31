@@ -29,11 +29,17 @@
 
 #### 依存関係
 ```bash
-pip install "numpy==1.26.4" --force-reinstall
+cd /workspace/veritas_os
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install "numpy==1.26.4"
 pip install sentence-transformers
 ```
 
 **重要**: NumPy 2.x は非互換。1.26.4を使用すること。
+**警告**: グローバル環境での `pip install` や `--force-reinstall` は依存破壊の
+リスクがあります。必ず仮想環境（`.venv`）内で実行してください。
 
 ---
 
@@ -41,7 +47,8 @@ pip install sentence-transformers
 
 #### 配置手順
 ```bash
-cp debate_improved.py /path/to/veritas_os/core/debate.py
+cd /workspace/veritas_os
+cp debate_improved.py veritas_os/core/debate.py
 ```
 
 #### 改善内容
@@ -55,8 +62,9 @@ cp debate_improved.py /path/to/veritas_os/core/debate.py
 
 #### 配置手順
 ```bash
-cp run_benchmarks_enhanced.py /path/to/veritas_os/scripts/
-cp self_heal_tasks.py /path/to/veritas_os/scripts/
+cd /workspace/veritas_os
+cp run_benchmarks_enhanced.py veritas_os/scripts/
+cp self_heal_tasks.py veritas_os/scripts/
 chmod +x scripts/run_benchmarks_enhanced.py
 chmod +x scripts/self_heal_tasks.py
 ```
@@ -87,7 +95,7 @@ python scripts/bench_summary.py
 
 ### 問題3: `Numpy is not available`
 **原因**: NumPy 2.x と PyTorch の非互換性  
-**解決**: `pip install "numpy==1.26.4" --force-reinstall`
+**解決**: `source .venv/bin/activate && pip install "numpy==1.26.4"`
 
 ### 問題4: モジュールロード時の循環インポート
 **原因**: `core/__init__.py` が全モジュールをインポート  
@@ -112,6 +120,7 @@ python scripts/bench_summary.py
 1. **ベクトル検索の利用開始**
    ```bash
    # 既存メモリからインデックス構築
+   cd /workspace/veritas_os
    python -c "from core import memory; memory.rebuild_vector_index()"
    
    # 検索テスト
@@ -120,11 +129,13 @@ python scripts/bench_summary.py
 
 2. **DebateOS配置**（推奨）
    ```bash
+   cd /workspace/veritas_os
    cp debate_improved.py core/debate.py
    ```
 
 3. **ベンチマーク実行**
    ```bash
+   cd /workspace/veritas_os
    cp run_benchmarks_enhanced.py scripts/
    python scripts/run_benchmarks_enhanced.py --all
    ```
@@ -135,6 +146,7 @@ python scripts/bench_summary.py
 # weekly_veritas_maintenance.sh
 
 # ベンチマーク実行
+cd /workspace/veritas_os
 python scripts/run_benchmarks_enhanced.py --all --output-plan
 
 # タスク生成

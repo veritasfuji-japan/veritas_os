@@ -335,7 +335,8 @@ warnings = {
 
 ### 1. ファイル置き換え
 ```bash
-cp debate_improved.py /path/to/veritas_os/core/debate.py
+cd /workspace/veritas_os
+cp debate_improved.py veritas_os/core/debate.py
 ```
 
 ### 2. 依存関係の確認

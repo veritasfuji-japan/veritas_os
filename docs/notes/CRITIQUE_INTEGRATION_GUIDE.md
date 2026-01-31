@@ -71,6 +71,9 @@ def analyze(
 ### ステップ1: バックアップ（1分）
 
 ```bash
+# リポジトリ直下で実行
+cd /workspace/veritas_os
+
 # 現在のファイルをバックアップ
 cp veritas_os/core/critique.py veritas_os/core/critique.py.backup
 
@@ -82,8 +85,11 @@ cp veritas_os/core/critique.py \
 ### ステップ2: 改善版を配置（1分）
 
 ```bash
+# 改善版のパスは環境に合わせて調整
+IMPROVED_CRITIQUE="/workspace/veritas_os/outputs/critique.py"
+
 # 改善版をコピー
-cp /mnt/user-data/outputs/critique.py veritas_os/core/critique.py
+cp "${IMPROVED_CRITIQUE}" veritas_os/core/critique.py
 
 # パーミッション確認
 chmod 644 veritas_os/core/critique.py
@@ -93,7 +99,7 @@ chmod 644 veritas_os/core/critique.py
 
 ```bash
 # 基本動作テスト
-cd veritas_os
+cd /workspace/veritas_os
 python -m core.critique
 
 # 期待される出力:
@@ -111,7 +117,7 @@ python -m core.critique
 ```python
 # test_critique_integration.py
 import sys
-sys.path.insert(0, '/path/to/veritas_os')
+sys.path.insert(0, '/workspace/veritas_os')
 
 from core.critique import analyze, summarize_critiques, filter_by_severity
 
@@ -515,7 +521,7 @@ ImportError: cannot import name 'analyze' from 'veritas_os.core.critique'
 echo $PYTHONPATH
 
 # 正しいディレクトリから実行
-cd /path/to/veritas_os/parent
+cd /workspace
 python -c "from veritas_os.core.critique import analyze; print('OK')"
 ```
 
