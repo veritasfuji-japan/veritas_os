@@ -1127,13 +1127,15 @@ async def memory_search(payload: dict):
 def memory_get(body: dict):
     store = get_memory_store()
     if store is None:
-        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}", "value": None}
+        # Do not expose internal error details to clients
+        return {"ok": False, "error": "memory store unavailable", "value": None}
 
     try:
         value = _store_get(store, body["user_id"], body["key"])
         return {"ok": True, "value": value}
-    except Exception as e:
-        return {"ok": False, "error": str(e), "value": None}
+    except Exception:
+        # Return a generic error instead of leaking exception messages
+        return {"ok": False, "error": "memory get failed", "value": None}
 
 
 # ==============================
