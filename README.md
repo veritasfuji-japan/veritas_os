@@ -7,7 +7,7 @@
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 
 **Version**: 2.0.0  
-**Release Date**: 2025-12-01  
+**Planned Release**: 2025-12-01  
 **Author**: Takeshi Fujishita
 
 VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline**.
@@ -186,7 +186,18 @@ pytest
 pytest --cov=veritas_os
 ```
 
-> Note: Coverage/CI badges will be added via GitHub Actions (recommended for external trust).
+> Note: Coverage badges are planned; CI is available via GitHub Actions.
+
+---
+
+## Security Notes (Important)
+
+- **API keys**: Avoid exporting secrets directly in shell history where possible. Prefer
+  `.env` files (git-ignored) or secret managers and inject them at runtime. Rotate keys
+  regularly and limit scope/permissions.
+- **TrustLog data**: TrustLog is append-only JSONL. If your payloads can contain PII or
+  sensitive data, ensure you have access controls, retention policies, and (if needed)
+  encryption at rest.
 
 ---
 
@@ -208,8 +219,10 @@ pytest --cov=veritas_os
 
 ## License
 
-**All Rights Reserved.**
-See [`LICENSE`](LICENSE).
+**All Rights Reserved (Proprietary).**
+This repository is **not** open-source. Usage, modification, and distribution
+are restricted unless explicitly permitted in a subdirectory-specific LICENSE
+file. See [`LICENSE`](LICENSE) for full terms.
 
 For academic use, please cite the Zenodo DOI.
 

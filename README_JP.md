@@ -7,7 +7,7 @@
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 
 **Version**: 2.0.0  
-**Release Date**: 2025-12-01  
+**Planned Release**: 2025-12-01  
 **Author**: Takeshi Fujishita
 
 VERITAS OS は、LLM（例：OpenAI GPT-4.1-mini）を  
@@ -188,8 +188,18 @@ pytest
 pytest --cov=veritas_os
 ```
 
-> 推奨：GitHub Actions（CI）で pytest + coverage を自動化し、
-> 外部から再現できる “信頼の証拠” を固定します。
+> 補足：CI は GitHub Actions で利用可能です。Coverage バッジは追加予定です。
+
+---
+
+## セキュリティ注意（重要）
+
+- **APIキー**: 可能な限りシェル履歴に残る `export` を避け、`.env`（gitignore）
+  や Secret Manager を使って実行時に注入してください。定期的なローテーションと
+  最小権限の付与を推奨します。
+- **TrustLogのデータ**: TrustLog は JSONL の追記ログです。ペイロードに個人情報
+  や機密情報が含まれる可能性がある場合、アクセス制御、保持期間、必要に応じて
+  保存時暗号化を実施してください。
 
 ---
 
@@ -211,7 +221,9 @@ pytest --cov=veritas_os
 
 ## ライセンス
 
-**All Rights Reserved.**
+**All Rights Reserved（プロプライエタリ）**。本リポジトリは
+オープンソースではありません。使用・改変・配布は、サブディレクトリに
+明示された LICENSE がある場合を除き制限されています。
 詳細は [`LICENSE`](LICENSE) を参照してください。
 
 学術用途では Zenodo DOI を引用してください。
@@ -236,4 +248,3 @@ pytest --cov=veritas_os
 
 * Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 * Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
-
