@@ -203,6 +203,14 @@ pytest --cov=veritas_os
 
 ---
 
+## 運用・セキュリティ上の注意
+
+- **TrustLog / Memory の保存前に PII マスクを強制することを推奨**します。保存前に `redact()`（PIIマスク）を通すことで、ログ/記憶に機微情報が残るリスクを低減できます。
+- **暗号化 at rest（オプション）**: TrustLog / Memory は平文保存のため、要件に応じて暗号化やKMS連携を検討してください。
+- **CORS と API Key の未設定は危険**です。`VERITAS_CORS_ALLOW_ORIGINS` と `VERITAS_API_KEY` を必ず設定してください。
+
+---
+
 ## 近いロードマップ（短期）
 
 * CI（GitHub Actions）：pytest + coverage + レポート生成
