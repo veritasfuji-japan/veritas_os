@@ -1207,8 +1207,9 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "value_core.append_trust_log not found"}
 
     except Exception as e:
+        # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
-        return {"status": "error", "detail": str(e)}
+        return {"status": "error", "detail": "internal error in trust_feedback"}
 
 
 
