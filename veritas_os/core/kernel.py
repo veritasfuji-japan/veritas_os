@@ -30,6 +30,9 @@ from .types import (
 
 import asyncio
 import inspect
+import logging
+
+log = logging.getLogger(__name__)
 
 from . import adapt
 from . import evidence as evos
@@ -501,7 +504,7 @@ async def decide(
             ctx["_world_state_injected"] = True
         except Exception as e:
             ctx = ctx_raw
-            print(f"[kernel] world_model.inject_state_into_context failed: {e}")
+            log.warning("world_model.inject_state_into_context failed: %s", e)
 
     fast_mode = bool(ctx.get("fast") or ctx.get("mode") == "fast")
 
@@ -1101,11 +1104,18 @@ async def decide(
     auto_doctor = ctx.get("auto_doctor", True)
     if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
         try:
-            subprocess.Popen(
-                [sys.executable, "-m", "veritas_os.scripts.doctor"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+            import os
+            from pathlib import Path
+            log_dir = Path(os.path.expanduser("~/.veritas/logs"))
+            log_dir.mkdir(parents=True, exist_ok=True)
+            doctor_log = log_dir / "doctor.log"
+            with open(doctor_log, "a", encoding="utf-8") as log_file:
+                log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
+                subprocess.Popen(
+                    [sys.executable, "-m", "veritas_os.scripts.doctor"],
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                )
         except Exception as e:
             extras.setdefault("doctor", {})
             extras["doctor"]["error"] = repr(e)
