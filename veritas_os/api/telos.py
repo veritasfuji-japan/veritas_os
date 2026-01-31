@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Mapping, Tuple
 
+from veritas_os.core.utils import _clamp
+
 
 @dataclass(frozen=True)
 class TelosConfig:
@@ -45,8 +47,7 @@ class TelosConfig:
             })
 
 
-def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    return max(lo, min(hi, x))
+# _clamp は veritas_os.core.utils からインポート
 
 
 def _weights(context: Dict, cfg: TelosConfig) -> Tuple[float, float]:

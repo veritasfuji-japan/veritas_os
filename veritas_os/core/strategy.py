@@ -4,6 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
 
+from .utils import _clip01
+
 # 同じパッケージ内の WorldModel / ValueCore を利用する
 try:
     from . import world_model as wm
@@ -15,15 +17,8 @@ except ImportError:
 
 
 # =========================================
-# ユーティリティ
+# ユーティリティ（_clip01 は utils.py からインポート）
 # =========================================
-
-def _clip01(x: Any, default: float = 0.0) -> float:
-    try:
-        v = float(x)
-    except Exception:
-        v = float(default)
-    return max(0.0, min(1.0, v))
 
 
 # =========================================

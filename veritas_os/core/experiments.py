@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from .utils import _clip01, _to_float
+
 
 # =========================================================
 # Time helpers (local; avoid core.time_utils import hazards)
@@ -17,31 +19,12 @@ def utc_now() -> datetime:
 
 
 # =========================================================
-# Helpers
+# Helpers（_clip01, _to_float は utils.py からインポート）
 # =========================================================
-
-def _clip01(x: Any, default: float = 0.0) -> float:
-    try:
-        v = float(x)
-    except Exception:
-        return default
-    if v < 0.0:
-        return 0.0
-    if v > 1.0:
-        return 1.0
-    return v
-
 
 def _to_int(x: Any, default: int = 0) -> int:
     try:
         return int(x)
-    except Exception:
-        return default
-
-
-def _to_float(x: Any, default: float = 0.0) -> float:
-    try:
-        return float(x)
     except Exception:
         return default
 

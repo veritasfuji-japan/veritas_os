@@ -21,9 +21,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security.api_key import APIKeyHeader
 
-# ---- API層（ここは基本 “安定” 前提）----
+# ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED  # noqa: F401
+
+# ---- PII検出・マスク（sanitize.py から。失敗時はフォールバック）----
+try:
+    from veritas_os.core.sanitize import mask_pii as _sanitize_mask_pii
+    _HAS_SANITIZE = True
+except Exception:
+    _HAS_SANITIZE = False
+    _sanitize_mask_pii = None  # type: ignore
 
 # ============================================================
 # ISSUE-4 方針:
@@ -543,8 +551,35 @@ def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-
 # ==============================
 
 def redact(text: str) -> str:
+    """
+    PIIをマスク（redact）する。
+
+    sanitize.mask_pii が利用可能な場合は、以下を検出・マスク:
+    - メールアドレス
+    - 電話番号（日本の携帯・固定・国際・フリーダイヤル）
+    - 郵便番号
+    - 日本の住所（都道府県+市区町村+番地）
+    - 個人名（日本語敬称付き、英語敬称付き）
+    - クレジットカード番号（Luhn検証付き）
+    - マイナンバー（チェックデジット検証付き）
+    - IPアドレス（IPv4/IPv6）
+    - URLクレデンシャル
+    - 銀行口座番号
+    - パスポート番号
+
+    sanitize.py が利用できない場合はシンプルなフォールバックを使用。
+    """
     if not text:
         return text
+
+    # sanitize.py が利用可能ならそちらを使う（より包括的）
+    if _HAS_SANITIZE and _sanitize_mask_pii is not None:
+        try:
+            return _sanitize_mask_pii(text)
+        except Exception:
+            pass  # フォールバックへ
+
+    # フォールバック: 基本的なパターンのみ
     text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
     text = re.sub(r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b", "[redacted:phone]", text)
     return text

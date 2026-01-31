@@ -9,32 +9,14 @@ import json, os, time
 # === Utility: remove numbers to prevent ValueCore mis-detection ===
 import re
 
+# 共通ユーティリティをインポート
+from .utils import _to_float, _clip01
+
+
 def _clean_text(x: str) -> str:
     # 数字・小数・指数表現（e-33 など）を除去
     x = re.sub(r"[0-9]+(?:\.[0-9]+)?(?:e[-+]?[0-9]+)?", "", x)
     return x
-# ==============================
-#   便利関数（型安全）
-# ==============================
-def _to_float(x: Any, default: float = 0.0) -> float:
-    """どんな入力でも float に安全変換（失敗時は default）"""
-    try:
-        if x is None:
-            return float(default)
-        if isinstance(x, (int, float)):
-            return float(x)
-        return float(str(x).strip())
-    except Exception:
-        return float(default)
-
-
-def _clip01(x: Any) -> float:
-    """0..1 にクリップ"""
-    try:
-        v = float(x)
-    except Exception:
-        v = 0.0
-    return max(0.0, min(1.0, v))
 
 
 def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:

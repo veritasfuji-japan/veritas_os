@@ -24,6 +24,7 @@ import textwrap
 
 from . import llm_client
 from . import world as world_model
+from .utils import _clamp01
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +222,7 @@ def _is_rejected(opt: Dict[str, Any]) -> bool:
     return v in ("却下", "reject", "Rejected", "NG")
 
 
-def _clamp01(x: float) -> float:
-    return max(0.0, min(1.0, x))
+# _clamp01 は utils.py からインポート
 
 
 def _get_score(opt: Dict[str, Any]) -> float:

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
+from .utils import _clip01
+
 # trust_log / value_core は他モジュールに依存するので、
 # 失敗しても落ちないように try-import しておく。
 try:  # pragma: no cover - インポート失敗パスは通常は通らないので除外
@@ -16,18 +18,7 @@ except Exception:  # pragma: no cover
     value_core = None  # type: ignore[assignment]
 
 
-def _clip01(v: Any, default: float = 0.5) -> float:
-    """0.0〜1.0 にクリップする小さなヘルパー。"""
-    try:
-        x = float(v)
-    except Exception:
-        x = float(default)
-
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return x
+# _clip01 は utils.py からインポート
 
 
 def _get_decision_id(decision: Any) -> str:
