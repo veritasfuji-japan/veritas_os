@@ -34,6 +34,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
+from .utils import _safe_float, _clip01 as _clip01_base
+
 
 try:
     from fastapi import Request
@@ -177,12 +179,8 @@ except Exception:  # pragma: no cover
 # Note: _to_bool is defined earlier (needed before safe imports)
 
 def _to_float_or(v: Any, default: float) -> float:
-    if v in (None, "", "null", "None"):
-        return default
-    try:
-        return float(v)
-    except Exception:
-        return default
+    """_safe_float のエイリアス（後方互換性のため維持）"""
+    return _safe_float(v, default)
 
 
 def _to_dict(o: Any) -> Dict[str, Any]:
@@ -271,10 +269,8 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
 
 
 def _clip01(x: float) -> float:
-    try:
-        return max(0.0, min(1.0, float(x)))
-    except Exception:
-        return 0.0
+    """_clip01_base のラッパー（後方互換性のため維持）"""
+    return _clip01_base(x)
 
 
 # =========================================================

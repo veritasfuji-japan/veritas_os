@@ -155,8 +155,10 @@ def test_vector_memory_add_search_and_persist(tmp_path: Path):
     VectorMemory.add / search / _save_index / _load_index /
     _cosine_similarity を通す。
     sentence-transformers は使わず、model をダミーに差し替え。
+
+    Note: pickle廃止によりJSON形式(.json)で保存される
     """
-    idx_path = tmp_path / "vec_index.pkl"
+    idx_path = tmp_path / "vec_index.pkl"  # 初期パス（.jsonに変換される）
 
     # 1) 新規 VectorMemory
     vm = memory.VectorMemory(index_path=idx_path, embedding_dim=4)
@@ -175,12 +177,13 @@ def test_vector_memory_add_search_and_persist(tmp_path: Path):
     assert len(hits) == 1
     assert hits[0]["text"] == "hello world"
 
-    # インデックス保存
+    # インデックス保存（JSON形式で保存される）
     vm._save_index()
-    assert idx_path.exists()
+    json_path = idx_path.with_suffix(".json")
+    assert json_path.exists(), f"Expected {json_path} to exist"
 
-    # 2) 再ロードしても同じ結果が得られるか
-    vm2 = memory.VectorMemory(index_path=idx_path, embedding_dim=4)
+    # 2) 再ロードしても同じ結果が得られるか（保存後のパスを使用）
+    vm2 = memory.VectorMemory(index_path=vm.index_path, embedding_dim=4)
     # ロード時には model が None になっている可能性があるので、差し替え
     vm2.model = DummyEmbedModel(dim=4)
 

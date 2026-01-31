@@ -26,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from .utils import _clip01
+
 
 # ============================================================
 # Dynamic Path (monkeypatch-friendly)
@@ -257,8 +259,7 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _clip01(x: float) -> float:
-    return max(0.0, min(1.0, float(x)))
+# _clip01 は utils.py からインポート
 
 
 def _ensure_v2_shape(state: dict) -> dict:

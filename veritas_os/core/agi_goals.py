@@ -16,19 +16,12 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .utils import _safe_float
+from .utils import _safe_float, _clip01
 
 
 # ============================================================
-# ユーティリティ
+# ユーティリティ（_clip01 は utils.py からインポート）
 # ============================================================
-
-def _clip01(x: float) -> float:
-    if x < 0.0:
-        return 0.0
-    if x > 1.0:
-        return 1.0
-    return x
 
 
 # ============================================================

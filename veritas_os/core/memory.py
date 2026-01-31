@@ -22,7 +22,7 @@ import time
 import threading
 from contextlib import contextmanager
 import logging
-import pickle
+import base64
 
 logger = logging.getLogger(__name__)
 
@@ -97,43 +97,125 @@ class VectorMemory:
             self.model = None
 
     def _load_index(self):
-        """永続化されたインデックスをロード"""
-        if not self.index_path or not self.index_path.exists():
+        """永続化されたインデックスをロード（JSON形式、旧pickle形式からの自動マイグレーション対応）"""
+        if not self.index_path:
             return
 
+        # JSON形式のパス（.json拡張子）
+        json_path = self.index_path.with_suffix(".json")
+        legacy_pkl_path = self.index_path  # 旧pickle形式
+
         try:
-            with open(self.index_path, "rb") as f:
-                data = pickle.load(f)
+            import numpy as np
 
-            self.documents = data.get("documents", [])
-            self.embeddings = data.get("embeddings")
+            # 1) まずJSON形式を試す
+            if json_path.exists():
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
 
-            logger.info(
-                f"[VectorMemory] Loaded index: {len(self.documents)} documents"
-            )
+                self.documents = data.get("documents", [])
+                embeddings_data = data.get("embeddings")
+
+                if embeddings_data is not None:
+                    # Base64形式の場合
+                    if isinstance(embeddings_data, str):
+                        raw_bytes = base64.b64decode(embeddings_data)
+                        dtype = data.get("embeddings_dtype", "float32")
+                        shape = data.get("embeddings_shape")
+                        self.embeddings = np.frombuffer(raw_bytes, dtype=dtype)
+                        if shape:
+                            self.embeddings = self.embeddings.reshape(shape)
+                    # リスト形式の場合
+                    elif isinstance(embeddings_data, list):
+                        self.embeddings = np.array(embeddings_data, dtype=np.float32)
+                    else:
+                        self.embeddings = None
+
+                logger.info(
+                    f"[VectorMemory] Loaded JSON index: {len(self.documents)} documents"
+                )
+                return
+
+            # 2) 旧pickle形式からのマイグレーション
+            if legacy_pkl_path.exists() and legacy_pkl_path.suffix == ".pkl":
+                logger.info("[VectorMemory] Migrating from legacy pickle format...")
+                try:
+                    import pickle
+                    with open(legacy_pkl_path, "rb") as f:
+                        data = pickle.load(f)
+
+                    self.documents = data.get("documents", [])
+                    self.embeddings = data.get("embeddings")
+
+                    logger.info(
+                        f"[VectorMemory] Loaded legacy pickle: {len(self.documents)} documents"
+                    )
+
+                    # 新形式で保存（マイグレーション）
+                    self.index_path = json_path  # 新しいパスに更新
+                    self._save_index()
+
+                    # 旧ファイルをバックアップとしてリネーム
+                    backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
+                    legacy_pkl_path.rename(backup_path)
+                    logger.info(
+                        f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
+                    )
+                    return
+                except Exception as e:
+                    logger.warning(f"[VectorMemory] Pickle migration failed: {e}")
+
         except Exception as e:
             logger.error(f"[VectorMemory] Failed to load index: {e}")
 
     def _save_index(self):
-        """インデックスを永続化"""
+        """インデックスをJSON形式で永続化（セキュリティ向上のためpickle廃止）"""
         if not self.index_path:
             return
 
         try:
-            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+            # JSON形式のパス（.json拡張子に統一）
+            json_path = self.index_path.with_suffix(".json")
+            json_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # embeddingsをBase64エンコード（コンパクト＋JSON互換）
+            embeddings_b64 = None
+            embeddings_shape = None
+            embeddings_dtype = None
+
+            if self.embeddings is not None:
+                import numpy as np
+                # numpy arrayの場合
+                if hasattr(self.embeddings, "tobytes"):
+                    embeddings_b64 = base64.b64encode(
+                        self.embeddings.astype(np.float32).tobytes()
+                    ).decode("ascii")
+                    embeddings_shape = list(self.embeddings.shape)
+                    embeddings_dtype = "float32"
 
             data = {
                 "documents": self.documents,
-                "embeddings": self.embeddings,
+                "embeddings": embeddings_b64,
+                "embeddings_shape": embeddings_shape,
+                "embeddings_dtype": embeddings_dtype,
                 "model_name": self.model_name,
                 "embedding_dim": self.embedding_dim,
+                "format_version": "2.0",  # バージョン管理
             }
 
-            with open(self.index_path, "wb") as f:
-                pickle.dump(data, f)
+            # アトミック書き込み（途中で失敗しても元ファイルを壊さない）
+            tmp_path = json_path.with_suffix(".json.tmp")
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False)
+
+            # 成功したら本ファイルにリネーム
+            tmp_path.replace(json_path)
+
+            # index_pathも更新（次回保存時のため）
+            self.index_path = json_path
 
             logger.info(
-                f"[VectorMemory] Saved index: {len(self.documents)} documents"
+                f"[VectorMemory] Saved JSON index: {len(self.documents)} documents"
             )
         except Exception as e:
             logger.error(f"[VectorMemory] Failed to save index: {e}")
