@@ -83,7 +83,7 @@ def clean_bias_weights(
 
     tmp: Dict[str, float] = {}
     for k, v in bias.items():
-        x = _safe_float(v, d=0.0)
+        x = _safe_float(v, default=0.0)
 
         # 0..1 にクリップ
         if x < 0.0:
