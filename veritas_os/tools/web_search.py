@@ -102,6 +102,19 @@ def _normalize_str(x: Any, *, limit: int = 4000) -> str:
     return s
 
 
+def _extract_hostname(url: str) -> str:
+    """URLからホスト名を抽出する（スキームなしURLも対応）。"""
+    if not url:
+        return ""
+    candidate = url.strip()
+    parsed = urlparse(candidate)
+    host = parsed.hostname
+    if not host and "://" not in candidate:
+        parsed = urlparse(f"http://{candidate}")
+        host = parsed.hostname
+    return (host or "").lower()
+
+
 def _is_agi_query(q: str) -> bool:
     """クエリが AGI 関連っぽいかどうかをざっくり判定"""
     q = q or ""
@@ -210,32 +223,28 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
     t = (title or "").lower()
     s = (snippet or "").lower()
     u = (url or "").lower()
+    host = _extract_hostname(u).replace("www.", "")
 
     for kw in BLACKLIST_KEYWORDS:
         kwl = kw.lower()
-        if kwl in t or kwl in s or kwl in u:
+        if kwl in t or kwl in s:
             return True
 
     for site in BLACKLIST_SITES:
-        if site.lower() in u:
-            return True
+        site_host = _extract_hostname(site).replace("www.", "")
+        if host and site_host:
+            if host == site_host or host.endswith(f".{site_host}"):
+                return True
 
     # bureauveritas.* wildcard block（ドメイン抽出が雑でも防ぐ）
-    if "bureauveritas." in u:
-        host_guess = u.split("/")[2] if "://" in u and len(u.split("/")) > 2 else u
-        host_guess = host_guess.split(":")[0].replace("www.", "")
-        if RE_BUREAUVERITAS.search(host_guess) or "bureauveritas" in host_guess:
+    if host:
+        if RE_BUREAUVERITAS.search(host) or "bureauveritas" in host:
             return True
 
     # veritas.com domain block（ホスト名を優先的にチェック）
-    parsed = urlparse(u)
-    host = (parsed.hostname or "").lower().replace("www.", "")
     if host:
         if host == "veritas.com" or host.endswith(".veritas.com"):
             return True
-    elif "veritas.com" in u:
-        # ホストが取得できない不正URLなどは従来どおりサブストリングで弾く
-        return True
 
     return False
 
@@ -433,7 +442,6 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "blocked_count": 0,
             },
         }
-
 
 
 
