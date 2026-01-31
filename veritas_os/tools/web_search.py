@@ -42,6 +42,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import requests
 
@@ -226,7 +227,14 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
         if RE_BUREAUVERITAS.search(host_guess) or "bureauveritas" in host_guess:
             return True
 
-    if "veritas.com" in u:
+    # veritas.com domain block（ホスト名を優先的にチェック）
+    parsed = urlparse(u)
+    host = (parsed.hostname or "").lower().replace("www.", "")
+    if host:
+        if host == "veritas.com" or host.endswith(".veritas.com"):
+            return True
+    elif "veritas.com" in u:
+        # ホストが取得できない不正URLなどは従来どおりサブストリングで弾く
         return True
 
     return False
