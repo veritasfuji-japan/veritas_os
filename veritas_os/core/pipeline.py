@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from .utils import _safe_float, _clip01 as _clip01_base
+from . import self_healing
 
 
 try:
@@ -2270,6 +2271,36 @@ async def run_decide_pipeline(
         core_decide = None
 
     raw: Dict[str, Any] = {}
+    healing_attempts: List[Dict[str, Any]] = []
+    healing_stop_reason: Optional[str] = None
+    healing_enabled = self_healing.is_healing_enabled(context or {})
+    healing_state = self_healing.HealingState()
+    healing_budget = self_healing.HealingBudget()
+    prev_healing_input: Optional[Dict[str, Any]] = None
+
+    def _extract_rejection(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        fuji_payload = payload.get("fuji") if isinstance(payload, dict) else None
+        if not isinstance(fuji_payload, dict):
+            return None
+        rejection = fuji_payload.get("rejection")
+        if not isinstance(rejection, dict):
+            return None
+        if rejection.get("status") != "REJECTED":
+            return None
+        return rejection
+
+    def _summarize_last_output(
+        payload: Dict[str, Any],
+        plan_payload: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        chosen = payload.get("chosen") if isinstance(payload, dict) else None
+        planner_obj = payload.get("planner") if isinstance(payload, dict) else None
+        return {
+            "chosen": chosen if isinstance(chosen, dict) else {},
+            "plan": plan_payload if isinstance(plan_payload, dict) else {},
+            "planner": planner_obj if isinstance(planner_obj, dict) else {},
+        }
+
     if core_decide is None:
         response_extras.setdefault("env_tools", {})
         if isinstance(response_extras["env_tools"], dict):
@@ -2288,6 +2319,105 @@ async def run_decide_pipeline(
         except Exception as e:
             _warn(f"[decide] core error: {e}")
             raw = {}
+
+    if raw and healing_enabled:
+        original_task = query
+        current_query = query
+        current_context = dict(context or {})
+        while True:
+            rejection = _extract_rejection(raw)
+            if not rejection:
+                break
+            error_code = (rejection.get("error") or {}).get("code") or "unknown"
+            feedback_action = (rejection.get("feedback") or {}).get("action")
+            decision = self_healing.decide_healing_action(
+                error_code=error_code,
+                feedback_action=feedback_action,
+            )
+
+            attempt_no = healing_state.attempt + 1
+            last_output = _summarize_last_output(raw, plan)
+            healing_input = self_healing.build_healing_input(
+                original_task=original_task,
+                last_output=last_output,
+                rejection=rejection,
+                attempt=attempt_no,
+                policy_decision=decision.reason,
+            )
+            input_signature = self_healing.healing_input_signature(healing_input)
+            diff_text = self_healing.diff_summary(prev_healing_input, healing_input)
+
+            stop_reason = self_healing.check_guardrails(
+                state=healing_state,
+                budget=healing_budget,
+                error_code=str(error_code),
+                input_signature=input_signature,
+            )
+            if not decision.allow:
+                stop_reason = decision.stop_reason or "policy_blocked"
+
+            budget_snapshot = self_healing.budget_remaining(
+                healing_state,
+                healing_budget,
+            )
+            trust_entry = self_healing.build_healing_trust_log_entry(
+                request_id=request_id,
+                healing_enabled=True,
+                attempt=attempt_no,
+                prev_error_code=str(error_code),
+                chosen_action=decision.action.value,
+                budget_snapshot=budget_snapshot,
+                diff_summary_text=diff_text,
+                linked_trust_log_id=rejection.get("trust_log_id"),
+                stop_reason=stop_reason,
+            )
+            try:
+                append_trust_log(trust_entry)
+            except Exception as e:
+                _warn(f"[self_healing] trust_log skipped: {repr(e)}")
+
+            healing_attempts.append(
+                {
+                    "attempt": attempt_no,
+                    "action": decision.action.value,
+                    "error_code": error_code,
+                    "stop_reason": stop_reason,
+                    "diff_summary": diff_text,
+                }
+            )
+            prev_healing_input = healing_input
+
+            if stop_reason:
+                healing_stop_reason = stop_reason
+                break
+
+            self_healing.advance_state(
+                state=healing_state,
+                error_code=str(error_code),
+                input_signature=input_signature,
+            )
+
+            current_context = dict(context or {})
+            current_context["healing"] = {
+                "attempt": attempt_no,
+                "action": decision.action.value,
+                "feedback": rejection.get("feedback"),
+                "policy_decision": decision.reason,
+            }
+            current_query = json.dumps(healing_input, ensure_ascii=False)
+            try:
+                raw0 = await call_core_decide(
+                    core_fn=core_decide,  # type: ignore[arg-type]
+                    context=current_context,
+                    query=current_query,
+                    alternatives=input_alts,
+                    min_evidence=min_ev,
+                )
+                raw = raw0 if isinstance(raw0, dict) else {}
+            except Exception as e:
+                _warn(f"[self_healing] retry failed: {repr(e)}")
+                healing_stop_reason = "retry_execution_failed"
+                break
 
     # =========================================================
     # absorb raw (respect explicit options)
@@ -2322,6 +2452,17 @@ async def run_decide_pipeline(
                 raw["extras"],
                 fast_mode_default=fast_mode,
                 context_obj=context,
+            )
+
+    if healing_attempts:
+        response_extras.setdefault("self_healing", {})
+        if isinstance(response_extras["self_healing"], dict):
+            response_extras["self_healing"].update(
+                {
+                    "enabled": True,
+                    "attempts": healing_attempts,
+                    "stop_reason": healing_stop_reason,
+                }
             )
 
     # =========================================================
