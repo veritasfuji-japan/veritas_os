@@ -134,8 +134,10 @@ def test_vector_memory_persist_and_reload(tmp_path: Path):
     - ドキュメントを追加して _save_index
     - 新しいインスタンスで index_path を指定してロード
     - 文書数が維持されていることを確認
+
+    Note: pickle廃止によりJSON形式(.json)で保存される
     """
-    idx_path = tmp_path / "vec_index.pkl"
+    idx_path = tmp_path / "vec_index.pkl"  # 初期パス（.pklでも.jsonに変換される）
     vm = _new_vector_memory(index_path=idx_path, dim=4)
 
     docs = [
@@ -164,14 +166,16 @@ def test_vector_memory_persist_and_reload(tmp_path: Path):
 
     assert len(vm.documents) == len(docs)
 
-    # インデックス保存
+    # インデックス保存（JSON形式で保存される）
     vm._save_index()
-    assert idx_path.exists()
-    size = idx_path.stat().st_size
+    # JSON形式で保存されるため、.json拡張子のファイルを確認
+    json_path = idx_path.with_suffix(".json")
+    assert json_path.exists(), f"Expected {json_path} to exist"
+    size = json_path.stat().st_size
     assert size > 0
 
-    # 再ロード
-    vm2 = _new_vector_memory(index_path=idx_path, dim=4)
+    # 再ロード（保存後のパス vm.index_path を使用）
+    vm2 = _new_vector_memory(index_path=vm.index_path, dim=4)
     # __init__ 時点で index を読み込む実装であれば、
     # documents が復元されているはず
     assert len(vm2.documents) == len(vm.documents)

@@ -384,13 +384,16 @@ def test_verify_signature_missing_headers(monkeypatch):
 def test_redact_masks_email_and_phone():
     """
     redact がメールアドレスと電話番号をマスクすることを確認
+    sanitize.py 統合後は 〔メール〕〔電話〕 形式でマスクされる
     """
     s = "mail: user@example.com tel: 090-1234-5678"
     red = server.redact(s)
     assert "user@example.com" not in red
     assert "090-1234-5678" not in red
-    assert "[redacted@email]" in red
-    assert "[redacted:phone]" in red
+    # sanitize.py 形式: 〔メール〕〔電話〕
+    # フォールバック形式: [redacted@email] [redacted:phone]
+    assert "〔メール〕" in red or "[redacted@email]" in red
+    assert "〔電話〕" in red or "[redacted:phone]" in red
 
 
 def test_decide_requires_api_key():
