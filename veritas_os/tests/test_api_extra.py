@@ -26,6 +26,7 @@ def client(monkeypatch):
     毎回APIキーを環境変数にセットし、TestClientを返します。
     """
     monkeypatch.setenv("VERITAS_API_KEY", "test-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
     return TestClient(server.app)
 
 
@@ -472,4 +473,3 @@ class TestPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
