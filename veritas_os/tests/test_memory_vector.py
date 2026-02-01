@@ -13,10 +13,10 @@ MemoryOS VectorMemory のユニットテスト
    DummyEmbedModel を差し替えてテストする。
 """
 
+import pickle
+import time
 from pathlib import Path
 from typing import Any, Dict, List
-
-import time
 
 from veritas_os.core import memory
 
@@ -54,6 +54,16 @@ def _new_vector_memory(index_path: Path | None = None, dim: int = 4):
     vm = memory.VectorMemory(index_path=index_path, embedding_dim=dim)
     vm.model = DummyEmbedModel(dim=dim)
     return vm
+
+
+def _write_legacy_pickle(path: Path, documents: List[Dict[str, Any]], embeddings):
+    """レガシー形式のpickleファイルを書き出すヘルパ。"""
+    payload = {
+        "documents": documents,
+        "embeddings": embeddings,
+    }
+    with open(path, "wb") as f:
+        pickle.dump(payload, f)
 
 
 # -----------------------------
@@ -232,7 +242,40 @@ def test_vector_memory_add_and_search_performance():
     assert search_time < 5.0
 
 
+def test_legacy_pickle_migration_disabled_by_default(tmp_path: Path, monkeypatch):
+    """オプトインなしではレガシーpickleを読み込まないことを確認する。"""
+    import numpy as np
 
+    idx_path = tmp_path / "legacy_index.pkl"
+    documents = [
+        {"id": "doc_1", "kind": "semantic", "text": "legacy doc", "tags": []},
+    ]
+    embeddings = np.ones((1, 4), dtype="float32")
+    _write_legacy_pickle(idx_path, documents, embeddings)
+
+    monkeypatch.delenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", raising=False)
+
+    vm = _new_vector_memory(index_path=idx_path, dim=4)
+    assert vm.documents == []
+    assert not idx_path.with_suffix(".json").exists()
+
+
+def test_legacy_pickle_migration_opt_in(tmp_path: Path, monkeypatch):
+    """オプトイン時にレガシーpickleが移行されることを確認する。"""
+    import numpy as np
+
+    idx_path = tmp_path / "legacy_index.pkl"
+    documents = [
+        {"id": "doc_1", "kind": "semantic", "text": "legacy doc", "tags": []},
+    ]
+    embeddings = np.ones((1, 4), dtype="float32")
+    _write_legacy_pickle(idx_path, documents, embeddings)
+
+    monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "1")
+
+    vm = _new_vector_memory(index_path=idx_path, dim=4)
+    assert len(vm.documents) == 1
+    assert idx_path.with_suffix(".json").exists()
 
 
 
