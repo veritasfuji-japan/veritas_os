@@ -480,8 +480,8 @@ def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
 
     assert r.status_code == 503
     data = r.json()
-    assert data["error"] == "decision_pipeline unavailable"
-    assert data["detail"] == "decision_pipeline unavailable"
+    assert data["error"] == server.DECIDE_GENERIC_ERROR
+    assert data["detail"] == server.DECIDE_GENERIC_ERROR
     assert "boom" not in data["detail"]
 
 
@@ -505,8 +505,8 @@ def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
 
     assert r.status_code == 503
     data = r.json()
-    assert data["error"] == "decision_pipeline execution failed"
-    assert data["detail"] == "decision_pipeline execution failed"
+    assert data["error"] == server.DECIDE_GENERIC_ERROR
+    assert data["detail"] == server.DECIDE_GENERIC_ERROR
     assert "boom" not in data["detail"]
 
 
@@ -988,4 +988,3 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
-
