@@ -88,13 +88,35 @@ except Exception:
     _ENV_POC_MODE = os.getenv("VERITAS_POC_MODE", "0") == "1"
 
 # 危険・違法系の簡易ワード（Safety Head が落ちた時の fallback 用）
-BANNED_KEYWORDS = {
-    "harm", "kill", "exploit", "illegal", "weapon", "malware", "bomb", "doxx",
-    "毒", "殺", "爆弾", "銃", "兵器", "ハッキング", "違法",
+BANNED_KEYWORDS_FALLBACK = {
+    "harm",
+    "kill",
+    "exploit",
+    "illegal",
+    "weapon",
+    "malware",
+    "bomb",
+    "doxx",
+    "毒",
+    "殺",
+    "爆弾",
+    "銃",
+    "兵器",
+    "ハッキング",
+    "違法",
 }
-SENSITIVE_KEYWORDS = {
-    "bio", "pathogen", "drug synthesis", "zero-day", "bypass", "unlock jail",
-    "生物兵器", "毒物合成", "ゼロデイ", "脱獄", "暗号回避",
+SENSITIVE_KEYWORDS_FALLBACK = {
+    "bio",
+    "pathogen",
+    "drug synthesis",
+    "zero-day",
+    "bypass",
+    "unlock jail",
+    "生物兵器",
+    "毒物合成",
+    "ゼロデイ",
+    "脱獄",
+    "暗号回避",
 }
 
 # ざっくり PII 検出（fallback 用）
@@ -194,6 +216,59 @@ def _resolve_trust_log_id(context: Dict[str, Any]) -> str:
     if context.get("request_id"):
         return str(context["request_id"])
     return "TL-UNKNOWN"
+
+
+def _policy_blocked_keywords(policy: Dict[str, Any]) -> tuple[set[str], set[str]]:
+    """
+    Extract blocked keywords from the active policy.
+
+    Returns:
+        (hard_block_keywords, sensitive_keywords)
+    """
+    blocked = policy.get("blocked_keywords") or {}
+    hard_block = blocked.get("hard_block") or []
+    sensitive = blocked.get("sensitive") or []
+    hard_set = {str(word).lower() for word in hard_block if word}
+    sensitive_set = {str(word).lower() for word in sensitive if word}
+
+    if not hard_set:
+        hard_set = {str(word).lower() for word in BANNED_KEYWORDS_FALLBACK}
+    if not sensitive_set:
+        sensitive_set = {str(word).lower() for word in SENSITIVE_KEYWORDS_FALLBACK}
+
+    return hard_set, sensitive_set
+
+
+def _redact_text_for_trust_log(text: str, policy: Dict[str, Any]) -> str:
+    """
+    Redact PII in TrustLog text previews based on policy settings.
+
+    This keeps FUJI's responsibility (safety gate + audit logging) while
+    honoring the policy's redaction requirement before writing TrustLog.
+    """
+    audit_cfg = policy.get("audit") or {}
+    if not audit_cfg.get("redact_before_log", False):
+        return text
+
+    pii_cfg = policy.get("pii") or {}
+    if not pii_cfg.get("enabled", True):
+        return text
+
+    masked_markers = pii_cfg.get("masked_markers") or ["●"]
+    mask_token = str(masked_markers[0]) if masked_markers else "●"
+    text_value = text or ""
+
+    redact_kinds = pii_cfg.get("redact_kinds") or {}
+    if redact_kinds.get("phone", True):
+        text_value = _RE_PHONE.sub(mask_token * 4, text_value)
+    if redact_kinds.get("email", True):
+        text_value = _RE_EMAIL.sub(mask_token * 4, text_value)
+    if redact_kinds.get("address_jp", True):
+        text_value = _RE_ADDRJP.sub(mask_token * 4, text_value)
+    if redact_kinds.get("person_name_jp", False):
+        text_value = _RE_NAMEJP.sub(mask_token * 2, text_value)
+
+    return text_value
 
 
 def _select_fuji_code(
@@ -410,7 +485,8 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
     risk = 0.05
     rationale_parts: List[str] = []
 
-    hits = [w for w in BANNED_KEYWORDS if w in t] + [w for w in SENSITIVE_KEYWORDS if w in t]
+    hard_block, sensitive = _policy_blocked_keywords(POLICY)
+    hits = [w for w in hard_block if w in t] + [w for w in sensitive if w in t]
     if hits:
         categories.append("illicit")
         risk = max(risk, 0.8)
@@ -936,10 +1012,11 @@ def fuji_gate(
 
     # ---------- 3) TrustLog ----------
     try:
+        redacted_preview = _redact_text_for_trust_log(text, POLICY)
         event = {
             "ts": _now_iso(),
             "event": "fuji_evaluate",
-            "text_preview": (text or "")[:200],
+            "text_preview": (redacted_preview or "")[:200],
             "risk_score": float(sh.risk_score),
             "risk_after_policy": float(final_risk),
             "categories": list(sh.categories),
@@ -1174,5 +1251,4 @@ __all__ = [
     "posthoc_check",
     "reload_policy",
 ]
-
 
