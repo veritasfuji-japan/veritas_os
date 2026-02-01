@@ -251,6 +251,32 @@ def test_verify_signature_missing_secret(monkeypatch):
     assert "Server secret missing" in exc.value.detail
 
 
+def test_verify_signature_placeholder_secret(monkeypatch):
+    """
+    VERITAS_API_SECRET がプレースホルダーの場合 → 500
+    """
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv(
+        "VERITAS_API_SECRET",
+        server._DEFAULT_API_SECRET_PLACEHOLDER,
+    )
+    req = DummyRequest(b"{}")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            server.verify_signature(
+                request=req,
+                x_api_key="k",
+                x_timestamp=str(int(time.time())),
+                x_nonce="nonce-1",
+                x_signature="dummy",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert "Server secret missing" in exc.value.detail
+
+
 def test_verify_signature_ok_and_replay(monkeypatch):
     """
     正常な署名 → True、同じ nonce で 2 回目 → Replay (401)
@@ -872,7 +898,6 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
-
 
 
 

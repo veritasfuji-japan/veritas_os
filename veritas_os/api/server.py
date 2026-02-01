@@ -410,6 +410,12 @@ _nonce_lock = threading.Lock()  # ★ スレッドセーフ化
 # 後方互換: テストが monkeypatch.setattr(server, "API_SECRET", ...) を使用
 # 実際の検証時は _get_api_secret() を使用して毎回環境変数から取得
 API_SECRET: bytes = b""  # ★ テスト用プレースホルダー（実際は _get_api_secret() を使用）
+_DEFAULT_API_SECRET_PLACEHOLDER = "YOUR_VERITAS_API_SECRET_HERE"
+
+
+def _is_placeholder_secret(secret: str) -> bool:
+    """Return True when the secret matches the default placeholder string."""
+    return secret.strip() == _DEFAULT_API_SECRET_PLACEHOLDER
 
 
 def _get_api_secret() -> bytes:
@@ -422,7 +428,12 @@ def _get_api_secret() -> bytes:
     global API_SECRET
     if API_SECRET:
         return API_SECRET
-    return (os.getenv("VERITAS_API_SECRET") or "").encode("utf-8")
+    env_secret = (os.getenv("VERITAS_API_SECRET") or "").strip()
+    if not env_secret or _is_placeholder_secret(env_secret):
+        if env_secret:
+            print("[WARN] VERITAS_API_SECRET is set to the default placeholder.")
+        return b""
+    return env_secret.encode("utf-8")
 
 
 def _cleanup_nonces_unsafe() -> None:
@@ -1212,7 +1223,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
