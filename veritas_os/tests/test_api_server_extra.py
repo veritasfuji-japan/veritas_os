@@ -464,6 +464,52 @@ def test_decide_validation_error_handler_returns_hint():
         assert any(k in data for k in ("request_id", "status", "result", "decision"))
 
 
+def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
+    """
+    /v1/decide がパイプライン不在のとき、
+    detail が一般的なメッセージになることを確認する。
+    """
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: None)
+    server._pipeline_state.err = "boom"  # type: ignore[attr-defined]
+
+    r = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert r.status_code == 503
+    data = r.json()
+    assert data["error"] == "decision_pipeline unavailable"
+    assert data["detail"] == "decision_pipeline unavailable"
+    assert "boom" not in data["detail"]
+
+
+def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
+    """
+    /v1/decide 実行失敗時に detail が一般化されることを確認する。
+    """
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+
+    r = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert r.status_code == 503
+    data = r.json()
+    assert data["error"] == "decision_pipeline execution failed"
+    assert data["detail"] == "decision_pipeline execution failed"
+    assert "boom" not in data["detail"]
+
+
 
 # -------------------------------------------------
 # FUJI quick validate (/v1/fuji/validate)
@@ -942,5 +988,4 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
-
 
