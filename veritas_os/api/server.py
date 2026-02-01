@@ -182,6 +182,9 @@ def _errstr(e: Exception) -> str:
     return f"{type(e).__name__}: {e}"
 
 
+DECIDE_GENERIC_ERROR = "service_unavailable"
+
+
 def _log_decide_failure(message: str, err: Optional[Exception | str]) -> None:
     """Log internal decide pipeline errors without exposing details to clients."""
     if err is None:
@@ -892,8 +895,8 @@ async def decide(req: DecideRequest, request: Request):
             status_code=503,
             content={
                 "ok": False,
-                "error": "decision_pipeline unavailable",
-                "detail": "decision_pipeline unavailable",
+                "error": DECIDE_GENERIC_ERROR,
+                "detail": DECIDE_GENERIC_ERROR,
                 "trust_log": None,  # ★互換
             },
         )
@@ -906,8 +909,8 @@ async def decide(req: DecideRequest, request: Request):
             status_code=503,
             content={
                 "ok": False,
-                "error": "decision_pipeline execution failed",
-                "detail": "decision_pipeline execution failed",
+                "error": DECIDE_GENERIC_ERROR,
+                "detail": DECIDE_GENERIC_ERROR,
                 "trust_log": None,  # ★互換
             },
         )
@@ -1237,7 +1240,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
