@@ -1,14 +1,17 @@
 # veritas/core/value_core.py
 from __future__ import annotations
+
+import fcntl
+import json
+import logging
+import os
+import re
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any
-import json, os, time
-import fcntl
 
-
-# === Utility: remove numbers to prevent ValueCore mis-detection ===
-import re
+logger = logging.getLogger(__name__)
 
 # 共通ユーティリティをインポート
 from .utils import _to_float, _clip01
@@ -96,7 +99,7 @@ class ValueProfile:
                 )
                 return cls(weights=_normalize_weights(merged))
         except Exception as e:
-            print("[ValueCore] load failed:", e)
+            logger.warning("load failed: %s", e)
 
         # 失敗したらデフォルトで作り直し
         prof = cls(weights=DEFAULT_WEIGHTS.copy())
@@ -282,7 +285,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
     """trust_log.jsonl の内容から ValueCore を自動調整"""
     log_file = Path(log_path)
     if not log_file.exists():
-        print("⚠️ trust_log.jsonl not found")
+        logger.warning("trust_log.jsonl not found")
         return
 
     scores: List[float] = []
@@ -296,14 +299,14 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
                 continue
 
     if not scores:
-        print("⚠️ No scores found in trust log.")
+        logger.warning("No scores found in trust log.")
         return
 
     # --- EMA ---
     ema, alpha = 0.0, 0.2
     for v in scores:
         ema = alpha * v + (1.0 - alpha) * ema
-    print(f"🧠 Trust EMA: {ema:.3f}")
+    logger.info("Trust EMA: %.3f", ema)
 
     prof = ValueProfile.load()
     w = prof.weights.copy()
@@ -317,7 +320,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
 
     prof.weights = _normalize_weights(w)
     prof.save()
-    print(f"✅ ValueCore rebalanced successfully at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info("ValueCore rebalanced successfully at %s", time.strftime('%Y-%m-%d %H:%M:%S'))
 
     # ==============================
 #   Trust Log への1行追記
@@ -358,7 +361,6 @@ def append_trust_log(
             finally:
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
-        # デバッグ用ログ
-        print(f"[ValueCore] trust_log appended: user={user_id}, score={s}")
+        logger.debug("trust_log appended: user=%s, score=%s", user_id, s)
     except Exception as e:
-        print("[ValueCore] append_trust_log failed:", e)
+        logger.warning("append_trust_log failed: %s", e)
