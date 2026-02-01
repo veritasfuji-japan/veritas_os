@@ -146,6 +146,30 @@ Example payload:
 
 ---
 
+## Docker (GHCR)
+
+Pull the latest image:
+
+```bash
+docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+Run the API server (equivalent to the uvicorn command above):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e OPENAI_API_KEY="YOUR_OPENAI_API_KEY" \
+  -e VERITAS_API_KEY="your-secret-api-key" \
+  -e LLM_PROVIDER="openai" \
+  -e LLM_MODEL="gpt-4.1-mini" \
+  ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+If your FastAPI entrypoint differs from `veritas_os.api.server:app`, update the
+Dockerfile `CMD` accordingly before building the image.
+
+---
+
 ## Architecture (High-Level)
 
 ### Core execution path
