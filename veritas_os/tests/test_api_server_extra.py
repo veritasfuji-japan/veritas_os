@@ -37,9 +37,11 @@ class DummyRequest:
 def _setup_env_and_rate_limit(monkeypatch):
     """
     - 毎テストで VERITAS_API_KEY をセット
+    - 毎テストで VERITAS_API_SECRET をセット
     - レートリミット用バケットをクリア
     """
     monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
     server._rate_bucket.clear()  # type: ignore[attr-defined]
     yield
     server._rate_bucket.clear()  # type: ignore[attr-defined]
@@ -132,6 +134,41 @@ def test_get_expected_api_key_falls_back_to_default(monkeypatch):
 
     got = server._get_expected_api_key()
     assert got == "cfg-key"
+
+
+def test_validate_api_credentials_on_startup_missing_key(monkeypatch):
+    """
+    APIキーが空の場合は RuntimeError を投げる。
+    """
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
+    with pytest.raises(RuntimeError, match="VERITAS_API_KEY is required"):
+        server._validate_api_credentials_on_startup()
+
+
+def test_validate_api_credentials_on_startup_missing_secret(monkeypatch):
+    """
+    APIシークレットが空/プレースホルダーの場合は RuntimeError を投げる。
+    """
+    monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv(
+        "VERITAS_API_SECRET",
+        server._DEFAULT_API_SECRET_PLACEHOLDER,
+    )
+    with pytest.raises(RuntimeError, match="VERITAS_API_SECRET is required"):
+        server._validate_api_credentials_on_startup()
+
+
+def test_validate_api_credentials_on_startup_ok(monkeypatch):
+    """
+    APIキーとシークレットが設定済みなら例外なし。
+    """
+    monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
+    server._validate_api_credentials_on_startup()
 
 
 def test_get_cfg_fallback_disables_cors(monkeypatch):

@@ -397,6 +397,27 @@ def _get_expected_api_key() -> str:
     return (API_KEY_DEFAULT or "").strip()
 
 
+def _validate_api_credentials_on_startup() -> None:
+    """Validate required API credentials on startup.
+
+    Raises:
+        RuntimeError: When API key or secret is missing/placeholder.
+    """
+    expected_key = _get_expected_api_key()
+    if not expected_key:
+        raise RuntimeError("VERITAS_API_KEY is required at startup.")
+
+    api_secret = _get_api_secret()
+    if not api_secret:
+        raise RuntimeError("VERITAS_API_SECRET is required at startup.")
+
+
+@app.on_event("startup")
+def _startup_validate_api_credentials() -> None:
+    """FastAPI startup hook for mandatory API credential validation."""
+    _validate_api_credentials_on_startup()
+
+
 def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
     """
     テスト契約:
@@ -1240,7 +1261,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
