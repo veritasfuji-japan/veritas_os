@@ -17,6 +17,7 @@ VERITAS WorldOS - Unified World State Management
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import tempfile
@@ -27,6 +28,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .utils import _clip01
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -449,9 +452,9 @@ def _save_world(world: Dict[str, Any]) -> None:
 
         path = _world_path()
         _atomic_write_json(path, world)
-        print(f"[world] state saved -> {path}")
+        logger.debug("state saved -> %s", path)
     except Exception as e:
-        print("[world] save error:", e)
+        logger.warning("save error: %s", e)
 
 
 # ============================================================

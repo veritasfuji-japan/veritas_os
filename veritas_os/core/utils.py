@@ -209,6 +209,68 @@ def _to_text(x: Any) -> str:
     return str(x)
 
 
+# =============================================================================
+# JSON抽出ユーティリティ
+# =============================================================================
+
+
+def _strip_code_block(raw: str) -> str:
+    """
+    LLM出力から```json ... ``` などのコードブロックを除去する。
+
+    Args:
+        raw: LLMからの生文字列
+
+    Returns:
+        コードブロックを除去したクリーンな文字列
+
+    Examples:
+        >>> _strip_code_block('```json\\n{"a": 1}\\n```')
+        '{"a": 1}'
+        >>> _strip_code_block('{"a": 1}')
+        '{"a": 1}'
+    """
+    if not raw:
+        return ""
+
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        first_nl = cleaned.find("\n")
+        if first_nl != -1:
+            cleaned = cleaned[first_nl + 1:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3].strip()
+
+    return cleaned
+
+
+def _extract_json_object(raw: str) -> str:
+    """
+    文字列から最初のJSON objectを抽出する。
+
+    Args:
+        raw: JSON objectを含む可能性のある文字列
+
+    Returns:
+        抽出されたJSON文字列（見つからない場合は空文字列）
+
+    Examples:
+        >>> _extract_json_object('prefix {"a": 1} suffix')
+        '{"a": 1}'
+        >>> _extract_json_object('no json here')
+        ''
+    """
+    if not raw:
+        return ""
+
+    try:
+        start = raw.index("{")
+        end = raw.rindex("}") + 1
+        return raw[start:end]
+    except ValueError:
+        return ""
+
+
 __all__ = [
     # 数値変換
     "_safe_float",
@@ -220,4 +282,7 @@ __all__ = [
     "_get_nested",
     "_truncate",
     "_to_text",
+    # JSON抽出
+    "_strip_code_block",
+    "_extract_json_object",
 ]
