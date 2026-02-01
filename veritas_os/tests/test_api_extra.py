@@ -92,7 +92,11 @@ class TestMemoryAPI:
             "meta": {"source": "pytest", "category": "test"}
         }
         
-        put_response = client.post("/v1/memory/put", json=put_payload)
+        put_response = client.post(
+            "/v1/memory/put",
+            headers={"X-API-Key": "test-key"},
+            json=put_payload,
+        )
         assert put_response.status_code == 200
         
         put_data = put_response.json()
@@ -129,7 +133,11 @@ class TestMemoryAPI:
             "user_id": "test_user"
         }
         
-        response = client.post("/v1/memory/search", json=search_payload)
+        response = client.post(
+            "/v1/memory/search",
+            headers={"X-API-Key": "test-key"},
+            json=search_payload,
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -152,7 +160,11 @@ class TestMemoryAPI:
             "value": "simple string value"
         }
         
-        response = client.post("/v1/memory/put", json=minimal_payload)
+        response = client.post(
+            "/v1/memory/put",
+            headers={"X-API-Key": "test-key"},
+            json=minimal_payload,
+        )
         
         assert response.status_code == 200
         data = response.json()
@@ -460,5 +472,4 @@ class TestPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
 

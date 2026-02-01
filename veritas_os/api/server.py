@@ -1028,7 +1028,7 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
-@app.post("/v1/memory/put")
+@app.post("/v1/memory/put", dependencies=[Depends(require_api_key)])
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1098,7 +1098,7 @@ def memory_put(body: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/v1/memory/search")
+@app.post("/v1/memory/search", dependencies=[Depends(require_api_key)])
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
@@ -1223,7 +1223,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
