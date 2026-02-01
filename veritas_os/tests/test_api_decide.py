@@ -7,6 +7,7 @@ from veritas_os.api.server import app
 def test_decide_minimal(monkeypatch):
     # APIキーを設定
     monkeypatch.setenv("VERITAS_API_KEY", "test-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
     client = TestClient(app)
 
     payload = {
@@ -31,4 +32,3 @@ def test_decide_minimal(monkeypatch):
     assert "fuji" in data
     assert "gate" in data
     assert "trust_log" in data
-
