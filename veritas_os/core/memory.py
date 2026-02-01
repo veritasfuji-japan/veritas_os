@@ -44,6 +44,12 @@ except ImportError:
     joblib_load = None
 
 
+def _allow_legacy_pickle_migration() -> bool:
+    """レガシーpickle移行を許可するか判定する。"""
+    value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
+    return value in {"1", "true", "yes", "y", "on"}
+
+
 # ============================
 # ベクトル検索モジュール（組み込み）
 # ============================
@@ -97,7 +103,7 @@ class VectorMemory:
             self.model = None
 
     def _load_index(self):
-        """永続化されたインデックスをロード（JSON形式、旧pickle形式からの自動マイグレーション対応）"""
+        """永続化されたインデックスをロード（JSON形式、旧pickle形式からの移行は明示的許可時のみ）"""
         if not self.index_path:
             return
 
@@ -138,6 +144,12 @@ class VectorMemory:
 
             # 2) 旧pickle形式からのマイグレーション
             if legacy_pkl_path.exists() and legacy_pkl_path.suffix == ".pkl":
+                if not _allow_legacy_pickle_migration():
+                    logger.warning(
+                        "[VectorMemory] Legacy pickle migration disabled. "
+                        "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to enable."
+                    )
+                    return
                 logger.info("[VectorMemory] Migrating from legacy pickle format...")
                 try:
                     import pickle
@@ -1730,7 +1742,6 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 
 
