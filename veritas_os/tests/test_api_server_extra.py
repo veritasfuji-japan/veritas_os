@@ -13,9 +13,6 @@ import pytest
 import veritas_os.api.server as server
 
 
-client = TestClient(server.app)
-
-
 class DummyRequest:
     """
     verify_signature をユニットテストするための簡易 Request モック
@@ -37,12 +34,24 @@ class DummyRequest:
 def _setup_env_and_rate_limit(monkeypatch):
     """
     - 毎テストで VERITAS_API_KEY をセット
+    - 毎テストで VERITAS_API_SECRET をセット
     - レートリミット用バケットをクリア
     """
     monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
     server._rate_bucket.clear()  # type: ignore[attr-defined]
     yield
     server._rate_bucket.clear()  # type: ignore[attr-defined]
+
+
+@pytest.fixture
+def client(monkeypatch):
+    """
+    FastAPI TestClient with required API credentials.
+    """
+    monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
+    return TestClient(server.app)
 
 
 # -------------------------------------------------
@@ -50,7 +59,7 @@ def _setup_env_and_rate_limit(monkeypatch):
 # -------------------------------------------------
 
 
-def test_health_and_status_and_metrics():
+def test_health_and_status_and_metrics(client):
     # health 系
     for path in ("/health", "/v1/health"):
         r = client.get(path)
@@ -83,7 +92,7 @@ def test_health_and_status_and_metrics():
 # -------------------------------------------------
 
 
-def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch):
+def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch, client):
     """
     /v1/metrics が
       - SHADOW_DIR の decide_* ファイルをカウント
@@ -132,6 +141,41 @@ def test_get_expected_api_key_falls_back_to_default(monkeypatch):
 
     got = server._get_expected_api_key()
     assert got == "cfg-key"
+
+
+def test_validate_api_credentials_on_startup_missing_key(monkeypatch):
+    """
+    APIキーが空の場合は RuntimeError を投げる。
+    """
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
+    with pytest.raises(RuntimeError, match="VERITAS_API_KEY is required"):
+        server._validate_api_credentials_on_startup()
+
+
+def test_validate_api_credentials_on_startup_missing_secret(monkeypatch):
+    """
+    APIシークレットが空/プレースホルダーの場合は RuntimeError を投げる。
+    """
+    monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv(
+        "VERITAS_API_SECRET",
+        server._DEFAULT_API_SECRET_PLACEHOLDER,
+    )
+    with pytest.raises(RuntimeError, match="VERITAS_API_SECRET is required"):
+        server._validate_api_credentials_on_startup()
+
+
+def test_validate_api_credentials_on_startup_ok(monkeypatch):
+    """
+    APIキーとシークレットが設定済みなら例外なし。
+    """
+    monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-api-secret")
+    server._validate_api_credentials_on_startup()
 
 
 def test_get_cfg_fallback_disables_cors(monkeypatch):
