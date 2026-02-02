@@ -32,9 +32,9 @@ def rotate_if_needed() -> Path:
     if lines < MAX_LINES:
         return trust_log
 
-    # rotate
-    base = str(trust_log).replace(".jsonl", "")
-    rotated = Path(base + "_old.jsonl")
+    # rotate - use Path methods for safe suffix handling
+    # Using trust_log.stem ensures only the file suffix is removed, not all occurrences
+    rotated = trust_log.parent / (trust_log.stem + "_old.jsonl")
     if rotated.exists():
         rotated.unlink()
     trust_log.rename(rotated)

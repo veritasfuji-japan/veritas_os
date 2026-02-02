@@ -237,11 +237,9 @@ def _analyze_with_llm(
     latency_ms = int((time.time() - t0) * 1000)
 
     # Responses API の JSON 抜き出し
-    try:
-        out = resp.output[0].parsed  # type: ignore[attr-defined]
-    except Exception:
-        # format 崩れなどの時は content からパースしなおす運用でもOK
-        out = resp.output[0].parsed  # 失敗したら例外に任せる
+    # Note: resp.output[0].parsed should contain the structured output
+    # If parsing fails, re-raise the exception to be handled by the caller
+    out = resp.output[0].parsed  # type: ignore[attr-defined]
 
     risk = float(out.get("risk_score", 0.05) or 0.05)
     cats = out.get("categories") or []

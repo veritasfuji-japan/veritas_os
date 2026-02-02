@@ -22,6 +22,7 @@ Usage (モジュールとして):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -29,6 +30,8 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VERITAS Dashboard", version="1.0.0")
 security = HTTPBasic()
@@ -82,33 +85,44 @@ def _validate_log_dir(log_dir_str: str, allowed_base: Path) -> Path:
     """
     Validate and sanitize the log directory path to prevent path traversal.
 
+    Only allows paths that are under the allowed_base directory.
+    This prevents path traversal attacks that could expose sensitive system files.
+
     Args:
         log_dir_str: String path from environment variable
         allowed_base: The allowed base directory for logs
 
     Returns:
-        Validated Path object
+        Validated Path object (always under allowed_base)
 
-    Raises:
-        ValueError: If the path attempts path traversal outside allowed base
+    Note:
+        Falls back to allowed_base if the path is invalid or outside allowed_base.
     """
     try:
         resolved = Path(log_dir_str).expanduser().resolve()
         allowed_resolved = allowed_base.resolve()
-        # Allow exact match or child paths
-        if resolved == allowed_resolved or allowed_resolved in resolved.parents:
+
+        # Allow exact match with allowed_base
+        if resolved == allowed_resolved:
             return resolved
-        # For custom log directories, ensure they don't traverse to sensitive system paths
-        resolved_str = str(resolved)
-        for sensitive in SENSITIVE_SYSTEM_PATHS:
-            if resolved_str.startswith(sensitive + "/") or resolved_str == sensitive:
-                raise ValueError(
-                    f"Log directory cannot be in sensitive system path: {resolved}"
-                )
-        return resolved
+
+        # Allow child paths of allowed_base (resolved path must have allowed_base as parent)
+        # Check if allowed_resolved is a parent of resolved
+        if allowed_resolved in resolved.parents:
+            return resolved
+
+        # Reject all paths outside allowed_base - this is the security fix
+        # Previously, arbitrary paths were allowed if not in SENSITIVE_SYSTEM_PATHS
+        logger.warning(
+            "VERITAS_LOG_DIR '%s' is outside allowed base '%s', using default",
+            resolved,
+            allowed_resolved,
+        )
+        return allowed_base
+
     except (OSError, ValueError) as e:
         # Fall back to default on any path resolution error
-        print(f"[WARN] Invalid VERITAS_LOG_DIR, using default: {e}")
+        logger.warning("Invalid VERITAS_LOG_DIR, using default: %s", e)
         return allowed_base
 
 

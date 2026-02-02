@@ -773,8 +773,9 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             yield
         finally:
             try:
-                if lockfile.exists():
-                    lockfile.unlink()
+                # Use missing_ok=True to avoid TOCTOU race condition
+                # (file could be deleted between exists() check and unlink())
+                lockfile.unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"[MemoryOS] lockfile cleanup failed: {e}")
 
