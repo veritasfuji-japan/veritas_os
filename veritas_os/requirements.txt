@@ -1,6 +1,9 @@
 # =============================
 # VERITAS OS — Core Dependencies
 # =============================
+# All versions are pinned for reproducibility and security.
+# Run `pip install --upgrade <package>` and update this file
+# to upgrade specific packages after testing.
 
 # --- API / Server ---
 fastapi==0.115.0
@@ -8,26 +11,25 @@ uvicorn==0.30.3
 pydantic==2.8.2
 python-dotenv==1.0.1
 orjson==3.10.7
-PyYAML>=6.0
+PyYAML==6.0.1
 
 # --- Model / Decision Engine ---
-joblib>=1.4.0
-scikit-learn>=1.5.0
-sentence-transformers
+joblib==1.4.2
+scikit-learn==1.5.2
+sentence-transformers==3.0.1
 
 # --- OpenAI / LLM Integration ---
-openai>=1.0.0
-requests>=2.31.0
-anthropic>=0.7.0
+openai==1.51.0
+requests==2.31.0
+anthropic==0.34.2
 
 # --- CLI / Dashboard Tools ---
-matplotlib>=3.8.0
-jinja2>=3.1.0
-numpy>=1.26.0
-pandas>=2.2.0
-pdfplumber>=0.11.0
-trio
-
+matplotlib==3.9.2
+jinja2==3.1.4
+numpy==1.26.4
+pandas==2.2.3
+pdfplumber==0.11.4
+trio==0.26.2
 
 # --- System Tools (optional but stable) ---
-psutil>=5.9.0
+psutil==6.0.0
