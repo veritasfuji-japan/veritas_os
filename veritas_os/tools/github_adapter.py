@@ -10,10 +10,13 @@ import os
 import requests
 
 
-GITHUB_TOKEN = os.environ.get("VERITAS_GITHUB_TOKEN", "")
+GITHUB_TOKEN = os.environ.get("VERITAS_GITHUB_TOKEN", "").strip()
 
 # URL が長くなりすぎないようにクエリ長を制限
 MAX_QUERY_LEN = 256
+
+# GitHub API の per_page 上限
+GITHUB_API_MAX_PER_PAGE = 100
 
 
 def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
@@ -63,9 +66,11 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         }
 
     url = "https://api.github.com/search/repositories"
+    # GitHub API の per_page は最大100なので制限する
+    per_page = min(max_results, GITHUB_API_MAX_PER_PAGE)
     params = {
         "q": q,
-        "per_page": max_results,
+        "per_page": per_page,
     }
     headers = {
         "Accept": "application/vnd.github+json",
