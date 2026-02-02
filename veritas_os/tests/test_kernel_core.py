@@ -10,6 +10,8 @@ VERITAS core.kernel 用のユニットテスト（v2-compatible版）
 ※ 実装との差異で落ちないように、実装に合わせて少し緩めにしてある。
 """
 
+from typing import Any, Dict
+
 import pytest
 
 from veritas_os.core import kernel
@@ -420,3 +422,76 @@ async def test_decide_respects_pipeline_skip_flags(monkeypatch):
     assert res["fuji"]["decision_status"] == "allow"
 
 
+# ============================================================
+# decide: PII マスキング（MemoryOS 保存前）
+# ============================================================
+
+@pytest.mark.anyio
+async def test_decide_masks_pii_before_memory_save(monkeypatch):
+    captured: Dict[str, Any] = {}
+
+    def fake_put(*args, **kwargs):
+        if len(args) == 2:
+            record = args[1]
+        else:
+            record = args[2]
+        captured["record"] = record
+        return True
+
+    def fake_fuji_evaluate(query, context, evidence, alternatives):
+        return {
+            "status": "allow",
+            "decision_status": "allow",
+            "rejection_reason": None,
+            "reasons": [],
+            "violations": [],
+            "risk": 0.1,
+            "checks": [],
+            "guidance": None,
+            "modifications": [],
+            "redactions": [],
+            "safe_instructions": [],
+        }
+
+    monkeypatch.setattr(kernel.mem_core.MEM, "put", fake_put)
+    monkeypatch.setattr(
+        kernel.world_model,
+        "inject_state_into_context",
+        lambda context, user_id: {**context, "_world_state_injected": True},
+    )
+    monkeypatch.setattr(
+        kernel.mem_core,
+        "summarize_for_planner",
+        lambda user_id, query, limit: "summary",
+    )
+    monkeypatch.setattr(
+        kernel.mem_core,
+        "get_evidence_for_decision",
+        lambda decision_snapshot, user_id, top_k: [],
+    )
+    monkeypatch.setattr(
+        kernel.planner_core,
+        "plan_for_veritas_agi",
+        lambda context, query: {"steps": [{"id": "s1", "title": "step1"}]},
+    )
+    monkeypatch.setattr(kernel.fuji_core, "evaluate", fake_fuji_evaluate)
+    monkeypatch.setattr(kernel.adapt, "load_persona", lambda: {"bias_weights": {}})
+    monkeypatch.setattr(kernel.adapt, "clean_bias_weights", lambda b: b)
+
+    ctx = {
+        "user_id": "test-user",
+        "fast": True,
+        "mode": "fast",
+        "auto_doctor": False,
+        "_daily_plans_generated_by_pipeline": True,
+    }
+    query = "連絡先は test@example.com と 090-1234-5678 です"
+
+    res = await kernel.decide(ctx, query, alternatives=None)
+
+    record = captured["record"]
+    assert "test@example.com" not in record["text"]
+    assert "090-1234-5678" not in record["text"]
+
+    warning = res.get("extras", {}).get("memory_log", {}).get("warning")
+    assert warning is not None

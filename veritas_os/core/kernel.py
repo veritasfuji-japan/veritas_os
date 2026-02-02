@@ -67,6 +67,13 @@ try:  # 任意: 戦略レイヤー（なければ無視）
 except Exception:  # pragma: no cover
     strategy_core = None  # type: ignore
 
+try:
+    from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
+    _HAS_SANITIZE = True
+except Exception:  # pragma: no cover
+    _mask_pii = None  # type: ignore
+    _HAS_SANITIZE = False
+
 from veritas_os.tools import call_tool
 
 
@@ -147,6 +154,37 @@ def _safe_load_persona() -> Dict[str, Any]:
         return {}
     except Exception:
         return {}
+
+
+def _redact_text(text: str) -> str:
+    """Return a PII-masked string for logs and memory persistence."""
+    if not text:
+        return text
+    if _HAS_SANITIZE and _mask_pii is not None:
+        try:
+            return _mask_pii(text)
+        except Exception:
+            pass
+    text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
+    text = re.sub(
+        r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b",
+        "[redacted:phone]",
+        text,
+    )
+    return text
+
+
+def redact_payload(value: Any) -> Any:
+    """Recursively mask PII in strings before persisting logs or memory."""
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, dict):
+        return {k: redact_payload(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_payload(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(redact_payload(v) for v in value)
+    return value
 
 
 # ============================================================
@@ -973,14 +1011,23 @@ async def decide(
                     "intent": intent,
                 },
             }
+            redacted_episode_record = redact_payload(episode_record)
+            if redacted_episode_record != episode_record:
+                log.warning(
+                    "PII detected in kernel.decide episode log; masked before persistence."
+                )
+                extras.setdefault("memory_log", {})
+                extras["memory_log"]["warning"] = (
+                    "PII detected in episode log; masked before persistence."
+                )
 
             try:
-                mem_core.MEM.put("episodic", episode_record)
+                mem_core.MEM.put("episodic", redacted_episode_record)
             except TypeError:
                 mem_core.MEM.put(
                     user_id,
                     f"decision:{req_id}",
-                    episode_record,
+                    redacted_episode_record,
                 )
 
         except Exception as e:
@@ -1124,7 +1171,5 @@ async def decide(
         "decision_status": decision_status,
         "rejection_reason": rejection_reason,
     }
-
-
 
 
