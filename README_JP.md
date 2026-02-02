@@ -70,6 +70,12 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
 ````
 
+> **注意（kernel 経由 vs pipeline 経由）**  
+> `kernel.py` 経由の `/v1/decide` では `telos_score` は `telos_weights` から簡易算出され、  
+> `pipeline.py` の **ValueCore 評価**（`value_core.evaluate`）や **TrustLog への監査書き込み** は
+> **実行されません**。ValueCore/TrustLog を含む完全な評価・監査が必要な場合は
+> **pipeline 経由**の実行を前提にしてください。
+
 同梱サブシステム：
 
 * **MemoryOS** — エピソード/セマンティック記憶、検索
