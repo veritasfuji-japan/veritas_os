@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 
 # リポジトリルート: .../veritas_clean_test2/veritas_os
@@ -12,18 +13,64 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # ---- ログ周り ----
 
-# ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う
-DATA_BASE = os.getenv("VERITAS_DATA_DIR")
-if DATA_BASE:
-    # 例: /tmp/pytest-xxx など
-    LOG_ROOT = Path(DATA_BASE).expanduser()
-else:
-    # 従来どおり VERITAS_LOG_ROOT → scripts/logs の順で使う
-    LOG_ROOT = Path(
-        os.getenv("VERITAS_LOG_ROOT", str(SCRIPTS_DIR / "logs"))
-    ).expanduser()
 
+def _as_bool_env(value: str | None) -> bool:
+    """Return True when the environment value represents an enabled flag."""
+    if not value:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _resolve_log_root() -> Path:
+    """Resolve the base log root with optional encrypted-path enforcement."""
+    encrypted_root = os.getenv("VERITAS_ENCRYPTED_LOG_ROOT")
+    data_base = os.getenv("VERITAS_DATA_DIR")
+    log_root_env = os.getenv("VERITAS_LOG_ROOT")
+    require_encrypted = _as_bool_env(
+        os.getenv("VERITAS_REQUIRE_ENCRYPTED_LOG_DIR")
+    )
+
+    if encrypted_root:
+        log_root = Path(encrypted_root).expanduser()
+    elif data_base:
+        log_root = Path(data_base).expanduser()
+    else:
+        log_root = Path(log_root_env or str(SCRIPTS_DIR / "logs")).expanduser()
+
+    if require_encrypted:
+        if not encrypted_root:
+            raise RuntimeError(
+                "VERITAS_REQUIRE_ENCRYPTED_LOG_DIR=1 requires "
+                "VERITAS_ENCRYPTED_LOG_ROOT to be set."
+            )
+        encrypted_path = Path(encrypted_root).expanduser().resolve()
+        try:
+            log_root.resolve().relative_to(encrypted_path)
+        except ValueError as exc:
+            raise RuntimeError(
+                "LOG_ROOT must be within VERITAS_ENCRYPTED_LOG_ROOT when "
+                "VERITAS_REQUIRE_ENCRYPTED_LOG_DIR=1."
+            ) from exc
+
+    return log_root
+
+
+def _ensure_secure_permissions(path: Path) -> None:
+    """Restrict permissions to owner-only (700) for log directories."""
+    if os.name == "nt":
+        return
+    try:
+        current_mode = stat.S_IMODE(path.stat().st_mode)
+        if current_mode != 0o700:
+            os.chmod(path, 0o700)
+    except OSError as exc:
+        print(f"[WARN] Failed to set permissions on {path}: {exc}")
+
+
+# ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う
+LOG_ROOT = _resolve_log_root()
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
+_ensure_secure_permissions(LOG_ROOT)
 
 # trust_log など通常ログ
 LOG_DIR = LOG_ROOT
@@ -33,6 +80,7 @@ LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 # decide_* や shadow 用
 DASH_DIR = LOG_ROOT / "DASH"
 DASH_DIR.mkdir(parents=True, exist_ok=True)
+_ensure_secure_permissions(DASH_DIR)
 
 # doctor/shadow decide 用ディレクトリ
 SHADOW_DIR = DASH_DIR
@@ -68,4 +116,3 @@ __all__ = [
     "VAL_JSON",
     "META_LOG",
 ]
-

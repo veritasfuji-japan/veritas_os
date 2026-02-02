@@ -123,6 +123,8 @@ export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
+export VERITAS_ENCRYPTED_LOG_ROOT="/path/to/encrypted/logs"
+export VERITAS_REQUIRE_ENCRYPTED_LOG_DIR="1"
 ```
 
 ### 3) サーバ起動
@@ -198,6 +200,19 @@ h_t = SHA256(h_{t-1} || r_t)
   監査・解析の際は **両方のパスにログが分散し得る**ことに注意してください。
 - ログ保存先を統一したい場合は `VERITAS_DATA_DIR`/`VERITAS_LOG_ROOT` の設定を優先してください。
   いずれのパスも **機微情報が含まれる可能性**があるため、アクセス権限と保管ポリシーを必ず確認してください。
+
+### ログ保管ポリシー（暗号化 + 権限制御の推奨）
+
+VERITAS のログは機微情報を含む可能性があるため、**暗号化ボリューム上に保管する運用**を推奨します。
+以下の環境変数でログ出力先の強制と権限制御を行えます。
+
+- `VERITAS_ENCRYPTED_LOG_ROOT`: 暗号化済みボリューム上のログ保存先
+- `VERITAS_REQUIRE_ENCRYPTED_LOG_DIR=1`: ログ出力先を暗号化パスに強制
+
+運用上の推奨:
+- 暗号化ボリューム（LUKS, BitLocker, EBS暗号化等）へマウント
+- ログディレクトリは **chmod 700**（所有者のみアクセス）
+- バックアップ先も暗号化 & アクセス制御を必須にする
 
 ---
 
