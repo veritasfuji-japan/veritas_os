@@ -279,8 +279,10 @@ class DecideRequest(BaseModel):
     context: Dict[str, Any] = Field(default_factory=dict)
 
     # ★ 受け口は AltIn にする（dict/Option/AltItem 全受け）
-    alternatives: Optional[List[AltIn]] = Field(default=None, max_length=MAX_LIST_ITEMS)
-    options: Optional[List[AltIn]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    # Note: max_length is for strings; Pydantic v2 doesn't have max_items for Lists in Field
+    # List size validation is done in the field_validator below
+    alternatives: Optional[List[AltIn]] = None
+    options: Optional[List[AltIn]] = None
 
     min_evidence: int = Field(default=1, ge=0, le=100)
     memory_auto_put: bool = True
@@ -299,6 +301,9 @@ class DecideRequest(BaseModel):
             return []
         # dict/scalar/iterable -> list
         items = _as_list(v)
+        # Enforce list size limit
+        if len(items) > MAX_LIST_ITEMS:
+            raise ValueError(f"alternatives list exceeds maximum size of {MAX_LIST_ITEMS}")
         return [_altin_to_altitem(x) for x in items]
 
     @field_validator("options", mode="before")
@@ -307,6 +312,9 @@ class DecideRequest(BaseModel):
         if v is None:
             return []
         items = _as_list(v)
+        # Enforce list size limit
+        if len(items) > MAX_LIST_ITEMS:
+            raise ValueError(f"options list exceeds maximum size of {MAX_LIST_ITEMS}")
         return [_altin_to_altitem(x) for x in items]
 
     @model_validator(mode="after")

@@ -9,6 +9,14 @@ from typing import List, Tuple, Iterable, Optional, Any
 from veritas_os.core.atomic_io import atomic_write_npz
 
 
+class PickleSecurityWarning(UserWarning):
+    """
+    Custom warning category for pickle-related security risks.
+    Allows filtering of security warnings separately from other UserWarnings.
+    """
+    pass
+
+
 def _allow_legacy_pickle_npz() -> bool:
     """
     Allow loading legacy npz files that require pickle.
@@ -29,7 +37,7 @@ def _allow_legacy_pickle_npz() -> bool:
             "VERITAS_MEMORY_ALLOW_LEGACY_NPZ is enabled. This is a security risk. "
             "Pickle deserialization can execute arbitrary code. "
             "Disable after migrating legacy data files.",
-            UserWarning,  # Use UserWarning for security concerns
+            PickleSecurityWarning,
             stacklevel=2,
         )
         return True
