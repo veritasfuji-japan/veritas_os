@@ -13,6 +13,9 @@ HOME_MEMORY.mkdir(parents=True, exist_ok=True)
 
 BASE = HOME_MEMORY
 
+# クエリ長の上限（DoS対策）
+MAX_QUERY_LENGTH = 10000
+
 FILES = {
     "episodic": BASE / "episodic.jsonl",
     "semantic": BASE / "semantic.jsonl",
@@ -140,6 +143,10 @@ class MemoryStore:
         query = (query or "").strip()
         if not query:
             return {}
+
+        # ★ DoS対策: クエリ長の制限
+        if len(query) > MAX_QUERY_LENGTH:
+            raise ValueError(f"Query too long (max {MAX_QUERY_LENGTH} chars)")
 
         kinds = kinds or list(FILES.keys())
 
