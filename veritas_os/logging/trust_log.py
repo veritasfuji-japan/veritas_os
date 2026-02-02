@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
@@ -29,6 +30,10 @@ LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 
 # trust_log.json に保持する最大件数
 MAX_JSON_ITEMS = 2000
+
+# スレッドセーフ化: ハッシュチェーンの整合性を保証するためのロック
+# ★ マルチスレッド環境（FastAPI等）での同時書き込みによるチェーン破損を防止
+_trust_log_lock = threading.RLock()
 
 
 # =============================================================================
@@ -147,57 +152,62 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     - JSONL は 5000 行でローテーション（rotate.py 側）
     - trust_log.json は最新 MAX_JSON_ITEMS 件だけ保持
 
+    ★ スレッドセーフ: RLock で全操作を保護（ハッシュチェーンの整合性保証）
+
     Returns:
         sha256, sha256_prev が付与されたエントリ（渡された entry も更新される）
     """
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-
-    # ---- 直前ハッシュの取得（JSON 側）----
-    items = _load_logs_json()
-    sha256_prev = None
-    if items:
-        last = items[-1]
-        sha256_prev = last.get("sha256")
-
-    # 元 entry を壊さないようにコピー
-    entry = dict(entry)
-    entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
-    entry["sha256_prev"] = sha256_prev
-
-    # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
-    # エントリから sha256 と sha256_prev を除外（これが rₜ）
-    hash_payload = dict(entry)
-    hash_payload.pop("sha256", None)
-    hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
-    
-    # rₜ を JSON化（キーをソートして一意性を保証）
-    entry_json = json.dumps(hash_payload, sort_keys=True, ensure_ascii=False)
-    
-    # hₜ₋₁ || rₜ を結合
-    if sha256_prev:
-        combined = sha256_prev + entry_json
-    else:
-        # 最初のエントリの場合は rₜ のみ
-        combined = entry_json
-    
-    # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
-    entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
-
-    # ---- JSONL に1行追記 (with fsync for durability) ----
     import os
-    with open_trust_log_for_append() as f:
-        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
 
-    # ---- JSON(配列) を更新（最新 N 件だけ残す）----
-    items.append(entry)
-    if len(items) > MAX_JSON_ITEMS:
-        items = items[-MAX_JSON_ITEMS:]
+    # ★ スレッドセーフ: ハッシュチェーンの整合性を保証するためロックを取得
+    with _trust_log_lock:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-    _save_json(items)
+        # ---- 直前ハッシュの取得（JSON 側）----
+        items = _load_logs_json()
+        sha256_prev = None
+        if items:
+            last = items[-1]
+            sha256_prev = last.get("sha256")
 
-    return entry
+        # 元 entry を壊さないようにコピー
+        entry = dict(entry)
+        entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+        entry["sha256_prev"] = sha256_prev
+
+        # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
+        # エントリから sha256 と sha256_prev を除外（これが rₜ）
+        hash_payload = dict(entry)
+        hash_payload.pop("sha256", None)
+        hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
+
+        # rₜ を JSON化（キーをソートして一意性を保証）
+        entry_json = json.dumps(hash_payload, sort_keys=True, ensure_ascii=False)
+
+        # hₜ₋₁ || rₜ を結合
+        if sha256_prev:
+            combined = sha256_prev + entry_json
+        else:
+            # 最初のエントリの場合は rₜ のみ
+            combined = entry_json
+
+        # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
+        entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+        # ---- JSONL に1行追記 (with fsync for durability) ----
+        with open_trust_log_for_append() as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+
+        # ---- JSON(配列) を更新（最新 N 件だけ残す）----
+        items.append(entry)
+        if len(items) > MAX_JSON_ITEMS:
+            items = items[-MAX_JSON_ITEMS:]
+
+        _save_json(items)
+
+        return entry
 
 
 def write_shadow_decide(
