@@ -122,5 +122,28 @@ __all__ = [
     "DECISION_REJECTED",  # backward compatibility alias
     "is_valid_status",
     "normalize_status",
+    # Security constants
+    "SENSITIVE_SYSTEM_PATHS",
+    "MAX_RAW_BODY_LENGTH",
+    "MAX_LOG_FILE_SIZE",
 ]
+
+
+# ===== Security Constants =====
+# Sensitive system paths that should not be used for data storage
+# These paths are used across the codebase for path validation
+SENSITIVE_SYSTEM_PATHS: frozenset[str] = frozenset([
+    "/etc",
+    "/var/run",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/boot",
+])
+
+# Maximum length of raw_body to include in error responses (to prevent large payloads)
+MAX_RAW_BODY_LENGTH: int = 1000
+
+# Maximum log file size to load (10 MB) to prevent memory exhaustion
+MAX_LOG_FILE_SIZE: int = 10 * 1024 * 1024
 

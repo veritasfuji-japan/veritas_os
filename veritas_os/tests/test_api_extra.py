@@ -402,10 +402,13 @@ class TestMetrics:
 class TestErrorHandling:
     """エラーハンドリングのテスト"""
 
-    def test_validation_error_422(self, client):
+    def test_validation_error_422(self, client, monkeypatch):
         """
         バリデーションエラーが422を返すことを確認
         """
+        # Enable debug mode to include raw_body in response
+        monkeypatch.setenv("VERITAS_DEBUG_MODE", "true")
+
         # min_evidenceは整数なので、文字列を入れてエラーを発生させる
         response = client.post(
             "/v1/decide",
@@ -419,8 +422,29 @@ class TestErrorHandling:
         # カスタムエラーハンドラーの出力を確認
         assert "detail" in data
         assert "hint" in data
-        assert "raw_body" in data
+        assert "raw_body" in data  # Only present in debug mode
         assert "expected_example" in data["hint"]
+
+    def test_validation_error_422_no_raw_body_in_production(self, client, monkeypatch):
+        """
+        本番モード（デバッグ無効）では raw_body が含まれないことを確認
+        """
+        # Ensure debug mode is disabled
+        monkeypatch.delenv("VERITAS_DEBUG_MODE", raising=False)
+
+        response = client.post(
+            "/v1/decide",
+            headers={"X-API-Key": "test-key"},
+            json={"min_evidence": "not-an-int"}
+        )
+
+        assert response.status_code == 422
+        data = response.json()
+
+        # Security: raw_body should NOT be present in production
+        assert "detail" in data
+        assert "hint" in data
+        assert "raw_body" not in data
 
     def test_missing_api_key(self, client):
         """

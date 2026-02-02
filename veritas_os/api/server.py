@@ -24,7 +24,12 @@ from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
-from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED  # noqa: F401
+from veritas_os.api.constants import (
+    DECISION_ALLOW,
+    DECISION_REJECTED,
+    MAX_LOG_FILE_SIZE,
+    MAX_RAW_BODY_LENGTH,
+)  # noqa: F401
 
 # ---- アトミック I/O（信頼性向上）----
 try:
@@ -760,18 +765,27 @@ def _decide_example() -> dict:
 
 @app.exception_handler(RequestValidationError)
 async def on_validation_error(request: Request, exc: RequestValidationError):
-    raw_body_bytes = await request.body()
-    raw = raw_body_bytes.decode("utf-8", "replace") if raw_body_bytes else ""
-    # 本番で危険になりやすいので最低限マスク
-    raw_safe = redact(raw)
-    return JSONResponse(
-        status_code=422,
-        content={
-            "detail": exc.errors(),
-            "hint": {"expected_example": _decide_example()},
-            "raw_body": raw_safe,
-        },
-    )
+    """
+    Handle validation errors with limited information disclosure.
+
+    Security: Only include raw_body in debug mode to prevent potential
+    information leakage in production environments.
+    """
+    # Build response content
+    content: Dict[str, Any] = {
+        "detail": exc.errors(),
+        "hint": {"expected_example": _decide_example()},
+    }
+
+    # Only include raw_body in debug mode (when env var is set)
+    if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+        raw_body_bytes = await request.body()
+        raw = raw_body_bytes.decode("utf-8", "replace") if raw_body_bytes else ""
+        # Apply PII masking and truncate to prevent large payloads
+        raw_safe = redact(raw)[:MAX_RAW_BODY_LENGTH]
+        content["raw_body"] = raw_safe
+
+    return JSONResponse(status_code=422, content=content)
 
 
 # ==============================
@@ -810,6 +824,7 @@ def status():
 # Trust log helpers（server 側でも軽く読めるように）
 # ==============================
 
+
 def _load_logs_json(path: Optional[Path] = None) -> list:
     """
     tests 互換:
@@ -822,6 +837,12 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
             path = log_json
 
         if not path.exists():
+            return []
+
+        # Security: Check file size before loading to prevent memory exhaustion
+        file_size = path.stat().st_size
+        if file_size > MAX_LOG_FILE_SIZE:
+            print(f"[WARN] Log file too large ({file_size} bytes), skipping load")
             return []
 
         with open(path, "r", encoding="utf-8") as f:
