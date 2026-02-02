@@ -575,13 +575,23 @@ def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-
 # ★ HMAC startup verification (Issue #64)
 # Verify that VERITAS_API_SECRET is properly configured at startup
 _startup_api_secret = _get_api_secret()
+_hmac_strict = os.getenv("VERITAS_HMAC_STRICT", "true").lower() in ("true", "1", "yes")
+
 if not _startup_api_secret:
-    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET not configured!")
+    msg = "[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET not configured!"
+    print(msg)
     print("[ERROR] Protected APIs will reject requests without valid HMAC signatures.")
     print("[ERROR] Please set VERITAS_API_SECRET environment variable to a secure value.")
+    if _hmac_strict:
+        print("[ERROR] Set VERITAS_HMAC_STRICT=false to allow server startup without HMAC secret (not recommended for production)")
+        raise RuntimeError("HMAC startup verification failed: API secret not configured")
 elif _is_placeholder_secret(_startup_api_secret.decode("utf-8")):
-    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET is set to placeholder!")
+    msg = "[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET is set to placeholder!"
+    print(msg)
     print("[ERROR] Please change VERITAS_API_SECRET to a secure, non-default value.")
+    if _hmac_strict:
+        print("[ERROR] Set VERITAS_HMAC_STRICT=false to allow server startup with placeholder (not recommended for production)")
+        raise RuntimeError("HMAC startup verification failed: API secret is placeholder value")
 else:
     print("[INFO] HMAC Startup Verification: API Secret configured successfully.")
 

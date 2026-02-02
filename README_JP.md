@@ -89,16 +89,31 @@ WorldModel → Planner → Memory/Web Evidence → Kernel → Debate → Critiqu
 
 ## API一覧（概要）
 
-保護されたエンドポイントは `X-API-Key` が必要です。
+保護されたエンドポイントは `X-API-Key` と **HMAC署名** が必要です。
 
-| Method | Path                  | 説明              |
-| ------ | --------------------- | --------------- |
-| GET    | `/health`             | ヘルスチェック         |
-| POST   | `/v1/decide`          | フル意思決定          |
-| POST   | `/v1/fuji/validate`   | 単一アクションをFUJIで評価 |
-| POST   | `/v1/memory/put`      | 記憶の保存           |
-| GET    | `/v1/memory/get`      | 記憶の取得           |
-| GET    | `/v1/logs/trust/{id}` | TrustLogエントリ取得  |
+| Method | Path                  | 説明              | 認証 |
+| ------ | --------------------- | --------------- | ---- |
+| GET    | `/health`             | ヘルスチェック         | なし |
+| POST   | `/v1/decide`          | フル意思決定          | API Key + HMAC |
+| POST   | `/v1/fuji/validate`   | 単一アクションをFUJIで評価 | API Key + HMAC |
+| POST   | `/v1/memory/put`      | 記憶の保存           | API Key + HMAC |
+| POST   | `/v1/memory/search`   | 記憶の検索           | API Key + HMAC |
+| POST   | `/v1/memory/get`      | 記憶の取得           | API Key + HMAC |
+| GET    | `/v1/logs/trust/{id}` | TrustLogエントリ取得  | なし |
+
+### HMAC認証について
+
+保護されたAPIは、リプレイ攻撃や改ざんを防ぐため、HMAC-SHA256署名を要求します。
+
+**必須ヘッダー:**
+- `X-API-Key`: APIキー
+- `X-Timestamp`: Unixタイムスタンプ（現在時刻）
+- `X-Nonce`: 一意のnonce値（UUID推奨）
+- `X-Signature`: HMAC-SHA256署名（`"{timestamp}\n{nonce}\n{body}"` のHMAC）
+
+**環境変数:**
+- `VERITAS_API_SECRET`: HMAC署名用のシークレット（必須、プレースホルダー不可）
+- `VERITAS_HMAC_STRICT`: `true`（デフォルト）で未設定時にサーバー起動を拒否、`false`でテスト用に緩和
 
 ---
 
@@ -121,11 +136,14 @@ pip install -r requirements.txt
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
+export VERITAS_API_SECRET="your-hmac-secret-key"  # HMAC署名用（必須）
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
 export VERITAS_ENCRYPTED_LOG_ROOT="/path/to/encrypted/logs"
 export VERITAS_REQUIRE_ENCRYPTED_LOG_DIR="1"
 ```
+
+**注意**: `VERITAS_API_SECRET`は保護されたAPIで必須です。強固なランダム文字列を使用してください（例: `openssl rand -hex 32`）。
 
 ### 3) サーバ起動
 

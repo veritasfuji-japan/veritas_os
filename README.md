@@ -82,16 +82,31 @@ Bundled subsystems:
 
 ## API Overview
 
-All protected endpoints require `X-API-Key`.
+All protected endpoints require `X-API-Key` and **HMAC signature**.
 
-| Method | Path                  | Description                       |
-| ------ | --------------------- | --------------------------------- |
-| GET    | `/health`             | Health check                      |
-| POST   | `/v1/decide`          | Full decision loop                |
-| POST   | `/v1/fuji/validate`   | Validate a single action via FUJI |
-| POST   | `/v1/memory/put`      | Persist memory                    |
-| GET    | `/v1/memory/get`      | Retrieve memory                   |
-| GET    | `/v1/logs/trust/{id}` | TrustLog entry by ID              |
+| Method | Path                  | Description                       | Auth |
+| ------ | --------------------- | --------------------------------- | ---- |
+| GET    | `/health`             | Health check                      | None |
+| POST   | `/v1/decide`          | Full decision loop                | API Key + HMAC |
+| POST   | `/v1/fuji/validate`   | Validate a single action via FUJI | API Key + HMAC |
+| POST   | `/v1/memory/put`      | Persist memory                    | API Key + HMAC |
+| POST   | `/v1/memory/search`   | Search memory                     | API Key + HMAC |
+| POST   | `/v1/memory/get`      | Retrieve memory                   | API Key + HMAC |
+| GET    | `/v1/logs/trust/{id}` | TrustLog entry by ID              | None |
+
+### HMAC Authentication
+
+Protected APIs require HMAC-SHA256 signatures to prevent replay attacks and tampering.
+
+**Required headers:**
+- `X-API-Key`: API key
+- `X-Timestamp`: Unix timestamp (current time)
+- `X-Nonce`: Unique nonce value (UUID recommended)
+- `X-Signature`: HMAC-SHA256 signature of `"{timestamp}\n{nonce}\n{body}"`
+
+**Environment variables:**
+- `VERITAS_API_SECRET`: Secret for HMAC signing (required, no placeholder allowed)
+- `VERITAS_HMAC_STRICT`: `true` (default) fails server startup if not configured, `false` allows for testing
 
 ---
 
@@ -114,9 +129,12 @@ pip install -r requirements.txt
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
+export VERITAS_API_SECRET="your-hmac-secret-key"  # Required for HMAC signatures
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
 ```
+
+**Note**: `VERITAS_API_SECRET` is required for protected APIs. Use a strong, random secret (e.g., `openssl rand -hex 32`).
 
 ### 3) Start server
 

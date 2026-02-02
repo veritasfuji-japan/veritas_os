@@ -30,6 +30,7 @@ jobs:
       PIP_NO_PYTHON_VERSION_WARNING: "1"
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_HMAC_STRICT: "false"
 
     steps:
       - name: Checkout
