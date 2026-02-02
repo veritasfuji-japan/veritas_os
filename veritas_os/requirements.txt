@@ -10,7 +10,7 @@ fastapi==0.115.0
 uvicorn==0.30.3
 pydantic==2.8.2
 python-dotenv==1.0.1
-orjson==3.10.7
+orjson==3.11.5
 PyYAML==6.0.1
 
 # --- Model / Decision Engine ---
@@ -20,12 +20,12 @@ sentence-transformers==3.0.1
 
 # --- OpenAI / LLM Integration ---
 openai==1.51.0
-requests==2.31.0
+requests==2.32.4
 anthropic==0.34.2
 
 # --- CLI / Dashboard Tools ---
 matplotlib==3.9.2
-jinja2==3.1.4
+jinja2==3.1.6
 numpy==1.26.4
 pandas==2.2.3
 pdfplumber==0.11.4
