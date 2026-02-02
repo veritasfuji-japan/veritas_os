@@ -981,6 +981,7 @@ def fuji_validate(payload: dict):
         result = _call_fuji(fc, action, context)
     except RuntimeError as e:
         # Check if this is the "neither validate_action nor validate" error
+        # Note: Using string matching is fragile but matches test expectations
         err_msg = str(e)
         if "neither validate_action nor validate" in err_msg:
             # This specific error should return 500 as expected by test_fuji_validate_no_impl_raises_500
@@ -1193,6 +1194,7 @@ def memory_get(body: dict):
         return {"ok": True, "value": value}
     except Exception as e:
         # Return error with exception details for debugging
+        # Note: In production, consider sanitizing error messages to avoid leaking sensitive info
         return {"ok": False, "error": str(e), "value": None}
 
 
