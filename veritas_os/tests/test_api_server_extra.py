@@ -2,18 +2,16 @@
 from __future__ import annotations
 
 import asyncio
-import json
-import time
 import hmac
+import json
+import secrets
+import time
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
-
-
-client = TestClient(server.app)
 
 
 class DummyRequest:
@@ -28,6 +26,33 @@ class DummyRequest:
         return self._body
 
 
+def _signed_body_and_headers(
+    payload: dict,
+    api_key: str = "test-api-key",
+    secret: bytes = b"test-secret",
+) -> tuple[str, dict]:
+    """
+    HMAC署名済みのボディとヘッダを生成する。
+    """
+    body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+    ts = str(int(time.time()))
+    nonce = secrets.token_hex(8)
+    signature_payload = f"{ts}\n{nonce}\n{body}"
+    signature = hmac.new(
+        secret,
+        signature_payload.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    headers = {
+        "X-API-Key": api_key,
+        "X-Timestamp": ts,
+        "X-Nonce": nonce,
+        "X-Signature": signature,
+        "Content-Type": "application/json",
+    }
+    return body, headers
+
+
 # -------------------------------------------------
 # 共通フィクスチャ: APIキー & レートリミットのリセット
 # -------------------------------------------------
@@ -40,9 +65,20 @@ def _setup_env_and_rate_limit(monkeypatch):
     - レートリミット用バケットをクリア
     """
     monkeypatch.setenv("VERITAS_API_KEY", "test-api-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-secret")
     server._rate_bucket.clear()  # type: ignore[attr-defined]
+    server._nonce_store.clear()  # type: ignore[attr-defined]
     yield
     server._rate_bucket.clear()  # type: ignore[attr-defined]
+    server._nonce_store.clear()  # type: ignore[attr-defined]
+
+
+@pytest.fixture
+def client():
+    """
+    TestClient をテスト毎に生成する。
+    """
+    return TestClient(server.app)
 
 
 # -------------------------------------------------
@@ -50,7 +86,7 @@ def _setup_env_and_rate_limit(monkeypatch):
 # -------------------------------------------------
 
 
-def test_health_and_status_and_metrics():
+def test_health_and_status_and_metrics(client):
     # health 系
     for path in ("/health", "/v1/health"):
         r = client.get(path)
@@ -83,7 +119,7 @@ def test_health_and_status_and_metrics():
 # -------------------------------------------------
 
 
-def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch):
+def test_metrics_counts_shadow_and_log(client, tmp_path, monkeypatch):
     """
     /v1/metrics が
       - SHADOW_DIR の decide_* ファイルをカウント
@@ -249,6 +285,33 @@ def test_verify_signature_missing_secret(monkeypatch):
 
     assert exc.value.status_code == 500
     assert "Server secret missing" in exc.value.detail
+
+
+def test_require_hmac_secret_missing(monkeypatch):
+    """
+    起動時チェック: VERITAS_API_SECRET 未設定なら RuntimeError。
+    """
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.delenv("VERITAS_API_SECRET", raising=False)
+
+    with pytest.raises(RuntimeError) as exc:
+        server._require_hmac_secret()
+    assert "VERITAS_API_SECRET is required" in str(exc.value)
+
+
+def test_require_hmac_secret_placeholder(monkeypatch):
+    """
+    起動時チェック: プレースホルダ設定なら RuntimeError。
+    """
+    monkeypatch.setattr(server, "API_SECRET", b"")
+    monkeypatch.setenv(
+        "VERITAS_API_SECRET",
+        server._DEFAULT_API_SECRET_PLACEHOLDER,
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        server._require_hmac_secret()
+    assert "placeholder" in str(exc.value)
 
 
 def test_verify_signature_placeholder_secret(monkeypatch):
@@ -422,16 +485,18 @@ def test_redact_masks_email_and_phone():
     assert "〔電話〕" in red or "[redacted:phone]" in red
 
 
-def test_decide_requires_api_key():
+def test_decide_requires_api_key(client):
     """
     /v1/decide は API キー無しだと 401 になることを確認
     """
     body = server._decide_example()
-    r = client.post("/v1/decide", json=body)
+    signed_body, headers = _signed_body_and_headers(body)
+    headers.pop("X-API-Key")
+    r = client.post("/v1/decide", content=signed_body, headers=headers)
     assert r.status_code == 401
 
 
-def test_decide_validation_error_handler_returns_hint():
+def test_decide_validation_error_handler_returns_hint(client):
     """
     /v1/decide に「おかしなボディ」を投げたときの挙動をテストする。
 
@@ -440,11 +505,9 @@ def test_decide_validation_error_handler_returns_hint():
 
     どちらの挙動でもテストが通るようにしておく。
     """
-    r = client.post(
-        "/v1/decide",
-        json={"invalid": "payload"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"invalid": "payload"}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/decide", content=body, headers=headers)
 
     if r.status_code == 422:
         # カスタム validation handler パス
@@ -464,7 +527,7 @@ def test_decide_validation_error_handler_returns_hint():
         assert any(k in data for k in ("request_id", "status", "result", "decision"))
 
 
-def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
+def test_decide_pipeline_unavailable_hides_detail(client, monkeypatch):
     """
     /v1/decide がパイプライン不在のとき、
     detail が一般的なメッセージになることを確認する。
@@ -472,11 +535,8 @@ def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: None)
     server._pipeline_state.err = "boom"  # type: ignore[attr-defined]
 
-    r = client.post(
-        "/v1/decide",
-        json=server._decide_example(),
-        headers={"X-API-Key": "test-api-key"},
-    )
+    body, headers = _signed_body_and_headers(server._decide_example())
+    r = client.post("/v1/decide", content=body, headers=headers)
 
     assert r.status_code == 503
     data = r.json()
@@ -485,7 +545,7 @@ def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
     assert "boom" not in data["detail"]
 
 
-def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
+def test_decide_pipeline_execution_failure_hides_detail(client, monkeypatch):
     """
     /v1/decide 実行失敗時に detail が一般化されることを確認する。
     """
@@ -497,11 +557,8 @@ def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
 
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
 
-    r = client.post(
-        "/v1/decide",
-        json=server._decide_example(),
-        headers={"X-API-Key": "test-api-key"},
-    )
+    body, headers = _signed_body_and_headers(server._decide_example())
+    r = client.post("/v1/decide", content=body, headers=headers)
 
     assert r.status_code == 503
     data = r.json()
@@ -516,7 +573,7 @@ def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
 # -------------------------------------------------
 
 
-def test_fuji_validate_uses_validate_action(monkeypatch):
+def test_fuji_validate_uses_validate_action(client, monkeypatch):
     """
     fuji_core.validate_action がある場合、その経路が使われる
     """
@@ -531,11 +588,9 @@ def test_fuji_validate_uses_validate_action(monkeypatch):
     # validate_action を持つ Dummy に差し替え
     monkeypatch.setattr(server, "fuji_core", DummyFuji())
 
-    r = client.post(
-        "/v1/fuji/validate",
-        json={"action": "do-x", "context": {"foo": "bar"}},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"action": "do-x", "context": {"foo": "bar"}}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/fuji/validate", content=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "ok"
@@ -543,7 +598,7 @@ def test_fuji_validate_uses_validate_action(monkeypatch):
     assert calls == [("do-x", {"foo": "bar"})]
 
 
-def test_fuji_validate_falls_back_to_validate(monkeypatch):
+def test_fuji_validate_falls_back_to_validate(client, monkeypatch):
     """
     validate_action が無く validate だけある場合、validate 経由になる
     """
@@ -555,18 +610,16 @@ def test_fuji_validate_falls_back_to_validate(monkeypatch):
 
     monkeypatch.setattr(server, "fuji_core", DummyFuji())
 
-    r = client.post(
-        "/v1/fuji/validate",
-        json={"action": "do-y", "context": {"x": 1}},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"action": "do-y", "context": {"x": 1}}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/fuji/validate", content=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
     assert data["status"] == "legacy"
     assert "via validate" in data["reason"]
 
 
-def test_fuji_validate_no_impl_raises_500(monkeypatch):
+def test_fuji_validate_no_impl_raises_500(client, monkeypatch):
     """
     validate_action も validate も無い場合は 500 を返す
     """
@@ -576,11 +629,9 @@ def test_fuji_validate_no_impl_raises_500(monkeypatch):
 
     monkeypatch.setattr(server, "fuji_core", DummyFuji())
 
-    r = client.post(
-        "/v1/fuji/validate",
-        json={"action": "do-z", "context": {}},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"action": "do-z", "context": {}}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/fuji/validate", content=body, headers=headers)
     assert r.status_code == 500
     data = r.json()
     assert "fuji_core has neither" in data["detail"]
@@ -678,16 +729,13 @@ def test_write_shadow_decide_creates_file(tmp_path, monkeypatch):
 # -------------------------------------------------
 
 
-def test_memory_put_and_get_roundtrip():
+def test_memory_put_and_get_roundtrip(client):
     """
     /v1/memory/put (レガシーKV) → /v1/memory/get で値が取れること
     """
     body = {"user_id": "user1", "key": "k_legacy", "value": {"foo": "bar"}}
-    r = client.post(
-        "/v1/memory/put",
-        json=body,
-        headers={"X-API-Key": "test-api-key"},
-    )
+    put_body, put_headers = _signed_body_and_headers(body)
+    r = client.post("/v1/memory/put", content=put_body, headers=put_headers)
     assert r.status_code == 200
     data = r.json()
 
@@ -696,18 +744,16 @@ def test_memory_put_and_get_roundtrip():
     assert data["legacy"]["key"] == "k_legacy"
 
     # /v1/memory/get は APIキー必須
-    r2 = client.post(
-        "/v1/memory/get",
-        json={"user_id": "user1", "key": "k_legacy"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    get_payload = {"user_id": "user1", "key": "k_legacy"}
+    get_body, get_headers = _signed_body_and_headers(get_payload)
+    r2 = client.post("/v1/memory/get", content=get_body, headers=get_headers)
     assert r2.status_code == 200
     data2 = r2.json()
     assert data2["ok"] is True
     assert data2["value"] == {"foo": "bar"}
 
 
-def test_memory_put_vector_and_size_and_kind():
+def test_memory_put_vector_and_size_and_kind(client):
     """
     /v1/memory/put の新フォーマット（vector側）の保存結果を確認
     """
@@ -719,11 +765,8 @@ def test_memory_put_vector_and_size_and_kind():
         "tags": ["tag1"],
         "meta": {"source": "test"},
     }
-    r = client.post(
-        "/v1/memory/put",
-        json=body,
-        headers={"X-API-Key": "test-api-key"},
-    )
+    put_body, put_headers = _signed_body_and_headers(body)
+    r = client.post("/v1/memory/put", content=put_body, headers=put_headers)
     assert r.status_code == 200
     data = r.json()
 
@@ -734,7 +777,7 @@ def test_memory_put_vector_and_size_and_kind():
     assert data["size"] == len(text)  # size は text 長さ
 
 
-def test_memory_search_filters_by_user(monkeypatch):
+def test_memory_search_filters_by_user(client, monkeypatch):
     """
     memory_search:
       - dict 形式ヒットに user_id フィルタがかかる
@@ -763,11 +806,9 @@ def test_memory_search_filters_by_user(monkeypatch):
     monkeypatch.setattr(server.MEMORY_STORE, "search", fake_search)
 
     # user_id 指定あり → meta.user_id 一致分だけ
-    r = client.post(
-        "/v1/memory/search",
-        json={"query": "q", "user_id": "userX"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    search_payload = {"query": "q", "user_id": "userX"}
+    search_body, search_headers = _signed_body_and_headers(search_payload)
+    r = client.post("/v1/memory/search", content=search_body, headers=search_headers)
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is True
@@ -775,10 +816,12 @@ def test_memory_search_filters_by_user(monkeypatch):
     assert data["hits"][0]["meta"]["user_id"] == "userX"
 
     # user_id なし → dict + 文字列ラップ分 全部返る
+    search_payload_all = {"query": "q"}
+    search_body_all, search_headers_all = _signed_body_and_headers(search_payload_all)
     r2 = client.post(
         "/v1/memory/search",
-        json={"query": "q"},
-        headers={"X-API-Key": "test-api-key"},
+        content=search_body_all,
+        headers=search_headers_all,
     )
     assert r2.status_code == 200
     data2 = r2.json()
@@ -794,7 +837,7 @@ def test_memory_search_filters_by_user(monkeypatch):
 # -------------------------------------------------
 
 
-def test_memory_search_error_path(monkeypatch):
+def test_memory_search_error_path(client, monkeypatch):
     """
     MEMORY_STORE.search が例外を投げたときに
     {ok: False, hits: [], count: 0} を返すパス
@@ -805,11 +848,9 @@ def test_memory_search_error_path(monkeypatch):
 
     monkeypatch.setattr(server.MEMORY_STORE, "search", boom)
 
-    r = client.post(
-        "/v1/memory/search",
-        json={"query": "q"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"query": "q"}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/memory/search", content=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
 
@@ -819,7 +860,7 @@ def test_memory_search_error_path(monkeypatch):
     assert "search failed" in data["error"]
 
 
-def test_memory_get_error_path(monkeypatch):
+def test_memory_get_error_path(client, monkeypatch):
     """
     MEMORY_STORE.get が例外を投げたときに
     {ok: False, value: None} を返すパス
@@ -830,11 +871,9 @@ def test_memory_get_error_path(monkeypatch):
 
     monkeypatch.setattr(server.MEMORY_STORE, "get", boom)
 
-    r = client.post(
-        "/v1/memory/get",
-        json={"user_id": "u", "key": "k"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"user_id": "u", "key": "k"}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/memory/get", content=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
 
@@ -860,7 +899,7 @@ def test_memory_put_outer_error():
 # -------------------------------------------------
 
 
-def test_trust_feedback_ok(monkeypatch):
+def test_trust_feedback_ok(client, monkeypatch):
     """
     append_trust_log が正常に呼ばれたパス
     """
@@ -894,7 +933,7 @@ def test_trust_feedback_ok(monkeypatch):
     assert extra.get("api") == "/v1/trust/feedback"
 
 
-def test_trust_feedback_error(monkeypatch):
+def test_trust_feedback_error(client, monkeypatch):
     """
     append_trust_log が例外を投げたときに error レスポンスになるパス
     """
@@ -923,7 +962,7 @@ def test_trust_feedback_error(monkeypatch):
 # -------------------------------------------------
 
 
-def test_memory_get_unauthorized_without_api_key():
+def test_memory_get_unauthorized_without_api_key(client):
     """
     /v1/memory/get を APIキーなしで叩いた場合、
     認証エラー系ステータスになることを確認。
@@ -936,7 +975,7 @@ def test_memory_get_unauthorized_without_api_key():
     assert r.status_code in (401, 403, 422)
 
 
-def test_memory_put_unauthorized_without_api_key():
+def test_memory_put_unauthorized_without_api_key(client):
     """
     /v1/memory/put を APIキーなしで叩いた場合、
     認証エラー系ステータスになることを確認。
@@ -949,7 +988,7 @@ def test_memory_put_unauthorized_without_api_key():
     assert r.status_code in (401, 403, 422)
 
 
-def test_memory_search_unauthorized_without_api_key():
+def test_memory_search_unauthorized_without_api_key(client):
     """
     /v1/memory/search を APIキーなしで叩いた場合、
     認証エラー系ステータスになることを確認。
@@ -962,24 +1001,22 @@ def test_memory_search_unauthorized_without_api_key():
     assert r.status_code in (401, 403, 422)
 
 
-def test_memory_put_minimal_body_ok():
+def test_memory_put_minimal_body_ok(client):
     """
     /v1/memory/put に user_id だけ投げても 500 にならず、
     正常レスポンスフォーマットを返すことを確認するテスト。
     （実装は「noop」として 200 を返す仕様）
     """
-    r = client.post(
-        "/v1/memory/put",
-        json={"user_id": "only-user"},
-        headers={"X-API-Key": "test-api-key"},
-    )
+    payload = {"user_id": "only-user"}
+    body, headers = _signed_body_and_headers(payload)
+    r = client.post("/v1/memory/put", content=body, headers=headers)
     assert r.status_code == 200
     data = r.json()
     # 最低限 ok フラグが立っていることだけ確認（詳細の中身は実装依存）
     assert data.get("ok") is True
 
 
-def test_decide_basic_requires_api_key():
+def test_decide_basic_requires_api_key(client):
     """
     /v1/decide/basic を叩いたときに 500 にならないことを確認する。
     現状の実装ではエンドポイント未公開/未実装のため 404 が返るが、

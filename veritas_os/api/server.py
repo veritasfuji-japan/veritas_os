@@ -451,6 +451,29 @@ def _get_api_secret() -> bytes:
     return env_secret.encode("utf-8")
 
 
+def _require_hmac_secret() -> None:
+    """
+    Enforce HMAC secret presence at startup for production endpoints.
+
+    Raises:
+        RuntimeError: When the API secret is missing or still a placeholder.
+    """
+    global API_SECRET
+    if API_SECRET:
+        return
+    env_secret = (os.getenv("VERITAS_API_SECRET") or "").strip()
+    if not env_secret:
+        raise RuntimeError("VERITAS_API_SECRET is required for HMAC validation.")
+    if _is_placeholder_secret(env_secret):
+        raise RuntimeError("VERITAS_API_SECRET must not be a placeholder value.")
+
+
+@app.on_event("startup")
+async def enforce_hmac_secret() -> None:
+    """Validate HMAC configuration before accepting requests."""
+    _require_hmac_secret()
+
+
 def _cleanup_nonces_unsafe() -> None:
     """内部用: ロック取得済み前提のクリーンアップ"""
     now = time.time()
@@ -885,7 +908,11 @@ def write_shadow_decide(
 @app.post(
     "/v1/decide",
     response_model=DecideResponse,
-    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+    dependencies=[
+        Depends(require_api_key),
+        Depends(enforce_rate_limit),
+        Depends(verify_signature),
+    ],
 )
 async def decide(req: DecideRequest, request: Request):
     p = get_decision_pipeline()
@@ -963,7 +990,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 @app.post(
     "/v1/fuji/validate",
     response_model=FujiDecision,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_api_key), Depends(verify_signature)],
 )
 def fuji_validate(payload: dict):
     fc = get_fuji_core()
@@ -1045,7 +1072,10 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
-@app.post("/v1/memory/put", dependencies=[Depends(require_api_key)])
+@app.post(
+    "/v1/memory/put",
+    dependencies=[Depends(require_api_key), Depends(verify_signature)],
+)
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1115,7 +1145,10 @@ def memory_put(body: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/v1/memory/search", dependencies=[Depends(require_api_key)])
+@app.post(
+    "/v1/memory/search",
+    dependencies=[Depends(require_api_key), Depends(verify_signature)],
+)
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
@@ -1151,7 +1184,10 @@ async def memory_search(payload: dict):
         return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
-@app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
+@app.post(
+    "/v1/memory/get",
+    dependencies=[Depends(require_api_key), Depends(verify_signature)],
+)
 def memory_get(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1240,7 +1276,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 

@@ -9,7 +9,10 @@ VERITAS OS v2.0 - 追加APIエンドポイントテスト
 
 from __future__ import annotations
 
+import hmac
 import json
+import secrets
+import time
 from pathlib import Path
 
 import pytest
@@ -26,7 +29,32 @@ def client(monkeypatch):
     毎回APIキーを環境変数にセットし、TestClientを返します。
     """
     monkeypatch.setenv("VERITAS_API_KEY", "test-key")
+    monkeypatch.setenv("VERITAS_API_SECRET", "test-secret")
+    server._nonce_store.clear()  # type: ignore[attr-defined]
     return TestClient(server.app)
+
+
+def _signed_body_and_headers(payload: dict) -> tuple[str, dict]:
+    """
+    HMAC署名済みのボディとヘッダを生成する。
+    """
+    body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
+    ts = str(int(time.time()))
+    nonce = secrets.token_hex(8)
+    signature_payload = f"{ts}\n{nonce}\n{body}"
+    signature = hmac.new(
+        b"test-secret",
+        signature_payload.encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    headers = {
+        "X-API-Key": "test-key",
+        "X-Timestamp": ts,
+        "X-Nonce": nonce,
+        "X-Signature": signature,
+        "Content-Type": "application/json",
+    }
+    return body, headers
 
 
 # =========================
@@ -92,10 +120,11 @@ class TestMemoryAPI:
             "meta": {"source": "pytest", "category": "test"}
         }
         
+        put_body, put_headers = _signed_body_and_headers(put_payload)
         put_response = client.post(
             "/v1/memory/put",
-            headers={"X-API-Key": "test-key"},
-            json=put_payload,
+            headers=put_headers,
+            content=put_body,
         )
         assert put_response.status_code == 200
         
@@ -109,10 +138,12 @@ class TestMemoryAPI:
         assert isinstance(put_data["vector"]["saved"], bool)
 
         # メモリ取得
+        get_payload = {"user_id": "test_user", "key": "unit_test_key"}
+        get_body, get_headers = _signed_body_and_headers(get_payload)
         get_response = client.post(
             "/v1/memory/get",
-            headers={"X-API-Key": "test-key"},
-            json={"user_id": "test_user", "key": "unit_test_key"}
+            headers=get_headers,
+            content=get_body,
         )
         
         assert get_response.status_code == 200
@@ -133,10 +164,11 @@ class TestMemoryAPI:
             "user_id": "test_user"
         }
         
+        search_body, search_headers = _signed_body_and_headers(search_payload)
         response = client.post(
             "/v1/memory/search",
-            headers={"X-API-Key": "test-key"},
-            json=search_payload,
+            headers=search_headers,
+            content=search_body,
         )
         
         assert response.status_code == 200
@@ -160,10 +192,11 @@ class TestMemoryAPI:
             "value": "simple string value"
         }
         
+        body, headers = _signed_body_and_headers(minimal_payload)
         response = client.post(
             "/v1/memory/put",
-            headers={"X-API-Key": "test-key"},
-            json=minimal_payload,
+            headers=headers,
+            content=body,
         )
         
         assert response.status_code == 200
@@ -294,13 +327,12 @@ class TestFUJIValidation:
             fake_validate_action
         )
 
+        payload = {"action": "safe_operation", "context": {"environment": "test"}}
+        body, headers = _signed_body_and_headers(payload)
         response = client.post(
             "/v1/fuji/validate",
-            headers={"X-API-Key": "test-key"},
-            json={
-                "action": "safe_operation",
-                "context": {"environment": "test"}
-            }
+            headers=headers,
+            content=body,
         )
         
         assert response.status_code == 200
@@ -328,13 +360,12 @@ class TestFUJIValidation:
             fake_validate_action
         )
 
+        payload = {"action": "危険な削除操作", "context": {}}
+        body, headers = _signed_body_and_headers(payload)
         response = client.post(
             "/v1/fuji/validate",
-            headers={"X-API-Key": "test-key"},
-            json={
-                "action": "危険な削除操作",
-                "context": {}
-            }
+            headers=headers,
+            content=body,
         )
         
         assert response.status_code == 200
@@ -472,4 +503,3 @@ class TestPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
