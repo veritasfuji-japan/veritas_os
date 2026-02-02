@@ -378,6 +378,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ★ HMAC startup verification (Issue #64)
+# Verify that VERITAS_API_SECRET is properly configured at startup
+_startup_api_secret = _get_api_secret()
+if not _startup_api_secret:
+    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET not configured!")
+    print("[ERROR] Protected APIs will reject requests without valid HMAC signatures.")
+    print("[ERROR] Please set VERITAS_API_SECRET environment variable to a secure value.")
+elif _is_placeholder_secret(_startup_api_secret.decode("utf-8")):
+    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET is set to placeholder!")
+    print("[ERROR] Please change VERITAS_API_SECRET to a secure, non-default value.")
+else:
+    print("[INFO] HMAC Startup Verification: API Secret configured successfully.")
+
 
 # ==============================
 # API Key & HMAC 認証
@@ -885,7 +898,7 @@ def write_shadow_decide(
 @app.post(
     "/v1/decide",
     response_model=DecideResponse,
-    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit), Depends(verify_signature)],
 )
 async def decide(req: DecideRequest, request: Request):
     p = get_decision_pipeline()
@@ -963,7 +976,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 @app.post(
     "/v1/fuji/validate",
     response_model=FujiDecision,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_api_key), Depends(verify_signature)],
 )
 def fuji_validate(payload: dict):
     fc = get_fuji_core()
@@ -1045,7 +1058,7 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
-@app.post("/v1/memory/put", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(verify_signature)])
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1115,7 +1128,7 @@ def memory_put(body: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/v1/memory/search", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(verify_signature)])
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
@@ -1151,7 +1164,7 @@ async def memory_search(payload: dict):
         return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
-@app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(verify_signature)])
 def memory_get(body: dict):
     store = get_memory_store()
     if store is None:
