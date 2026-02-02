@@ -185,6 +185,20 @@ h_t = SHA256(h_{t-1} || r_t)
 
 これにより、決定履歴は **改ざん検知可能**な監査証跡として扱えます。
 
+### ログ保存パス（`scripts/logs` vs `~/.veritas`）
+
+- **`scripts/logs`（既定）**: `veritas_os.logging.paths` 経由で保存される TrustLog/ダッシュボード用ログの既定パスです。  
+  `VERITAS_DATA_DIR` または `VERITAS_LOG_ROOT` を設定している場合は、そのパスが優先されます。
+- **`~/.veritas`（既定）**: ValueCore の補助ログ（`~/.veritas/trust_log.jsonl` など）や、
+  Kernel 直呼び時の Doctor ログ（`~/.veritas/logs/doctor.log` など）が保存されます。
+
+**使い分け/注意点**
+- `/v1/decide` を **pipeline 経由**で実行している場合は主に `scripts/logs` に出力されます。
+- **Kernel 直呼び**や ValueCore 単体のユーティリティは `~/.veritas` を参照するため、
+  監査・解析の際は **両方のパスにログが分散し得る**ことに注意してください。
+- ログ保存先を統一したい場合は `VERITAS_DATA_DIR`/`VERITAS_LOG_ROOT` の設定を優先してください。
+  いずれのパスも **機微情報が含まれる可能性**があるため、アクセス権限と保管ポリシーを必ず確認してください。
+
 ---
 
 ## テスト
