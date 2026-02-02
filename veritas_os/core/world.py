@@ -370,9 +370,25 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     - write to temp file in same directory
     - fsync
     - replace
+    
+    ★ セキュリティ修正:
+    - ディレクトリのパーミッションを制限（0o755）
+    - 一時ファイルの作成に安全なtempfile.mkstempを使用
+    - finallyブロックで確実にクリーンアップ
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd, tmp_name = tempfile.mkstemp(prefix=".world_state.", suffix=".tmp", dir=str(path.parent))
+    # ★ セキュリティ修正: 親ディレクトリを安全に作成（パーミッション制限）
+    parent_dir = path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+    
+    # ★ セキュリティ修正: ディレクトリのパーミッションを確認・修正
+    try:
+        current_mode = parent_dir.stat().st_mode & 0o777
+        if current_mode & 0o022:  # group/other write permission
+            os.chmod(parent_dir, current_mode & ~0o022)
+    except OSError:
+        pass  # パーミッション変更に失敗しても処理続行
+    
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix=".world_state.", suffix=".tmp", dir=str(parent_dir))
     try:
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -380,10 +396,11 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
             os.fsync(f.fileno())
         os.replace(tmp_name, path)
     finally:
+        # ★ セキュリティ修正: 一時ファイルのクリーンアップを確実に実行
         try:
             if os.path.exists(tmp_name):
                 os.remove(tmp_name)
-        except Exception:
+        except OSError:
             pass
 
 

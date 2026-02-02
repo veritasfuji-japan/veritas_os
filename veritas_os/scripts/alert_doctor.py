@@ -73,15 +73,48 @@ def http_get(url: str, timeout=3):
 # ================================
 # Self-Heal
 # ================================
+def _validate_heal_script_path(script_path: Path) -> bool:
+    """
+    ★ セキュリティ修正: heal.shのパスを厳密に検証
+    - スクリプトがSCRIPTS_DIR内に存在することを確認
+    - シンボリックリンク攻撃を防止
+    - パス走査（..）攻撃を防止
+    """
+    try:
+        # resolve() でシンボリックリンクを解決し、実際のパスを取得
+        resolved_script = script_path.resolve(strict=True)
+        resolved_scripts_dir = SCRIPTS_DIR.resolve(strict=True)
+        
+        # スクリプトがSCRIPTS_DIR内に存在することを確認
+        if not str(resolved_script).startswith(str(resolved_scripts_dir) + os.sep):
+            return False
+        
+        # ファイル名が期待通りであることを確認
+        if resolved_script.name != "heal.sh":
+            return False
+        
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def run_heal():
     if not HEAL_SCRIPT.exists():
         msg = f"heal.sh not found at {HEAL_SCRIPT}"
         print(f"⚠️ {msg}")
         return False, msg
 
+    # ★ セキュリティ修正: パスを厳密に検証
+    if not _validate_heal_script_path(HEAL_SCRIPT):
+        msg = f"Security check failed: heal.sh path validation failed"
+        print(f"🚫 {msg}")
+        return False, msg
+
     try:
+        # ★ セキュリティ修正: shlex.split()を使わず、直接リストで渡す
+        # これにより、シェルメタ文字の解釈を防止
         out = subprocess.check_output(
-            shlex.split(str(HEAL_SCRIPT)),
+            ["/bin/bash", str(HEAL_SCRIPT.resolve())],
             stderr=subprocess.STDOUT,
             text=True
         ).strip()

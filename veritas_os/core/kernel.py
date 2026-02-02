@@ -1071,13 +1071,24 @@ async def decide(
         try:
             import os
             from pathlib import Path
+            
+            # ★ セキュリティ修正: sys.executableの検証
+            python_executable = sys.executable
+            if not python_executable or not os.path.isfile(python_executable):
+                raise ValueError("Invalid Python executable path")
+            
+            # ★ セキュリティ修正: executableがPythonインタプリタであることを確認
+            executable_name = os.path.basename(python_executable).lower()
+            if not any(name in executable_name for name in ("python", "pypy")):
+                raise ValueError(f"Unexpected executable: {executable_name}")
+            
             log_dir = Path(os.path.expanduser("~/.veritas/logs"))
-            log_dir.mkdir(parents=True, exist_ok=True)
+            log_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
             doctor_log = log_dir / "doctor.log"
             with open(doctor_log, "a", encoding="utf-8") as log_file:
                 log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
                 subprocess.Popen(
-                    [sys.executable, "-m", "veritas_os.scripts.doctor"],
+                    [python_executable, "-m", "veritas_os.scripts.doctor"],
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
                     shell=False,
