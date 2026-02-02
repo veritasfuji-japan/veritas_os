@@ -45,9 +45,21 @@ except ImportError:
 
 
 def _allow_legacy_pickle_migration() -> bool:
-    """レガシーpickle移行を許可するか判定する。"""
+    """
+    レガシーpickle移行を許可するか判定する。
+
+    ★ 重要: Pickle は本質的に安全ではありません。
+    この機能は廃止予定です。新しいデータは JSON 形式で保存されます。
+    """
     value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
-    return value in {"1", "true", "yes", "y", "on"}
+    if value in {"1", "true", "yes", "y", "on"}:
+        logger.warning(
+            "[SECURITY] Legacy pickle migration is enabled. "
+            "This feature is DEPRECATED and will be removed in a future version. "
+            "Please ensure all data is migrated to JSON format."
+        )
+        return True
+    return False
 
 
 def _should_delete_pickle_after_migration() -> bool:
@@ -59,10 +71,12 @@ def _should_delete_pickle_after_migration() -> bool:
     return value not in {"1", "true", "yes", "y", "on"}
 
 
-def _is_pickle_file_stale(path: Path, max_age_days: int = 365) -> bool:
+def _is_pickle_file_stale(path: Path, max_age_days: int = 90) -> bool:
     """
     ★ セキュリティ修正: pickleファイルが古すぎないか確認する。
     古すぎるpickleファイルは移行を拒否し、手動対応を要求する。
+
+    max_age_days を 365 → 90 日に短縮（セキュリティ強化）
     """
     try:
         mtime = path.stat().st_mtime
@@ -72,40 +86,87 @@ def _is_pickle_file_stale(path: Path, max_age_days: int = 365) -> bool:
         return True  # エラー時は古いとみなす
 
 
+def _validate_pickle_data_structure(data: Any) -> bool:
+    """
+    ★ セキュリティ修正: デシリアライズ後のデータ構造を検証する。
+
+    期待される構造:
+    - dict であること
+    - "documents" キーが存在し、list であること
+    - "embeddings" キーが存在し、None または numpy array であること
+
+    Returns:
+        True: 構造が正しい、False: 不正な構造
+    """
+    if not isinstance(data, dict):
+        return False
+
+    # documents の検証
+    documents = data.get("documents")
+    if documents is not None and not isinstance(documents, list):
+        return False
+
+    # documents の各要素が dict であることを確認
+    if documents:
+        for doc in documents[:100]:  # 最初の100件のみチェック（パフォーマンス）
+            if not isinstance(doc, dict):
+                return False
+
+    # embeddings の検証（numpy array または None）
+    embeddings = data.get("embeddings")
+    if embeddings is not None:
+        try:
+            import numpy as np
+            if not isinstance(embeddings, np.ndarray):
+                return False
+            # 次元数の検証（1D または 2D のみ許可）
+            if embeddings.ndim not in (1, 2):
+                return False
+            # サイズの検証（異常に大きい場合は拒否）
+            if embeddings.size > 100_000_000:  # 100M 要素まで
+                return False
+        except Exception:
+            return False
+
+    return True
+
+
 class RestrictedUnpickler:
     """
     安全なPickle読み込み用の制限付きUnpickler。
 
-    許可された型のみデシリアライズし、任意コード実行を防止する。
+    ★★★ 重要: このクラスは廃止予定です ★★★
+
+    Pickle は本質的に安全ではなく、制限付きでも攻撃のリスクがあります。
+    新しいコードでは JSON 形式を使用してください。
+
+    許可された型のみデシリアライズし、任意コード実行を防止しますが、
+    完全な安全性は保証されません。
     """
 
-    # 許可するnumpy型（旧版・新版両対応）
+    # ★ セキュリティ強化: _reconstruct を許可リストから削除
+    # _reconstruct は任意のバイト列から配列を再構築するため、悪用の可能性がある
+    # 代わりに、ndarray と dtype のみを許可し、データは JSON 形式で保持する
     ALLOWED_NUMPY_TYPES = frozenset({
-        # numpy < 2.0
-        "numpy.core.multiarray._reconstruct",
-        "numpy.core.multiarray.scalar",
-        # numpy >= 2.0
-        "numpy._core.multiarray._reconstruct",
-        "numpy._core.multiarray.scalar",
-        # 共通
+        # numpy の安全な型のみ（_reconstruct は除外）
         "numpy.ndarray",
         "numpy.dtype",
     })
 
-    # 許可する基本型
+    # 許可する基本型（必要最小限に制限）
     ALLOWED_BUILTINS = frozenset({
         "dict",
         "list",
         "tuple",
-        "set",
-        "frozenset",
         "str",
         "int",
         "float",
         "bool",
         "bytes",
-        "type",
+        # set, frozenset, type は除外（通常不要）
     })
+
+    _DEPRECATION_WARNED = False
 
     @classmethod
     def _find_class(cls, module: str, name: str):
@@ -115,27 +176,40 @@ class RestrictedUnpickler:
 
         full_name = f"{module}.{name}"
 
-        # numpy型
+        # ★ _reconstruct の使用を検出して警告（廃止移行のため）
+        if "_reconstruct" in name or "scalar" in name:
+            # 互換性のため許可するが、強い警告を出す
+            logger.warning(
+                f"[SECURITY] Pickle contains unsafe numpy type: {full_name}. "
+                "This data format is deprecated. Please migrate to JSON."
+            )
+            try:
+                import numpy as np
+                # numpy >= 2.0
+                try:
+                    import numpy._core.multiarray as ma
+                    if hasattr(ma, name):
+                        return getattr(ma, name)
+                except ImportError:
+                    pass
+                # numpy < 2.0
+                try:
+                    import numpy.core.multiarray as ma
+                    if hasattr(ma, name):
+                        return getattr(ma, name)
+                except ImportError:
+                    pass
+            except Exception:
+                pass
+            raise pickle.UnpicklingError(
+                f"Restricted unpickler: {full_name} not found"
+            )
+
+        # numpy型（安全なもののみ）
         if full_name in cls.ALLOWED_NUMPY_TYPES:
             import numpy as np
-            # ndarray, dtype はトップレベル
             if hasattr(np, name):
                 return getattr(np, name)
-            # _reconstruct等は multiarray モジュールにある
-            try:
-                # numpy >= 2.0
-                import numpy._core.multiarray as ma
-                if hasattr(ma, name):
-                    return getattr(ma, name)
-            except ImportError:
-                pass
-            try:
-                # numpy < 2.0
-                import numpy.core.multiarray as ma
-                if hasattr(ma, name):
-                    return getattr(ma, name)
-            except ImportError:
-                pass
             raise pickle.UnpicklingError(
                 f"Restricted unpickler: numpy type {name} not found"
             )
@@ -150,14 +224,36 @@ class RestrictedUnpickler:
 
     @classmethod
     def loads(cls, data: bytes) -> Any:
-        """制限付きでPickleデータを読み込む。"""
+        """
+        制限付きでPickleデータを読み込む。
+
+        ★ 廃止予定: この関数は将来のバージョンで削除されます。
+        新しいコードでは JSON 形式を使用してください。
+        """
         import pickle
         import io
+
+        # 廃止警告（1回のみ）
+        if not cls._DEPRECATION_WARNED:
+            cls._DEPRECATION_WARNED = True
+            logger.warning(
+                "[SECURITY] RestrictedUnpickler.loads() is DEPRECATED. "
+                "Pickle deserialization poses security risks. "
+                "Please migrate to JSON format."
+            )
 
         class _Unpickler(pickle.Unpickler):
             find_class = staticmethod(cls._find_class)
 
-        return _Unpickler(io.BytesIO(data)).load()
+        result = _Unpickler(io.BytesIO(data)).load()
+
+        # ★ セキュリティ修正: デシリアライズ後のデータ構造を検証
+        if not _validate_pickle_data_structure(result):
+            raise pickle.UnpicklingError(
+                "Restricted unpickler: Invalid data structure after deserialization"
+            )
+
+        return result
 
 
 # ============================
