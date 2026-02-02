@@ -470,16 +470,34 @@ def _get_api_secret() -> bytes:
     ★ セキュリティ修正: APIシークレットを毎回環境変数から取得。
     モジュールレベル変数に長時間保持しないことで、メモリダンプによる漏洩リスクを軽減。
     テスト時は API_SECRET 変数を monkeypatch で上書き可能。
+    
+    ★ セキュリティ注意:
+    - プレースホルダ値や空の値が設定されている場合、空のbytesを返す
+    - この場合、verify_signature()は500エラーを返し、HMAC認証は無効化される
+    - 本番環境では必ず安全なシークレットを設定すること
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # テスト用: API_SECRET が明示的に設定されていればそれを使用
     global API_SECRET
     if API_SECRET:
         return API_SECRET
     env_secret = (os.getenv("VERITAS_API_SECRET") or "").strip()
     if not env_secret or _is_placeholder_secret(env_secret):
-        if env_secret:
-            print("[WARN] VERITAS_API_SECRET is set to the default placeholder.")
+        if env_secret and _is_placeholder_secret(env_secret):
+            # ★ セキュリティ警告: プレースホルダ使用は危険
+            logger.warning(
+                "VERITAS_API_SECRET is set to the placeholder value. "
+                "HMAC authentication is DISABLED. Set a secure secret in production!"
+            )
         return b""
+    # ★ セキュリティ: 最小シークレット長の確認（32文字以上推奨）
+    if len(env_secret) < 32:
+        logger.warning(
+            "VERITAS_API_SECRET is shorter than 32 characters. "
+            "Consider using a longer, more secure secret."
+        )
     return env_secret.encode("utf-8")
 
 
