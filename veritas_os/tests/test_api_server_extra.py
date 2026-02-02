@@ -157,6 +157,8 @@ def test_require_api_key_server_not_configured(monkeypatch):
     """
     monkeypatch.delenv("VERITAS_API_KEY", raising=False)
     monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
+    # cfg.api_key もモックして空にする（モジュール読み込み時に環境変数から初期化されている可能性があるため）
+    monkeypatch.setattr(server.cfg, "api_key", "")
     with pytest.raises(HTTPException) as exc:
         server.require_api_key(x_api_key="anything")  # type: ignore[arg-type]
     assert exc.value.status_code == 500

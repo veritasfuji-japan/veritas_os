@@ -375,13 +375,65 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
 
+    # Security constraints
+    MAX_STRING_LENGTH = 10000  # Maximum length for any string field
+    MAX_OPTIONS = 100  # Maximum number of options to prevent resource exhaustion
+
+    def _truncate_string(value: Any, max_len: int = MAX_STRING_LENGTH) -> Optional[str]:
+        """Safely truncate string values to prevent resource exhaustion."""
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return str(value)[:max_len]
+        return value[:max_len]
+
+    def _validate_option(opt: Any) -> bool:
+        """Validate that an option has expected structure."""
+        if not isinstance(opt, dict):
+            return False
+        # Options must have valid types for key fields if present
+        for key in ("id", "title", "summary", "verdict"):
+            val = opt.get(key)
+            if val is not None and not isinstance(val, str):
+                return False
+            # Check string length limits
+            if isinstance(val, str) and len(val) > MAX_STRING_LENGTH:
+                return False
+        for key in ("score", "score_raw"):
+            if key in opt:
+                try:
+                    float(opt[key])
+                except (TypeError, ValueError):
+                    return False
+        return True
+
+    def _sanitize_options(options: List[Any]) -> List[Dict[str, Any]]:
+        """Filter and sanitize options list to prevent malicious data."""
+        sanitized = []
+        for opt in options[:MAX_OPTIONS]:  # Limit number of options
+            if _validate_option(opt):
+                # Truncate string fields for safety
+                for key in ("id", "title", "summary", "verdict", "safety_view", "critic_view", "architect_view"):
+                    if key in opt and opt[key] is not None:
+                        opt[key] = _truncate_string(opt[key])
+                sanitized.append(opt)
+            else:
+                logger.warning("DebateOS: Skipping invalid option structure: %r", type(opt))
+        if len(options) > MAX_OPTIONS:
+            logger.warning("DebateOS: Truncated options from %d to %d", len(options), MAX_OPTIONS)
+        return sanitized
+
     def _wrap(obj: Any) -> Dict[str, Any]:
         if isinstance(obj, dict):
-            obj.setdefault("options", obj.get("options") or [])
-            obj.setdefault("chosen_id", obj.get("chosen_id"))
+            options = obj.get("options") or []
+            if not isinstance(options, list):
+                options = []
+            obj["options"] = _sanitize_options(options)
+            chosen_id = obj.get("chosen_id")
+            obj["chosen_id"] = _truncate_string(chosen_id, 1000) if isinstance(chosen_id, (str, type(None))) else None
             return obj
         if isinstance(obj, list):
-            return {"options": obj, "chosen_id": None}
+            return {"options": _sanitize_options(obj), "chosen_id": None}
         return {"options": [], "chosen_id": None}
 
     try:

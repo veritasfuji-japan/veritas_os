@@ -50,6 +50,28 @@ def _allow_legacy_pickle_migration() -> bool:
     return value in {"1", "true", "yes", "y", "on"}
 
 
+def _should_delete_pickle_after_migration() -> bool:
+    """
+    ★ セキュリティ修正: 移行後にpickleファイルを削除するか判定する。
+    デフォルトは削除（セキュリティ向上）。VERITAS_MEMORY_KEEP_PICKLE_BACKUP=1で保持。
+    """
+    value = os.getenv("VERITAS_MEMORY_KEEP_PICKLE_BACKUP", "").strip().lower()
+    return value not in {"1", "true", "yes", "y", "on"}
+
+
+def _is_pickle_file_stale(path: Path, max_age_days: int = 365) -> bool:
+    """
+    ★ セキュリティ修正: pickleファイルが古すぎないか確認する。
+    古すぎるpickleファイルは移行を拒否し、手動対応を要求する。
+    """
+    try:
+        mtime = path.stat().st_mtime
+        age_days = (time.time() - mtime) / (60 * 60 * 24)
+        return age_days > max_age_days
+    except Exception:
+        return True  # エラー時は古いとみなす
+
+
 class RestrictedUnpickler:
     """
     安全なPickle読み込み用の制限付きUnpickler。
@@ -238,6 +260,16 @@ class VectorMemory:
                         "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to enable."
                     )
                     return
+
+                # ★ セキュリティ修正: 古すぎるpickleファイルは移行を拒否
+                if _is_pickle_file_stale(legacy_pkl_path):
+                    logger.error(
+                        "[VectorMemory] Legacy pickle file is too old (>365 days). "
+                        "Manual migration required for security reasons. "
+                        "Please delete the pickle file or contact support."
+                    )
+                    return
+
                 logger.info("[VectorMemory] Migrating from legacy pickle format...")
                 try:
                     # セキュリティ: RestrictedUnpickler を使用して安全にデシリアライズ
@@ -256,12 +288,25 @@ class VectorMemory:
                     self.index_path = json_path  # 新しいパスに更新
                     self._save_index()
 
-                    # 旧ファイルをバックアップとしてリネーム
-                    backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
-                    legacy_pkl_path.rename(backup_path)
-                    logger.info(
-                        f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
-                    )
+                    # ★ セキュリティ修正: 移行後は旧pickleファイルを削除（デフォルト）
+                    if _should_delete_pickle_after_migration():
+                        try:
+                            legacy_pkl_path.unlink()
+                            logger.info(
+                                f"[VectorMemory] Deleted legacy pickle file: {legacy_pkl_path}"
+                            )
+                        except Exception as del_e:
+                            logger.warning(
+                                f"[VectorMemory] Failed to delete pickle file: {del_e}. "
+                                "Please manually remove for security."
+                            )
+                    else:
+                        # バックアップとしてリネーム（VERITAS_MEMORY_KEEP_PICKLE_BACKUP=1の場合のみ）
+                        backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
+                        legacy_pkl_path.rename(backup_path)
+                        logger.info(
+                            f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
+                        )
                     return
                 except Exception as e:
                     logger.warning(f"[VectorMemory] Pickle migration failed: {e}")
