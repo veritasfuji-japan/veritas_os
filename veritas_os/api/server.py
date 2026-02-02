@@ -378,19 +378,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ★ HMAC startup verification (Issue #64)
-# Verify that VERITAS_API_SECRET is properly configured at startup
-_startup_api_secret = _get_api_secret()
-if not _startup_api_secret:
-    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET not configured!")
-    print("[ERROR] Protected APIs will reject requests without valid HMAC signatures.")
-    print("[ERROR] Please set VERITAS_API_SECRET environment variable to a secure value.")
-elif _is_placeholder_secret(_startup_api_secret.decode("utf-8")):
-    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET is set to placeholder!")
-    print("[ERROR] Please change VERITAS_API_SECRET to a secure, non-default value.")
-else:
-    print("[INFO] HMAC Startup Verification: API Secret configured successfully.")
-
 
 # ==============================
 # API Key & HMAC 認証
@@ -583,6 +570,20 @@ def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-
 
         _rate_bucket[key] = (count + 1, start)
         return True
+
+
+# ★ HMAC startup verification (Issue #64)
+# Verify that VERITAS_API_SECRET is properly configured at startup
+_startup_api_secret = _get_api_secret()
+if not _startup_api_secret:
+    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET not configured!")
+    print("[ERROR] Protected APIs will reject requests without valid HMAC signatures.")
+    print("[ERROR] Please set VERITAS_API_SECRET environment variable to a secure value.")
+elif _is_placeholder_secret(_startup_api_secret.decode("utf-8")):
+    print("[ERROR] HMAC Startup Verification Failed: VERITAS_API_SECRET is set to placeholder!")
+    print("[ERROR] Please change VERITAS_API_SECRET to a secure, non-default value.")
+else:
+    print("[INFO] HMAC Startup Verification: API Secret configured successfully.")
 
 
 # ==============================
