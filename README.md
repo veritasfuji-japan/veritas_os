@@ -236,6 +236,7 @@ pytest --cov=veritas_os
 - **Force PII masking before persisting TrustLog/Memory**. Apply `redact()` (PII masking) prior to storage to reduce leakage risk.
 - **Encryption at rest (optional)**: TrustLog/Memory are stored in plaintext; consider encryption or KMS integration based on requirements.
 - **CORS and API key must be set**. Configure `VERITAS_CORS_ALLOW_ORIGINS` and `VERITAS_API_KEY` to avoid unsafe defaults.
+- **Operational logs are excluded from Git**. Runtime logs (e.g., `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live under `veritas_os/sample_data/memory/`.
 
 ---
 
