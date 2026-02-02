@@ -383,7 +383,9 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     # ★ セキュリティ修正: ディレクトリのパーミッションを確認・修正
     try:
         current_mode = parent_dir.stat().st_mode & 0o777
-        if current_mode & 0o022:  # group/other write permission
+        # 0o022 = group write (0o020) + other write (0o002)
+        # このビットがセットされている場合、書き込み権限を除去
+        if current_mode & 0o022:
             os.chmod(parent_dir, current_mode & ~0o022)
     except OSError:
         pass  # パーミッション変更に失敗しても処理続行

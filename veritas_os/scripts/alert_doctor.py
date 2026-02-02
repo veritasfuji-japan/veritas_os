@@ -79,15 +79,24 @@ def _validate_heal_script_path(script_path: Path) -> bool:
     - スクリプトがSCRIPTS_DIR内に存在することを確認
     - シンボリックリンク攻撃を防止
     - パス走査（..）攻撃を防止
+    - クロスプラットフォーム対応（Windows含む）
     """
     try:
         # resolve() でシンボリックリンクを解決し、実際のパスを取得
         resolved_script = script_path.resolve(strict=True)
         resolved_scripts_dir = SCRIPTS_DIR.resolve(strict=True)
         
-        # スクリプトがSCRIPTS_DIR内に存在することを確認
-        if not str(resolved_script).startswith(str(resolved_scripts_dir) + os.sep):
-            return False
+        # ★ クロスプラットフォーム対応: is_relative_to() を使用 (Python 3.9+)
+        # これはWindowsのcase-insensitivityとドライブレター問題を正しく処理
+        try:
+            if not resolved_script.is_relative_to(resolved_scripts_dir):
+                return False
+        except AttributeError:
+            # Python 3.8以前のフォールバック
+            try:
+                resolved_script.relative_to(resolved_scripts_dir)
+            except ValueError:
+                return False
         
         # ファイル名が期待通りであることを確認
         if resolved_script.name != "heal.sh":

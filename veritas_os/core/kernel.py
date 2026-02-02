@@ -1078,9 +1078,13 @@ async def decide(
                 raise ValueError("Invalid Python executable path")
             
             # ★ セキュリティ修正: executableがPythonインタプリタであることを確認
+            # 注意: ファイル名チェックは基本的な防御層。完全な検証にはバージョン出力確認が必要だが、
+            # パフォーマンス上、ここでは軽量なチェックを採用
             executable_name = os.path.basename(python_executable).lower()
-            if not any(name in executable_name for name in ("python", "pypy")):
-                raise ValueError(f"Unexpected executable: {executable_name}")
+            # 正規表現で厳密にマッチ: python, python3, python3.x, pypy, pypy3等
+            import re
+            if not re.match(r'^(python|pypy)[0-9.]*$', executable_name.replace('.exe', '')):
+                raise ValueError(f"Unexpected executable name: {executable_name}")
             
             log_dir = Path(os.path.expanduser("~/.veritas/logs"))
             log_dir.mkdir(parents=True, exist_ok=True, mode=0o755)

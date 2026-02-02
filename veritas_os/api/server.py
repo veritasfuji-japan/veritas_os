@@ -476,6 +476,9 @@ def _get_api_secret() -> bytes:
     - この場合、verify_signature()は500エラーを返し、HMAC認証は無効化される
     - 本番環境では必ず安全なシークレットを設定すること
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # テスト用: API_SECRET が明示的に設定されていればそれを使用
     global API_SECRET
     if API_SECRET:
@@ -484,13 +487,17 @@ def _get_api_secret() -> bytes:
     if not env_secret or _is_placeholder_secret(env_secret):
         if env_secret and _is_placeholder_secret(env_secret):
             # ★ セキュリティ警告: プレースホルダ使用は危険
-            print("[SECURITY WARN] VERITAS_API_SECRET is set to the placeholder value. "
-                  "HMAC authentication is DISABLED. Set a secure secret in production!")
+            logger.warning(
+                "VERITAS_API_SECRET is set to the placeholder value. "
+                "HMAC authentication is DISABLED. Set a secure secret in production!"
+            )
         return b""
     # ★ セキュリティ: 最小シークレット長の確認（32文字以上推奨）
     if len(env_secret) < 32:
-        print("[SECURITY WARN] VERITAS_API_SECRET is shorter than 32 characters. "
-              "Consider using a longer, more secure secret.")
+        logger.warning(
+            "VERITAS_API_SECRET is shorter than 32 characters. "
+            "Consider using a longer, more secure secret."
+        )
     return env_secret.encode("utf-8")
 
 
