@@ -95,8 +95,9 @@ class ValueProfile:
                     }
                 )
                 return cls(weights=_normalize_weights(merged))
-        except Exception as e:
-            print("[ValueCore] load failed:", e)
+        except (OSError, IOError, json.JSONDecodeError, TypeError, ValueError) as e:
+            import logging
+            logging.getLogger(__name__).warning("[ValueCore] load failed: %s", e)
 
         # 失敗したらデフォルトで作り直し
         prof = cls(weights=DEFAULT_WEIGHTS.copy())
@@ -292,11 +293,12 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
                 j = json.loads(line)
                 if "score" in j:
                     scores.append(float(j["score"]))
-            except Exception:
+            except (json.JSONDecodeError, ValueError, TypeError, KeyError):
                 continue
 
     if not scores:
-        print("⚠️ No scores found in trust log.")
+        import logging
+        logging.getLogger(__name__).warning("No scores found in trust log.")
         return
 
     # --- EMA ---
@@ -359,6 +361,8 @@ def append_trust_log(
                 fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
         # デバッグ用ログ
-        print(f"[ValueCore] trust_log appended: user={user_id}, score={s}")
-    except Exception as e:
-        print("[ValueCore] append_trust_log failed:", e)
+        import logging
+        logging.getLogger(__name__).debug("[ValueCore] trust_log appended: user=%s, score=%s", user_id, s)
+    except (OSError, IOError, TypeError, ValueError) as e:
+        import logging
+        logging.getLogger(__name__).error("[ValueCore] append_trust_log failed: %s", e)

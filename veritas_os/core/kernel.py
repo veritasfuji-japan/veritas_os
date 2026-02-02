@@ -9,6 +9,7 @@ VERITAS kernel.py v2-compatible - 後方互換性を維持した二重実行解�
 """
 from __future__ import annotations
 
+import json
 import re
 import uuid
 import time
@@ -49,7 +50,7 @@ from . import affect as affect_core  # ★ NEW: ReasonOS / AffectOS
 # ★ セキュリティ修正: reason_core のインポート（存在しない場合は None）
 try:
     from . import reason as reason_core
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     reason_core = None  # type: ignore
 
 # ★ QA処理を分離モジュールからインポート
@@ -64,7 +65,7 @@ from .kernel_qa import (
 
 try:  # 任意: 戦略レイヤー（なければ無視）
     from . import strategy as strategy_core  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     strategy_core = None  # type: ignore
 
 from veritas_os.tools import call_tool
@@ -96,11 +97,19 @@ def run_env_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         result.setdefault("ok", True)
         result.setdefault("results", [])
         return result
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError) as e:
+        log.warning("env_tool '%s' failed: %s", kind, e)
         return {
             "ok": False,
             "results": [],
-            "error": f"env_tool error: {repr(e)[:200]}",
+            "error": f"env_tool error ({type(e).__name__}): {repr(e)[:200]}",
+        }
+    except (OSError, IOError) as e:
+        log.error("env_tool '%s' I/O error: %s", kind, e)
+        return {
+            "ok": False,
+            "results": [],
+            "error": f"env_tool I/O error: {repr(e)[:200]}",
         }
 
 
@@ -145,7 +154,8 @@ def _safe_load_persona() -> Dict[str, Any]:
         if isinstance(p, dict):
             return p
         return {}
-    except Exception:
+    except (json.JSONDecodeError, OSError, IOError, TypeError, ValueError) as e:
+        log.warning("Failed to load persona: %s", e)
         return {}
 
 
@@ -354,8 +364,8 @@ def _score_alternatives(
                         continue
                     if oid in score_map:
                         a["score"] = round(score_map[oid], 4)
-        except Exception:
-            pass
+        except (RuntimeError, AttributeError, TypeError, ValueError) as e:
+            log.debug("strategy_core.score_options failed: %s", e)
 
 
 def _score_alternatives_with_value_core_and_persona(
@@ -420,7 +430,7 @@ async def decide(
                 user_id=user_id,
             )
             ctx["_world_state_injected"] = True
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
             ctx = ctx_raw
             log.warning("world_model.inject_state_into_context failed: %s", e)
 
@@ -462,8 +472,8 @@ async def decide(
                 req_id=req_id,
                 telos_score=telos_score,
             )
-    except Exception:
-        pass
+    except (RuntimeError, TypeError, ValueError, KeyError) as e:
+        log.debug("knowledge_qa handling failed: %s", e)
 
     # ★ Pipeline から渡された evidence があればそれを使用
     pipeline_evidence = ctx.get("_pipeline_evidence")
@@ -488,9 +498,10 @@ async def decide(
                 "summary": memory_summary,
                 "source": "MemoryOS.summarize_for_planner",
             }
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("Memory summarize failed: %s", e)
             extras["memory"] = {
-                "error": f"memory summarize failed: {repr(e)[:80]}",
+                "error": f"memory summarize failed ({type(e).__name__}): {repr(e)[:80]}",
             }
 
     # Persona
@@ -499,10 +510,10 @@ async def decide(
         persona_bias: Dict[str, float] = adapt.clean_bias_weights(
             dict(persona.get("bias_weights") or {})
         )
-    except Exception as e:
+    except (json.JSONDecodeError, OSError, IOError, TypeError, ValueError, KeyError) as e:
         persona = {}
         persona_bias = {}
-        print(f"[kernel] adapt.load_persona failed: {e}")
+        log.warning("adapt.load_persona failed: %s", e)
 
     # WorldModel simulate
     world_sim = None
@@ -522,9 +533,10 @@ async def decide(
                 "prediction": world_sim,
                 "source": "world.simulate()",
             }
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("world.simulate failed: %s", e)
             extras["world"] = {
-                "error": f"world.simulate failed: {repr(e)[:80]}",
+                "error": f"world.simulate failed ({type(e).__name__}): {repr(e)[:80]}",
             }
 
     # ★ env tools: pipeline から渡されていればスキップ
@@ -564,8 +576,9 @@ async def decide(
                         query=q_text,
                         max_results=3,
                     )
-        except Exception as e:
-            env_logs["error"] = f"run_env_tool failed: {repr(e)[:200]}"
+        except (RuntimeError, TypeError, ValueError, OSError) as e:
+            log.warning("run_env_tool failed: %s", e)
+            env_logs["error"] = f"run_env_tool failed ({type(e).__name__}): {repr(e)[:200]}"
 
     if env_logs:
         extras["env_tools"] = env_logs
@@ -646,8 +659,9 @@ async def decide(
                 alt["meta"] = t
                 alts.append(alt)
 
-        except Exception as e:
-            extras["code_change_plan_error"] = f"generate_code_tasks failed: {repr(e)[:120]}"
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("generate_code_tasks failed: %s", e)
+            extras["code_change_plan_error"] = f"generate_code_tasks failed ({type(e).__name__}): {repr(e)[:120]}"
 
     # 通常モード → PlannerOS 呼び出し
     if not alts and planner_obj is None:
@@ -674,9 +688,10 @@ async def decide(
                 alt["meta"] = st
                 alts.append(alt)
 
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("plan_for_veritas_agi failed: %s", e)
             extras.setdefault("planner_error", {})
-            extras["planner_error"]["detail"] = repr(e)
+            extras["planner_error"]["detail"] = f"{type(e).__name__}: {repr(e)}"
             if not alts:
                 alts = _gen_options_by_intent(intent)
 
@@ -735,13 +750,14 @@ async def decide(
 
             alts = _dedupe_alts(enriched_alts)
 
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("DebateOS failed, using fallback: %s", e)
             if alts:
                 chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
             else:
                 chosen = _mk_option("フォールバック選択")
             debate_logs.append({
-                "summary": f"DebateOS フォールバック (例外: {repr(e)[:80]})",
+                "summary": f"DebateOS フォールバック ({type(e).__name__}: {repr(e)[:60]})",
                 "risk_delta": 0.0,
                 "suggested_choice_id": chosen.get("id"),
                 "source": "fallback",
@@ -795,9 +811,10 @@ async def decide(
                 extras.setdefault("memory", {})
                 extras["memory"]["evidence_count"] = memory_evidence_count
                 extras["memory"]["citations"] = mem_evs
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+            log.warning("get_evidence_for_decision failed: %s", e)
             extras.setdefault("memory", {})
-            extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
+            extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed ({type(e).__name__}): {repr(e)[:80]}"
 
     # FUJI Gate
     try:
@@ -813,12 +830,13 @@ async def decide(
             evidence=evidence,
             alternatives=alts,
         )
-    except Exception as e:
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+        log.error("FUJI Gate evaluation failed: %s", e)
         fuji_result = {
             "status": "allow",
             "decision_status": "allow",
             "rejection_reason": None,
-            "reasons": [f"fuji_error:{repr(e)[:80]}"],
+            "reasons": [f"fuji_error ({type(e).__name__}):{repr(e)[:80]}"],
             "violations": [],
             "risk": 0.05,
             "checks": [],
@@ -828,7 +846,7 @@ async def decide(
             "safe_instructions": [],
         }
         extras.setdefault("fuji_error", {})
-        extras["fuji_error"]["detail"] = repr(e)
+        extras["fuji_error"]["detail"] = f"{type(e).__name__}: {repr(e)}"
 
     # =======================================================
     # AffectOS / ReasonOS: 自己評価 & 理由 & Self-Refine テンプレ
@@ -846,9 +864,10 @@ async def decide(
         })
         extras.setdefault("affect", {})
         extras["affect"]["meta"] = affect_meta
-    except Exception as e:
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+        log.debug("affect_core.reflect failed: %s", e)
         extras.setdefault("affect", {})
-        extras["affect"]["meta_error"] = repr(e)
+        extras["affect"]["meta_error"] = f"{type(e).__name__}: {repr(e)}"
 
     # 自然文 Reason（なぜこの決定が妥当か）
     # ★ セキュリティ修正: reason_core の存在チェックと安全な呼び出し
@@ -877,9 +896,10 @@ async def decide(
         else:
             extras.setdefault("affect", {})
             extras["affect"]["natural_error"] = "reason_core.generate_reason not available"
-    except Exception as e:
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+        log.debug("generate_reason failed: %s", e)
         extras.setdefault("affect", {})
-        extras["affect"]["natural_error"] = repr(e)
+        extras["affect"]["natural_error"] = f"{type(e).__name__}: {repr(e)}"
 
     # Self-Refine 用テンプレ（高リスク or 高 stakes のときだけ）
     # ★ セキュリティ修正: reason_core の存在チェックと安全な async 呼び出し
@@ -904,9 +924,10 @@ async def decide(
                 if refl_tmpl:
                     extras.setdefault("affect", {})
                     extras["affect"]["reflection_template"] = refl_tmpl
-    except Exception as e:
+    except (RuntimeError, TypeError, ValueError, KeyError, AttributeError) as e:
+        log.debug("generate_reflection_template failed: %s", e)
         extras.setdefault("affect", {})
-        extras["affect"]["reflection_template_error"] = repr(e)
+        extras["affect"]["reflection_template_error"] = f"{type(e).__name__}: {repr(e)}"
 
     # 学習＋AGIゴール自己調整
     if not fast_mode and not ctx.get("_agi_goals_adjusted_by_pipeline"):
@@ -945,9 +966,10 @@ async def decide(
                 "fuji_risk": fuji_risk,
             }
 
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError, OSError) as e:
+            log.warning("AGI goals auto-adjust failed: %s", e)
             extras.setdefault("agi_goals", {})
-            extras["agi_goals"]["error"] = repr(e)
+            extras["agi_goals"]["error"] = f"{type(e).__name__}: {repr(e)}"
     else:
         extras.setdefault("agi_goals", {})
         extras["agi_goals"]["skipped"] = {"reason": "fast_mode or pipeline"}
@@ -983,9 +1005,10 @@ async def decide(
                     episode_record,
                 )
 
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError, OSError) as e:
+            log.warning("Episode save to memory failed: %s", e)
             extras.setdefault("memory_log", {})
-            extras["memory_log"]["error"] = repr(e)
+            extras["memory_log"]["error"] = f"{type(e).__name__}: {repr(e)}"
     else:
         skip_reasons["episode_save"] = "already_saved_by_pipeline"
 
@@ -997,7 +1020,8 @@ async def decide(
         latency_ms = int((time.time() - start_ts) * 1000)
         extras.setdefault("metrics", {})
         extras["metrics"]["latency_ms"] = latency_ms
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
+        # Calculation errors are non-critical, just skip
         pass
 
     # world_state.json 更新（Pipeline が行う場合はスキップ）
@@ -1012,9 +1036,10 @@ async def decide(
                 planner=extras.get("code_change_plan") or extras.get("planner"),
                 latency_ms=latency_ms,
             )
-        except Exception as e:
+        except (RuntimeError, TypeError, ValueError, KeyError, AttributeError, OSError) as e:
+            log.warning("world_model.update_from_decision failed: %s", e)
             extras.setdefault("world_state_update", {})
-            extras["world_state_update"]["error"] = repr(e)
+            extras["world_state_update"]["error"] = f"{type(e).__name__}: {repr(e)}"
     else:
         skip_reasons["world_state_update"] = "already_done_by_pipeline"
 
@@ -1029,14 +1054,27 @@ async def decide(
             doctor_log = log_dir / "doctor.log"
             with open(doctor_log, "a", encoding="utf-8") as log_file:
                 log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
-                subprocess.Popen(
-                    [sys.executable, "-m", "veritas_os.scripts.doctor"],
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                )
-        except Exception as e:
+                # ★ セキュリティ修正: タイムアウト付きでサブプロセスを実行
+                # Popenではなくrunを使用し、300秒のタイムアウトを設定
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "veritas_os.scripts.doctor"],
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                        timeout=300,  # 5分のタイムアウト
+                        check=False,  # 終了コードでエラーを投げない
+                    )
+                except subprocess.TimeoutExpired:
+                    log.warning("Doctor script timed out after 300 seconds")
+                    log_file.write("\n--- Doctor timed out after 300 seconds ---\n")
+        except (OSError, IOError) as e:
+            log.error("Doctor execution failed (I/O error): %s", e)
             extras.setdefault("doctor", {})
-            extras["doctor"]["error"] = repr(e)
+            extras["doctor"]["error"] = f"IOError: {repr(e)}"
+        except subprocess.SubprocessError as e:
+            log.error("Doctor execution failed (subprocess error): %s", e)
+            extras.setdefault("doctor", {})
+            extras["doctor"]["error"] = f"SubprocessError: {repr(e)}"
 
     # experiments / curriculum
     if not ctx.get("_daily_plans_generated_by_pipeline"):
@@ -1046,7 +1084,8 @@ async def decide(
 
             try:
                 world_state_full = world_model.get_state()
-            except Exception:
+            except (RuntimeError, OSError, IOError, AttributeError) as e:
+                log.debug("world_model.get_state failed: %s", e)
                 world_state_full = None
 
             value_ema_for_day = float(telos_score)
@@ -1065,9 +1104,14 @@ async def decide(
             extras["experiments"] = [e.to_dict() for e in todays_exps]
             extras["curriculum"] = [t.to_dict() for t in todays_tasks]
 
-        except Exception as e:
+        except (ImportError, ModuleNotFoundError) as e:
+            log.debug("experiments/curriculum modules not available: %s", e)
             extras.setdefault("daily_plans", {})
-            extras["daily_plans"]["error"] = repr(e)
+            extras["daily_plans"]["error"] = f"ModuleNotFound: {repr(e)}"
+        except (RuntimeError, TypeError, ValueError, AttributeError) as e:
+            log.warning("daily_plans generation failed: %s", e)
+            extras.setdefault("daily_plans", {})
+            extras["daily_plans"]["error"] = f"{type(e).__name__}: {repr(e)}"
     else:
         skip_reasons["daily_plans"] = "already_generated_by_pipeline"
 

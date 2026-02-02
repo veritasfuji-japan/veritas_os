@@ -52,7 +52,7 @@ from .fuji_codes import build_fuji_rejection
 # ---------------------------------------------------------
 try:
     from veritas_os.tools import call_tool
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         raise RuntimeError(
             f"env tool '{kind}' / veritas_os.tools.call_tool が利用できません"
@@ -61,14 +61,14 @@ except Exception:  # pragma: no cover
 
 try:
     from veritas_os.logging.trust_log import append_trust_event
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def append_trust_event(event: Dict[str, Any]) -> None:
         return
 
 
 try:
     import yaml  # ポリシーファイル用
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     yaml = None  # type: ignore
 
 
@@ -81,7 +81,7 @@ try:
     DEFAULT_MIN_EVIDENCE = _fuji_cfg.default_min_evidence
     MAX_UNCERTAINTY = _fuji_cfg.max_uncertainty
     _ENV_POC_MODE = _fuji_cfg.poc_mode
-except Exception:
+except (ImportError, ModuleNotFoundError, AttributeError):
     # フォールバック: config が壊れていてもfuji.pyは動作する
     DEFAULT_MIN_EVIDENCE = 1
     MAX_UNCERTAINTY = 0.60
@@ -196,7 +196,7 @@ def _safe_int(x: Any, default: int) -> int:
     try:
         v = int(x)
         return v if v >= 0 else default
-    except Exception:
+    except (ValueError, TypeError):
         return default
 
 
@@ -435,7 +435,9 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-    except Exception:
+    except (OSError, IOError, yaml.YAMLError) as e:
+        import logging
+        logging.getLogger(__name__).warning("Failed to load policy file %s: %s", path, e)
         return dict(_DEFAULT_POLICY)
 
     if "version" not in data:
@@ -549,10 +551,12 @@ def run_safety_head(
             raw=res,
         )
 
-    except Exception as e:
+    except (RuntimeError, ValueError, TypeError, KeyError, AttributeError, OSError, IOError) as e:
+        import logging
+        logging.getLogger(__name__).warning("Safety head call failed: %s", e)
         fb = _fallback_safety_head(text)
         fb.categories.append("safety_head_error")
-        fb.rationale += f" / safety_head error: {repr(e)[:120]}"
+        fb.rationale += f" / safety_head error ({type(e).__name__}): {repr(e)[:120]}"
         fb.raw.setdefault("safety_head_error", repr(e))
         # ★ 不確実性を反映: LLM エラー時はベースリスクを 0.30 に引き上げ
         # 理由: LLM が評価できなかった = 安全性を確認できていない
@@ -783,7 +787,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         pii_safe_cap = _fuji_cfg.pii_safe_risk_cap
-    except Exception:
+    except (AttributeError, NameError):
         pii_safe_cap = 0.40
 
     if safe_applied:
@@ -797,7 +801,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         low_ev_penalty = _fuji_cfg.low_evidence_risk_penalty
-    except Exception:
+    except (AttributeError, NameError):
         low_ev_penalty = 0.10
 
     low_ev = evidence_count < int(min_evidence)
@@ -816,7 +820,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         telos_risk_scale = _fuji_cfg.telos_risk_scale_factor
-    except Exception:
+    except (AttributeError, NameError):
         telos_risk_scale = 0.10
 
     telos_clamped = max(0.0, min(1.0, telos_score))
@@ -1041,8 +1045,10 @@ def fuji_gate(
             },
         }
         append_trust_event(event)
-    except Exception as e:  # pragma: no cover
-        reasons.append(f"trustlog_error:{repr(e)[:80]}")
+    except (OSError, IOError, TypeError, ValueError) as e:  # pragma: no cover
+        import logging
+        logging.getLogger(__name__).warning("TrustLog write failed: %s", e)
+        reasons.append(f"trustlog_error ({type(e).__name__}):{repr(e)[:80]}")
 
     checks: List[Dict[str, Any]] = [
         {
