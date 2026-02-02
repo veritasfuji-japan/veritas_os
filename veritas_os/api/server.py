@@ -8,6 +8,7 @@ import json
 import os
 import re
 import secrets
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -24,6 +25,16 @@ from fastapi.security.api_key import APIKeyHeader
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.constants import DECISION_ALLOW, DECISION_REJECTED  # noqa: F401
+
+# ---- アトミック I/O（信頼性向上）----
+try:
+    from veritas_os.core.atomic_io import atomic_append_line, atomic_write_json
+    _HAS_ATOMIC_IO = True
+except Exception as _atomic_import_err:
+    _HAS_ATOMIC_IO = False
+    atomic_append_line = None  # type: ignore
+    atomic_write_json = None  # type: ignore
+    print(f"[WARN] atomic_io import failed, using fallback: {_atomic_import_err}")
 
 # ---- PII検出・マスク（sanitize.py から。失敗時はフォールバック）----
 try:
@@ -809,16 +820,25 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
         return []
 
 
+# スレッドセーフな Trust Log ロック
+_trust_log_lock = threading.Lock()
+
+
 def _save_json(path: Path, items: list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"items": items}, f, ensure_ascii=False, indent=2)
+    if _HAS_ATOMIC_IO:
+        atomic_write_json(path, {"items": items}, indent=2)
+    else:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"items": items}, f, ensure_ascii=False, indent=2)
 
 
 def append_trust_log(entry: Dict[str, Any]) -> None:
     """
     server 単体でも最低限 trust log が書けるフォールバック。
     （tests互換のため server.LOG_DIR patch に追随）
+
+    スレッドセーフ: ロック + アトミック I/O を使用してデータ損失を防止。
 
     Args:
         entry: TrustLogエントリ辞書
@@ -831,18 +851,25 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
         print(f"[WARN] LOG_DIR mkdir failed: {_errstr(e)}")
         return
 
-    try:
-        with open(log_jsonl, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception as e:
-        print(f"[WARN] write trust_log.jsonl failed: {_errstr(e)}")
+    # 全ての書き込みをロックで保護（競合状態を防止）
+    with _trust_log_lock:
+        # JSONL への追記（アトミック I/O 使用）
+        try:
+            if _HAS_ATOMIC_IO:
+                atomic_append_line(log_jsonl, json.dumps(entry, ensure_ascii=False))
+            else:
+                with open(log_jsonl, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print(f"[WARN] write trust_log.jsonl failed: {_errstr(e)}")
 
-    items = _load_logs_json(log_json)
-    items.append(entry)
-    try:
-        _save_json(log_json, items)
-    except Exception as e:
-        print(f"[WARN] write trust_log.json failed: {_errstr(e)}")
+        # JSON への追記
+        items = _load_logs_json(log_json)
+        items.append(entry)
+        try:
+            _save_json(log_json, items)
+        except Exception as e:
+            print(f"[WARN] write trust_log.json failed: {_errstr(e)}")
 
 
 def write_shadow_decide(

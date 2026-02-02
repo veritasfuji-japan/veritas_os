@@ -1080,6 +1080,7 @@ async def decide(
                     [sys.executable, "-m", "veritas_os.scripts.doctor"],
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
+                    shell=False,
                 )
         except Exception as e:
             extras.setdefault("doctor", {})

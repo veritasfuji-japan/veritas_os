@@ -50,6 +50,94 @@ def _allow_legacy_pickle_migration() -> bool:
     return value in {"1", "true", "yes", "y", "on"}
 
 
+class RestrictedUnpickler:
+    """
+    安全なPickle読み込み用の制限付きUnpickler。
+
+    許可された型のみデシリアライズし、任意コード実行を防止する。
+    """
+
+    # 許可するnumpy型（旧版・新版両対応）
+    ALLOWED_NUMPY_TYPES = frozenset({
+        # numpy < 2.0
+        "numpy.core.multiarray._reconstruct",
+        "numpy.core.multiarray.scalar",
+        # numpy >= 2.0
+        "numpy._core.multiarray._reconstruct",
+        "numpy._core.multiarray.scalar",
+        # 共通
+        "numpy.ndarray",
+        "numpy.dtype",
+    })
+
+    # 許可する基本型
+    ALLOWED_BUILTINS = frozenset({
+        "dict",
+        "list",
+        "tuple",
+        "set",
+        "frozenset",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "bytes",
+        "type",
+    })
+
+    @classmethod
+    def _find_class(cls, module: str, name: str):
+        """許可されたクラスのみを読み込む。"""
+        import pickle
+        import builtins
+
+        full_name = f"{module}.{name}"
+
+        # numpy型
+        if full_name in cls.ALLOWED_NUMPY_TYPES:
+            import numpy as np
+            # ndarray, dtype はトップレベル
+            if hasattr(np, name):
+                return getattr(np, name)
+            # _reconstruct等は multiarray モジュールにある
+            try:
+                # numpy >= 2.0
+                import numpy._core.multiarray as ma
+                if hasattr(ma, name):
+                    return getattr(ma, name)
+            except ImportError:
+                pass
+            try:
+                # numpy < 2.0
+                import numpy.core.multiarray as ma
+                if hasattr(ma, name):
+                    return getattr(ma, name)
+            except ImportError:
+                pass
+            raise pickle.UnpicklingError(
+                f"Restricted unpickler: numpy type {name} not found"
+            )
+
+        # builtins
+        if module == "builtins" and name in cls.ALLOWED_BUILTINS:
+            return getattr(builtins, name)
+
+        raise pickle.UnpicklingError(
+            f"Restricted unpickler: {full_name} is not allowed"
+        )
+
+    @classmethod
+    def loads(cls, data: bytes) -> Any:
+        """制限付きでPickleデータを読み込む。"""
+        import pickle
+        import io
+
+        class _Unpickler(pickle.Unpickler):
+            find_class = staticmethod(cls._find_class)
+
+        return _Unpickler(io.BytesIO(data)).load()
+
+
 # ============================
 # ベクトル検索モジュール（組み込み）
 # ============================
@@ -152,9 +240,10 @@ class VectorMemory:
                     return
                 logger.info("[VectorMemory] Migrating from legacy pickle format...")
                 try:
-                    import pickle
+                    # セキュリティ: RestrictedUnpickler を使用して安全にデシリアライズ
                     with open(legacy_pkl_path, "rb") as f:
-                        data = pickle.load(f)
+                        raw_data = f.read()
+                    data = RestrictedUnpickler.loads(raw_data)
 
                     self.documents = data.get("documents", [])
                     self.embeddings = data.get("embeddings")
