@@ -57,7 +57,7 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 | `chosen` | 選択したアクション + 根拠、確信度、不確実性、効用、リスク |
 | `alternatives[]` | 他の候補アクション |
 | `evidence[]` | 参照した根拠（MemoryOS / WorldModel / 任意ツールなど） |
-| `critique[]` | 自己批判・弱点・前提の穴 |
+| `critique` | 自己批判・弱点・前提の穴（dict） |
 | `debate[]` | 擬似マルチエージェント討論（賛成/反対/第三者） |
 | `telos_score` | ValueCoreに対する整合スコア |
 | `fuji` | FUJI Gate判定（allow / modify / rejected） |
@@ -67,7 +67,7 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 意思決定パイプライン（メンタルモデル）：
 
 ```text
-Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
+WorldModel → Planner → Memory/Web Evidence → Kernel → Debate → Critique → FUJI → ValueCore → Gate → TrustLog
 ````
 
 > **注意（kernel 経由 vs pipeline 経由）**  
