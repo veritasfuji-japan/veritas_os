@@ -9,10 +9,39 @@ from typing import List, Tuple, Iterable, Optional, Any
 from veritas_os.core.atomic_io import atomic_write_npz
 
 
+class PickleSecurityWarning(UserWarning):
+    """
+    Custom warning category for pickle-related security risks.
+    Allows filtering of security warnings separately from other UserWarnings.
+    """
+    pass
+
+
 def _allow_legacy_pickle_npz() -> bool:
-    """Allow loading legacy npz files that require pickle (unsafe)."""
+    """
+    Allow loading legacy npz files that require pickle.
+
+    ⚠️ SECURITY WARNING: Pickle deserialization can execute arbitrary code.
+    This feature is DEPRECATED and should only be enabled temporarily
+    during one-time migration of legacy data files.
+
+    To enable (NOT recommended for production):
+        export VERITAS_MEMORY_ALLOW_LEGACY_NPZ=1
+
+    After migration, disable immediately and regenerate index files.
+    """
+    import warnings
     value = os.getenv("VERITAS_MEMORY_ALLOW_LEGACY_NPZ", "").strip().lower()
-    return value in {"1", "true", "yes", "y", "on"}
+    if value in {"1", "true", "yes", "y", "on"}:
+        warnings.warn(
+            "VERITAS_MEMORY_ALLOW_LEGACY_NPZ is enabled. This is a security risk. "
+            "Pickle deserialization can execute arbitrary code. "
+            "Disable after migrating legacy data files.",
+            PickleSecurityWarning,
+            stacklevel=2,
+        )
+        return True
+    return False
 
 
 class CosineIndex:
@@ -49,11 +78,22 @@ class CosineIndex:
                 pass
 
             if _allow_legacy_pickle_npz():
+                import sys
+                print(
+                    f"[CosineIndex] WARNING: Loading legacy pickle-based npz file: {self.path}. "
+                    "This is a security risk. Re-save the index to migrate.",
+                    file=sys.stderr,
+                )
                 try:
                     data = np.load(self.path, allow_pickle=True)
                     self.vecs = data["vecs"].astype(np.float32)
                     self.ids = [str(i) for i in data["ids"].tolist()]
+                    # Immediately re-save without pickle to migrate
                     self.save()
+                    print(
+                        f"[CosineIndex] Migrated legacy pickle file to safe format: {self.path}",
+                        file=sys.stderr,
+                    )
                     return
                 except Exception:
                     pass
