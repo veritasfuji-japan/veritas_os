@@ -87,7 +87,7 @@ def _validate_url(url: str) -> Optional[str]:
             return None
 
         # ホスト名は英数字、ハイフン、ドットのみ（IDN は punycode に変換済み前提）
-        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", hostname):
+        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", hostname):
             # IPv4 アドレスの場合は別途チェック
             if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname):
                 return None
