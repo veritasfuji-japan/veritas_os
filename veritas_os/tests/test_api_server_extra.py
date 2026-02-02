@@ -433,7 +433,7 @@ def test_decide_requires_api_key():
     assert r.status_code == 401
 
 
-def test_decide_validation_error_handler_returns_hint():
+def test_decide_validation_error_handler_returns_hint(monkeypatch):
     """
     /v1/decide に「おかしなボディ」を投げたときの挙動をテストする。
 
@@ -442,6 +442,9 @@ def test_decide_validation_error_handler_returns_hint():
 
     どちらの挙動でもテストが通るようにしておく。
     """
+    # Enable debug mode to include raw_body in 422 response
+    monkeypatch.setenv("VERITAS_DEBUG_MODE", "true")
+
     r = client.post(
         "/v1/decide",
         json={"invalid": "payload"},
@@ -454,6 +457,7 @@ def test_decide_validation_error_handler_returns_hint():
         assert "detail" in data
         assert "hint" in data
         assert "expected_example" in data["hint"]
+        # raw_body is only present in debug mode
         assert "raw_body" in data
         assert '"invalid"' in data["raw_body"]
     else:

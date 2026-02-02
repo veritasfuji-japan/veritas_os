@@ -72,9 +72,48 @@ def verify_credentials(
 
 # ===== パス設定 =====
 
+from veritas_os.api.constants import SENSITIVE_SYSTEM_PATHS
+
 BASE_DIR = Path(__file__).resolve().parents[1]
 default_log_dir = BASE_DIR / "scripts" / "logs"
-LOG_DIR = Path(os.getenv("VERITAS_LOG_DIR", str(default_log_dir))).expanduser()
+
+
+def _validate_log_dir(log_dir_str: str, allowed_base: Path) -> Path:
+    """
+    Validate and sanitize the log directory path to prevent path traversal.
+
+    Args:
+        log_dir_str: String path from environment variable
+        allowed_base: The allowed base directory for logs
+
+    Returns:
+        Validated Path object
+
+    Raises:
+        ValueError: If the path attempts path traversal outside allowed base
+    """
+    try:
+        resolved = Path(log_dir_str).expanduser().resolve()
+        allowed_resolved = allowed_base.resolve()
+        # Allow exact match or child paths
+        if resolved == allowed_resolved or allowed_resolved in resolved.parents:
+            return resolved
+        # For custom log directories, ensure they don't traverse to sensitive system paths
+        resolved_str = str(resolved)
+        for sensitive in SENSITIVE_SYSTEM_PATHS:
+            if resolved_str.startswith(sensitive + "/") or resolved_str == sensitive:
+                raise ValueError(
+                    f"Log directory cannot be in sensitive system path: {resolved}"
+                )
+        return resolved
+    except (OSError, ValueError) as e:
+        # Fall back to default on any path resolution error
+        print(f"[WARN] Invalid VERITAS_LOG_DIR, using default: {e}")
+        return allowed_base
+
+
+_log_dir_env = os.getenv("VERITAS_LOG_DIR", str(default_log_dir))
+LOG_DIR = _validate_log_dir(_log_dir_env, default_log_dir)
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
