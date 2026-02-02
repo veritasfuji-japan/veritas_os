@@ -394,18 +394,34 @@ app.add_middleware(
 # API Key & HMAC 認証
 # ==============================
 
-API_KEY_DEFAULT = (os.getenv("VERITAS_API_KEY") or getattr(cfg, "api_key", "") or "").strip()
-if not API_KEY_DEFAULT:
+# ★ 後方互換: テストがmonkeypatch.setattr(server, "API_KEY_DEFAULT", ...)を使用
+# 実際の認証では _get_expected_api_key() を使用して毎回環境変数から取得
+# （この変数は直接使用せず、レガシーテスト互換のためだけに存在）
+API_KEY_DEFAULT = ""  # ★ セキュリティ修正: 起動時にキーを保持しない
+
+# 起動時に一度だけ警告を出力（テスト互換性のため）
+if not os.getenv("VERITAS_API_KEY"):
     print("[WARN] VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def _get_expected_api_key() -> str:
+    """
+    ★ セキュリティ修正: APIキーを毎回環境変数から取得。
+    モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
+    テスト時は API_KEY_DEFAULT を monkeypatch で上書き可能（レガシー互換）。
+    """
+    # 1. 環境変数を優先
     env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
     if env_key:
         return env_key
-    return (API_KEY_DEFAULT or "").strip()
+    # 2. テスト互換: API_KEY_DEFAULT がmonkeypatchで設定されていれば使用
+    if API_KEY_DEFAULT:
+        return API_KEY_DEFAULT.strip()
+    # 3. フォールバック: configからの取得（レガシー互換）
+    config_key = (getattr(cfg, "api_key", "") or "").strip()
+    return config_key
 
 
 def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
