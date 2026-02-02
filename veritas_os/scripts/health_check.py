@@ -13,9 +13,18 @@ VERITAS health_check.py（veritas_clean_test2 用）
 import os
 import json
 import subprocess
+import re
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse
+
+# requests ライブラリ（セキュリティ向上のため curl subprocess を置換）
+try:
+    import requests
+    HAS_REQUESTS = True
+except ImportError:
+    HAS_REQUESTS = False
 
 # ===== パス設定 =====
 HERE = Path(__file__).resolve().parent      # .../veritas_os/scripts
@@ -39,14 +48,83 @@ OUT_JSON = LOGS_DIR / f"health_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
 SLACK_NOTIFY = SCRIPTS_BASE / "notify_slack.py"
 
-API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
-HEALTH_URL = f"{API_BASE}/health"
-
 NOW = datetime.now()
 WITHIN = timedelta(days=1)   # 「最近」の基準（24h 以内）
 
+
+# ===== セキュリティ: URL バリデーション =====
+def _validate_url(url: str) -> Optional[str]:
+    """
+    ★ セキュリティ修正: URL を検証し、安全な場合のみ返す。
+
+    - http:// または https:// スキームのみ許可
+    - ホスト名は英数字、ハイフン、ドットのみ
+    - 危険な文字（シェルメタキャラクター）を拒否
+    - ポート番号は 1-65535 の範囲のみ
+
+    Returns:
+        検証済みの URL（安全な場合）、または None（不正な場合）
+    """
+    if not url or not isinstance(url, str):
+        return None
+
+    # 危険な文字を検出（コマンドインジェクション防止）
+    dangerous_chars = [";", "|", "&", "$", "`", "(", ")", "{", "}", "<", ">", "\n", "\r", "\\"]
+    for char in dangerous_chars:
+        if char in url:
+            return None
+
+    try:
+        parsed = urlparse(url)
+
+        # スキームの検証（http/https のみ）
+        if parsed.scheme not in ("http", "https"):
+            return None
+
+        # ホスト名の検証
+        hostname = parsed.hostname
+        if not hostname:
+            return None
+
+        # ホスト名は英数字、ハイフン、ドットのみ（IDN は punycode に変換済み前提）
+        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9\-\.]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", hostname):
+            # IPv4 アドレスの場合は別途チェック
+            if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname):
+                return None
+
+        # ポートの検証
+        port = parsed.port
+        if port is not None:
+            if not (1 <= port <= 65535):
+                return None
+
+        # パスに危険な文字がないか再確認
+        path = parsed.path or ""
+        for char in dangerous_chars:
+            if char in path:
+                return None
+
+        return url
+
+    except Exception:
+        return None
+
+
+API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
+
+# ★ セキュリティ修正: API_BASE を検証
+_validated_api_base = _validate_url(API_BASE)
+if _validated_api_base is None:
+    print(f"⚠️ SECURITY WARNING: Invalid VERITAS_API_BASE: {API_BASE!r}")
+    print("   Using default: http://127.0.0.1:8000")
+    API_BASE = "http://127.0.0.1:8000"
+
+HEALTH_URL = f"{API_BASE}/health"
+
+
 # ===== ユーティリティ =====
 def run(cmd: List[str], timeout: int = 8):
+    """サブプロセス実行（Slack 通知など用）"""
     try:
         r = subprocess.run(
             cmd,
@@ -60,20 +138,64 @@ def run(cmd: List[str], timeout: int = 8):
     except Exception as e:
         return 99, "", str(e)
 
+
 def mtime_ok(p: Path, within: timedelta) -> bool:
     return p.exists() and datetime.fromtimestamp(p.stat().st_mtime) >= NOW - within
 
+
 # ===== チェック群 =====
 def check_server() -> Dict[str, Any]:
-    """FastAPI /health を curl で確認"""
-    code, out, err = run(["curl", "-m", "3", "-sS", HEALTH_URL])
-    ok = (code == 0) and ("\"ok\":true" in out.replace(" ", "").lower())
+    """
+    FastAPI /health を確認
+
+    ★ セキュリティ修正:
+    - curl subprocess の代わりに requests ライブラリを使用（コマンドインジェクション防止）
+    - URL は事前に検証済み
+    - requests がない場合はフォールバック（検証済み URL のみ許可）
+    """
+    url = HEALTH_URL
+
+    # URL 再検証（念のため）
+    if _validate_url(url) is None:
+        return {
+            "name": "api_health",
+            "ok": False,
+            "status_code": -1,
+            "detail": f"Invalid URL: {url}",
+            "url": url,
+        }
+
+    # requests ライブラリを優先使用（セキュリティ向上）
+    if HAS_REQUESTS:
+        try:
+            resp = requests.get(url, timeout=3)
+            body = resp.text
+            ok = resp.ok and ('"ok":true' in body.replace(" ", "").lower())
+            return {
+                "name": "api_health",
+                "ok": ok,
+                "status_code": resp.status_code,
+                "detail": body[:500] if body else "",
+                "url": url,
+            }
+        except requests.RequestException as e:
+            return {
+                "name": "api_health",
+                "ok": False,
+                "status_code": -1,
+                "detail": f"Request failed: {e}",
+                "url": url,
+            }
+
+    # フォールバック: curl（URL は検証済み）
+    code, out, err = run(["curl", "-m", "3", "-sS", url])
+    ok = (code == 0) and ('"ok":true' in out.replace(" ", "").lower())
     return {
         "name": "api_health",
         "ok": ok,
         "status_code": code,
         "detail": out or err,
-        "url": HEALTH_URL,
+        "url": url,
     }
 
 def check_logs() -> Dict[str, Any]:
