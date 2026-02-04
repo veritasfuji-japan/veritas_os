@@ -67,7 +67,7 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 意思決定パイプライン（メンタルモデル）：
 
 ```text
-WorldModel → Planner → Memory/Web Evidence → Kernel → Debate → Critique → FUJI → ValueCore → Gate → TrustLog
+Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
 ````
 
 同梱サブシステム：
