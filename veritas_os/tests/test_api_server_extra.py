@@ -464,6 +464,52 @@ def test_decide_validation_error_handler_returns_hint():
         assert any(k in data for k in ("request_id", "status", "result", "decision"))
 
 
+def test_decide_pipeline_unavailable_hides_detail(monkeypatch):
+    """
+    /v1/decide がパイプライン不在のとき、
+    detail が一般的なメッセージになることを確認する。
+    """
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: None)
+    server._pipeline_state.err = "boom"  # type: ignore[attr-defined]
+
+    r = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert r.status_code == 503
+    data = r.json()
+    assert data["error"] == server.DECIDE_GENERIC_ERROR
+    assert data["detail"] == server.DECIDE_GENERIC_ERROR
+    assert "boom" not in data["detail"]
+
+
+def test_decide_pipeline_execution_failure_hides_detail(monkeypatch):
+    """
+    /v1/decide 実行失敗時に detail が一般化されることを確認する。
+    """
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+
+    r = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert r.status_code == 503
+    data = r.json()
+    assert data["error"] == server.DECIDE_GENERIC_ERROR
+    assert data["detail"] == server.DECIDE_GENERIC_ERROR
+    assert "boom" not in data["detail"]
+
+
 
 # -------------------------------------------------
 # FUJI quick validate (/v1/fuji/validate)
@@ -637,7 +683,11 @@ def test_memory_put_and_get_roundtrip():
     /v1/memory/put (レガシーKV) → /v1/memory/get で値が取れること
     """
     body = {"user_id": "user1", "key": "k_legacy", "value": {"foo": "bar"}}
-    r = client.post("/v1/memory/put", json=body)
+    r = client.post(
+        "/v1/memory/put",
+        json=body,
+        headers={"X-API-Key": "test-api-key"},
+    )
     assert r.status_code == 200
     data = r.json()
 
@@ -669,7 +719,11 @@ def test_memory_put_vector_and_size_and_kind():
         "tags": ["tag1"],
         "meta": {"source": "test"},
     }
-    r = client.post("/v1/memory/put", json=body)
+    r = client.post(
+        "/v1/memory/put",
+        json=body,
+        headers={"X-API-Key": "test-api-key"},
+    )
     assert r.status_code == 200
     data = r.json()
 
@@ -712,6 +766,7 @@ def test_memory_search_filters_by_user(monkeypatch):
     r = client.post(
         "/v1/memory/search",
         json={"query": "q", "user_id": "userX"},
+        headers={"X-API-Key": "test-api-key"},
     )
     assert r.status_code == 200
     data = r.json()
@@ -723,6 +778,7 @@ def test_memory_search_filters_by_user(monkeypatch):
     r2 = client.post(
         "/v1/memory/search",
         json={"query": "q"},
+        headers={"X-API-Key": "test-api-key"},
     )
     assert r2.status_code == 200
     data2 = r2.json()
@@ -749,7 +805,11 @@ def test_memory_search_error_path(monkeypatch):
 
     monkeypatch.setattr(server.MEMORY_STORE, "search", boom)
 
-    r = client.post("/v1/memory/search", json={"query": "q"})
+    r = client.post(
+        "/v1/memory/search",
+        json={"query": "q"},
+        headers={"X-API-Key": "test-api-key"},
+    )
     assert r.status_code == 200
     data = r.json()
 
@@ -876,13 +936,43 @@ def test_memory_get_unauthorized_without_api_key():
     assert r.status_code in (401, 403, 422)
 
 
+def test_memory_put_unauthorized_without_api_key():
+    """
+    /v1/memory/put を APIキーなしで叩いた場合、
+    認証エラー系ステータスになることを確認。
+    """
+    r = client.post(
+        "/v1/memory/put",
+        json={"user_id": "user1", "key": "k_legacy", "value": {"foo": "bar"}},
+        # ヘッダに X-API-Key を付けない
+    )
+    assert r.status_code in (401, 403, 422)
+
+
+def test_memory_search_unauthorized_without_api_key():
+    """
+    /v1/memory/search を APIキーなしで叩いた場合、
+    認証エラー系ステータスになることを確認。
+    """
+    r = client.post(
+        "/v1/memory/search",
+        json={"query": "q"},
+        # ヘッダに X-API-Key を付けない
+    )
+    assert r.status_code in (401, 403, 422)
+
+
 def test_memory_put_minimal_body_ok():
     """
     /v1/memory/put に user_id だけ投げても 500 にならず、
     正常レスポンスフォーマットを返すことを確認するテスト。
     （実装は「noop」として 200 を返す仕様）
     """
-    r = client.post("/v1/memory/put", json={"user_id": "only-user"})
+    r = client.post(
+        "/v1/memory/put",
+        json={"user_id": "only-user"},
+        headers={"X-API-Key": "test-api-key"},
+    )
     assert r.status_code == 200
     data = r.json()
     # 最低限 ok フラグが立っていることだけ確認（詳細の中身は実装依存）
@@ -898,7 +988,3 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
-
-
-
-

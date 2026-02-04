@@ -182,6 +182,21 @@ def _errstr(e: Exception) -> str:
     return f"{type(e).__name__}: {e}"
 
 
+DECIDE_GENERIC_ERROR = "service_unavailable"
+
+
+def _log_decide_failure(message: str, err: Optional[Exception | str]) -> None:
+    """Log internal decide pipeline errors without exposing details to clients."""
+    if err is None:
+        print(f"[ERROR] decide failed: {message}")
+        return
+    if isinstance(err, Exception):
+        err_detail = _errstr(err)
+    else:
+        err_detail = str(err)
+    print(f"[ERROR] decide failed: {message} ({err_detail})")
+
+
 def get_cfg() -> Any:
     """
     cfg は “無い/壊れてる” 可能性があるので必ずフォールバックを返す。
@@ -875,12 +890,13 @@ def write_shadow_decide(
 async def decide(req: DecideRequest, request: Request):
     p = get_decision_pipeline()
     if p is None:
+        _log_decide_failure("decision_pipeline unavailable", _pipeline_state.err)
         return JSONResponse(
             status_code=503,
             content={
                 "ok": False,
-                "error": "decision_pipeline unavailable",
-                "detail": _pipeline_state.err,
+                "error": DECIDE_GENERIC_ERROR,
+                "detail": DECIDE_GENERIC_ERROR,
                 "trust_log": None,  # ★互換
             },
         )
@@ -888,12 +904,13 @@ async def decide(req: DecideRequest, request: Request):
     try:
         payload = await p.run_decide_pipeline(req=req, request=request)
     except Exception as e:
+        _log_decide_failure("decision_pipeline execution failed", e)
         return JSONResponse(
             status_code=503,
             content={
                 "ok": False,
-                "error": "decision_pipeline execution failed",
-                "detail": _errstr(e),
+                "error": DECIDE_GENERIC_ERROR,
+                "detail": DECIDE_GENERIC_ERROR,
                 "trust_log": None,  # ★互換
             },
         )
@@ -1028,7 +1045,7 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
-@app.post("/v1/memory/put")
+@app.post("/v1/memory/put", dependencies=[Depends(require_api_key)])
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1098,7 +1115,7 @@ def memory_put(body: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/v1/memory/search")
+@app.post("/v1/memory/search", dependencies=[Depends(require_api_key)])
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
@@ -1223,10 +1240,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         print("[Trust] feedback failed:", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
-
-
-
 
 
 
