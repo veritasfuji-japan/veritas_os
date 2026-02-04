@@ -50,6 +50,12 @@ memory/store/*
 memory/episodic*
 memory/semantic*
 memory/skills*
+veritas_os/memory/*.jsonl
+veritas_os/memory/*.npz
+veritas_os/memory/store/*
+veritas_os/memory/episodic*
+veritas_os/memory/semantic*
+veritas_os/memory/skills*
 
 # ログ＆レポート類（あとから再生成できるもの）
 logs/

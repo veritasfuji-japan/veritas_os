@@ -90,6 +90,15 @@ class DynamicPath(os.PathLike):
 
 DEFAULT_USER_ID = "global"
 
+# Import shared security constants
+try:
+    from veritas_os.api.constants import SENSITIVE_SYSTEM_PATHS
+except ImportError:
+    # Fallback for testing or standalone usage
+    SENSITIVE_SYSTEM_PATHS: frozenset[str] = frozenset([
+        "/etc", "/var/run", "/proc", "/sys", "/dev", "/boot"
+    ])
+
 
 def _first_env(*keys: str) -> Optional[str]:
     """最初に見つかった env を返す（未設定なら None）"""
@@ -100,6 +109,37 @@ def _first_env(*keys: str) -> Optional[str]:
     return None
 
 
+def _validate_path_safety(path: Path, context: str = "path") -> Path:
+    """
+    Validate that a path does not point to sensitive system directories.
+
+    Args:
+        path: The path to validate
+        context: Context string for error messages
+
+    Returns:
+        The validated path (resolved)
+
+    Raises:
+        ValueError: If path points to a sensitive system directory
+    """
+    try:
+        resolved = path.resolve()
+        resolved_str = str(resolved)
+        for sensitive in SENSITIVE_SYSTEM_PATHS:
+            if resolved_str.startswith(sensitive + "/") or resolved_str == sensitive:
+                logger.warning(
+                    f"Attempted to use sensitive path for {context}: {resolved}"
+                )
+                raise ValueError(
+                    f"Cannot use sensitive system path for {context}: {resolved}"
+                )
+        return resolved
+    except OSError as e:
+        logger.warning(f"Path resolution failed for {context}: {e}")
+        raise
+
+
 def _resolve_data_dir() -> Path:
     """tests / users の両方に優しい data dir resolver"""
     base = _first_env(
@@ -108,10 +148,20 @@ def _resolve_data_dir() -> Path:
         "VERITAS_HOME",
         "VERITAS_PATH",
     )
-    return Path(base if base else "~/veritas").expanduser()
+    path = Path(base if base else "~/veritas").expanduser()
+    try:
+        return _validate_path_safety(path, "data directory")
+    except ValueError:
+        # Fall back to default on validation failure
+        default_path = Path.home() / "veritas"
+        logger.warning(f"Using default data directory: {default_path}")
+        return default_path
 
 
 def _resolve_world_path() -> Path:
+    """Resolve the world state file path with security validation."""
+    default_path = Path.home() / "veritas" / "world_state.json"
+
     # 1) ファイルパスを直指定できる系を最優先
     explicit = (
         os.getenv("VERITAS_WORLD_PATH")
@@ -119,7 +169,12 @@ def _resolve_world_path() -> Path:
         or os.getenv("WORLD_STATE_PATH")
     )
     if explicit:
-        return Path(explicit).expanduser()
+        path = Path(explicit).expanduser()
+        try:
+            return _validate_path_safety(path, "world state")
+        except ValueError:
+            logger.warning(f"Invalid explicit path, using default: {default_path}")
+            return default_path
 
     # 2) データディレクトリ指定系（tests がこっちを setenv してる可能性が高い）
     base = (
@@ -129,10 +184,15 @@ def _resolve_world_path() -> Path:
         or os.getenv("VERITAS_DIR")
     )
     if base:
-        return Path(base).expanduser() / "world_state.json"
+        path = Path(base).expanduser() / "world_state.json"
+        try:
+            return _validate_path_safety(path, "world state")
+        except ValueError:
+            logger.warning(f"Invalid base path, using default: {default_path}")
+            return default_path
 
     # 3) デフォルト
-    return Path.home() / "veritas" / "world_state.json"
+    return default_path
 
 
 # ------------------------------------------------------------
@@ -310,9 +370,27 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
     - write to temp file in same directory
     - fsync
     - replace
+    
+    ★ セキュリティ修正:
+    - ディレクトリのパーミッションを制限（0o755）
+    - 一時ファイルの作成に安全なtempfile.mkstempを使用
+    - finallyブロックで確実にクリーンアップ
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_fd, tmp_name = tempfile.mkstemp(prefix=".world_state.", suffix=".tmp", dir=str(path.parent))
+    # ★ セキュリティ修正: 親ディレクトリを安全に作成（パーミッション制限）
+    parent_dir = path.parent
+    parent_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+    
+    # ★ セキュリティ修正: ディレクトリのパーミッションを確認・修正
+    try:
+        current_mode = parent_dir.stat().st_mode & 0o777
+        # 0o022 = group write (0o020) + other write (0o002)
+        # このビットがセットされている場合、書き込み権限を除去
+        if current_mode & 0o022:
+            os.chmod(parent_dir, current_mode & ~0o022)
+    except OSError:
+        pass  # パーミッション変更に失敗しても処理続行
+    
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix=".world_state.", suffix=".tmp", dir=str(parent_dir))
     try:
         with os.fdopen(tmp_fd, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
@@ -320,10 +398,11 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
             os.fsync(f.fileno())
         os.replace(tmp_name, path)
     finally:
+        # ★ セキュリティ修正: 一時ファイルのクリーンアップを確実に実行
         try:
             if os.path.exists(tmp_name):
                 os.remove(tmp_name)
-        except Exception:
+        except OSError:
             pass
 
 

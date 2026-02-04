@@ -13,6 +13,18 @@ from pydantic import (
 )
 
 # =========================
+# Input Length Constraints (Security)
+# =========================
+# These limits prevent DoS attacks via oversized payloads.
+# Adjust as needed for your use case, but keep reasonable limits.
+
+MAX_QUERY_LENGTH = 10000  # Max characters for query/message fields
+MAX_SNIPPET_LENGTH = 50000  # Max characters for evidence snippets
+MAX_DESCRIPTION_LENGTH = 20000  # Max characters for descriptions
+MAX_TITLE_LENGTH = 1000  # Max characters for titles
+MAX_LIST_ITEMS = 100  # Max items in lists (alternatives, evidence, etc.)
+
+# =========================
 # Helpers (robust coercion)
 # =========================
 
@@ -69,9 +81,9 @@ def _coerce_context(v: Any) -> Dict[str, Any]:
 class Context(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    user_id: str
-    session_id: Optional[str] = None
-    query: str
+    user_id: str = Field(..., max_length=500)
+    session_id: Optional[str] = Field(default=None, max_length=500)
+    query: str = Field(..., max_length=MAX_QUERY_LENGTH)
 
     goals: Optional[List[str]] = None
     constraints: Optional[List[str]] = None
@@ -89,11 +101,11 @@ class Context(BaseModel):
 class Option(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: Optional[str] = None
-    title: Optional[str] = None
-    description: Optional[str] = None
+    id: Optional[str] = Field(default=None, max_length=500)
+    title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     score: Optional[float] = None
-    text: Optional[str] = None  # 互換（title の別名）
+    text: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)  # 互換（title の別名）
     score_raw: Optional[float] = None
 
     @model_validator(mode="after")
@@ -128,10 +140,10 @@ class EvidenceItem(BaseModel):
     """
     model_config = ConfigDict(extra="allow")
 
-    source: str = "unknown"
-    uri: Optional[str] = None
-    title: Optional[str] = None
-    snippet: str = ""
+    source: str = Field(default="unknown", max_length=500)
+    uri: Optional[str] = Field(default=None, max_length=2000)
+    title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    snippet: str = Field(default="", max_length=MAX_SNIPPET_LENGTH)
     confidence: float = 0.7
 
     @model_validator(mode="after")
@@ -147,14 +159,14 @@ class EvidenceItem(BaseModel):
             if isinstance(ex, dict):
                 u = ex.get("url") or ex.get("link") or ex.get("href") or ex.get("URI")
             if u:
-                self.uri = str(u)
+                self.uri = str(u)[:2000]  # Truncate to max length
 
         # snippet: 無ければ title -> uri -> "" の順で埋める
         if not self.snippet:
             if self.title:
-                self.snippet = str(self.title)
+                self.snippet = str(self.title)[:MAX_SNIPPET_LENGTH]
             elif self.uri:
-                self.snippet = str(self.uri)
+                self.snippet = str(self.uri)[:MAX_SNIPPET_LENGTH]
             else:
                 self.snippet = ""
 
@@ -219,10 +231,10 @@ class TrustLog(BaseModel):
 class AltItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: Optional[str] = None
-    title: Optional[str] = None
-    text: Optional[str] = None  # 互換（title の別名）
-    description: Optional[str] = None
+    id: Optional[str] = Field(default=None, max_length=500)
+    title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    text: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)  # 互換（title の別名）
+    description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     score: Optional[float] = None
     score_raw: Optional[float] = None
 
@@ -263,14 +275,16 @@ class DecideRequest(BaseModel):
     """
     model_config = ConfigDict(extra="allow")
 
-    query: str = ""
+    query: str = Field(default="", max_length=MAX_QUERY_LENGTH)
     context: Dict[str, Any] = Field(default_factory=dict)
 
     # ★ 受け口は AltIn にする（dict/Option/AltItem 全受け）
+    # Note: max_length is for strings; Pydantic v2 doesn't have max_items for Lists in Field
+    # List size validation is done in the field_validator below
     alternatives: Optional[List[AltIn]] = None
     options: Optional[List[AltIn]] = None
 
-    min_evidence: int = 1
+    min_evidence: int = Field(default=1, ge=0, le=100)
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
@@ -287,6 +301,9 @@ class DecideRequest(BaseModel):
             return []
         # dict/scalar/iterable -> list
         items = _as_list(v)
+        # Enforce list size limit
+        if len(items) > MAX_LIST_ITEMS:
+            raise ValueError(f"alternatives list exceeds maximum size of {MAX_LIST_ITEMS}")
         return [_altin_to_altitem(x) for x in items]
 
     @field_validator("options", mode="before")
@@ -295,6 +312,9 @@ class DecideRequest(BaseModel):
         if v is None:
             return []
         items = _as_list(v)
+        # Enforce list size limit
+        if len(items) > MAX_LIST_ITEMS:
+            raise ValueError(f"options list exceeds maximum size of {MAX_LIST_ITEMS}")
         return [_altin_to_altitem(x) for x in items]
 
     @model_validator(mode="after")
@@ -622,8 +642,8 @@ class PersonaState(BaseModel):
 class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    message: str
-    session_id: Optional[str] = None
+    message: str = Field(..., max_length=MAX_QUERY_LENGTH)
+    session_id: Optional[str] = Field(default=None, max_length=500)
     memory_auto_put: bool = True
     persona_evolve: bool = True
 

@@ -70,6 +70,12 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
 ````
 
+> **注意（kernel 経由 vs pipeline 経由）**  
+> `kernel.py` 経由の `/v1/decide` では `telos_score` は `telos_weights` から簡易算出され、  
+> `pipeline.py` の **ValueCore 評価**（`value_core.evaluate`）や **TrustLog への監査書き込み** は
+> **実行されません**。ValueCore/TrustLog を含む完全な評価・監査が必要な場合は
+> **pipeline 経由**の実行を前提にしてください。
+
 同梱サブシステム：
 
 * **MemoryOS** — エピソード/セマンティック記憶、検索
@@ -117,6 +123,8 @@ export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
+export VERITAS_ENCRYPTED_LOG_ROOT="/path/to/encrypted/logs"
+export VERITAS_REQUIRE_ENCRYPTED_LOG_DIR="1"
 ```
 
 ### 3) サーバ起動
@@ -179,6 +187,33 @@ h_t = SHA256(h_{t-1} || r_t)
 
 これにより、決定履歴は **改ざん検知可能**な監査証跡として扱えます。
 
+### ログ保存パス（`scripts/logs` vs `~/.veritas`）
+
+- **`scripts/logs`（既定）**: `veritas_os.logging.paths` 経由で保存される TrustLog/ダッシュボード用ログの既定パスです。  
+  `VERITAS_DATA_DIR` または `VERITAS_LOG_ROOT` を設定している場合は、そのパスが優先されます。
+- **`~/.veritas`（既定）**: ValueCore の補助ログ（`~/.veritas/trust_log.jsonl` など）や、
+  Kernel 直呼び時の Doctor ログ（`~/.veritas/logs/doctor.log` など）が保存されます。
+
+**使い分け/注意点**
+- `/v1/decide` を **pipeline 経由**で実行している場合は主に `scripts/logs` に出力されます。
+- **Kernel 直呼び**や ValueCore 単体のユーティリティは `~/.veritas` を参照するため、
+  監査・解析の際は **両方のパスにログが分散し得る**ことに注意してください。
+- ログ保存先を統一したい場合は `VERITAS_DATA_DIR`/`VERITAS_LOG_ROOT` の設定を優先してください。
+  いずれのパスも **機微情報が含まれる可能性**があるため、アクセス権限と保管ポリシーを必ず確認してください。
+
+### ログ保管ポリシー（暗号化 + 権限制御の推奨）
+
+VERITAS のログは機微情報を含む可能性があるため、**暗号化ボリューム上に保管する運用**を推奨します。
+以下の環境変数でログ出力先の強制と権限制御を行えます。
+
+- `VERITAS_ENCRYPTED_LOG_ROOT`: 暗号化済みボリューム上のログ保存先
+- `VERITAS_REQUIRE_ENCRYPTED_LOG_DIR=1`: ログ出力先を暗号化パスに強制
+
+運用上の推奨:
+- 暗号化ボリューム（LUKS, BitLocker, EBS暗号化等）へマウント
+- ログディレクトリは **chmod 700**（所有者のみアクセス）
+- バックアップ先も暗号化 & アクセス制御を必須にする
+
 ---
 
 ## テスト
@@ -208,6 +243,7 @@ pytest --cov=veritas_os
 - **TrustLog / Memory の保存前に PII マスクを強制することを推奨**します。保存前に `redact()`（PIIマスク）を通すことで、ログ/記憶に機微情報が残るリスクを低減できます。
 - **暗号化 at rest（オプション）**: TrustLog / Memory は平文保存のため、要件に応じて暗号化やKMS連携を検討してください。
 - **CORS と API Key の未設定は危険**です。`VERITAS_CORS_ALLOW_ORIGINS` と `VERITAS_API_KEY` を必ず設定してください。
+- **運用ログは Git 管理から除外**します。`veritas_os/memory/*.jsonl` などのランタイムログは `.gitignore` 対象とし、匿名化済みサンプルは `veritas_os/sample_data/memory/` に配置します。
 
 ---
 

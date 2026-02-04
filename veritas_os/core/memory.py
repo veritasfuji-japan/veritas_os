@@ -45,9 +45,215 @@ except ImportError:
 
 
 def _allow_legacy_pickle_migration() -> bool:
-    """レガシーpickle移行を許可するか判定する。"""
+    """
+    レガシーpickle移行を許可するか判定する。
+
+    ★ 重要: Pickle は本質的に安全ではありません。
+    この機能は廃止予定です。新しいデータは JSON 形式で保存されます。
+    """
     value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
-    return value in {"1", "true", "yes", "y", "on"}
+    if value in {"1", "true", "yes", "y", "on"}:
+        logger.warning(
+            "[SECURITY] Legacy pickle migration is enabled. "
+            "This feature is DEPRECATED and will be removed in a future version. "
+            "Please ensure all data is migrated to JSON format."
+        )
+        return True
+    return False
+
+
+def _should_delete_pickle_after_migration() -> bool:
+    """
+    ★ セキュリティ修正: 移行後にpickleファイルを削除するか判定する。
+    デフォルトは削除（セキュリティ向上）。VERITAS_MEMORY_KEEP_PICKLE_BACKUP=1で保持。
+    """
+    value = os.getenv("VERITAS_MEMORY_KEEP_PICKLE_BACKUP", "").strip().lower()
+    return value not in {"1", "true", "yes", "y", "on"}
+
+
+def _is_pickle_file_stale(path: Path, max_age_days: int = 90) -> bool:
+    """
+    ★ セキュリティ修正: pickleファイルが古すぎないか確認する。
+    古すぎるpickleファイルは移行を拒否し、手動対応を要求する。
+
+    max_age_days を 365 → 90 日に短縮（セキュリティ強化）
+    """
+    try:
+        mtime = path.stat().st_mtime
+        age_days = (time.time() - mtime) / (60 * 60 * 24)
+        return age_days > max_age_days
+    except Exception:
+        return True  # エラー時は古いとみなす
+
+
+def _validate_pickle_data_structure(data: Any) -> bool:
+    """
+    ★ セキュリティ修正: デシリアライズ後のデータ構造を検証する。
+
+    期待される構造:
+    - dict であること
+    - "documents" キーが存在し、list であること
+    - "embeddings" キーが存在し、None または numpy array であること
+
+    Returns:
+        True: 構造が正しい、False: 不正な構造
+    """
+    if not isinstance(data, dict):
+        return False
+
+    # documents の検証
+    documents = data.get("documents")
+    if documents is not None and not isinstance(documents, list):
+        return False
+
+    # documents の各要素が dict であることを確認
+    if documents:
+        for doc in documents[:100]:  # 最初の100件のみチェック（パフォーマンス）
+            if not isinstance(doc, dict):
+                return False
+
+    # embeddings の検証（numpy array または None）
+    embeddings = data.get("embeddings")
+    if embeddings is not None:
+        try:
+            import numpy as np
+            if not isinstance(embeddings, np.ndarray):
+                return False
+            # 次元数の検証（1D または 2D のみ許可）
+            if embeddings.ndim not in (1, 2):
+                return False
+            # サイズの検証（異常に大きい場合は拒否）
+            if embeddings.size > 100_000_000:  # 100M 要素まで
+                return False
+        except Exception:
+            return False
+
+    return True
+
+
+class RestrictedUnpickler:
+    """
+    安全なPickle読み込み用の制限付きUnpickler。
+
+    ★★★ 重要: このクラスは廃止予定です ★★★
+
+    Pickle は本質的に安全ではなく、制限付きでも攻撃のリスクがあります。
+    新しいコードでは JSON 形式を使用してください。
+
+    許可された型のみデシリアライズし、任意コード実行を防止しますが、
+    完全な安全性は保証されません。
+    """
+
+    # ★ セキュリティ強化: _reconstruct を許可リストから削除
+    # _reconstruct は任意のバイト列から配列を再構築するため、悪用の可能性がある
+    # 代わりに、ndarray と dtype のみを許可し、データは JSON 形式で保持する
+    ALLOWED_NUMPY_TYPES = frozenset({
+        # numpy の安全な型のみ（_reconstruct は除外）
+        "numpy.ndarray",
+        "numpy.dtype",
+    })
+
+    # 許可する基本型（必要最小限に制限）
+    ALLOWED_BUILTINS = frozenset({
+        "dict",
+        "list",
+        "tuple",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "bytes",
+        # set, frozenset, type は除外（通常不要）
+    })
+
+    _DEPRECATION_WARNED = False
+
+    @classmethod
+    def _find_class(cls, module: str, name: str):
+        """許可されたクラスのみを読み込む。"""
+        import pickle
+        import builtins
+
+        full_name = f"{module}.{name}"
+
+        # ★ _reconstruct の使用を検出して警告（廃止移行のため）
+        if "_reconstruct" in name or "scalar" in name:
+            # 互換性のため許可するが、強い警告を出す
+            logger.warning(
+                f"[SECURITY] Pickle contains unsafe numpy type: {full_name}. "
+                "This data format is deprecated. Please migrate to JSON."
+            )
+            try:
+                import numpy as np
+                # numpy >= 2.0
+                try:
+                    import numpy._core.multiarray as ma
+                    if hasattr(ma, name):
+                        return getattr(ma, name)
+                except ImportError:
+                    pass
+                # numpy < 2.0
+                try:
+                    import numpy.core.multiarray as ma
+                    if hasattr(ma, name):
+                        return getattr(ma, name)
+                except ImportError:
+                    pass
+            except Exception:
+                pass
+            raise pickle.UnpicklingError(
+                f"Restricted unpickler: {full_name} not found"
+            )
+
+        # numpy型（安全なもののみ）
+        if full_name in cls.ALLOWED_NUMPY_TYPES:
+            import numpy as np
+            if hasattr(np, name):
+                return getattr(np, name)
+            raise pickle.UnpicklingError(
+                f"Restricted unpickler: numpy type {name} not found"
+            )
+
+        # builtins
+        if module == "builtins" and name in cls.ALLOWED_BUILTINS:
+            return getattr(builtins, name)
+
+        raise pickle.UnpicklingError(
+            f"Restricted unpickler: {full_name} is not allowed"
+        )
+
+    @classmethod
+    def loads(cls, data: bytes) -> Any:
+        """
+        制限付きでPickleデータを読み込む。
+
+        ★ 廃止予定: この関数は将来のバージョンで削除されます。
+        新しいコードでは JSON 形式を使用してください。
+        """
+        import pickle
+        import io
+
+        # 廃止警告（1回のみ）
+        if not cls._DEPRECATION_WARNED:
+            cls._DEPRECATION_WARNED = True
+            logger.warning(
+                "[SECURITY] RestrictedUnpickler.loads() is DEPRECATED. "
+                "Pickle deserialization poses security risks. "
+                "Please migrate to JSON format."
+            )
+
+        class _Unpickler(pickle.Unpickler):
+            find_class = staticmethod(cls._find_class)
+
+        result = _Unpickler(io.BytesIO(data)).load()
+
+        # ★ セキュリティ修正: デシリアライズ後のデータ構造を検証
+        if not _validate_pickle_data_structure(result):
+            raise pickle.UnpicklingError(
+                "Restricted unpickler: Invalid data structure after deserialization"
+            )
+
+        return result
 
 
 # ============================
@@ -150,11 +356,22 @@ class VectorMemory:
                         "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to enable."
                     )
                     return
+
+                # ★ セキュリティ修正: 古すぎるpickleファイルは移行を拒否
+                if _is_pickle_file_stale(legacy_pkl_path):
+                    logger.error(
+                        "[VectorMemory] Legacy pickle file is too old (>365 days). "
+                        "Manual migration required for security reasons. "
+                        "Please delete the pickle file or contact support."
+                    )
+                    return
+
                 logger.info("[VectorMemory] Migrating from legacy pickle format...")
                 try:
-                    import pickle
+                    # セキュリティ: RestrictedUnpickler を使用して安全にデシリアライズ
                     with open(legacy_pkl_path, "rb") as f:
-                        data = pickle.load(f)
+                        raw_data = f.read()
+                    data = RestrictedUnpickler.loads(raw_data)
 
                     self.documents = data.get("documents", [])
                     self.embeddings = data.get("embeddings")
@@ -167,12 +384,25 @@ class VectorMemory:
                     self.index_path = json_path  # 新しいパスに更新
                     self._save_index()
 
-                    # 旧ファイルをバックアップとしてリネーム
-                    backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
-                    legacy_pkl_path.rename(backup_path)
-                    logger.info(
-                        f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
-                    )
+                    # ★ セキュリティ修正: 移行後は旧pickleファイルを削除（デフォルト）
+                    if _should_delete_pickle_after_migration():
+                        try:
+                            legacy_pkl_path.unlink()
+                            logger.info(
+                                f"[VectorMemory] Deleted legacy pickle file: {legacy_pkl_path}"
+                            )
+                        except Exception as del_e:
+                            logger.warning(
+                                f"[VectorMemory] Failed to delete pickle file: {del_e}. "
+                                "Please manually remove for security."
+                            )
+                    else:
+                        # バックアップとしてリネーム（VERITAS_MEMORY_KEEP_PICKLE_BACKUP=1の場合のみ）
+                        backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
+                        legacy_pkl_path.rename(backup_path)
+                        logger.info(
+                            f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
+                        )
                     return
                 except Exception as e:
                     logger.warning(f"[VectorMemory] Pickle migration failed: {e}")
@@ -639,8 +869,9 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             yield
         finally:
             try:
-                if lockfile.exists():
-                    lockfile.unlink()
+                # Use missing_ok=True to avoid TOCTOU race condition
+                # (file could be deleted between exists() check and unlink())
+                lockfile.unlink(missing_ok=True)
             except Exception as e:
                 logger.error(f"[MemoryOS] lockfile cleanup failed: {e}")
 

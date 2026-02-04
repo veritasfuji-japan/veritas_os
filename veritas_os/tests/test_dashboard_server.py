@@ -10,6 +10,47 @@ from fastapi.testclient import TestClient
 from veritas_os.api import dashboard_server
 
 
+# =====================================================================
+# _validate_log_dir のテスト（パストラバーサル対策）
+# =====================================================================
+
+
+def test_validate_log_dir_allows_exact_base(tmp_path):
+    """allowed_base と完全一致するパスは許可される。"""
+    result = dashboard_server._validate_log_dir(str(tmp_path), tmp_path)
+    assert result == tmp_path
+
+
+def test_validate_log_dir_allows_child_path(tmp_path):
+    """allowed_base の子ディレクトリは許可される。"""
+    child = tmp_path / "subdir"
+    result = dashboard_server._validate_log_dir(str(child), tmp_path)
+    assert result == child
+
+
+def test_validate_log_dir_rejects_outside_path(tmp_path):
+    """allowed_base 外のパスは拒否され、デフォルトが返される。"""
+    outside_path = "/tmp/outside_dir"
+    result = dashboard_server._validate_log_dir(outside_path, tmp_path)
+    # 外部パスは拒否されて allowed_base が返される
+    assert result == tmp_path
+
+
+def test_validate_log_dir_rejects_sensitive_paths(tmp_path):
+    """センシティブなシステムパス（/root, ~/.ssh等）は拒否される。"""
+    for sensitive in ["/root", "/etc/passwd", "/home/user/.ssh"]:
+        result = dashboard_server._validate_log_dir(sensitive, tmp_path)
+        assert result == tmp_path
+
+
+def test_validate_log_dir_handles_path_traversal_attempt(tmp_path):
+    """'../' を使ったパストラバーサル攻撃は拒否される。"""
+    traversal_path = str(tmp_path / ".." / ".." / "etc")
+    result = dashboard_server._validate_log_dir(traversal_path, tmp_path)
+    # 解決後のパスが allowed_base 外になるので拒否
+    assert result == tmp_path
+
+
 @pytest.fixture
 def client(monkeypatch, tmp_path) -> TestClient:
     """

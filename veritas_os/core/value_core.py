@@ -1,7 +1,6 @@
 # veritas/core/value_core.py
 from __future__ import annotations
 
-import fcntl
 import json
 import logging
 import os
@@ -12,6 +11,17 @@ from pathlib import Path
 from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
+
+# OS 判定（Windows互換性のため）
+IS_WIN = os.name == "nt"
+
+if not IS_WIN:
+    try:
+        import fcntl  # type: ignore
+    except ImportError:
+        fcntl = None  # type: ignore
+else:
+    fcntl = None  # type: ignore
 
 # 共通ユーティリティをインポート
 from .utils import _to_float, _clip01
@@ -354,12 +364,14 @@ def append_trust_log(
             rec["extra"] = extra
 
         with log_file.open("a", encoding="utf-8") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            if fcntl is not None:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 f.flush()
             finally:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                if fcntl is not None:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
         logger.debug("trust_log appended: user=%s, score=%s", user_id, s)
     except Exception as e:
