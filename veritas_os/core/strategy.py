@@ -11,9 +11,9 @@ try:
     from . import world_model as wm
     from . import value_core
 except ImportError:
-    # パッケージ名が veritas_os の場合など、必要に応じてここを書き換え
-    from veritas.core import world_model as wm  # type: ignore
-    from veritas.core import value_core        # type: ignore
+    # ★ 修正: パッケージ名を veritas → veritas_os に修正
+    from veritas_os.core import world_model as wm  # type: ignore
+    from veritas_os.core import value_core          # type: ignore
 
 
 # =========================================

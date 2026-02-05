@@ -90,12 +90,12 @@ def evaluate_decision(
     score = _compute_score(decision, outcome)
 
     # スコアが低い場合は「慎重さ」を少しだけ強める
+    # NOTE: value_core.adjust_weights() は現在未実装。
+    #   hasattr ガード付きのため、実装されるまでこのブロックは無害にスキップされる。
     if score < 0.5 and value_core is not None and hasattr(value_core, "adjust_weights"):
         try:
-            # 元コードのイメージ: ValueCore.adjust_weights("prudence", +0.1)
             value_core.adjust_weights("prudence", +0.1)  # type: ignore[attr-defined]
         except Exception:
-            # 調整に失敗しても core ロジックは壊さない
             pass
 
     memory.append(
