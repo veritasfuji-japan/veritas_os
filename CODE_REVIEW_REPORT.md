@@ -16,7 +16,7 @@ VERITAS OS is a Python-based AI decision-making framework with ethical guardrail
 
 | Severity | Count |
 |----------|-------|
-| CRITICAL | 2     |
+| CRITICAL | 3     |
 | HIGH     | 12    |
 | MEDIUM   | 18    |
 | LOW      | 9     |
@@ -55,6 +55,55 @@ Unlike `trust_log.py` which has `with _trust_log_lock:`, this module has zero pr
 - Compare with `_atomic_write_bytes()` (line 67) which properly calls `os.fsync(fd)`
 
 **Fix:** After `np.savez()`, reopen the file in read mode and fsync it before the rename.
+
+### C-3: Missing FastAPI Request Body Size Limit - Denial of Service Vulnerability
+**File:** `veritas_os/api/server.py:391`
+**Date Added:** 2026-02-05
+
+**Problem:** The FastAPI application is initialized without any request body size limits. This allows an attacker to send extremely large payloads (potentially gigabytes) that will:
+1. Consume all server memory causing Out-Of-Memory crashes
+2. Block legitimate requests during the slow processing
+3. Exhaust disk space if payloads are temporarily cached
+4. Bypass application-level MAX_QUERY_LENGTH checks which only validate after parsing
+
+**Evidence:**
+```python
+# Line 391
+app = FastAPI(title="VERITAS Public API", version="1.0.3")
+```
+
+No `max_body_size` or similar parameter is configured. While Pydantic schemas define `MAX_QUERY_LENGTH = 10000`, this validation only occurs AFTER FastAPI has already parsed the potentially multi-gigabyte JSON payload into memory.
+
+**Attack Scenario:**
+```bash
+# Attacker sends 1GB payload
+curl -X POST http://api/v1/decide \
+  -H "X-API-Key: valid-key" \
+  -d "$(python3 -c 'print(\"{\\\"query\\\": \\\"\" + \"A\"*1000000000 + \"\\\"}\")')"
+```
+
+This bypasses rate limiting (which counts requests, not bytes) and crashes the server before Pydantic validation runs.
+
+**Fix:** Add middleware to enforce body size limits:
+
+```python
+MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024  # 10MB
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_REQUEST_BODY_SIZE:
+        raise HTTPException(status_code=413, detail="Request body too large")
+    return await call_next(request)
+```
+
+Or configure uvicorn startup with explicit limits:
+```bash
+uvicorn veritas_os.api.server:app \
+    --limit-max-requests 1000 \
+    --limit-request-line 8190 \
+    --limit-request-fields 100
+```
 
 ---
 
@@ -429,7 +478,7 @@ def _check_policy_hot_reload() -> None:
 ## Recommended Priority
 
 ### Immediate (CRITICAL + HIGH Security Issues)
-1. **C-1, C-2**: Fix race conditions in dataset_writer and atomic_write_npz
+1. **C-1, C-2, C-3**: Fix race conditions in dataset_writer and atomic_write_npz, add request body size limits
 2. **H-9, H-10, H-11**: Fix TOCTOU race conditions in policy loading, MEM_VEC access, and log rotation
 3. **H-5, H-2, H-3**: Fix trust log hash chain consistency, non-atomic writes, and duplicate functions
 
