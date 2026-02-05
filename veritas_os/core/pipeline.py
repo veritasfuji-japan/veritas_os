@@ -35,8 +35,22 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from .utils import _safe_float, _clip01 as _clip01_base
+from .utils import (
+    _safe_float,
+    _clip01 as _clip01_base,
+    _redact_text,
+    redact_payload,
+    utc_now,
+    utc_now_iso_z,
+)
 from . import self_healing
+
+try:
+    from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
+    _HAS_ATOMIC_IO = True
+except Exception:
+    _atomic_write_json = None  # type: ignore
+    _HAS_ATOMIC_IO = False
 
 
 try:
@@ -62,13 +76,7 @@ TELOS_THRESHOLD_MAX = 0.75         # テロス閾値の上限
 HIGH_RISK_THRESHOLD = 0.90         # 高リスク判定閾値
 BASE_TELOS_THRESHOLD = 0.55        # 基本テロススコア閾値
 
-
-def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def utc_now_iso_z(*, timespec: str = "seconds") -> str:
-    return utc_now().isoformat(timespec=timespec).replace("+00:00", "Z")
+# utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
 
 
 # =========================================================
@@ -196,7 +204,6 @@ except Exception:  # pragma: no cover
 # =========================================================
 # util helpers
 # =========================================================
-# Note: _to_bool is defined earlier (needed before safe imports)
 
 def _to_float_or(v: Any, default: float) -> float:
     """_safe_float のエイリアス（後方互換性のため維持）"""
@@ -218,31 +225,7 @@ def _to_dict(o: Any) -> Dict[str, Any]:
     return {}
 
 
-def _redact_text(text: str) -> str:
-    """Return a PII-masked string for logs and memory persistence."""
-    if not text:
-        return text
-    if _HAS_SANITIZE and _mask_pii is not None:
-        try:
-            return _mask_pii(text)
-        except Exception:
-            pass
-    text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
-    text = re.sub(r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b", "[redacted:phone]", text)
-    return text
-
-
-def redact_payload(value: Any) -> Any:
-    """Recursively mask PII in strings before persisting logs or memory."""
-    if isinstance(value, str):
-        return _redact_text(value)
-    if isinstance(value, dict):
-        return {k: redact_payload(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [redact_payload(v) for v in value]
-    if isinstance(value, tuple):
-        return tuple(redact_payload(v) for v in value)
-    return value
+# _redact_text / redact_payload は utils.py に統合済み（import 済み）
 
 
 def _get_request_params(request: Any) -> Dict[str, Any]:
@@ -459,8 +442,11 @@ def _save_valstats(d: Dict[str, Any]) -> None:
     try:
         p = Path(VAL_JSON)
         p.parent.mkdir(parents=True, exist_ok=True)
-        with open(p, "w", encoding="utf-8") as f:
-            json.dump(d, f, ensure_ascii=False, indent=2)
+        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
+            _atomic_write_json(p, d, indent=2)
+        else:
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False, indent=2)
     except Exception:
         return None
 

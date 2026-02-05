@@ -13,7 +13,6 @@ import re
 import uuid
 import time
 import sys
-import subprocess
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -27,7 +26,7 @@ from .types import (
     DebateViewpoint,
     CritiquePoint,
 )
-from .utils import _safe_float, _to_text
+from .utils import _safe_float, _to_text, _redact_text, redact_payload
 
 import asyncio
 import inspect
@@ -156,35 +155,7 @@ def _safe_load_persona() -> Dict[str, Any]:
         return {}
 
 
-def _redact_text(text: str) -> str:
-    """Return a PII-masked string for logs and memory persistence."""
-    if not text:
-        return text
-    if _HAS_SANITIZE and _mask_pii is not None:
-        try:
-            return _mask_pii(text)
-        except Exception:
-            pass
-    text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
-    text = re.sub(
-        r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b",
-        "[redacted:phone]",
-        text,
-    )
-    return text
-
-
-def redact_payload(value: Any) -> Any:
-    """Recursively mask PII in strings before persisting logs or memory."""
-    if isinstance(value, str):
-        return _redact_text(value)
-    if isinstance(value, dict):
-        return {k: redact_payload(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [redact_payload(v) for v in value]
-    if isinstance(value, tuple):
-        return tuple(redact_payload(v) for v in value)
-    return value
+# _redact_text / redact_payload は utils.py に統合済み（import 済み）
 
 
 # ============================================================

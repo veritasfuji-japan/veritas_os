@@ -846,7 +846,9 @@ def test_memory_get_error_path(monkeypatch):
 
     assert data["ok"] is False
     assert data["value"] is None
-    assert "get failed" in data["error"]
+    # M-3: エラー詳細はクライアントに露出させず、汎用メッセージを返す
+    assert "error" in data
+    assert data["error"]  # 非空であること
 
 
 def test_memory_put_outer_error():

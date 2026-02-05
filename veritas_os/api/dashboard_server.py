@@ -39,7 +39,15 @@ security = HTTPBasic()
 # ===== 認証設定 =====
 
 DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "change_me_in_production")
+_env_password = os.getenv("DASHBOARD_PASSWORD", "")
+if not _env_password:
+    _env_password = secrets.token_urlsafe(24)
+    logger.warning(
+        "DASHBOARD_PASSWORD not set. Generated random password: %s  "
+        "Set DASHBOARD_PASSWORD env var for persistent access.",
+        _env_password,
+    )
+DASHBOARD_PASSWORD = _env_password
 
 
 def verify_credentials(
@@ -342,7 +350,7 @@ async def get_status(username: str = Depends(verify_credentials)) -> JSONRespons
             )
     else:
         return JSONResponse(
-            {"error": "status file not found", "path": str(STATUS_JSON)},
+            {"error": "status file not found"},
             status_code=404,
         )
 
@@ -362,7 +370,7 @@ async def download_report(username: str = Depends(verify_credentials)):
             media_type="text/html",
         )
     return JSONResponse(
-        {"error": "report not found", "path": str(REPORT_HTML)},
+        {"error": "report not found"},
         status_code=404,
     )
 
@@ -382,9 +390,9 @@ if __name__ == "__main__":
     print("🔐 VERITAS Dashboard Server (Authenticated)")
     print("=" * 60)
     print(f"   Username: {DASHBOARD_USERNAME}")
-    if DASHBOARD_PASSWORD == "change_me_in_production":
-        print(f"   Password: ⚠️  DEFAULT PASSWORD (INSECURE)")
-        print("   ⚠️  Please set DASHBOARD_PASSWORD environment variable!")
+    if not os.getenv("DASHBOARD_PASSWORD"):
+        print(f"   Password: {DASHBOARD_PASSWORD}  (auto-generated)")
+        print("   Set DASHBOARD_PASSWORD env var for persistent access.")
     else:
         print(f"   Password: {'*' * len(DASHBOARD_PASSWORD)}")
     print(f"   Log Directory: {LOG_DIR}")
