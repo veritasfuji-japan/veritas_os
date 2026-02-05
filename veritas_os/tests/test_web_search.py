@@ -131,6 +131,46 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     assert resp["meta"]["boosted_query"] is None
 
 
+def test_web_search_retries_on_timeout(monkeypatch) -> None:
+    """一時的なタイムアウト時に再試行する。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_MAX_RETRIES", 2, raising=False)
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_RETRY_DELAY", 0.0, raising=False)
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_RETRY_MAX_DELAY", 0.0, raising=False)
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_RETRY_JITTER", 0.0, raising=False)
+
+    data = {
+        "organic": [
+            {
+                "title": "Result 1",
+                "link": "https://example.com/1",
+                "snippet": "First result",
+            }
+        ]
+    }
+    calls = {"count": 0}
+
+    def fake_post(
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+    ):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise web_search_mod.requests.exceptions.Timeout("boom")
+        return DummyResponse(data)
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+    monkeypatch.setattr(web_search_mod.time, "sleep", lambda *_: None)
+
+    resp = web_search_mod.web_search("normal query", max_results=1)
+
+    assert calls["count"] == 2
+    assert resp["ok"] is True
+    assert resp["results"][0]["title"] == "Result 1"
+
+
 def test_web_search_agi_query_filters_and_trims(monkeypatch) -> None:
     """AGI クエリではブースト + フィルタがかかる"""
     monkeypatch.setattr(
@@ -237,5 +277,4 @@ def test_web_search_handles_request_exception(monkeypatch) -> None:
     assert resp["ok"] is False
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
-
 
