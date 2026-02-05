@@ -46,6 +46,13 @@ def open_trust_log_for_append() -> TextIO:
     """
     trust_log.jsonl を追記モードで開く。
     必要に応じてローテーションを行う。
+    
+    ★ 修正 (H-7): rotate_if_needed() と open() の間に他のスレッドが
+      ローテーションを実行するリスクを文書化。
+      呼び出し側で _trust_log_lock を保持することで、アトミック性を保証する。
+    
+    注意: この関数は trust_log.py の _trust_log_lock 内で呼ばれることを想定。
+          単独で呼び出す場合は、ローテーションと open の間の競合に注意。
     """
     trust_log = rotate_if_needed()
     trust_log.parent.mkdir(parents=True, exist_ok=True)
