@@ -7,7 +7,11 @@ FUJI Gate が返す「意思決定ステータス」を Enum で一元管理す�
 
 - "allow"   : そのまま実行してよい
 - "modify"  : 修正して実行（マスク・要約など）
-- "rejected": 危険なので実行しない
+- "block"   : 安全上の理由でブロック（旧: rejected）
+- "abstain" : 判断を保留・回答回避（高リスク・不確実）
+
+NOTE: api/constants.py と整合性を保つため、BLOCK/ABSTAINを追加。
+      REJECTEDはBLOCKのaliasとして後方互換性を維持。
 
 Enum 化により:
 - 型安全
@@ -38,8 +42,19 @@ class DecisionStatus(str, Enum):
             ...
     """
 
+    #: FUJI が内容に問題なしと判断した場合
     ALLOW = "allow"
+
+    #: 軽微な修正を入れれば許可できる場合
     MODIFY = "modify"
+
+    #: 安全上の理由でブロック（旧: rejected）
+    BLOCK = "block"
+
+    #: 判断を保留・回答回避（高リスク・不確実）
+    ABSTAIN = "abstain"
+
+    #: 後方互換性のための alias（BLOCKと同値）
     REJECTED = "rejected"
 
     def __str__(self) -> str:  # pragma: no cover - 単純なのでテスト省略可
@@ -47,10 +62,14 @@ class DecisionStatus(str, Enum):
         return self.value
 
 
-# ===== Backward Compatibility =====
+# ===== Backward Compatibility (文字列定数) =====
 # 既存コードが "allow" などの生文字列を import していても壊れないように保持する。
 DECISION_ALLOW: str = DecisionStatus.ALLOW.value
 DECISION_MODIFY: str = DecisionStatus.MODIFY.value
+DECISION_BLOCK: str = DecisionStatus.BLOCK.value
+DECISION_ABSTAIN: str = DecisionStatus.ABSTAIN.value
+
+# 旧名（後方互換性のため維持）
 DECISION_REJECTED: str = DecisionStatus.REJECTED.value
 
 
@@ -61,7 +80,7 @@ def is_valid_status(status: str) -> bool:
     与えられた文字列が有効な decision status かを判定。
 
     Args:
-        status: "allow" / "modify" / "rejected" など
+        status: "allow" / "modify" / "block" / "abstain" / "rejected" など
 
     Returns:
         True  : 有効
@@ -69,6 +88,10 @@ def is_valid_status(status: str) -> bool:
 
     Example:
         >>> is_valid_status("allow")
+        True
+        >>> is_valid_status("block")
+        True
+        >>> is_valid_status("rejected")
         True
         >>> is_valid_status("invalid")
         False
@@ -98,6 +121,8 @@ def normalize_status(status: str | DecisionStatus) -> DecisionStatus:
         <DecisionStatus.ALLOW: 'allow'>
         >>> normalize_status(DecisionStatus.ALLOW)
         <DecisionStatus.ALLOW: 'allow'>
+        >>> normalize_status("rejected")
+        <DecisionStatus.REJECTED: 'rejected'>
     """
     if isinstance(status, DecisionStatus):
         return status
@@ -108,7 +133,9 @@ __all__ = [
     "DecisionStatus",
     "DECISION_ALLOW",
     "DECISION_MODIFY",
-    "DECISION_REJECTED",
+    "DECISION_BLOCK",
+    "DECISION_ABSTAIN",
+    "DECISION_REJECTED",  # backward compatibility
     "is_valid_status",
     "normalize_status",
 ]
