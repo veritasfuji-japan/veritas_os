@@ -1020,7 +1020,7 @@ def test_request_body_size_limit_blocks_large_payload(monkeypatch):
         json={"query": "test"},
         headers={
             "X-API-Key": "test-api-key",
-            "Content-Length": "2000000",  # 2MB - 制限の1000を超える
+            "Content-Length": "2000000",  # 2MB - 制限の1000バイトを超える
         },
     )
 
@@ -1028,6 +1028,30 @@ def test_request_body_size_limit_blocks_large_payload(monkeypatch):
     assert r.status_code == 413
     data = r.json()
     assert "too large" in data["detail"].lower()
+
+
+def test_request_body_size_limit_rejects_malformed_content_length(monkeypatch):
+    """
+    ★ C-3 修正テスト: 不正な Content-Length は 400 でブロックされる
+
+    数値でない Content-Length は悪意のあるリクエストの可能性があるため、
+    400 Bad Request を返す。
+    """
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_SIZE", 1000)
+
+    r = client.post(
+        "/v1/decide",
+        json={"query": "test"},
+        headers={
+            "X-API-Key": "test-api-key",
+            "Content-Length": "not-a-number",
+        },
+    )
+
+    # 400 Bad Request を返す
+    assert r.status_code == 400
+    data = r.json()
+    assert "invalid" in data["detail"].lower()
 
 
 def test_request_body_size_limit_allows_normal_payload(monkeypatch):

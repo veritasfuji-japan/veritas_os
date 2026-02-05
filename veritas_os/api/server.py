@@ -422,8 +422,12 @@ async def limit_body_size(request: Request, call_next):
                     content={"detail": f"Request body too large. Max size: {MAX_REQUEST_BODY_SIZE} bytes"}
                 )
         except (ValueError, TypeError):
-            # content-length が数値でない場合は通過させる
-            pass
+            # ★ 修正: 不正な Content-Length は 400 Bad Request を返す
+            # 悪意のあるリクエストがバリデーションをバイパスするのを防止
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid Content-Length header"}
+            )
     return await call_next(request)
 
 
