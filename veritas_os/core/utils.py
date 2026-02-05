@@ -8,6 +8,9 @@ VERITAS OS 共通ユーティリティモジュール
 """
 from __future__ import annotations
 
+import json
+import re
+from datetime import datetime, timezone
 from typing import Any, Union
 
 
@@ -248,6 +251,9 @@ def _extract_json_object(raw: str) -> str:
     """
     文字列から最初のJSON objectを抽出する。
 
+    json.JSONDecoder.raw_decode を使用して、ネストした括弧や
+    エスケープされた文字を含む JSON も正しく扱う。
+
     Args:
         raw: JSON objectを含む可能性のある文字列
 
@@ -264,11 +270,72 @@ def _extract_json_object(raw: str) -> str:
         return ""
 
     try:
+        # 最初の '{' を探す
         start = raw.index("{")
-        end = raw.rindex("}") + 1
-        return raw[start:end]
-    except ValueError:
+        decoder = json.JSONDecoder()
+        obj, end = decoder.raw_decode(raw, start)
+        return json.dumps(obj, ensure_ascii=False)
+    except (ValueError, json.JSONDecodeError):
         return ""
+
+
+# =============================================================================
+# 時刻ユーティリティ（プロジェクト共通）
+# =============================================================================
+
+
+def utc_now() -> datetime:
+    """UTC の現在時刻を返す（timezone-aware）"""
+    return datetime.now(timezone.utc)
+
+
+def utc_now_iso_z(*, timespec: str = "seconds") -> str:
+    """UTC ISO8601 文字列を 'Z' サフィックスで返す（監査ログ等で使用）"""
+    return utc_now().isoformat(timespec=timespec).replace("+00:00", "Z")
+
+
+# =============================================================================
+# PII マスキング（プロジェクト共通）
+# =============================================================================
+
+# sanitize.py のインポート（失敗してもフォールバックで動作）
+try:
+    from veritas_os.core.sanitize import mask_pii as _mask_pii_impl
+    _HAS_SANITIZE_IMPL = True
+except Exception:
+    _mask_pii_impl = None  # type: ignore
+    _HAS_SANITIZE_IMPL = False
+
+
+def _redact_text(text: str) -> str:
+    """PII をマスクした文字列を返す（ログ・メモリ永続化用）"""
+    if not text:
+        return text
+    if _HAS_SANITIZE_IMPL and _mask_pii_impl is not None:
+        try:
+            return _mask_pii_impl(text)
+        except Exception:
+            pass
+    text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
+    text = re.sub(
+        r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b",
+        "[redacted:phone]",
+        text,
+    )
+    return text
+
+
+def redact_payload(value: Any) -> Any:
+    """文字列中の PII を再帰的にマスクする"""
+    if isinstance(value, str):
+        return _redact_text(value)
+    if isinstance(value, dict):
+        return {k: redact_payload(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_payload(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(redact_payload(v) for v in value)
+    return value
 
 
 __all__ = [
@@ -285,4 +352,10 @@ __all__ = [
     # JSON抽出
     "_strip_code_block",
     "_extract_json_object",
+    # 時刻
+    "utc_now",
+    "utc_now_iso_z",
+    # PII マスキング
+    "_redact_text",
+    "redact_payload",
 ]

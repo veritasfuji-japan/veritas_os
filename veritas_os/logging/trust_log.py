@@ -80,15 +80,26 @@ def _compute_sha256(payload: dict) -> str:
 
 
 def get_last_hash() -> str | None:
-    """直近の trust_log.jsonl から最後の SHA-256 値を取得"""
+    """直近の trust_log.jsonl から最後の SHA-256 値を取得。
+
+    ファイル末尾からシークして最終行のみを読み込む。
+    全行をメモリに読み込まないため、大きなファイルでもメモリ効率が良い。
+    """
     try:
-        if LOG_JSONL.exists():
-            with open(LOG_JSONL, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-            if not lines:
-                return None
-            last = json.loads(lines[-1])
-            return last.get("sha256")  # sha256_self ではなく sha256
+        if not LOG_JSONL.exists():
+            return None
+        file_size = LOG_JSONL.stat().st_size
+        if file_size == 0:
+            return None
+        with open(LOG_JSONL, "rb") as f:
+            # 末尾から最大 4KB を読んで最終行を取得
+            chunk_size = min(4096, file_size)
+            f.seek(file_size - chunk_size)
+            chunk = f.read().decode("utf-8")
+            lines = chunk.strip().split("\n")
+            if lines:
+                last = json.loads(lines[-1])
+                return last.get("sha256")
     except Exception:
         return None
     return None

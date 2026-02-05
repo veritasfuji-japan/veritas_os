@@ -126,6 +126,8 @@ __all__ = [
     "SENSITIVE_SYSTEM_PATHS",
     "MAX_RAW_BODY_LENGTH",
     "MAX_LOG_FILE_SIZE",
+    # Memory constants
+    "VALID_MEMORY_KINDS",
 ]
 
 
@@ -146,4 +148,13 @@ MAX_RAW_BODY_LENGTH: int = 1000
 
 # Maximum log file size to load (10 MB) to prevent memory exhaustion
 MAX_LOG_FILE_SIZE: int = 10 * 1024 * 1024
+
+# Valid memory kinds for /v1/memory/put
+VALID_MEMORY_KINDS: frozenset[str] = frozenset([
+    "semantic",
+    "episodic",
+    "skills",
+    "doc",
+    "plan",
+])
 

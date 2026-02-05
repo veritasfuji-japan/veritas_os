@@ -427,14 +427,16 @@ def chat(
 
         except requests.exceptions.RequestException as e:
             last_error = e
+            wait_time = LLM_RETRY_DELAY * (2 ** (attempt - 1))
             log.warning(
-                "LLM request error (provider=%s, attempt=%s): %r",
+                "LLM request error (provider=%s, attempt=%s), retry in %.1fs: %r",
                 provider,
                 attempt,
+                wait_time,
                 e,
             )
             if attempt < LLM_MAX_RETRIES:
-                time.sleep(LLM_RETRY_DELAY)
+                time.sleep(wait_time)
                 continue
         except Exception as e:
             # 予期せぬエラーは即終了

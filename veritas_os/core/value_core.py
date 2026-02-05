@@ -51,9 +51,15 @@ def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
 # ==============================
 #   設定・保存パス
 # ==============================
-CFG_DIR = Path(os.path.expanduser("~/.veritas"))
+# config.cfg から統一パスを取得（フォールバック: ~/.veritas）
+try:
+    from veritas_os.core.config import cfg as _cfg
+    CFG_DIR = _cfg.log_dir or Path(os.path.expanduser("~/.veritas"))
+except Exception:
+    CFG_DIR = Path(os.path.expanduser("~/.veritas"))
+
 CFG_PATH = CFG_DIR / "value_core.json"
-TRUST_LOG_PATH = Path(os.path.expanduser("~/.veritas/trust_log.jsonl"))
+TRUST_LOG_PATH = CFG_DIR / "trust_log.jsonl"
 
 # デフォルトの価値重み（0.0〜1.0）
 DEFAULT_WEIGHTS: Dict[str, float] = {

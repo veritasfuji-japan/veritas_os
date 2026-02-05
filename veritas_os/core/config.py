@@ -260,11 +260,22 @@ class VeritasConfig:
         if self.kv_path is None:
             self.kv_path = self.log_dir / "kv.sqlite3"
 
-        # --- ディレクトリ作成 ---
-        self.log_dir.mkdir(parents=True, exist_ok=True)
-        self.dataset_dir.mkdir(parents=True, exist_ok=True)
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.kv_path.parent.mkdir(parents=True, exist_ok=True)
+        # --- ディレクトリ作成は初回書き込み時に遅延実行 ---
+        # 読み取り専用環境やテスト環境でインポート時の副作用を防止
+        self._dirs_ensured = False
+
+    def ensure_dirs(self) -> None:
+        """必要なディレクトリを作成する（初回呼び出し時のみ実行）"""
+        if self._dirs_ensured:
+            return
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self.dataset_dir.mkdir(parents=True, exist_ok=True)
+            self.data_dir.mkdir(parents=True, exist_ok=True)
+            self.kv_path.parent.mkdir(parents=True, exist_ok=True)
+            self._dirs_ensured = True
+        except OSError:
+            pass  # 読み取り専用環境ではスキップ
 
 
 cfg = VeritasConfig()

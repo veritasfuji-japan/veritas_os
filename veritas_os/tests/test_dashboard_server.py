@@ -131,8 +131,8 @@ def test_status_not_found_when_file_missing(client: TestClient):
     assert res.status_code == 404
     body = res.json()
     assert body.get("error") == "status file not found"
-    # path フィールドに STATUS_JSON のパス文字列が入っていること
-    assert body.get("path") == str(dashboard_server.STATUS_JSON)
+    # M-2: セキュリティ修正 - 内部パスをクライアントに露出させない
+    assert "path" not in body
 
 
 def test_status_ok_when_valid_json_exists(client: TestClient):
@@ -176,7 +176,8 @@ def test_download_report_not_found(client: TestClient):
     assert res.status_code == 404
     body = res.json()
     assert body.get("error") == "report not found"
-    assert body.get("path") == str(dashboard_server.REPORT_HTML)
+    # M-2: セキュリティ修正 - 内部パスをクライアントに露出させない
+    assert "path" not in body
 
 
 def test_download_report_ok(client: TestClient):

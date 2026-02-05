@@ -29,6 +29,7 @@ from veritas_os.api.constants import (
     DECISION_REJECTED,
     MAX_LOG_FILE_SIZE,
     MAX_RAW_BODY_LENGTH,
+    VALID_MEMORY_KINDS,
 )  # noqa: F401
 
 # ---- アトミック I/O（信頼性向上）----
@@ -68,9 +69,12 @@ except Exception as e:
     print(f"[WARN] dotenv load failed: {type(e).__name__}: {e}")
 
 
-def utc_now_iso_z() -> str:
-    """UTC now helper（time_utils 依存を排除）"""
-    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+try:
+    from veritas_os.core.utils import utc_now_iso_z
+except Exception:
+    def utc_now_iso_z() -> str:  # type: ignore[misc]
+        """UTC now helper（fallback: utils import failed）"""
+        return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 # ==============================
@@ -390,8 +394,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=getattr(cfg, "cors_allow_origins", []),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["X-API-Key", "X-Timestamp", "X-Nonce", "X-Signature", "Content-Type", "Authorization"],
 )
 
 
@@ -446,8 +450,7 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
 
 
 # ---- HMAC signature / replay (optional) ----
-# ★ セキュリティ修正: スレッドセーフ化
-import threading
+# ★ セキュリティ修正: スレッドセーフ化 (threading は L11 で import 済み)
 
 _NONCE_TTL_SEC = 300
 _NONCE_MAX = 5000  # 簡易上限
@@ -518,6 +521,23 @@ def _cleanup_nonces() -> None:
     """★ スレッドセーフ版: ロックを取得してクリーンアップ"""
     with _nonce_lock:
         _cleanup_nonces_unsafe()
+
+
+# ★ M-11 修正: 定期的なノンスクリーンアップ（60秒ごと）
+_nonce_cleanup_timer: threading.Timer | None = None
+
+
+def _schedule_nonce_cleanup() -> None:
+    """バックグラウンドでノンスストアを定期クリーンアップする"""
+    global _nonce_cleanup_timer
+    _cleanup_nonces()
+    _nonce_cleanup_timer = threading.Timer(60.0, _schedule_nonce_cleanup)
+    _nonce_cleanup_timer.daemon = True
+    _nonce_cleanup_timer.start()
+
+
+# 初回スケジュール
+_schedule_nonce_cleanup()
 
 
 def _check_and_register_nonce(nonce: str) -> bool:
@@ -1003,13 +1023,13 @@ async def decide(req: DecideRequest, request: Request):
     try:
         return DecideResponse.model_validate(coerced)
     except Exception as e:
-        # 最後の保険：型検証で落ちても 503 ではなく 200/JSON にして “落ちない” を優先
-        # （ただしこの経路はログで追えるよう detail を付ける）
+        # 最後の保険：型検証で落ちても 503 ではなく JSON にして "落ちない" を優先
+        # ok=False でクライアントが正常レスポンスと区別できるようにする
         return JSONResponse(
             status_code=200,
             content={
                 **coerced,
-                "ok": True,
+                "ok": False,
                 "warn": "response_model_validation_failed",
                 "warn_detail": _errstr(e),
             },
@@ -1045,7 +1065,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 @app.post(
     "/v1/fuji/validate",
     response_model=FujiDecision,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
 )
 def fuji_validate(payload: dict):
     fc = get_fuji_core()
@@ -1158,7 +1178,7 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
-@app.post("/v1/memory/put", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1178,7 +1198,7 @@ def memory_put(body: dict):
                 print("[MemoryOS][legacy] Error:", e)
 
         kind = (body.get("kind") or "semantic").strip().lower()
-        if kind not in ("semantic", "episodic", "skills", "doc", "plan"):
+        if kind not in VALID_MEMORY_KINDS:
             kind = "semantic"
 
         text = (body.get("text") or "").strip()
@@ -1228,7 +1248,7 @@ def memory_put(body: dict):
         return {"ok": False, "error": str(e)}
 
 
-@app.post("/v1/memory/search", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
@@ -1264,7 +1284,7 @@ async def memory_search(payload: dict):
         return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
-@app.post("/v1/memory/get", dependencies=[Depends(require_api_key)])
+@app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def memory_get(body: dict):
     store = get_memory_store()
     if store is None:
@@ -1275,9 +1295,9 @@ def memory_get(body: dict):
         value = _store_get(store, body["user_id"], body["key"])
         return {"ok": True, "value": value}
     except Exception as e:
-        # Return error with exception details for debugging
-        # Note: In production, consider sanitizing error messages to avoid leaking sensitive info
-        return {"ok": False, "error": str(e), "value": None}
+        import logging as _logging
+        _logging.getLogger(__name__).error("memory_get failed: %s", e)
+        return {"ok": False, "error": "memory retrieval failed", "value": None}
 
 
 # ==============================
