@@ -277,3 +277,46 @@ class TestAtomicityGuarantee:
             atomic_write_text(target, "content")
 
         mock_fsync.assert_called()
+
+
+class TestAtomicWriteNpzFsync:
+    """
+    Tests for C-2 fix: atomic_write_npz() should call fsync.
+
+    ★ C-2: np.savez() 後に fsync しないと、クラッシュ時に
+    ベクトルインデックスが破損する可能性がある問題を修正。
+    """
+
+    def test_fsync_called_for_npz(self, tmp_path: Path):
+        """Test that fsync is called after np.savez in atomic_write_npz."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        from veritas_os.core.atomic_io import atomic_write_npz
+
+        target = tmp_path / "test.npz"
+        vecs = np.array([[1, 2, 3]], dtype=np.float32)
+
+        with mock.patch("os.fsync") as mock_fsync:
+            atomic_write_npz(target, vecs=vecs)
+
+        # fsync should be called at least once (for the file and possibly directory)
+        assert mock_fsync.call_count >= 1, \
+            f"fsync should be called at least once, but was called {mock_fsync.call_count} times"
+
+    def test_npz_file_is_complete(self, tmp_path: Path):
+        """Test that the npz file is complete and readable after write."""
+        pytest.importorskip("numpy")
+        import numpy as np
+        from veritas_os.core.atomic_io import atomic_write_npz
+
+        target = tmp_path / "test.npz"
+        original_vecs = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32)
+        original_ids = np.array(["a", "b"], dtype=object)
+
+        atomic_write_npz(target, vecs=original_vecs, ids=original_ids)
+
+        # File should exist and be readable
+        assert target.exists()
+        loaded = np.load(target, allow_pickle=True)
+        np.testing.assert_array_equal(loaded["vecs"], original_vecs)
+        np.testing.assert_array_equal(loaded["ids"], original_ids)
