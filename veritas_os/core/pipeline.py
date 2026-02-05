@@ -51,6 +51,17 @@ except Exception:  # tests may import pipeline without fastapi installed
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 
+# =========================================================
+# Pipeline constants (magic numbers consolidated)
+# =========================================================
+MIN_MEMORY_SIMILARITY = 0.30       # メモリ検索の最小類似度
+DEFAULT_CONFIDENCE = 0.55          # デフォルト信頼度（web_search fallback等）
+DOC_MIN_CONFIDENCE = 0.75          # ドキュメント証拠の最小信頼度
+TELOS_THRESHOLD_MIN = 0.35         # テロス閾値の下限
+TELOS_THRESHOLD_MAX = 0.75         # テロス閾値の上限
+HIGH_RISK_THRESHOLD = 0.90         # 高リスク判定閾値
+BASE_TELOS_THRESHOLD = 0.55        # 基本テロススコア閾値
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -1435,7 +1446,7 @@ async def run_decide_pipeline(
 
         return []
 
-        # -------------------------------
+    # -------------------------------
     # ISSUE-2.7: Evidence normalizer / deduper (contract hardening)
     #   - Some pipelines expect _norm_evidence_item / _dedupe_evidence
     #   - Must never raise
@@ -1538,151 +1549,12 @@ async def run_decide_pipeline(
         except Exception:
             return []
 
-
-        # -------------------------------
+    # -------------------------------
     # ISSUE-2.8: Extras contract merger (contract hardening)
     #   - Some pipelines expect _merge_extras_preserving_contract
     #   - Must never raise
     #   - Must preserve metrics/memory_meta invariants
     # -------------------------------
-    def _set_int_metric(
-        extras: Dict[str, Any], key: str, value: Any, default: int = 0
-    ) -> None:
-        extras.setdefault("metrics", {})
-        if not isinstance(extras["metrics"], dict):
-            extras["metrics"] = {}
-        try:
-            extras["metrics"][key] = int(value)
-        except Exception:
-            extras["metrics"][key] = int(default)
-
-    def _set_bool_metric(
-        extras: Dict[str, Any], key: str, value: Any, default: bool = False
-    ) -> None:
-        extras.setdefault("metrics", {})
-        if not isinstance(extras["metrics"], dict):
-            extras["metrics"] = {}
-        try:
-            extras["metrics"][key] = _to_bool(value)
-        except Exception:
-            extras["metrics"][key] = bool(default)
-
-    def _ensure_full_contract(
-        extras: Dict[str, Any], *, fast_mode_default: bool, context_obj: Dict[str, Any]
-    ) -> None:
-        """
-        Strong contract:
-        - extras.fast_mode always exists (bool)
-        - extras.metrics.{mem_hits, memory_evidence_count, web_hits, web_evidence_count, fast_mode} always exist (int/bool)
-        - extras.metrics.mem_evidence_count exists for backward compat
-        - extras.env_tools exists
-        - extras.memory_meta.context exists and has bool 'fast'
-        - extras.memory_meta.query exists best-effort
-        Never raises.
-        """
-        if not isinstance(extras, dict):
-            return
-
-        extras.setdefault("metrics", {})
-        if not isinstance(extras.get("metrics"), dict):
-            extras["metrics"] = {}
-
-        extras.setdefault("env_tools", {})
-        if not isinstance(extras.get("env_tools"), dict):
-            extras["env_tools"] = {}
-
-        # ---- fast mode invariant
-        extras["fast_mode"] = _to_bool(extras.get("fast_mode", fast_mode_default))
-        _set_bool_metric(
-            extras,
-            "fast_mode",
-            (extras.get("metrics", {}) or {}).get("fast_mode", extras["fast_mode"]),
-            default=fast_mode_default,
-        )
-
-        # ---- ints invariants
-        _set_int_metric(extras, "mem_hits", extras["metrics"].get("mem_hits", 0), default=0)
-        _set_int_metric(
-            extras,
-            "memory_evidence_count",
-            extras["metrics"].get("memory_evidence_count", 0),
-            default=0,
-        )
-        _set_int_metric(extras, "web_hits", extras["metrics"].get("web_hits", 0), default=0)
-        _set_int_metric(
-            extras,
-            "web_evidence_count",
-            extras["metrics"].get("web_evidence_count", 0),
-            default=0,
-        )
-
-        # ---- backward compat
-        try:
-            extras["metrics"].setdefault(
-                "mem_evidence_count", int(extras["metrics"].get("mem_evidence_count", 0) or 0)
-            )
-        except Exception:
-            extras["metrics"]["mem_evidence_count"] = 0
-
-        # ---- memory_meta invariants
-        extras.setdefault("memory_meta", {})
-        if not isinstance(extras.get("memory_meta"), dict):
-            try:
-                extras["memory_meta"] = {"context": dict(context_obj)}
-            except Exception:
-                extras["memory_meta"] = {"context": {}}
-
-        mm = extras["memory_meta"]
-
-        # context must be dict and contain merged context_obj defaults
-        try:
-            base_ctx = dict(context_obj)
-        except Exception:
-            base_ctx = {}
-
-        mm_ctx = mm.get("context")
-        if not isinstance(mm_ctx, dict):
-            mm_ctx = dict(base_ctx)
-            mm["context"] = mm_ctx
-        else:
-            for k, v in base_ctx.items():
-                mm_ctx.setdefault(k, v)
-
-        # enforce bool
-        mm_ctx["fast"] = _to_bool(mm_ctx.get("fast", fast_mode_default))
-
-        # query best-effort (do not crash on missing vars)
-        try:
-            if not (isinstance(mm.get("query"), str) and mm.get("query").strip()):
-                # try local vars if exist
-                _q = None
-                try:
-                    _q = query  # noqa: F821
-                except Exception:
-                    _q = None
-                if _q is None:
-                    try:
-                        _q = q  # noqa: F821
-                    except Exception:
-                        _q = None
-                if _q is None:
-                    try:
-                        body = getattr(req, "body", None)  # noqa: F821
-                        if isinstance(body, dict):
-                            _q = body.get("query")
-                    except Exception:
-                        _q = None
-                if isinstance(_q, str) and _q.strip():
-                    mm["query"] = _q
-        except Exception:
-            pass
-
-        # keep original helper if present
-        try:
-            _ensure_metrics_contract(extras)  # noqa: F821
-        except Exception:
-            pass
-
     def _deep_merge_dict(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
         """Safe deep merge: dict-only. Never raises."""
         try:
@@ -1897,7 +1769,7 @@ async def run_decide_pipeline(
                 query=query,
                 k=8,
                 kinds=["semantic", "skills", "episodic", "doc"],
-                min_sim=0.30,
+                min_sim=MIN_MEMORY_SIMILARITY,
                 user_id=user_id,
             )
 
@@ -1977,8 +1849,8 @@ async def run_decide_pipeline(
                 text = r.get("text") or ""
                 snippet = text[:200] + ("..." if len(text) > 200 else "")
                 conf = max(0.3, min(1.0, float(r.get("score", 0.5))))
-                if r.get("kind") == "doc" and conf < 0.75:
-                    conf = 0.75
+                if r.get("kind") == "doc" and conf < DOC_MIN_CONFIDENCE:
+                    conf = DOC_MIN_CONFIDENCE
                 ev = _norm_evidence_item(
                     {
                         "source": f"memory:{r.get('kind','')}",
@@ -2077,7 +1949,7 @@ async def run_decide_pipeline(
                     "title": "web_search attempted (degraded)",
                     # ★ evidence に query を残す（アンカー後が取れないのでここは query）
                     "snippet": f"[q={ws_final_query}] web_search unavailable or returned None",
-                    "confidence": 0.55,
+                    "confidence": DEFAULT_CONFIDENCE,
                 }
             )
             if ev_fallback:
@@ -2157,7 +2029,7 @@ async def run_decide_pipeline(
                         "title": "web_search executed",
                         # ★ここもアンカー後 query を残す
                         "snippet": f"[q={ws_final_query}] web_search ok=True but no structured results extracted",
-                        "confidence": 0.55,
+                        "confidence": DEFAULT_CONFIDENCE,
                     }
                 )
                 if ev_fallback:
@@ -2177,9 +2049,7 @@ async def run_decide_pipeline(
 
     response_extras["metrics"]["web_evidence_count"] = int(web_evidence_added)
 
-
-
-        # =========================================================
+    # =========================================================
     # options normalization + planner→alts for veritas queries
     # =========================================================
     explicit_raw = body.get("options") or body.get("alternatives") or []
@@ -2743,10 +2613,9 @@ async def run_decide_pipeline(
         effective_risk = 0.0
     effective_risk = max(0.0, min(1.0, effective_risk))
 
-    BASE_TELOS_TH = 0.55
     TELOS_EMA_DELTA = float(os.getenv("VERITAS_TELOS_EMA_DELTA", "0.10"))
-    telos_threshold = BASE_TELOS_TH - TELOS_EMA_DELTA * (value_ema - 0.5) * 2.0
-    telos_threshold = max(0.35, min(0.75, telos_threshold))
+    telos_threshold = BASE_TELOS_THRESHOLD - TELOS_EMA_DELTA * (value_ema - 0.5) * 2.0
+    telos_threshold = max(TELOS_THRESHOLD_MIN, min(TELOS_THRESHOLD_MAX, telos_threshold))
 
     # world.utility synthesis (best-effort)
     try:
@@ -2798,7 +2667,7 @@ async def run_decide_pipeline(
         decision_status = "rejected"
         rejection_reason = "FUJI gate: " + ", ".join(fuji_dict.get("reasons", []) or ["policy_violation"])
         chosen, alts = {}, []
-    elif effective_risk >= 0.90 and float(telos) < float(telos_threshold):
+    elif effective_risk >= HIGH_RISK_THRESHOLD and float(telos) < float(telos_threshold):
         decision_status = "rejected"
         rejection_reason = f"FUJI gate: high risk ({effective_risk:.2f}) & low telos (<{telos_threshold:.2f})"
         chosen, alts = {}, []
@@ -3320,29 +3189,3 @@ async def run_decide_pipeline(
         _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
 
     return payload
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
-
-
-
-
-
-
-
-
-
-    
