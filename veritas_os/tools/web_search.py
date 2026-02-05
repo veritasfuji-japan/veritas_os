@@ -145,12 +145,13 @@ def _post_with_retry(
                 json=payload,
                 timeout=timeout,
             )
-            if _should_retry_status(response.status_code):
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None and _should_retry_status(status_code):
                 if attempt < WEBSEARCH_MAX_RETRIES:
                     delay = _compute_backoff(attempt)
                     logger.warning(
                         "WEBSEARCH retryable status=%s attempt=%s, sleep=%.2fs",
-                        response.status_code,
+                        status_code,
                         attempt,
                         delay,
                     )
@@ -521,5 +522,4 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "blocked_count": 0,
             },
         }
-
 

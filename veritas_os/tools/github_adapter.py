@@ -79,12 +79,13 @@ def _get_with_retry(
                 params=params,
                 timeout=timeout,
             )
-            if _should_retry_status(response.status_code):
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None and _should_retry_status(status_code):
                 if attempt < GITHUB_MAX_RETRIES:
                     delay = _compute_backoff(attempt)
                     logger.warning(
                         "GitHub retryable status=%s attempt=%s, sleep=%.2fs",
-                        response.status_code,
+                        status_code,
                         attempt,
                         delay,
                     )
