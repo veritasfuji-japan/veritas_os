@@ -174,12 +174,13 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     with _trust_log_lock:
         LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-        # ---- 直前ハッシュの取得（JSON 側）----
+        # ---- 直前ハッシュの取得（JSONL 側を正とする）----
+        # ★ 修正: JSON (MAX_JSON_ITEMS 件に制限) ではなく JSONL (全件) から
+        #   直前ハッシュを取得する。JSON が 2000 件で切られている場合、
+        #   JSON の末尾と JSONL の末尾が乖離してチェーンが壊れる問題を修正。
+        sha256_prev = get_last_hash()
+
         items = _load_logs_json()
-        sha256_prev = None
-        if items:
-            last = items[-1]
-            sha256_prev = last.get("sha256")
 
         # 元 entry を壊さないようにコピー
         entry = dict(entry)

@@ -126,8 +126,9 @@ class ValueProfile:
     def save(self) -> None:
         CFG_DIR.mkdir(parents=True, exist_ok=True)
         data = {"weights": _normalize_weights(self.weights)}
-        with CFG_PATH.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        # ★ 修正: atomic_write_json を使用してクラッシュ時のファイル破損を防止
+        from veritas_os.core.atomic_io import atomic_write_json
+        atomic_write_json(CFG_PATH, data, indent=2)
 
     # ---- オンライン学習 ----
     def update_from_scores(self, scores: Dict[str, float], lr: float = 0.02) -> None:
@@ -349,18 +350,18 @@ def append_trust_log(
     extra: Dict[str, Any] | None = None,
 ) -> None:
     """
-    trust_log.jsonl に 1 行追記するユーティリティ。
+    trust_log に 1 行追記するユーティリティ（ユーザーフィードバック用）。
     - score: 0.0〜1.0 を想定（範囲外ならクリップ）
     - note : 簡単なメモ（「今日の決定はかなり良い」など）
     - source: "manual" / "auto" など
+
+    ★ 修正: 正規の logging.trust_log.append_trust_log に委譲することで
+      ハッシュチェーンの整合性を維持する。
     """
     try:
-        log_file = TRUST_LOG_PATH
-        log_file.parent.mkdir(parents=True, exist_ok=True)
-
         s = _clip01(score)
-        rec = {
-            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+        rec: Dict[str, Any] = {
+            "type": "trust_feedback",
             "user_id": user_id,
             "score": s,
             "note": note,
@@ -369,15 +370,8 @@ def append_trust_log(
         if extra:
             rec["extra"] = extra
 
-        with log_file.open("a", encoding="utf-8") as f:
-            if fcntl is not None:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            try:
-                f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-                f.flush()
-            finally:
-                if fcntl is not None:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        from veritas_os.logging.trust_log import append_trust_log as _canonical_append
+        _canonical_append(rec)
 
         logger.debug("trust_log appended: user=%s, score=%s", user_id, s)
     except Exception as e:

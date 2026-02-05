@@ -1348,10 +1348,8 @@ except Exception as e:
     logger.error(f"[MemoryOS] init failed: {e}")
     MEM = MemoryStore.load(MEM_PATH)
 
-# 他モジュールで MEM を直接使えるようにする
-import builtins
-
-builtins.MEM = MEM
+# ★ 修正: builtins.MEM への代入を削除。
+# 他モジュールは from veritas_os.core.memory import MEM で明示的にインポートしてください。
 
 
 # ============================

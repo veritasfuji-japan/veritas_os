@@ -281,8 +281,20 @@ monkeypatch):
 # append_trust_log
 # ============
 def test_append_trust_log_writes_jsonl(tmp_path, monkeypatch):
-    log_path = tmp_path / "trust_log.jsonl"
-    monkeypatch.setattr(value_core, "TRUST_LOG_PATH", log_path)
+    """
+    value_core.append_trust_log は正規の logging.trust_log.append_trust_log に委譲する。
+    テストでは正規側のパスをモンキーパッチする。
+    """
+    from veritas_os.logging import trust_log as tl
+    from veritas_os.logging import paths as log_paths
+
+    log_jsonl = tmp_path / "trust_log.jsonl"
+    log_json = tmp_path / "trust_log.json"
+
+    monkeypatch.setattr(tl, "LOG_JSONL", log_jsonl)
+    monkeypatch.setattr(tl, "LOG_JSON", log_json)
+    monkeypatch.setattr(tl, "LOG_DIR", tmp_path)
+    monkeypatch.setattr(log_paths, "LOG_JSONL", log_jsonl)
 
     value_core.append_trust_log(
         user_id="user123",
@@ -292,8 +304,8 @@ def test_append_trust_log_writes_jsonl(tmp_path, monkeypatch):
         extra={"foo": "bar"},
     )
 
-    assert log_path.exists()
-    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert log_jsonl.exists()
+    lines = log_jsonl.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     rec = json.loads(lines[0])
 
@@ -302,4 +314,7 @@ def test_append_trust_log_writes_jsonl(tmp_path, monkeypatch):
     assert rec["note"] == "test-note"
     assert rec["source"] == "unit"
     assert rec["extra"]["foo"] == "bar"
+    # ★ 正規trust_logに委譲されたため、sha256ハッシュチェーンも付与される
+    assert "sha256" in rec
+    assert rec["type"] == "trust_feedback"
 
