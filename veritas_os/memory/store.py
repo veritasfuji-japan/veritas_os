@@ -1,12 +1,15 @@
 from pathlib import Path
-import json, time, uuid, threading
+import json, time, uuid, threading, os
 from typing import Dict, Any, List, Optional
 from .embedder import HashEmbedder
 from .index_cosine import CosineIndex
 from veritas_os.core.atomic_io import atomic_append_line
 
-# プロジェクトルート基準に変更
-BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
+# ★ 修正 (M-3): 環境変数で設定可能にし、ハードコードされたparents[2]を削除
+# VERITAS_MEMORY_DIR 環境変数が設定されていればそれを使用、
+# なければデフォルトでプロジェクトルート相対パスを使用
+_default_base = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(os.getenv("VERITAS_MEMORY_DIR", str(_default_base)))
 VERITAS_DIR = BASE_DIR / "veritas_os"
 HOME_MEMORY = VERITAS_DIR / "memory"               # ← プロジェクト内メモリ
 HOME_MEMORY.mkdir(parents=True, exist_ok=True)
