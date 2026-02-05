@@ -1715,7 +1715,7 @@ async def run_decide_pipeline(
         pass
 
     # ---- contract hardening (early)
-    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context)
+    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
 
     qlower = query.lower()
     is_veritas_query = any(k in qlower for k in ["veritas", "agi", "protoagi", "プロトagi", "veritasのagi化"])
@@ -2723,7 +2723,7 @@ async def run_decide_pipeline(
         }
     )
 
-    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context)
+    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
 
     # =========================================================
     # Low-evidence hardening (query hint only)
