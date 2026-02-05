@@ -1,6 +1,6 @@
 # VERITAS OS - Comprehensive Code Review Report
 
-**Date**: 2026-02-05
+**Date**: 2026-02-05 (Updated)
 **Reviewer**: Claude (Automated Code Review)
 **Scope**: All source files in `veritas_os/`
 
@@ -12,13 +12,49 @@ VERITAS OS is a Python-based AI decision-making framework with ethical guardrail
 
 **Overall Assessment**: The codebase is functional with thoughtful safety/ethical design. However, there are several HIGH-severity issues (security, data integrity, architectural) and many MEDIUM-severity code quality issues that should be addressed.
 
-### Severity Counts
+### Severity Counts (Updated)
 
 | Severity | Count |
 |----------|-------|
-| HIGH     | 8     |
-| MEDIUM   | 12    |
-| LOW      | 7     |
+| CRITICAL | 2     |
+| HIGH     | 12    |
+| MEDIUM   | 18    |
+| LOW      | 9     |
+
+---
+
+## CRITICAL Severity Findings (NEW)
+
+### C-1: Race Condition in dataset_writer.py - Concurrent Appends Can Corrupt Data
+**File:** `veritas_os/logging/dataset_writer.py:218-237`
+
+**Problem:** The `append_dataset_record` function has NO thread synchronization, fsync, or atomic write guarantees. In a multi-threaded environment (FastAPI), concurrent calls to this function can:
+1. Interleave writes, corrupting the JSONL file
+2. Lose data on crash (no fsync)
+3. Create race conditions in file access
+
+**Evidence:**
+```python
+# Line 233 - No lock acquired
+with path.open("a", encoding="utf-8") as f:
+    f.write(json.dumps(record, ensure_ascii=False) + "\n")  # No fsync
+```
+
+Unlike `trust_log.py` which has `with _trust_log_lock:`, this module has zero protection.
+
+**Fix**: Add a module-level `threading.RLock()` and use `atomic_append_line` from `veritas_os.core.atomic_io`.
+
+### C-2: Missing fsync in atomic_write_npz Causes Data Corruption Risk
+**File:** `veritas_os/core/atomic_io.py:181`
+
+**Problem:** The `atomic_write_npz()` function calls `np.savez()` without fsync before the atomic rename. If the system crashes after `np.savez()` completes but before OS buffers are flushed to disk, the temporary file may be incompletely written. The subsequent `os.replace()` then renames this corrupt file to the target path, permanently corrupting the vector index.
+
+**Evidence:**
+- Line 181: `np.savez(tmp_path, **arrays)` - no fsync after this
+- Line 184: `os.replace(tmp_path, path)` - renames potentially incomplete file
+- Compare with `_atomic_write_bytes()` (line 67) which properly calls `os.fsync(fd)`
+
+**Fix:** After `np.savez()`, reopen the file in read mode and fsync it before the rename.
 
 ---
 
@@ -254,15 +290,130 @@ Both files define a class named `MemoryStore` with different APIs. This creates 
 
 ---
 
+## NEW HIGH Severity Findings (Added 2026-02-05)
+
+### H-9: TOCTOU Race Condition in Policy Hot Reload
+**File:** `veritas_os/core/fuji.py:461-477`
+
+**Problem:** The `_check_policy_hot_reload()` function has a classic Time-of-Check-Time-of-Use (TOCTOU) race condition. The code checks the file modification time, then loads the policy. Between these two operations, an attacker could replace the policy file with malicious content.
+
+```python
+def _check_policy_hot_reload() -> None:
+    global POLICY, _POLICY_MTIME
+    path = _policy_path()
+    current_mtime = path.stat().st_mtime  # TIME-OF-CHECK
+    if current_mtime > _POLICY_MTIME:
+        POLICY = _load_policy(path)       # TIME-OF-USE
+```
+
+**Fix**: Use file descriptors to eliminate the race condition.
+
+### H-10: Race Condition in Global MEM_VEC Access
+**File:** `veritas_os/core/memory.py:1199, 1382, 1924`
+
+**Problem:** The global `MEM_VEC` variable is accessed and modified without proper synchronization across multiple functions. While `MemoryStore` has `_cache_lock` for its internal cache, the global `MEM_VEC` can be accessed from multiple threads without protection.
+
+**Fix:** Add a global lock for `MEM_VEC` operations similar to `_trust_log_lock`.
+
+### H-11: Race Condition in rotate.py - TOCTOU Between rotate_if_needed and open
+**File:** `veritas_os/logging/rotate.py:45-60`
+
+**Problem:** There's a Time-Of-Check-Time-Of-Use (TOCTOU) race condition between `rotate_if_needed()` returning a path and `open()` being called. Another thread could rotate the file between these two calls.
+
+**Fix:** Move the lock into `rotate.py` or make `open_trust_log_for_append` do rotation and open atomically.
+
+### H-12: Missing get_last_hash Thread Safety When Called Externally
+**File:** `veritas_os/logging/trust_log.py:82-105, 467`
+
+**Problem:** `get_last_hash()` is exported in `__all__` but has no internal locking. External callers could call it without the lock, leading to:
+1. Reading partial/incomplete JSON lines if another thread is writing
+2. `json.loads()` exception → returns None → caller thinks log is empty → breaks hash chain
+
+**Fix**: Either remove from `__all__`, add lock acquisition inside the function, or document that callers MUST hold `_trust_log_lock`.
+
+---
+
+## NEW MEDIUM Severity Findings (Added 2026-02-05)
+
+### M-13: Internal Error Details Exposed in /status Endpoint
+**File:** `veritas_os/api/server.py:847-858`
+
+**Problem:** The `/status` endpoint exposes internal error messages through `cfg_error` and `pipeline_error` fields, which can reveal sensitive implementation details to unauthenticated users.
+
+**Fix:** Remove internal error details from the status response, or make them available only in debug mode or authenticated endpoints.
+
+### M-14: Missing HTTP Security Headers
+**File:** `veritas_os/api/server.py`, `veritas_os/api/dashboard_server.py`
+
+**Problem:** Neither server implements security headers middleware. Missing:
+- `X-Frame-Options` (clickjacking protection)
+- `X-Content-Type-Options: nosniff` (MIME sniffing protection)
+- `Strict-Transport-Security` (HSTS for HTTPS enforcement)
+- `Content-Security-Policy` (XSS protection)
+
+**Fix:** Add a security headers middleware.
+
+### M-15: Unbounded max_results in web_search Allows Resource Exhaustion
+**File:** `veritas_os/tools/web_search.py:354-360`
+
+**Problem:** The `max_results` parameter has no upper bound validation. An attacker could pass extremely large values causing excessive API costs and memory exhaustion.
+
+**Fix:** Add an upper bound check, e.g., `if mr > 100: mr = 100`.
+
+### M-16: Invalid JSON serialization in LLM Safety API Call
+**File:** `veritas_os/tools/llm_safety.py:213`
+
+**Problem:** The `user_payload` dictionary is being converted to string using Python's default string representation instead of proper JSON serialization. This results in Python dict syntax (single quotes) being sent instead of valid JSON.
+
+**Fix:** Use `json.dumps(user_payload)` to properly serialize the dictionary to JSON format.
+
+### M-17: Denial of Service - Unbounded Memory Allocation in HashEmbedder
+**File:** `veritas_os/memory/embedder.py:14-15`
+
+**Problem:** The `embed()` method has no input validation on the size of the `texts` list or the length of individual strings. An attacker can cause memory exhaustion by passing extremely large inputs.
+
+**Fix:** Add maximum text length validation (e.g., MAX_TEXT_LENGTH = 100,000) and maximum batch size limits.
+
+### M-18: Silent Error Handling Hides Index Loading Failures
+**File:** `veritas_os/memory/index_cosine.py:77-78, 98-99`
+
+**Problem:** Two bare `except Exception: pass` blocks silently swallow all exceptions during index loading. Users have no way to distinguish between "index doesn't exist yet" and "index is corrupted".
+
+**Fix:** Log the exception at WARNING or ERROR level before falling through to empty initialization.
+
+---
+
+## Test Coverage Gap Findings
+
+### T-1: Missing Request Size Limit Tests for DoS Protection
+**Severity:** High
+**Problem:** The API server does not appear to have request body size limits configured, and there are no tests validating behavior with extremely large payloads.
+
+### T-2: Missing Subprocess Command Injection Tests
+**Severity:** High
+**Problem:** `veritas_os/core/kernel.py:1065` uses `subprocess.Popen` but there are no tests covering this subprocess execution path or validating the `sys.executable` validation logic.
+
+### T-3: Missing HMAC Signature Edge Case Tests
+**Severity:** Medium
+**Problem:** HMAC signature verification tests don't cover edge cases: empty body, malformed UTF-8, extremely long body, body with null bytes.
+
+### T-4: Missing Rate Limit Concurrency Tests
+**Severity:** Medium
+**Problem:** Rate limiting implementation has no concurrent/parallel test execution to verify thread safety under race conditions.
+
+---
+
 ## Architecture Observations
 
 ### Strengths
 1. **Defense-in-depth**: FUJI safety gate with multiple layers (data, logic, value, security)
 2. **Audit trail**: SHA-256 hash chain in trust log provides tamper-evident logging
 3. **Graceful degradation**: Extensive fallback patterns ensure the system doesn't crash
-4. **Thread safety**: RLock usage in trust log and memory store
+4. **Thread safety**: RLock usage in trust log and memory store (mostly)
 5. **Atomic I/O**: Well-implemented write-temp-fsync-rename pattern in `atomic_io.py`
 6. **Type safety**: Pydantic v2 schemas with thorough validation
+7. **Input validation**: Good use of constant-time comparisons for secrets
+8. **PII Protection**: Comprehensive PII detection and masking in sanitize.py
 
 ### Areas for Improvement
 1. **Module initialization**: Heavy side effects at import time (memory.py, paths.py)
@@ -270,12 +421,27 @@ Both files define a class named `MemoryStore` with different APIs. This creates 
 3. **Logging consistency**: Mix of `print()`, `logging`, and different timestamp formats
 4. **Test isolation**: `builtins.MEM` and module-level state make testing difficult
 5. **Error handling**: Too many bare `except` clauses that swallow errors silently
+6. **Thread Safety**: Global variables (MEM_VEC) need locks; some functions exported without thread safety documentation
+7. **Security Headers**: Missing standard HTTP security headers in API servers
 
 ---
 
 ## Recommended Priority
 
-1. **Immediate** (H-5, H-2, H-3): Fix trust log hash chain consistency, non-atomic writes, and duplicate functions
-2. **Short-term** (H-1, H-6, H-7): Remove builtins pollution, fix wrong imports, fix rotation atomicity
-3. **Medium-term** (M-1 through M-12): Code quality improvements
-4. **Long-term** (H-4, H-8): Refactor memory module initialization, remove pickle support entirely
+### Immediate (CRITICAL + HIGH Security Issues)
+1. **C-1, C-2**: Fix race conditions in dataset_writer and atomic_write_npz
+2. **H-9, H-10, H-11**: Fix TOCTOU race conditions in policy loading, MEM_VEC access, and log rotation
+3. **H-5, H-2, H-3**: Fix trust log hash chain consistency, non-atomic writes, and duplicate functions
+
+### Short-term (Remaining HIGH + API Security)
+4. **H-1, H-6, H-7**: Remove builtins pollution, fix wrong imports, fix rotation atomicity
+5. **M-13, M-14**: Remove internal error exposure, add security headers
+6. **M-15, M-16, M-17**: Fix input validation issues in web_search, llm_safety, embedder
+
+### Medium-term (Code Quality + Test Coverage)
+7. **M-1 through M-12**: Other code quality improvements
+8. **T-1 through T-4**: Add missing security test coverage
+
+### Long-term (Architectural Changes)
+9. **H-4, H-8**: Refactor memory module initialization, remove pickle support entirely
+10. Standardize timestamp formats and logging patterns across codebase
