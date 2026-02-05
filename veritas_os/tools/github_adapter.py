@@ -6,17 +6,27 @@ GitHub Adapter for VERITAS Environment Tools
 - 公開リポジトリを簡易検索するヘルパー
 """
 
+import logging
 import os
+import random
+import time
+
 import requests
 
 
 GITHUB_TOKEN = os.environ.get("VERITAS_GITHUB_TOKEN", "").strip()
+GITHUB_MAX_RETRIES = int(os.getenv("VERITAS_GITHUB_MAX_RETRIES", "3"))
+GITHUB_RETRY_DELAY = float(os.getenv("VERITAS_GITHUB_RETRY_DELAY", "1.0"))
+GITHUB_RETRY_MAX_DELAY = float(os.getenv("VERITAS_GITHUB_RETRY_MAX_DELAY", "8.0"))
+GITHUB_RETRY_JITTER = float(os.getenv("VERITAS_GITHUB_RETRY_JITTER", "0.1"))
 
 # URL が長くなりすぎないようにクエリ長を制限
 MAX_QUERY_LEN = 256
 
 # GitHub API の per_page 上限
 GITHUB_API_MAX_PER_PAGE = 100
+
+logger = logging.getLogger(__name__)
 
 
 def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
@@ -35,6 +45,70 @@ def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
         q = q[:max_len]
         truncated = True
     return q, truncated
+
+
+def _compute_backoff(attempt: int) -> float:
+    """指数バックオフの待機時間を算出する（ジッター込み）。"""
+    base_delay = max(GITHUB_RETRY_DELAY, 0.0)
+    max_delay = max(GITHUB_RETRY_MAX_DELAY, base_delay)
+    jitter = max(GITHUB_RETRY_JITTER, 0.0)
+    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+    if jitter:
+        delay += random.uniform(0, delay * jitter)
+    return delay
+
+
+def _should_retry_status(status_code: int) -> bool:
+    """再試行対象のHTTPステータスかどうかを判定する。"""
+    return status_code in {403, 429} or status_code >= 500
+
+
+def _get_with_retry(
+    url: str,
+    headers: dict,
+    params: dict,
+    timeout: int,
+) -> requests.Response:
+    """GitHub API 呼び出しを再試行しつつ実行する。"""
+    last_exc: Exception | None = None
+    for attempt in range(1, GITHUB_MAX_RETRIES + 1):
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=timeout,
+            )
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None and _should_retry_status(status_code):
+                if attempt < GITHUB_MAX_RETRIES:
+                    delay = _compute_backoff(attempt)
+                    logger.warning(
+                        "GitHub retryable status=%s attempt=%s, sleep=%.2fs",
+                        status_code,
+                        attempt,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    continue
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            if attempt < GITHUB_MAX_RETRIES:
+                delay = _compute_backoff(attempt)
+                logger.warning(
+                    "GitHub request error attempt=%s, sleep=%.2fs: %r",
+                    attempt,
+                    delay,
+                    exc,
+                )
+                time.sleep(delay)
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("GitHub request failed without exception")
 
 
 def github_search_repos(query: str, max_results: int = 5) -> dict:
@@ -78,8 +152,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
     }
 
     try:
-        r = requests.get(url, headers=headers, params=params, timeout=20)
-        r.raise_for_status()
+        r = _get_with_retry(url, headers=headers, params=params, timeout=20)
         data = r.json()
     except Exception as e:
         return {
@@ -110,4 +183,3 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
             "used_query": q,
         },
     }
-

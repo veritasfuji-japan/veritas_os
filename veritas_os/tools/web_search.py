@@ -39,8 +39,11 @@ env:
 
 from __future__ import annotations
 
+import logging
 import os
+import random
 import re
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -48,6 +51,14 @@ import requests
 
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
+WEBSEARCH_MAX_RETRIES = int(os.getenv("VERITAS_WEBSEARCH_MAX_RETRIES", "3"))
+WEBSEARCH_RETRY_DELAY = float(os.getenv("VERITAS_WEBSEARCH_RETRY_DELAY", "1.0"))
+WEBSEARCH_RETRY_MAX_DELAY = float(
+    os.getenv("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", "8.0")
+)
+WEBSEARCH_RETRY_JITTER = float(os.getenv("VERITAS_WEBSEARCH_RETRY_JITTER", "0.1"))
+
+logger = logging.getLogger(__name__)
 
 # -------------------------------
 # AGI 系クエリ用キーワード/サイト
@@ -100,6 +111,70 @@ def _normalize_str(x: Any, *, limit: int = 4000) -> str:
     if limit and len(s) > int(limit):
         return s[: int(limit)]
     return s
+
+
+def _compute_backoff(attempt: int) -> float:
+    """指数バックオフの待機時間を算出する（ジッター込み）。"""
+    base_delay = max(WEBSEARCH_RETRY_DELAY, 0.0)
+    max_delay = max(WEBSEARCH_RETRY_MAX_DELAY, base_delay)
+    jitter = max(WEBSEARCH_RETRY_JITTER, 0.0)
+    delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+    if jitter:
+        delay += random.uniform(0, delay * jitter)
+    return delay
+
+
+def _should_retry_status(status_code: int) -> bool:
+    """再試行対象のHTTPステータスかどうかを判定する。"""
+    return status_code == 429 or status_code >= 500
+
+
+def _post_with_retry(
+    url: str,
+    headers: Dict[str, Any],
+    payload: Dict[str, Any],
+    timeout: int,
+) -> requests.Response:
+    """外部API呼び出しを再試行しつつ実行する。"""
+    last_exc: Optional[Exception] = None
+    for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
+        try:
+            response = requests.post(
+                url,
+                headers=headers,
+                json=payload,
+                timeout=timeout,
+            )
+            status_code = getattr(response, "status_code", None)
+            if status_code is not None and _should_retry_status(status_code):
+                if attempt < WEBSEARCH_MAX_RETRIES:
+                    delay = _compute_backoff(attempt)
+                    logger.warning(
+                        "WEBSEARCH retryable status=%s attempt=%s, sleep=%.2fs",
+                        status_code,
+                        attempt,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    continue
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            if attempt < WEBSEARCH_MAX_RETRIES:
+                delay = _compute_backoff(attempt)
+                logger.warning(
+                    "WEBSEARCH request error attempt=%s, sleep=%.2fs: %r",
+                    attempt,
+                    delay,
+                    exc,
+                )
+                time.sleep(delay)
+                continue
+            raise
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("WEBSEARCH request failed without exception")
 
 
 def _extract_hostname(url: str) -> str:
@@ -331,7 +406,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "num": num_to_fetch,
         }
 
-        resp = requests.post(WEBSEARCH_URL, headers=headers, json=payload, timeout=15)
+        resp = _post_with_retry(
+            WEBSEARCH_URL,
+            headers=headers,
+            payload=payload,
+            timeout=15,
+        )
         resp.raise_for_status()
         data: Dict[str, Any] = resp.json()
 
@@ -442,7 +522,4 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "blocked_count": 0,
             },
         }
-
-
-
 
