@@ -123,3 +123,49 @@ def test_github_search_repos_handles_api_error(monkeypatch):
     assert res["results"] == []
     assert "GitHub API error:" in res["error"]
 
+
+def test_github_search_repos_retries_on_timeout(monkeypatch):
+    """一時的なタイムアウト時に再試行する。"""
+    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setattr(github_adapter, "GITHUB_MAX_RETRIES", 2)
+    monkeypatch.setattr(github_adapter, "GITHUB_RETRY_DELAY", 0.0)
+    monkeypatch.setattr(github_adapter, "GITHUB_RETRY_MAX_DELAY", 0.0)
+    monkeypatch.setattr(github_adapter, "GITHUB_RETRY_JITTER", 0.0)
+    monkeypatch.setattr(github_adapter.time, "sleep", lambda *_: None)
+
+    class DummyResp:
+        def __init__(self, payload):
+            self._payload = payload
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    calls = {"count": 0}
+
+    def fake_get(*args, **kwargs):
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise github_adapter.requests.exceptions.Timeout("boom")
+        payload = {
+            "items": [
+                {
+                    "full_name": "veritasfuji-japan/veritas_os",
+                    "html_url": "https://github.com/veritasfuji-japan/veritas_os",
+                    "description": "Proto-AGI Decision OS",
+                    "stargazers_count": 42,
+                }
+            ]
+        }
+        return DummyResp(payload)
+
+    monkeypatch.setattr(github_adapter.requests, "get", fake_get)
+
+    res = github_adapter.github_search_repos("veritas_os")
+
+    assert calls["count"] == 2
+    assert res["ok"] is True
+    assert res["results"][0]["full_name"] == "veritasfuji-japan/veritas_os"
