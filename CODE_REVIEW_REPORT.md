@@ -609,3 +609,137 @@ VERITAS OS is a **production-ready** codebase with strong security fundamentals.
 1. Continue Pickle → JSON migration
 2. Refactor large functions for maintainability
 3. Standardize logging approach
+
+---
+
+## Addendum: Deep Module Review (2026-02-07 Extended)
+
+### All Core Modules — Per-Module Assessment
+
+| Module | Grade | Lines | Summary |
+|--------|-------|-------|---------|
+| `core/kernel.py` | A | — | Main decision kernel, well-orchestrated pipeline |
+| `core/pipeline.py` | A | 1100+ | Pipeline orchestration, extensive error handling |
+| `core/kernel_stages.py` | A | — | Individual pipeline stages, clean separation |
+| `core/fuji.py` | A | 1255 | 4-layer safety gate, self-validating code registry |
+| `core/fuji_codes.py` | A | 307 | FUJI error code registry with dataclass+enum design, import-time validation |
+| `core/critique.py` | A- | 580 | 8-check rule-based analysis, dual API (list + dict), clean severity system |
+| `core/debate.py` | B+ | 844 | 4-role simulation (Architect/Critic/Safety/Judge), danger term detection, 3-stage fallback |
+| `core/planner.py` | B+ | 1217 | WorldModel-integrated hybrid planner, complex JSON rescue, stage-based fallback |
+| `core/world.py` | B+ | 1026 | DynamicPath for monkeypatch, v1→v2 migration, path safety validation |
+| `core/strategy.py` | B | 268 | Fusion scoring (40:25:25:10:-10), hardcoded weights |
+| `core/reason.py` | B | 297 | 3-layer (reflect + LLM reason + Self-Refine template), non-atomic log writes |
+| `core/evidence.py` | B+ | — | Local heuristic evidence (fatigue/stakes/constraints), no LLM calls |
+| `core/value_core.py` | B+ | — | EMA-based online learning, atomic persistence |
+| `core/adapt.py` | B+ | 299 | Persona management, bias from trust_log history, EMA merge |
+| `core/affect.py` | A | 218 | Style system (concise/neutral/warm/legal/coach), clean LLM instruction generation |
+| `core/rsi.py` | C | 63 | Stub — always returns fixed delta (+1, +0.1) |
+| `core/identity.py` | D | 4 | Stub — `return True` (no actual integrity check) |
+| `core/sanitize.py` | A | — | Comprehensive PII detection (JP+EN), regex-based |
+| `core/atomic_io.py` | A | — | fsync + atomic rename + directory fsync |
+| `core/self_healing.py` | B+ | — | Budget guardrails (max_attempts/steps/seconds) |
+| `core/config.py` | B | — | Environment-variable-driven configuration |
+| `core/llm_client.py` | B | — | OpenAI/Anthropic dual-provider wrapper |
+| `memory/store.py` | B | — | MemoryOS CRUD + search |
+| `memory/engine.py` | B | — | Memory retrieval engine |
+| `memory/embedder.py` | B- | — | BLAKE2b hash embedder (no semantic similarity) |
+| `logging/trust_log.py` | A- | — | Hash-chained audit log, JSONL+JSON dual format |
+| `logging/rotate.py` | B+ | — | 5000-line rotation, thread safety documented |
+| `logging/paths.py` | A- | 122 | Secure permissions (0o700), encrypted log path enforcement |
+| `api/server.py` | A- | 1426 | Multi-layer defense (auth/HMAC/rate limit/body size/PII redaction) |
+| `api/schemas.py` | B+ | — | Pydantic v2 with thorough validation |
+| `tools/web_search.py` | B+ | 526 | Serper.dev adapter, Bureau Veritas disambiguation |
+
+### New Findings from Extended Review
+
+#### EF-1: `reason.py` — Non-atomic log writes (MEDIUM→HIGH)
+
+```python
+# reason.py:100-105
+with open(META_LOG, "a", encoding="utf-8") as f:
+    f.write(json.dumps(out, ensure_ascii=False) + "\n")
+```
+
+Uses plain `open("a")` instead of `atomic_io.atomic_append_line()`. Also duplicates path resolution instead of using `logging/paths.py`. This is the same pattern flagged in H-2 for `value_core.py`.
+
+#### EF-2: `strategy.py` — Import fallback uses wrong package name (confirms H-6)
+
+```python
+try:
+    from . import world_model as wm
+except ImportError:
+    from veritas_os.core import world_model as wm  # type: ignore
+```
+
+Comment says `veritas → veritas_os` fix applied, but the primary import uses `from . import world_model` which assumes `world_model.py` exists as a separate file. The actual module is `world.py`. This fallback is dead code.
+
+#### EF-3: `planner.py` — JSON rescue brute-force (confirms M-4)
+
+The `_safe_json_extract_core()` function at lines 404-530 implements a 4-stage JSON recovery pipeline including character-by-character parsing. `max_attempts=500` for the tail-trimming loop could cause latency spikes with large LLM outputs.
+
+#### EF-4: `world.py` — `_atomic_write_json` duplicates `atomic_io.py` logic
+
+`world.py:367-406` has its own `_atomic_write_json()` implementation instead of reusing `atomic_io.atomic_write_json()`. While functionally similar (both do temp+fsync+replace), the duplication increases maintenance burden and risk of divergence.
+
+#### EF-5: `identity.py` — 4-line stub is a safety gap
+
+```python
+def integrity_ok(option_title: str) -> bool:
+    return True  # デモ：常に真
+```
+
+If this function is called in the pipeline to validate option integrity, it provides zero protection. This should either be implemented or removed from the call chain.
+
+#### EF-6: `rsi.py` — Non-adaptive self-improvement stub
+
+`propose_patch()` ignores its `last_outcome` parameter entirely and returns a hardcoded delta. For a "Proto-AGI" system, the recursive self-improvement module being a stub is a significant functional gap.
+
+#### EF-7: `adapt.py` — `clean_bias_weights` loses absolute scale
+
+The normalization by max value (`v / mx`) preserves relative distribution but discards absolute magnitude. Two very different bias profiles (e.g., max=0.01 vs max=0.99) would produce identical normalized outputs.
+
+#### EF-8: `fuji_codes.py` — Import-time self-validation (Positive)
+
+```python
+_validate_registry()  # Called at import time
+```
+
+This ensures that any inconsistency in the FUJI code registry (e.g., wrong layer prefix, HIGH severity without blocking) is caught immediately on startup. Excellent pattern.
+
+### Updated Priority Recommendations
+
+#### P0 (Critical — Address immediately)
+1. **world.py read-modify-write race condition** — Add file locking (`fcntl.flock` or `filelock` library)
+2. **identity.py stub** — Either implement real integrity check or remove from pipeline
+
+#### P1 (High — Address within sprint)
+3. **Unify atomic write patterns** — `reason.py`, `value_core.py`, `world.py` should all use `atomic_io.*`
+4. **Fix strategy.py dead import fallback** — Remove or fix `world_model` import
+5. **Add CI quality gates** — mypy, ruff, bandit
+6. **Eliminate `_atomic_write_json` duplication in world.py** — Use `atomic_io.atomic_write_json`
+
+#### P2 (Medium — Next release)
+7. **Split debate.py** — danger terms, JSON parsing, debate logic into separate modules
+8. **Consolidate utility functions** — `_now_iso()`, `_clip01`/`_clamp01`, `_as_float` variants into `utils.py`
+9. **Replace HashEmbedder** — If semantic search is needed, use SentenceTransformers
+10. **Implement RSI module** — Adaptive patch proposal based on actual outcome feedback
+
+#### P3 (Low — Backlog)
+11. **Externalize fusion score weights** — Move strategy.py hardcoded weights to config
+12. **Reduce planner.py JSON rescue complexity** — Consider `json.JSONDecoder.raw_decode()`
+13. **API key rotation** — Vault/Secrets Manager integration
+
+### Overall Grade (Updated 2026-02-07)
+
+| Category | Grade |
+|----------|-------|
+| Architecture Design | **A-** |
+| Security | **B+** |
+| Code Quality | **B+** |
+| Test Coverage | **A-** |
+| Error Handling | **A** |
+| Documentation | **B** |
+| Deployment/Operations | **B** |
+| **Overall** | **B+** |
+
+Proto-AGI Skeleton として非常に野心的かつ高品質な設計。特に FUJI Safety Gate の多層安全設計、hash-chained trust log、atomic I/O パターン、import-time レジストリ検証は優れたプラクティス。主な改善点は並行安全性（ファイルロック）、スタブモジュールの実装充実、重複コードの統合、CI パイプラインの強化に集約される。
