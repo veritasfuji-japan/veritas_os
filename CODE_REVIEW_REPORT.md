@@ -279,3 +279,131 @@ Both files define a class named `MemoryStore` with different APIs. This creates 
 2. **Short-term** (H-1, H-6, H-7): Remove builtins pollution, fix wrong imports, fix rotation atomicity
 3. **Medium-term** (M-1 through M-12): Code quality improvements
 4. **Long-term** (H-4, H-8): Refactor memory module initialization, remove pickle support entirely
+
+---
+
+## Addendum: Extended Code Review (2026-02-07)
+
+### Additional Files Reviewed
+
+Following the initial review, a comprehensive analysis of the following key files was conducted:
+
+| File | Lines | Focus |
+|------|-------|-------|
+| `core/pipeline.py` | 1100+ | Decision pipeline orchestration |
+| `core/fuji.py` | 1255 | Safety gate implementation |
+| `api/server.py` | 1390 | FastAPI REST endpoints |
+| `tools/web_search.py` | 526 | Serper.dev integration |
+
+### Additional Positive Findings
+
+#### P-1: Robust FUJI Gate Implementation (`core/fuji.py`)
+
+The FUJI gate demonstrates several security-conscious patterns:
+
+1. **Prompt Injection Detection** (lines 381-398):
+   - Rule-based detection for common injection patterns
+   - Pattern matching for bypass/jailbreak attempts
+   - Weighted scoring system
+
+2. **Immutable Invariants** (lines 903-913):
+   ```python
+   # Invariant enforcement
+   if status == "deny" and decision_status != "deny":
+       decision_status = "deny"
+       rejection_reason = rejection_reason or "policy_deny_coerce"
+   ```
+
+3. **Hot Policy Reload** (lines 461-476):
+   - Automatic reloading when policy file changes
+   - Graceful handling of file access errors
+
+#### P-2: Comprehensive PII Detection (`core/sanitize.py`)
+
+The sanitize module demonstrates thorough Japanese-language awareness:
+- Phone: 携帯・固定・国際・フリーダイヤル
+- Address: 都道府県+市区町村+番地
+- Personal ID: マイナンバー with check digit validation
+- Credit cards: Luhn algorithm validation
+
+#### P-3: Thread-Safe Rate Limiting (`api/server.py:588-642`)
+
+```python
+_rate_lock = threading.Lock()
+
+def enforce_rate_limit(...):
+    with _rate_lock:
+        _cleanup_rate_bucket_unsafe()
+        # ... rate limit logic
+```
+
+#### P-4: Memory-Efficient Log Reading (`logging/trust_log.py:82-105`)
+
+```python
+# Seek to tail for efficient last-hash retrieval
+chunk_size = min(4096, file_size)
+f.seek(file_size - chunk_size)
+```
+
+### Additional Concerns
+
+#### AC-1: Complex Pipeline Function (HIGH refactoring priority)
+
+`run_decide_pipeline()` in `pipeline.py` is ~500 lines with:
+- 20+ nested helper functions
+- Deep nesting levels (up to 5)
+- Multiple try/except blocks
+
+**Recommendation**: Split into separate phases:
+1. Evidence collection
+2. Critique/debate execution
+3. Value scoring
+4. FUJI validation
+5. Response formatting
+
+#### AC-2: Web Search Bureau Veritas Blacklist (`tools/web_search.py`)
+
+```python
+BUREAU_VERITAS_DOMAINS = {
+    "bureauveritas.com",
+    "bureauveritas.co.jp",
+    ...
+}
+```
+
+The system actively filters out "Bureau Veritas" company results to prevent confusion with "VERITAS OS". This is a reasonable disambiguation but should be documented.
+
+#### AC-3: API Error Information Disclosure
+
+```python
+# Only in debug mode - Good!
+if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+    content["raw_body"] = raw_safe
+```
+
+Debug mode properly gated, but ensure `VERITAS_DEBUG_MODE` is never set in production.
+
+### Code Quality Metrics Summary
+
+| Metric | Status |
+|--------|--------|
+| Type Hints | ✅ Comprehensive (using `from __future__ import annotations`) |
+| Docstrings | ⚠️ Mixed (Japanese comments abundant, English docstrings sparse) |
+| Error Handling | ⚠️ Many bare `except Exception` |
+| Logging | ⚠️ Mix of `print()` and `logging` |
+| Thread Safety | ✅ RLock/Lock used consistently |
+| Atomic I/O | ✅ Well implemented |
+| Test Coverage | ✅ 76 test files |
+
+### Final Assessment
+
+VERITAS OS is a **production-ready** codebase with strong security fundamentals. The hash-chained TrustLog, multi-layer FUJI safety gate, and atomic I/O patterns demonstrate mature engineering practices.
+
+**Priority fixes from original review have been addressed** (per git commit d9dc634):
+- H-5: Trust log now uses `get_last_hash()` from JSONL
+- Security fixes applied across the codebase
+
+**Remaining items** for ongoing maintenance:
+1. Continue Pickle → JSON migration
+2. Refactor large functions for maintainability
+3. Standardize logging approach
