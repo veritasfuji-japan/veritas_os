@@ -1,15 +1,14 @@
 from pathlib import Path
-import json, time, uuid, threading, os
+import json, logging, time, uuid, threading
 from typing import Dict, Any, List, Optional
 from .embedder import HashEmbedder
 from .index_cosine import CosineIndex
 from veritas_os.core.atomic_io import atomic_append_line
 
-# ★ 修正 (M-3): 環境変数で設定可能にし、ハードコードされたparents[2]を削除
-# VERITAS_MEMORY_DIR 環境変数が設定されていればそれを使用、
-# なければデフォルトでプロジェクトルート相対パスを使用
-_default_base = Path(__file__).resolve().parents[2]
-BASE_DIR = Path(os.getenv("VERITAS_MEMORY_DIR", str(_default_base)))
+logger = logging.getLogger(__name__)
+
+# プロジェクトルート基準に変更
+BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
 VERITAS_DIR = BASE_DIR / "veritas_os"
 HOME_MEMORY = VERITAS_DIR / "memory"               # ← プロジェクト内メモリ
 HOME_MEMORY.mkdir(parents=True, exist_ok=True)
@@ -164,7 +163,7 @@ class MemoryStore:
                 try:
                     raw = self.idx[kind].search(qv, k=k)
                 except Exception as e:
-                    print(f"[MemoryStore] index search error for {kind}:", e)
+                    logger.warning("[MemoryStore] index search error for %s: %s", kind, e)
                     out[kind] = []
                     continue
 
@@ -201,7 +200,7 @@ class MemoryStore:
                                 pass
                 except (OSError, IOError) as e:
                     # ファイルアクセスエラーをログ出力
-                    print(f"[MemoryStore] Failed to read {FILES[kind]}: {e}")
+                    logger.warning("[MemoryStore] Failed to read %s: %s", FILES[kind], e)
 
             # ロック外で結果を組み立て（パフォーマンス向上）
             table = {it["id"]: it for it in items}

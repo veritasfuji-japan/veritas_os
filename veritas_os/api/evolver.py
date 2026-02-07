@@ -1,9 +1,9 @@
-from typing import Any, List
-import re
-import logging
-from pathlib import Path
 import json
+import logging
+import re
 from datetime import datetime, timezone
+from typing import Any, List
+
 from .schemas import PersonaState
 from ..core.config import cfg
 
@@ -27,7 +27,6 @@ def load_persona() -> dict:
                 data = json.load(f)
             return data if isinstance(data, dict) else {}
     except Exception as e:
-        # ★ 修正 (L-2): print() を logging.warning() に変更
         logger.warning("[persona] load failed: %s", e)
     return {}
 
@@ -56,8 +55,7 @@ def save_persona(p: PersonaState) -> None:
             encoding="utf-8",
         )
     except Exception as e:
-        # ★ 修正 (L-2): print() を logging.error() に変更
-        logger.error("[persona] save failed: %s", e)
+        logger.warning("[persona] save failed: %s", e)
 
 
 def apply_persona(chosen: dict, persona: PersonaState) -> dict:

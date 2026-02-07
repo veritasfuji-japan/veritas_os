@@ -1,9 +1,12 @@
 # veritas_os/logging/paths.py
 from __future__ import annotations
 
+import logging
 import os
 import stat
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # リポジトリルート: .../veritas_clean_test2/veritas_os
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +67,7 @@ def _ensure_secure_permissions(path: Path) -> None:
         if current_mode != 0o700:
             os.chmod(path, 0o700)
     except OSError as exc:
-        print(f"[WARN] Failed to set permissions on {path}: {exc}")
+        logger.warning("Failed to set permissions on %s: %s", path, exc)
 
 
 # ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う

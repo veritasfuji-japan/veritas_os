@@ -13,8 +13,9 @@
 # - iso_now: 監査用 UTC ISO8601 時刻
 from __future__ import annotations
 
-import json
 import hashlib
+import json
+import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,8 @@ from typing import Any, Dict, Iterable, List, Optional
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
+
+logger = logging.getLogger(__name__)
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
 LOG_JSON = LOG_DIR / "trust_log.json"
@@ -301,7 +304,7 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
                     except json.JSONDecodeError:
                         continue
     except Exception as e:
-        print(f"[WARN] trust_log iterate failed: {e}")
+        logger.warning("trust_log iterate failed: %s", e)
         return
 
 
