@@ -1,0 +1,153 @@
+{
+  "project": "VERITAS OS v2.0",
+  "description": "Auditable Decision OS for LLM Agents",
+  "valuation_date": "2026-02-07",
+  "exchange_rate_usd_jpy": 150.0,
+  "codebase_metrics": {
+    "total_python_files": 160,
+    "source_files": 84,
+    "test_files": 76,
+    "total_loc": 54515,
+    "source_loc": 31680,
+    "test_loc": 22835,
+    "documentation_loc": 11418,
+    "config_loc": 1192
+  },
+  "valuation_methods": [
+    {
+      "method": "COCOMO II 再構築コスト法",
+      "description": "ソースコード量 (SLOC) から COCOMO II モデルで再構築に必要な工数・期間・コストを推定。セミデタッチドモード（新規ドメイン）で算出。",
+      "value_usd": 2735520,
+      "value_jpy": 410327982,
+      "details": {
+        "source_kloc": 31.7,
+        "effort_person_months": 187.0,
+        "schedule_months": 15.6,
+        "avg_team_size": 12.0,
+        "cost_per_person_month_usd": 10833,
+        "base_cost_usd": 2026311,
+        "overhead_factor": 1.35,
+        "total_with_overhead_usd": 2735520
+      }
+    },
+    {
+      "method": "ファンクションポイント法 (FPA)",
+      "description": "プロジェクトの機能量を IFPUG 基準の FPA で定量化。外部入出力・照会・内部ファイル・外部インターフェースを計測し、業界標準のコスト/FP 単価で価値を算出。",
+      "value_usd": 291930,
+      "value_jpy": 43789500,
+      "details": {
+        "components": {
+          "external_inputs": 6,
+          "external_outputs": 10,
+          "external_inquiries": 5,
+          "internal_files": 11,
+          "external_interfaces": 8
+        },
+        "unadjusted_fp": 263.0,
+        "value_adjustment_factor": 1.11,
+        "adjusted_fp": 291.9,
+        "cost_per_fp_usd": 1000,
+        "total_cost_usd": 291930
+      }
+    },
+    {
+      "method": "市場比較法 (Revenue Multiple)",
+      "description": "AI Safety/Governance SaaS 市場の類似企業（Robust Intelligence, Credo AI, Arthur AI 等）の取引事例から収益マルチプルを適用。3つの収益シナリオ（保守的・基準・楽観的）で算出。",
+      "value_usd": 45000000,
+      "value_jpy": 6750000000,
+      "details": {
+        "scenarios": {
+          "conservative": {
+            "description": "OSS コア + 有料サポート/SaaS モデル",
+            "potential_arr_usd": 600000,
+            "revenue_multiple": 10,
+            "valuation_usd": 6000000
+          },
+          "base": {
+            "description": "AI ガバナンス SaaS (中堅〜大企業向け)",
+            "potential_arr_usd": 3000000,
+            "revenue_multiple": 15,
+            "valuation_usd": 45000000
+          },
+          "optimistic": {
+            "description": "AI Safety プラットフォーム (グローバル展開)",
+            "potential_arr_usd": 15000000,
+            "revenue_multiple": 20,
+            "valuation_usd": 300000000
+          }
+        }
+      }
+    },
+    {
+      "method": "知的財産・無形資産価値法",
+      "description": "ソフトウェアの知的財産（アルゴリズム、設計、データ、ブランド、学術出版物）を個別に評価し積み上げる手法。",
+      "value_usd": 1580000,
+      "value_jpy": 237000000,
+      "details": {
+        "ip_assets": {
+          "core_algorithms": {
+            "description": "FUJI Gate, Hash-Chain TrustLog, ValueCore アルゴリズム",
+            "value_usd": 500000,
+            "rationale": "特許出願可能な独自アルゴリズム3件相当"
+          },
+          "decision_pipeline": {
+            "description": "Options→Evidence→Critique→Debate→Plan→Value→FUJI 7段階パイプライン",
+            "value_usd": 300000,
+            "rationale": "独自の意思決定フレームワーク設計"
+          },
+          "memory_system": {
+            "description": "MemoryOS (エピソード記憶+意味記憶+ベクトル検索)",
+            "value_usd": 200000,
+            "rationale": "LLMエージェント用の独自メモリアーキテクチャ"
+          },
+          "safety_policies": {
+            "description": "FUJI ポリシー定義 (YAML) + リスクスコアリングモデル",
+            "value_usd": 150000,
+            "rationale": "ドメイン知識を体系化した安全性ポリシー"
+          },
+          "academic_publication": {
+            "description": "Zenodo DOI 登録済み学術出版物 (英語・日本語)",
+            "value_usd": 100000,
+            "rationale": "学術的信頼性・引用可能性"
+          },
+          "test_suite": {
+            "description": "76件の包括的テストスイート (22,835 LOC)",
+            "value_usd": 150000,
+            "rationale": "品質保証基盤・回帰テスト資産"
+          },
+          "documentation": {
+            "description": "バイリンガル文書 (11,418 LOC), OpenAPI仕様",
+            "value_usd": 100000,
+            "rationale": "日英両言語の技術文書・API仕様"
+          },
+          "devops_infrastructure": {
+            "description": "Docker, GitHub Actions CI/CD, GHCR パブリッシュ",
+            "value_usd": 80000,
+            "rationale": "本番運用可能なデプロイメント基盤"
+          }
+        },
+        "total_usd": 1580000
+      }
+    }
+  ],
+  "summary": {
+    "simple_average_usd": 12401862,
+    "simple_average_jpy": 1860279371,
+    "weighted_average_usd": 12459638,
+    "weighted_average_jpy": 1868945770,
+    "valuation_range_usd": {
+      "low": 291930,
+      "high": 45000000
+    },
+    "valuation_range_jpy": {
+      "low": 43789500,
+      "high": 6750000000
+    },
+    "weights": {
+      "COCOMO II": 0.3,
+      "FPA": 0.25,
+      "Market Comparable": 0.25,
+      "IP Value": 0.2
+    }
+  }
+}
