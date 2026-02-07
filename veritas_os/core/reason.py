@@ -1,14 +1,17 @@
 # veritas_os/core/reason.py
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, List
 import asyncio
 import json
+import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List
 
 from . import llm_client
+
+logger = logging.getLogger(__name__)
 
 # ============================
 # ログパスは「このリポジトリ内」のみを見る
@@ -225,7 +228,7 @@ async def generate_reflection_template(
             ),
         )
     except Exception as e:
-        print("[ReasonOS] generate_reflection_template LLM error:", e)
+        logger.error("[ReasonOS] generate_reflection_template LLM error: %s", e)
         return {}
 
     text = ""
@@ -241,7 +244,7 @@ async def generate_reflection_template(
     try:
         data = json.loads(text)
     except Exception as e:
-        print("[ReasonOS] reflection_template json parse failed:", e)
+        logger.warning("[ReasonOS] reflection_template json parse failed: %s", e)
         return {}
 
     if not isinstance(data, dict):
@@ -288,7 +291,7 @@ async def generate_reflection_template(
         with open(META_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
     except Exception as e:
-        print("[ReasonOS] reflection_template meta_log skipped:", e)
+        logger.debug("[ReasonOS] reflection_template meta_log skipped: %s", e)
 
     return tmpl
 

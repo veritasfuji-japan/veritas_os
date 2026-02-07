@@ -26,6 +26,7 @@ Payload contracts restored (tests / server expectations):
 import asyncio
 import inspect
 import json
+import logging
 import os
 import re
 import secrets
@@ -34,6 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import uuid4
+
+logger = logging.getLogger(__name__)
 
 from .utils import (
     _safe_float,
@@ -109,7 +112,7 @@ def _to_bool(v: Any) -> bool:
 def _warn(msg: str) -> None:
     """警告メッセージを出力（環境変数で抑制可能）"""
     if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        print(msg)
+        logger.warning(msg)
 
 
 def _check_required_modules() -> None:

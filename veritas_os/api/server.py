@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import importlib
 import json
+import logging
 import os
 import re
 import secrets
@@ -15,6 +16,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional, Tuple
+
+# ---- ロガー設定（標準化: print → logging）----
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.exceptions import RequestValidationError
@@ -40,7 +44,7 @@ except Exception as _atomic_import_err:
     _HAS_ATOMIC_IO = False
     atomic_append_line = None  # type: ignore
     atomic_write_json = None  # type: ignore
-    print(f"[WARN] atomic_io import failed, using fallback: {_atomic_import_err}")
+    logger.warning("atomic_io import failed, using fallback: %s", _atomic_import_err)
 
 # ---- PII検出・マスク（sanitize.py から。失敗時はフォールバック）----
 try:
@@ -66,7 +70,7 @@ try:
 
     load_dotenv(REPO_ROOT / ".env")
 except Exception as e:
-    print(f"[WARN] dotenv load failed: {type(e).__name__}: {e}")
+    logger.warning("dotenv load failed: %s: %s", type(e).__name__, e)
 
 
 try:
@@ -208,13 +212,13 @@ DECIDE_GENERIC_ERROR = "service_unavailable"
 def _log_decide_failure(message: str, err: Optional[Exception | str]) -> None:
     """Log internal decide pipeline errors without exposing details to clients."""
     if err is None:
-        print(f"[ERROR] decide failed: {message}")
+        logger.error("decide failed: %s", message)
         return
     if isinstance(err, Exception):
         err_detail = _errstr(err)
     else:
         err_detail = str(err)
-    print(f"[ERROR] decide failed: {message} ({err_detail})")
+    logger.error("decide failed: %s (%s)", message, err_detail)
 
 
 def get_cfg() -> Any:
@@ -242,7 +246,7 @@ def get_cfg() -> Any:
             cors_allow_origins=[],
             api_key="",
         )
-        print(f"[WARN] cfg import failed -> fallback: {_cfg_state.err}")
+        logger.warning("cfg import failed -> fallback: %s", _cfg_state.err)
         return _cfg_state.obj
 
 
@@ -266,7 +270,7 @@ def get_decision_pipeline() -> Optional[Any]:
     except Exception as e:
         _pipeline_state.err = _errstr(e)
         _pipeline_state.obj = None
-        print(f"[WARN] decision pipeline import failed: {_pipeline_state.err}")
+        logger.warning("decision pipeline import failed: %s", _pipeline_state.err)
         return None
 
 
@@ -303,7 +307,7 @@ def get_fuji_core() -> Optional[Any]:
     except Exception as e:
         _fuji_state.err = _errstr(e)
         _fuji_state.obj = None
-        print(f"[WARN] fuji_core import failed: {_fuji_state.err}")
+        logger.warning("fuji_core import failed: %s", _fuji_state.err)
         return None
 
 
@@ -336,7 +340,7 @@ def get_value_core() -> Optional[Any]:
     except Exception as e:
         _value_core_state.err = _errstr(e)
         _value_core_state.obj = None
-        print(f"[WARN] value_core import failed: {_value_core_state.err}")
+        logger.warning("value_core import failed: %s", _value_core_state.err)
         return None
 
 
@@ -378,7 +382,7 @@ def get_memory_store() -> Optional[Any]:
     except Exception as e:
         _memory_store_state.err = _errstr(e)
         _memory_store_state.obj = None
-        print(f"[WARN] memory store import failed: {_memory_store_state.err}")
+        logger.warning("memory store import failed: %s", _memory_store_state.err)
         return None
 
 
@@ -410,7 +414,7 @@ API_KEY_DEFAULT = ""  # ★ セキュリティ修正: 起動時にキーを保�
 
 # 起動時に一度だけ警告を出力（テスト互換性のため）
 if not os.getenv("VERITAS_API_KEY"):
-    print("[WARN] VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
+    logger.warning("VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -880,7 +884,7 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
         # Security: Check file size before loading to prevent memory exhaustion
         file_size = path.stat().st_size
         if file_size > MAX_LOG_FILE_SIZE:
-            print(f"[WARN] Log file too large ({file_size} bytes), skipping load")
+            logger.warning("Log file too large (%d bytes), skipping load", file_size)
             return []
 
         with open(path, "r", encoding="utf-8") as f:
@@ -923,7 +927,7 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        print(f"[WARN] LOG_DIR mkdir failed: {_errstr(e)}")
+        logger.warning("LOG_DIR mkdir failed: %s", _errstr(e))
         return
 
     # 全ての書き込みをロックで保護（競合状態を防止）
@@ -936,7 +940,7 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
                 with open(log_jsonl, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
         except Exception as e:
-            print(f"[WARN] write trust_log.jsonl failed: {_errstr(e)}")
+            logger.warning("write trust_log.jsonl failed: %s", _errstr(e))
 
         # JSON への追記
         items = _load_logs_json(log_json)
@@ -944,7 +948,7 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
         try:
             _save_json(log_json, items)
         except Exception as e:
-            print(f"[WARN] write trust_log.json failed: {_errstr(e)}")
+            logger.warning("write trust_log.json failed: %s", _errstr(e))
 
 
 def write_shadow_decide(
@@ -959,7 +963,7 @@ def write_shadow_decide(
     try:
         shadow_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
-        print(f"[WARN] SHADOW_DIR mkdir failed: {_errstr(e)}")
+        logger.warning("SHADOW_DIR mkdir failed: %s", _errstr(e))
         return
 
     now_utc = datetime.now(timezone.utc)
@@ -977,7 +981,7 @@ def write_shadow_decide(
         with open(out, "w", encoding="utf-8") as f:
             json.dump(rec, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        print(f"[WARN] write shadow decide failed: {_errstr(e)}")
+        logger.warning("write shadow decide failed: %s", _errstr(e))
 
 
 # ==============================
@@ -1195,7 +1199,7 @@ def memory_put(body: dict):
                 _store_put(store, user_id, key, value)
                 legacy_saved = True
             except Exception as e:
-                print("[MemoryOS][legacy] Error:", e)
+                logger.warning("[MemoryOS][legacy] Error: %s", e)
 
         kind = (body.get("kind") or "semantic").strip().lower()
         if kind not in VALID_MEMORY_KINDS:
@@ -1229,7 +1233,7 @@ def memory_put(body: dict):
                     )
                     new_id = episode_key
             except Exception as e:
-                print("[MemoryOS][vector] Error:", e)
+                logger.warning("[MemoryOS][vector] Error: %s", e)
 
         return {
             "ok": True,
@@ -1244,7 +1248,7 @@ def memory_put(body: dict):
         }
 
     except Exception as e:
-        print("[MemoryOS] Error:", e)
+        logger.error("[MemoryOS] Error: %s", e)
         return {"ok": False, "error": str(e)}
 
 
@@ -1280,7 +1284,7 @@ async def memory_search(payload: dict):
         return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
 
     except Exception as e:
-        print("[MemoryOS][search] Error:", e)
+        logger.error("[MemoryOS][search] Error: %s", e)
         return {"ok": False, "error": str(e), "hits": [], "count": 0}
 
 
@@ -1325,7 +1329,7 @@ def metrics():
                 for _ in f:
                     lines += 1
     except Exception as e:
-        print(f"[WARN] read trust_log.jsonl failed: {_errstr(e)}")
+        logger.warning("read trust_log.jsonl failed: %s", _errstr(e))
 
     return {
         "decide_files": len(files),
@@ -1372,7 +1376,7 @@ def trust_feedback(body: dict):
 
     except Exception as e:
         # Log the detailed error server-side, but do not expose it to the client.
-        print("[Trust] feedback failed:", e)
+        logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
 
 

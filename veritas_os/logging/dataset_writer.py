@@ -13,19 +13,21 @@ VERITAS Dataset Writer（拡張版）
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-import json
 import hashlib
+import json
+import logging
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from veritas_os.core.config import cfg
 from veritas_os.core.decision_status import (
     DecisionStatus,
     normalize_status,
 )
+
+logger = logging.getLogger(__name__)
 
 # ==========================
 # パス設定
@@ -226,14 +228,14 @@ def append_dataset_record(
     if validate:
         valid, error = validate_record(record)
         if not valid:
-            print(f"[ERROR] Invalid record: {error}")
+            logger.error("Invalid record: %s", error)
             return
 
     try:
         with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
     except Exception as e:
-        print(f"[WARN] append_dataset_record failed: {e}")
+        logger.warning("append_dataset_record failed: %s", e)
 
 
 # ==========================

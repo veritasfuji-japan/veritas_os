@@ -1,10 +1,14 @@
-from typing import Any, List
-import re
-from pathlib import Path
 import json
+import logging
+import re
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, List
+
 from .schemas import PersonaState
 from ..core.config import cfg
+
+logger = logging.getLogger(__name__)
 
 PERSONA_JSON = cfg.log_dir / "persona.json"
 
@@ -24,7 +28,7 @@ def load_persona() -> dict:
                 data = json.load(f)
             return data if isinstance(data, dict) else {}
     except Exception as e:
-        print("[persona] load failed:", e)
+        logger.warning("[persona] load failed: %s", e)
     return {}
 
 
@@ -52,7 +56,7 @@ def save_persona(p: PersonaState) -> None:
             encoding="utf-8",
         )
     except Exception as e:
-        print(f"[persona] save failed: {e}")
+        logger.warning("[persona] save failed: %s", e)
 
 
 def apply_persona(chosen: dict, persona: PersonaState) -> dict:

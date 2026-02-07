@@ -1,4 +1,5 @@
 # veritas/memory/index_cosine.py
+import logging
 import os
 import threading
 
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import List, Tuple, Iterable, Optional, Any
 
 from veritas_os.core.atomic_io import atomic_write_npz
+
+logger = logging.getLogger(__name__)
 
 
 class PickleSecurityWarning(UserWarning):
@@ -78,11 +81,10 @@ class CosineIndex:
                 pass
 
             if _allow_legacy_pickle_npz():
-                import sys
-                print(
-                    f"[CosineIndex] WARNING: Loading legacy pickle-based npz file: {self.path}. "
+                logger.warning(
+                    "[CosineIndex] Loading legacy pickle-based npz file: %s. "
                     "This is a security risk. Re-save the index to migrate.",
-                    file=sys.stderr,
+                    self.path,
                 )
                 try:
                     data = np.load(self.path, allow_pickle=True)
@@ -90,9 +92,9 @@ class CosineIndex:
                     self.ids = [str(i) for i in data["ids"].tolist()]
                     # Immediately re-save without pickle to migrate
                     self.save()
-                    print(
-                        f"[CosineIndex] Migrated legacy pickle file to safe format: {self.path}",
-                        file=sys.stderr,
+                    logger.info(
+                        "[CosineIndex] Migrated legacy pickle file to safe format: %s",
+                        self.path,
                     )
                     return
                 except Exception:
@@ -113,7 +115,7 @@ class CosineIndex:
                     ids=np.array(self.ids, dtype=str),
                 )
             except Exception as e:
-                print("[CosineIndex] save failed:", e)
+                logger.error("[CosineIndex] save failed: %s", e)
 
     # ---- 基本操作 ------------------------------------------------
     @property

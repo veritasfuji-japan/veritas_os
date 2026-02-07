@@ -9,12 +9,15 @@ VERITAS kernel.py v2-compatible - 後方互換性を維持した二重実行解�
 """
 from __future__ import annotations
 
+import logging
 import re
-import uuid
-import time
 import sys
+import time
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 from .types import (
     ToolResult,
@@ -511,7 +514,7 @@ async def decide(
     except Exception as e:
         persona = {}
         persona_bias = {}
-        print(f"[kernel] adapt.load_persona failed: {e}")
+        logger.warning("[kernel] adapt.load_persona failed: %s", e)
 
     # WorldModel simulate
     world_sim = None

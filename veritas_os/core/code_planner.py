@@ -14,15 +14,17 @@ VERITAS self-hosting 専用の「コード変更プランナー」
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
-
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import world as world_model
 from .utils import _safe_float
+
+logger = logging.getLogger(__name__)
 
 # ==== パス設定 ====
 
@@ -46,7 +48,7 @@ def _load_json(path: Path, default: Any = None) -> Any:
             with path.open("r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception as e:
-        print(f"[code_planner] load_json error at {path}: {e}")
+        logger.warning("[code_planner] load_json error at %s: %s", path, e)
     return default
 
 
