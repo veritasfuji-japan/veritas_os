@@ -70,6 +70,20 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
 
         # Atomic rename (POSIX guarantees atomicity)
         os.replace(tmp_path, path)
+        
+        # ★ 修正 (M-1): ディレクトリの fsync を追加
+        # ext4 data=ordered (デフォルト) では、rename後にディレクトリをfsyncしないと
+        # クラッシュ時にrenameが失われる可能性がある
+        try:
+            dir_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except (OSError, AttributeError):
+            # Windows や一部のファイルシステムでは失敗する可能性がある
+            # その場合は無視して続行（ベストエフォート）
+            pass
     except Exception:
         # Clean up temp file on failure
         if fd >= 0:
@@ -166,8 +180,25 @@ def atomic_write_npz(
         # Save to temp file
         np.savez(tmp_path, **arrays)
 
+        # ★ C-2 修正: fsync を追加
+        # np.savez() 後、OS バッファをディスクにフラッシュしないと
+        # クラッシュ時にデータが破損する可能性がある
+        with open(tmp_path, 'rb') as f:
+            os.fsync(f.fileno())
+
         # Atomic rename
         os.replace(tmp_path, path)
+
+        # ★ ディレクトリの fsync も追加（M-1 と同様）
+        try:
+            dir_fd = os.open(str(path.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except (OSError, AttributeError):
+            # Windows や一部のファイルシステムでは失敗する可能性がある
+            pass
     except Exception:
         try:
             os.unlink(tmp_path)

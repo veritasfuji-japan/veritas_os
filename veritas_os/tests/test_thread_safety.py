@@ -320,3 +320,99 @@ class TestRLockReentrancy:
 
         # Check size (uses lock) after add (which also uses lock)
         assert idx.size == 1
+
+
+class TestDatasetWriterThreadSafety:
+    """
+    Tests for dataset_writer.py thread safety (C-1 fix).
+
+    ★ C-1: dataset_writer.append_dataset_record にスレッド同期を追加。
+    このテストは並行書き込み時にデータ破損しないことを確認します。
+    """
+
+    def test_has_lock(self):
+        """Test that dataset_writer has a lock."""
+        from veritas_os.logging import dataset_writer
+        assert hasattr(dataset_writer, "_dataset_lock")
+        assert isinstance(dataset_writer._dataset_lock, type(threading.RLock()))
+
+    def test_concurrent_append_no_corruption(self, tmp_path: Path):
+        """
+        Test that concurrent appends don't corrupt the JSONL file.
+
+        Multiple threads write records simultaneously and we verify:
+        - All records are written
+        - Each line is valid JSON
+        - No interleaving/corruption
+        """
+        import json
+        from veritas_os.logging.dataset_writer import (
+            build_dataset_record,
+            append_dataset_record,
+        )
+
+        path = tmp_path / "dataset.jsonl"
+        errors: List[Exception] = []
+        lock = threading.Lock()
+
+        def dummy_request(i: int):
+            return {"query": f"Query {i}", "context": {}}
+
+        def dummy_response(i: int):
+            return {
+                "chosen": {"id": f"opt{i}", "title": f"Option {i}", "score": 0.9},
+                "alternatives": [],
+                "evidence": [],
+                "fuji": {"status": "ok", "reasons": [], "violations": []},
+                "gate": {"decision_status": "allow", "risk": 0.1, "telos_score": 0.8},
+                "memory": {"used": False, "citations": 0},
+            }
+
+        def dummy_meta():
+            return {"api_version": "v2.0", "kernel_version": "2.0.0"}
+
+        def append_records(thread_id: int, count: int):
+            try:
+                for i in range(count):
+                    rec = build_dataset_record(
+                        dummy_request(thread_id * 100 + i),
+                        dummy_response(thread_id * 100 + i),
+                        dummy_meta(),
+                    )
+                    append_dataset_record(rec, path=path, validate=True)
+            except Exception as e:
+                with lock:
+                    errors.append(e)
+
+        # Start multiple threads
+        threads = []
+        num_threads = 4
+        items_per_thread = 10
+        for t in range(num_threads):
+            thread = threading.Thread(target=append_records, args=(t, items_per_thread))
+            threads.append(thread)
+
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        # Check no errors
+        assert len(errors) == 0, f"Errors occurred: {errors}"
+
+        # Verify all records were written and are valid JSON
+        with path.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        assert len(lines) == num_threads * items_per_thread, \
+            f"Expected {num_threads * items_per_thread} lines, got {len(lines)}"
+
+        # Each line should be valid JSON
+        for i, line in enumerate(lines):
+            try:
+                data = json.loads(line)
+                assert "ts" in data
+                assert "request" in data
+                assert "response" in data
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Line {i+1} is not valid JSON: {e}\nContent: {line[:200]}...")

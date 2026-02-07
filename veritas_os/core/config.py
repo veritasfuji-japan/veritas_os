@@ -7,6 +7,7 @@ VERITAS OS 設定モジュール
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from dataclasses import dataclass, field
@@ -17,7 +18,13 @@ def _parse_cors_origins(raw_value: str) -> list[str]:
     """Parse comma-separated CORS origins from an env var into a clean list."""
     if not raw_value:
         return []
-    return [value.strip() for value in raw_value.split(",") if value.strip()]
+    values = [value.strip() for value in raw_value.split(",") if value.strip()]
+    if "*" in values:
+        logging.getLogger(__name__).warning(
+            "VERITAS_CORS_ALLOW_ORIGINS contains '*'. "
+            "Credentials are enabled, so '*' is ignored for safety."
+        )
+    return [value for value in values if value != "*"]
 
 
 def _parse_float(env_key: str, default: float) -> float:

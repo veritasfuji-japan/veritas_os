@@ -403,6 +403,38 @@ app.add_middleware(
 )
 
 
+# ★ C-3 修正: リクエストボディサイズ制限 (DoS対策)
+# デフォルト: 10MB。環境変数で設定可能。
+MAX_REQUEST_BODY_SIZE = int(os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024))
+
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    """
+    ★ C-3 修正: リクエストボディサイズ制限ミドルウェア
+
+    巨大なペイロードによるDoS攻撃を防止:
+    - Content-Length ヘッダーで事前チェック
+    - Pydantic バリデーション前にブロック
+    """
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_REQUEST_BODY_SIZE:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Max size: {MAX_REQUEST_BODY_SIZE} bytes"}
+                )
+        except (ValueError, TypeError):
+            # ★ 修正: 不正な Content-Length は 400 Bad Request を返す
+            # 悪意のあるリクエストがバリデーションをバイパスするのを防止
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Invalid Content-Length header"}
+            )
+    return await call_next(request)
+
+
 # ==============================
 # API Key & HMAC 認証
 # ==============================

@@ -996,3 +996,90 @@ def test_decide_basic_requires_api_key():
     body = {"query": "hello", "user_id": "userX"}
     r = client.post("/v1/decide/basic", json=body)
     assert r.status_code in (401, 403, 404, 422)
+
+
+# -------------------------------------------------
+# C-3: Request Body Size Limit (DoS対策)
+# -------------------------------------------------
+
+
+def test_request_body_size_limit_blocks_large_payload(monkeypatch):
+    """
+    ★ C-3 修正テスト: 巨大なリクエストボディは 413 でブロックされる
+
+    MAX_REQUEST_BODY_SIZE を超える Content-Length を持つリクエストは
+    Pydantic バリデーション前にミドルウェアでブロックされる。
+    """
+    # テスト用に小さい制限値を設定
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_SIZE", 1000)
+
+    # Content-Length が制限を超えるリクエストを送信
+    # ヘッダーだけで判定するので、実際の本文は小さくても良い
+    r = client.post(
+        "/v1/decide",
+        json={"query": "test"},
+        headers={
+            "X-API-Key": "test-api-key",
+            "Content-Length": "2000000",  # 2MB - 制限の1000バイトを超える
+        },
+    )
+
+    # 413 Payload Too Large を返す
+    assert r.status_code == 413
+    data = r.json()
+    assert "too large" in data["detail"].lower()
+
+
+def test_request_body_size_limit_rejects_malformed_content_length(monkeypatch):
+    """
+    ★ C-3 修正テスト: 不正な Content-Length は 400 でブロックされる
+
+    数値でない Content-Length は悪意のあるリクエストの可能性があるため、
+    400 Bad Request を返す。
+    """
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_SIZE", 1000)
+
+    r = client.post(
+        "/v1/decide",
+        json={"query": "test"},
+        headers={
+            "X-API-Key": "test-api-key",
+            "Content-Length": "not-a-number",
+        },
+    )
+
+    # 400 Bad Request を返す
+    assert r.status_code == 400
+    data = r.json()
+    assert "invalid" in data["detail"].lower()
+
+
+def test_request_body_size_limit_allows_normal_payload(monkeypatch):
+    """
+    ★ C-3 修正テスト: 通常サイズのリクエストは通過する
+
+    MAX_REQUEST_BODY_SIZE 以下の Content-Length を持つリクエストは
+    ミドルウェアを通過して通常の処理が行われる。
+    """
+    # テスト用に十分大きい制限値を設定
+    monkeypatch.setattr(server, "MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024)  # 10MB
+
+    r = client.post(
+        "/v1/decide",
+        json={"query": "test"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    # 413 以外のステータス（認証済みなので処理される）
+    assert r.status_code != 413
+
+
+def test_max_request_body_size_is_configurable():
+    """
+    ★ C-3 修正テスト: MAX_REQUEST_BODY_SIZE が存在し設定可能なことを確認
+
+    デフォルトは 10MB (10 * 1024 * 1024) で、環境変数で変更可能。
+    """
+    assert hasattr(server, "MAX_REQUEST_BODY_SIZE")
+    assert isinstance(server.MAX_REQUEST_BODY_SIZE, int)
+    assert server.MAX_REQUEST_BODY_SIZE > 0

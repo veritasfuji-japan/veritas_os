@@ -17,6 +17,7 @@ import hashlib
 import json
 import logging
 import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -26,6 +27,7 @@ from veritas_os.core.decision_status import (
     DecisionStatus,
     normalize_status,
 )
+from veritas_os.core.atomic_io import atomic_append_line
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,10 @@ DATASET_DIR: Path = cfg.dataset_dir
 DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
 DATASET_JSONL: Path = DATASET_DIR / "dataset.jsonl"
+
+# ★ C-1 修正: スレッドセーフ化のためのロック
+# FastAPI の並行リクエストでデータ破損を防止
+_dataset_lock = threading.RLock()
 
 
 # ==========================
@@ -224,6 +230,10 @@ def append_dataset_record(
 ) -> None:
     """
     データセットに JSONL 形式で1行追記
+
+    ★ C-1 修正: スレッドセーフ化
+    - RLock による同時書き込み保護
+    - atomic_append_line による fsync 保証
     """
     if validate:
         valid, error = validate_record(record)
@@ -232,8 +242,9 @@ def append_dataset_record(
             return
 
     try:
-        with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        # ★ スレッドセーフ: ロックを取得して排他制御
+        with _dataset_lock:
+            atomic_append_line(path, json.dumps(record, ensure_ascii=False))
     except Exception as e:
         logger.warning("append_dataset_record failed: %s", e)
 
