@@ -55,6 +55,7 @@ def _sha256_dict(d: Dict[str, Any]) -> str:
     try:
         s = json.dumps(d, ensure_ascii=False, sort_keys=True)
     except Exception:
+        logger.debug("_sha256_dict: JSON serialization failed, falling back to str()", exc_info=True)
         s = str(d)
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
@@ -63,7 +64,7 @@ def _f2(x: Any, default: float = 0.0) -> float:
     """安全な float 変換（失敗時は default）"""
     try:
         return float(x)
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 

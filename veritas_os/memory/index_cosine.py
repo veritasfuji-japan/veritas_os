@@ -70,7 +70,7 @@ class CosineIndex:
             self._load()
 
     # ---- 永続化 -------------------------------------------------
-    def _load(self):
+    def _load(self) -> None:
         with self._lock:
             try:
                 data = np.load(self.path, allow_pickle=False)
@@ -112,7 +112,7 @@ class CosineIndex:
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)
             self.ids = []
 
-    def save(self):
+    def save(self) -> None:
         if self.path is None:
             return
         with self._lock:

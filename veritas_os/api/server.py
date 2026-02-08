@@ -50,9 +50,10 @@ except Exception as _atomic_import_err:
 try:
     from veritas_os.core.sanitize import mask_pii as _sanitize_mask_pii
     _HAS_SANITIZE = True
-except Exception:
+except Exception as _sanitize_import_err:
     _HAS_SANITIZE = False
     _sanitize_mask_pii = None  # type: ignore
+    logger.debug("sanitize import failed, PII masking disabled: %s", _sanitize_import_err)
 
 # ============================================================
 # ISSUE-4 方針:
@@ -75,7 +76,8 @@ except Exception as e:
 
 try:
     from veritas_os.core.utils import utc_now_iso_z
-except Exception:
+except Exception as _utils_import_err:
+    logger.debug("utils import failed, using fallback utc_now_iso_z: %s", _utils_import_err)
     def utc_now_iso_z() -> str:  # type: ignore[misc]
         """UTC now helper（fallback: utils import failed）"""
         return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
