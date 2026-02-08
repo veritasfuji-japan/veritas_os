@@ -16,9 +16,9 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 |----------|-------|-------|----------|-----------|
 | CRITICAL | 3     | 3     | 0        | 100%      |
 | HIGH     | 12    | 6     | 6        | 50%       |
-| MEDIUM   | 18    | 10    | 8        | 56%       |
-| LOW      | 9     | 2     | 7        | 22%       |
-| **TOTAL**| 42    | 21    | 21       | **50%**   |
+| MEDIUM   | 20    | 12    | 8        | 60%       |
+| LOW      | 10    | 3     | 7        | 30%       |
+| **TOTAL**| 45    | 24    | 21       | **53%**   |
 
 ---
 
@@ -221,6 +221,29 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 ✅ **Information Disclosure**: Internal error details gated behind debug mode (M-13)
 ✅ **Input Validation**: max_results bounded (M-15), embedder input limits (M-17)
 ✅ **JSON Serialization**: LLM safety payload properly serialized (M-16)
+✅ **File Permissions**: Restrictive permissions (0o600) for atomic append and lock files (M-19, M-20)
+
+---
+
+## New Findings (2026-02-08 - Follow-up Review)
+
+### ✅ M-19: World-Readable File Permissions in atomic_append_line
+**Status**: FIXED
+**File**: `core/atomic_io.py:238`
+**Problem**: `atomic_append_line()` creates files with `0o644` (world-readable). Trust logs and dataset files contain sensitive decision data that should not be readable by other system users.
+**Fix**: Changed to `0o600` (owner read/write only).
+
+### ✅ M-20: World-Readable Lock File in world.py
+**Status**: FIXED
+**File**: `core/world.py:262`
+**Problem**: Lock file created with `0o644` permissions. Lock files should be restricted to the owner.
+**Fix**: Changed to `0o600`.
+
+### ✅ L-8: Misindented Comment in value_core.py
+**Status**: FIXED
+**File**: `core/value_core.py:342`
+**Problem**: Comment block `# ==============================` was accidentally indented inside `rebalance_from_trust_log()` function body while the rest of the comment block was at module level.
+**Fix**: Moved comment to module level (consistent indentation).
 
 ---
 
@@ -236,6 +259,9 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 7. ✅ Fix JSON serialization in LLM safety (M-16)
 8. ✅ Add input size limits to HashEmbedder (M-17)
 9. ✅ Add error logging to index_cosine.py (M-18)
+10. ✅ Restrict file permissions for atomic append (M-19)
+11. ✅ Restrict lock file permissions (M-20)
+12. ✅ Fix misindented comment in value_core.py (L-8)
 
 ### Short-term Recommendations (Next PR)
 1. Set hard deadline for pickle removal (H-8)
@@ -255,7 +281,7 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 - ✅ atomic_io tests: All 11 tests pass
 - ✅ Code review: No issues found
 - ✅ CodeQL security scan: No alerts
-- ✅ Full test suite: 1052 passed (1 skipped - unrelated async test)
+- ✅ Full test suite: 1079 passed (0 failed, excluding unrelated async test)
 
 ---
 
@@ -274,5 +300,6 @@ The codebase is now more robust with:
 - Proper JSON serialization in LLM safety calls
 - Error logging instead of silent swallowing in index operations
 - Internal error details gated behind debug mode
+- Restrictive file permissions (0o600) for sensitive files
 
 The deferred issues should be addressed in future PRs as part of planned architectural improvements.

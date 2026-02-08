@@ -339,7 +339,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
     prof.save()
     logger.info("ValueCore rebalanced successfully at %s", time.strftime('%Y-%m-%d %H:%M:%S'))
 
-    # ==============================
+# ==============================
 #   Trust Log への1行追記
 # ==============================
 def append_trust_log(
