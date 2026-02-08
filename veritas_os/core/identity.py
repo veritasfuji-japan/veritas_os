@@ -14,8 +14,11 @@ from __future__ import annotations
 import re
 from typing import FrozenSet
 
-# --- 定数 ---
-MAX_TITLE_LENGTH = 500
+# API スキーマ (veritas_os/api/schemas.py) と統一した上限値
+try:
+    from veritas_os.api.schemas import MAX_TITLE_LENGTH  # 1000
+except ImportError:  # pragma: no cover — schemas が無い環境用フォールバック
+    MAX_TITLE_LENGTH = 1000
 
 # FUJI Gate (fuji.py) の BANNED_KEYWORDS_FALLBACK と整合を取る
 _BANNED_KEYWORDS: FrozenSet[str] = frozenset({

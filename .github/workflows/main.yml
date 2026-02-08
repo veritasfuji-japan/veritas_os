@@ -47,9 +47,9 @@ jobs:
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \
-            -s B101,B311,B404,B603,B607 \
+            -s B101,B104,B311,B404,B603,B607 \
             --severity-level medium \
-            -f txt || true
+            -f txt
 
   # ============================================================
   # Test matrix
