@@ -530,9 +530,6 @@ def _get_api_secret() -> bytes:
     - この場合、verify_signature()は500エラーを返し、HMAC認証は無効化される
     - 本番環境では必ず安全なシークレットを設定すること
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
     # テスト用: API_SECRET が明示的に設定されていればそれを使用
     global API_SECRET
     if API_SECRET:
@@ -1134,10 +1131,11 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 def fuji_validate(payload: dict):
     fc = get_fuji_core()
     if fc is None:
+        logger.warning("fuji_validate: fuji_core unavailable: %s", _fuji_state.err)
         # Return 503 as JSONResponse to ensure proper format
         return JSONResponse(
             status_code=503,
-            content={"detail": f"fuji_core unavailable: {_fuji_state.err}"}
+            content={"detail": "fuji_core unavailable"}
         )
 
     action = payload.get("action", "") or ""
@@ -1246,7 +1244,8 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
-        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}"}
+        logger.warning("memory_put: memory store unavailable: %s", _memory_store_state.err)
+        return {"ok": False, "error": "memory store unavailable"}
 
     try:
         user_id = body.get("user_id", "anon")
@@ -1309,14 +1308,15 @@ def memory_put(body: dict):
 
     except Exception as e:
         logger.error("[MemoryOS] Error: %s", e)
-        return {"ok": False, "error": str(e)}
+        return {"ok": False, "error": "memory operation failed"}
 
 
 @app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
-        return {"ok": False, "error": f"memory store unavailable: {_memory_store_state.err}", "hits": [], "count": 0}
+        logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
+        return {"ok": False, "error": "memory store unavailable", "hits": [], "count": 0}
 
     try:
         q = payload.get("query", "")
@@ -1345,7 +1345,7 @@ async def memory_search(payload: dict):
 
     except Exception as e:
         logger.error("[MemoryOS][search] Error: %s", e)
-        return {"ok": False, "error": str(e), "hits": [], "count": 0}
+        return {"ok": False, "error": "memory search failed", "hits": [], "count": 0}
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
@@ -1359,8 +1359,7 @@ def memory_get(body: dict):
         value = _store_get(store, body["user_id"], body["key"])
         return {"ok": True, "value": value}
     except Exception as e:
-        import logging as _logging
-        _logging.getLogger(__name__).error("memory_get failed: %s", e)
+        logger.error("memory_get failed: %s", e)
         return {"ok": False, "error": "memory retrieval failed", "value": None}
 
 
@@ -1419,7 +1418,8 @@ def trust_feedback(body: dict):
     """
     vc = get_value_core()
     if vc is None:
-        return {"status": "error", "detail": f"value_core unavailable: {_value_core_state.err}"}
+        logger.warning("trust_feedback: value_core unavailable: %s", _value_core_state.err)
+        return {"status": "error", "detail": "value_core unavailable"}
 
     try:
         uid = (body.get("user_id") or "anon")
