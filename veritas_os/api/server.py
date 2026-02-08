@@ -435,6 +435,19 @@ async def limit_body_size(request: Request, call_next):
     return await call_next(request)
 
 
+# ★ M-14 修正: HTTPセキュリティヘッダーミドルウェア
+# クリックジャッキング、MIMEスニッフィング、XSS攻撃を防止
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 # ==============================
 # API Key & HMAC 認証
 # ==============================
@@ -852,7 +865,7 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     }
 
     # Only include raw_body in debug mode (when env var is set)
-    if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+    if _is_debug_mode():
         raw_body_bytes = await request.body()
         raw = raw_body_bytes.decode("utf-8", "replace") if raw_body_bytes else ""
         # Apply PII masking and truncate to prevent large payloads
@@ -865,6 +878,12 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 # ==============================
 # Health / Status (must always work)
 # ==============================
+
+
+def _is_debug_mode() -> bool:
+    """VERITAS_DEBUG_MODE が有効かどうかを判定する。"""
+    return os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+
 
 @app.get("/")
 def root():
@@ -882,16 +901,23 @@ def health():
 @app.get("/api/status")
 def status():
     expected = (_get_expected_api_key() or "").strip()
-    return {
+    result = {
         "ok": True,
         "version": "veritas-api 1.0.3",
         "uptime": int(time.time() - START_TS),
         "server_time": utc_now_iso_z(),
         "pipeline_ok": get_decision_pipeline() is not None,
         "api_key_configured": bool(expected),
-        "cfg_error": _cfg_state.err,
-        "pipeline_error": _pipeline_state.err,
     }
+    # ★ M-13 修正: 内部エラー詳細はデバッグモード時のみ公開
+    # 本番環境では実装の詳細が漏洩するのを防止
+    if _is_debug_mode():
+        result["cfg_error"] = _cfg_state.err
+        result["pipeline_error"] = _pipeline_state.err
+    else:
+        result["cfg_error"] = bool(_cfg_state.err)
+        result["pipeline_error"] = bool(_pipeline_state.err)
+    return result
 
 
 # ==============================
@@ -1363,15 +1389,21 @@ def metrics():
     except Exception as e:
         logger.warning("read trust_log.jsonl failed: %s", _errstr(e))
 
-    return {
+    result = {
         "decide_files": len(files),
         "trust_jsonl_lines": lines,
         "last_decide_at": last_at,
         "server_time": utc_now_iso_z(),
         "pipeline_ok": get_decision_pipeline() is not None,
-        "pipeline_error": _pipeline_state.err,
-        "cfg_error": _cfg_state.err,
     }
+    # ★ M-13 修正: 内部エラー詳細はデバッグモード時のみ公開
+    if _is_debug_mode():
+        result["pipeline_error"] = _pipeline_state.err
+        result["cfg_error"] = _cfg_state.err
+    else:
+        result["pipeline_error"] = bool(_pipeline_state.err)
+        result["cfg_error"] = bool(_cfg_state.err)
+    return result
 
 
 # ==============================

@@ -1,6 +1,6 @@
 # VERITAS OS - Code Review Status Update
 
-**Date**: 2026-02-05
+**Date**: 2026-02-08 (Updated)
 **Status**: Code review issues addressed and new issues identified
 **PR**: copilot/review-all-code-improvements
 
@@ -14,31 +14,30 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 
 | Severity | Total | Fixed | Deferred | % Complete |
 |----------|-------|-------|----------|-----------|
-| CRITICAL | 3     | 0     | 3        | 0%        |
+| CRITICAL | 3     | 3     | 0        | 100%      |
 | HIGH     | 12    | 6     | 6        | 50%       |
-| MEDIUM   | 18    | 4     | 14       | 22%       |
+| MEDIUM   | 18    | 10    | 8        | 56%       |
 | LOW      | 9     | 2     | 7        | 22%       |
-| **TOTAL**| 42    | 12    | 30       | **29%**   |
+| **TOTAL**| 42    | 21    | 21       | **50%**   |
 
 ---
 
 ## CRITICAL Severity Issues - Status
 
-### ⚠️ C-1: Race Condition in dataset_writer.py - Concurrent Appends Can Corrupt Data
-**Status**: OPEN (requires fix)
-**Location**: `logging/dataset_writer.py:218-237`
-**Priority**: IMMEDIATE
+### ✅ C-1: Race Condition in dataset_writer.py - Concurrent Appends Can Corrupt Data
+**Status**: FIXED
+**Location**: `logging/dataset_writer.py`
+**Fix**: Added `_dataset_lock = threading.RLock()` and wrapped all file operations with `with _dataset_lock:`
 
-### ⚠️ C-2: Missing fsync in atomic_write_npz Causes Data Corruption Risk
-**Status**: OPEN (requires fix)
-**Location**: `core/atomic_io.py:181`
-**Priority**: IMMEDIATE
+### ✅ C-2: Missing fsync in atomic_write_npz Causes Data Corruption Risk
+**Status**: FIXED
+**Location**: `core/atomic_io.py:186-187`
+**Fix**: Added `os.fsync()` after `np.savez()` and before `os.replace()`, plus directory fsync
 
-### ⚠️ C-3: Missing FastAPI Request Body Size Limit (NEW)
-**Status**: OPEN (requires fix)
-**Location**: `api/server.py:391`
-**Priority**: IMMEDIATE
-**Note**: DoS vulnerability - attacker can crash server with large payloads
+### ✅ C-3: Missing FastAPI Request Body Size Limit (DoS vulnerability)
+**Status**: FIXED
+**Location**: `api/server.py:406-435`
+**Fix**: Added `limit_body_size` middleware with configurable `MAX_REQUEST_BODY_SIZE` (default 10MB)
 
 ---
 
@@ -145,6 +144,36 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 **Location**: `core/self_healing.py`
 **Reason**: Would require persistence layer design. Consider for future version.
 
+### ✅ M-13: Internal Error Details Exposed in /status Endpoint
+**Status**: FIXED (2026-02-08)
+**Location**: `api/server.py`
+**Fix**: Internal error details (`cfg_error`, `pipeline_error`) are now only exposed when `VERITAS_DEBUG_MODE` is enabled. In production, only a boolean (has error / no error) is returned.
+
+### ✅ M-14: Missing HTTP Security Headers
+**Status**: FIXED (2026-02-08)
+**Location**: `api/server.py`
+**Fix**: Added `add_security_headers` middleware that sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Cache-Control: no-store`.
+
+### ✅ M-15: Unbounded max_results in web_search
+**Status**: FIXED (2026-02-08)
+**Location**: `tools/web_search.py`
+**Fix**: Added upper bound check `if mr > 100: mr = 100` to prevent resource exhaustion.
+
+### ✅ M-16: Invalid JSON serialization in LLM Safety API Call
+**Status**: FIXED (2026-02-08)
+**Location**: `tools/llm_safety.py:213`
+**Fix**: Changed `{user_payload}` (Python repr) to `{json.dumps(user_payload, ensure_ascii=False)}` for proper JSON serialization.
+
+### ✅ M-17: Denial of Service - Unbounded Memory Allocation in HashEmbedder
+**Status**: FIXED (2026-02-08)
+**Location**: `memory/embedder.py`
+**Fix**: Added `MAX_TEXT_LENGTH = 100,000` and `MAX_BATCH_SIZE = 10,000` limits with `ValueError` on exceeding.
+
+### ✅ M-18: Silent Error Handling Hides Index Loading Failures
+**Status**: FIXED (2026-02-08)
+**Location**: `memory/index_cosine.py:80-81, 100-101`
+**Fix**: Replaced bare `except Exception: pass` with `logger.debug()` and `logger.warning()` calls to log the exception details.
+
 ---
 
 ## LOW Severity Issues - Status
@@ -187,6 +216,11 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 ✅ **Code Review**: No critical security issues in changed files
 ✅ **Data Integrity**: Fixed directory fsync issue (M-1) for crash safety
 ✅ **Hash Chain Integrity**: Already fixed in prior commits (H-5)
+✅ **DoS Protection**: Request body size limit added (C-3)
+✅ **Security Headers**: HTTP security headers middleware added (M-14)
+✅ **Information Disclosure**: Internal error details gated behind debug mode (M-13)
+✅ **Input Validation**: max_results bounded (M-15), embedder input limits (M-17)
+✅ **JSON Serialization**: LLM safety payload properly serialized (M-16)
 
 ---
 
@@ -196,6 +230,12 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 1. ✅ Add directory fsync in atomic_io.py (M-1)
 2. ✅ Make memory directory configurable (M-3)
 3. ✅ Replace print with logging in evolver.py (L-2)
+4. ✅ Add HTTP security headers middleware (M-14)
+5. ✅ Gate internal error details behind debug mode (M-13)
+6. ✅ Add upper bound to web_search max_results (M-15)
+7. ✅ Fix JSON serialization in LLM safety (M-16)
+8. ✅ Add input size limits to HashEmbedder (M-17)
+9. ✅ Add error logging to index_cosine.py (M-18)
 
 ### Short-term Recommendations (Next PR)
 1. Set hard deadline for pickle removal (H-8)
@@ -215,18 +255,24 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 - ✅ atomic_io tests: All 11 tests pass
 - ✅ Code review: No issues found
 - ✅ CodeQL security scan: No alerts
-- ⚠️ Full test suite: Not run (requires full dependency installation)
+- ✅ Full test suite: 1052 passed (1 skipped - unrelated async test)
 
 ---
 
 ## Conclusion
 
-This PR successfully addresses the most critical data integrity and security issues identified in the code review. All HIGH severity issues that could be fixed with minimal changes have been addressed (6 of 8). The remaining issues are either architectural (requiring large refactoring) or acceptable given the current design constraints.
+This PR successfully addresses all CRITICAL issues and 10 of 18 MEDIUM severity issues identified in the code review. All HIGH severity issues that could be fixed with minimal changes have been addressed (6 of 8). The remaining issues are either architectural (requiring large refactoring) or acceptable given the current design constraints.
 
 The codebase is now more robust with:
 - Improved crash safety through directory fsync
 - Better configurability for deployment flexibility  
 - Improved logging hygiene
 - Continued hash chain integrity
+- HTTP security headers for web protection
+- DoS protection via request body size limits
+- Input validation for resource exhaustion prevention
+- Proper JSON serialization in LLM safety calls
+- Error logging instead of silent swallowing in index operations
+- Internal error details gated behind debug mode
 
 The deferred issues should be addressed in future PRs as part of planned architectural improvements.

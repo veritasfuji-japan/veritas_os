@@ -21,6 +21,7 @@ FUJI Gate から呼ばれる「安全ヘッド」。
 
 from __future__ import annotations
 from typing import Any, Dict, List
+import json
 import os
 import re
 import time
@@ -210,7 +211,7 @@ def _analyze_with_llm(
             },
             {
                 "role": "user",
-                "content": f"CLASSIFY_THIS_INPUT:\n```json\n{user_payload}\n```",
+                "content": f"CLASSIFY_THIS_INPUT:\n```json\n{json.dumps(user_payload, ensure_ascii=False)}\n```",
             },
         ],
         response_format={
