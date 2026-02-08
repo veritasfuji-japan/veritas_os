@@ -21,12 +21,14 @@ def test_decision_status_enum_values_and_str():
     assert DecisionStatus.MODIFY.value == "modify"
     assert DecisionStatus.BLOCK.value == "block"
     assert DecisionStatus.ABSTAIN.value == "abstain"
+    assert DecisionStatus.REJECTED.value == "rejected"
 
     # __str__ は value を返す
     assert str(DecisionStatus.ALLOW) == "allow"
     assert str(DecisionStatus.MODIFY) == "modify"
     assert str(DecisionStatus.BLOCK) == "block"
     assert str(DecisionStatus.ABSTAIN) == "abstain"
+    assert str(DecisionStatus.REJECTED) == "rejected"
 
 
 def test_backward_compat_string_constants():
@@ -42,11 +44,11 @@ def test_backward_compat_string_constants():
 
 def test_is_valid_status():
     # 有効なステータスは True
-    for s in ["allow", "modify", "block", "abstain"]:
+    for s in ["allow", "modify", "block", "abstain", "rejected"]:
         assert is_valid_status(s) is True
 
     # 無効なステータスは False（except パスも踏む）
-    for s in ["invalid", "", "ALLOW", "reject", "rejected"]:
+    for s in ["invalid", "", "ALLOW", "reject"]:
         assert is_valid_status(s) is False
 
 
@@ -56,6 +58,7 @@ def test_normalize_status_from_str_and_enum():
     assert normalize_status("modify") is DecisionStatus.MODIFY
     assert normalize_status("block") is DecisionStatus.BLOCK
     assert normalize_status("abstain") is DecisionStatus.ABSTAIN
+    assert normalize_status("rejected") is DecisionStatus.REJECTED
 
     # すでに Enum の場合はそのまま返る（if 分岐）
     st = DecisionStatus.ALLOW
