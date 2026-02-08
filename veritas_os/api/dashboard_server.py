@@ -403,5 +403,5 @@ if __name__ == "__main__":
     print("   API:    http://localhost:8000/api/status")
     print("=" * 60)
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=os.getenv("DASHBOARD_HOST", "127.0.0.1"), port=8000)
 
