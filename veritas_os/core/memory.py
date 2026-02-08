@@ -13,7 +13,7 @@ MemoryOS - 改善版
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 import json
@@ -1340,13 +1340,56 @@ def get_evidence_for_query(
     return _hits_to_evidence(hits, source_prefix="memory")
 
 
-# ==== グローバル MEM 初期化 ====
-try:
-    MEM = MemoryStore.load(MEM_PATH)
-    logger.info(f"[MemoryOS] initialized at {MEM_PATH}")
-except Exception as e:
-    logger.error(f"[MemoryOS] init failed: {e}")
-    MEM = MemoryStore.load(MEM_PATH)
+class _LazyMemoryStore:
+    """MemoryStore の遅延初期化プロキシ。
+
+    import 時の重い I/O やモデルロードを避け、初回アクセス時にのみ
+    MemoryStore を初期化する。
+    """
+
+    def __init__(self, loader: Callable[[], "MemoryStore"]) -> None:
+        self._loader = loader
+        self._lock = threading.Lock()
+        self._obj: Optional[MemoryStore] = None
+        self._attempted = False
+        self._err: Optional[Exception] = None
+
+    def _load(self) -> "MemoryStore":
+        if self._obj is not None:
+            return self._obj
+        if self._attempted and self._err is not None:
+            raise RuntimeError(f"MemoryStore load failed: {self._err}") from self._err
+        with self._lock:
+            if self._obj is not None:
+                return self._obj
+            if self._attempted and self._err is not None:
+                raise RuntimeError(
+                    f"MemoryStore load failed: {self._err}"
+                ) from self._err
+            self._attempted = True
+            try:
+                self._obj = self._loader()
+                self._err = None
+            except Exception as exc:
+                self._err = exc
+                logger.error("[MemoryOS] lazy init failed: %s", exc)
+                raise
+        return self._obj
+
+    def __getattr__(self, name: str) -> Any:
+        obj = self._load()
+        return getattr(obj, name)
+
+
+def _load_memory_store() -> "MemoryStore":
+    """MemoryStore を遅延初期化するためのローダー。"""
+    store = MemoryStore.load(MEM_PATH)
+    logger.info("[MemoryOS] initialized at %s", MEM_PATH)
+    return store
+
+
+# ==== グローバル MEM (遅延初期化) ====
+MEM = _LazyMemoryStore(_load_memory_store)
 
 # ★ 修正: builtins.MEM への代入を削除。
 # 他モジュールは from veritas_os.core.memory import MEM で明示的にインポートしてください。
@@ -1971,7 +2014,6 @@ def rebuild_vector_index():
     MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 
 
