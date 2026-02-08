@@ -259,7 +259,7 @@ def _world_file_lock() -> Generator[None, None, None]:
 
     fd = None
     try:
-        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o600)
         fcntl.flock(fd, fcntl.LOCK_EX)
         yield
     finally:
