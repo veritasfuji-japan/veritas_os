@@ -309,7 +309,8 @@ async def on_message(message: cl.Message):
         res = await call_veritas_decide(query)
     except Exception as e:
         # update() は content キーワードを取らないので、contentを書き換えてから呼ぶ
-        thinking.content = f"VERITAS API 呼び出しでエラーが発生しました：\n`{e}`"
+        # ★ L-3 修正: スタックトレースをユーザーに露出しない
+        thinking.content = "VERITAS API 呼び出しでエラーが発生しました。しばらくしてから再度お試しください。"
         await thinking.update()
         return
 

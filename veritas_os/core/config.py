@@ -278,7 +278,9 @@ class VeritasConfig:
 
         # --- ディレクトリ作成は初回書き込み時に遅延実行 ---
         # 読み取り専用環境やテスト環境でインポート時の副作用を防止
-        self._dirs_ensured = False
+        # ★ M-6: object.__setattr__ を使用（frozen=False でも dataclass の
+        #   init=False フィールドとして宣言が推奨だが、後方互換性のため現行方式を維持）
+        object.__setattr__(self, "_dirs_ensured", False)
 
     def ensure_dirs(self) -> None:
         """必要なディレクトリを作成する（初回呼び出し時のみ実行）"""

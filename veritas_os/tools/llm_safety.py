@@ -238,9 +238,13 @@ def _analyze_with_llm(
     latency_ms = int((time.time() - t0) * 1000)
 
     # Responses API の JSON 抜き出し
-    # Note: resp.output[0].parsed should contain the structured output
-    # If parsing fails, re-raise the exception to be handled by the caller
-    out = resp.output[0].parsed  # type: ignore[attr-defined]
+    # ★ H-5 修正: output が空の場合の IndexError を防止
+    output = getattr(resp, "output", None)
+    if not output or len(output) == 0:
+        raise RuntimeError("LLM safety head returned empty output")
+    out = output[0].parsed  # type: ignore[attr-defined]
+    if out is None:
+        raise RuntimeError("LLM safety head returned unparseable output")
 
     risk = float(out.get("risk_score", 0.05) or 0.05)
     cats = out.get("categories") or []

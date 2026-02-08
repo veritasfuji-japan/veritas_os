@@ -101,8 +101,8 @@ def get_last_hash() -> str | None:
             if file_size == 0:
                 return None
             with open(LOG_JSONL, "rb") as f:
-                # 末尾から最大 4KB を読んで最終行を取得
-                chunk_size = min(4096, file_size)
+                # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
+                chunk_size = min(65536, file_size)
                 f.seek(file_size - chunk_size)
                 chunk = f.read().decode("utf-8")
                 lines = chunk.strip().split("\n")
