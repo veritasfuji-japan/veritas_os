@@ -16,16 +16,13 @@ from typing import FrozenSet
 
 # API スキーマ (veritas_os/api/schemas.py) と統一した上限値
 try:
-    from veritas_os.api.schemas import MAX_TITLE_LENGTH  # 1000
-except ImportError:  # pragma: no cover — schemas が無い環境用フォールバック
-    MAX_TITLE_LENGTH = 1000
+from .fuji import BANNED_KEYWORDS_FALLBACK
+
+# --- 定数 ---
+MAX_TITLE_LENGTH = 500
 
 # FUJI Gate (fuji.py) の BANNED_KEYWORDS_FALLBACK と整合を取る
-_BANNED_KEYWORDS: FrozenSet[str] = frozenset({
-    "harm", "kill", "exploit", "illegal", "weapon",
-    "malware", "bomb", "doxx",
-    "毒", "殺", "爆弾", "銃", "兵器", "ハッキング", "違法",
-})
+_BANNED_KEYWORDS: FrozenSet[str] = frozenset(BANNED_KEYWORDS_FALLBACK)
 
 # ASCII 制御文字 (タブ・改行・CR を除く) の検出パターン
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
