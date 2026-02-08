@@ -13,9 +13,47 @@ concurrency:
 permissions:
   contents: read
 
+# ============================================================
+# Lint & Security (fast-fail — テストより先に回す)
+# ============================================================
 jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install lint tools
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install ruff bandit
+
+      - name: Ruff check (lint)
+        run: |
+          ruff check veritas_os/ --select E,F,W --ignore E501,E402,F401,W291,W293
+
+      - name: Bandit security scan
+        run: |
+          bandit -r veritas_os/core veritas_os/api veritas_os/tools \
+            -s B101,B311,B404,B603,B607 \
+            --severity-level medium \
+            -f txt || true
+
+  # ============================================================
+  # Test matrix
+  # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
+    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -46,7 +84,6 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
 
-          # プロジェクトが “パッケージ化” されていない前提なので editable install はしない
           # requirements があれば優先して入れる
           if [ -f requirements.txt ]; then
             python -m pip install -r requirements.txt
@@ -56,7 +93,6 @@ jobs:
           fi
 
           # CIでテスト収集(import)が落ちないための最低限を強制補完
-          # requirements-dev にあっても二重OK
           python -m pip install \
             requests \
             fastapi \
@@ -81,7 +117,9 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
-            --junitxml=test-reports/pytest.xml
+            --cov-fail-under=40 \
+            --junitxml=test-reports/pytest.xml \
+            --tb=short
 
       - name: Upload test report (junit)
         if: always()

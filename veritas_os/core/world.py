@@ -16,6 +16,7 @@ VERITAS WorldOS - Unified World State Management
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import math
@@ -25,7 +26,17 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Generator, List, Optional
+
+# fcntl はプロセス間排他制御 (flock) に使用。Windows では利用不可。
+_IS_WIN = os.name == "nt"
+if not _IS_WIN:
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover
+        fcntl = None  # type: ignore[assignment]
+else:
+    fcntl = None  # type: ignore[assignment]
 
 from .utils import _clip01
 
@@ -223,6 +234,44 @@ def _world_path() -> Path:
     if isinstance(wp, Path):
         return wp.expanduser()
     return Path(os.fspath(wp)).expanduser()
+
+
+# ============================================================
+# File Lock (プロセス間 read-modify-write 排他制御)
+# ============================================================
+
+@contextlib.contextmanager
+def _world_file_lock() -> Generator[None, None, None]:
+    """
+    world_state.json に対するプロセス間排他ロック。
+
+    fcntl.flock(LOCK_EX) を使用して、read-modify-write サイクル全体を
+    アトミックにする。ロックファイルは world_state.json.lock に配置。
+
+    fcntl が利用できない環境 (Windows 等) ではノーオペレーション。
+    """
+    if fcntl is None:
+        yield
+        return
+
+    lock_path = Path(str(_world_path()) + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd = None
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        if fd is not None:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                os.close(fd)
+            except OSError:
+                pass
 
 
 # ============================================================
@@ -646,27 +695,28 @@ def load_state(user_id: str = DEFAULT_USER_ID) -> WorldState:
 
 
 def save_state(state: WorldState) -> None:
-    world = _load_world()
-    proj = _get_or_create_default_project(world, state.user_id)
+    with _world_file_lock():
+        world = _load_world()
+        proj = _get_or_create_default_project(world, state.user_id)
 
-    m = proj.setdefault("metrics", {})
-    m["decisions"] = int(state.decisions)
-    m["avg_latency_ms"] = float(state.avg_latency_ms)
-    m["avg_risk"] = float(state.avg_risk)
-    m["avg_value"] = float(state.avg_value)
-    m["active_plan_steps"] = int(state.active_plan_steps)
-    m["active_plan_done"] = int(state.active_plan_done)
+        m = proj.setdefault("metrics", {})
+        m["decisions"] = int(state.decisions)
+        m["avg_latency_ms"] = float(state.avg_latency_ms)
+        m["avg_risk"] = float(state.avg_risk)
+        m["avg_value"] = float(state.avg_value)
+        m["active_plan_steps"] = int(state.active_plan_steps)
+        m["active_plan_done"] = int(state.active_plan_done)
 
-    proj["active_plan_id"] = state.active_plan_id
-    proj["active_plan_title"] = state.active_plan_title
+        proj["active_plan_id"] = state.active_plan_id
+        proj["active_plan_title"] = state.active_plan_title
 
-    last = proj.setdefault("last", {})
-    last["query"] = state.last_query
-    last["chosen_title"] = state.last_chosen_title
-    last["decision_status"] = state.last_decision_status
-    proj["last_decision_at"] = state.last_updated or _now_iso()
+        last = proj.setdefault("last", {})
+        last["query"] = state.last_query
+        last["chosen_title"] = state.last_chosen_title
+        last["decision_status"] = state.last_decision_status
+        proj["last_decision_at"] = state.last_updated or _now_iso()
 
-    _save_world(world)
+        _save_world(world)
 
 
 def get_state(user_id: str = DEFAULT_USER_ID) -> dict:
@@ -710,86 +760,87 @@ def update_from_decision(
     planner: Optional[Dict[str, Any]] = None,
     latency_ms: Optional[float] = None,
 ) -> WorldState:
-    world = _load_world()
-    proj = _get_or_create_default_project(world, user_id)
-    metrics = proj.setdefault("metrics", {})
-    last = proj.setdefault("last", {})
+    with _world_file_lock():
+        world = _load_world()
+        proj = _get_or_create_default_project(world, user_id)
+        metrics = proj.setdefault("metrics", {})
+        last = proj.setdefault("last", {})
 
-    decisions = int(metrics.get("decisions", 0)) + 1
-    metrics["decisions"] = decisions
+        decisions = int(metrics.get("decisions", 0)) + 1
+        metrics["decisions"] = decisions
 
-    alpha = 0.2
-    risk = float(gate.get("risk", 0.0) or 0.0)
-    val = float(values.get("total", values.get("ema", 0.5)) or 0.5)
+        alpha = 0.2
+        risk = float(gate.get("risk", 0.0) or 0.0)
+        val = float(values.get("total", values.get("ema", 0.5)) or 0.5)
 
-    prev_risk = float(metrics.get("avg_risk", 0.0) or 0.0)
-    prev_val = float(metrics.get("avg_value", 0.5) or 0.5)
+        prev_risk = float(metrics.get("avg_risk", 0.0) or 0.0)
+        prev_val = float(metrics.get("avg_value", 0.5) or 0.5)
 
-    metrics["avg_risk"] = (1 - alpha) * prev_risk + alpha * risk
-    metrics["avg_value"] = (1 - alpha) * prev_val + alpha * val
+        metrics["avg_risk"] = (1 - alpha) * prev_risk + alpha * risk
+        metrics["avg_value"] = (1 - alpha) * prev_val + alpha * val
 
-    if latency_ms is not None:
-        prev_lat = float(metrics.get("avg_latency_ms", 0.0) or 0.0)
-        metrics["avg_latency_ms"] = (1 - alpha) * prev_lat + alpha * float(latency_ms)
+        if latency_ms is not None:
+            prev_lat = float(metrics.get("avg_latency_ms", 0.0) or 0.0)
+            metrics["avg_latency_ms"] = (1 - alpha) * prev_lat + alpha * float(latency_ms)
 
-    if planner:
-        steps = planner.get("steps") or []
-        proj["active_plan_id"] = planner.get("id") or planner.get("plan_id")
-        proj["active_plan_title"] = planner.get("title") or planner.get("name")
-        metrics["active_plan_steps"] = int(len(steps) or metrics.get("active_plan_steps", 0))
+        if planner:
+            steps = planner.get("steps") or []
+            proj["active_plan_id"] = planner.get("id") or planner.get("plan_id")
+            proj["active_plan_title"] = planner.get("title") or planner.get("name")
+            metrics["active_plan_steps"] = int(len(steps) or metrics.get("active_plan_steps", 0))
 
-        done = 0
-        for s in steps:
-            if isinstance(s, dict) and s.get("done"):
-                done += 1
-        metrics["active_plan_done"] = int(done or metrics.get("active_plan_done", 0))
+            done = 0
+            for s in steps:
+                if isinstance(s, dict) and s.get("done"):
+                    done += 1
+            metrics["active_plan_done"] = int(done or metrics.get("active_plan_done", 0))
 
-    last["query"] = query
-    last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
-    last["decision_status"] = gate.get("decision_status") or "unknown"
-    proj["last_decision_at"] = _now_iso()
+        last["query"] = query
+        last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
+        last["decision_status"] = gate.get("decision_status") or "unknown"
+        proj["last_decision_at"] = _now_iso()
 
-    req_id = (chosen or {}).get("request_id") or values.get("request_id") or ""
-    proj.setdefault("decisions", []).append({
-        "request_id": req_id,
-        "ts": proj["last_decision_at"],
-        "query": query,
-        "chosen_title": last["chosen_title"],
-        "decision_status": last["decision_status"],
-        "avg_value_after": metrics["avg_value"],
-        "avg_risk_after": metrics["avg_risk"],
-    })
+        req_id = (chosen or {}).get("request_id") or values.get("request_id") or ""
+        proj.setdefault("decisions", []).append({
+            "request_id": req_id,
+            "ts": proj["last_decision_at"],
+            "query": query,
+            "chosen_title": last["chosen_title"],
+            "decision_status": last["decision_status"],
+            "avg_value_after": metrics["avg_value"],
+            "avg_risk_after": metrics["avg_risk"],
+        })
 
-    veritas = world.setdefault("veritas", {})
-    veritas["decision_count"] = int(veritas.get("decision_count", 0)) + 1
-    veritas["last_risk"] = risk
+        veritas = world.setdefault("veritas", {})
+        veritas["decision_count"] = int(veritas.get("decision_count", 0)) + 1
+        veritas["last_risk"] = risk
 
-    history = world.setdefault("history", {})
-    decisions_hist = history.setdefault("decisions", [])
-    decisions_hist.append({
-        "ts": proj["last_decision_at"],
-        "user_id": user_id,
-        "project_id": proj.get("project_id", f"{user_id}:default"),
-        "query": query,
-        "chosen_id": (chosen or {}).get("id"),
-        "chosen_title": last["chosen_title"],
-        "gate_status": gate.get("status"),
-        "gate_risk": risk,
-        "value_total": val,
-        "plan_steps": len(planner.get("steps", [])) if planner else 0,
-    })
-    if len(decisions_hist) > 200:
-        history["decisions"] = decisions_hist[-200:]
+        history = world.setdefault("history", {})
+        decisions_hist = history.setdefault("decisions", [])
+        decisions_hist.append({
+            "ts": proj["last_decision_at"],
+            "user_id": user_id,
+            "project_id": proj.get("project_id", f"{user_id}:default"),
+            "query": query,
+            "chosen_id": (chosen or {}).get("id"),
+            "chosen_title": last["chosen_title"],
+            "gate_status": gate.get("status"),
+            "gate_risk": risk,
+            "value_total": val,
+            "plan_steps": len(planner.get("steps", [])) if planner else 0,
+        })
+        if len(decisions_hist) > 200:
+            history["decisions"] = decisions_hist[-200:]
 
-    meta = world.setdefault("meta", {})
-    last_users = meta.setdefault("last_users", {})
-    last_users[user_id] = {
-        "last_seen": proj["last_decision_at"],
-        "last_project": proj.get("project_id"),
-    }
+        meta = world.setdefault("meta", {})
+        last_users = meta.setdefault("last_users", {})
+        last_users[user_id] = {
+            "last_seen": proj["last_decision_at"],
+            "last_project": proj.get("project_id"),
+        }
 
-    _save_world(world)
-    return _project_to_worldstate(user_id, proj)
+        _save_world(world)
+        return _project_to_worldstate(user_id, proj)
 
 
 def update_state_from_decision(
@@ -813,60 +864,62 @@ def update_state_from_decision(
 
 def inject_state_into_context(context: Dict[str, Any], user_id: str = DEFAULT_USER_ID) -> Dict[str, Any]:
     ctx = dict(context or {})
-    state_data = _load_world()
 
-    ctx["world_state"] = state_data
+    with _world_file_lock():
+        state_data = _load_world()
 
-    st = load_state(user_id)
-    ctx.setdefault("world_state", {}).update({
-        "decisions": st.decisions,
-        "avg_latency_ms": st.avg_latency_ms,
-        "avg_risk": st.avg_risk,
-        "avg_value": st.avg_value,
-        "plan_progress": st.progress(),
-        "active_plan_title": st.active_plan_title,
-        "last_query": st.last_query,
-        "last_chosen_title": st.last_chosen_title,
-        "last_decision_status": st.last_decision_status,
-        "last_updated": st.last_updated,
-    })
+        ctx["world_state"] = state_data
 
-    projects = state_data.get("projects", [])
-    veritas_proj: Dict[str, Any] = {}
-    if isinstance(projects, list):
-        for p in projects:
-            if isinstance(p, dict) and (
-                p.get("project_id") == "veritas_agi"
-                or "veritas" in str(p.get("project_id", "")).lower()
-            ):
-                veritas_proj = p
-                break
-    elif isinstance(projects, dict):
-        veritas_proj = projects.get("veritas_agi", {})
+        st = load_state(user_id)
+        ctx.setdefault("world_state", {}).update({
+            "decisions": st.decisions,
+            "avg_latency_ms": st.avg_latency_ms,
+            "avg_risk": st.avg_risk,
+            "avg_value": st.avg_value,
+            "plan_progress": st.progress(),
+            "active_plan_title": st.active_plan_title,
+            "last_query": st.last_query,
+            "last_chosen_title": st.last_chosen_title,
+            "last_decision_status": st.last_decision_status,
+            "last_updated": st.last_updated,
+        })
 
-    world_summary = {
-        "projects": {
-            "veritas_agi": {
-                "name": veritas_proj.get("title") or veritas_proj.get("name", "VERITASのAGI化"),
-                "status": veritas_proj.get("status", "unknown"),
-                "progress": float(veritas_proj.get("progress", 0.0) or 0.0),
-                "last_decision_ts": veritas_proj.get("last_decision_at") or veritas_proj.get("last_decision_ts"),
-                "notes": veritas_proj.get("notes", ""),
-                "decision_count": int(veritas_proj.get("decision_count", 0) or 0),
-                "last_risk": float(veritas_proj.get("last_risk", 0.3) or 0.3),
-            }
-        },
-        "external_knowledge": _load_memory_agi_summary(state_data),
-    }
-    ctx["world"] = world_summary
+        projects = state_data.get("projects", [])
+        veritas_proj: Dict[str, Any] = {}
+        if isinstance(projects, list):
+            for p in projects:
+                if isinstance(p, dict) and (
+                    p.get("project_id") == "veritas_agi"
+                    or "veritas" in str(p.get("project_id", "")).lower()
+                ):
+                    veritas_proj = p
+                    break
+        elif isinstance(projects, dict):
+            veritas_proj = projects.get("veritas_agi", {})
 
-    meta = state_data.setdefault("meta", {})
-    last_users = meta.setdefault("last_users", {})
-    last_users[user_id] = {
-        "last_seen": _now_iso(),
-        "last_project": veritas_proj.get("project_id") if veritas_proj else None,
-    }
-    _save_world(state_data)
+        world_summary = {
+            "projects": {
+                "veritas_agi": {
+                    "name": veritas_proj.get("title") or veritas_proj.get("name", "VERITASのAGI化"),
+                    "status": veritas_proj.get("status", "unknown"),
+                    "progress": float(veritas_proj.get("progress", 0.0) or 0.0),
+                    "last_decision_ts": veritas_proj.get("last_decision_at") or veritas_proj.get("last_decision_ts"),
+                    "notes": veritas_proj.get("notes", ""),
+                    "decision_count": int(veritas_proj.get("decision_count", 0) or 0),
+                    "last_risk": float(veritas_proj.get("last_risk", 0.3) or 0.3),
+                }
+            },
+            "external_knowledge": _load_memory_agi_summary(state_data),
+        }
+        ctx["world"] = world_summary
+
+        meta = state_data.setdefault("meta", {})
+        last_users = meta.setdefault("last_users", {})
+        last_users[user_id] = {
+            "last_seen": _now_iso(),
+            "last_project": veritas_proj.get("project_id") if veritas_proj else None,
+        }
+        _save_world(state_data)
 
     return ctx
 
@@ -1015,6 +1068,7 @@ __all__ = [
     "WORLD_PATH",
     "DATA_DIR",
     "_ensure_project",   # ✅ tests expect
+    "_world_file_lock",  # テスト・外部利用向け
 ]
 
 
