@@ -2935,7 +2935,7 @@ async def run_decide_pipeline(
                 value=decision_value,
             )
 
-            episode_key = f"episode_{time.time():.6f}_{request_id[:8]}"
+            episode_key = f"episode_{time.time_ns()}_{request_id[:8]}"
             episode_value = redact_payload(
                 {
                     "kind": "episode",

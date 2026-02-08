@@ -313,7 +313,9 @@ def _policy_path() -> Path:
             p = root_dir / p
             # ★ セキュリティ修正: 相対パスは resolve() してプロジェクト内に収まることを確認
             resolved = p.resolve()
-            if not str(resolved).startswith(str(root_dir.resolve())):
+            try:
+                resolved.relative_to(root_dir.resolve())
+            except ValueError:
                 _logger.warning("VERITAS_FUJI_POLICY relative path escapes project root, ignoring: %s", env_path)
                 return root_dir / "policies" / "fuji_default.yaml"
             return resolved
