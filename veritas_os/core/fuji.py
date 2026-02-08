@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 from datetime import datetime, timezone
+import logging
+import threading
 import time
 import os
 import re
@@ -444,17 +446,36 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
     return data
 
 
+def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
+    """文字列からポリシーをパースする（TOCTOU 回避用）。"""
+    if yaml is None:
+        return dict(_DEFAULT_POLICY)
+    try:
+        data = yaml.safe_load(content) or {}
+    except Exception:
+        return dict(_DEFAULT_POLICY)
+    if "version" not in data:
+        data["version"] = f"fuji_file_{path.name}"
+    return data
+
+
 _POLICY_PATH = _policy_path()
 POLICY: Dict[str, Any] = _load_policy(_POLICY_PATH)
 _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime if _POLICY_PATH.exists() else 0.0
+
+# ★ 修正 (H-9): ポリシーリロード時の TOCTOU 競合状態を防止するためのロック
+_policy_reload_lock = threading.Lock()
+
+_logger = logging.getLogger(__name__)
 
 
 def reload_policy() -> Dict[str, Any]:
     """ポリシーを強制的にリロードする"""
     global POLICY, _POLICY_MTIME
-    path = _policy_path()
-    POLICY = _load_policy(path)
-    _POLICY_MTIME = path.stat().st_mtime if path.exists() else 0.0
+    with _policy_reload_lock:
+        path = _policy_path()
+        POLICY = _load_policy(path)
+        _POLICY_MTIME = path.stat().st_mtime if path.exists() else 0.0
     return POLICY
 
 
@@ -462,18 +483,29 @@ def _check_policy_hot_reload() -> None:
     """
     ポリシーファイルの変更を検知して自動リロードする。
     validate() / validate_action() 呼び出し時に実行される。
+
+    ★ 修正 (H-9): ファイルディスクリプタ経由で mtime 取得と読み込みを
+      同一 fd で行い、TOCTOU 競合状態を排除。さらに _policy_reload_lock で
+      複数スレッドからの同時リロードを防止する。
     """
     global POLICY, _POLICY_MTIME
     path = _policy_path()
     if not path.exists():
         return
     try:
-        current_mtime = path.stat().st_mtime
-        if current_mtime > _POLICY_MTIME:
-            POLICY = _load_policy(path)
-            _POLICY_MTIME = current_mtime
-    except OSError:
-        pass  # ファイルアクセスエラーは無視
+        with _policy_reload_lock:
+            fd = os.open(str(path), os.O_RDONLY)
+            try:
+                current_mtime = os.fstat(fd).st_mtime
+                if current_mtime > _POLICY_MTIME:
+                    with os.fdopen(fd, "r", encoding="utf-8", closefd=False) as f:
+                        content = f.read()
+                    POLICY = _load_policy_from_str(content, path)
+                    _POLICY_MTIME = current_mtime
+            finally:
+                os.close(fd)
+    except OSError as exc:
+        _logger.debug("policy hot reload skipped: %s", exc)
 
 
 # =========================================================
