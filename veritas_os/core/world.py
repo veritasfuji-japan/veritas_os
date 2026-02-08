@@ -266,12 +266,12 @@ def _world_file_lock() -> Generator[None, None, None]:
         if fd is not None:
             try:
                 fcntl.flock(fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("flock unlock failed (non-critical): %s", e)
             try:
                 os.close(fd)
-            except OSError:
-                pass
+            except OSError as e:
+                logger.debug("lock fd close failed (non-critical): %s", e)
 
 
 # ============================================================
@@ -870,7 +870,9 @@ def inject_state_into_context(context: Dict[str, Any], user_id: str = DEFAULT_US
 
         ctx["world_state"] = state_data
 
-        st = load_state(user_id)
+        # state_data から直接導出 (二重 I/O を回避)
+        proj = _get_or_create_default_project(state_data, user_id)
+        st = _project_to_worldstate(user_id, proj)
         ctx.setdefault("world_state", {}).update({
             "decisions": st.decisions,
             "avg_latency_ms": st.avg_latency_ms,
