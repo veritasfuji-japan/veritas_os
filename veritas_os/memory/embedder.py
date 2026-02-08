@@ -3,6 +3,10 @@ import hashlib
 
 import numpy as np
 
+# ★ M-17 修正: 入力サイズ制限（リソース枯渇防止）
+MAX_TEXT_LENGTH = 100_000
+MAX_BATCH_SIZE = 10_000
+
 class HashEmbedder:
     def __init__(self, dim: int = 384):
         self.dim = dim
@@ -14,4 +18,9 @@ class HashEmbedder:
         v = (v - v.mean()) / (v.std() + 1e-6)
         return v
     def embed(self, texts):
+        if len(texts) > MAX_BATCH_SIZE:
+            raise ValueError(f"Batch size {len(texts)} exceeds limit {MAX_BATCH_SIZE}")
+        for t in texts:
+            if len(t) > MAX_TEXT_LENGTH:
+                raise ValueError(f"Text length {len(t)} exceeds limit {MAX_TEXT_LENGTH}")
         return np.vstack([self._h(t) for t in texts])
