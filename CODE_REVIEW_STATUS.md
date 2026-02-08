@@ -15,10 +15,10 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 | Severity | Total | Fixed | Deferred | % Complete |
 |----------|-------|-------|----------|-----------|
 | CRITICAL | 3     | 3     | 0        | 100%      |
-| HIGH     | 12    | 6     | 6        | 50%       |
+| HIGH     | 12    | 9     | 3        | 75%       |
 | MEDIUM   | 20    | 12    | 8        | 60%       |
 | LOW      | 10    | 3     | 7        | 30%       |
-| **TOTAL**| 45    | 24    | 21       | **53%**   |
+| **TOTAL**| 45    | 27    | 18       | **60%**   |
 
 ---
 
@@ -82,6 +82,26 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 **Status**: DEFERRED (requires deprecation timeline)
 **Location**: `core/memory.py:134-257`
 **Reason**: Requires coordinated deprecation plan with users. The restricted unpickler provides temporary mitigation. Should set hard deadline for removal.
+
+### ✅ H-9: TOCTOU Race Condition in Policy Hot Reload
+**Status**: FIXED (2026-02-08)
+**Location**: `core/fuji.py:463-497`
+**Fix**: Added `_policy_reload_lock` (threading.Lock) and changed to file-descriptor-based approach: `os.open()` + `os.fstat()` + `os.fdopen()` read ensures mtime check and file read use the same fd, eliminating the TOCTOU window. Added `_load_policy_from_str()` to parse content already read into memory.
+
+### ✅ H-10: Race Condition in Global MEM_VEC Access
+**Status**: FIXED (2026-02-08)
+**Location**: `core/memory.py` (multiple sites)
+**Fix**: Added `_mem_vec_lock` (threading.Lock) for write operations (rebuild_vector_index). For read paths (put_episode, add, ingest_document, search), applied local-variable snapshot pattern (`_vec = MEM_VEC; if _vec is not None: _vec.add(...)`) to prevent TOCTOU between `if` check and method call.
+
+### ✅ H-11: Race Condition in rotate.py
+**Status**: FIXED (via prior H-7 documentation + this PR's H-12 lock)
+**Location**: `logging/rotate.py:45-60`
+**Fix**: Already documented in H-7 (prior PR) that `open_trust_log_for_append` must be called under `_trust_log_lock`. This PR's H-12 fix ensures `get_last_hash()` also acquires the lock, completing the thread safety coverage.
+
+### ✅ H-12: Missing get_last_hash Thread Safety
+**Status**: FIXED (2026-02-08)
+**Location**: `logging/trust_log.py:85-115`
+**Fix**: Wrapped the function body with `with _trust_log_lock:` so external callers are protected from reading partial/incomplete JSON lines during concurrent writes. Uses RLock so internal calls from `append_trust_log()` (which already holds the lock) do not deadlock.
 
 ---
 
@@ -215,13 +235,15 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 ✅ **CodeQL Analysis**: No security vulnerabilities detected
 ✅ **Code Review**: No critical security issues in changed files
 ✅ **Data Integrity**: Fixed directory fsync issue (M-1) for crash safety
-✅ **Hash Chain Integrity**: Already fixed in prior commits (H-5)
+✅ **Hash Chain Integrity**: Already fixed in prior commits (H-5); thread safety added to `get_last_hash()` (H-12)
 ✅ **DoS Protection**: Request body size limit added (C-3)
 ✅ **Security Headers**: HTTP security headers middleware added (M-14)
 ✅ **Information Disclosure**: Internal error details gated behind debug mode (M-13)
 ✅ **Input Validation**: max_results bounded (M-15), embedder input limits (M-17)
 ✅ **JSON Serialization**: LLM safety payload properly serialized (M-16)
 ✅ **File Permissions**: Restrictive permissions (0o600) for atomic append and lock files (M-19, M-20)
+✅ **TOCTOU Prevention**: Policy hot reload uses fd-based approach (H-9); MEM_VEC uses local snapshots (H-10)
+✅ **Thread Safety**: `get_last_hash()` now protected by RLock (H-12); `rebuild_vector_index()` under `_mem_vec_lock` (H-10)
 
 ---
 
@@ -262,6 +284,9 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 10. ✅ Restrict file permissions for atomic append (M-19)
 11. ✅ Restrict lock file permissions (M-20)
 12. ✅ Fix misindented comment in value_core.py (L-8)
+13. ✅ Fix TOCTOU race in policy hot reload (H-9)
+14. ✅ Fix MEM_VEC thread safety with local snapshots + lock (H-10)
+15. ✅ Fix get_last_hash thread safety with RLock (H-12)
 
 ### Short-term Recommendations (Next PR)
 1. Set hard deadline for pickle removal (H-8)
@@ -287,7 +312,7 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 
 ## Conclusion
 
-This PR successfully addresses all CRITICAL issues and 10 of 18 MEDIUM severity issues identified in the code review. All HIGH severity issues that could be fixed with minimal changes have been addressed (6 of 8). The remaining issues are either architectural (requiring large refactoring) or acceptable given the current design constraints.
+This PR successfully addresses all CRITICAL issues, 9 of 12 HIGH severity issues, and 12 of 20 MEDIUM severity issues identified in the code review. The remaining deferred issues are either architectural (requiring large refactoring) or acceptable given the current design constraints.
 
 The codebase is now more robust with:
 - Improved crash safety through directory fsync
@@ -301,5 +326,8 @@ The codebase is now more robust with:
 - Error logging instead of silent swallowing in index operations
 - Internal error details gated behind debug mode
 - Restrictive file permissions (0o600) for sensitive files
+- TOCTOU prevention in policy hot reload via fd-based approach (H-9)
+- Thread-safe MEM_VEC access via local-variable snapshots and lock (H-10)
+- Thread-safe `get_last_hash()` for external callers (H-12)
 
 The deferred issues should be addressed in future PRs as part of planned architectural improvements.
