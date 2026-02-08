@@ -108,8 +108,8 @@ def _normalize_str(x: Any, *, limit: int = 4000) -> str:
         s = "" if x is None else str(x)
     except Exception:
         s = repr(x)
-    if limit and len(s) > int(limit):
-        return s[: int(limit)]
+    if limit and len(s) > limit:
+        return s[:limit]
     return s
 
 
