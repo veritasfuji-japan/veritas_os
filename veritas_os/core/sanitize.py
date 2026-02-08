@@ -134,10 +134,10 @@ RE_IPV4 = re.compile(
 # IPv6（簡易版）
 RE_IPV6 = re.compile(
     r'(?:'
-    r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'        # full form
-    r'|(?:[0-9a-fA-F]{1,4}:){1,7}:'                          # trailing ::
-    r'|::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b'      # leading ::
-    r'|::'                                                     # all-zeros
+    r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b'         # full form
+    r'|\b(?:[0-9a-fA-F]{1,4}:){1,7}:'                         # trailing ::
+    r'|::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b'       # leading ::
+    r'|::'                                                      # all-zeros
     r')'
 )
 
