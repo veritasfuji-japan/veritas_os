@@ -43,7 +43,7 @@ class MemoryStore:
     FastAPI の並行リクエストでも安全に使用できます。
     """
 
-    def __init__(self, dim=384):
+    def __init__(self, dim: int = 384) -> None:
         self._lock = threading.RLock()  # リエントラントロック
         self.emb = HashEmbedder(dim=dim)
         # ★ 各 kind ごとに index ファイルパスを渡す
@@ -53,7 +53,7 @@ class MemoryStore:
         }
         self._boot()
 
-    def _boot(self):
+    def _boot(self) -> None:
         """
         - 既に index（.npz）があればそれを使う
         - index が空で jsonl が存在する場合だけ、jsonl から再構築
@@ -223,7 +223,7 @@ class MemoryStore:
 
         return out
 
-    def put_episode(self, text, tags=None, meta=None):
+    def put_episode(self, text: str, tags: Optional[List[str]] = None, meta: Optional[Dict[str, Any]] = None) -> str:
         item = {
             "text": text,
             "tags": tags or ["episode"],

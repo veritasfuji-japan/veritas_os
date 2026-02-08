@@ -64,7 +64,7 @@ def _norm_severity(x: Any) -> Severity:
     """
     try:
         s = str(x).lower().strip()
-    except Exception:
+    except (TypeError, ValueError):
         return "med"
     if s in ("high", "h", "critical", "crit"):
         return "high"
@@ -83,7 +83,7 @@ def _severity_rank(x: Any, *, unknown_rank: int = 0) -> int:
         return int(unknown_rank)
     try:
         s = str(x).lower().strip()
-    except Exception:
+    except (TypeError, ValueError):
         return int(unknown_rank)
 
     if s in ("high", "h", "critical", "crit"):
@@ -99,7 +99,7 @@ def _severity_rank(x: Any, *, unknown_rank: int = 0) -> int:
 def _as_float(x: Any, default: float = 0.0) -> float:
     try:
         return float(x)
-    except Exception:
+    except (TypeError, ValueError):
         return float(default)
 
 

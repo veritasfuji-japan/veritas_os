@@ -78,6 +78,7 @@ def _compute_sha256(payload: dict) -> str:
     try:
         s = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     except Exception:
+        logger.debug("_compute_sha256: JSON serialization failed, falling back to repr()", exc_info=True)
         s = repr(payload).encode("utf-8", "ignore")
     return hashlib.sha256(s).hexdigest()
 
@@ -115,7 +116,13 @@ def get_last_hash() -> str | None:
 
 
 def calc_sha256(payload: dict) -> str:
-    """entry の SHA-256 ハッシュを計算する（外部用の薄いヘルパー）"""
+    """entry の SHA-256 ハッシュを計算する（外部用の薄いヘルパー）
+
+    NOTE: この関数は ensure_ascii=True (デフォルト) を使用する。
+    _compute_sha256() は ensure_ascii=False を使用するため、
+    非ASCII文字を含むペイロードでは異なるハッシュ値を返す。
+    ハッシュチェーンの検証には _normalize_entry_for_hash() + _sha256() を使用すること。
+    """
     raw = json.dumps(payload, sort_keys=True).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
@@ -139,7 +146,10 @@ def _load_logs_json() -> list:
         if not isinstance(items, list):
             return []
         return [x for x in items if isinstance(x, dict)]
+    except FileNotFoundError:
+        return []
     except Exception:
+        logger.debug("_load_logs_json: failed to load %s", LOG_JSON, exc_info=True)
         return []
 
 
