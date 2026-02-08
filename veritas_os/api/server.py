@@ -1321,8 +1321,8 @@ async def memory_search(payload: dict):
     try:
         q = payload.get("query", "")
         kinds = payload.get("kinds")
-        k = int(payload.get("k", 8))
-        min_sim = float(payload.get("min_sim", 0.25))
+        k = max(1, min(int(payload.get("k", 8)), 100))
+        min_sim = max(0.0, min(float(payload.get("min_sim", 0.25)), 1.0))
         user_id = payload.get("user_id")
 
         raw_hits = _store_search(store, query=q, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
