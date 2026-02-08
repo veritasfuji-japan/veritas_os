@@ -71,6 +71,9 @@ backup/
 *.tmp
 *.temp
 
+# Stale backup files
+*.py.old
+
 # Coverage
 .coverage
 **/.coverage

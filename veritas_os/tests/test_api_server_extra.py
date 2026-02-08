@@ -860,7 +860,7 @@ def test_memory_put_outer_error():
     result = server.memory_put(body=None)  # type: ignore[arg-type]
 
     assert result["ok"] is False
-    assert "object has no attribute" in result["error"]
+    assert "memory operation failed" in result["error"]
 
 
 # -------------------------------------------------
