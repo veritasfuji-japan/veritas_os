@@ -195,10 +195,12 @@ class VeritasConfig:
             "",
         )
     )
+    # ★ C-2 修正: プレースホルダーをデフォルト値にしない（セキュリティ改善）
+    # 環境変数未設定時は空文字 → server.py 側で未設定として 500 を返す
     api_secret: str = field(
         default_factory=lambda: os.getenv(
             "VERITAS_API_SECRET",
-            "YOUR_VERITAS_API_SECRET_HERE",
+            "",
         )
     )
     api_header: str = "X-API-Key"
