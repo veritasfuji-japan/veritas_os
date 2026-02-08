@@ -45,7 +45,7 @@ class DecisionStatus(str, Enum):
     #: 判断を保留・回答回避（高リスク・不確実）
     ABSTAIN = "abstain"
 
-    #: 後方互換性のための alias（BLOCKと同値）
+    #: 後方互換性のための alias（旧: BLOCK相当の意味だが、値は "rejected"）
     REJECTED = "rejected"
 
     def __str__(self) -> str:
