@@ -15,7 +15,7 @@ import subprocess
 import sys
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -1076,10 +1076,10 @@ async def decide(
                     raise ValueError(f"Unexpected executable name: {executable_name}")
 
                 log_dir = Path(os.path.expanduser("~/.veritas/logs"))
-                log_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+                log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
                 doctor_log = log_dir / "doctor.log"
                 with open(doctor_log, "a", encoding="utf-8") as log_file:
-                    log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
+                    log_file.write(f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n")
                     subprocess.Popen(
                         [python_executable, "-m", "veritas_os.scripts.doctor"],
                         stdout=log_file,
