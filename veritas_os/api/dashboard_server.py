@@ -21,6 +21,7 @@ Usage (モジュールとして):
 
 from __future__ import annotations
 
+import html as html_mod
 import json
 import logging
 import os
@@ -323,7 +324,8 @@ document.getElementById('user').textContent = '{{USERNAME}}';
 </html>
 """
     # username を埋め込む（CSS/JS の { } を壊さないために単純置換）
-    html = html.replace("{{USERNAME}}", username)
+    # XSS対策: ユーザー名をHTMLエスケープ
+    html = html.replace("{{USERNAME}}", html_mod.escape(username))
     return HTMLResponse(html)
 
 
@@ -343,9 +345,9 @@ async def get_status(username: str = Depends(verify_credentials)) -> JSONRespons
             data = json.loads(STATUS_JSON.read_text(encoding="utf-8"))
             # data はそのまま返す（ok, ended_at_utc, duration_sec などを想定）
             return JSONResponse(data)
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             return JSONResponse(
-                {"error": "invalid JSON", "detail": str(e)},
+                {"error": "invalid JSON"},
                 status_code=500,
             )
     else:

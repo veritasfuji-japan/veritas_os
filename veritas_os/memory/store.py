@@ -98,7 +98,8 @@ class MemoryStore:
         Returns:
             追加されたアイテムのID
         """
-        assert kind in FILES
+        if kind not in FILES:
+            raise ValueError(f"Unknown memory kind: {kind!r}. Must be one of {set(FILES)}")
         j = {
             "id":   item.get("id") or uuid.uuid4().hex,
             "ts":   item.get("ts") or time.time(),

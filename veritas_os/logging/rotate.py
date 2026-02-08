@@ -35,8 +35,7 @@ def rotate_if_needed() -> Path:
     # rotate - use Path methods for safe suffix handling
     # Using trust_log.stem ensures only the file suffix is removed, not all occurrences
     rotated = trust_log.parent / (trust_log.stem + "_old.jsonl")
-    if rotated.exists():
-        rotated.unlink()
+    rotated.unlink(missing_ok=True)
     trust_log.rename(rotated)
 
     return trust_log
