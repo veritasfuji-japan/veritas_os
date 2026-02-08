@@ -351,13 +351,16 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             },
         }
 
-    # max_results の下限を守る（極端値対策）
+    # max_results の下限・上限を守る（極端値対策）
+    # ★ M-15 修正: 上限を追加してリソース枯渇を防止
     try:
         mr = int(max_results)
     except Exception:
         mr = 5
     if mr < 1:
         mr = 1
+    if mr > 100:
+        mr = 100
 
     try:
         headers = {

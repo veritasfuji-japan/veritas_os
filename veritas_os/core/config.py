@@ -239,6 +239,13 @@ class VeritasConfig:
     )
 
     def __post_init__(self):
+        # --- API secret 未設定の警告 ---
+        if not self.api_secret:
+            logging.getLogger(__name__).warning(
+                "VERITAS_API_SECRET is not set. "
+                "The API will reject authenticated requests until a secret is configured."
+            )
+
         # --- API alias ---
         if not self.api_key:
             self.api_key = self.api_key_str

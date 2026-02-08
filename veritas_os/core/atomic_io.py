@@ -235,7 +235,7 @@ def atomic_append_line(
     fd = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_APPEND,
-        0o644
+        0o600
     )
     try:
         os.write(fd, line.encode(encoding))

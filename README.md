@@ -114,8 +114,10 @@ pip install -r requirements.txt
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
+export VERITAS_API_SECRET="your-long-random-secret"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
+export VERITAS_MAX_REQUEST_BODY_SIZE="10485760"
 ```
 
 ### 3) Start server
@@ -143,6 +145,18 @@ Example payload:
   }
 }
 ```
+
+---
+
+## Security Notes (Important)
+
+- **Never use placeholder or short secrets**: `VERITAS_API_SECRET` should be a long,
+  random value (32+ chars recommended). Placeholder or short secrets can effectively
+  disable or weaken HMAC protection.
+- **CORS safety**: avoid wildcard origins (`*`) when `allow_credentials` is enabled.
+  Configure explicit trusted origins only.
+- **Legacy pickle migration is risky**: if you enable legacy pickle migration for
+  MemoryOS, treat it as a short-lived migration path and disable it afterward.
 
 ---
 

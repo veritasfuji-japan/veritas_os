@@ -121,10 +121,12 @@ pip install -r requirements.txt
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
 export VERITAS_API_KEY="your-secret-api-key"
+export VERITAS_API_SECRET="your-long-random-secret"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
 export VERITAS_ENCRYPTED_LOG_ROOT="/path/to/encrypted/logs"
 export VERITAS_REQUIRE_ENCRYPTED_LOG_DIR="1"
+export VERITAS_MAX_REQUEST_BODY_SIZE="10485760"
 ```
 
 ### 3) サーバ起動
@@ -152,6 +154,18 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
   }
 }
 ```
+
+---
+
+## セキュリティ注意（重要）
+
+- **プレースホルダや短すぎるシークレットは禁止**:
+  `VERITAS_API_SECRET` は長いランダム値（推奨32文字以上）を設定してください。
+  プレースホルダや短い値はHMAC保護を無効化・弱体化する恐れがあります。
+- **CORSの安全性**: `allow_credentials` を有効にした状態で
+  ワイルドカード（`*`）を使わず、信頼できるオリジンのみを許可してください。
+- **Legacy pickle移行は危険**:
+  MemoryOSで旧pickle移行を有効にする場合は、移行完了後に必ず無効化してください。
 
 ---
 

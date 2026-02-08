@@ -13,7 +13,7 @@ MemoryOS - 改善版
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from datetime import datetime, timezone
 from uuid import uuid4
 import json
@@ -715,6 +715,8 @@ else:
     )
 
 # VectorMemory インスタンスの初期化
+# ★ 修正 (H-10): MEM_VEC へのアクセスをスレッドセーフにするためのロック
+_mem_vec_lock = threading.Lock()
 MEM_VEC = None
 try:
     # 外部 MEM_VEC を使うかどうかの判定
@@ -1196,10 +1198,12 @@ class MemoryStore:
         self.put(user_id, key, record)
 
         # ベクトルインデックスにも追加
-        global MEM_VEC
-        if MEM_VEC is not None:
+        # ★ 修正 (H-10): ローカル変数でスナップショットし、
+        #   チェックと使用の間で MEM_VEC が None になる競合を防止
+        _vec = MEM_VEC
+        if _vec is not None:
             try:
-                MEM_VEC.add(
+                _vec.add(
                     kind="episodic",
                     text=text,
                     tags=tags or [],
@@ -1340,13 +1344,56 @@ def get_evidence_for_query(
     return _hits_to_evidence(hits, source_prefix="memory")
 
 
-# ==== グローバル MEM 初期化 ====
-try:
-    MEM = MemoryStore.load(MEM_PATH)
-    logger.info(f"[MemoryOS] initialized at {MEM_PATH}")
-except Exception as e:
-    logger.error(f"[MemoryOS] init failed: {e}")
-    MEM = MemoryStore.load(MEM_PATH)
+class _LazyMemoryStore:
+    """MemoryStore の遅延初期化プロキシ。
+
+    import 時の重い I/O やモデルロードを避け、初回アクセス時にのみ
+    MemoryStore を初期化する。
+    """
+
+    def __init__(self, loader: Callable[[], "MemoryStore"]) -> None:
+        self._loader = loader
+        self._lock = threading.Lock()
+        self._obj: Optional[MemoryStore] = None
+        self._attempted = False
+        self._err: Optional[Exception] = None
+
+    def _load(self) -> "MemoryStore":
+        if self._obj is not None:
+            return self._obj
+        if self._attempted and self._err is not None:
+            raise RuntimeError(f"MemoryStore load failed: {self._err}") from self._err
+        with self._lock:
+            if self._obj is not None:
+                return self._obj
+            if self._attempted and self._err is not None:
+                raise RuntimeError(
+                    f"MemoryStore load failed: {self._err}"
+                ) from self._err
+            self._attempted = True
+            try:
+                self._obj = self._loader()
+                self._err = None
+            except Exception as exc:
+                self._err = exc
+                logger.error("[MemoryOS] lazy init failed: %s", exc)
+                raise
+        return self._obj
+
+    def __getattr__(self, name: str) -> Any:
+        obj = self._load()
+        return getattr(obj, name)
+
+
+def _load_memory_store() -> "MemoryStore":
+    """MemoryStore を遅延初期化するためのローダー。"""
+    store = MemoryStore.load(MEM_PATH)
+    logger.info("[MemoryOS] initialized at %s", MEM_PATH)
+    return store
+
+
+# ==== グローバル MEM (遅延初期化) ====
+MEM = _LazyMemoryStore(_load_memory_store)
 
 # ★ 修正: builtins.MEM への代入を削除。
 # 他モジュールは from veritas_os.core.memory import MEM で明示的にインポートしてください。
@@ -1379,8 +1426,6 @@ def add(
             meta={"page": 3},
         )
     """
-    global MEM_VEC
-
     if not text or not text.strip():
         raise ValueError("[MemoryOS.add] text is empty")
 
@@ -1404,9 +1449,11 @@ def add(
         logger.error("[MemoryOS.add] MEM.put failed")
 
     # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
-    if MEM_VEC is not None:
+    # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
+    _vec = MEM_VEC
+    if _vec is not None:
         try:
-            MEM_VEC.add(
+            _vec.add(
                 kind=kind,
                 text=text,
                 tags=tags or [],
@@ -1445,10 +1492,12 @@ def put(*args, **kwargs) -> bool:
             return False
 
         # ベクトルインデックスに追加
-        if MEM_VEC is not None:
+        # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
+        _vec = MEM_VEC
+        if _vec is not None:
             try:
                 base_text = text or json.dumps(doc, ensure_ascii=False)
-                success = MEM_VEC.add(kind=kind, text=base_text, tags=tags, meta=meta)
+                success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
                 if success:
                     logger.debug(f"[MemoryOS] Added to vector index: {kind}")
             except Exception as e:
@@ -1548,9 +1597,11 @@ def search(
     # ===========================
     # 1) ベクトル検索（優先）
     # ===========================
-    if MEM_VEC is not None:
+    # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
+    _vec = MEM_VEC
+    if _vec is not None:
         try:
-            raw = MEM_VEC.search(
+            raw = _vec.search(
                 query=query,
                 k=k,
                 kinds=kinds,
@@ -1598,7 +1649,7 @@ def search(
         except TypeError:
             # 旧シグネチャへのフォールバック
             try:
-                raw = MEM_VEC.search(query, k=k)  # type: ignore[call-arg]
+                raw = _vec.search(query, k=k)  # type: ignore[call-arg]
                 if isinstance(raw, list) and raw:
                     hits = [h for h in raw if isinstance(h, dict)]
                     unique = _dedup_hits(hits, k)
@@ -1921,57 +1972,59 @@ def rebuild_vector_index():
         from veritas_os.core import memory
         memory.rebuild_vector_index()
     """
-    global MEM_VEC
+    # ★ 修正 (H-10): _mem_vec_lock で排他制御し、
+    #   リビルド中に他スレッドが MEM_VEC を使用しないようにする
+    with _mem_vec_lock:
+        _vec = MEM_VEC
 
-    if MEM_VEC is None:
-        logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
-        return
+        if _vec is None:
+            logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
+            return
 
-    if not hasattr(MEM_VEC, "rebuild_index"):
-        logger.error(
-            "[MemoryOS] Cannot rebuild index: MEM_VEC has no rebuild_index()"
-        )
-        return
+        if not hasattr(_vec, "rebuild_index"):
+            logger.error(
+                "[MemoryOS] Cannot rebuild index: MEM_VEC has no rebuild_index()"
+            )
+            return
 
-    logger.info("[MemoryOS] Starting vector index rebuild...")
+        logger.info("[MemoryOS] Starting vector index rebuild...")
 
-    # memory.jsonから全データを読み込み
-    all_data = MEM.list_all()
+        # memory.jsonから全データを読み込み
+        all_data = MEM.list_all()
 
-    # ベクトル化可能なドキュメントを抽出
-    documents: List[Dict[str, Any]] = []
-    for record in all_data:
-        value = record.get("value")
-        if not isinstance(value, dict):
-            continue
+        # ベクトル化可能なドキュメントを抽出
+        documents: List[Dict[str, Any]] = []
+        for record in all_data:
+            value = record.get("value")
+            if not isinstance(value, dict):
+                continue
 
-        text = value.get("text", "")
-        if not text or not text.strip():
-            continue
+            text = value.get("text", "")
+            if not text or not text.strip():
+                continue
 
-        meta = value.get("meta", {}) or {}
-        meta = {
-            "user_id": record.get("user_id"),
-            "created_at": record.get("ts"),
-            **meta,
-        }
-
-        documents.append(
-            {
-                "kind": value.get("kind", "episodic"),
-                "text": text,
-                "tags": value.get("tags", []),
-                "meta": meta,
+            meta = value.get("meta", {}) or {}
+            meta = {
+                "user_id": record.get("user_id"),
+                "created_at": record.get("ts"),
+                **meta,
             }
-        )
 
-    logger.info(f"[MemoryOS] Found {len(documents)} documents to index")
+            documents.append(
+                {
+                    "kind": value.get("kind", "episodic"),
+                    "text": text,
+                    "tags": value.get("tags", []),
+                    "meta": meta,
+                }
+            )
 
-    # インデックス再構築
-    MEM_VEC.rebuild_index(documents)  # type: ignore[arg-type]
+        logger.info(f"[MemoryOS] Found {len(documents)} documents to index")
 
-    logger.info("[MemoryOS] Vector index rebuild complete")
+        # インデックス再構築
+        _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
+        logger.info("[MemoryOS] Vector index rebuild complete")
 
 
 

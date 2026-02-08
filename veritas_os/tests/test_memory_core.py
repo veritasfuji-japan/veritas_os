@@ -43,6 +43,33 @@ def test_memory_store_put_get_list_recent(tmp_path: Path):
 
 
 # -------------------------------------------------
+# 1.5. Lazy MemoryStore initialization
+# -------------------------------------------------
+
+
+def test_memory_lazy_initialization(tmp_path: Path):
+    import importlib
+
+    module = importlib.reload(memory)
+    module.MEM_PATH = tmp_path / "memory.json"
+
+    calls = {"count": 0}
+
+    def loader():
+        calls["count"] += 1
+        return module.MemoryStore.load(module.MEM_PATH)
+
+    module.MEM._loader = loader
+
+    assert module.MEM._obj is None
+    assert calls["count"] == 0
+
+    assert module.MEM.list_all("user1") == []
+    assert calls["count"] == 1
+    assert module.MEM._obj is not None
+
+
+# -------------------------------------------------
 # 2. MemoryStore: 旧形式 dict → list へのマイグレーション
 # -------------------------------------------------
 
@@ -479,4 +506,3 @@ def test_predict_gate_label_default(monkeypatch):
     monkeypatch.setattr(memory, "MODEL", None)
     label = memory.predict_gate_label("anything")
     assert label["allow"] == 0.5
-

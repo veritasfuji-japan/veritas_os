@@ -276,15 +276,16 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
         }
 
     records: List[Dict[str, Any]] = []
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
+    with _dataset_lock:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    records.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
 
     if not records:
         return {
@@ -366,43 +367,44 @@ def search_dataset(
     results: List[Dict[str, Any]] = []
     q_lower = query.lower() if query else None
 
-    with path.open(encoding="utf-8") as f:
-        for line in f:
-            if len(results) >= limit:
-                break
+    with _dataset_lock:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                if len(results) >= limit:
+                    break
 
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            # クエリフィルタ
-            if q_lower:
-                req_query = (
-                    rec.get("request", {})
-                    .get("payload", {})
-                    .get("query", "")
-                )
-                if q_lower not in str(req_query).lower():
+                line = line.strip()
+                if not line:
                     continue
 
-            # status フィルタ
-            if status:
-                rec_status = rec.get("labels", {}).get("status")
-                if rec_status != status:
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
                     continue
 
-            # memory_used フィルタ
-            if memory_used is not None:
-                rec_memory = rec.get("labels", {}).get("memory_used", False)
-                if bool(rec_memory) != memory_used:
-                    continue
+                # クエリフィルタ
+                if q_lower:
+                    req_query = (
+                        rec.get("request", {})
+                        .get("payload", {})
+                        .get("query", "")
+                    )
+                    if q_lower not in str(req_query).lower():
+                        continue
 
-            results.append(rec)
+                # status フィルタ
+                if status:
+                    rec_status = rec.get("labels", {}).get("status")
+                    if rec_status != status:
+                        continue
+
+                # memory_used フィルタ
+                if memory_used is not None:
+                    rec_memory = rec.get("labels", {}).get("memory_used", False)
+                    if bool(rec_memory) != memory_used:
+                        continue
+
+                results.append(rec)
 
     return results
 
