@@ -294,6 +294,14 @@ class VeritasConfig:
             pass  # 読み取り専用環境ではスキップ
 
 
+    def __repr__(self) -> str:
+        """API秘密鍵がログに漏洩しないよう、マスクした表現を返す"""
+        return (
+            f"VeritasConfig(api_key_str='***', api_secret='***', "
+            f"repo_root={self.repo_root!r}, log_dir={self.log_dir!r})"
+        )
+
+
 cfg = VeritasConfig()
 
 # サブ設定インスタンス（各モジュールからインポート可能）

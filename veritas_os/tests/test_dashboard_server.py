@@ -163,7 +163,8 @@ def test_status_500_on_invalid_json(client: TestClient):
     assert res.status_code == 500
     body = res.json()
     assert body.get("error") == "invalid JSON"
-    assert "detail" in body
+    # JSONDecodeError の詳細はセキュリティ上クライアントに返さない
+    assert "detail" not in body
 
 
 # =====================================================================
