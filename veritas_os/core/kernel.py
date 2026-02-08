@@ -20,6 +20,13 @@ from typing import Any, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
+# ★ C-1 修正: doctor 自動起動のレート制限
+# 高頻度リクエストでプロセスが溜まるのを防止（最低 60 秒間隔）
+import threading as _threading
+_DOCTOR_MIN_INTERVAL_SEC = 60.0
+_doctor_last_run: float = 0.0
+_doctor_lock = _threading.Lock()
+
 from .types import (
     ToolResult,
     OptionDict,
@@ -34,9 +41,6 @@ from .utils import _safe_float, _to_text, _redact_text, redact_payload
 
 import asyncio
 import inspect
-import logging
-
-log = logging.getLogger(__name__)
 
 from . import adapt
 from . import evidence as evos
@@ -435,7 +439,7 @@ async def decide(
             ctx["_world_state_injected"] = True
         except Exception as e:
             ctx = ctx_raw
-            log.warning("world_model.inject_state_into_context failed: %s", e)
+            logger.warning("world_model.inject_state_into_context failed: %s", e)
 
     fast_mode = bool(ctx.get("fast") or ctx.get("mode") == "fast")
 
@@ -988,7 +992,7 @@ async def decide(
             }
             redacted_episode_record = redact_payload(episode_record)
             if redacted_episode_record != episode_record:
-                log.warning(
+                logger.warning(
                     "PII detected in kernel.decide episode log; masked before persistence."
                 )
                 extras.setdefault("memory_log", {})
@@ -1041,40 +1045,50 @@ async def decide(
         skip_reasons["world_state_update"] = "already_done_by_pipeline"
 
     # doctor 自動実行
+    # ★ C-1 修正: レート制限付き（最低 _DOCTOR_MIN_INTERVAL_SEC 秒間隔）
     auto_doctor = ctx.get("auto_doctor", True)
     if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
-        try:
-            import os
-            from pathlib import Path
-            
-            # ★ セキュリティ修正: sys.executableの検証
-            python_executable = sys.executable
-            if not python_executable or not os.path.isfile(python_executable):
-                raise ValueError("Invalid Python executable path")
-            
-            # ★ セキュリティ修正: executableがPythonインタプリタであることを確認
-            # 注意: ファイル名チェックは基本的な防御層。完全な検証にはバージョン出力確認が必要だが、
-            # パフォーマンス上、ここでは軽量なチェックを採用
-            executable_name = os.path.basename(python_executable).lower()
-            # 正規表現で厳密にマッチ: python, python3, python3.x, pypy, pypy3等
-            import re
-            if not re.match(r'^(python|pypy)[0-9.]*$', executable_name.replace('.exe', '')):
-                raise ValueError(f"Unexpected executable name: {executable_name}")
-            
-            log_dir = Path(os.path.expanduser("~/.veritas/logs"))
-            log_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
-            doctor_log = log_dir / "doctor.log"
-            with open(doctor_log, "a", encoding="utf-8") as log_file:
-                log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
-                subprocess.Popen(
-                    [python_executable, "-m", "veritas_os.scripts.doctor"],
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    shell=False,
-                )
-        except Exception as e:
-            extras.setdefault("doctor", {})
-            extras["doctor"]["error"] = repr(e)
+        global _doctor_last_run
+        _should_run_doctor = False
+        with _doctor_lock:
+            now = time.time()
+            if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
+                _doctor_last_run = now
+                _should_run_doctor = True
+            else:
+                extras.setdefault("doctor", {})
+                extras["doctor"]["skipped"] = "rate_limited"
+
+        if _should_run_doctor:
+            try:
+                import os
+                from pathlib import Path
+
+                # ★ セキュリティ修正: sys.executableの検証
+                python_executable = sys.executable
+                if not python_executable or not os.path.isfile(python_executable):
+                    raise ValueError("Invalid Python executable path")
+
+                # ★ セキュリティ修正: executableがPythonインタプリタであることを確認
+                executable_name = os.path.basename(python_executable).lower()
+                # 正規表現で厳密にマッチ: python, python3, python3.x, pypy, pypy3等
+                if not re.match(r'^(python|pypy)[0-9.]*$', executable_name.replace('.exe', '')):
+                    raise ValueError(f"Unexpected executable name: {executable_name}")
+
+                log_dir = Path(os.path.expanduser("~/.veritas/logs"))
+                log_dir.mkdir(parents=True, exist_ok=True, mode=0o755)
+                doctor_log = log_dir / "doctor.log"
+                with open(doctor_log, "a", encoding="utf-8") as log_file:
+                    log_file.write(f"\n--- Doctor started at {datetime.now().isoformat()} ---\n")
+                    subprocess.Popen(
+                        [python_executable, "-m", "veritas_os.scripts.doctor"],
+                        stdout=log_file,
+                        stderr=subprocess.STDOUT,
+                        shell=False,
+                    )
+            except Exception as e:
+                extras.setdefault("doctor", {})
+                extras["doctor"]["error"] = repr(e)
 
     # experiments / curriculum
     if not ctx.get("_daily_plans_generated_by_pipeline"):
