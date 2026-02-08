@@ -1131,6 +1131,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 def fuji_validate(payload: dict):
     fc = get_fuji_core()
     if fc is None:
+        logger.warning("fuji_validate: fuji_core unavailable: %s", _fuji_state.err)
         # Return 503 as JSONResponse to ensure proper format
         return JSONResponse(
             status_code=503,
@@ -1243,6 +1244,7 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
 def memory_put(body: dict):
     store = get_memory_store()
     if store is None:
+        logger.warning("memory_put: memory store unavailable: %s", _memory_store_state.err)
         return {"ok": False, "error": "memory store unavailable"}
 
     try:
@@ -1313,6 +1315,7 @@ def memory_put(body: dict):
 async def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
+        logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
         return {"ok": False, "error": "memory store unavailable", "hits": [], "count": 0}
 
     try:
@@ -1415,6 +1418,7 @@ def trust_feedback(body: dict):
     """
     vc = get_value_core()
     if vc is None:
+        logger.warning("trust_feedback: value_core unavailable: %s", _value_core_state.err)
         return {"status": "error", "detail": "value_core unavailable"}
 
     try:
