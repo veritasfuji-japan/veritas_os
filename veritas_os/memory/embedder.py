@@ -1,5 +1,7 @@
 # veritas/memory/embedder.py
-import numpy as np, hashlib
+import hashlib
+
+import numpy as np
 
 class HashEmbedder:
     def __init__(self, dim: int = 384):
