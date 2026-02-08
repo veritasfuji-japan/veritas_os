@@ -94,9 +94,9 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 **Fix**: Added `_mem_vec_lock` (threading.Lock) for write operations (rebuild_vector_index). For read paths (put_episode, add, ingest_document, search), applied local-variable snapshot pattern (`_vec = MEM_VEC; if _vec is not None: _vec.add(...)`) to prevent TOCTOU between `if` check and method call.
 
 ### ✅ H-11: Race Condition in rotate.py
-**Status**: FIXED (via H-7 documentation + H-12 lock)
+**Status**: FIXED (via prior H-7 documentation + this PR's H-12 lock)
 **Location**: `logging/rotate.py:45-60`
-**Fix**: Already documented in H-7 that `open_trust_log_for_append` must be called under `_trust_log_lock`. H-12 fix ensures `get_last_hash()` also acquires the lock, completing the thread safety coverage.
+**Fix**: Already documented in H-7 (prior PR) that `open_trust_log_for_append` must be called under `_trust_log_lock`. This PR's H-12 fix ensures `get_last_hash()` also acquires the lock, completing the thread safety coverage.
 
 ### ✅ H-12: Missing get_last_hash Thread Safety
 **Status**: FIXED (2026-02-08)

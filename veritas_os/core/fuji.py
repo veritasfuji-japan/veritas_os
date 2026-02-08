@@ -498,12 +498,15 @@ def _check_policy_hot_reload() -> None:
             try:
                 current_mtime = os.fstat(fd).st_mtime
                 if current_mtime > _POLICY_MTIME:
-                    with os.fdopen(fd, "r", encoding="utf-8", closefd=False) as f:
+                    with os.fdopen(fd, "r", encoding="utf-8") as f:
                         content = f.read()
+                    # fd is now owned and closed by os.fdopen
+                    fd = -1
                     POLICY = _load_policy_from_str(content, path)
                     _POLICY_MTIME = current_mtime
             finally:
-                os.close(fd)
+                if fd >= 0:
+                    os.close(fd)
     except OSError as exc:
         _logger.debug("policy hot reload skipped: %s", exc)
 
