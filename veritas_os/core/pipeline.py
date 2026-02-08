@@ -731,8 +731,44 @@ def _normalize_web_payload(payload: Any) -> Optional[Dict[str, Any]]:
 # =========================================================
 from veritas_os.core import evidence as evidence_core
 
+
+def _norm_evidence_item_simple(ev: Any) -> Optional[Dict[str, Any]]:
+    """Module-level evidence normalizer (lightweight shim).
+
+    The full version lives inside the pipeline function as a nested def.
+    This shim is used by ``_evidencepy_to_pipeline_item`` which is defined
+    at module level and therefore cannot see the nested version.
+    """
+    if not isinstance(ev, dict):
+        return None
+    try:
+        ev2 = dict(ev)
+        if "confidence" not in ev2 and "weight" in ev2:
+            ev2["confidence"] = ev2.get("weight")
+        if ("title" not in ev2 or ev2.get("title") in (None, "")) and "kind" in ev2:
+            ev2["title"] = f"local:{ev2.get('kind')}"
+        if ("uri" not in ev2 or ev2.get("uri") in (None, "")) and "kind" in ev2:
+            ev2["uri"] = f"internal:evidence:{ev2.get('kind')}"
+        src = ev2.get("source") or "local"
+        conf_raw = ev2.get("confidence", 0.7)
+        conf = max(0.0, min(1.0, float(conf_raw if conf_raw is not None else 0.7)))
+        snippet = ev2.get("snippet")
+        snippet_s = "" if snippet is None else str(snippet)
+        uri = ev2.get("uri")
+        uri_s = str(uri) if uri is not None else None
+        return {
+            "source": str(src),
+            "uri": uri_s,
+            "title": str(ev2.get("title") or ""),
+            "snippet": snippet_s,
+            "confidence": conf,
+        }
+    except Exception:
+        return None
+
+
 def _evidencepy_to_pipeline_item(ev: dict) -> dict | None:
-    return _norm_evidence_item(
+    return _norm_evidence_item_simple(
         {
             "source": ev.get("source", "local"),
             "uri": f"internal:evidence:{ev.get('kind','unknown')}",

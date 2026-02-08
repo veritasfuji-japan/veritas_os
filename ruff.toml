@@ -1,0 +1,20 @@
+# Ruff linter configuration for VERITAS OS
+# https://docs.astral.sh/ruff/configuration/
+
+target-version = "py311"
+
+exclude = [
+    "veritas_os/scripts/",
+    "veritas_os/tests/",
+]
+
+[lint]
+select = ["E", "F", "W"]
+ignore = [
+    "E501",   # line too long
+    "E402",   # module level import not at top
+    "F401",   # imported but unused
+    "W291",   # trailing whitespace
+    "W293",   # whitespace before ':'
+    "F841",   # local variable assigned but never used
+]

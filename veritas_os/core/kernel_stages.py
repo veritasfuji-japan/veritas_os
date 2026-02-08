@@ -273,7 +273,7 @@ def score_alternatives(
     """
     ql = (query or "").lower()
     bias = persona_bias or {}
-    ctx = context or {}
+    _ctx = context or {}  # noqa: F841
 
     # value_core が利用可能かチェック
     try:

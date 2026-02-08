@@ -159,7 +159,28 @@ def test_inject_state_into_context_with_list_projects(monkeypatch):
         "meta": {"last_users": {}},
         "projects": [
             {
+                "project_id": "u:default",
+                "owner_user_id": "u",
+                "title": "Default Project for u",
+                "status": "active",
+                "metrics": {
+                    "decisions": 10,
+                    "avg_latency_ms": 100.0,
+                    "avg_risk": 0.1,
+                    "avg_value": 0.9,
+                    "active_plan_steps": 4,
+                    "active_plan_done": 2,
+                },
+                "last": {
+                    "query": "q",
+                    "chosen_title": "c",
+                    "decision_status": "ok",
+                },
+                "active_plan_title": "Plan",
+            },
+            {
                 "project_id": "veritas_agi",
+                "owner_user_id": "u",
                 "title": "AGI Project",
                 "status": "active",
                 "progress": 0.5,
@@ -167,7 +188,7 @@ def test_inject_state_into_context_with_list_projects(monkeypatch):
                 "notes": "",
                 "decision_count": 3,
                 "last_risk": 0.2,
-            }
+            },
         ],
         "external_knowledge": {
             "agi_research_events": [
@@ -184,22 +205,6 @@ def test_inject_state_into_context_with_list_projects(monkeypatch):
 
     monkeypatch.setattr(world_core, "_load_world", lambda: fake_world)
     monkeypatch.setattr(world_core, "_save_world", lambda state: None)
-
-    dummy_state = WorldState(
-        user_id="u",
-        decisions=10,
-        avg_latency_ms=100.0,
-        avg_risk=0.1,
-        avg_value=0.9,
-        active_plan_title="Plan",
-        active_plan_steps=4,
-        active_plan_done=2,
-        last_query="q",
-        last_chosen_title="c",
-        last_decision_status="ok",
-        last_updated="2025-01-01T00:00:00Z",
-    )
-    monkeypatch.setattr(world_core, "load_state", lambda user_id="global": dummy_state)
 
     ctx = world_core.inject_state_into_context({"foo": "bar"}, user_id="u")
 

@@ -1,5 +1,9 @@
 from pathlib import Path
-import json, logging, time, uuid, threading
+import json
+import logging
+import threading
+import time
+import uuid
 from typing import Dict, Any, List, Optional
 from .embedder import HashEmbedder
 from .index_cosine import CosineIndex
