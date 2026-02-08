@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from . import adapt
@@ -129,7 +129,7 @@ def handle_simple_qa(
     Returns:
         DecideResponse 完全互換のレスポンス辞書
     """
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     answer_str = ""
     title = ""
     description = ""

@@ -181,17 +181,17 @@ def heuristic_value_scores(q: str, ctx: dict) -> Dict[str, float]:
         s["efficiency"] = 0.5
 
     # ポジティブなワード
-    if "報告" in q or "説明" in q or "引用" in q or "検証" in q:
+    if "報告" in qn or "説明" in qn or "引用" in qn or "検証" in qn:
         s["truthfulness"] = 0.95
         s["accountability"] = 0.9
 
-    if "自動" in q or "自律" in q:
+    if "自動" in qn or "自律" in qn:
         s["autonomy"] = 0.8
 
-    if "安全" in q or "危険" in q or "リスク" in q:
+    if "安全" in qn or "危険" in qn or "リスク" in qn:
         s["harm_avoid"] = min(s["harm_avoid"], 0.85)
 
-    if "改善" in q or "最適" in q or "短縮" in q:
+    if "改善" in qn or "最適" in qn or "短縮" in qn:
         s["efficiency"] = 0.9
         s["accountability"] = 0.8
 

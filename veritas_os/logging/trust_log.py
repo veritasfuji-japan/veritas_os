@@ -118,12 +118,10 @@ def get_last_hash() -> str | None:
 def calc_sha256(payload: dict) -> str:
     """entry の SHA-256 ハッシュを計算する（外部用の薄いヘルパー）
 
-    NOTE: この関数は ensure_ascii=True (デフォルト) を使用する。
-    _compute_sha256() は ensure_ascii=False を使用するため、
-    非ASCII文字を含むペイロードでは異なるハッシュ値を返す。
-    ハッシュチェーンの検証には _normalize_entry_for_hash() + _sha256() を使用すること。
+    NOTE: ensure_ascii=False を使用してハッシュチェーンの
+    append_trust_log / verify_trust_log と整合性を保つ。
     """
-    raw = json.dumps(payload, sort_keys=True).encode("utf-8")
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(raw).hexdigest()
 
 

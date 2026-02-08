@@ -23,7 +23,10 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 
 # ここでは VERITAS_LOG_DIR を無視して固定パスにする
 LOG_DIR = SCRIPTS_DIR / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def _ensure_log_dir() -> None:
+    """LOG_DIR を遅延的に作成する（import 時の副作用を回避）。"""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Doctor / Reason 用メタログ（JSON Lines）
 META_LOG = LOG_DIR / "meta_log.jsonl"
@@ -98,6 +101,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
 
     # JSON Lines 形式で1行ずつ追記
     try:
+        _ensure_log_dir()
         with open(META_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(out, ensure_ascii=False) + "\n")
     except Exception:
@@ -281,6 +285,7 @@ async def generate_reflection_template(
 
     # ついでに meta_log にも記録しておく（任意）
     try:
+        _ensure_log_dir()
         meta = {
             "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "type": "reflection_template",
