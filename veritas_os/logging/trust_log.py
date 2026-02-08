@@ -103,7 +103,8 @@ def get_last_hash() -> str | None:
             if lines:
                 last = json.loads(lines[-1])
                 return last.get("sha256")
-    except Exception:
+    except Exception as exc:
+        logger.warning("get_last_hash failed: %s", exc)
         return None
     return None
 
