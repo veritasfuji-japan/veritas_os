@@ -38,11 +38,7 @@ jobs:
           python -m pip install ruff bandit
 
       - name: Ruff check (lint)
-        run: |
-          ruff check veritas_os/ \
-            --select E,F,W \
-            --ignore E501,E402,F401,W291,W293,F841 \
-            --exclude "veritas_os/scripts/,veritas_os/tests/"
+        run: ruff check veritas_os/
 
       - name: Bandit security scan
         run: |
