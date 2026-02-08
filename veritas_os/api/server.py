@@ -865,7 +865,7 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     }
 
     # Only include raw_body in debug mode (when env var is set)
-    if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+    if _is_debug_mode():
         raw_body_bytes = await request.body()
         raw = raw_body_bytes.decode("utf-8", "replace") if raw_body_bytes else ""
         # Apply PII masking and truncate to prevent large payloads
@@ -878,6 +878,12 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 # ==============================
 # Health / Status (must always work)
 # ==============================
+
+
+def _is_debug_mode() -> bool:
+    """VERITAS_DEBUG_MODE が有効かどうかを判定する。"""
+    return os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+
 
 @app.get("/")
 def root():
@@ -905,7 +911,7 @@ def status():
     }
     # ★ M-13 修正: 内部エラー詳細はデバッグモード時のみ公開
     # 本番環境では実装の詳細が漏洩するのを防止
-    if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+    if _is_debug_mode():
         result["cfg_error"] = _cfg_state.err
         result["pipeline_error"] = _pipeline_state.err
     else:
@@ -1391,7 +1397,7 @@ def metrics():
         "pipeline_ok": get_decision_pipeline() is not None,
     }
     # ★ M-13 修正: 内部エラー詳細はデバッグモード時のみ公開
-    if os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes"):
+    if _is_debug_mode():
         result["pipeline_error"] = _pipeline_state.err
         result["cfg_error"] = _cfg_state.err
     else:
