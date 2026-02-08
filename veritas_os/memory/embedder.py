@@ -1,5 +1,6 @@
 # veritas/memory/embedder.py
 import hashlib
+from typing import List
 
 import numpy as np
 
@@ -17,7 +18,7 @@ class HashEmbedder:
         v = np.tile(arr, int(np.ceil(self.dim/arr.size)))[:self.dim]
         v = (v - v.mean()) / (v.std() + 1e-6)
         return v
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: List[str]) -> np.ndarray:
         if len(texts) > MAX_BATCH_SIZE:
             raise ValueError(f"Batch size {len(texts)} exceeds limit {MAX_BATCH_SIZE}")
         for t in texts:
