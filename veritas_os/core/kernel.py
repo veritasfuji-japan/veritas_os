@@ -1078,7 +1078,9 @@ async def decide(
                 log_dir = Path(os.path.expanduser("~/.veritas/logs"))
                 log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
                 doctor_log = log_dir / "doctor.log"
-                with open(doctor_log, "a", encoding="utf-8") as log_file:
+                # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
+                fd = os.open(str(doctor_log), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+                with os.fdopen(fd, "a", encoding="utf-8") as log_file:
                     log_file.write(f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n")
                     subprocess.Popen(
                         [python_executable, "-m", "veritas_os.scripts.doctor"],

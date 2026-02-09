@@ -110,9 +110,14 @@ def _to_bool(v: Any) -> bool:
 
 
 def _warn(msg: str) -> None:
-    """警告メッセージを出力（環境変数で抑制可能）"""
+    """警告メッセージを出力（環境変数で抑制可能）。メッセージの接頭辞に応じてログレベルを自動選択する。"""
     if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        logger.warning(msg)
+        if msg.startswith("[INFO]"):
+            logger.info(msg)
+        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
+            logger.error(msg)
+        else:
+            logger.warning(msg)
 
 
 def _check_required_modules() -> None:
@@ -1705,8 +1710,9 @@ async def run_decide_pipeline(
     # ---------- fast mode (restore contract) ----------
     params = _get_request_params(request)
     fast_from_body = _to_bool(body.get("fast"))
+    _ctx_mode = context.get("mode")
     fast_from_ctx = _to_bool(context.get("fast")) or (
-        isinstance(context.get("mode"), str) and context.get("mode").lower() == "fast"
+        isinstance(_ctx_mode, str) and _ctx_mode.lower() == "fast"
     )
     fast_from_query = _to_bool(params.get("fast"))
 
@@ -2134,10 +2140,7 @@ async def run_decide_pipeline(
     # alternatives の初期値は input_alts（= 明示 or planner）
     alternatives: List[Dict[str, Any]] = list(input_alts)
 
-    # web_evidence が未定義でも落ちないように
-    try:
-        web_evidence = web_evidence if isinstance(web_evidence, list) else []
-    except Exception:
+    if not isinstance(web_evidence, list):
         web_evidence = []
 
     # =========================================================
@@ -3096,13 +3099,8 @@ async def run_decide_pipeline(
     except Exception:
         payload["evidence"] = []
 
-    try:
-        EVIDENCE_MAX_LOCAL = int(os.getenv("VERITAS_EVIDENCE_MAX", str(EVIDENCE_MAX)))
-    except Exception:
-        EVIDENCE_MAX_LOCAL = 50
-
-    if isinstance(payload.get("evidence"), list) and len(payload["evidence"]) > EVIDENCE_MAX_LOCAL:
-        payload["evidence"] = payload["evidence"][:EVIDENCE_MAX_LOCAL]
+    if isinstance(payload.get("evidence"), list) and len(payload["evidence"]) > EVIDENCE_MAX:
+        payload["evidence"] = payload["evidence"][:EVIDENCE_MAX]
 
     # =========================================================
     # Persist (best-effort)
@@ -3138,7 +3136,7 @@ async def run_decide_pipeline(
         fuji_full = payload.get("fuji") or {}
         world_snapshot = (context or {}).get("world")
 
-        persist = {
+        persist = redact_payload({
             "request_id": request_id,
             "ts": utc_now_iso_z(timespec="seconds"),
             "query": query,
@@ -3160,7 +3158,7 @@ async def run_decide_pipeline(
             "critique_ok": bool((critique or {}).get("ok")) if isinstance(critique, dict) else False,
             "critique_mode": (critique or {}).get("mode") if isinstance(critique, dict) else None,
             "critique_reason": (critique or {}).get("reason") if isinstance(critique, dict) else None,
-        }
+        })
 
         stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         fname = f"decide_{stamp}.json"

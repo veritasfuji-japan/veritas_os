@@ -510,10 +510,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
+        # 詳細はログに記録し、クライアントには汎用的なエラーメッセージのみ返す
+        logger.warning("WEBSEARCH_API error: %r", e)
         return {
             "ok": False,
             "results": [],
-            "error": f"WEBSEARCH_API error: {repr(e)}",
+            "error": "WEBSEARCH_API error: request failed",
             "meta": {
                 "raw_count": 0,
                 "agi_filter_applied": False,

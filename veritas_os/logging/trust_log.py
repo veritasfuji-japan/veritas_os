@@ -104,14 +104,18 @@ def get_last_hash() -> str | None:
                 # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
                 chunk_size = min(65536, file_size)
                 f.seek(file_size - chunk_size)
-                chunk = f.read().decode("utf-8")
+                raw = f.read()
+                # ★ UTF-8 境界安全: seek がマルチバイト文字の途中に
+                # 当たる可能性があるため errors="replace" で安全にデコード。
+                # 置換文字は先頭の不完全行にのみ影響し、lines[-1] は
+                # 常に EOF まで読み込んだ完全な行なので安全。
+                chunk = raw.decode("utf-8", errors="replace")
                 lines = chunk.strip().split("\n")
                 if lines:
                     last = json.loads(lines[-1])
                     return last.get("sha256")
         except Exception as exc:
             logger.warning("get_last_hash failed: %s", exc)
-            return None
         return None
 
 
@@ -291,14 +295,21 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
 
     Yields:
         dict: 個々のログエントリ
+
+    ★ スレッドセーフ: reverse=True の場合、ファイル読み込みをロック下で行い、
+      書き込み中の不完全な行を読み込むリスクを排除する。
     """
     if not LOG_JSONL.exists():
         return
 
     try:
         if reverse:
-            with LOG_JSONL.open("rb") as f:
-                lines = f.readlines()
+            # ★ 修正: _trust_log_lock 下でファイルを一括読み込み
+            # concurrent な append_trust_log() が途中行を書き込んでいても
+            # ロック取得後に完全なデータを読める
+            with _trust_log_lock:
+                with LOG_JSONL.open("rb") as f:
+                    lines = f.readlines()
             for line in reversed(lines):
                 line_str = line.decode("utf-8").strip()
                 if not line_str:
@@ -476,6 +487,7 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
 __all__ = [
     "iso_now",
     "append_trust_log",
+    "append_trust_event",
     "iter_trust_log",
     "load_trust_log",
     "get_trust_log_entry",
@@ -486,3 +498,7 @@ __all__ = [
     "LOG_JSON",
     "LOG_JSONL",
 ]
+
+
+# fuji.py 等が append_trust_event として参照するための後方互換エイリアス
+append_trust_event = append_trust_log
