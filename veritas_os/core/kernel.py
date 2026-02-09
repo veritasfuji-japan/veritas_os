@@ -1080,18 +1080,17 @@ async def decide(
                 doctor_log = log_dir / "doctor.log"
                 # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
                 fd = os.open(str(doctor_log), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-                log_file = os.fdopen(fd, "a", encoding="utf-8")
-                log_file.write(f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n")
-                log_file.flush()
-                # Note: log_file is intentionally NOT closed here.
-                # The subprocess inherits the fd and will keep it open;
-                # Python's GC will close it after the Popen object is collected.
-                subprocess.Popen(
-                    [python_executable, "-m", "veritas_os.scripts.doctor"],
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    shell=False,
-                )
+                try:
+                    os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
+                    proc = subprocess.Popen(
+                        [python_executable, "-m", "veritas_os.scripts.doctor"],
+                        stdout=fd,
+                        stderr=subprocess.STDOUT,
+                        shell=False,
+                    )
+                finally:
+                    # Close our copy of the fd; the subprocess has its own copy.
+                    os.close(fd)
             except Exception as e:
                 extras.setdefault("doctor", {})
                 extras["doctor"]["error"] = repr(e)

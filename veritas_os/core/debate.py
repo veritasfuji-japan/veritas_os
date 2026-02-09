@@ -380,7 +380,10 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     MAX_OPTIONS = 100  # Maximum number of options to prevent resource exhaustion
 
     def _truncate_string(value: Any, max_len: int = MAX_STRING_LENGTH) -> Optional[str]:
-        """Safely truncate string values to prevent resource exhaustion."""
+        """Safely truncate string values to prevent resource exhaustion.
+
+        If *max_len* is non-positive, falls back to ``MAX_STRING_LENGTH``.
+        """
         if value is None:
             return None
         if max_len <= 0:
