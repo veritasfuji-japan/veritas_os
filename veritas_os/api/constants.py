@@ -62,8 +62,9 @@ DECISION_MODIFY: str = DecisionStatus.MODIFY.value
 DECISION_BLOCK: str = DecisionStatus.BLOCK.value
 DECISION_ABSTAIN: str = DecisionStatus.ABSTAIN.value
 
-# 旧名（内部的には BLOCK と同義）
-DECISION_REJECTED: str = DecisionStatus.BLOCK.value
+# 旧名（後方互換性のため維持。Pydantic スキーマ Gate/DecideResponse の
+# Literal["allow","modify","rejected"] に合わせて "rejected" を使用する）
+DECISION_REJECTED: str = DecisionStatus.REJECTED.value
 
 
 # ===== Helper Functions =====

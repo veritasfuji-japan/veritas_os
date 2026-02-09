@@ -38,8 +38,8 @@ def test_backward_compat_string_constants():
     assert DECISION_BLOCK == DecisionStatus.BLOCK.value
     assert DECISION_ABSTAIN == DecisionStatus.ABSTAIN.value
 
-    # 旧名（rejected）は BLOCK の alias になっている
-    assert DECISION_REJECTED == DecisionStatus.BLOCK.value
+    # 旧名（rejected）は後方互換性のために維持
+    assert DECISION_REJECTED == DecisionStatus.REJECTED.value
 
 
 def test_is_valid_status():

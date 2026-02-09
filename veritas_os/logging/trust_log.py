@@ -476,6 +476,7 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
 __all__ = [
     "iso_now",
     "append_trust_log",
+    "append_trust_event",
     "iter_trust_log",
     "load_trust_log",
     "get_trust_log_entry",
@@ -486,3 +487,7 @@ __all__ = [
     "LOG_JSON",
     "LOG_JSONL",
 ]
+
+
+# fuji.py 等が append_trust_event として参照するための後方互換エイリアス
+append_trust_event = append_trust_log
