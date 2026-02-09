@@ -371,7 +371,7 @@ class Gate(BaseModel):
     risk: float = 0.0
     telos_score: float = 0.0
     bias: Optional[float] = None
-    decision_status: Literal["allow", "modify", "rejected"] = "allow"
+    decision_status: Literal["allow", "modify", "rejected", "block", "abstain"] = "allow"
     reason: Optional[str] = None
     modifications: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
 
@@ -411,7 +411,7 @@ class DecideResponse(BaseModel):
     evo: Optional[Dict[str, Any]] = None
 
     # /v1/decide 側に合わせた拡張分
-    decision_status: Literal["allow", "modify", "rejected"] = "allow"
+    decision_status: Literal["allow", "modify", "rejected", "block", "abstain"] = "allow"
     rejection_reason: Optional[str] = None
 
     # MemoryOS メタ
