@@ -34,6 +34,8 @@ import time
 import os
 import re
 
+_logger = logging.getLogger(__name__)
+
 from .types import (
     FujiInternalStatus,
     FujiDecisionStatus,
@@ -473,8 +475,6 @@ _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime if _POLICY_PATH.exists() els
 
 # ★ 修正 (H-9): ポリシーリロード時の TOCTOU 競合状態を防止するためのロック
 _policy_reload_lock = threading.Lock()
-
-_logger = logging.getLogger(__name__)
 
 
 def reload_policy() -> Dict[str, Any]:
