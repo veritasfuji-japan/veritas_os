@@ -460,7 +460,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         obj = json.loads(cleaned)
         return _wrap_if_needed(obj)
     except Exception:
-        pass
+        logger.debug("planner JSON parse attempt 1 (raw) failed")
 
     # 2) {} 抜き出し
     try:
@@ -470,7 +470,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         obj = json.loads(snippet)
         return _wrap_if_needed(obj)
     except Exception:
-        pass
+        logger.debug("planner JSON parse attempt 2 (brace extraction) failed")
 
     # 3) 末尾削り
     max_len = len(cleaned)
@@ -535,7 +535,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
                             if isinstance(obj, dict):
                                 objs.append(obj)
                         except Exception:
-                            pass
+                            logger.debug("planner step object parse failed: %s", obj_str[:80])
                         buf_start = None
                 elif ch == "]":
                     break
