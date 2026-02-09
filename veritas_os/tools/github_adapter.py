@@ -141,8 +141,11 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
 
     url = "https://api.github.com/search/repositories"
     # GitHub API の per_page は最大100なので制限する
-    # ★ セキュリティ修正: 負の値も防止
-    per_page = max(1, min(int(max_results), GITHUB_API_MAX_PER_PAGE))
+    # ★ セキュリティ修正: 負の値・非数値型も防止
+    try:
+        per_page = max(1, min(int(max_results), GITHUB_API_MAX_PER_PAGE))
+    except (ValueError, TypeError):
+        per_page = 5
     params = {
         "q": q,
         "per_page": per_page,

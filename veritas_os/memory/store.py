@@ -156,7 +156,10 @@ class MemoryStore:
             raise ValueError(f"Query too long (max {MAX_QUERY_LENGTH} chars)")
 
         # ★ DoS対策: k の上限を制限（メモリ枯渇防止）
-        k = max(1, min(int(k), 1000))
+        try:
+            k = max(1, min(int(k), 1000))
+        except (ValueError, TypeError):
+            k = 8
 
         kinds = kinds or list(FILES.keys())
 

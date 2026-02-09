@@ -26,12 +26,17 @@ def _as_bool_env(value: str | None) -> bool:
 
 def _validate_resolved_path(path: Path) -> Path:
     """Validate that a resolved path does not traverse into sensitive system dirs."""
-    resolved = path.resolve()
-    resolved_str = str(resolved)
-    # Reject paths containing '..' components (pre-resolution traversal attempt)
+    # Reject paths containing '..' components before resolution
     if ".." in path.parts:
         raise RuntimeError(
-            f"Path traversal detected: {path} contains '..' components"
+            "Path traversal detected: path contains '..' components"
+        )
+    resolved = path.resolve()
+    resolved_str = str(resolved)
+    # Also check resolved path for '..' (symlink traversal)
+    if ".." in resolved.parts:
+        raise RuntimeError(
+            "Path traversal detected: resolved path contains '..' components"
         )
     # Block sensitive system directories
     _sensitive = ("/etc", "/var/run", "/proc", "/sys", "/dev", "/boot")
