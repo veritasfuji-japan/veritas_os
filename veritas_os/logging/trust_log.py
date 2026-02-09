@@ -106,7 +106,9 @@ def get_last_hash() -> str | None:
                 f.seek(file_size - chunk_size)
                 raw = f.read()
                 # ★ UTF-8 境界安全: seek がマルチバイト文字の途中に
-                # 当たる可能性があるため errors="replace" で安全にデコード
+                # 当たる可能性があるため errors="replace" で安全にデコード。
+                # 置換文字は先頭の不完全行にのみ影響し、lines[-1] は
+                # 常に EOF まで読み込んだ完全な行なので安全。
                 chunk = raw.decode("utf-8", errors="replace")
                 lines = chunk.strip().split("\n")
                 if lines:

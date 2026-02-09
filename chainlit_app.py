@@ -313,7 +313,7 @@ async def on_message(message: cl.Message):
     except Exception as e:
         # ★ L-3 修正: スタックトレースをユーザーに露出しない
         # ★ 追加修正: エラー詳細をログに記録（運用時のデバッグ用）
-        logger.error("VERITAS API call failed: %r", e)
+        logger.error("VERITAS API call failed for query=%r: %r", query, e)
         thinking.content = "VERITAS API 呼び出しでエラーが発生しました。しばらくしてから再度お試しください。"
         await thinking.update()
         return
