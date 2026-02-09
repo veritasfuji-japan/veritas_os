@@ -44,9 +44,8 @@ _env_password = os.getenv("DASHBOARD_PASSWORD", "")
 if not _env_password:
     _env_password = secrets.token_urlsafe(24)
     logger.warning(
-        "DASHBOARD_PASSWORD not set. Generated random password: %s  "
+        "DASHBOARD_PASSWORD not set. Generated a random password. "
         "Set DASHBOARD_PASSWORD env var for persistent access.",
-        _env_password,
     )
 DASHBOARD_PASSWORD = _env_password
 
@@ -404,4 +403,3 @@ if __name__ == "__main__":
     print("=" * 60)
 
     uvicorn.run(app, host=os.getenv("DASHBOARD_HOST", "127.0.0.1"), port=8000)
-
