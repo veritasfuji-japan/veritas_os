@@ -295,14 +295,21 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
 
     Yields:
         dict: 個々のログエントリ
+
+    ★ スレッドセーフ: reverse=True の場合、ファイル読み込みをロック下で行い、
+      書き込み中の不完全な行を読み込むリスクを排除する。
     """
     if not LOG_JSONL.exists():
         return
 
     try:
         if reverse:
-            with LOG_JSONL.open("rb") as f:
-                lines = f.readlines()
+            # ★ 修正: _trust_log_lock 下でファイルを一括読み込み
+            # concurrent な append_trust_log() が途中行を書き込んでいても
+            # ロック取得後に完全なデータを読める
+            with _trust_log_lock:
+                with LOG_JSONL.open("rb") as f:
+                    lines = f.readlines()
             for line in reversed(lines):
                 line_str = line.decode("utf-8").strip()
                 if not line_str:

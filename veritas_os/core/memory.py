@@ -82,8 +82,9 @@ def _is_pickle_file_stale(path: Path, max_age_days: int = 90) -> bool:
         mtime = path.stat().st_mtime
         age_days = (time.time() - mtime) / (60 * 60 * 24)
         return age_days > max_age_days
-    except Exception:
-        return True  # エラー時は古いとみなす
+    except OSError as exc:
+        logger.warning("Cannot stat pickle file %s: %s", path, exc)
+        return True  # エラー時は古いとみなす（安全側に倒す）
 
 
 def _validate_pickle_data_structure(data: Any) -> bool:

@@ -617,7 +617,7 @@ async def verify_signature(
         raise HTTPException(status_code=401, detail="Missing auth headers")
     try:
         ts = int(x_timestamp)
-    except Exception:
+    except (ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid timestamp")
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         raise HTTPException(status_code=401, detail="Timestamp out of range")
