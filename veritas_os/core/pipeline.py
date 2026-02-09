@@ -451,7 +451,7 @@ def _save_valstats(d: Dict[str, Any]) -> None:
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=2)
     except Exception:
-        return None
+        pass
 
 
 def _dedupe_alts_fallback(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -850,7 +850,7 @@ async def run_decide_pipeline(
             s = str(x).strip().lower()
         except Exception:
             return False
-        return s in ("1", "true", "t", "yes", "y", "on")
+        return s in ("1", "true", "yes", "y", "on")
     
     
     def _as_str(x: Any, *, limit: int = 2000) -> str:
@@ -858,8 +858,8 @@ async def run_decide_pipeline(
             s = "" if x is None else str(x)
         except Exception:
             s = repr(x)
-        if limit and len(s) > int(limit):
-            return s[: int(limit)]
+        if limit and len(s) > limit:
+            return s[:limit]
         return s
     
     
@@ -1661,15 +1661,7 @@ async def run_decide_pipeline(
     if not isinstance(body, dict):
         body = {}
 
-    # --- 明示 options を最優先ソースとして保持 ---
-    explicit_raw = body.get("options") or body.get("alternatives") or []
-    if not isinstance(explicit_raw, list):
-        explicit_raw = []
-    explicit_options = [_norm_alt(o) for o in explicit_raw if isinstance(o, dict)]
-
-
     # ---------- SAFE INIT ----------
-    raw: Dict[str, Any] = {}
     evidence: List[Dict[str, Any]] = []
     critique: Dict[str, Any] = {}
     debate: List[Any] = []
@@ -1951,12 +1943,7 @@ async def run_decide_pipeline(
         try:
             ws0 = await _safe_web_search(query, max_results=web_max)
 
-            # _normalize_web_payload が無い/参照できない場合でも絶対に落とさない
-            norm_fn = globals().get("_normalize_web_payload")
-            if callable(norm_fn):
-                ws = norm_fn(ws0)
-            else:
-                ws = ws0 if isinstance(ws0, dict) else None
+            ws = _normalize_web_payload(ws0)
 
         except Exception as e:
             response_extras.setdefault("env_tools", {})
@@ -2165,7 +2152,7 @@ async def run_decide_pipeline(
     except Exception:
         core_decide = None
 
-    raw: Dict[str, Any] = {}
+    raw = {}
     healing_attempts: List[Dict[str, Any]] = []
     healing_stop_reason: Optional[str] = None
     healing_enabled = self_healing.is_healing_enabled(context or {})
