@@ -996,6 +996,8 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
             else:
                 with open(log_jsonl, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
         except Exception as e:
             logger.warning("write trust_log.jsonl failed: %s", _errstr(e))
 

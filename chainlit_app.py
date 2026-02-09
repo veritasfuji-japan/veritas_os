@@ -3,11 +3,14 @@
 # VERITAS v2 Chainlit デモ UI
 # -----------------------------------
 
+import logging
 import os
 from typing import Any, Dict, List
 
 import chainlit as cl
 import httpx
+
+logger = logging.getLogger(__name__)
 
 
 VERITAS_API_URL = os.getenv("VERITAS_API_URL", "http://localhost:8000/v1/decide")
@@ -308,8 +311,9 @@ async def on_message(message: cl.Message):
     try:
         res = await call_veritas_decide(query)
     except Exception as e:
-        # update() は content キーワードを取らないので、contentを書き換えてから呼ぶ
         # ★ L-3 修正: スタックトレースをユーザーに露出しない
+        # ★ 追加修正: エラー詳細をログに記録（運用時のデバッグ用）
+        logger.error("VERITAS API call failed: %r", e)
         thinking.content = "VERITAS API 呼び出しでエラーが発生しました。しばらくしてから再度お試しください。"
         await thinking.update()
         return
