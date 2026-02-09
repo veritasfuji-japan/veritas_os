@@ -393,10 +393,13 @@ if __name__ == "__main__":
     print(f"   Username: {DASHBOARD_USERNAME}")
     if not os.getenv("DASHBOARD_PASSWORD"):
         # ★ セキュリティ修正: 自動生成パスワードを stdout に出力しない
-        # パスワードはログファイル経由でのみ確認可能（ログレベル WARNING）
+        # パスワードの具体的な値はログにも出力しない
         # NOTE: ログファイルのパーミッションが適切に制限されていることを確認してください
-        logger.warning("Auto-generated password: %s", DASHBOARD_PASSWORD)
-        print("   Password: (auto-generated, check logs)")
+        logger.warning(
+            "DASHBOARD_PASSWORD was not set. An auto-generated password is in use. "
+            "Set DASHBOARD_PASSWORD env var for persistent access."
+        )
+        print("   Password: (auto-generated, not shown)")
         print("   Set DASHBOARD_PASSWORD env var for persistent access.")
     else:
         print(f"   Password: {'*' * len(DASHBOARD_PASSWORD)}")
