@@ -143,7 +143,7 @@ def build_dataset_record(
     decision_labels = {
         "status": status_enum.value,          # "allow" / "modify" / "rejected"
         "fuji_status": fuji.get("status"),    # FUJI の内部ステータス（任意）
-        "blocked": status_enum is DecisionStatus.REJECTED,
+        "blocked": status_enum == DecisionStatus.REJECTED,
         "memory_used": mem_used,
         "memory_citations": mem_citation,
     }

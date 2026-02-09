@@ -34,7 +34,7 @@ def test_github_search_repos_without_token(monkeypatch):
 
     assert res["ok"] is False
     assert res["results"] == []
-    assert "GITHUB_API not configured" in res["error"]
+    assert "GitHub API unavailable" in res["error"]
 
 
 def test_github_search_repos_empty_query(monkeypatch):
