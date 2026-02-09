@@ -1705,8 +1705,9 @@ async def run_decide_pipeline(
     # ---------- fast mode (restore contract) ----------
     params = _get_request_params(request)
     fast_from_body = _to_bool(body.get("fast"))
+    _ctx_mode = context.get("mode")
     fast_from_ctx = _to_bool(context.get("fast")) or (
-        isinstance(context.get("mode"), str) and context.get("mode").lower() == "fast"
+        isinstance(_ctx_mode, str) and _ctx_mode.lower() == "fast"
     )
     fast_from_query = _to_bool(params.get("fast"))
 
@@ -2134,10 +2135,7 @@ async def run_decide_pipeline(
     # alternatives の初期値は input_alts（= 明示 or planner）
     alternatives: List[Dict[str, Any]] = list(input_alts)
 
-    # web_evidence が未定義でも落ちないように
-    try:
-        web_evidence = web_evidence if isinstance(web_evidence, list) else []
-    except Exception:
+    if not isinstance(web_evidence, list):
         web_evidence = []
 
     # =========================================================
