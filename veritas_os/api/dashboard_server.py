@@ -41,12 +41,10 @@ security = HTTPBasic()
 
 DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
 _env_password = os.getenv("DASHBOARD_PASSWORD", "")
+_password_auto_generated = False
 if not _env_password:
     _env_password = secrets.token_urlsafe(24)
-    logger.warning(
-        "DASHBOARD_PASSWORD not set. Generated a random password. "
-        "Set DASHBOARD_PASSWORD env var for persistent access.",
-    )
+    _password_auto_generated = True
 DASHBOARD_PASSWORD = _env_password
 
 
@@ -391,14 +389,10 @@ if __name__ == "__main__":
     print("🔐 VERITAS Dashboard Server (Authenticated)")
     print("=" * 60)
     print(f"   Username: {DASHBOARD_USERNAME}")
-    if not os.getenv("DASHBOARD_PASSWORD"):
+    if _password_auto_generated:
         # ★ セキュリティ修正: 自動生成パスワードを stdout に出力しない
         # パスワードの具体的な値はログにも出力しない
         # NOTE: ログファイルのパーミッションが適切に制限されていることを確認してください
-        logger.warning(
-            "DASHBOARD_PASSWORD was not set. An auto-generated password is in use. "
-            "Set DASHBOARD_PASSWORD env var for persistent access."
-        )
         print("   Password: (auto-generated, not shown)")
         print("   Set DASHBOARD_PASSWORD env var for persistent access.")
     else:
