@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import textwrap
 import logging
 import re
-from typing import Any, Dict, List, Optional
+import textwrap
+from typing import Any, Dict, List, Optional, TypedDict
 
 from . import llm_client
 from . import world as world_model
@@ -14,6 +14,27 @@ from . import memory as mem
 from . import code_planner  # ★ 追加
 
 logger = logging.getLogger(__name__)
+
+
+class StepDict(TypedDict, total=False):
+    """Planner step definition for normalized step payloads."""
+
+    id: str
+    title: str
+    detail: str
+    why: str
+    eta_hours: float
+    risk: float
+    dependencies: List[str]
+
+
+class PlanDict(TypedDict, total=False):
+    """Planner plan payload containing normalized steps and metadata."""
+
+    steps: List[StepDict]
+    raw: Dict[str, Any]
+    meta: Dict[str, Any]
+    source: str
 
 # ============================
 #  step1（棚卸し）意図判定
@@ -52,15 +73,15 @@ def _wants_inventory_step(query: str, context: Dict[str, Any] | None = None) -> 
 # ============================
 
 def _normalize_step(
-    step: Dict[str, Any],
+    step: StepDict,
     default_eta_hours: float = 1.0,
     default_risk: float = 0.1,
-) -> Dict[str, Any]:
+) -> StepDict:
     """
     1つの step に対して、eta_hours / risk / dependencies を必ず埋める。
     すでに値がある場合はそのまま尊重し、欠けているものだけ補完する。
     """
-    s: Dict[str, Any] = dict(step)
+    s: StepDict = dict(step)
 
     if "eta_hours" not in s:
         try:
@@ -84,10 +105,10 @@ def _normalize_step(
 
 
 def _normalize_steps_list(
-    steps: List[Dict[str, Any]] | None,
+    steps: List[StepDict] | None,
     default_eta_hours: float = 1.0,
     default_risk: float = 0.1,
-) -> List[Dict[str, Any]]:
+) -> List[StepDict]:
     """
     steps のリストに対して _normalize_step を一括適用。
     None や不正要素が混ざっていても「まともな dict だけ」を採用する。
@@ -95,7 +116,7 @@ def _normalize_steps_list(
     if not isinstance(steps, list):
         return []
 
-    normalized: List[Dict[str, Any]] = []
+    normalized: List[StepDict] = []
     for st in steps:
         if not isinstance(st, dict):
             continue
@@ -162,13 +183,13 @@ def _simple_qa_plan(
     query: str,
     context: Dict[str, Any] | None = None,
     world_snap: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+) -> PlanDict:
     """
     simple QA 用の最小プラン。
     """
     q = (query or "").strip()
 
-    steps: List[Dict[str, Any]] = [
+    steps: List[StepDict] = [
         {
             "id": "simple_qa",
             "title": "シンプルQ&Aで回答を受け取る",
@@ -1210,7 +1231,5 @@ def generate_plan(
     )
 
     return steps
-
-
 
 

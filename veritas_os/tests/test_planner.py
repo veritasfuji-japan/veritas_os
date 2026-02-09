@@ -18,8 +18,11 @@ def test_normalize_step_fills_defaults_and_preserves():
         "eta_hours": 2.5,
         "dependencies": ["a", 2],
     }
-    normalized = planner_core._normalize_step(step, default_eta_hours=10, 
-default_risk=0.5)
+    normalized = planner_core._normalize_step(
+        step,
+        default_eta_hours=10,
+        default_risk=0.5,
+    )
 
     # 既存値は尊重される
     assert normalized["eta_hours"] == 2.5
@@ -48,6 +51,19 @@ def test_normalize_steps_list_filters_invalid():
         assert "eta_hours" in s
         assert "risk" in s
         assert "dependencies" in s
+
+
+def test_normalize_step_handles_non_list_dependencies():
+    step = {"id": "s1", "dependencies": "not-a-list"}
+    normalized = planner_core._normalize_step(
+        step,
+        default_eta_hours="2",
+        default_risk="0.2",
+    )
+
+    assert normalized["eta_hours"] == 2.0
+    assert normalized["risk"] == pytest.approx(0.2)
+    assert normalized["dependencies"] == []
 
 
 # -------------------------------
@@ -366,4 +382,3 @@ def test_generate_plan_includes_expected_steps():
     assert "reflect" in ids
     # 「調べ」が含まれるクエリなので research ステップも含まれる
     assert "research" in ids
-
