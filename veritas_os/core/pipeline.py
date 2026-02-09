@@ -112,9 +112,9 @@ def _to_bool(v: Any) -> bool:
 def _warn(msg: str) -> None:
     """警告メッセージを出力（環境変数で抑制可能）。メッセージの接頭辞に応じてログレベルを自動選択する。"""
     if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        if "[INFO]" in msg:
+        if msg.startswith("[INFO]"):
             logger.info(msg)
-        elif "[ERROR]" in msg or "[FATAL]" in msg:
+        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
             logger.error(msg)
         else:
             logger.warning(msg)
