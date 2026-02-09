@@ -727,9 +727,13 @@ def _normalize_web_payload(payload: Any) -> Optional[Dict[str, Any]]:
     return {"ok": True, "results": [{"title": s, "url": "", "snippet": s}]}
 
 # =========================================================
-# evidencepy_to_pipeline_item
+# evidence.py -> pipeline item
 # =========================================================
-from veritas_os.core import evidence as evidence_core
+try:
+    from veritas_os.core import evidence as evidence_core  # type: ignore
+except Exception as e:  # pragma: no cover
+    evidence_core = None  # type: ignore
+    _warn(f"[WARN][pipeline] evidence import failed (OPTIONAL): {repr(e)}")
 
 
 def _norm_evidence_item_simple(ev: Any) -> Optional[Dict[str, Any]]:
@@ -3093,7 +3097,7 @@ async def run_decide_pipeline(
         payload["evidence"] = []
 
     try:
-        EVIDENCE_MAX_LOCAL = int(os.getenv("VERITAS_EVIDENCE_MAX", str(EVIDENCE_MAX if "EVIDENCE_MAX" in globals() else 50)))
+        EVIDENCE_MAX_LOCAL = int(os.getenv("VERITAS_EVIDENCE_MAX", str(EVIDENCE_MAX)))
     except Exception:
         EVIDENCE_MAX_LOCAL = 50
 
