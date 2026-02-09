@@ -194,7 +194,7 @@ def _luhn_check(card_number: str) -> bool:
 def _is_valid_credit_card(match: str) -> bool:
     """クレジットカード番号の妥当性を検証"""
     digits_only = re.sub(r'[-\s]', '', match)
-    if not digits_only.isdigit():
+    if not digits_only or not digits_only.isdigit():
         return False
 
     # 長さチェック
@@ -284,12 +284,9 @@ def _is_likely_ip(match: str) -> bool:
     # 各オクテットが0-255の範囲か確認
     try:
         octets = [int(p) for p in parts]
-        if all(0 <= o <= 255 for o in octets):
-            return True
+        return all(0 <= o <= 255 for o in octets)
     except ValueError:
         return False
-
-    return False
 
 
 # =============================================================================

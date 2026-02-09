@@ -127,7 +127,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         return {
             "ok": False,
             "results": [],
-            "error": "GITHUB_API not configured (set VERITAS_GITHUB_TOKEN)",
+            "error": "GitHub API unavailable",
         }
 
     q, truncated = _prepare_query(query)

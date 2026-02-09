@@ -69,7 +69,7 @@ def test_web_search_returns_error_when_not_configured(monkeypatch) -> None:
 
     assert resp["ok"] is False
     assert resp["results"] == []
-    assert "WEBSEARCH_API not configured" in resp["error"]
+    assert "WEBSEARCH_API unavailable" in resp["error"]
 
 
 def test_web_search_normal_query_returns_results(monkeypatch) -> None:

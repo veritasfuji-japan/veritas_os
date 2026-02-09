@@ -338,7 +338,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         return {
             "ok": False,
             "results": [],
-            "error": "WEBSEARCH_API not configured (set VERITAS_WEBSEARCH_URL / KEY)",
+            "error": "WEBSEARCH_API unavailable",
             "meta": {
                 "raw_count": 0,
                 "agi_filter_applied": False,

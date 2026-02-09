@@ -383,6 +383,8 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
         """Safely truncate string values to prevent resource exhaustion."""
         if value is None:
             return None
+        if max_len <= 0:
+            max_len = MAX_STRING_LENGTH
         if not isinstance(value, str):
             return str(value)[:max_len]
         return value[:max_len]
