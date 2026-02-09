@@ -450,8 +450,8 @@ def _save_valstats(d: Dict[str, Any]) -> None:
         else:
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("_save_valstats failed: %s", e)
 
 
 def _dedupe_alts_fallback(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
