@@ -141,7 +141,11 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
 
     url = "https://api.github.com/search/repositories"
     # GitHub API の per_page は最大100なので制限する
-    per_page = min(max_results, GITHUB_API_MAX_PER_PAGE)
+    # ★ セキュリティ修正: 負の値・非数値型も防止
+    try:
+        per_page = max(1, min(int(max_results), GITHUB_API_MAX_PER_PAGE))
+    except (ValueError, TypeError):
+        per_page = 5
     params = {
         "q": q,
         "per_page": per_page,
@@ -155,10 +159,12 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         r = _get_with_retry(url, headers=headers, params=params, timeout=20)
         data = r.json()
     except Exception as e:
+        # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
+        logger.warning("GitHub API error: %r", e)
         return {
             "ok": False,
             "results": [],
-            "error": f"GitHub API error: {e}",
+            "error": "GitHub API error: request failed",
         }
 
     items = data.get("items", []) or []

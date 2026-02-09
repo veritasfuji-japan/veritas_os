@@ -24,6 +24,30 @@ def _as_bool_env(value: str | None) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _validate_resolved_path(path: Path) -> Path:
+    """Validate that a resolved path does not traverse into sensitive system dirs."""
+    # Reject paths containing '..' components before resolution
+    if ".." in path.parts:
+        raise RuntimeError(
+            "Path traversal detected: path contains '..' components"
+        )
+    resolved = path.resolve()
+    resolved_str = str(resolved)
+    # Also check resolved path for '..' (symlink traversal)
+    if ".." in resolved.parts:
+        raise RuntimeError(
+            "Path traversal detected: resolved path contains '..' components"
+        )
+    # Block sensitive system directories
+    _sensitive = ("/etc", "/var/run", "/proc", "/sys", "/dev", "/boot")
+    for sp in _sensitive:
+        if resolved_str == sp or resolved_str.startswith(sp + "/"):
+            raise RuntimeError(
+                f"Log path must not be within sensitive system directory: {sp}"
+            )
+    return resolved
+
+
 def _resolve_log_root() -> Path:
     """Resolve the base log root with optional encrypted-path enforcement."""
     encrypted_root = os.getenv("VERITAS_ENCRYPTED_LOG_ROOT")
@@ -39,6 +63,9 @@ def _resolve_log_root() -> Path:
         log_root = Path(data_base).expanduser()
     else:
         log_root = Path(log_root_env or str(SCRIPTS_DIR / "logs")).expanduser()
+
+    # ★ セキュリティ修正: パストラバーサル・機密ディレクトリへの書き込みを防止
+    _validate_resolved_path(log_root)
 
     if require_encrypted:
         if not encrypted_root:
