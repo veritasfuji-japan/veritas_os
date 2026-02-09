@@ -394,6 +394,7 @@ if __name__ == "__main__":
     if not os.getenv("DASHBOARD_PASSWORD"):
         # ★ セキュリティ修正: 自動生成パスワードを stdout に出力しない
         # パスワードはログファイル経由でのみ確認可能（ログレベル WARNING）
+        # NOTE: ログファイルのパーミッションが適切に制限されていることを確認してください
         logger.warning("Auto-generated password: %s", DASHBOARD_PASSWORD)
         print("   Password: (auto-generated, check logs)")
         print("   Set DASHBOARD_PASSWORD env var for persistent access.")
