@@ -104,14 +104,18 @@ def get_last_hash() -> str | None:
                 # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
                 chunk_size = min(65536, file_size)
                 f.seek(file_size - chunk_size)
-                chunk = f.read().decode("utf-8")
+                raw = f.read()
+                # ★ UTF-8 境界安全: seek がマルチバイト文字の途中に
+                # 当たる可能性があるため errors="replace" で安全にデコード。
+                # 置換文字は先頭の不完全行にのみ影響し、lines[-1] は
+                # 常に EOF まで読み込んだ完全な行なので安全。
+                chunk = raw.decode("utf-8", errors="replace")
                 lines = chunk.strip().split("\n")
                 if lines:
                     last = json.loads(lines[-1])
                     return last.get("sha256")
         except Exception as exc:
             logger.warning("get_last_hash failed: %s", exc)
-            return None
         return None
 
 
