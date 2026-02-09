@@ -1037,8 +1037,11 @@ def write_shadow_decide(
         "fuji": (fuji or {}).get("status"),
     }
     try:
-        with open(out, "w", encoding="utf-8") as f:
-            json.dump(rec, f, ensure_ascii=False, indent=2)
+        if _HAS_ATOMIC_IO:
+            atomic_write_json(out, rec, indent=2)
+        else:
+            with open(out, "w", encoding="utf-8") as f:
+                json.dump(rec, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.warning("write shadow decide failed: %s", _errstr(e))
 
