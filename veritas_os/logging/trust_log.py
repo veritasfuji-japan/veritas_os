@@ -319,15 +319,20 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
                 except json.JSONDecodeError:
                     continue
         else:
-            with LOG_JSONL.open("r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        yield json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
+            # ★ Bug fix: forward iteration もロック下でファイルを一括読み込み。
+            # concurrent な append_trust_log() が途中行を書き込んでいても
+            # ロック取得後に完全なデータを読める。
+            with _trust_log_lock:
+                with LOG_JSONL.open("r", encoding="utf-8") as f:
+                    lines = f.readlines()
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    yield json.loads(line)
+                except json.JSONDecodeError:
+                    continue
     except Exception as e:
         logger.warning("trust_log iterate failed: %s", e)
         return

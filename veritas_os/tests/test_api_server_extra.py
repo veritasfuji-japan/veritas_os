@@ -3,8 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import time
 import hmac
+
+# ★ テスト用APIキーを設定（認証付きエンドポイントのテスト用）
+# server import 前に設定して、起動時の警告を抑制
+_TEST_API_KEY = "test-server-extra-key"
+os.environ["VERITAS_API_KEY"] = _TEST_API_KEY
+_AUTH_HEADERS = {"X-API-Key": _TEST_API_KEY}
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -50,7 +57,8 @@ def _setup_env_and_rate_limit(monkeypatch):
 # -------------------------------------------------
 
 
-def test_health_and_status_and_metrics():
+def test_health_and_status_and_metrics(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     # health 系
     for path in ("/health", "/v1/health"):
         r = client.get(path)
@@ -69,7 +77,7 @@ def test_health_and_status_and_metrics():
         assert "version" in data
 
     # metrics (ファイルが無くても 200 が返ることだけ確認)
-    r = client.get("/v1/metrics")
+    r = client.get("/v1/metrics", headers=_AUTH_HEADERS)
     assert r.status_code == 200
     data = r.json()
     assert "decide_files" in data
@@ -91,6 +99,7 @@ def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch):
       - last_decide_at を JSON から読む
     パスを踏むテスト
     """
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     shadow_dir = tmp_path / "shadow_for_metrics"
     shadow_dir.mkdir()
     log_jsonl = tmp_path / "trust_log_metrics.jsonl"
@@ -108,7 +117,7 @@ def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch):
     with log_jsonl.open("w", encoding="utf-8") as f:
         f.write("{}\n{}\n")
 
-    r = client.get("/v1/metrics")
+    r = client.get("/v1/metrics", headers=_AUTH_HEADERS)
     assert r.status_code == 200
     data = r.json()
 
@@ -872,6 +881,7 @@ def test_trust_feedback_ok(monkeypatch):
     """
     append_trust_log が正常に呼ばれたパス
     """
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     calls = []
 
     def fake_append_trust_log(user_id, score, note, source, extra):
@@ -881,6 +891,7 @@ def test_trust_feedback_ok(monkeypatch):
 
     r = client.post(
         "/v1/trust/feedback",
+        headers=_AUTH_HEADERS,
         json={
             "user_id": "user123",
             "score": 0.9,
@@ -906,6 +917,7 @@ def test_trust_feedback_error(monkeypatch):
     """
     append_trust_log が例外を投げたときに error レスポンスになるパス
     """
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
 
     def boom(*args, **kwargs):
         raise RuntimeError("boom")
@@ -914,6 +926,7 @@ def test_trust_feedback_error(monkeypatch):
 
     r = client.post(
         "/v1/trust/feedback",
+        headers=_AUTH_HEADERS,
         json={
             "user_id": "user_err",
             "score": 0.1,

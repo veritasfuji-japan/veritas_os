@@ -1317,7 +1317,7 @@ def memory_put(body: dict):
 
 
 @app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-async def memory_search(payload: dict):
+def memory_search(payload: dict):
     store = get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
@@ -1326,11 +1326,26 @@ async def memory_search(payload: dict):
     try:
         q = payload.get("query", "")
         kinds = payload.get("kinds")
-        k = max(1, min(int(payload.get("k", 8)), 100))
-        min_sim = max(0.0, min(float(payload.get("min_sim", 0.25)), 1.0))
+        try:
+            k = max(1, min(int(payload.get("k", 8)), 100))
+        except (ValueError, TypeError):
+            k = 8
+        try:
+            min_sim = max(0.0, min(float(payload.get("min_sim", 0.25)), 1.0))
+        except (ValueError, TypeError):
+            min_sim = 0.25
         user_id = payload.get("user_id")
 
         raw_hits = _store_search(store, query=q, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
+
+        # ★ Bug fix: MemoryStore.search() returns Dict[str, List[Dict]], not a flat list.
+        # Flatten the dict-of-lists into a single list before filtering.
+        if isinstance(raw_hits, dict):
+            flat_hits: list = []
+            for kind_hits in raw_hits.values():
+                if isinstance(kind_hits, list):
+                    flat_hits.extend(kind_hits)
+            raw_hits = flat_hits
 
         norm_hits = []
         for h in (raw_hits or []):
@@ -1361,7 +1376,11 @@ def memory_get(body: dict):
         return {"ok": False, "error": "memory store unavailable", "value": None}
 
     try:
-        value = _store_get(store, body["user_id"], body["key"])
+        uid = body.get("user_id")
+        key = body.get("key")
+        if not uid or not key:
+            return {"ok": False, "error": "user_id and key are required", "value": None}
+        value = _store_get(store, uid, key)
         return {"ok": True, "value": value}
     except Exception as e:
         logger.error("memory_get failed: %s", e)
@@ -1372,7 +1391,7 @@ def memory_get(body: dict):
 # metrics for Doctor
 # ==============================
 
-@app.get("/v1/metrics")
+@app.get("/v1/metrics", dependencies=[Depends(require_api_key)])
 def metrics():
     shadow_dir = _effective_shadow_dir()
     _, _, log_jsonl = _effective_log_paths()
@@ -1416,7 +1435,7 @@ def metrics():
 # Trust Feedback
 # ==============================
 
-@app.post("/v1/trust/feedback")
+@app.post("/v1/trust/feedback", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def trust_feedback(body: dict):
     """
     人間からのフィードバックを trust_log に記録する簡易API。

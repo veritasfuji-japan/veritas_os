@@ -208,7 +208,7 @@ class TestTrustFeedback:
             "source": "unit-test"
         }
         
-        response = client.post("/v1/trust/feedback", json=payload)
+        response = client.post("/v1/trust/feedback", headers={"X-API-Key": "test-key"}, json=payload)
         
         assert response.status_code == 200
         data = response.json()
@@ -254,7 +254,7 @@ class TestTrustFeedback:
             "note": "high score test"
         }
         
-        response = client.post("/v1/trust/feedback", json=payload)
+        response = client.post("/v1/trust/feedback", headers={"X-API-Key": "test-key"}, json=payload)
         
         # 現在の実装では200を返し、スコアはそのまま記録される
         assert response.status_code == 200
@@ -383,7 +383,7 @@ class TestMetrics:
         log_jsonl.write_text("".join(log_lines), encoding="utf-8")
 
         # メトリクス取得
-        response = client.get("/v1/metrics")
+        response = client.get("/v1/metrics", headers={"X-API-Key": "test-key"})
         
         assert response.status_code == 200
         data = response.json()
