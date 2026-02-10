@@ -374,7 +374,7 @@ def chat(
     # Gemini は endpoint + model + :generateContent の形式（認証はヘッダー経由）
     if provider == LLMProvider.GOOGLE.value:
         # ★ セキュリティ: モデル名のバリデーション（パストラバーサル/SSRF防止）
-        if not re.match(r'^[a-zA-Z0-9._-]+$', model):
+        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', model) or '..' in model:
             raise LLMError("Invalid model name for Gemini: contains disallowed characters")
         endpoint = f"{endpoint}/{model}:generateContent"
 
