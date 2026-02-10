@@ -1201,17 +1201,18 @@ class MemoryStore:
         # ベクトルインデックスにも追加
         # ★ 修正 (H-10): ローカル変数でスナップショットし、
         #   チェックと使用の間で MEM_VEC が None になる競合を防止
-        _vec = MEM_VEC
-        if _vec is not None:
-            try:
-                _vec.add(
-                    kind="episodic",
-                    text=text,
-                    tags=tags or [],
-                    meta=meta or {},
-                )
-            except Exception as e:
-                logger.warning(f"[MemoryOS] put_episode MEM_VEC.add error: {e}")
+        with _mem_vec_lock:
+            _vec = MEM_VEC
+            if _vec is not None:
+                try:
+                    _vec.add(
+                        kind="episodic",
+                        text=text,
+                        tags=tags or [],
+                        meta=meta or {},
+                    )
+                except Exception as e:
+                    logger.warning(f"[MemoryOS] put_episode MEM_VEC.add error: {e}")
 
         return key
 
@@ -1451,17 +1452,18 @@ def add(
 
     # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
     # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
-    _vec = MEM_VEC
-    if _vec is not None:
-        try:
-            _vec.add(
-                kind=kind,
-                text=text,
-                tags=tags or [],
-                meta=entry_meta,
-            )
-        except Exception as e:
-            logger.warning(f"[MemoryOS.add] MEM_VEC.add error: {e}")
+    with _mem_vec_lock:
+        _vec = MEM_VEC
+        if _vec is not None:
+            try:
+                _vec.add(
+                    kind=kind,
+                    text=text,
+                    tags=tags or [],
+                    meta=entry_meta,
+                )
+            except Exception as e:
+                logger.warning(f"[MemoryOS.add] MEM_VEC.add error: {e}")
 
     return record
 
@@ -1494,15 +1496,16 @@ def put(*args, **kwargs) -> bool:
 
         # ベクトルインデックスに追加
         # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
-        _vec = MEM_VEC
-        if _vec is not None:
-            try:
-                base_text = text or json.dumps(doc, ensure_ascii=False)
-                success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
-                if success:
-                    logger.debug(f"[MemoryOS] Added to vector index: {kind}")
-            except Exception as e:
-                logger.warning(f"[MemoryOS] MEM_VEC.add error (fallback to KVS): {e}")
+        with _mem_vec_lock:
+            _vec = MEM_VEC
+            if _vec is not None:
+                try:
+                    base_text = text or json.dumps(doc, ensure_ascii=False)
+                    success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
+                    if success:
+                        logger.debug(f"[MemoryOS] Added to vector index: {kind}")
+                except Exception as e:
+                    logger.warning(f"[MemoryOS] MEM_VEC.add error (fallback to KVS): {e}")
 
         # KVSにも保存
         user_id = meta.get("user_id", kind)

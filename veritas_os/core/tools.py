@@ -14,6 +14,7 @@ VERITAS ToolOS - Tool Execution Control & Registry
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -79,6 +80,7 @@ if _llm_safety_impl is not None:
 
 # ツール使用ログ（メモリ内、最新100件のみ保持）
 _tool_usage_log: List[Dict[str, Any]] = []
+_tool_usage_log_lock = threading.Lock()
 MAX_LOG_SIZE = 100
 
 
@@ -339,7 +341,6 @@ def _log_tool_usage(
     """
     ツール使用をメモリ内ログに記録
     """
-    global _tool_usage_log
 
     entry: Dict[str, Any] = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -364,11 +365,12 @@ def _log_tool_usage(
             summary["result_count"] = len(result["results"])
         entry["result_summary"] = summary
 
-    _tool_usage_log.append(entry)
+    with _tool_usage_log_lock:
+        _tool_usage_log.append(entry)
 
-    # ログサイズ制限
-    if len(_tool_usage_log) > MAX_LOG_SIZE:
-        _tool_usage_log = _tool_usage_log[-MAX_LOG_SIZE:]
+        # ログサイズ制限
+        if len(_tool_usage_log) > MAX_LOG_SIZE:
+            del _tool_usage_log[: len(_tool_usage_log) - MAX_LOG_SIZE]
 
 
 def _sanitize_args(args: Dict[str, Any]) -> Dict[str, Any]:
@@ -396,13 +398,14 @@ def get_tool_usage_log(limit: int = 100) -> List[Dict[str, Any]]:
     Args:
         limit: 取得する最大件数
     """
-    return _tool_usage_log[-limit:][::-1]
+    with _tool_usage_log_lock:
+        return _tool_usage_log[-limit:][::-1]
 
 
 def clear_tool_usage_log() -> None:
     """ツール使用ログをクリア"""
-    global _tool_usage_log
-    _tool_usage_log = []
+    with _tool_usage_log_lock:
+        _tool_usage_log.clear()
     logger.info("Tool usage log cleared")
 
 
@@ -417,7 +420,10 @@ def get_tool_stats() -> Dict[str, Any]:
     Returns:
         dict: 統計情報
     """
-    total = len(_tool_usage_log)
+    with _tool_usage_log_lock:
+        snapshot = list(_tool_usage_log)
+
+    total = len(snapshot)
 
     if total == 0:
         return {
@@ -430,12 +436,12 @@ def get_tool_stats() -> Dict[str, Any]:
             "implemented_tools_count": len(TOOL_REGISTRY),
         }
 
-    success = sum(1 for e in _tool_usage_log if e.get("status") == "success")
+    success = sum(1 for e in snapshot if e.get("status") == "success")
 
     by_tool: Dict[str, int] = {}
     by_status: Dict[str, int] = {}
 
-    for entry in _tool_usage_log:
+    for entry in snapshot:
         tool = entry.get("tool", "unknown")
         status = entry.get("status", "unknown")
         by_tool[tool] = by_tool.get(tool, 0) + 1

@@ -397,7 +397,8 @@ def chat(
 
             # その他エラー
             if resp.status_code >= 400:
-                raise LLMError(f"API error (status={resp.status_code})")
+                body = resp.text[:200] if resp.text else ""
+                raise LLMError(f"API error (status={resp.status_code}): {body}")
 
             data = resp.json()
             text = _parse_response(provider, data)
