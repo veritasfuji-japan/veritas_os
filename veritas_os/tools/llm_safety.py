@@ -312,7 +312,7 @@ def run(
             logger.warning("LLM safety head failed, falling back to heuristic: %s: %s", type(e).__name__, e)
             fb = _heuristic_analyze(text)
             fb["ok"] = True
-            fb.setdefault("raw", {})["llm_error"] = "llm_call_failed"
+            fb.setdefault("raw", {})["llm_error"] = f"{type(e).__name__}: {e}"
             return fb
 
     # API キー不在など → ヒューリスティック
