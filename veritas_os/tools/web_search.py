@@ -442,7 +442,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             # URL スキーム検証: 安全なスキーム (http/https) のみ許可
             if url:
                 parsed_url = urlparse(url)
-                if parsed_url.scheme not in ("http", "https", ""):
+                if parsed_url.scheme not in ("http", "https"):
                     continue
             title = item.get("title") or ""
             snippet = item.get("snippet") or item.get("description") or ""
