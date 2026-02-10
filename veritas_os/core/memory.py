@@ -282,6 +282,7 @@ class VectorMemory:
         self.index_path = index_path
         self.embedding_dim = embedding_dim
         self._lock = threading.RLock()
+        self._id_counter = 0
 
         # データストア
         self.documents: List[Dict[str, Any]] = []
@@ -496,8 +497,9 @@ class VectorMemory:
 
             with self._lock:
                 # ドキュメント追加
+                self._id_counter += 1
                 doc = {
-                    "id": f"{kind}_{len(self.documents)}_{int(time.time())}",
+                    "id": f"{kind}_{self._id_counter}_{int(time.time())}",
                     "kind": kind,
                     "text": text,
                     "tags": tags or [],
@@ -652,8 +654,9 @@ class VectorMemory:
             f"[VectorMemory] Rebuilding index for {len(documents)} documents..."
         )
 
-        self.documents = []
-        self.embeddings = None
+        with self._lock:
+            self.documents = []
+            self.embeddings = None
 
         for doc in documents:
             text = doc.get("text", "")
@@ -870,6 +873,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
     else:
         # Windows or 非POSIX: .lock ファイルで排他
         lockfile = path.with_suffix(path.suffix + ".lock")
+        _STALE_LOCK_AGE_SECONDS = 300  # 5 minutes
         backoff = 0.01
         while True:
             try:
@@ -877,6 +881,18 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                 os.close(fd)
                 break
             except FileExistsError:
+                # Stale lock detection: remove lockfile older than threshold
+                try:
+                    lock_age = time.time() - os.path.getmtime(str(lockfile))
+                    if lock_age > _STALE_LOCK_AGE_SECONDS:
+                        logger.warning(
+                            "[MemoryOS] Removing stale lockfile (age=%.0fs): %s",
+                            lock_age, lockfile,
+                        )
+                        lockfile.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    pass
                 if time.time() - start > timeout:
                     raise TimeoutError(f"failed to acquire lock for {path}")
                 time.sleep(backoff)
