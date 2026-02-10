@@ -873,7 +873,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
     else:
         # Windows or 非POSIX: .lock ファイルで排他
         lockfile = path.with_suffix(path.suffix + ".lock")
-        _STALE_LOCK_AGE = 300  # 5 minutes
+        _STALE_LOCK_AGE_SECONDS = 300  # 5 minutes
         backoff = 0.01
         while True:
             try:
@@ -884,7 +884,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                 # Stale lock detection: remove lockfile older than threshold
                 try:
                     lock_age = time.time() - os.path.getmtime(str(lockfile))
-                    if lock_age > _STALE_LOCK_AGE:
+                    if lock_age > _STALE_LOCK_AGE_SECONDS:
                         logger.warning(
                             "[MemoryOS] Removing stale lockfile (age=%.0fs): %s",
                             lock_age, lockfile,
