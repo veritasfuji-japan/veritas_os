@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
@@ -240,6 +241,9 @@ class VeritasConfig:
 
     # ★ M-6 修正: _dirs_ensured を正式な dataclass フィールドとして宣言
     _dirs_ensured: bool = field(default=False, init=False, repr=False)
+    _dirs_lock: threading.Lock = field(
+        default_factory=threading.Lock, init=False, repr=False
+    )
 
     def __post_init__(self):
         # --- API secret 未設定の警告 ---
@@ -281,18 +285,19 @@ class VeritasConfig:
 
     def ensure_dirs(self) -> None:
         """必要なディレクトリを作成する（初回呼び出し時のみ実行）"""
-        if self._dirs_ensured:
-            return
-        try:
-            self.log_dir.mkdir(parents=True, exist_ok=True)
-            self.dataset_dir.mkdir(parents=True, exist_ok=True)
-            self.data_dir.mkdir(parents=True, exist_ok=True)
-            self.kv_path.parent.mkdir(parents=True, exist_ok=True)
-            self._dirs_ensured = True
-        except OSError as e:
-            logging.getLogger(__name__).warning(
-                "Failed to create directories: %s", e
-            )
+        with self._dirs_lock:
+            if self._dirs_ensured:
+                return
+            try:
+                self.log_dir.mkdir(parents=True, exist_ok=True)
+                self.dataset_dir.mkdir(parents=True, exist_ok=True)
+                self.data_dir.mkdir(parents=True, exist_ok=True)
+                self.kv_path.parent.mkdir(parents=True, exist_ok=True)
+                self._dirs_ensured = True
+            except OSError as e:
+                logging.getLogger(__name__).warning(
+                    "Failed to create directories: %s", e
+                )
 
 
     def __repr__(self) -> str:

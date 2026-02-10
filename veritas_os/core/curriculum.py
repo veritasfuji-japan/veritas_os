@@ -1,6 +1,7 @@
 # veritas_os/core/curriculum.py
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 # ★ メモリリーク防止: ユーザー数の上限を設ける
 _MAX_USERS = 1000
 _USER_TASKS: Dict[str, List["CurriculumTask"]] = {}
+_USER_TASKS_LOCK = threading.Lock()
 
 
 @dataclass
@@ -43,7 +45,8 @@ def load_tasks(user_id: str) -> List[CurriculumTask]:
     今日分が既に作られていれば取得。なければ空リスト。
     - 実ストレージは後で差し替え前提。今はインメモリ。
     """
-    tasks = _USER_TASKS.get(user_id, [])
+    with _USER_TASKS_LOCK:
+        tasks = _USER_TASKS.get(user_id, [])
     today = _today_str()
     return [t for t in tasks if t.id.startswith(today)]
 
@@ -181,10 +184,11 @@ def generate_daily_curriculum(
     )
 
     # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除（FIFO方式）
-    if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
-        oldest_key = next(iter(_USER_TASKS))
-        del _USER_TASKS[oldest_key]
-    _USER_TASKS[user_id] = tasks
+    with _USER_TASKS_LOCK:
+        if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
+            oldest_key = next(iter(_USER_TASKS))
+            del _USER_TASKS[oldest_key]
+        _USER_TASKS[user_id] = tasks
     return tasks
 
 

@@ -56,7 +56,7 @@ from . import affect as affect_core  # ★ NEW: ReasonOS / AffectOS
 # ★ セキュリティ修正: reason_core のインポート（存在しない場合は None）
 try:
     from . import reason as reason_core
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     reason_core = None  # type: ignore
 
 # ★ QA処理を分離モジュールからインポート
@@ -71,13 +71,13 @@ from .kernel_qa import (
 
 try:  # 任意: 戦略レイヤー（なければ無視）
     from . import strategy as strategy_core  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     strategy_core = None  # type: ignore
 
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
     _HAS_SANITIZE = True
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     _mask_pii = None  # type: ignore
     _HAS_SANITIZE = False
 

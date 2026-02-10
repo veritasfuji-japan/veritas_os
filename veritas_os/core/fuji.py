@@ -56,7 +56,7 @@ from .fuji_codes import build_fuji_rejection
 # ---------------------------------------------------------
 try:
     from veritas_os.tools import call_tool
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         raise RuntimeError(
             f"env tool '{kind}' / veritas_os.tools.call_tool が利用できません"
@@ -65,14 +65,14 @@ except Exception:  # pragma: no cover
 
 try:
     from veritas_os.logging.trust_log import append_trust_event
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def append_trust_event(event: Dict[str, Any]) -> None:
         return
 
 
 try:
     import yaml  # ポリシーファイル用
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     yaml = None  # type: ignore
 
 

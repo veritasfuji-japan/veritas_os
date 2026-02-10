@@ -197,14 +197,14 @@ except Exception as e:  # pragma: no cover
 
 try:
     from veritas_os.api.evolver import load_persona  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def load_persona() -> dict:  # type: ignore
         return {"name": "fallback", "mode": "minimal"}
 
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
     _HAS_SANITIZE = True
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     _mask_pii = None  # type: ignore
     _HAS_SANITIZE = False
 
@@ -368,7 +368,7 @@ except Exception as e:  # pragma: no cover
 
 try:
     from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     def append_trust_log(_entry: dict) -> None:  # type: ignore
         return None
 
