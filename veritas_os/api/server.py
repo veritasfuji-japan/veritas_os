@@ -1283,6 +1283,15 @@ def memory_put(body: dict):
         key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         value = body.get("value") or {}
 
+        # ★ セキュリティ修正: 入力サイズの制限（DoS対策）
+        text = (body.get("text") or "").strip()
+        if len(text) > 100_000:
+            return {"ok": False, "error": "text too large (max 100000 chars)"}
+        tags = body.get("tags") or []
+        if len(tags) > 100:
+            return {"ok": False, "error": "too many tags (max 100)"}
+        meta = body.get("meta") or {}
+
         legacy_saved = False
         if value:
             try:
@@ -1294,10 +1303,6 @@ def memory_put(body: dict):
         kind = (body.get("kind") or "semantic").strip().lower()
         if kind not in VALID_MEMORY_KINDS:
             kind = "semantic"
-
-        text = (body.get("text") or "").strip()
-        tags = body.get("tags") or []
-        meta = body.get("meta") or {}
 
         new_id = None
         if text:

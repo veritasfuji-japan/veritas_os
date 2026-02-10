@@ -279,6 +279,8 @@ async function loadStatus() {
     }
 
     const data = await response.json();
+    // XSS防止: テキストコンテンツはDOM APIで安全に挿入
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
     const statusBadge = data.ok
       ? '<span class="badge ok">✅ OK</span>'
       : '<span class="badge ng">❌ FAILED</span>';
@@ -287,19 +289,19 @@ async function loadStatus() {
       '<h3 style="margin-bottom: 16px;">☁️ Google Drive Sync Status ' + statusBadge + '</h3>' +
       '<div class="info-row">' +
         '<span class="info-label">Last Run (UTC):</span>' +
-        '<span class="info-value">' + (data.ended_at_utc || 'N/A') + '</span>' +
+        '<span class="info-value">' + esc(data.ended_at_utc || 'N/A') + '</span>' +
       '</div>' +
       '<div class="info-row">' +
         '<span class="info-label">Duration:</span>' +
-        '<span class="info-value">' + ((data.duration_sec != null ? data.duration_sec : 0)) + 's</span>' +
+        '<span class="info-value">' + esc(String(data.duration_sec != null ? data.duration_sec : 0)) + 's</span>' +
       '</div>' +
       '<div class="info-row">' +
         '<span class="info-label">Destination:</span>' +
-        '<span class="info-value">' + (data.dst || 'N/A') + '</span>' +
+        '<span class="info-value">' + esc(data.dst || 'N/A') + '</span>' +
       '</div>' +
       '<div class="info-row">' +
         '<span class="info-label">Transferred Files:</span>' +
-        '<span class="info-value">' + ((data.transferred_files != null ? data.transferred_files : 0)) + '</span>' +
+        '<span class="info-value">' + esc(String(data.transferred_files != null ? data.transferred_files : 0)) + '</span>' +
       '</div>';
   } catch (error) {
     console.error('Error loading status:', error);

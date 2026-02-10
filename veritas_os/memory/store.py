@@ -22,6 +22,9 @@ BASE = HOME_MEMORY
 # クエリ長の上限（DoS対策）
 MAX_QUERY_LENGTH = 10000
 
+# JSONL ファイルサイズの上限（起動時の再構築 / 検索時の読み込み用、100MB）
+MAX_JSONL_FILE_SIZE = 100 * 1024 * 1024
+
 FILES = {
     "episodic": BASE / "episodic.jsonl",
     "semantic": BASE / "semantic.jsonl",
@@ -66,6 +69,15 @@ class MemoryStore:
                 continue
 
             if not path.exists():
+                continue
+
+            # OOM防止: 大きすぎるファイルは再構築をスキップ
+            try:
+                if path.stat().st_size > MAX_JSONL_FILE_SIZE:
+                    logger.warning("[MemoryStore] %s too large for boot rebuild (%d bytes), skipping",
+                                   kind, path.stat().st_size)
+                    continue
+            except OSError:
                 continue
 
             ids, texts = [], []
@@ -203,12 +215,17 @@ class MemoryStore:
                 # JSONL 読み込み（ロック内で実行）
                 items = []
                 try:
-                    with open(FILES[kind], encoding="utf-8") as f:
-                        for line in f:
-                            try:
-                                items.append(json.loads(line))
-                            except json.JSONDecodeError:
-                                pass
+                    # OOM防止: 大きすぎるファイルの読み込みを防止
+                    if FILES[kind].stat().st_size > MAX_JSONL_FILE_SIZE:
+                        logger.warning("[MemoryStore] %s too large for search (%d bytes)",
+                                       kind, FILES[kind].stat().st_size)
+                    else:
+                        with open(FILES[kind], encoding="utf-8") as f:
+                            for line in f:
+                                try:
+                                    items.append(json.loads(line))
+                                except json.JSONDecodeError:
+                                    pass
                 except (OSError, IOError) as e:
                     # ファイルアクセスエラーをログ出力
                     logger.warning("[MemoryStore] Failed to read %s: %s", FILES[kind], e)
