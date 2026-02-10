@@ -481,12 +481,13 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        logger.warning("verify_trust_log failed: %s", e)
         return {
             "ok": False,
             "checked": checked,
             "broken": True,
             "broken_index": checked,
-            "broken_reason": f"exception: {e}",
+            "broken_reason": "verification_exception",
         }
 
 

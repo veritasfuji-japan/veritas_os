@@ -81,7 +81,7 @@ def verify_credentials(
 
 # ===== パス設定 =====
 
-from veritas_os.api.constants import SENSITIVE_SYSTEM_PATHS
+from veritas_os.api.constants import MAX_LOG_FILE_SIZE, SENSITIVE_SYSTEM_PATHS
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 default_log_dir = BASE_DIR / "scripts" / "logs"
@@ -339,6 +339,11 @@ async def get_status(username: str = Depends(verify_credentials)) -> JSONRespons
     """
     if STATUS_JSON.exists():
         try:
+            if STATUS_JSON.stat().st_size > MAX_LOG_FILE_SIZE:
+                return JSONResponse(
+                    {"error": "status file too large"},
+                    status_code=500,
+                )
             data = json.loads(STATUS_JSON.read_text(encoding="utf-8"))
             # data はそのまま返す（ok, ended_at_utc, duration_sec などを想定）
             return JSONResponse(data)

@@ -22,9 +22,12 @@ FUJI Gate から呼ばれる「安全ヘッド」。
 from __future__ import annotations
 from typing import Any, Dict, List
 import json
+import logging
 import os
 import re
 import time
+
+logger = logging.getLogger(__name__)
 
 try:
     # OpenAI クライアント（インポートできなければ使わない）
@@ -306,9 +309,10 @@ def run(
             )
         except Exception as e:
             # LLM 失敗時は fallback
+            logger.warning("LLM safety head failed, falling back to heuristic: %s: %s", type(e).__name__, e)
             fb = _heuristic_analyze(text)
             fb["ok"] = True
-            fb.setdefault("raw", {})["llm_error"] = f"{type(e).__name__}: {e}"
+            fb.setdefault("raw", {})["llm_error"] = "llm_call_failed"
             return fb
 
     # API キー不在など → ヒューリスティック

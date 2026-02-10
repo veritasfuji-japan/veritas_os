@@ -407,7 +407,11 @@ app.add_middleware(
 
 # ★ C-3 修正: リクエストボディサイズ制限 (DoS対策)
 # デフォルト: 10MB。環境変数で設定可能。
-MAX_REQUEST_BODY_SIZE = int(os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024))
+try:
+    MAX_REQUEST_BODY_SIZE = int(os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024))
+except (ValueError, TypeError):
+    MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
+    logger.warning("Invalid VERITAS_MAX_REQUEST_BODY_SIZE, using default 10MB")
 
 
 @app.middleware("http")
@@ -578,7 +582,10 @@ _nonce_cleanup_timer: threading.Timer | None = None
 def _schedule_nonce_cleanup() -> None:
     """バックグラウンドでノンスストアを定期クリーンアップする"""
     global _nonce_cleanup_timer
-    _cleanup_nonces()
+    try:
+        _cleanup_nonces()
+    except Exception as e:
+        logger.warning("nonce cleanup failed: %s", e)
     _nonce_cleanup_timer = threading.Timer(60.0, _schedule_nonce_cleanup)
     _nonce_cleanup_timer.daemon = True
     _nonce_cleanup_timer.start()
@@ -953,6 +960,7 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
             return obj
         return []
     except Exception:
+        logger.debug("_load_logs_json: failed to load %s", path, exc_info=True)
         return []
 
 
