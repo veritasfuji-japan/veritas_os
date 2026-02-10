@@ -173,15 +173,10 @@ def _is_hard_blocked(opt: Dict[str, Any]) -> bool:
     “絶対に選ばない”ハードブロック。
     FUJIが前段にいても、最後の砦として入れておく。
     """
-    if opt.get("blocked") is True:
-        return True
-    if opt.get("fuji_block") is True:
-        return True
-    if opt.get("safety_block") is True:
-        return True
-    # 互換のための別名も拾う
-    if opt.get("is_blocked") is True:
-        return True
+    for key in ("blocked", "fuji_block", "safety_block", "is_blocked"):
+        v = opt.get(key)
+        if v is True or (isinstance(v, str) and v.strip().lower() in ("true", "1", "yes")):
+            return True
     return False
 
 

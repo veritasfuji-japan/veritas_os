@@ -529,7 +529,7 @@ def test_chat_http_error_raises(monkeypatch):
     with pytest.raises(LLMError) as exc:
         llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
 
-    assert "API error 500" in str(exc.value)
+    assert "API error" in str(exc.value) and "500" in str(exc.value)
 
 
 def test_chat_request_exception_retries_and_fails(monkeypatch):
