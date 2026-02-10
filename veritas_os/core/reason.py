@@ -158,12 +158,16 @@ def generate_reason(
 """
 
     # llm_client.chat は {"text": "...", "source": "..."} を返す想定
-    llm_res = llm_client.chat(
-        system_prompt=system_prompt,
-        user_prompt=user_prompt,
-        temperature=0.3,
-        max_tokens=800,
-    )
+    try:
+        llm_res = llm_client.chat(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            temperature=0.3,
+            max_tokens=800,
+        )
+    except Exception as e:
+        logger.error("[ReasonOS] generate_reason LLM error: %s", e)
+        return {"text": "", "source": "error"}
 
     text = ""
     if isinstance(llm_res, dict):

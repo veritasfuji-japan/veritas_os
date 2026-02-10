@@ -515,7 +515,7 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
 
     rescued = _extract_objects_from_array(cleaned, "options")
     if rescued:
-        return {"options": rescued, "chosen_id": None}
+        return {"options": _sanitize_options(rescued), "chosen_id": None}
 
     return {"options": [], "chosen_id": None}
 

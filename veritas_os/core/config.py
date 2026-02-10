@@ -289,8 +289,10 @@ class VeritasConfig:
             self.data_dir.mkdir(parents=True, exist_ok=True)
             self.kv_path.parent.mkdir(parents=True, exist_ok=True)
             self._dirs_ensured = True
-        except OSError:
-            pass  # 読み取り専用環境ではスキップ
+        except OSError as e:
+            logging.getLogger(__name__).warning(
+                "Failed to create directories: %s", e
+            )
 
 
     def __repr__(self) -> str:
