@@ -1374,6 +1374,8 @@ def memory_search(payload: dict):
                 if meta.get("user_id") == user_id:
                     norm_hits.append(h)
             else:
+                # ★ セキュリティ修正: non-dict ヒット（生ID文字列等）は user_id を
+                # 検証できないため、情報漏洩防止のためスキップする
                 continue
 
         return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
