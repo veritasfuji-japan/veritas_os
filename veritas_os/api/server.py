@@ -409,7 +409,7 @@ app.add_middleware(
 # デフォルト: 10MB。環境変数で設定可能。
 try:
     MAX_REQUEST_BODY_SIZE = int(os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024))
-except (ValueError, TypeError):
+except ValueError:
     MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
     logger.warning("Invalid VERITAS_MAX_REQUEST_BODY_SIZE, using default 10MB")
 
