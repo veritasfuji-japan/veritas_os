@@ -404,8 +404,13 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
     checked = 0
 
     try:
-        with LOG_JSONL.open("r", encoding="utf-8") as f:
-            for idx, line in enumerate(f):
+        # ★ スレッドセーフ修正: ロック下でファイルを一括読み込み
+        # concurrent な append_trust_log() による不完全な行の読み込みを防止
+        with _trust_log_lock:
+            with LOG_JSONL.open("r", encoding="utf-8") as f:
+                all_lines = f.readlines()
+
+        for idx, line in enumerate(all_lines):
                 if max_entries is not None and idx >= max_entries:
                     break
 

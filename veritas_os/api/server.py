@@ -1091,14 +1091,18 @@ async def decide(req: DecideRequest, request: Request):
     except Exception as e:
         # 最後の保険：型検証で落ちても 503 ではなく JSON にして "落ちない" を優先
         # ok=False でクライアントが正常レスポンスと区別できるようにする
+        # ★ セキュリティ修正: 内部エラー詳細はデバッグモード時のみ公開
+        logger.error("DecideResponse validation failed: %s", _errstr(e))
+        content = {
+            **coerced,
+            "ok": False,
+            "warn": "response_model_validation_failed",
+        }
+        if _is_debug_mode():
+            content["warn_detail"] = _errstr(e)
         return JSONResponse(
             status_code=200,
-            content={
-                **coerced,
-                "ok": False,
-                "warn": "response_model_validation_failed",
-                "warn_detail": _errstr(e),
-            },
+            content=content,
         )
 
 
@@ -1154,26 +1158,31 @@ def fuji_validate(payload: dict):
         err_msg = str(e)
         if "neither validate_action nor validate" in err_msg:
             # This specific error should return 500 as expected by test_fuji_validate_no_impl_raises_500
+            logger.error("fuji_validate: %s", err_msg)
             return JSONResponse(
                 status_code=500,
                 content={"detail": err_msg}
             )
         # Other RuntimeErrors: return 200 with error structure
+        # ★ セキュリティ修正: 内部エラー詳細をレスポンスに含めない
+        logger.error("fuji_validate RuntimeError: %s", err_msg)
         return JSONResponse(
             status_code=200,
             content={
                 "status": "error",
-                "reasons": [f"Validation failed: {err_msg}"],
+                "reasons": ["Validation failed"],
                 "violations": []
             }
         )
     except Exception as e:
         # All other exceptions: return 200 with error structure
+        # ★ セキュリティ修正: 内部エラー詳細をレスポンスに含めない
+        logger.error("fuji_validate error: %s", _errstr(e))
         return JSONResponse(
             status_code=200,
             content={
                 "status": "error",
-                "reasons": [f"Validation failed: {_errstr(e)}"],
+                "reasons": ["Validation failed"],
                 "violations": []
             }
         )
@@ -1183,13 +1192,17 @@ def fuji_validate(payload: dict):
         return FujiDecision.model_validate(coerced)
     except Exception as e:
         # 最後の保険：落ちるより返す
+        # ★ セキュリティ修正: 内部エラー詳細はデバッグモード時のみ公開
+        logger.error("FujiDecision validation failed: %s", _errstr(e))
+        content = {
+            **coerced,
+            "warn": "response_model_validation_failed",
+        }
+        if _is_debug_mode():
+            content["warn_detail"] = _errstr(e)
         return JSONResponse(
             status_code=200,
-            content={
-                **coerced,
-                "warn": "response_model_validation_failed",
-                "warn_detail": _errstr(e),
-            },
+            content=content,
         )
 
 
@@ -1336,6 +1349,10 @@ def memory_search(payload: dict):
             min_sim = 0.25
         user_id = payload.get("user_id")
 
+        # ★ セキュリティ修正: user_id 必須化（未指定時は全ユーザーのメモリが返る問題を修正）
+        if not user_id:
+            return {"ok": False, "error": "user_id is required", "hits": [], "count": 0}
+
         raw_hits = _store_search(store, query=q, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
 
         # ★ Bug fix: MemoryStore.search() returns Dict[str, List[Dict]], not a flat list.
@@ -1353,15 +1370,11 @@ def memory_search(payload: dict):
         for h in (raw_hits or []):
             if isinstance(h, dict):
                 meta = h.get("meta") or {}
-                if user_id:
-                    if meta.get("user_id") == user_id:
-                        norm_hits.append(h)
-                else:
+                # ★ セキュリティ修正: 常に user_id でフィルタリング
+                if meta.get("user_id") == user_id:
                     norm_hits.append(h)
             else:
-                if user_id:
-                    continue
-                norm_hits.append({"id": h})
+                continue
 
         return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
 
