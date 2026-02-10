@@ -1346,6 +1346,8 @@ def memory_search(payload: dict):
                 if isinstance(kind_hits, list):
                     flat_hits.extend(kind_hits)
             raw_hits = flat_hits
+        elif not isinstance(raw_hits, list):
+            raw_hits = list(raw_hits) if raw_hits else []
 
         norm_hits = []
         for h in (raw_hits or []):
