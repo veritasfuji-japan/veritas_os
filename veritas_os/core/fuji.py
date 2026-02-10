@@ -651,14 +651,19 @@ def _apply_policy(
         if not cfg:
             continue
         max_allow = cfg.get("max_risk_allow")
-        if max_allow is not None and risk > float(max_allow):
-            violation_details.append(
-                {
-                    "category": str(c),
-                    "max_risk_allow": float(max_allow),
-                    "action_on_exceed": cfg.get("action_on_exceed", "human_review"),
-                }
-            )
+        if max_allow is not None:
+            try:
+                max_allow_f = float(max_allow)
+            except (ValueError, TypeError):
+                continue
+            if risk > max_allow_f:
+                violation_details.append(
+                    {
+                        "category": str(c),
+                        "max_risk_allow": max_allow_f,
+                        "action_on_exceed": cfg.get("action_on_exceed", "human_review"),
+                    }
+                )
 
     precedence = {"deny": 3, "human_review": 2, "warn": 1, "allow": 0}
     final_action = "allow"
