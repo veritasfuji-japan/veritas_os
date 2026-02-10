@@ -7,7 +7,7 @@
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 
 **Version**: 2.0.0  
-**Planned Release**: 2025-12-01  
+**Planned Release**: In Development  
 **Author**: Takeshi Fujishita
 
 VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline**.
