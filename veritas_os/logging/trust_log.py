@@ -36,7 +36,9 @@ MAX_JSON_ITEMS = 2000
 
 # スレッドセーフ化: ハッシュチェーンの整合性を保証するためのロック
 # ★ マルチスレッド環境（FastAPI等）での同時書き込みによるチェーン破損を防止
+# NOTE: server.py のフォールバック trust log もこのロックを共有する
 _trust_log_lock = threading.RLock()
+trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
 
 
 # =============================================================================
@@ -506,6 +508,7 @@ __all__ = [
     "write_shadow_decide",
     "get_last_hash",
     "calc_sha256",
+    "trust_log_lock",
     "LOG_JSON",
     "LOG_JSONL",
 ]

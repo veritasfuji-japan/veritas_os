@@ -450,14 +450,8 @@ class VectorMemory:
             }
 
             # アトミック書き込み（途中で失敗しても元ファイルを壊さない）
-            tmp_path = json_path.with_suffix(".json.tmp")
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False)
-                f.flush()
-                os.fsync(f.fileno())
-
-            # 成功したら本ファイルにリネーム
-            tmp_path.replace(json_path)
+            from veritas_os.core.atomic_io import atomic_write_json
+            atomic_write_json(json_path, data)
 
             # index_pathも更新（次回保存時のため）
             self.index_path = json_path
@@ -1005,11 +999,11 @@ class MemoryStore:
         return data
 
     def _save_all(self, data: List[Dict[str, Any]]) -> bool:
-        """memory.json 全体を保存"""
+        """memory.json 全体を保存（atomic_write_json でクラッシュ安全）"""
         try:
+            from veritas_os.core.atomic_io import atomic_write_json
             with locked_memory(self.path):
-                with open(self.path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
+                atomic_write_json(self.path, data, indent=2)
 
             # キャッシュ無効化
             with self._cache_lock:

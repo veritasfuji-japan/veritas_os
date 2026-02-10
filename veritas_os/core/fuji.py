@@ -478,7 +478,10 @@ def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
 
 _POLICY_PATH = _policy_path()
 POLICY: Dict[str, Any] = _load_policy(_POLICY_PATH)
-_POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime if _POLICY_PATH.exists() else 0.0
+try:
+    _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime
+except OSError:
+    _POLICY_MTIME: float = 0.0
 
 # ★ 修正 (H-9): ポリシーリロード時の TOCTOU 競合状態を防止するためのロック
 _policy_reload_lock = threading.Lock()
@@ -490,7 +493,10 @@ def reload_policy() -> Dict[str, Any]:
     with _policy_reload_lock:
         path = _policy_path()
         POLICY = _load_policy(path)
-        _POLICY_MTIME = path.stat().st_mtime if path.exists() else 0.0
+        try:
+            _POLICY_MTIME = path.stat().st_mtime
+        except OSError:
+            _POLICY_MTIME = 0.0
     return POLICY
 
 

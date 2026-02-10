@@ -6,6 +6,8 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
 # 超簡易なインメモリ保存（とりあえず動かす用）
+# ★ メモリリーク防止: ユーザー数の上限を設ける
+_MAX_USERS = 1000
 _USER_TASKS: Dict[str, List["CurriculumTask"]] = {}
 
 
@@ -178,6 +180,10 @@ def generate_daily_curriculum(
         )
     )
 
+    # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除（FIFO方式）
+    if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
+        oldest_key = next(iter(_USER_TASKS))
+        del _USER_TASKS[oldest_key]
     _USER_TASKS[user_id] = tasks
     return tasks
 
