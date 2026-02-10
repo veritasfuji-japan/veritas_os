@@ -87,7 +87,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
         boost = -0.1
 
     out = {
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
         "query": q[:200],
         "chosen_title": chosen.get("title"),
         "status": status,
