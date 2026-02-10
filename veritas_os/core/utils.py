@@ -39,7 +39,11 @@ def _safe_float(x: Any, default: float = 0.0) -> float:
         0.0
     """
     try:
-        return float(x)
+        v = float(x)
+        # NaN check: v != v is the IEEE 754 standard NaN identity test
+        if v != v or v == float("inf") or v == float("-inf"):
+            return default
+        return v
     except Exception:
         return default
 

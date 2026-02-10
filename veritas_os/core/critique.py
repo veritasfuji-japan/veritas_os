@@ -226,7 +226,7 @@ def analyze(
 
     # ==== 3. リスクチェック ====
     risk = option.get("risk")
-    if isinstance(risk, (int, float)) and float(risk) >= risk_threshold:
+    if isinstance(risk, (int, float)) and not isinstance(risk, bool) and float(risk) >= risk_threshold:
         critiques.append(
             _crit(
                 issue="高リスク",
@@ -243,7 +243,7 @@ def analyze(
 
     # ==== 4. 複雑度（スコープ）チェック ====
     complexity = option.get("complexity")
-    if isinstance(complexity, (int, float)) and float(complexity) > complexity_threshold:
+    if isinstance(complexity, (int, float)) and not isinstance(complexity, bool) and float(complexity) > complexity_threshold:
         critiques.append(
             _crit(
                 issue="過大スコープ",
@@ -263,7 +263,7 @@ def analyze(
 
     # ==== 5. 価値チェック ====
     value = option.get("value")
-    if isinstance(value, (int, float)) and float(value) < value_threshold:
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and float(value) < value_threshold:
         critiques.append(
             _crit(
                 issue="低価値",
@@ -280,7 +280,7 @@ def analyze(
 
     # ==== 6. 実現可能性チェック ====
     feasibility = option.get("feasibility")
-    if isinstance(feasibility, (int, float)) and float(feasibility) < feasibility_threshold:
+    if isinstance(feasibility, (int, float)) and not isinstance(feasibility, bool) and float(feasibility) < feasibility_threshold:
         sev: Severity = "high" if float(feasibility) < 0.2 else "med"
         critiques.append(
             _crit(
@@ -298,7 +298,7 @@ def analyze(
 
     # ==== 7. タイムラインチェック ====
     timeline = option.get("timeline")
-    if isinstance(timeline, (int, float)) and float(timeline) > timeline_threshold:
+    if isinstance(timeline, (int, float)) and not isinstance(timeline, bool) and float(timeline) > timeline_threshold:
         critiques.append(
             _crit(
                 issue="長期タイムライン",
@@ -314,9 +314,10 @@ def analyze(
         )
 
     # ==== 8. リスク・価値バランスチェック ====
-    if isinstance(risk, (int, float)) and isinstance(value, (int, float)):
+    if isinstance(risk, (int, float)) and not isinstance(risk, bool) and isinstance(value, (int, float)) and not isinstance(value, bool):
         rv = float(value)
-        ratio = float(risk) / rv if rv > 0 else float("inf")
+        # Use bounded value instead of float("inf") to avoid infinity propagation
+        ratio = float(risk) / rv if rv > 0 else float(risk) * 100.0
         if ratio > risk_value_ratio_threshold and float(risk) > 0.6 and float(value) < 0.5:
             critiques.append(
                 _crit(

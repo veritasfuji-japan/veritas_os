@@ -393,11 +393,11 @@ def chat(
                     )
                     time.sleep(wait_time)
                     continue
-                raise LLMError(f"Rate limited: {resp.text[:500]}")
+                raise LLMError(f"Rate limited after {LLM_MAX_RETRIES} retries (status=429)")
 
             # その他エラー
             if resp.status_code >= 400:
-                raise LLMError(f"API error {resp.status_code}: {resp.text[:500]}")
+                raise LLMError(f"API error (status={resp.status_code})")
 
             data = resp.json()
             text = _parse_response(provider, data)
