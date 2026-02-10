@@ -411,66 +411,66 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                 all_lines = f.readlines()
 
         for idx, line in enumerate(all_lines):
-                if max_entries is not None and idx >= max_entries:
-                    break
+            if max_entries is not None and idx >= max_entries:
+                break
 
-                line = line.strip()
-                if not line:
-                    continue
+            line = line.strip()
+            if not line:
+                continue
 
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                return {
+                    "ok": False,
+                    "checked": checked,
+                    "broken": True,
+                    "broken_index": idx,
+                    "broken_reason": "json_decode_error",
+                }
+
+            # sha256_prev の整合性チェック
+            actual_prev = entry.get("sha256_prev")
+            if prev_hash is None:
+                # 最初のエントリは sha256_prev が None のはず（もしくは存在しない）
+                if actual_prev not in (None, ""):
                     return {
                         "ok": False,
                         "checked": checked,
                         "broken": True,
                         "broken_index": idx,
-                        "broken_reason": "json_decode_error",
+                        "broken_reason": "unexpected_sha256_prev_for_first_entry",
                     }
-
-                # sha256_prev の整合性チェック
-                actual_prev = entry.get("sha256_prev")
-                if prev_hash is None:
-                    # 最初のエントリは sha256_prev が None のはず（もしくは存在しない）
-                    if actual_prev not in (None, ""):
-                        return {
-                            "ok": False,
-                            "checked": checked,
-                            "broken": True,
-                            "broken_index": idx,
-                            "broken_reason": "unexpected_sha256_prev_for_first_entry",
-                        }
-                else:
-                    if actual_prev != prev_hash:
-                        return {
-                            "ok": False,
-                            "checked": checked,
-                            "broken": True,
-                            "broken_index": idx,
-                            "broken_reason": "sha256_prev_mismatch",
-                        }
-
-                # sha256 の再計算チェック
-                expected_prev = prev_hash
-                entry_json = _normalize_entry_for_hash(entry)
-                if expected_prev:
-                    combined = expected_prev + entry_json
-                else:
-                    combined = entry_json
-                expected_hash = _sha256(combined)
-                if entry.get("sha256") != expected_hash:
+            else:
+                if actual_prev != prev_hash:
                     return {
                         "ok": False,
                         "checked": checked,
                         "broken": True,
                         "broken_index": idx,
-                        "broken_reason": "sha256_mismatch",
+                        "broken_reason": "sha256_prev_mismatch",
                     }
 
-                # 状態更新
-                prev_hash = entry.get("sha256")
-                checked += 1
+            # sha256 の再計算チェック
+            expected_prev = prev_hash
+            entry_json = _normalize_entry_for_hash(entry)
+            if expected_prev:
+                combined = expected_prev + entry_json
+            else:
+                combined = entry_json
+            expected_hash = _sha256(combined)
+            if entry.get("sha256") != expected_hash:
+                return {
+                    "ok": False,
+                    "checked": checked,
+                    "broken": True,
+                    "broken_index": idx,
+                    "broken_reason": "sha256_mismatch",
+                }
+
+            # 状態更新
+            prev_hash = entry.get("sha256")
+            checked += 1
 
         return {
             "ok": True,

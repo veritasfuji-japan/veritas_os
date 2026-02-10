@@ -78,6 +78,8 @@ backup/
 .coverage
 **/.coverage
 coverage.xml
+coverage.json
+**/coverage.json
 htmlcov/
 test-reports/
 coverage-html/
