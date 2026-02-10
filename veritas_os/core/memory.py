@@ -268,6 +268,8 @@ class VectorMemory:
 
     sentence-transformers を使用してテキストの埋め込みを生成し、
     コサイン類似度で検索を行う。
+
+    スレッドセーフ: 全ての読み書き操作は RLock で保護されています。
     """
 
     def __init__(
@@ -279,6 +281,7 @@ class VectorMemory:
         self.model_name = model_name
         self.index_path = index_path
         self.embedding_dim = embedding_dim
+        self._lock = threading.RLock()
 
         # データストア
         self.documents: List[Dict[str, Any]] = []
@@ -361,7 +364,7 @@ class VectorMemory:
                 # ★ セキュリティ修正: 古すぎるpickleファイルは移行を拒否
                 if _is_pickle_file_stale(legacy_pkl_path):
                     logger.error(
-                        "[VectorMemory] Legacy pickle file is too old (>365 days). "
+                        "[VectorMemory] Legacy pickle file is too old (>90 days). "
                         "Manual migration required for security reasons. "
                         "Please delete the pickle file or contact support."
                     )
@@ -450,6 +453,8 @@ class VectorMemory:
             tmp_path = json_path.with_suffix(".json.tmp")
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
 
             # 成功したら本ファイルにリネーム
             tmp_path.replace(json_path)
@@ -492,29 +497,30 @@ class VectorMemory:
         try:
             import numpy as np
 
-            # 埋め込み生成
+            # 埋め込み生成（ロック外で実行 - 計算コストが高い）
             embedding = self.model.encode([text])[0]
 
-            # ドキュメント追加
-            doc = {
-                "id": f"{kind}_{len(self.documents)}_{int(time.time())}",
-                "kind": kind,
-                "text": text,
-                "tags": tags or [],
-                "meta": meta or {},
-                "ts": time.time(),
-            }
-            self.documents.append(doc)
+            with self._lock:
+                # ドキュメント追加
+                doc = {
+                    "id": f"{kind}_{len(self.documents)}_{int(time.time())}",
+                    "kind": kind,
+                    "text": text,
+                    "tags": tags or [],
+                    "meta": meta or {},
+                    "ts": time.time(),
+                }
+                self.documents.append(doc)
 
-            # 埋め込み配列を更新
-            if self.embeddings is None:
-                self.embeddings = embedding.reshape(1, -1)
-            else:
-                self.embeddings = np.vstack([self.embeddings, embedding])
+                # 埋め込み配列を更新
+                if self.embeddings is None:
+                    self.embeddings = embedding.reshape(1, -1)
+                else:
+                    self.embeddings = np.vstack([self.embeddings, embedding])
 
-            # 定期的に保存（100件ごと）
-            if len(self.documents) % 100 == 0 and self.index_path:
-                self._save_index()
+                # 定期的に保存（100件ごと）
+                if len(self.documents) % 100 == 0 and self.index_path:
+                    self._save_index()
 
             logger.debug(f"[VectorMemory] Added document: {doc['id']}")
             return True
@@ -554,11 +560,21 @@ class VectorMemory:
             return []
 
         try:
-            # クエリの埋め込み生成
+            # クエリの埋め込み生成（ロック外で実行 - 計算コストが高い）
             query_embedding = self.model.encode([query])[0]
 
+            with self._lock:
+                if not self.documents or self.embeddings is None:
+                    return []
+
+                # スナップショットを取得
+                docs_snapshot = list(self.documents)
+                import numpy as np
+                embeddings_snapshot = np.array(self.embeddings, copy=True)
+
+            # ロック外で計算
             # コサイン類似度計算
-            similarities = self._cosine_similarity(query_embedding, self.embeddings)
+            similarities = self._cosine_similarity(query_embedding, embeddings_snapshot)
 
             # 結果を構築
             results: List[Dict[str, Any]] = []
@@ -566,7 +582,10 @@ class VectorMemory:
                 if sim < min_sim:
                     continue
 
-                doc = self.documents[idx]
+                if idx >= len(docs_snapshot):
+                    continue
+
+                doc = docs_snapshot[idx]
 
                 # kinds フィルタリング
                 if kinds and doc.get("kind") not in kinds:

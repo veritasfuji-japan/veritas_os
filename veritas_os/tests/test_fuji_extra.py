@@ -109,14 +109,16 @@ class TestPolicyPath:
         assert isinstance(result, Path)
 
     def test_env_variable_override(self, monkeypatch, tmp_path):
-        """VERITAS_FUJI_POLICY env should override default."""
+        """VERITAS_FUJI_POLICY env with path outside project root should fallback to default."""
         policy_file = tmp_path / "custom_policy.yaml"
         policy_file.write_text("# custom policy")
 
         monkeypatch.setenv("VERITAS_FUJI_POLICY", str(policy_file))
 
         result = fuji_mod._policy_path()
-        assert result == policy_file
+        # ★ セキュリティ修正: tmp_path はプロジェクトルート外なのでデフォルトにフォールバック
+        assert result != policy_file
+        assert "fuji_default.yaml" in str(result)
 
 
 class TestFujiGate:

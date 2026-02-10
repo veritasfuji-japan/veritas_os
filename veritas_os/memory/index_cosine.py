@@ -151,7 +151,7 @@ class CosineIndex:
                 self.vecs = np.concatenate([self.vecs, vecs], axis=0)
             self.ids.extend([str(i) for i in ids])
 
-        self.save()
+            self.save()
 
     def search(self, qv: Any, k: int = 8) -> List[List[Tuple[str, float]]]:
         """

@@ -45,6 +45,9 @@ DATASET_JSONL: Path = DATASET_DIR / "dataset.jsonl"
 # FastAPI の並行リクエストでデータ破損を防止
 _dataset_lock = threading.RLock()
 
+# ★ セキュリティ: get_dataset_stats のファイルサイズ上限（メモリ枯渇防止）
+MAX_DATASET_STATS_SIZE = 100 * 1024 * 1024  # 100 MB
+
 
 # ==========================
 # ヘルパー関数
@@ -275,6 +278,22 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
             "avg_score": 0.0,
             "date_range": None,
         }
+
+    # ★ セキュリティ修正: ファイルサイズチェック（メモリ枯渇防止）
+    try:
+        file_size = path.stat().st_size
+        if file_size > MAX_DATASET_STATS_SIZE:
+            logger.warning("dataset file too large for stats (%d bytes), skipping", file_size)
+            return {
+                "total_records": -1,
+                "status_counts": {},
+                "memory_usage": {},
+                "avg_score": 0.0,
+                "date_range": None,
+                "error": "file_too_large",
+            }
+    except OSError:
+        pass
 
     records: List[Dict[str, Any]] = []
     with _dataset_lock:

@@ -873,7 +873,9 @@ def inject_state_into_context(context: Dict[str, Any], user_id: str = DEFAULT_US
         # state_data から直接導出 (二重 I/O を回避)
         proj = _get_or_create_default_project(state_data, user_id)
         st = _project_to_worldstate(user_id, proj)
-        ctx.setdefault("world_state", {}).update({
+        # ★ 修正: state_data を直接 mutate しないようコピーに update する
+        ws = dict(state_data)
+        ws.update({
             "decisions": st.decisions,
             "avg_latency_ms": st.avg_latency_ms,
             "avg_risk": st.avg_risk,
@@ -885,6 +887,7 @@ def inject_state_into_context(context: Dict[str, Any], user_id: str = DEFAULT_US
             "last_decision_status": st.last_decision_status,
             "last_updated": st.last_updated,
         })
+        ctx["world_state"] = ws
 
         projects = state_data.get("projects", [])
         veritas_proj: Dict[str, Any] = {}
