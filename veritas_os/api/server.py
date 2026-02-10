@@ -969,7 +969,7 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
 # 共有に失敗した場合はローカルロックにフォールバック。
 try:
     from veritas_os.logging.trust_log import trust_log_lock as _trust_log_lock
-except Exception:
+except ImportError:
     _trust_log_lock = threading.Lock()
 
 
