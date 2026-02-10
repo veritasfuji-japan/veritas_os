@@ -58,9 +58,11 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
     fd, tmp_path = tempfile.mkstemp(
         dir=path.parent,
         prefix=f".{path.name}.",
-        suffix=".tmp"
+        suffix=".tmp",
     )
     try:
+        # Restrict permissions to owner-only before writing sensitive data
+        os.fchmod(fd, 0o600)
         # Write data
         os.write(fd, data)
         # Flush to disk

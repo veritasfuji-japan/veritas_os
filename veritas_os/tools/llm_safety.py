@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 try:
     # OpenAI クライアント（インポートできなければ使わない）
     from openai import OpenAI  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     OpenAI = None  # type: ignore
 
 

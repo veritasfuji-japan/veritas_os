@@ -9,12 +9,12 @@ from .utils import _clip01
 # 失敗しても落ちないように try-import しておく。
 try:  # pragma: no cover - インポート失敗パスは通常は通らないので除外
     from ..logging import trust_log  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     trust_log = None  # type: ignore[assignment]
 
 try:  # pragma: no cover
     from . import value_core  # type: ignore
-except Exception:  # pragma: no cover
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
     value_core = None  # type: ignore[assignment]
 
 

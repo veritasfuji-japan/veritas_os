@@ -9,6 +9,7 @@ VERITAS OS 共通ユーティリティモジュール
 from __future__ import annotations
 
 import json
+import math
 import re
 from datetime import datetime, timezone
 from typing import Any, Union
@@ -40,8 +41,7 @@ def _safe_float(x: Any, default: float = 0.0) -> float:
     """
     try:
         v = float(x)
-        # NaN check: v != v is the IEEE 754 standard NaN identity test
-        if v != v or v == float("inf") or v == float("-inf"):
+        if math.isnan(v) or math.isinf(v):
             return default
         return v
     except Exception:
@@ -313,7 +313,7 @@ def utc_now_iso_z(*, timespec: str = "seconds") -> str:
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii_impl
     _HAS_SANITIZE_IMPL = True
-except Exception:
+except (ImportError, ModuleNotFoundError):
     _mask_pii_impl = None  # type: ignore
     _HAS_SANITIZE_IMPL = False
 

@@ -439,6 +439,11 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         raw_items: List[Dict[str, Any]] = []
         for item in organic:
             url = item.get("link") or item.get("url") or ""
+            # URL スキーム検証: 安全なスキーム (http/https) のみ許可
+            if url:
+                parsed_url = urlparse(url)
+                if parsed_url.scheme not in ("http", "https", ""):
+                    continue
             title = item.get("title") or ""
             snippet = item.get("snippet") or item.get("description") or ""
             raw_items.append({"title": title, "url": url, "snippet": snippet})
