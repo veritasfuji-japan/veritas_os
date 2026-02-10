@@ -33,6 +33,9 @@ import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Callable, Optional
 
+# Luhnチェック時の入力文字列長上限（DoS対策）
+_MAX_CARD_INPUT_LENGTH = 256
+
 
 # =============================================================================
 # PII検出パターン定義
@@ -175,6 +178,9 @@ def _luhn_check(card_number: str) -> bool:
     Returns:
         True if valid, False otherwise
     """
+    # ★ DoS対策: 極端に長い文字列のリスト変換を防止
+    if len(card_number) > _MAX_CARD_INPUT_LENGTH:
+        return False
     digits = [int(d) for d in card_number if d.isdigit()]
     if len(digits) < 13 or len(digits) > 19:
         return False

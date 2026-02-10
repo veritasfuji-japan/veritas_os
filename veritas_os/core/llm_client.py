@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -228,20 +229,24 @@ def _format_request(
 
 
 def _parse_response(provider: str, data: Dict[str, Any]) -> str:
-    """プロバイダー別レスポンスからテキストだけ抽出"""
+    """プロバイダー別レスポンスからテキストだけ抽出
+
+    ★ セキュリティ: エラーメッセージにはエラー種別のみを含め、
+    生の API レスポンスを含めない（情報漏洩防止）。
+    """
     if provider == LLMProvider.ANTHROPIC.value:
         # Claude Messages: {"content": [{"type": "text", "text": "..."}], ...}
         try:
             return data["content"][0]["text"]
-        except Exception as e:
-            raise LLMError(f"Anthropic response parse error: {repr(e)}") from e
+        except (KeyError, IndexError, TypeError) as e:
+            raise LLMError(f"Anthropic response parse error: {type(e).__name__}") from e
 
     if provider == LLMProvider.GOOGLE.value:
         # Gemini: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
         try:
             return data["candidates"][0]["content"]["parts"][0]["text"]
-        except Exception as e:
-            raise LLMError(f"Gemini response parse error: {repr(e)}") from e
+        except (KeyError, IndexError, TypeError) as e:
+            raise LLMError(f"Gemini response parse error: {type(e).__name__}") from e
 
     if provider == LLMProvider.OLLAMA.value:
         # Ollama chat: {"message":{"role":"assistant","content":"..."}}
@@ -255,8 +260,8 @@ def _parse_response(provider: str, data: Dict[str, Any]) -> str:
     # OpenAI / OpenRouter 互換
     try:
         return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        raise LLMError(f"OpenAI-like response parse error: {repr(e)}") from e
+    except (KeyError, IndexError, TypeError) as e:
+        raise LLMError(f"OpenAI-like response parse error: {type(e).__name__}") from e
 
 
 def _get_headers(provider: str) -> Dict[str, str]:
@@ -368,6 +373,9 @@ def chat(
 
     # Gemini は endpoint + model + :generateContent の形式（認証はヘッダー経由）
     if provider == LLMProvider.GOOGLE.value:
+        # ★ セキュリティ: モデル名のバリデーション（パストラバーサル/SSRF防止）
+        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', model) or '..' in model:
+            raise LLMError("Invalid model name for Gemini: contains disallowed characters")
         endpoint = f"{endpoint}/{model}:generateContent"
 
     last_error: Optional[Exception] = None

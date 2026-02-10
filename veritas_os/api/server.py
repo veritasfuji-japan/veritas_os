@@ -596,7 +596,19 @@ _schedule_nonce_cleanup()
 
 
 def _check_and_register_nonce(nonce: str) -> bool:
-    """★ スレッドセーフ版: nonceの重複チェックと登録"""
+    """Check and register a nonce for replay attack prevention.
+
+    Args:
+        nonce: Unique request identifier.
+
+    Returns:
+        True if nonce is new (not replayed), False if duplicate.
+
+    Note:
+        - Nonces expire after ``_NONCE_TTL_SEC`` (300 s).
+        - Store limited to ``_NONCE_MAX`` (5000) entries.
+        - Thread-safe via ``_nonce_lock``.
+    """
     with _nonce_lock:
         _cleanup_nonces_unsafe()
         if nonce in _nonce_store:
