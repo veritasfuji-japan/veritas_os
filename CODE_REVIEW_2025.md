@@ -108,7 +108,7 @@ except Exception:
     _atomic_write_json = None
     _HAS_ATOMIC_IO = False
 ```
-This pattern (repeated throughout the codebase) catches `Exception` which includes `MemoryError`, `RecursionError`, `SystemExit` (only `BaseException`s for the last, actually).  
+This pattern (repeated throughout the codebase) catches `Exception` which includes `MemoryError` and `RecursionError`. `SystemExit` and `KeyboardInterrupt` are `BaseException` subclasses and are not caught here.  
 **Why it's a problem**: `KeyboardInterrupt` is `BaseException` so it's not caught here, but `MemoryError` IS caught. If an `atomic_io` import triggers an OOM, the system silently degrades to non-atomic writes without any indication that the environment is in a critical state.  
 **Fix**: Catch `(ImportError, ModuleNotFoundError)` specifically instead of bare `Exception`. Other files with this same pattern: `kernel.py` lines 72–76, `server.py` lines 41–47.
 
@@ -143,15 +143,7 @@ This pattern (repeated throughout the codebase) catches `Exception` which includ
 
 ---
 
-### 11. Pipeline `_to_bool` Helper Shadows Built-in Import
-
-**File**: `veritas_os/core/pipeline.py`, lines 98–99  
-**What**: The `_to_bool` function is defined but I can only see the first two lines (file was shown truncated at line 100). A local `_to_bool` is also available via other modules. If this function's body is incomplete or has a bug, it will silently shadow the correct implementation.  
-**Why it's a problem**: Low confidence issue (may be complete in the full file), but the pattern of re-defining utility functions across modules increases the risk of divergence.
-
----
-
-### 12. CORS Allows All Credentials with Configurable Origins
+### 11. CORS Allows All Credentials with Configurable Origins
 
 **File**: `veritas_os/api/server.py`, lines 399–405  
 **What**:
@@ -169,7 +161,7 @@ app.add_middleware(
 
 ---
 
-### 13. `verify_trust_log` Doesn't Handle Entries Without `sha256`
+### 12. `verify_trust_log` Doesn't Handle Entries Without `sha256`
 
 **File**: `veritas_os/logging/trust_log.py`, lines 382–493  
 **What**: At line 464: `if entry.get("sha256") != expected_hash:`. If an entry was written by the server.py fallback (Issue #1) and has no `sha256` field, `entry.get("sha256")` returns `None`, which will never equal `expected_hash`, causing verification to report `sha256_mismatch`.  
@@ -178,7 +170,7 @@ app.add_middleware(
 
 ---
 
-### 14. Dataset Writer Reads Entire File Under Lock for Stats
+### 13. Dataset Writer Reads Entire File Under Lock for Stats
 
 **File**: `veritas_os/logging/dataset_writer.py`, lines 298–309  
 **What**: `get_dataset_stats()` reads the entire JSONL file while holding `_dataset_lock` (line 299). All `append_dataset_record()` calls block during this read.  
@@ -189,7 +181,7 @@ app.add_middleware(
 
 ## LOW Issues
 
-### 15. `CosineIndex._load` Has Pickle Fallback Behind Env Flag
+### 14. `CosineIndex._load` Has Pickle Fallback Behind Env Flag
 
 **File**: `veritas_os/memory/index_cosine.py`, lines 87–109  
 **What**: When `VERITAS_MEMORY_ALLOW_LEGACY_NPZ=1`, the code loads npz files with `allow_pickle=True` (line 94). This is documented as a security risk and gated behind an env flag, but if an attacker can place a malicious `.npz` file in the index directory AND the env flag is enabled, arbitrary code execution is possible.  
@@ -198,7 +190,7 @@ app.add_middleware(
 
 ---
 
-### 16. `chainlit_app.py` Sends `user_id` at Top Level (Redundant)
+### 15. `chainlit_app.py` Sends `user_id` at Top Level (Redundant)
 
 **File**: `chainlit_app.py`, lines 30–36  
 **What**: The payload includes `"user_id": DEFAULT_USER_ID` at the top level AND inside `context`. The `DecideRequest` schema has `ConfigDict(extra="allow")`, so the top-level `user_id` is silently accepted but ignored by the schema validation.  
@@ -207,7 +199,7 @@ app.add_middleware(
 
 ---
 
-### 17. Server Fallback `_save_json` Uses Non-Atomic Write
+### 16. Server Fallback `_save_json` Uses Non-Atomic Write
 
 **File**: `veritas_os/api/server.py`, lines 988–994  
 **What**: When `_HAS_ATOMIC_IO` is False:
@@ -226,8 +218,8 @@ with open(path, "w", encoding="utf-8") as f:
 |----------|-------|------------|
 | CRITICAL | 3 | Hash chain integrity (#1), Data correctness (#2), Data loss (#3) |
 | HIGH | 5 | DoS via lock contention (#4), Cross-platform corruption (#5), File handle safety (#6), Error swallowing (#7), Clock-skew replay (#8) |
-| MEDIUM | 5 | Zombie processes (#9), fd leak edge case (#10), CORS config (#12), Hash chain + fallback interaction (#13), Lock contention (#14) |
-| LOW | 3 | Pickle fallback (#15), Redundant field (#16), Non-atomic fallback (#17) |
+| MEDIUM | 4 | Zombie processes (#9), fd leak edge case (#10), CORS config (#11), Hash chain + fallback interaction (#12) |
+| LOW | 4 | Lock contention (#13), Pickle fallback (#14), Redundant field (#15), Non-atomic fallback (#16) |
 
 ### Most Urgent Fixes
 1. **Issue #1** (trust log fallback) — breaks the core audit/tamper-evidence mechanism
