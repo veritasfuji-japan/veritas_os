@@ -455,6 +455,8 @@ def _save_valstats(d: Dict[str, Any]) -> None:
         else:
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
     except Exception as e:
         logger.debug("_save_valstats failed: %s", e)
 

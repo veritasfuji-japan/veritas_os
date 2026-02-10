@@ -169,17 +169,18 @@ def build_healing_input(
     policy_decision: str,
 ) -> Dict[str, Any]:
     """Build the standardized self-healing input payload."""
-    feedback = rejection.get("feedback") if isinstance(rejection, dict) else {}
-    error = rejection.get("error") if isinstance(rejection, dict) else {}
+    is_dict = isinstance(rejection, dict)
+    feedback = rejection.get("feedback") if is_dict else {}
+    error = rejection.get("error") if is_dict else {}
     return {
         "original_task": original_task,
         "last_output": last_output,
         "rejection": {
-            "status": rejection.get("status"),
-            "gate": rejection.get("gate"),
+            "status": rejection.get("status") if is_dict else None,
+            "gate": rejection.get("gate") if is_dict else None,
             "error": error,
             "feedback": feedback,
-            "trust_log_id": rejection.get("trust_log_id"),
+            "trust_log_id": rejection.get("trust_log_id") if is_dict else None,
         },
         "attempt": int(attempt),
         "policy_decision": policy_decision,

@@ -132,6 +132,9 @@ def _clamp01(x: float) -> float:
 # =============================================================================
 
 
+_MISSING = object()
+
+
 def _get_nested(d: dict, *keys: str, default: Any = None) -> Any:
     """
     ネストした辞書から安全に値を取得する。
@@ -150,13 +153,15 @@ def _get_nested(d: dict, *keys: str, default: Any = None) -> Any:
         1
         >>> _get_nested(d, "a", "x", default=0)
         0
+        >>> _get_nested({"a": None}, "a") is None
+        True
     """
     current = d
     for key in keys:
         if not isinstance(current, dict):
             return default
-        current = current.get(key)
-        if current is None:
+        current = current.get(key, _MISSING)
+        if current is _MISSING:
             return default
     return current
 
