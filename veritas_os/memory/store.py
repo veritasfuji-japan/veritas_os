@@ -73,9 +73,10 @@ class MemoryStore:
 
             # OOM防止: 大きすぎるファイルは再構築をスキップ
             try:
-                if path.stat().st_size > MAX_JSONL_FILE_SIZE:
+                file_size = path.stat().st_size
+                if file_size > MAX_JSONL_FILE_SIZE:
                     logger.warning("[MemoryStore] %s too large for boot rebuild (%d bytes), skipping",
-                                   kind, path.stat().st_size)
+                                   kind, file_size)
                     continue
             except OSError:
                 continue

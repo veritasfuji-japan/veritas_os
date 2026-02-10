@@ -280,7 +280,8 @@ async function loadStatus() {
 
     const data = await response.json();
     // XSS防止: テキストコンテンツはDOM APIで安全に挿入
-    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    var escEl = document.createElement('div');
+    function esc(s) { escEl.textContent = s; return escEl.innerHTML; }
     const statusBadge = data.ok
       ? '<span class="badge ok">✅ OK</span>'
       : '<span class="badge ng">❌ FAILED</span>';
