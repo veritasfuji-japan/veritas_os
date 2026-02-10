@@ -316,6 +316,7 @@ def analyze(
     # ==== 8. リスク・価値バランスチェック ====
     if isinstance(risk, (int, float)) and not isinstance(risk, bool) and isinstance(value, (int, float)) and not isinstance(value, bool):
         rv = float(value)
+        # Use bounded value instead of float("inf") to avoid infinity propagation
         ratio = float(risk) / rv if rv > 0 else float(risk) * 100.0
         if ratio > risk_value_ratio_threshold and float(risk) > 0.6 and float(value) < 0.5:
             critiques.append(
