@@ -175,6 +175,8 @@ def _truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
     """
     if not text or len(text) <= max_len:
         return text or ""
+    if max_len <= len(suffix):
+        return text[:max_len]
     return text[:max_len - len(suffix)] + suffix
 
 
