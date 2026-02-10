@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -88,7 +87,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
         boost = -0.1
 
     out = {
-        "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
         "query": q[:200],
         "chosen_title": chosen.get("title"),
         "status": status,
@@ -104,9 +103,9 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
         _ensure_log_dir()
         with open(META_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(out, ensure_ascii=False) + "\n")
-    except Exception:
+    except Exception as e:
         # ログ書き込み失敗は本体ロジックに影響させない
-        pass
+        logger.debug("meta_log write skipped: %s", e)
 
     return out
 

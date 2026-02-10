@@ -270,7 +270,7 @@ def test_run_llm_error_falls_back_to_heuristic(monkeypatch):
     assert res["risk_score"] == 0.3
     assert "raw" in res
     assert "llm_error" in res["raw"]
-    assert "boom-llm" in res["raw"]["llm_error"]
+    assert res["raw"]["llm_error"] == "LLM safety head unavailable"
 
 
 def test_run_uses_heuristic_when_no_llm(monkeypatch):

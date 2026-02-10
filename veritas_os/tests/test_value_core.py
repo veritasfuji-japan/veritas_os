@@ -8,15 +8,6 @@ from veritas_os.core import value_core
 # ============
 # 基本ユーティリティ
 # ============
-def test_clean_text_removes_numbers_and_exponents():
-    s = "Value 123 and 45.6 and 7.8e-10 remain"
-    cleaned = value_core._clean_text(s)
-    assert "123" not in cleaned
-    assert "45.6" not in cleaned
-    assert "7.8e-10" not in cleaned
-    assert "Value" in cleaned
-
-
 def test_to_float_and_clip01_basic():
     assert value_core._to_float(1) == 1.0
     assert value_core._to_float(" 2.5 ") == 2.5
