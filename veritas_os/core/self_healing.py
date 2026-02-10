@@ -17,12 +17,30 @@ from typing import Any, Dict, Optional
 
 from .fuji_codes import FujiAction
 
-MAX_HEALING_ATTEMPTS = int(os.getenv("VERITAS_MAX_HEALING_ATTEMPTS", "3"))
-MAX_HEALING_STEPS = int(os.getenv("VERITAS_HEALING_MAX_STEPS", "6"))
-MAX_HEALING_SECONDS = float(os.getenv("VERITAS_HEALING_MAX_SECONDS", "20"))
-MAX_CONSECUTIVE_SAME_ERROR = int(
-    os.getenv("VERITAS_HEALING_MAX_SAME_ERROR", "2")
-)
+def _safe_int(env_key: str, default: int) -> int:
+    val = os.getenv(env_key)
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(env_key: str, default: float) -> float:
+    val = os.getenv(env_key)
+    if val is None:
+        return default
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
+MAX_HEALING_ATTEMPTS = _safe_int("VERITAS_MAX_HEALING_ATTEMPTS", 3)
+MAX_HEALING_STEPS = _safe_int("VERITAS_HEALING_MAX_STEPS", 6)
+MAX_HEALING_SECONDS = _safe_float("VERITAS_HEALING_MAX_SECONDS", 20.0)
+MAX_CONSECUTIVE_SAME_ERROR = _safe_int("VERITAS_HEALING_MAX_SAME_ERROR", 2)
 
 
 @dataclass(frozen=True)
