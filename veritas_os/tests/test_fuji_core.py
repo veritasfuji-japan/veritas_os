@@ -87,7 +87,7 @@ def test_policy_load_missing_path_uses_default(tmp_path):
 def test_reload_policy_respects_env(tmp_path, monkeypatch):
     """
     VERITAS_FUJI_POLICY が設定されているときに reload_policy が動作するか。
-    PyYAML が無い環境では DEFAULT にフォールバックするが、それでも OK。
+    ★ セキュリティ修正: プロジェクトルート外の絶対パスは拒否されデフォルトにフォールバック。
     """
     policy_path = tmp_path / "fuji_test_policy.yaml"
     policy_path.write_text(
@@ -100,11 +100,9 @@ def test_reload_policy_respects_env(tmp_path, monkeypatch):
 
     assert isinstance(pol, dict)
     assert fuji.POLICY is pol
-    # PyYAML ありなら fuji_test_v1、無しなら DEFAULT の version
-    assert pol.get("version") in (
-        "fuji_test_v1",
-        fuji._DEFAULT_POLICY["version"],  # type: ignore[attr-defined]
-    )
+    # ★ セキュリティ修正: tmp_path はプロジェクトルート外なのでデフォルトにフォールバック
+    # デフォルトポリシーファイルまたはハードコードされたデフォルトが使われる
+    assert pol.get("version") != "fuji_test_v1"
 
 
 # ---------------------------------------------------------

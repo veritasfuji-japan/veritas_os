@@ -276,6 +276,22 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
             "date_range": None,
         }
 
+    # ★ セキュリティ修正: ファイルサイズチェック（メモリ枯渇防止）
+    _MAX_DATASET_STATS_SIZE = 100 * 1024 * 1024  # 100 MB
+    try:
+        if path.stat().st_size > _MAX_DATASET_STATS_SIZE:
+            logger.warning("dataset file too large for stats (%d bytes), skipping", path.stat().st_size)
+            return {
+                "total_records": -1,
+                "status_counts": {},
+                "memory_usage": {},
+                "avg_score": 0.0,
+                "date_range": None,
+                "error": "file_too_large",
+            }
+    except OSError:
+        pass
+
     records: List[Dict[str, Any]] = []
     with _dataset_lock:
         with path.open(encoding="utf-8") as f:
