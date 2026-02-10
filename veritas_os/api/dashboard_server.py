@@ -325,7 +325,7 @@ document.getElementById('user').textContent = '{{USERNAME}}';
 """
     # username を埋め込む（CSS/JS の { } を壊さないために単純置換）
     # XSS対策: JS 文字列コンテキスト向けに json.dumps でエスケープ
-    html = html.replace("'{{USERNAME}}'", json.dumps(html_mod.escape(username)))
+    html = html.replace("'{{USERNAME}}'", json.dumps(username))
     return HTMLResponse(html)
 
 

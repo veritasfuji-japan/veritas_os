@@ -285,8 +285,6 @@ class VeritasConfig:
 
     def ensure_dirs(self) -> None:
         """必要なディレクトリを作成する（初回呼び出し時のみ実行）"""
-        if self._dirs_ensured:
-            return
         with self._dirs_lock:
             if self._dirs_ensured:
                 return
