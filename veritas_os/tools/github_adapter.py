@@ -98,9 +98,10 @@ def _get_with_retry(
             if attempt < GITHUB_MAX_RETRIES:
                 delay = _compute_backoff(attempt)
                 logger.warning(
-                    "GitHub request error attempt=%s, sleep=%.2fs: %r",
+                    "GitHub request error attempt=%s, sleep=%.2fs: %s: %s",
                     attempt,
                     delay,
+                    type(exc).__name__,
                     exc,
                 )
                 time.sleep(delay)
@@ -160,7 +161,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         data = r.json()
     except Exception as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
-        logger.warning("GitHub API error: %r", e)
+        logger.warning("GitHub API error: %s: %s", type(e).__name__, e)
         return {
             "ok": False,
             "results": [],
