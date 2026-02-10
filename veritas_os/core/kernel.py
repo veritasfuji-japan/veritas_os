@@ -372,7 +372,7 @@ def _score_alternatives(
                     if oid in score_map:
                         a["score"] = round(score_map[oid], 4)
         except Exception:
-            pass
+            logger.warning("[Kernel] _score_alternatives strategy scoring failed", exc_info=True)
 
 
 def _score_alternatives_with_value_core_and_persona(
@@ -480,7 +480,7 @@ async def decide(
                 telos_score=telos_score,
             )
     except Exception:
-        pass
+        logger.warning("[Kernel] knowledge_qa detection/handling failed", exc_info=True)
 
     # ★ Pipeline から渡された evidence があればそれを使用
     pipeline_evidence = ctx.get("_pipeline_evidence")
@@ -831,13 +831,14 @@ async def decide(
             alternatives=alts,
         )
     except Exception as e:
+        logger.error("FUJI gate evaluation failed, defaulting to deny: %s", repr(e))
         fuji_result = {
-            "status": "allow",
-            "decision_status": "allow",
-            "rejection_reason": None,
+            "status": "deny",
+            "decision_status": "deny",
+            "rejection_reason": "fuji_gate_error",
             "reasons": [f"fuji_error:{repr(e)[:80]}"],
             "violations": [],
-            "risk": 0.05,
+            "risk": 1.0,
             "checks": [],
             "guidance": None,
             "modifications": [],
@@ -1088,6 +1089,8 @@ async def decide(
                         stderr=subprocess.STDOUT,
                         shell=False,
                     )
+                    # Reap the subprocess in a background thread to prevent zombies
+                    _threading.Thread(target=proc.wait, daemon=True).start()
                 finally:
                     # Close our copy of the fd; the subprocess has its own copy.
                     os.close(fd)

@@ -321,7 +321,13 @@ def _policy_path() -> Path:
                 _logger.warning("VERITAS_FUJI_POLICY relative path escapes project root, ignoring: %s", env_path)
                 return root_dir / "policies" / "fuji_default.yaml"
             return resolved
-        return p
+        # ★ セキュリティ修正: 絶対パスがプロジェクトルート外の場合は警告を記録
+        resolved = p.resolve()
+        try:
+            resolved.relative_to(root_dir.resolve())
+        except ValueError:
+            _logger.warning("VERITAS_FUJI_POLICY points outside project root: %s", env_path)
+        return resolved
 
     return root_dir / "policies" / "fuji_default.yaml"
 
