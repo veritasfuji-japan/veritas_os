@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -11,10 +12,15 @@ from veritas_os.core.atomic_io import atomic_append_line
 
 logger = logging.getLogger(__name__)
 
-# プロジェクトルート基準に変更
-BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
-VERITAS_DIR = BASE_DIR / "veritas_os"
-HOME_MEMORY = VERITAS_DIR / "memory"               # ← プロジェクト内メモリ
+# ★ M-3 修正: メモリディレクトリを環境変数で設定可能にする
+# VERITAS_MEMORY_DIR が設定されていればそちらを使用、未設定ならプロジェクト内のデフォルト
+_env_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
+if _env_memory_dir:
+    HOME_MEMORY = Path(_env_memory_dir)
+else:
+    BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
+    VERITAS_DIR = BASE_DIR / "veritas_os"
+    HOME_MEMORY = VERITAS_DIR / "memory"               # ← プロジェクト内メモリ
 HOME_MEMORY.mkdir(parents=True, exist_ok=True)
 
 BASE = HOME_MEMORY

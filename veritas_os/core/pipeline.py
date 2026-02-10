@@ -3164,8 +3164,15 @@ async def run_decide_pipeline(
 
         stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         fname = f"decide_{stamp}.json"
-        (Path(LOG_DIR) / fname).write_text(json.dumps(persist, ensure_ascii=False, indent=2), encoding="utf-8")
-        (Path(DATASET_DIR) / fname).write_text(json.dumps(persist, ensure_ascii=False), encoding="utf-8")
+        # ★ クラッシュセーフ: atomic_write_json を使用（利用可能な場合）
+        log_path = Path(LOG_DIR) / fname
+        dataset_path = Path(DATASET_DIR) / fname
+        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
+            _atomic_write_json(log_path, persist, indent=2)
+            _atomic_write_json(dataset_path, persist)
+        else:
+            log_path.write_text(json.dumps(persist, ensure_ascii=False, indent=2), encoding="utf-8")
+            dataset_path.write_text(json.dumps(persist, ensure_ascii=False), encoding="utf-8")
     except Exception as e:
         _warn(f"[persist] decide record skipped: {e}")
 
