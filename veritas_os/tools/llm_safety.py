@@ -308,7 +308,7 @@ def run(
             # LLM 失敗時は fallback
             fb = _heuristic_analyze(text)
             fb["ok"] = True
-            fb.setdefault("raw", {})["llm_error"] = repr(e)
+            fb.setdefault("raw", {})["llm_error"] = f"{type(e).__name__}: {e}"
             return fb
 
     # API キー不在など → ヒューリスティック

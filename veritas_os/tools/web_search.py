@@ -164,9 +164,10 @@ def _post_with_retry(
             if attempt < WEBSEARCH_MAX_RETRIES:
                 delay = _compute_backoff(attempt)
                 logger.warning(
-                    "WEBSEARCH request error attempt=%s, sleep=%.2fs: %r",
+                    "WEBSEARCH request error attempt=%s, sleep=%.2fs: %s: %s",
                     attempt,
                     delay,
+                    type(exc).__name__,
                     exc,
                 )
                 time.sleep(delay)
@@ -512,7 +513,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     except Exception as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
         # 詳細はログに記録し、クライアントには汎用的なエラーメッセージのみ返す
-        logger.warning("WEBSEARCH_API error: %r", e)
+        logger.warning("WEBSEARCH_API error: %s: %s", type(e).__name__, e)
         return {
             "ok": False,
             "results": [],
