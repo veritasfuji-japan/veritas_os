@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import uuid
 import time
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import logging
@@ -353,7 +354,8 @@ def score_alternatives(
                     world_projection=a.get("world"),
                 )
                 vscore = float(vc_compute(opt_score))
-                base *= vscore
+                if math.isfinite(vscore):
+                    base *= vscore
             except Exception:
                 pass
 

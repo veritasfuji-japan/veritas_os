@@ -252,7 +252,10 @@ def _analyze_with_llm(
     if out is None:
         raise RuntimeError("LLM safety head returned unparseable output")
 
-    risk = float(out.get("risk_score", 0.05) or 0.05)
+    try:
+        risk = float(out.get("risk_score", 0.05) or 0.05)
+    except (ValueError, TypeError):
+        risk = 0.05
     cats = out.get("categories") or []
     rat = out.get("rationale") or ""
 

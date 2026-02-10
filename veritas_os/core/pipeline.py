@@ -3013,7 +3013,7 @@ async def run_decide_pipeline(
 
             if not note_text:
                 tips = reflection.get("improvement_tips") or []
-                note_text = " / ".join(tips) if tips else "自動反省メモはありません。"
+                note_text = " / ".join(str(t) for t in tips) if tips else "自動反省メモはありません。"
 
             payload["reason"] = {
                 "note": note_text,
