@@ -625,7 +625,7 @@ async def verify_signature(
     try:
         ts = int(x_timestamp)
     except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid timestamp")
+        raise HTTPException(status_code=401, detail="Invalid timestamp") from None
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         raise HTTPException(status_code=401, detail="Timestamp out of range")
     if not _check_and_register_nonce(x_nonce):
