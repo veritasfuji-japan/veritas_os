@@ -569,7 +569,8 @@ class VectorMemory:
 
                 # スナップショットを取得
                 docs_snapshot = list(self.documents)
-                embeddings_snapshot = self.embeddings.copy() if hasattr(self.embeddings, 'copy') else self.embeddings
+                import numpy as np
+                embeddings_snapshot = np.array(self.embeddings, copy=True)
 
             # ロック外で計算
             # コサイン類似度計算
@@ -582,7 +583,7 @@ class VectorMemory:
                     continue
 
                 if idx >= len(docs_snapshot):
-                    break
+                    continue
 
                 doc = docs_snapshot[idx]
 
