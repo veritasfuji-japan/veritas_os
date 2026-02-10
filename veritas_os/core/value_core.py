@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,25 +11,8 @@ from typing import Dict, List, Any
 
 logger = logging.getLogger(__name__)
 
-# OS 判定（Windows互換性のため）
-IS_WIN = os.name == "nt"
-
-if not IS_WIN:
-    try:
-        import fcntl  # type: ignore
-    except ImportError:
-        fcntl = None  # type: ignore
-else:
-    fcntl = None  # type: ignore
-
 # 共通ユーティリティをインポート
 from .utils import _to_float, _clip01
-
-
-def _clean_text(x: str) -> str:
-    # 数字・小数・指数表現（e-33 など）を除去
-    x = re.sub(r"[0-9]+(?:\.[0-9]+)?(?:e[-+]?[0-9]+)?", "", x)
-    return x
 
 
 def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:

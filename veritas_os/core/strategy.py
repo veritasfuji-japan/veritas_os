@@ -8,11 +8,10 @@ from .utils import _clip01
 
 # 同じパッケージ内の WorldModel / ValueCore を利用する
 try:
-    from . import world_model as wm
+    from . import world as wm
     from . import value_core
 except ImportError:
-    # ★ 修正: パッケージ名を veritas → veritas_os に修正
-    from veritas_os.core import world_model as wm  # type: ignore
+    from veritas_os.core import world as wm        # type: ignore
     from veritas_os.core import value_core          # type: ignore
 
 

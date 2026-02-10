@@ -51,12 +51,28 @@ import requests
 
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
-WEBSEARCH_MAX_RETRIES = int(os.getenv("VERITAS_WEBSEARCH_MAX_RETRIES", "3"))
-WEBSEARCH_RETRY_DELAY = float(os.getenv("VERITAS_WEBSEARCH_RETRY_DELAY", "1.0"))
-WEBSEARCH_RETRY_MAX_DELAY = float(
-    os.getenv("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", "8.0")
+
+
+def _safe_int(key: str, default: int) -> int:
+    try:
+        return int(os.getenv(key, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(key: str, default: float) -> float:
+    try:
+        return float(os.getenv(key, str(default)))
+    except (ValueError, TypeError):
+        return default
+
+
+WEBSEARCH_MAX_RETRIES = _safe_int("VERITAS_WEBSEARCH_MAX_RETRIES", 3)
+WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
+WEBSEARCH_RETRY_MAX_DELAY = _safe_float(
+    "VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0
 )
-WEBSEARCH_RETRY_JITTER = float(os.getenv("VERITAS_WEBSEARCH_RETRY_JITTER", "0.1"))
+WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
 
 logger = logging.getLogger(__name__)
 
