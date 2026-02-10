@@ -180,7 +180,7 @@ def generate_daily_curriculum(
         )
     )
 
-    # ★ メモリリーク防止: ユーザー数上限を超えたら古いエントリを削除
+    # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除（FIFO方式）
     if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
         oldest_key = next(iter(_USER_TASKS))
         del _USER_TASKS[oldest_key]

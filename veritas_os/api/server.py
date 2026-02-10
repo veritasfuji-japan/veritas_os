@@ -965,10 +965,10 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
 
 
 # ★ スレッドセーフな Trust Log ロック
-# trust_log.py の _trust_log_lock を共有して、同一ファイルへの並行書き込みを防止。
+# trust_log.py の trust_log_lock を共有して、同一ファイルへの並行書き込みを防止。
 # 共有に失敗した場合はローカルロックにフォールバック。
 try:
-    from veritas_os.logging.trust_log import _trust_log_lock  # type: ignore[attr-defined]
+    from veritas_os.logging.trust_log import trust_log_lock as _trust_log_lock
 except Exception:
     _trust_log_lock = threading.Lock()
 

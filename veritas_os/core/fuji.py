@@ -479,7 +479,7 @@ def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
 _POLICY_PATH = _policy_path()
 POLICY: Dict[str, Any] = _load_policy(_POLICY_PATH)
 try:
-    _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime if _POLICY_PATH.exists() else 0.0
+    _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime
 except OSError:
     _POLICY_MTIME: float = 0.0
 
@@ -494,7 +494,7 @@ def reload_policy() -> Dict[str, Any]:
         path = _policy_path()
         POLICY = _load_policy(path)
         try:
-            _POLICY_MTIME = path.stat().st_mtime if path.exists() else 0.0
+            _POLICY_MTIME = path.stat().st_mtime
         except OSError:
             _POLICY_MTIME = 0.0
     return POLICY
