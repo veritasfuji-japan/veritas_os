@@ -647,5 +647,3 @@ class ChatRequest(BaseModel):
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
-
-

@@ -789,7 +789,7 @@ def test_memory_search_filters_by_user(monkeypatch):
     assert data["count"] == 1
     assert data["hits"][0]["meta"]["user_id"] == "userX"
 
-    # user_id なし → dict + 文字列ラップ分 全部返る
+    # user_id なし → セキュリティ修正: user_id は必須
     r2 = client.post(
         "/v1/memory/search",
         json={"query": "q"},
@@ -797,11 +797,9 @@ def test_memory_search_filters_by_user(monkeypatch):
     )
     assert r2.status_code == 200
     data2 = r2.json()
-    assert data2["ok"] is True
-    assert data2["count"] == 3
-
-    # 文字列ヒットは {"id": "..."} にラップされているはず
-    assert any(isinstance(h, dict) and "id" in h for h in data2["hits"])
+    assert data2["ok"] is False
+    assert data2["count"] == 0
+    assert "user_id" in data2["error"]
 
 
 # -------------------------------------------------
@@ -822,7 +820,7 @@ def test_memory_search_error_path(monkeypatch):
 
     r = client.post(
         "/v1/memory/search",
-        json={"query": "q"},
+        json={"query": "q", "user_id": "test_user"},
         headers={"X-API-Key": "test-api-key"},
     )
     assert r.status_code == 200
