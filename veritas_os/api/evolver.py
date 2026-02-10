@@ -6,6 +6,7 @@ from typing import Any, List
 
 from .schemas import PersonaState
 from ..core.config import cfg
+from ..core.atomic_io import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +48,9 @@ def save_persona(p: PersonaState) -> None:
             ),
         )
 
-        # ディレクトリが存在しない場合は作成
-        PERSONA_JSON.parent.mkdir(parents=True, exist_ok=True)
-
-        PERSONA_JSON.write_text(
-            json.dumps(updated.model_dump(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        # ★ クラッシュセーフ: atomic_write_json で書き込み
+        # write_text() は書き込み途中のクラッシュでデータ破損のリスクがある
+        atomic_write_json(PERSONA_JSON, updated.model_dump(), indent=2)
     except Exception as e:
         logger.warning("[persona] save failed: %s", e)
 
