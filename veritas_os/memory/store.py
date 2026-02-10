@@ -99,6 +99,8 @@ class MemoryStore:
             if texts:
                 vecs = self.emb.embed(texts)
                 idx.add(vecs, ids)  # ★ ここで追加すると .npz 保存まで自動で行われる
+            else:
+                logger.warning("[MemoryStore] No valid items found in %s for kind=%s", path, kind)
 
     def put(self, kind: str, item: Dict[str, Any]) -> str:
         """

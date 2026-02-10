@@ -175,6 +175,9 @@ def _luhn_check(card_number: str) -> bool:
     Returns:
         True if valid, False otherwise
     """
+    # ★ DoS対策: 極端に長い文字列のリスト変換を防止
+    if len(card_number) > 256:
+        return False
     digits = [int(d) for d in card_number if d.isdigit()]
     if len(digits) < 13 or len(digits) > 19:
         return False

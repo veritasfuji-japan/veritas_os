@@ -86,7 +86,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
             # Windows や一部のファイルシステムでは失敗する可能性がある
             # その場合は無視して続行（ベストエフォート）
             pass
-    except Exception:
+    except (IOError, OSError):
         # Clean up temp file on failure
         if fd >= 0:
             try:
