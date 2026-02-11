@@ -568,7 +568,7 @@ async def call_core_decide(
             "Errors: %s. Parameters: %s",
             getattr(core_fn, "__name__", repr(core_fn)),
             "; ".join(errors),
-            list(p),
+            sorted(p),
         )
         raise TypeError(
             f"call_core_decide: cannot call {getattr(core_fn, '__name__', '?')} "
