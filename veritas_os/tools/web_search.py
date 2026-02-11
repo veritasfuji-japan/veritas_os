@@ -91,7 +91,12 @@ if WEBSEARCH_URL:
             _parsed_ws_url.scheme,
         )
         WEBSEARCH_URL = ""
-    elif _is_private_or_loopback(_parsed_ws_url.hostname or ""):
+    elif not _parsed_ws_url.hostname:
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL is missing hostname; URL will be ignored",
+        )
+        WEBSEARCH_URL = ""
+    elif _is_private_or_loopback(_parsed_ws_url.hostname):
         logging.getLogger(__name__).warning(
             "VERITAS_WEBSEARCH_URL resolves to private/loopback address; URL will be ignored",
         )
