@@ -37,8 +37,8 @@ async def call_veritas_decide(query: str) -> Dict[str, Any]:
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(VERITAS_API_URL, headers=headers, json=payload)
-    resp.raise_for_status()
-    return resp.json()
+        resp.raise_for_status()
+        return resp.json()
 
 
 # ========= 表示用フォーマッタ =========
