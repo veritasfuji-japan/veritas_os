@@ -25,6 +25,11 @@ from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 
+try:
+    from veritas_os.core.sanitize import mask_pii as _mask_pii
+except Exception:  # pragma: no cover
+    _mask_pii = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
@@ -267,15 +272,19 @@ def write_shadow_decide(
 
     fuji_safe = fuji if isinstance(fuji, dict) else {}
 
+    raw_query = (
+        body.get("query")
+        or (body.get("context") or {}).get("query")
+        or ""
+    )
+    # ★ セキュリティ: シャドウログに書き出す前にPIIをマスク
+    query = _mask_pii(raw_query) if _mask_pii and raw_query else raw_query
+
     rec = {
         "request_id": request_id,
         # ISO8601 + "Z"（UTC）に正規化
         "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "query": (
-            body.get("query")
-            or (body.get("context") or {}).get("query")
-            or ""
-        ),
+        "query": query,
         "chosen": chosen,
         "telos_score": float(telos_score or 0.0),
         "fuji": fuji_safe.get("status"),

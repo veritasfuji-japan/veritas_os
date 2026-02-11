@@ -384,6 +384,14 @@ def search_dataset(
     if not path.exists():
         return []
 
+    # ★ セキュリティ: 巨大ファイルによるメモリ枯渇を防止
+    try:
+        if path.stat().st_size > MAX_DATASET_STATS_SIZE:
+            logger.warning("search_dataset: file too large (%s), skipping", path)
+            return []
+    except OSError:
+        return []
+
     results: List[Dict[str, Any]] = []
     q_lower = query.lower() if query else None
 

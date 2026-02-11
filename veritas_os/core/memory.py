@@ -177,33 +177,14 @@ class RestrictedUnpickler:
 
         full_name = f"{module}.{name}"
 
-        # ★ _reconstruct の使用を検出して警告（廃止移行のため）
+        # ★ セキュリティ強化: _reconstruct / scalar は任意コード実行のリスクがあるため拒否
         if "_reconstruct" in name or "scalar" in name:
-            # 互換性のため許可するが、強い警告を出す
             logger.warning(
-                f"[SECURITY] Pickle contains unsafe numpy type: {full_name}. "
-                "This data format is deprecated. Please migrate to JSON."
+                f"[SECURITY] Pickle contains blocked numpy type: {full_name}. "
+                "Please migrate to JSON format."
             )
-            try:
-                import numpy as np
-                # numpy >= 2.0
-                try:
-                    import numpy._core.multiarray as ma
-                    if hasattr(ma, name):
-                        return getattr(ma, name)
-                except ImportError:
-                    pass
-                # numpy < 2.0
-                try:
-                    import numpy.core.multiarray as ma
-                    if hasattr(ma, name):
-                        return getattr(ma, name)
-                except ImportError:
-                    pass
-            except Exception:
-                pass
             raise pickle.UnpicklingError(
-                f"Restricted unpickler: {full_name} not found"
+                f"Restricted unpickler: {full_name} is blocked for security"
             )
 
         # numpy型（安全なもののみ）
