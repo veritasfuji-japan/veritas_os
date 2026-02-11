@@ -25,6 +25,8 @@ class _DummyResponse:
         self.status_code = status_code
         self._data = data
         self.text = text or ""
+        self.headers = {}
+        self.content = (text or "").encode("utf-8")
 
     def json(self):
         return self._data

@@ -85,28 +85,40 @@ class CosineIndex:
                 )
 
             if _allow_legacy_pickle_npz():
-                logger.warning(
-                    "[CosineIndex] Loading legacy pickle-based npz file: %s. "
-                    "This is a security risk. Re-save the index to migrate.",
-                    self.path,
-                )
+                # ★ セキュリティ: ファイルサイズ制限（メモリ枯渇防止）
+                _MAX_LEGACY_NPZ_BYTES = 512 * 1024 * 1024  # 512 MB
                 try:
-                    data = np.load(self.path, allow_pickle=True)
-                    self.vecs = data["vecs"].astype(np.float32)
-                    self.ids = [str(i) for i in data["ids"].tolist()]
-                    # Immediately re-save without pickle to migrate
-                    self.save()
-                    logger.info(
-                        "[CosineIndex] Migrated legacy pickle file to safe format: %s",
+                    file_size = self.path.stat().st_size
+                except OSError:
+                    file_size = 0
+                if file_size > _MAX_LEGACY_NPZ_BYTES:
+                    logger.warning(
+                        "[CosineIndex] Legacy pickle file too large (%d bytes, limit=%d): %s",
+                        file_size, _MAX_LEGACY_NPZ_BYTES, self.path,
+                    )
+                else:
+                    logger.warning(
+                        "[CosineIndex] Loading legacy pickle-based npz file: %s. "
+                        "This is a security risk. Re-save the index to migrate.",
                         self.path,
                     )
-                    return
-                except Exception as e:
-                    # ★ M-18 修正: レガシー読み込みの失敗もログに記録
-                    logger.warning(
-                        "[CosineIndex] Failed to load legacy pickle file: %s: %s",
-                        self.path, e,
-                    )
+                    try:
+                        data = np.load(self.path, allow_pickle=True)
+                        self.vecs = data["vecs"].astype(np.float32)
+                        self.ids = [str(i) for i in data["ids"].tolist()]
+                        # Immediately re-save without pickle to migrate
+                        self.save()
+                        logger.info(
+                            "[CosineIndex] Migrated legacy pickle file to safe format: %s",
+                            self.path,
+                        )
+                        return
+                    except Exception as e:
+                        # ★ M-18 修正: レガシー読み込みの失敗もログに記録
+                        logger.warning(
+                            "[CosineIndex] Failed to load legacy pickle file: %s: %s",
+                            self.path, e,
+                        )
 
             # 壊れていたら諦めて空からスタート
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)
@@ -176,7 +188,7 @@ class CosineIndex:
         Vn = V / (np.linalg.norm(V, axis=1, keepdims=True) + 1e-8)
         Qn = q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-8)
 
-        sims = Qn @ Vn.T  # (Q, N)
+        sims = np.clip(Qn @ Vn.T, -1.0, 1.0)  # (Q, N)
 
         out: List[List[Tuple[str, float]]] = []
         for row in sims:

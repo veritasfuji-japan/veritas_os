@@ -307,6 +307,20 @@ class VeritasConfig:
             f"repo_root={self.repo_root!r}, log_dir={self.log_dir!r})"
         )
 
+    @property
+    def api_secret_configured(self) -> bool:
+        """API Secret が正しく設定されているかどうかを返す。
+
+        空文字やプレースホルダー値の場合は False を返す。
+        認証バイパスリスクの明示的チェックに使用する。
+        """
+        secret = self.api_secret.strip()
+        if not secret:
+            return False
+        if secret == "YOUR_VERITAS_API_SECRET_HERE":
+            return False
+        return True
+
 
 cfg = VeritasConfig()
 

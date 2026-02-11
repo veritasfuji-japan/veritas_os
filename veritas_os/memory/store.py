@@ -31,6 +31,9 @@ MAX_QUERY_LENGTH = 10000
 # JSONL ファイルサイズの上限（起動時の再構築 / 検索時の読み込み用、100MB）
 MAX_JSONL_FILE_SIZE = 100 * 1024 * 1024
 
+# ★ OOM対策: 検索時にメモリに読み込む最大アイテム数
+MAX_SEARCH_ITEMS = 500_000
+
 FILES = {
     "episodic": BASE / "episodic.jsonl",
     "semantic": BASE / "semantic.jsonl",
@@ -101,6 +104,13 @@ class MemoryStore:
                     except (json.JSONDecodeError, KeyError, TypeError):
                         # 不正なJSONまたは必須フィールド欠損をスキップ
                         continue
+                    # ★ OOM対策: ブート時の再構築もアイテム数上限を適用
+                    if len(ids) >= MAX_SEARCH_ITEMS:
+                        logger.warning(
+                            "[MemoryStore] %s hit MAX_SEARCH_ITEMS (%d) during boot, truncating",
+                            kind, MAX_SEARCH_ITEMS,
+                        )
+                        break
 
             if texts:
                 vecs = self.emb.embed(texts)
@@ -225,9 +235,10 @@ class MemoryStore:
                 items = []
                 try:
                     # OOM防止: 大きすぎるファイルの読み込みを防止
-                    if FILES[kind].stat().st_size > MAX_JSONL_FILE_SIZE:
+                    _file_size = FILES[kind].stat().st_size
+                    if _file_size > MAX_JSONL_FILE_SIZE:
                         logger.warning("[MemoryStore] %s too large for search (%d bytes)",
-                                       kind, FILES[kind].stat().st_size)
+                                       kind, _file_size)
                     else:
                         with open(FILES[kind], encoding="utf-8") as f:
                             for line in f:
@@ -235,6 +246,13 @@ class MemoryStore:
                                     items.append(json.loads(line))
                                 except json.JSONDecodeError:
                                     pass
+                                # ★ OOM対策: アイテム数の上限を超えたら読み込みを停止
+                                if len(items) >= MAX_SEARCH_ITEMS:
+                                    logger.warning(
+                                        "[MemoryStore] %s hit MAX_SEARCH_ITEMS (%d), truncating",
+                                        kind, MAX_SEARCH_ITEMS,
+                                    )
+                                    break
                 except (OSError, IOError) as e:
                     # ファイルアクセスエラーをログ出力
                     logger.warning("[MemoryStore] Failed to read %s: %s", FILES[kind], e)

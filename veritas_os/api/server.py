@@ -53,7 +53,7 @@ try:
 except Exception as _sanitize_import_err:
     _HAS_SANITIZE = False
     _sanitize_mask_pii = None  # type: ignore
-    logger.debug("sanitize import failed, PII masking disabled: %s", _sanitize_import_err)
+    logger.warning("sanitize import failed, PII masking disabled: %s", _sanitize_import_err)
 
 # ============================================================
 # ISSUE-4 方針:
@@ -644,7 +644,10 @@ async def verify_signature(
         raise HTTPException(status_code=401, detail="Replay detected")
 
     body_bytes = await request.body()
-    body = body_bytes.decode("utf-8") if body_bytes else ""
+    try:
+        body = body_bytes.decode("utf-8") if body_bytes else ""
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Request body is not valid UTF-8") from None
     payload = f"{ts}\n{x_nonce}\n{body}"
     mac = hmac.new(api_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
     if not hmac.compare_digest(mac, (x_signature or "").lower()):
@@ -740,7 +743,7 @@ def redact(text: str) -> str:
         try:
             return _sanitize_mask_pii(text)
         except Exception:
-            pass  # フォールバックへ
+            logger.warning("sanitize.mask_pii failed; falling back to basic regex")
 
     # フォールバック: 基本的なパターンのみ
     text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)

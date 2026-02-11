@@ -58,8 +58,8 @@ def _sha256_dict(d: Dict[str, Any]) -> str:
     try:
         s = json.dumps(d, ensure_ascii=False, sort_keys=True)
     except Exception:
-        logger.debug("_sha256_dict: JSON serialization failed, falling back to str()", exc_info=True)
-        s = str(d)
+        logger.debug("_sha256_dict: JSON serialization failed, using default=str fallback", exc_info=True)
+        s = json.dumps(d, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
 
@@ -382,6 +382,15 @@ def search_dataset(
         path: JSONL ファイルパス
     """
     if not path.exists():
+        return []
+
+    # ★ セキュリティ: 巨大ファイルによるメモリ枯渇を防止
+    try:
+        if path.stat().st_size > MAX_DATASET_STATS_SIZE:
+            logger.warning("search_dataset: file too large (%s), skipping", path)
+            return []
+    except OSError as e:
+        logger.warning("search_dataset: cannot stat %s: %s", path, e)
         return []
 
     results: List[Dict[str, Any]] = []

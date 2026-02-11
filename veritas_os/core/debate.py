@@ -451,7 +451,7 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     # 末尾削り（軽め）
     attempts = 0
     for cut in range(len(cleaned), 1, -1):
-        if attempts >= 250:
+        if attempts >= 50:
             break
         if cleaned[cut - 1] not in ("}", "]"):
             continue
@@ -462,7 +462,7 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
             continue
 
     # "options":[{...},{...}] から完成objだけ拾う（最後の保険）
-    def _extract_objects_from_array(text: str, key: str) -> List[Dict[str, Any]]:
+    def _extract_objects_from_array(text: str, key: str, max_objects: int = 50) -> List[Dict[str, Any]]:
         idx = text.find(f'"{key}"')
         if idx == -1:
             return []
@@ -503,6 +503,8 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
                         except Exception:
                             pass
                         buf_start = None
+                        if len(objs) >= max_objects:
+                            break
                 elif ch == "]":
                     break
             i += 1

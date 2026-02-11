@@ -29,9 +29,12 @@ PII (Personally Identifiable Information) 検出・マスク処理モジュー�
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Callable, Optional
+
+_logger = logging.getLogger(__name__)
 
 # Luhnチェック時の入力文字列長上限（DoS対策）
 _MAX_CARD_INPUT_LENGTH = 256
@@ -92,7 +95,7 @@ PREFECTURES = (
 # 住所全体を貪欲にマッチ（スペース・句読点・改行で終了）
 RE_ADDRESS_JP = re.compile(
     rf'(?:{PREFECTURES})'
-    r'(?:[一-龯々ぁ-んァ-ヶa-zA-Z0-9ー−\-]+)',  # 市区町村 + 町名 + 番地
+    r'(?:[一-龯々ぁ-んァ-ヶa-zA-Z0-9ー−\-]{1,80})',  # 市区町村 + 町名 + 番地 (長さ制限でReDoS対策)
     re.UNICODE
 )
 
@@ -378,6 +381,12 @@ class PIIDetector:
         """
         if not text:
             return []
+
+        # ★ セキュリティ: 入力長制限（ReDoS / CPU DoS 防止）
+        _MAX_PII_INPUT_LENGTH = 1_000_000  # 1M chars (~1 MB for ASCII)
+        if len(text) > _MAX_PII_INPUT_LENGTH:
+            _logger.warning("PII input truncated from %d to %d chars", len(text), _MAX_PII_INPUT_LENGTH)
+            text = text[:_MAX_PII_INPUT_LENGTH]
 
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用

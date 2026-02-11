@@ -23,6 +23,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 import json
 import logging
+import math
 import os
 import re
 import time
@@ -71,7 +72,7 @@ _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
 
 
 def _norm(s: str) -> str:
-    return (s or "").replace("　", " ").strip().lower()
+    return (s or "").replace("　", " ").strip().casefold()
 
 
 def _heuristic_analyze(text: str) -> Dict[str, Any]:
@@ -248,13 +249,15 @@ def _analyze_with_llm(
     output = getattr(resp, "output", None)
     if not output or len(output) == 0:
         raise RuntimeError("LLM safety head returned empty output")
-    out = output[0].parsed  # type: ignore[attr-defined]
+    out = getattr(output[0], "parsed", None)
     if out is None:
         raise RuntimeError("LLM safety head returned unparseable output")
 
     try:
         risk = float(out.get("risk_score", 0.05) or 0.05)
     except (ValueError, TypeError):
+        risk = 0.05
+    if not math.isfinite(risk):
         risk = 0.05
     cats = out.get("categories") or []
     rat = out.get("rationale") or ""

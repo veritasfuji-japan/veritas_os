@@ -85,8 +85,9 @@ try:
     DEFAULT_MIN_EVIDENCE = _fuji_cfg.default_min_evidence
     MAX_UNCERTAINTY = _fuji_cfg.max_uncertainty
     _ENV_POC_MODE = _fuji_cfg.poc_mode
-except Exception:
+except Exception as _cfg_err:
     # フォールバック: config が壊れていてもfuji.pyは動作する
+    _logger.warning("Failed to load fuji_cfg, using defaults: %s", _cfg_err)
     DEFAULT_MIN_EVIDENCE = 1
     MAX_UNCERTAINTY = 0.60
     _ENV_POC_MODE = os.getenv("VERITAS_POC_MODE", "0") == "1"

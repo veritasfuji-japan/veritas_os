@@ -22,9 +22,11 @@ logger = logging.getLogger(__name__)
 
 # ★ C-1 修正: doctor 自動起動のレート制限
 # 高頻度リクエストでプロセスが溜まるのを防止（最低 60 秒間隔）
+# ★ C-1b 修正: アクティブプロセス追跡で並行起動を防止
 import threading as _threading
 _DOCTOR_MIN_INTERVAL_SEC = 60.0
 _doctor_last_run: float = 0.0
+_doctor_active_proc: "subprocess.Popen | None" = None
 _doctor_lock = _threading.Lock()
 
 from .types import (
@@ -1047,18 +1049,28 @@ async def decide(
 
     # doctor 自動実行
     # ★ C-1 修正: レート制限付き（最低 _DOCTOR_MIN_INTERVAL_SEC 秒間隔）
+    # ★ C-1b 修正: アクティブプロセス追跡で並行起動を防止
     auto_doctor = ctx.get("auto_doctor", True)
     if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
-        global _doctor_last_run
+        global _doctor_last_run, _doctor_active_proc
         _should_run_doctor = False
         with _doctor_lock:
-            now = time.time()
-            if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
-                _doctor_last_run = now
-                _should_run_doctor = True
-            else:
-                extras.setdefault("doctor", {})
-                extras["doctor"]["skipped"] = "rate_limited"
+            # ★ C-1b: 既存プロセスがまだ実行中なら新規起動をスキップ
+            if _doctor_active_proc is not None:
+                if _doctor_active_proc.poll() is None:
+                    extras.setdefault("doctor", {})
+                    extras["doctor"]["skipped"] = "already_running"
+                    _should_run_doctor = False
+                else:
+                    _doctor_active_proc = None
+            if _doctor_active_proc is None:
+                now = time.time()
+                if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
+                    _doctor_last_run = now
+                    _should_run_doctor = True
+                else:
+                    extras.setdefault("doctor", {})
+                    extras["doctor"]["skipped"] = "rate_limited"
 
         if _should_run_doctor:
             try:
@@ -1083,14 +1095,31 @@ async def decide(
                 fd = os.open(str(doctor_log), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
                 try:
                     os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
+                    doctor_timeout = 300  # 5 minutes max
                     proc = subprocess.Popen(
                         [python_executable, "-m", "veritas_os.scripts.doctor"],
                         stdout=fd,
                         stderr=subprocess.STDOUT,
                         shell=False,
                     )
-                    # Reap the subprocess in a background thread to prevent zombies
-                    _threading.Thread(target=proc.wait, daemon=True).start()
+                    # ★ C-1b: アクティブプロセスを追跡
+                    with _doctor_lock:
+                        _doctor_active_proc = proc
+                    # Reap the subprocess in a background thread to prevent zombies;
+                    # enforce a timeout to avoid indefinitely hanging processes.
+                    def _wait_with_timeout(p: subprocess.Popen, t: int) -> None:
+                        try:
+                            p.wait(timeout=t)
+                        except subprocess.TimeoutExpired:
+                            p.kill()
+                            p.wait()
+                        finally:
+                            with _doctor_lock:
+                                # NOTE: nested function needs its own global declaration
+                                global _doctor_active_proc
+                                if _doctor_active_proc is p:
+                                    _doctor_active_proc = None
+                    _threading.Thread(target=_wait_with_timeout, args=(proc, doctor_timeout), daemon=True).start()
                 finally:
                     # Close our copy of the fd; the subprocess has its own copy.
                     os.close(fd)
