@@ -419,6 +419,11 @@ def chat(
                     f"Response too large ({content_length} bytes, "
                     f"limit={LLM_MAX_RESPONSE_BYTES})"
                 )
+            if len(resp.content) > LLM_MAX_RESPONSE_BYTES:
+                raise LLMError(
+                    f"Response body too large ({len(resp.content)} bytes, "
+                    f"limit={LLM_MAX_RESPONSE_BYTES})"
+                )
 
             data = resp.json()
             text = _parse_response(provider, data)
