@@ -1,4 +1,5 @@
 # tests/test_llm_client.py
+import importlib
 from unittest.mock import MagicMock
 
 import pytest
@@ -657,3 +658,40 @@ def test_chat_local_shortcut(monkeypatch):
     assert called["model"] == "llama3"
     assert res["model"] == "llama3"
 
+
+
+def test_env_parsing_safe_helpers_return_default_for_invalid_values(monkeypatch):
+    monkeypatch.setenv("VERITAS_TEST_SAFE_INT", "invalid-int")
+    monkeypatch.setenv("VERITAS_TEST_SAFE_FLOAT", "invalid-float")
+
+    assert llm_client._safe_int("VERITAS_TEST_SAFE_INT", 7) == 7
+    assert llm_client._safe_float("VERITAS_TEST_SAFE_FLOAT", 1.5) == 1.5
+
+
+def test_env_parsing_failsafe_on_module_reload(monkeypatch):
+    original_timeout = llm_client.LLM_TIMEOUT
+    original_connect_timeout = llm_client.LLM_CONNECT_TIMEOUT
+    original_retries = llm_client.LLM_MAX_RETRIES
+    original_retry_delay = llm_client.LLM_RETRY_DELAY
+    original_max_response_bytes = llm_client.LLM_MAX_RESPONSE_BYTES
+
+    monkeypatch.setenv("LLM_TIMEOUT", "not-a-number")
+    monkeypatch.setenv("LLM_CONNECT_TIMEOUT", "bad")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "oops")
+    monkeypatch.setenv("LLM_RETRY_DELAY", "bad-float")
+    monkeypatch.setenv("LLM_MAX_RESPONSE_BYTES", "nope")
+
+    reloaded = importlib.reload(llm_client)
+    try:
+        assert reloaded.LLM_TIMEOUT == 60.0
+        assert reloaded.LLM_CONNECT_TIMEOUT == 10.0
+        assert reloaded.LLM_MAX_RETRIES == 3
+        assert reloaded.LLM_RETRY_DELAY == 2.0
+        assert reloaded.LLM_MAX_RESPONSE_BYTES == 16 * 1024 * 1024
+    finally:
+        monkeypatch.setenv("LLM_TIMEOUT", str(original_timeout))
+        monkeypatch.setenv("LLM_CONNECT_TIMEOUT", str(original_connect_timeout))
+        monkeypatch.setenv("LLM_MAX_RETRIES", str(original_retries))
+        monkeypatch.setenv("LLM_RETRY_DELAY", str(original_retry_delay))
+        monkeypatch.setenv("LLM_MAX_RESPONSE_BYTES", str(original_max_response_bytes))
+        importlib.reload(llm_client)

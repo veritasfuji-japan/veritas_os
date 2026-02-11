@@ -57,17 +57,33 @@ class LLMError(Exception):
 # 設定値（環境変数）
 # =========================
 
+
+def _safe_int(key: str, default: int) -> int:
+    """環境変数を int として安全に取得する。"""
+    try:
+        return int(os.getenv(key, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(key: str, default: float) -> float:
+    """環境変数を float として安全に取得する。"""
+    try:
+        return float(os.getenv(key, str(default)))
+    except (TypeError, ValueError):
+        return default
+
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", LLMProvider.OPENAI.value)
 # ★ 現在のデフォルトは gpt-4.1-mini を想定（env で上書き可）
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4.1-mini")
 
-LLM_TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "60"))
-LLM_CONNECT_TIMEOUT = float(os.environ.get("LLM_CONNECT_TIMEOUT", "10"))
-LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "3"))
-LLM_RETRY_DELAY = float(os.environ.get("LLM_RETRY_DELAY", "2"))
+LLM_TIMEOUT = _safe_float("LLM_TIMEOUT", 60.0)
+LLM_CONNECT_TIMEOUT = _safe_float("LLM_CONNECT_TIMEOUT", 10.0)
+LLM_MAX_RETRIES = _safe_int("LLM_MAX_RETRIES", 3)
+LLM_RETRY_DELAY = _safe_float("LLM_RETRY_DELAY", 2.0)
 
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
-LLM_MAX_RESPONSE_BYTES = int(os.environ.get("LLM_MAX_RESPONSE_BYTES", str(16 * 1024 * 1024)))
+LLM_MAX_RESPONSE_BYTES = _safe_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
 
 
 # =========================
@@ -559,4 +575,3 @@ __all__ = [
     "chat_gemini",
     "chat_local",
 ]
-
