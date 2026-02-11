@@ -47,18 +47,53 @@ import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
+import ipaddress
+import socket
+
 import requests
 
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
-# ★ SSRF対策: WEBSEARCH_URL のスキームを検証
+
+# ★ SSRF対策: プライベート/ループバックIPへのリクエストをブロック
+def _is_private_or_loopback(hostname: str) -> bool:
+    """ホスト名がプライベートIPまたはループバックに解決されるか判定する。
+
+    SSRF防止のため、内部ネットワークへのリクエストをブロックする。
+    """
+    if not hostname:
+        return False
+    try:
+        addr = ipaddress.ip_address(hostname)
+        return addr.is_private or addr.is_loopback or addr.is_link_local
+    except ValueError:
+        pass
+    # ホスト名の場合はDNS解決して判定
+    try:
+        infos = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for _family, _type, _proto, _canonname, sockaddr in infos:
+            ip_str = sockaddr[0]
+            addr = ipaddress.ip_address(ip_str)
+            if addr.is_private or addr.is_loopback or addr.is_link_local:
+                return True
+    except (socket.gaierror, OSError, ValueError):
+        pass
+    return False
+
+
+# ★ SSRF対策: WEBSEARCH_URL のスキーム + ホスト名を検証
 if WEBSEARCH_URL:
     _parsed_ws_url = urlparse(WEBSEARCH_URL)
     if _parsed_ws_url.scheme not in ("http", "https"):
         logging.getLogger(__name__).warning(
             "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
             _parsed_ws_url.scheme,
+        )
+        WEBSEARCH_URL = ""
+    elif _is_private_or_loopback(_parsed_ws_url.hostname or ""):
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL resolves to private/loopback address; URL will be ignored",
         )
         WEBSEARCH_URL = ""
 

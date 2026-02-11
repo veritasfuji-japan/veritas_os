@@ -50,13 +50,24 @@ def _allow_legacy_pickle_migration() -> bool:
 
     ★ 重要: Pickle は本質的に安全ではありません。
     この機能は廃止予定です。新しいデータは JSON 形式で保存されます。
+
+    廃止タイムライン:
+    - v2.1 (2026-Q2): デフォルト OFF（現状維持）。警告ログを強化。
+    - v2.2 (2026-Q3): 環境変数による有効化時に起動時エラーに変更。
+    - v3.0 (2026-Q4): Pickle 関連コードを完全削除。
+
+    移行手順:
+    1. VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 で起動
+    2. 全データが JSON に自動変換されたことを確認
+    3. 環境変数を削除して再起動
     """
     value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
     if value in {"1", "true", "yes", "y", "on"}:
         logger.warning(
             "[SECURITY] Legacy pickle migration is enabled. "
-            "This feature is DEPRECATED and will be removed in a future version. "
-            "Please ensure all data is migrated to JSON format."
+            "This feature is DEPRECATED and will be REMOVED in v3.0 (2026-Q4). "
+            "Please ensure all data is migrated to JSON format. "
+            "See: docs/notes/pickle_migration_guide.md"
         )
         return True
     return False
@@ -137,6 +148,7 @@ class RestrictedUnpickler:
     安全なPickle読み込み用の制限付きUnpickler。
 
     ★★★ 重要: このクラスは廃止予定です ★★★
+    ★★★ 削除予定: v3.0 (2026-Q4)           ★★★
 
     Pickle は本質的に安全ではなく、制限付きでも攻撃のリスクがあります。
     新しいコードでは JSON 形式を使用してください。

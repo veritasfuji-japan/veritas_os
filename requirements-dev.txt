@@ -1,0 +1,21 @@
+# =============================
+# VERITAS OS — Development & Test Dependencies
+# =============================
+# Install alongside main requirements:
+#   pip install -r veritas_os/requirements.txt -r requirements-dev.txt
+
+# --- Testing ---
+pytest>=7.0
+pytest-cov>=4.0
+pytest-asyncio>=0.21
+httpx>=0.24.0    # FastAPI TestClient
+
+# --- Linting & Security ---
+ruff>=0.4.0
+bandit>=1.7
+pip-audit>=2.6
+
+# --- Type Checking (optional) ---
+# mypy>=1.8
+# types-PyYAML
+# types-requests

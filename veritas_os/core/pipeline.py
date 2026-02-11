@@ -515,14 +515,15 @@ async def call_core_decide(
             return set()
 
     p = _params(core_fn)
+    errors: List[str] = []
 
     # ---- Try A: ctx/options style ----
     try:
         if ("ctx" in p) or ("options" in p):
             res = core_fn(ctx=ctx, options=opts, min_evidence=min_evidence, query=query)
             return await res if _is_awaitable(res) else res
-    except TypeError:
-        pass
+    except TypeError as e:
+        errors.append(f"Try-A (ctx/options): {e}")
 
     # ---- Try B: context/query/alternatives style ----
     try:
@@ -553,12 +554,26 @@ async def call_core_decide(
 
         res = core_fn(**kw)
         return await res if _is_awaitable(res) else res
-    except TypeError:
-        pass
+    except TypeError as e:
+        errors.append(f"Try-B (context/query/alternatives): {e}")
 
     # ---- Try C: positional ----
-    res = core_fn(ctx, query, opts, min_evidence)
-    return await res if _is_awaitable(res) else res
+    try:
+        res = core_fn(ctx, query, opts, min_evidence)
+        return await res if _is_awaitable(res) else res
+    except TypeError as e:
+        errors.append(f"Try-C (positional): {e}")
+        logger.error(
+            "call_core_decide: all calling conventions failed for %s. "
+            "Errors: %s. Parameters: %s",
+            getattr(core_fn, "__name__", repr(core_fn)),
+            "; ".join(errors),
+            list(p),
+        )
+        raise TypeError(
+            f"call_core_decide: cannot call {getattr(core_fn, '__name__', '?')} "
+            f"with any known signature. Tried: {'; '.join(errors)}"
+        ) from e
 
 
 

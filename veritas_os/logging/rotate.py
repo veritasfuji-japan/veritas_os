@@ -90,15 +90,26 @@ def rotate_if_needed() -> Path:
     if lines < MAX_LINES:
         return trust_log
 
-    # ★ ハッシュチェーン連続性: ローテーション前に最終ハッシュを保存
-    save_last_hash_marker(trust_log)
-
     # rotate - use Path methods for safe suffix handling
     # Using trust_log.stem ensures only the file suffix is removed, not all occurrences
     rotated = trust_log.parent / (trust_log.stem + "_old.jsonl")
+
     # ★ セキュリティ修正: シンボリックリンク攻撃を防止
-    if rotated.is_symlink() or trust_log.is_symlink():
-        raise RuntimeError("Refusing to rotate: symlink detected on log paths")
+    # ハッシュ保存やファイル操作の *前に* チェックする（順序が重要）
+    if trust_log.is_symlink():
+        raise RuntimeError(
+            "Refusing to rotate: symlink detected on trust_log path: "
+            f"{trust_log}"
+        )
+    if rotated.exists() and rotated.is_symlink():
+        raise RuntimeError(
+            "Refusing to rotate: symlink detected on rotated log path: "
+            f"{rotated}"
+        )
+
+    # ★ ハッシュチェーン連続性: シンリンクチェック通過後に最終ハッシュを保存
+    save_last_hash_marker(trust_log)
+
     rotated.unlink(missing_ok=True)
     trust_log.rename(rotated)
 

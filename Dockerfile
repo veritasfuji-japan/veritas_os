@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# ★ セキュリティ: パッチバージョンまで固定し、Dependabot/Renovate で定期更新する
+FROM python:3.11.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
