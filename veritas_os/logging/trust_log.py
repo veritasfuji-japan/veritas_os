@@ -27,8 +27,12 @@ from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii
-except Exception:  # pragma: no cover
+except Exception as _import_err:  # pragma: no cover
     _mask_pii = None  # type: ignore[assignment]
+    logging.getLogger(__name__).warning(
+        "sanitize.mask_pii unavailable; shadow log PII masking disabled: %s",
+        _import_err,
+    )
 
 logger = logging.getLogger(__name__)
 

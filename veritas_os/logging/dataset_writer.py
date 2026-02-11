@@ -389,7 +389,8 @@ def search_dataset(
         if path.stat().st_size > MAX_DATASET_STATS_SIZE:
             logger.warning("search_dataset: file too large (%s), skipping", path)
             return []
-    except OSError:
+    except OSError as e:
+        logger.warning("search_dataset: cannot stat %s: %s", path, e)
         return []
 
     results: List[Dict[str, Any]] = []
