@@ -22,6 +22,7 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safet
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: `README_JP.md` (if present)
+- **Code review document map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 
 ---
 
