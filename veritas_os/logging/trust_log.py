@@ -462,7 +462,10 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                     }
 
             # sha256 の再計算チェック
-            expected_prev = prev_hash
+            # ★ ログローテーション後の最初のエントリでは prev_hash がまだ None だが、
+            #   エントリ自身の sha256_prev にはローテーション前の最終ハッシュが入っている。
+            #   ハッシュ再計算にはその値を使う必要がある。
+            expected_prev = prev_hash if prev_hash is not None else actual_prev
             entry_json = _normalize_entry_for_hash(entry)
             if expected_prev:
                 combined = expected_prev + entry_json
