@@ -99,6 +99,10 @@ def rotate_if_needed() -> Path:
     # ★ セキュリティ修正: シンボリックリンク攻撃を防止
     if rotated.is_symlink() or trust_log.is_symlink():
         raise RuntimeError("Refusing to rotate: symlink detected on log paths")
+    # ★ セキュリティ: 解決済みパスがログディレクトリ内にあることを確認
+    resolved_parent = trust_log.parent.resolve()
+    if trust_log.resolve().parent != resolved_parent or rotated.resolve().parent != resolved_parent:
+        raise RuntimeError("Refusing to rotate: resolved path outside log directory")
     rotated.unlink(missing_ok=True)
     trust_log.rename(rotated)
 
