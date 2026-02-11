@@ -167,7 +167,7 @@ def _load_logs_json() -> list:
     except FileNotFoundError:
         return []
     except Exception:
-        logger.debug("_load_logs_json: failed to load %s", LOG_JSON, exc_info=True)
+        logger.warning("_load_logs_json: failed to load %s", LOG_JSON, exc_info=True)
         return []
 
 

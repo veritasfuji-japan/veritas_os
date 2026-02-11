@@ -553,7 +553,7 @@ def test_chat_request_exception_retries_and_fails(monkeypatch):
 
 
 def test_chat_unexpected_error_wraps(monkeypatch):
-    """_parse_response などで例外 → Unexpected error で wrap されるか"""
+    """_parse_response などで例外 → LLMError で wrap されるか"""
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
     class BadResponse(_DummyResponse):
@@ -569,7 +569,7 @@ def test_chat_unexpected_error_wraps(monkeypatch):
     with pytest.raises(LLMError) as exc:
         llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
 
-    assert "Unexpected error" in str(exc.value)
+    assert "Failed to parse LLM response as JSON" in str(exc.value)
 
 
 # ------------------------------------------------------------
