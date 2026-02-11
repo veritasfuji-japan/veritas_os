@@ -235,9 +235,10 @@ class MemoryStore:
                 items = []
                 try:
                     # OOM防止: 大きすぎるファイルの読み込みを防止
-                    if FILES[kind].stat().st_size > MAX_JSONL_FILE_SIZE:
+                    _file_size = FILES[kind].stat().st_size
+                    if _file_size > MAX_JSONL_FILE_SIZE:
                         logger.warning("[MemoryStore] %s too large for search (%d bytes)",
-                                       kind, FILES[kind].stat().st_size)
+                                       kind, _file_size)
                     else:
                         with open(FILES[kind], encoding="utf-8") as f:
                             for line in f:

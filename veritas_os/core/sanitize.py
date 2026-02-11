@@ -29,9 +29,12 @@ PII (Personally Identifiable Information) 検出・マスク処理モジュー�
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from typing import List, Dict, Any, Callable, Optional
+
+_logger = logging.getLogger(__name__)
 
 # Luhnチェック時の入力文字列長上限（DoS対策）
 _MAX_CARD_INPUT_LENGTH = 256
@@ -382,6 +385,7 @@ class PIIDetector:
         # ★ セキュリティ: 入力長制限（ReDoS / CPU DoS 防止）
         _MAX_PII_INPUT_LENGTH = 1_000_000  # 1M chars (~1 MB for ASCII)
         if len(text) > _MAX_PII_INPUT_LENGTH:
+            _logger.warning("PII input truncated from %d to %d chars", len(text), _MAX_PII_INPUT_LENGTH)
             text = text[:_MAX_PII_INPUT_LENGTH]
 
         results: List[PIIMatch] = []
