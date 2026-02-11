@@ -112,6 +112,33 @@ def test_verify_trust_log_empty_file(tmp_path, monkeypatch):
     assert result["broken_index"] is None
 
 
+def test_verify_trust_log_after_rotation(tmp_path, monkeypatch):
+    """
+    ログローテーション後の JSONL ファイルで、最初のエントリが
+    非 None の sha256_prev を持つ場合も verify_trust_log が
+    正常にチェーンを検証できることを確認。
+    """
+    log_path = _setup_tmp_trust_log(tmp_path, monkeypatch)
+
+    # まず 2 件のエントリを正常に作成
+    e1 = core_logging.append_trust_log({"request_id": "r1", "value": 1})
+    e2 = core_logging.append_trust_log({"request_id": "r2", "value": 2})
+
+    # ローテーションをシミュレート:
+    # 古い JSONL を別名に退避し、2 件目だけを新しい JSONL に残す。
+    # 2 件目は sha256_prev が非 None（= e1 の sha256）なので、
+    # 新ファイル先頭のエントリが sha256_prev != None になる。
+    log_path.write_text(
+        json.dumps(e2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    result = core_logging.verify_trust_log()
+    assert result["ok"] is True
+    assert result["checked"] == 1
+    assert result["broken"] is False
+
+
 def test_verify_trust_log_detects_tamper(tmp_path, monkeypatch):
     """
     途中でハッシュを書き換えて改ざんされている場合に、

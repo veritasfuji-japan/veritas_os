@@ -61,8 +61,10 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         suffix=".tmp",
     )
     try:
-        # Restrict permissions to owner-only before writing sensitive data
-        os.fchmod(fd, 0o600)
+        # Restrict permissions to owner-only before writing sensitive data.
+        # On Windows, tempfile.mkstemp already creates files with user-only access.
+        if hasattr(os, 'fchmod'):
+            os.fchmod(fd, 0o600)
         # Write data
         os.write(fd, data)
         # Flush to disk

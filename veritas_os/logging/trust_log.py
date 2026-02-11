@@ -447,15 +447,10 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
             # sha256_prev の整合性チェック
             actual_prev = entry.get("sha256_prev")
             if prev_hash is None:
-                # 最初のエントリは sha256_prev が None のはず（もしくは存在しない）
-                if actual_prev not in (None, ""):
-                    return {
-                        "ok": False,
-                        "checked": checked,
-                        "broken": True,
-                        "broken_index": idx,
-                        "broken_reason": "unexpected_sha256_prev_for_first_entry",
-                    }
+                # 最初のエントリ: sha256_prev が None なら新規チェーン。
+                # 非 None ならログローテーション後の継続チェーンであり正常。
+                # いずれの場合も、以降のエントリは自身の sha256 から検証する。
+                pass
             else:
                 if actual_prev != prev_hash:
                     return {
@@ -467,7 +462,10 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                     }
 
             # sha256 の再計算チェック
-            expected_prev = prev_hash
+            # ★ ログローテーション後の最初のエントリでは prev_hash がまだ None だが、
+            #   エントリ自身の sha256_prev にはローテーション前の最終ハッシュが入っている。
+            #   ハッシュ再計算にはその値を使う必要がある。
+            expected_prev = prev_hash if prev_hash is not None else actual_prev
             entry_json = _normalize_entry_for_hash(entry)
             if expected_prev:
                 combined = expected_prev + entry_json
