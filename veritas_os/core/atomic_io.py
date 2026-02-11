@@ -62,7 +62,8 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
     )
     try:
         # Restrict permissions to owner-only before writing sensitive data
-        os.fchmod(fd, 0o600)
+        if hasattr(os, 'fchmod'):
+            os.fchmod(fd, 0o600)
         # Write data
         os.write(fd, data)
         # Flush to disk
