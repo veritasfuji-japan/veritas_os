@@ -17,7 +17,6 @@ select = [
 ]
 ignore = [
     "E402",   # module level import not at top (try/except import pattern で必要)
-    "E501",   # line too long (line-length で段階的に対応)
     "W291",   # trailing whitespace
     "W293",   # whitespace before ':'
 ]
