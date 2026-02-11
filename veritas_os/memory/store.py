@@ -58,6 +58,12 @@ class MemoryStore:
     def __init__(self, dim: int = 384) -> None:
         self._lock = threading.RLock()  # リエントラントロック
         self.emb = HashEmbedder(dim=dim)
+        # 段階キャッシュ（kind -> id -> payload）
+        self._payload_cache: Dict[str, Dict[str, Dict[str, Any]]] = {
+            kind: {} for kind in FILES
+        }
+        # True のときは「その kind の JSONL 全件がキャッシュ済み」を示す
+        self._cache_complete: Dict[str, bool] = {kind: False for kind in FILES}
         # ★ 各 kind ごとに index ファイルパスを渡す
         self.idx = {
             k: CosineIndex(dim, INDEX[k])
@@ -96,6 +102,7 @@ class MemoryStore:
                     try:
                         j = json.loads(line)
                         ids.append(j["id"])
+                        self._payload_cache[kind][j["id"]] = j
                         texts.append(
                             j.get("text")
                             or j.get("summary")
@@ -111,6 +118,8 @@ class MemoryStore:
                             kind, MAX_SEARCH_ITEMS,
                         )
                         break
+
+            self._cache_complete[kind] = len(ids) < MAX_SEARCH_ITEMS
 
             if texts:
                 vecs = self.emb.embed(texts)
@@ -146,10 +155,48 @@ class MemoryStore:
             # JSONL へ追記（atomic append with fsync）
             atomic_append_line(FILES[kind], json.dumps(j, ensure_ascii=False))
 
+            # payload KV キャッシュ更新
+            self._payload_cache[kind][j["id"]] = j
+
             # index へ追加（.npz も自動で更新）
             self.idx[kind].add(vec, [j["id"]])
 
         return j["id"]
+
+    def _load_payloads_for_ids(self, kind: str, ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """JSONL を逐次走査し、指定 id の payload だけを読み込む。"""
+        found: Dict[str, Dict[str, Any]] = {}
+        if not ids:
+            return found
+
+        wanted = set(ids)
+        path = FILES[kind]
+
+        try:
+            file_size = path.stat().st_size
+            if file_size > MAX_JSONL_FILE_SIZE:
+                logger.warning("[MemoryStore] %s too large for targeted payload load (%d bytes)",
+                               kind, file_size)
+                return found
+        except OSError:
+            return found
+
+        try:
+            with open(path, encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    _id = item.get("id")
+                    if _id in wanted:
+                        found[_id] = item
+                        if len(found) >= len(wanted):
+                            break
+        except (OSError, IOError) as e:
+            logger.warning("[MemoryStore] Failed targeted payload load from %s: %s", path, e)
+
+        return found
 
     def search(
         self,
@@ -200,8 +247,13 @@ class MemoryStore:
         out: Dict[str, List[Dict[str, Any]]] = {}
 
         for kind in kinds:
+            if kind not in FILES:
+                logger.warning("[MemoryStore] Unknown kind in search: %s", kind)
+                out[kind] = []
+                continue
+
             with self._lock:
-                # インデックス検索とJSONL読み込みをアトミックに実行
+                # インデックス検索のみロック内で実行
                 try:
                     raw = self.idx[kind].search(qv, k=k)
                 except Exception as e:
@@ -231,34 +283,22 @@ class MemoryStore:
                     except (ValueError, TypeError):
                         pairs.append((_id, 0.0))
 
-                # JSONL 読み込み（ロック内で実行）
-                items = []
-                try:
-                    # OOM防止: 大きすぎるファイルの読み込みを防止
-                    _file_size = FILES[kind].stat().st_size
-                    if _file_size > MAX_JSONL_FILE_SIZE:
-                        logger.warning("[MemoryStore] %s too large for search (%d bytes)",
-                                       kind, _file_size)
-                    else:
-                        with open(FILES[kind], encoding="utf-8") as f:
-                            for line in f:
-                                try:
-                                    items.append(json.loads(line))
-                                except json.JSONDecodeError:
-                                    pass
-                                # ★ OOM対策: アイテム数の上限を超えたら読み込みを停止
-                                if len(items) >= MAX_SEARCH_ITEMS:
-                                    logger.warning(
-                                        "[MemoryStore] %s hit MAX_SEARCH_ITEMS (%d), truncating",
-                                        kind, MAX_SEARCH_ITEMS,
-                                    )
-                                    break
-                except (OSError, IOError) as e:
-                    # ファイルアクセスエラーをログ出力
-                    logger.warning("[MemoryStore] Failed to read %s: %s", FILES[kind], e)
+                candidate_ids = [item_id for item_id, _ in pairs]
+                table = {
+                    item_id: self._payload_cache[kind].get(item_id)
+                    for item_id in candidate_ids
+                }
+                cache_complete = self._cache_complete.get(kind, False)
 
-            # ロック外で結果を組み立て（パフォーマンス向上）
-            table = {it["id"]: it for it in items}
+            # ロック外: miss 分のみ targeted load（段階キャッシュ）
+            missing_ids = [item_id for item_id, payload in table.items() if payload is None]
+            if missing_ids and not cache_complete:
+                loaded = self._load_payloads_for_ids(kind, missing_ids)
+                if loaded:
+                    with self._lock:
+                        self._payload_cache[kind].update(loaded)
+                        for item_id, payload in loaded.items():
+                            table[item_id] = payload
 
             hits: List[Dict[str, Any]] = []
             for _id, score in pairs:
