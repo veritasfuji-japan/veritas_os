@@ -418,7 +418,10 @@ def ensure_min_items(
     analyze() の意味（問題が無ければ空）を壊さないため、別関数で提供する。
     """
     _ = context or {}
-    min_items = min(int(min_items), _MAX_MIN_ITEMS)
+    try:
+        min_items = min(int(min_items), _MAX_MIN_ITEMS)
+    except (TypeError, ValueError):
+        min_items = min(3, _MAX_MIN_ITEMS)
 
     defaults = [
         _crit(
