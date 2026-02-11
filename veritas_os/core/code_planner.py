@@ -62,7 +62,7 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
         return None
 
     # ★ セキュリティ: bench_id のバリデーション（パストラバーサル防止）
-    if not bench_id or not re.fullmatch(r'[a-zA-Z0-9_\-]+', bench_id):
+    if not bench_id or not re.fullmatch(r'[a-zA-Z0-9_-]+', bench_id):
         logger.warning("[code_planner] Invalid bench_id: %r", bench_id)
         return None
 
