@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, Mapping, Tuple
 
-from veritas_os.core.utils import _clamp
+from veritas_os.core.utils import _clamp, _safe_float
 
 
 @dataclass(frozen=True)
@@ -54,8 +54,8 @@ def _weights(context: Dict, cfg: TelosConfig) -> Tuple[float, float]:
     """contextから重みを安全に取得し、合計1.0へ正規化して返す"""
     w = (context.get("telos_weights") or {})
     # 大小文字や別表記も許容
-    wt = float(w.get("W_Transcendence", w.get("w_transcendence", cfg.W_Transcendence)))
-    ws = float(w.get("W_Struggle",      w.get("w_struggle",      cfg.W_Struggle)))
+    wt = _safe_float(w.get("W_Transcendence", w.get("w_transcendence", cfg.W_Transcendence)), cfg.W_Transcendence)
+    ws = _safe_float(w.get("W_Struggle",      w.get("w_struggle",      cfg.W_Struggle)), cfg.W_Struggle)
     tot = max(1e-9, wt + ws)
     return wt / tot, ws / tot
 
@@ -74,7 +74,7 @@ def _safety_boost(context: Dict, cfg: TelosConfig) -> Tuple[float, float]:
     boost: safety_weight に応じて -0.2..+0.2 程度の補正
     """
     fuji = context.get("fuji_status") or {}
-    risk = float(fuji.get("risk", 0.0))          # 0 安全 ←→ 1 危険
+    risk = _safe_float(fuji.get("risk", 0.0), 0.0)  # 0 安全 ←→ 1 危険
     risk = _clamp(risk)
     safety = 1.0 - risk                          # 1.0 が安全
     boost = cfg.safety_weight * (safety - 0.5) * 2.0  # -w..+w
@@ -91,8 +91,8 @@ def _progress_factor(context: Dict, cfg: TelosConfig) -> Tuple[float, float, flo
     どちらも指定がない場合は 0.5 とみなし、factor=1.0 となる。
     """
     world = context.get("world") or {}
-    world_progress = float(world.get("predicted_progress", 0.5))
-    value_ema = float(context.get("value_ema", 0.5))
+    world_progress = _safe_float(world.get("predicted_progress", 0.5), 0.5)
+    value_ema = _safe_float(context.get("value_ema", 0.5), 0.5)
 
     world_progress = _clamp(world_progress)
     value_ema = _clamp(value_ema)
