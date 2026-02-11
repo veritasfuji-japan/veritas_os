@@ -709,7 +709,7 @@ if joblib_load and MEMORY_MODEL_PATH.exists():
             logger.info("[MemoryModel] loaded: %s", MEMORY_MODEL_PATH)
         except Exception as e:
             MODEL = None
-            logger.warning("[MemoryModel] load skipped: %s", e)
+            logger.warning("[MemoryModel] load skipped: %s", e, exc_info=True)
     else:
         MODEL = None
         logger.info(

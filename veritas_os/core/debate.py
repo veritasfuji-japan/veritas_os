@@ -227,7 +227,7 @@ def _get_score(opt: Dict[str, Any]) -> float:
             s = opt.get("score_raw")
         return _clamp01(float(s or 0.0))
     except Exception:
-        logger.debug("_get_score: failed to parse score from option: %s", opt.get("score"))
+        logger.debug("_get_score: failed to parse score from option: score=%s, score_raw=%s", opt.get("score"), opt.get("score_raw"))
         return 0.0
 
 
