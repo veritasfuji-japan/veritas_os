@@ -232,9 +232,21 @@ VERITAS のログは機微情報を含む可能性があるため、**暗号化�
 
 ## テスト
 
+再現性重視（推奨）:
+
 ```bash
-pytest
-pytest --cov=veritas_os
+make test
+make test-cov
+```
+
+これらのターゲットは `uv` と `PYTHON_VERSION=3.12.7` を利用し、
+未導入時は Python 本体を自動取得して実行します。
+
+オプション:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
+make test PYTHON_VERSION=3.11
 ```
 
 > 補足：CI は GitHub Actions で利用可能です。Coverage バッジは追加予定です。

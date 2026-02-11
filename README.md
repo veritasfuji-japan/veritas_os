@@ -219,9 +219,21 @@ This enables integrity verification and tamper-evident audit trails.
 
 ## Tests
 
+Recommended (reproducible):
+
 ```bash
-pytest
-pytest --cov=veritas_os
+make test
+make test-cov
+```
+
+These targets use `uv` with `PYTHON_VERSION=3.12.7` and automatically download the
+interpreter if it is not already installed.
+
+Optional overrides:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
+make test PYTHON_VERSION=3.11
 ```
 
 ### CI / Quality Gate
