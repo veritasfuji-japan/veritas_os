@@ -420,7 +420,7 @@ def chat(
                 cl_int = 0
             if cl_int > LLM_MAX_RESPONSE_BYTES:
                 raise LLMError(
-                    f"Response too large ({content_length} bytes, "
+                    f"Response too large ({cl_int} bytes, "
                     f"limit={LLM_MAX_RESPONSE_BYTES})"
                 )
             if len(resp.content) > LLM_MAX_RESPONSE_BYTES:

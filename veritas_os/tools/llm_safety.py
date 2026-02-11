@@ -255,9 +255,9 @@ def _analyze_with_llm(
 
     try:
         risk = float(out.get("risk_score", 0.05) or 0.05)
-        if not math.isfinite(risk):
-            risk = 0.05
     except (ValueError, TypeError):
+        risk = 0.05
+    if not math.isfinite(risk):
         risk = 0.05
     cats = out.get("categories") or []
     rat = out.get("rationale") or ""
