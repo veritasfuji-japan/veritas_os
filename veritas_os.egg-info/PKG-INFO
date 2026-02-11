@@ -1,0 +1,493 @@
+Metadata-Version: 2.4
+Name: veritas-os
+Version: 2.0.0
+Summary: Auditable Decision OS for LLM Agents
+Author-email: Takeshi Fujishita <veritas.fuji@gmail.com>
+License: PROPRIETARY LICENSE NOTICE FOR VERITAS OS REPOSITORY
+        ====================================================
+        
+        Copyright (c) 2025 Takeshi Fujishita. All Rights Reserved.
+        
+        This repository contains multiple software components, documentation, and
+        related assets. Unless otherwise explicitly stated in a subdirectory-specific
+        LICENSE file, all contents of this repository are provided on an
+        “ALL RIGHTS RESERVED” basis.
+        
+        By accessing, cloning, or downloading this repository, you acknowledge and
+        agree to the following terms.
+        
+        
+        1. SCOPE
+        --------
+        
+        1.1. Core Code
+        
+        Unless a different license is clearly indicated in a specific directory
+        or file, all source code under (including but not limited to):
+        
+            - veritas_os/
+            - scripts/
+            - tools/          (unless otherwise noted)
+            - config/         (unless otherwise noted)
+            - tests/          (unless otherwise noted)
+        
+        is proprietary software and is NOT licensed for public use, copying,
+        modification, distribution, or sublicensing without the prior written
+        permission of the copyright holder.
+        
+        Such code is provided for review, evaluation, and archival purposes only,
+        unless a separate written agreement grants you additional rights.
+        
+        
+        1.2. Open-Source / Publicly Licensed Components
+        
+        Certain parts of this repository (for example, documentation,
+        research papers, or example scripts) MAY be released under open-source
+        licenses such as the Apache License, Version 2.0.
+        
+        These components are explicitly marked by a LICENSE file placed inside
+        the corresponding subdirectory, for example:
+        
+            - docs/LICENSE
+            - examples/LICENSE
+            - other-subdir/LICENSE
+        
+        If a subdirectory contains its own LICENSE file, the terms in that file
+        govern ONLY the contents of that subdirectory, and do NOT automatically
+        apply to the entire repository.
+        
+        
+        2. RIGHTS RESERVED
+        ------------------
+        
+        2.1. Default Rule
+        
+        Except where a different license is explicitly provided in a
+        subdirectory-specific LICENSE file, the following applies:
+        
+            - You may NOT copy, modify, merge, publish, distribute, sublicense,
+              or sell copies of the proprietary parts of this software.
+            - You may NOT use the proprietary code to create derivative works
+              without explicit written permission.
+            - You may NOT remove or alter any copyright, trademark, or other
+              proprietary notices.
+        
+        Any use beyond what is permitted by applicable law (such as fair use or
+        mandatory statutory rights) requires prior written consent from the
+        copyright holder.
+        
+        
+        2.2. No Implied License
+        
+        The presence of publicly viewable source code in this repository does NOT
+        imply any grant of license or rights. No license is granted by estoppel,
+        implication, or otherwise, except as expressly set forth in:
+        
+            - this top-level LICENSE, and
+            - any subdirectory-specific LICENSE files.
+        
+        
+        3. OPEN-SOURCE LICENSE REFERENCES
+        ---------------------------------
+        
+        Where Apache License Version 2.0 or another open-source license is used,
+        the full license text is provided in the relevant subdirectory LICENSE file
+        (e.g., `docs/LICENSE`, `veritas_os/templates/LICENSE`, `examples/LICENSE`).
+        
+        For the avoidance of doubt:
+        
+            - The existence of an Apache-2.0 LICENSE in `docs/` means that the
+              documentation in `docs/` is licensed under Apache-2.0.
+            - The existence of an Apache-2.0 LICENSE in `veritas_os/templates/`
+              means that template assets in `veritas_os/templates/` are licensed
+              under Apache-2.0.
+            - It does NOT mean that `veritas_os/` or other core code is licensed
+              under Apache-2.0, unless explicitly and clearly stated.
+        
+        
+        4. NO WARRANTY
+        --------------
+        
+        UNLESS OTHERWISE REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING,
+        THE SOFTWARE AND OTHER CONTENTS OF THIS REPOSITORY ARE PROVIDED "AS IS",
+        WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+        LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+        PURPOSE, AND NON-INFRINGEMENT.
+        
+        IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
+        CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+        TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+        SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE OR RELATED
+        CONTENTS.
+        
+        
+        5. CONTACT
+        ----------
+        
+        For licensing inquiries, commercial use, or any request to obtain a
+        separate license to the proprietary components of this repository,
+        please contact:
+        
+            Takeshi Fujishita
+            (Contact information to be provided separately.)
+        
+        ------------------------------------------------------------
+        If you are unsure whether a specific file or directory is open-source
+        or proprietary, please assume it is proprietary and contact the author.
+        ------------------------------------------------------------
+        
+Project-URL: Homepage, https://github.com/veritasfuji-japan/veritas_os
+Project-URL: Repository, https://github.com/veritasfuji-japan/veritas_os
+Project-URL: Issues, https://github.com/veritasfuji-japan/veritas_os/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.11
+Classifier: License :: Other/Proprietary License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: fastapi==0.115.0
+Requires-Dist: uvicorn==0.30.3
+Requires-Dist: pydantic==2.8.2
+Requires-Dist: python-dotenv==1.0.1
+Requires-Dist: orjson==3.11.5
+Requires-Dist: PyYAML==6.0.1
+Requires-Dist: joblib==1.4.2
+Requires-Dist: scikit-learn==1.5.2
+Requires-Dist: sentence-transformers==3.0.1
+Requires-Dist: openai==1.51.0
+Requires-Dist: requests==2.32.4
+Requires-Dist: anthropic==0.34.2
+Requires-Dist: matplotlib==3.9.2
+Requires-Dist: jinja2==3.1.6
+Requires-Dist: numpy==1.26.4
+Requires-Dist: pandas==2.2.3
+Requires-Dist: pdfplumber==0.11.4
+Requires-Dist: trio==0.26.2
+Requires-Dist: psutil==6.0.0
+Dynamic: license-file
+
+
+# VERITAS OS v2.0 — Auditable Decision OS for LLM Agents (Proto-AGI Skeleton)
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
+[![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
+[![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
+
+**Version**: 2.0.0  
+**Planned Release**: In Development  
+**Author**: Takeshi Fujishita
+
+VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline**.
+
+> Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
+
+---
+
+## Quick Links
+
+- **GitHub**: https://github.com/veritasfuji-japan/veritas_os
+- **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
+- **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
+- **Japanese README**: `README_JP.md` (if present)
+
+## Contents
+
+- [Why VERITAS?](#why-veritas)
+- [What It Does](#what-it-does)
+- [API Overview](#api-overview)
+- [Quickstart](#quickstart)
+- [Security Notes (Important)](#security-notes-important)
+- [Docker (GHCR)](#docker-ghcr)
+- [Architecture (High-Level)](#architecture-high-level)
+- [TrustLog (Hash-Chained Audit Log)](#trustlog-hash-chained-audit-log)
+- [Tests](#tests)
+- [Roadmap (Near-Term)](#roadmap-near-term)
+- [License](#license)
+
+---
+
+## Why VERITAS?
+
+Most “agent frameworks” optimize autonomy and tool use.
+VERITAS optimizes for **governance**:
+
+- **Safety & compliance** enforced by a final gate (**FUJI Gate**)
+- **Reproducible decision pipeline** (fixed stages, structured outputs)
+- **Auditability** via a **hash-chained TrustLog** (tamper-evident decision history)
+- **Memory & world state** as first-class inputs (MemoryOS + WorldModel)
+- **Operational visibility** (Doctor dashboard for health & risk distribution)
+
+**Target users**
+- AI safety / agent researchers
+- Teams operating LLMs in regulated or high-stakes environments
+- Governance / compliance teams building “policy-driven” LLM systems
+
+---
+
+## What It Does
+
+### `/v1/decide` — Full Decision Loop (Structured JSON)
+
+`POST /v1/decide` returns a structured decision record.
+
+Key fields (simplified):
+
+| Field | Meaning |
+|---|---|
+| `chosen` | Selected action + rationale, uncertainty, utility, risk |
+| `alternatives[]` | Other candidate actions |
+| `evidence[]` | Evidence used (MemoryOS / WorldModel / optional tools) |
+| `critique[]` | Self-critique & weaknesses |
+| `debate[]` | Pro/con/third-party viewpoints |
+| `telos_score` | Alignment score vs ValueCore |
+| `fuji` | FUJI Gate result (allow / modify / rejected) |
+| `gate.decision_status` | Normalized final status (`DecisionStatus`) |
+| `trust_log` | Hash-chained TrustLog entry (`sha256_prev`) |
+
+Pipeline mental model:
+
+```text
+Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
+````
+
+Bundled subsystems:
+
+* **MemoryOS** — episodic/semantic memory & retrieval
+* **WorldModel** — world state, projects, progress snapshots
+* **ValueCore** — value function & Value EMA
+* **FUJI Gate** — safety / ethics / compliance gate
+* **TrustLog** — hash-chained audit log (JSONL)
+* **Doctor** — diagnostics & dashboard
+
+---
+
+## API Overview
+
+All protected endpoints require `X-API-Key`.
+
+| Method | Path                  | Description                       |
+| ------ | --------------------- | --------------------------------- |
+| GET    | `/health`             | Health check                      |
+| POST   | `/v1/decide`          | Full decision loop                |
+| POST   | `/v1/fuji/validate`   | Validate a single action via FUJI |
+| POST   | `/v1/memory/put`      | Persist memory                    |
+| GET    | `/v1/memory/get`      | Retrieve memory                   |
+| GET    | `/v1/logs/trust/{id}` | TrustLog entry by ID              |
+
+---
+
+## Quickstart
+
+### 1) Install
+
+```bash
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
+
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+### 2) Set env vars
+
+```bash
+export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
+export VERITAS_API_KEY="your-secret-api-key"
+export VERITAS_API_SECRET="your-long-random-secret"
+export LLM_PROVIDER="openai"
+export LLM_MODEL="gpt-4.1-mini"
+export VERITAS_MAX_REQUEST_BODY_SIZE="10485760"
+```
+
+### 3) Start server
+
+```bash
+python -m uvicorn veritas_os.api.server:app --reload --port 8000
+```
+
+### 4) Try Swagger UI
+
+* Open: `http://127.0.0.1:8000/docs`
+* Authorize with header: `X-API-Key: $VERITAS_API_KEY`
+* Run: `POST /v1/decide`
+
+Example payload:
+
+```json
+{
+  "query": "Should I check tomorrow's weather before going out?",
+  "context": {
+    "user_id": "test_user",
+    "goals": ["health", "efficiency"],
+    "constraints": ["time limit"],
+    "affect_hint": "focused"
+  }
+}
+```
+
+---
+
+## Security Notes (Important)
+
+- **Never use placeholder or short secrets**: `VERITAS_API_SECRET` should be a long,
+  random value (32+ chars recommended). Placeholder or short secrets can effectively
+  disable or weaken HMAC protection.
+- **CORS safety**: avoid wildcard origins (`*`) when `allow_credentials` is enabled.
+  Configure explicit trusted origins only.
+- **Legacy pickle migration is risky**: if you enable legacy pickle migration for
+  MemoryOS, treat it as a short-lived migration path and disable it afterward.
+
+---
+
+## Docker (GHCR)
+
+Pull the latest image:
+
+```bash
+docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+Run the API server (equivalent to the uvicorn command above):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e OPENAI_API_KEY="YOUR_OPENAI_API_KEY" \
+  -e VERITAS_API_KEY="your-secret-api-key" \
+  -e LLM_PROVIDER="openai" \
+  -e LLM_MODEL="gpt-4.1-mini" \
+  ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+If your FastAPI entrypoint differs from `veritas_os.api.server:app`, update the
+Dockerfile `CMD` accordingly before building the image.
+
+---
+
+## Architecture (High-Level)
+
+### Core execution path
+
+* `veritas_os/core/kernel.py` — orchestrates `/v1/decide`
+* `veritas_os/core/pipeline.py` — defines stage order + metrics
+* `veritas_os/core/llm_client.py` — **single** gateway for LLM calls
+
+### Safety & governance
+
+* `veritas_os/core/fuji.py` — FUJI Gate (allow/modify/reject)
+* `veritas_os/core/value_core.py` — Value function + Value EMA
+* `veritas_os/logging/trust_log.py` (or equivalent) — hash-chain TrustLog
+
+### Memory & world state
+
+* `veritas_os/core/memory.py` — MemoryOS frontend
+* `veritas_os/core/world.py` — World state snapshots
+
+---
+
+## TrustLog (Hash-Chained Audit Log)
+
+The TrustLog is append-only JSONL. Each entry includes a hash pointer:
+
+```text
+h_t = SHA256(h_{t-1} || r_t)
+```
+
+This enables integrity verification and tamper-evident audit trails.
+
+---
+
+## Tests
+
+Recommended (reproducible):
+
+```bash
+make test
+make test-cov
+```
+
+These targets use `uv` with `PYTHON_VERSION=3.12.7` and automatically download the
+interpreter if it is not already installed.
+
+Fast smoke check:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
+```
+
+Optional overrides:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
+make test PYTHON_VERSION=3.11
+```
+
+### CI / Quality Gate
+
+* GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix.
+* Coverage artifacts are stored as **XML/HTML** outputs.
+* The CI job fails if tests fail, acting as a quality gate.
+
+## Security Notes (Important)
+
+- **API keys**: Avoid exporting secrets directly in shell history where possible. Prefer
+  `.env` files (git-ignored) or secret managers and inject them at runtime. Rotate keys
+  regularly and limit scope/permissions.
+- **TrustLog data**: TrustLog is append-only JSONL. If your payloads can contain PII or
+  sensitive data, ensure you have access controls, retention policies, and (if needed)
+  encryption at rest.
+
+---
+
+## Operational Security Notes
+
+- **Force PII masking before persisting TrustLog/Memory**. Apply `redact()` (PII masking) prior to storage to reduce leakage risk.
+- **Encryption at rest (optional)**: TrustLog/Memory are stored in plaintext; consider encryption or KMS integration based on requirements.
+- **CORS and API key must be set**. Configure `VERITAS_CORS_ALLOW_ORIGINS` and `VERITAS_API_KEY` to avoid unsafe defaults.
+- **Operational logs are excluded from Git**. Runtime logs (e.g., `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live under `veritas_os/sample_data/memory/`.
+
+---
+
+## Roadmap (Near-Term)
+
+* CI (GitHub Actions): pytest + coverage + artifact reports
+* Security hardening: input validation & secret/log hygiene
+* Policy-as-Code: **Policy → ValueCore/FUJI rules → generated tests** (compiler layer)
+
+---
+
+## License
+
+**All Rights Reserved (Proprietary).**
+This repository is **not** open-source. Usage, modification, and distribution
+are restricted unless explicitly permitted in a subdirectory-specific LICENSE
+file. See [`LICENSE`](LICENSE) for full terms.
+
+For academic use, please cite the Zenodo DOI.
+
+---
+
+## Citation (BibTeX)
+
+```bibtex
+@software{veritas_os_2025,
+  author = {Fujishita, Takeshi},
+  title  = {VERITAS OS: Auditable Decision OS for LLM Agents},
+  year   = {2025},
+  doi    = {10.5281/zenodo.17838349},
+  url    = {https://github.com/veritasfuji-japan/veritas_os}
+}
+```
+
+---
+
+## Contact
+
+* Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
+* Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
