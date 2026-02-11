@@ -67,7 +67,7 @@ def _allow_legacy_pickle_migration() -> bool:
             "[SECURITY] Legacy pickle migration is enabled. "
             "This feature is DEPRECATED and will be REMOVED in v3.0 (2026-Q4). "
             "Please ensure all data is migrated to JSON format. "
-            "See: docs/notes/pickle_migration_guide.md"
+            "See the project documentation for pickle migration steps."
         )
         return True
     return False
