@@ -176,7 +176,7 @@ class CosineIndex:
         Vn = V / (np.linalg.norm(V, axis=1, keepdims=True) + 1e-8)
         Qn = q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-8)
 
-        sims = Qn @ Vn.T  # (Q, N)
+        sims = np.clip(Qn @ Vn.T, -1.0, 1.0)  # (Q, N)
 
         out: List[List[Tuple[str, float]]] = []
         for row in sims:

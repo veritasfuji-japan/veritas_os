@@ -181,6 +181,7 @@ def _truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
     Returns:
         切り詰められた文字列
     """
+    max_len = max(0, int(max_len))
     if not text or len(text) <= max_len:
         return text or ""
     if max_len <= len(suffix):
@@ -340,16 +341,18 @@ def _redact_text(text: str) -> str:
     return text
 
 
-def redact_payload(value: Any) -> Any:
-    """文字列中の PII を再帰的にマスクする"""
+def redact_payload(value: Any, *, _depth: int = 0) -> Any:
+    """文字列中の PII を再帰的にマスクする（最大再帰深度: 50）"""
+    if _depth > 50:
+        return value
     if isinstance(value, str):
         return _redact_text(value)
     if isinstance(value, dict):
-        return {k: redact_payload(v) for k, v in value.items()}
+        return {k: redact_payload(v, _depth=_depth + 1) for k, v in value.items()}
     if isinstance(value, list):
-        return [redact_payload(v) for v in value]
+        return [redact_payload(v, _depth=_depth + 1) for v in value]
     if isinstance(value, tuple):
-        return tuple(redact_payload(v) for v in value)
+        return tuple(redact_payload(v, _depth=_depth + 1) for v in value)
     return value
 
 
