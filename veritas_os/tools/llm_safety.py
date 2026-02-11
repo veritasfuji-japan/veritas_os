@@ -248,7 +248,7 @@ def _analyze_with_llm(
     output = getattr(resp, "output", None)
     if not output or len(output) == 0:
         raise RuntimeError("LLM safety head returned empty output")
-    out = output[0].parsed  # type: ignore[attr-defined]
+    out = getattr(output[0], "parsed", None)
     if out is None:
         raise RuntimeError("LLM safety head returned unparseable output")
 

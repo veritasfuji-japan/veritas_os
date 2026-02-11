@@ -740,7 +740,7 @@ def redact(text: str) -> str:
         try:
             return _sanitize_mask_pii(text)
         except Exception:
-            pass  # フォールバックへ
+            logger.warning("sanitize.mask_pii failed; falling back to basic regex")
 
     # フォールバック: 基本的なパターンのみ
     text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
