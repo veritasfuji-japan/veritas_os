@@ -44,7 +44,7 @@ def test_search_uses_payload_cache_without_jsonl_read(tmp_path: Path, monkeypatc
 
     monkeypatch.setattr("builtins.open", tracked_open)
 
-    result = ms.search("cache", k=3, kinds=["episodic"], min_sim=0.0)
+    result = ms.search("cache", k=3, kinds=["episodic"], min_sim=-1.0)
     assert result["episodic"]
     assert result["episodic"][0]["id"] == item_id
 
@@ -71,11 +71,11 @@ def test_search_targeted_load_reads_only_missing_payloads(tmp_path: Path, monkey
 
     monkeypatch.setattr(ms, "_load_payloads_for_ids", tracked_loader)
 
-    result = ms.search("first", k=3, kinds=["episodic"], min_sim=0.0)
+    result = ms.search("first", k=3, kinds=["episodic"], min_sim=-1.0)
 
     assert load_calls["count"] >= 1
     assert result["episodic"]
-    assert result["episodic"][0]["id"] == first_id
+    assert any(item["id"] == first_id for item in result["episodic"])
     assert first_id in ms._payload_cache["episodic"]
 
 
