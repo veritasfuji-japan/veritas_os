@@ -162,6 +162,12 @@ def _format_request(
     """
     extra_messages = extra_messages or []
 
+    # ★ セキュリティ: extra_messages の件数制限（DoS防止）
+    _MAX_EXTRA_MESSAGES = 100
+    if len(extra_messages) > _MAX_EXTRA_MESSAGES:
+        log.warning("extra_messages truncated from %d to %d", len(extra_messages), _MAX_EXTRA_MESSAGES)
+        extra_messages = extra_messages[:_MAX_EXTRA_MESSAGES]
+
     if provider == LLMProvider.ANTHROPIC.value:
         msgs: List[Dict[str, str]] = [{"role": "user", "content": user_prompt}]
         for m in extra_messages:
@@ -409,8 +415,10 @@ def chat(
 
             # その他エラー
             if resp.status_code >= 400:
+                # ★ セキュリティ: APIレスポンス本文はログに記録し、例外には含めない（情報漏洩防止）
                 body = resp.text[:200] if resp.text else ""
-                raise LLMError(f"API error (status={resp.status_code}): {body}")
+                log.warning("LLM API error (provider=%s, status=%s): %s", provider, resp.status_code, body)
+                raise LLMError(f"API error (status={resp.status_code})")
 
             # ★ セキュリティ: レスポンスサイズ制限（メモリ枯渇防止）
             content_length = resp.headers.get("Content-Length")
@@ -468,14 +476,18 @@ def chat(
             if attempt < LLM_MAX_RETRIES:
                 time.sleep(wait_time)
                 continue
+        except LLMError:
+            # LLMError はそのまま再送出（上位で処理させる）
+            raise
         except Exception as e:
             # 予期せぬエラーは即終了
-            raise LLMError(f"Unexpected error: {repr(e)}") from e
+            # ★ セキュリティ: 例外の詳細はログに記録し、外部には型名のみ公開
+            log.error("LLM unexpected error (provider=%s): %r", provider, e)
+            raise LLMError(f"Unexpected error: {type(e).__name__}") from e
 
     # 全リトライ失敗
-    raise LLMError(
-        f"LLM request failed after {LLM_MAX_RETRIES} retries: {repr(last_error)}"
-    )
+    suffix = f": {type(last_error).__name__}" if last_error else ""
+    raise LLMError(f"LLM request failed after {LLM_MAX_RETRIES} retries{suffix}")
 
 
 # =========================
