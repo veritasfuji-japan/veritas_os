@@ -9,10 +9,13 @@ VERITAS OS 共通ユーティリティモジュール
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
 from datetime import datetime, timezone
 from typing import Any, Union
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -316,6 +319,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     _mask_pii_impl = None  # type: ignore
     _HAS_SANITIZE_IMPL = False
+    logger.warning("sanitize module not available; PII masking will use regex fallback")
 
 
 def _redact_text(text: str) -> str:

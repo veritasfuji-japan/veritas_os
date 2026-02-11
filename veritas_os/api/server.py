@@ -53,7 +53,7 @@ try:
 except Exception as _sanitize_import_err:
     _HAS_SANITIZE = False
     _sanitize_mask_pii = None  # type: ignore
-    logger.debug("sanitize import failed, PII masking disabled: %s", _sanitize_import_err)
+    logger.warning("sanitize import failed, PII masking disabled: %s", _sanitize_import_err)
 
 # ============================================================
 # ISSUE-4 方針:

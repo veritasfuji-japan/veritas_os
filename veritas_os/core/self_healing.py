@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import logging
 import os
 import time
 from typing import Any, Dict, Optional
 
 from .fuji_codes import FujiAction
+
+logger = logging.getLogger(__name__)
 
 def _safe_int(env_key: str, default: int) -> int:
     val = os.getenv(env_key)
@@ -91,6 +94,7 @@ def _coerce_action(action_value: Any) -> Optional[FujiAction]:
     try:
         return FujiAction(str(action_value))
     except Exception:
+        logger.debug("Cannot coerce %r to FujiAction", action_value)
         return None
 
 
