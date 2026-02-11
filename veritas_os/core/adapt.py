@@ -129,7 +129,7 @@ def load_persona(path: str = PERSONA_JSON) -> Dict[str, Any]:
     try:
         with open(path, "r", encoding="utf-8") as f:
             raw = json.load(f)
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         raw = None
 
     persona = _ensure_persona(raw)
