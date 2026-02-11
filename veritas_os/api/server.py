@@ -396,10 +396,13 @@ cfg = get_cfg()
 
 app = FastAPI(title="VERITAS Public API", version="1.0.3")
 
+# ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
+# 空の場合に True にすると、ブラウザの CORS チェックを意図せずバイパスするリスクがある
+_cors_origins = getattr(cfg, "cors_allow_origins", [])
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=getattr(cfg, "cors_allow_origins", []),
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=bool(_cors_origins),
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["X-API-Key", "X-Timestamp", "X-Nonce", "X-Signature", "Content-Type", "Authorization"],
 )
