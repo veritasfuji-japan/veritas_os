@@ -1083,14 +1083,22 @@ async def decide(
                 fd = os.open(str(doctor_log), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
                 try:
                     os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
+                    doctor_timeout = 300  # 5 minutes max
                     proc = subprocess.Popen(
                         [python_executable, "-m", "veritas_os.scripts.doctor"],
                         stdout=fd,
                         stderr=subprocess.STDOUT,
                         shell=False,
                     )
-                    # Reap the subprocess in a background thread to prevent zombies
-                    _threading.Thread(target=proc.wait, daemon=True).start()
+                    # Reap the subprocess in a background thread to prevent zombies;
+                    # enforce a timeout to avoid indefinitely hanging processes.
+                    def _wait_with_timeout(p: subprocess.Popen, t: int) -> None:
+                        try:
+                            p.wait(timeout=t)
+                        except subprocess.TimeoutExpired:
+                            p.kill()
+                            p.wait()
+                    _threading.Thread(target=_wait_with_timeout, args=(proc, doctor_timeout), daemon=True).start()
                 finally:
                     # Close our copy of the fd; the subprocess has its own copy.
                     os.close(fd)

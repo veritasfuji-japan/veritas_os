@@ -92,7 +92,7 @@ PREFECTURES = (
 # 住所全体を貪欲にマッチ（スペース・句読点・改行で終了）
 RE_ADDRESS_JP = re.compile(
     rf'(?:{PREFECTURES})'
-    r'(?:[一-龯々ぁ-んァ-ヶa-zA-Z0-9ー−\-]+)',  # 市区町村 + 町名 + 番地
+    r'(?:[一-龯々ぁ-んァ-ヶa-zA-Z0-9ー−\-]{1,80})',  # 市区町村 + 町名 + 番地 (長さ制限でReDoS対策)
     re.UNICODE
 )
 

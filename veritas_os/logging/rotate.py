@@ -35,6 +35,9 @@ def rotate_if_needed() -> Path:
     # rotate - use Path methods for safe suffix handling
     # Using trust_log.stem ensures only the file suffix is removed, not all occurrences
     rotated = trust_log.parent / (trust_log.stem + "_old.jsonl")
+    # ★ セキュリティ修正: シンボリックリンク攻撃を防止
+    if rotated.is_symlink() or trust_log.is_symlink():
+        raise RuntimeError("Refusing to rotate: symlink detected on log paths")
     rotated.unlink(missing_ok=True)
     trust_log.rename(rotated)
 
