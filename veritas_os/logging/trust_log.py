@@ -89,8 +89,8 @@ def _compute_sha256(payload: dict) -> str:
     try:
         s = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     except Exception:
-        logger.debug("_compute_sha256: JSON serialization failed, falling back to repr()", exc_info=True)
-        s = repr(payload).encode("utf-8", "ignore")
+        logger.debug("_compute_sha256: JSON serialization failed, using default=str fallback", exc_info=True)
+        s = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
     return hashlib.sha256(s).hexdigest()
 
 

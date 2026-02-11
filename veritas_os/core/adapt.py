@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections import Counter
 from pathlib import Path
@@ -11,6 +12,8 @@ from typing import Any, Dict, List
 from .config import cfg  # VERITAS の設定オブジェクト
 from .atomic_io import atomic_write_json
 from .utils import _safe_float
+
+logger = logging.getLogger(__name__)
 
 
 # ==== NEW: プロジェクト内に保存するパス ============================
@@ -174,7 +177,7 @@ def read_recent_decisions(
                         )
                 except Exception:
                     # 1行壊れていても全体は止めない
-                    pass
+                    logger.debug("Skipping malformed JSONL line in %s", jsonl_path, exc_info=True)
     except FileNotFoundError:
         return []
 
