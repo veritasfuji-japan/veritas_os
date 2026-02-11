@@ -5,6 +5,9 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
+[![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 
 **Version**: 2.0.0  
 **Planned Release**: In Development  
@@ -22,6 +25,20 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safet
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: `README_JP.md` (if present)
+
+## Contents
+
+- [Why VERITAS?](#why-veritas)
+- [What It Does](#what-it-does)
+- [API Overview](#api-overview)
+- [Quickstart](#quickstart)
+- [Security Notes (Important)](#security-notes-important)
+- [Docker (GHCR)](#docker-ghcr)
+- [Architecture (High-Level)](#architecture-high-level)
+- [TrustLog (Hash-Chained Audit Log)](#trustlog-hash-chained-audit-log)
+- [Tests](#tests)
+- [Roadmap (Near-Term)](#roadmap-near-term)
+- [License](#license)
 
 ---
 
@@ -229,6 +246,12 @@ make test-cov
 These targets use `uv` with `PYTHON_VERSION=3.12.7` and automatically download the
 interpreter if it is not already installed.
 
+Fast smoke check:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
+```
+
 Optional overrides:
 
 ```bash
@@ -239,12 +262,8 @@ make test PYTHON_VERSION=3.11
 ### CI / Quality Gate
 
 * GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix.
-* Coverage artifacts are stored as **XML/HTML** outputs (badges are not yet in place).
+* Coverage artifacts are stored as **XML/HTML** outputs.
 * The CI job fails if tests fail, acting as a quality gate.
-
-> Note: Coverage badges are planned.
-
----
 
 ## Security Notes (Important)
 
@@ -303,8 +322,3 @@ For academic use, please cite the Zenodo DOI.
 
 * Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 * Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
-
-
-
-
-PR test: 2025-12-13 00:38:09
