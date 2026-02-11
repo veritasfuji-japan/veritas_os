@@ -486,10 +486,8 @@ def chat(
             raise LLMError(f"Unexpected error: {type(e).__name__}") from e
 
     # 全リトライ失敗
-    raise LLMError(
-        f"LLM request failed after {LLM_MAX_RETRIES} retries: {type(last_error).__name__}"
-        if last_error else f"LLM request failed after {LLM_MAX_RETRIES} retries"
-    )
+    suffix = f": {type(last_error).__name__}" if last_error else ""
+    raise LLMError(f"LLM request failed after {LLM_MAX_RETRIES} retries{suffix}")
 
 
 # =========================
