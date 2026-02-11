@@ -52,6 +52,19 @@ import requests
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
+# ★ SSRF対策: WEBSEARCH_URL のスキームを検証
+if WEBSEARCH_URL:
+    _parsed_ws_url = urlparse(WEBSEARCH_URL)
+    if _parsed_ws_url.scheme not in ("http", "https"):
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
+            _parsed_ws_url.scheme,
+        )
+        WEBSEARCH_URL = ""
+
+# ★ クエリインジェクション対策: 制御文字の除去パターン
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
 
 def _safe_int(key: str, default: int) -> int:
     try:
@@ -350,6 +363,9 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     - AGI文脈: ブースト + 結果のAGIっぽさフィルタを適用（任意）
     """
     raw_query = _normalize_str(query, limit=2000).strip()
+
+    # ★ クエリインジェクション対策: 制御文字を除去
+    raw_query = _RE_CONTROL_CHARS.sub("", raw_query)
 
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
         return {

@@ -43,6 +43,11 @@ PATTERNS = [
 # キーワード辞書（必要に応じて増やしてOK）
 KW_LIST = ["交渉", "天気", "疲れ", "音楽", "VERITAS"]
 
+# ★ CPU/OOM対策: JSON解析時の安全制限
+MAX_FILE_SIZE = 50 * 1024 * 1024      # 50MB: これを超えるファイルはスキップ
+MAX_ITEMS_PER_FILE = 100_000          # 1ファイルあたりの最大アイテム数
+MAX_TRUSTLOG_LINES = 500_000          # TrustLog検証の最大行数
+
 
 # ---- TrustLog validation -------------------------------------------
 def compute_hash_for_entry(prev_hash: str | None, entry: dict) -> str:
@@ -105,6 +110,24 @@ def analyze_trustlog() -> dict:
             "created_at": None,
         }
     
+    # ★ CPU/OOM対策: ファイルサイズチェック
+    try:
+        file_size = TRUST_LOG_JSON.stat().st_size
+        if file_size > MAX_FILE_SIZE:
+            return {
+                "status": f"skipped: file too large ({file_size} bytes)",
+                "entries": 0,
+                "chain_valid": None,
+                "chain_breaks": 0,
+                "hash_mismatches": 0,
+                "first_break": None,
+                "first_mismatch": None,
+                "last_hash": None,
+                "created_at": None,
+            }
+    except OSError:
+        pass
+
     total_entries = 0
     chain_valid = True
     chain_breaks = []
@@ -116,6 +139,9 @@ def analyze_trustlog() -> dict:
     try:
         with open(TRUST_LOG_JSON, "r", encoding="utf-8") as f:
             for i, line in enumerate(f, 1):
+                # ★ CPU対策: 行数上限チェック
+                if i > MAX_TRUSTLOG_LINES:
+                    break
                 line = line.strip()
                 if not line:
                     continue
@@ -212,7 +238,17 @@ def _read_json_or_jsonl(path: str) -> list[dict]:
     - 先頭文字で JSON / JSONL を判定
     - 壊れ行はスキップ
     - {"items":[...]} 形式は items を展開
+    ★ CPU/OOM対策: ファイルサイズ制限とアイテム数上限を適用
     """
+    # ★ CPU/OOM対策: ファイルサイズチェック
+    try:
+        file_size = os.path.getsize(path)
+        if file_size > MAX_FILE_SIZE:
+            print(f"⚠️ {path} is too large ({file_size} bytes), skipping")
+            return []
+    except OSError:
+        return []
+
     items: list[dict] = []
     with open(path, "r", encoding="utf-8") as f:
         head = f.read(1)
@@ -223,7 +259,7 @@ def _read_json_or_jsonl(path: str) -> list[dict]:
         if head == "{":  # JSON
             data = json.load(f)
             if isinstance(data, dict) and isinstance(data.get("items"), list):
-                items.extend(data["items"])
+                items.extend(data["items"][:MAX_ITEMS_PER_FILE])
             else:
                 items.append(data)
         else:            # JSONL
@@ -236,6 +272,9 @@ def _read_json_or_jsonl(path: str) -> list[dict]:
                 except Exception:
                     # 破損行は無視して続行
                     continue
+                # ★ CPU/OOM対策: アイテム数の上限チェック
+                if len(items) >= MAX_ITEMS_PER_FILE:
+                    break
     return items
 
 
