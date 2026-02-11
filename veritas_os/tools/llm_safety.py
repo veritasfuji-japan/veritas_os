@@ -71,7 +71,7 @@ _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
 
 
 def _norm(s: str) -> str:
-    return (s or "").replace("　", " ").strip().lower()
+    return (s or "").replace("　", " ").strip().casefold()
 
 
 def _heuristic_analyze(text: str) -> Dict[str, Any]:
