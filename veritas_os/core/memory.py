@@ -699,13 +699,23 @@ VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.pkl"
 logger.info(f"[MemoryModel] module loaded from: {__file__}")
 
 # memory_model.pkl のロード（分類器用）
+# ★ セキュリティ修正: joblib.load()は内部でpickleを使用するため、
+#   レガシーpickle移行と同じセキュリティポリシーを適用する。
+#   明示的にVERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1が設定されている場合のみロード。
 if joblib_load and MEMORY_MODEL_PATH.exists():
-    try:
-        MODEL = joblib_load(MEMORY_MODEL_PATH)
-        logger.info(f"[MemoryModel] loaded: {MEMORY_MODEL_PATH}")
-    except Exception as e:
+    if _allow_legacy_pickle_migration():
+        try:
+            MODEL = joblib_load(MEMORY_MODEL_PATH)
+            logger.info("[MemoryModel] loaded: %s", MEMORY_MODEL_PATH)
+        except Exception as e:
+            MODEL = None
+            logger.warning("[MemoryModel] load skipped: %s", e)
+    else:
         MODEL = None
-        logger.warning(f"[MemoryModel] load skipped: {e}")
+        logger.info(
+            "[MemoryModel] load skipped: pickle migration not enabled. "
+            "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to load memory_model.pkl"
+        )
 else:
     MODEL = None
     logger.info(

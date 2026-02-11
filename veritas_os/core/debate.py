@@ -227,6 +227,7 @@ def _get_score(opt: Dict[str, Any]) -> float:
             s = opt.get("score_raw")
         return _clamp01(float(s or 0.0))
     except Exception:
+        logger.debug("_get_score: failed to parse score from option: %s", opt.get("score"))
         return 0.0
 
 
@@ -439,14 +440,14 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     try:
         return _wrap(json.loads(cleaned))
     except Exception:
-        pass
+        logger.debug("_safe_json_extract_like: direct JSON parse failed")
 
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
         return _wrap(json.loads(cleaned[start:end]))
     except Exception:
-        pass
+        logger.debug("_safe_json_extract_like: brace-delimited JSON parse failed")
 
     # 末尾削り（軽め）
     attempts = 0
@@ -691,6 +692,7 @@ def run_debate(
     try:
         world_snap = world_model.snapshot("veritas_agi")
     except Exception:
+        logger.debug("run_debate: world_model.snapshot failed", exc_info=True)
         world_snap = {}
 
     if not options:
