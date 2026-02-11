@@ -1115,6 +1115,7 @@ async def decide(
                             p.wait()
                         finally:
                             with _doctor_lock:
+                                # NOTE: nested function needs its own global declaration
                                 global _doctor_active_proc
                                 if _doctor_active_proc is p:
                                     _doctor_active_proc = None

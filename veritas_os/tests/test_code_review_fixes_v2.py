@@ -213,9 +213,9 @@ class TestDoctorFileLimits:
         from veritas_os.scripts import doctor
 
         jsonl_file = tmp_path / "items.jsonl"
-        # Start lines with a non-'{' character is not possible for valid JSONL
-        # The function detects JSONL by first char != '{'
-        # Use array items to trigger JSONL path
+        # Valid JSONL lines start with '{'. The function detects JSONL
+        # when the first character is not '{'. Prefix with empty line
+        # to trigger the JSONL path.
         lines = [json.dumps({"id": i}) for i in range(100)]
         # Prefix with an empty line so head char is not '{'
         jsonl_file.write_text("\n" + "\n".join(lines) + "\n", encoding="utf-8")
