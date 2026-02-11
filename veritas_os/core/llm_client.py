@@ -414,7 +414,11 @@ def chat(
 
             # ★ セキュリティ: レスポンスサイズ制限（メモリ枯渇防止）
             content_length = resp.headers.get("Content-Length")
-            if content_length and int(content_length) > LLM_MAX_RESPONSE_BYTES:
+            try:
+                cl_int = int(content_length) if content_length else 0
+            except (ValueError, TypeError):
+                cl_int = 0
+            if cl_int > LLM_MAX_RESPONSE_BYTES:
                 raise LLMError(
                     f"Response too large ({content_length} bytes, "
                     f"limit={LLM_MAX_RESPONSE_BYTES})"

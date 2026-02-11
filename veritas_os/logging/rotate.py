@@ -36,11 +36,14 @@ def save_last_hash_marker(trust_log: Path) -> None:
 
     marker = _get_last_hash_marker_path(trust_log)
     try:
-        if not trust_log.exists() or trust_log.stat().st_size == 0:
+        if not trust_log.exists():
+            return
+        file_size = trust_log.stat().st_size
+        if file_size == 0:
             return
         with open(trust_log, "rb") as f:
-            chunk_size = min(65536, trust_log.stat().st_size)
-            f.seek(trust_log.stat().st_size - chunk_size)
+            chunk_size = min(65536, file_size)
+            f.seek(file_size - chunk_size)
             raw = f.read()
             chunk = raw.decode("utf-8", errors="replace")
             lines = chunk.strip().split("\n")
