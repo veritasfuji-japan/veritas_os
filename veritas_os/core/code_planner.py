@@ -76,7 +76,9 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
             resolved_p = p.resolve()
         except OSError:
             continue
-        if not str(resolved_p).startswith(str(resolved_base) + os.sep) and resolved_p.parent != resolved_base:
+        try:
+            resolved_p.relative_to(resolved_base)
+        except ValueError:
             logger.warning("[code_planner] Skipping path outside base dir: %s", p)
             continue
         try:
