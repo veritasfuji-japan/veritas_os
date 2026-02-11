@@ -57,7 +57,9 @@ def _stage_from_world(world_state: Dict[str, Any] | None) -> str:
     experiments.py の _infer_veritas_stage と合わせてもOK。
     """
     ws = world_state or {}
-    veritas = (ws.get("veritas") or ws.get("veritas_agi") or {}) or {}
+    veritas = ws.get("veritas") or ws.get("veritas_agi") or {}
+    if not isinstance(veritas, dict):
+        veritas = {}
     try:
         p = float(veritas.get("progress", 0.0) or 0.0)
     except (ValueError, TypeError):

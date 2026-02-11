@@ -66,8 +66,19 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
         logger.warning("[code_planner] Invalid bench_id: %r", bench_id)
         return None
 
+    # ★ セキュリティ: BENCH_LOG_DIR を解決し、基準パスとして使用
+    resolved_base = BENCH_LOG_DIR.resolve()
+
     candidates: List[Tuple[float, Path]] = []
     for p in BENCH_LOG_DIR.glob("*.json"):
+        # ★ セキュリティ: シンボリックリンク経由のパストラバーサルを防止
+        try:
+            resolved_p = p.resolve()
+        except OSError:
+            continue
+        if not str(resolved_p).startswith(str(resolved_base) + os.sep) and resolved_p.parent != resolved_base:
+            logger.warning("[code_planner] Skipping path outside base dir: %s", p)
+            continue
         try:
             txt = p.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

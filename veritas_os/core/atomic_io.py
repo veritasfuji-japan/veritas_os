@@ -21,10 +21,13 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
 from typing import Any, Union
+
+logger = logging.getLogger(__name__)
 
 # Optional numpy support
 try:
@@ -87,7 +90,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         except (OSError, AttributeError):
             # Windows や一部のファイルシステムでは失敗する可能性がある
             # その場合は無視して続行（ベストエフォート）
-            pass
+            logger.debug("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
     except (IOError, OSError):
         # Clean up temp file on failure
         if fd >= 0:
@@ -202,7 +205,7 @@ def atomic_write_npz(
                 os.close(dir_fd)
         except (OSError, AttributeError):
             # Windows や一部のファイルシステムでは失敗する可能性がある
-            pass
+            logger.debug("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
     except Exception:
         try:
             os.unlink(tmp_path)
