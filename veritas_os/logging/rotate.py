@@ -106,6 +106,10 @@ def rotate_if_needed() -> Path:
             "Refusing to rotate: symlink detected on rotated log path: "
             f"{rotated}"
         )
+    # ★ セキュリティ: 解決済みパスがログディレクトリ内にあることを確認
+    resolved_parent = trust_log.parent.resolve()
+    if trust_log.resolve().parent != resolved_parent or rotated.resolve().parent != resolved_parent:
+        raise RuntimeError("Refusing to rotate: resolved path outside log directory")
 
     # ★ ハッシュチェーン連続性: シンリンクチェック通過後に最終ハッシュを保存
     save_last_hash_marker(trust_log)
