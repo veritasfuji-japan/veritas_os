@@ -140,14 +140,14 @@ def _validate_path_safety(path: Path, context: str = "path") -> Path:
         for sensitive in SENSITIVE_SYSTEM_PATHS:
             if resolved_str.startswith(sensitive + "/") or resolved_str == sensitive:
                 logger.warning(
-                    f"Attempted to use sensitive path for {context}: {resolved}"
+                    "Attempted to use sensitive path for %s: %s", context, resolved
                 )
                 raise ValueError(
                     f"Cannot use sensitive system path for {context}: {resolved}"
                 )
         return resolved
     except OSError as e:
-        logger.warning(f"Path resolution failed for {context}: {e}")
+        logger.warning("Path resolution failed for %s: %s", context, e)
         raise
 
 
@@ -165,7 +165,7 @@ def _resolve_data_dir() -> Path:
     except ValueError:
         # Fall back to default on validation failure
         default_path = Path.home() / "veritas"
-        logger.warning(f"Using default data directory: {default_path}")
+        logger.warning("Using default data directory: %s", default_path)
         return default_path
 
 
@@ -184,7 +184,7 @@ def _resolve_world_path() -> Path:
         try:
             return _validate_path_safety(path, "world state")
         except ValueError:
-            logger.warning(f"Invalid explicit path, using default: {default_path}")
+            logger.warning("Invalid explicit path, using default: %s", default_path)
             return default_path
 
     # 2) データディレクトリ指定系（tests がこっちを setenv してる可能性が高い）
@@ -199,7 +199,7 @@ def _resolve_world_path() -> Path:
         try:
             return _validate_path_safety(path, "world state")
         except ValueError:
-            logger.warning(f"Invalid base path, using default: {default_path}")
+            logger.warning("Invalid base path, using default: %s", default_path)
             return default_path
 
     # 3) デフォルト
