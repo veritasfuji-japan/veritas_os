@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from veritas_os.logging.paths import LOG_DIR
-from veritas_os.logging.rotate import open_trust_log_for_append
+from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 
 try:
@@ -100,6 +100,9 @@ def get_last_hash() -> str | None:
     ファイル末尾からシークして最終行のみを読み込む。
     全行をメモリに読み込まないため、大きなファイルでもメモリ効率が良い。
 
+    ★ ハッシュチェーン連続性: JSONL が空の場合（ローテーション直後）は
+      マーカーファイルからローテーション前の最終ハッシュを取得する。
+
     ★ 修正 (H-12): _trust_log_lock を取得してスレッドセーフにする。
       外部から直接呼ばれた場合でも、書き込み中の不完全な行を
       読み込むリスクを排除する。
@@ -107,10 +110,12 @@ def get_last_hash() -> str | None:
     with _trust_log_lock:
         try:
             if not LOG_JSONL.exists():
-                return None
+                # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
+                return load_last_hash_marker(LOG_JSONL)
             file_size = LOG_JSONL.stat().st_size
             if file_size == 0:
-                return None
+                # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
+                return load_last_hash_marker(LOG_JSONL)
             with open(LOG_JSONL, "rb") as f:
                 # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
                 chunk_size = min(65536, file_size)
