@@ -177,7 +177,7 @@ def read_recent_decisions(
                         )
                 except Exception:
                     # 1行壊れていても全体は止めない
-                    logger.debug("Skipping malformed JSONL line in %s", jsonl_path)
+                    logger.debug("Skipping malformed JSONL line in %s", jsonl_path, exc_info=True)
     except FileNotFoundError:
         return []
 
