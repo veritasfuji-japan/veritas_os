@@ -60,7 +60,7 @@ def _stage_from_world(world_state: Dict[str, Any] | None) -> str:
     veritas = (ws.get("veritas") or ws.get("veritas_agi") or {}) or {}
     try:
         p = float(veritas.get("progress", 0.0) or 0.0)
-    except Exception:
+    except (ValueError, TypeError):
         p = 0.0
 
     if p < 0.10:
@@ -183,7 +183,8 @@ def generate_daily_curriculum(
         )
     )
 
-    # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除（FIFO方式）
+    # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除
+    # Python 3.7+ では dict は挿入順を保持するため、next(iter(...)) は FIFO
     with _USER_TASKS_LOCK:
         if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
             oldest_key = next(iter(_USER_TASKS))

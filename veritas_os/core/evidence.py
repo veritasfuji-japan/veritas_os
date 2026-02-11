@@ -32,7 +32,7 @@ def _mk(
     # weight -> confidence（絶対に落とさない）
     try:
         w = float(weight)
-    except Exception:
+    except (ValueError, TypeError):
         w = 0.2
     conf = max(0.0, min(1.0, w))
 

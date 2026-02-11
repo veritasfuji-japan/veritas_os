@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,7 +48,7 @@ def _load_json(path: Path, default: Any = None) -> Any:
         if path.exists():
             with path.open("r", encoding="utf-8") as f:
                 return json.load(f)
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, ValueError) as e:
         logger.warning("[code_planner] load_json error at %s: %s", path, e)
     return default
 
@@ -60,14 +61,22 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
     if not BENCH_LOG_DIR.exists():
         return None
 
+    # ★ セキュリティ: bench_id のバリデーション（パストラバーサル防止）
+    if not bench_id or not re.fullmatch(r'[a-zA-Z0-9_\-]+', bench_id):
+        logger.warning("[code_planner] Invalid bench_id: %r", bench_id)
+        return None
+
     candidates: List[Tuple[float, Path]] = []
     for p in BENCH_LOG_DIR.glob("*.json"):
         try:
             txt = p.read_text(encoding="utf-8")
-        except Exception:
+        except (OSError, UnicodeDecodeError):
             continue
         if bench_id in txt:
-            mtime = p.stat().st_mtime
+            try:
+                mtime = p.stat().st_mtime
+            except OSError:
+                continue
             candidates.append((mtime, p))
 
     if not candidates:
