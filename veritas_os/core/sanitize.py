@@ -379,6 +379,11 @@ class PIIDetector:
         if not text:
             return []
 
+        # ★ セキュリティ: 入力長制限（ReDoS / CPU DoS 防止）
+        _MAX_PII_INPUT_LENGTH = 1_000_000  # 1M chars (~1 MB for ASCII)
+        if len(text) > _MAX_PII_INPUT_LENGTH:
+            text = text[:_MAX_PII_INPUT_LENGTH]
+
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用
 

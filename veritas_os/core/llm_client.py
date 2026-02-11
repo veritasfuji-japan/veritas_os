@@ -62,8 +62,12 @@ LLM_PROVIDER = os.environ.get("LLM_PROVIDER", LLMProvider.OPENAI.value)
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4.1-mini")
 
 LLM_TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "60"))
+LLM_CONNECT_TIMEOUT = float(os.environ.get("LLM_CONNECT_TIMEOUT", "10"))
 LLM_MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "3"))
 LLM_RETRY_DELAY = float(os.environ.get("LLM_RETRY_DELAY", "2"))
+
+# Maximum response body size to parse (16 MB) — prevents memory exhaustion
+LLM_MAX_RESPONSE_BYTES = int(os.environ.get("LLM_MAX_RESPONSE_BYTES", str(16 * 1024 * 1024)))
 
 
 # =========================
@@ -374,7 +378,7 @@ def chat(
     # Gemini は endpoint + model + :generateContent の形式（認証はヘッダー経由）
     if provider == LLMProvider.GOOGLE.value:
         # ★ セキュリティ: モデル名のバリデーション（パストラバーサル/SSRF防止）
-        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', model) or '..' in model:
+        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', model) or '..' in model or '/' in model:
             raise LLMError("Invalid model name for Gemini: contains disallowed characters")
         endpoint = f"{endpoint}/{model}:generateContent"
 
@@ -386,7 +390,7 @@ def chat(
                 endpoint,
                 headers=headers,
                 json=payload,
-                timeout=LLM_TIMEOUT,
+                timeout=(LLM_CONNECT_TIMEOUT, LLM_TIMEOUT),
             )
 
             # レート制限
@@ -407,6 +411,19 @@ def chat(
             if resp.status_code >= 400:
                 body = resp.text[:200] if resp.text else ""
                 raise LLMError(f"API error (status={resp.status_code}): {body}")
+
+            # ★ セキュリティ: レスポンスサイズ制限（メモリ枯渇防止）
+            content_length = resp.headers.get("Content-Length")
+            if content_length and int(content_length) > LLM_MAX_RESPONSE_BYTES:
+                raise LLMError(
+                    f"Response too large ({content_length} bytes, "
+                    f"limit={LLM_MAX_RESPONSE_BYTES})"
+                )
+            if len(resp.content) > LLM_MAX_RESPONSE_BYTES:
+                raise LLMError(
+                    f"Response body too large ({len(resp.content)} bytes, "
+                    f"limit={LLM_MAX_RESPONSE_BYTES})"
+                )
 
             data = resp.json()
             text = _parse_response(provider, data)

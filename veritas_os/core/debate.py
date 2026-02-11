@@ -451,7 +451,7 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     # 末尾削り（軽め）
     attempts = 0
     for cut in range(len(cleaned), 1, -1):
-        if attempts >= 250:
+        if attempts >= 50:
             break
         if cleaned[cut - 1] not in ("}", "]"):
             continue
