@@ -144,7 +144,7 @@ The OS decides **both** the multi-step plan and the immediate next action.
 ### 3.1 Root Layout
 
 ```text
-veritas_clean_test2/
+veritas_os/
 ├── chainlit_app.py
 ├── chainlit.md
 ├── data/
@@ -651,8 +651,8 @@ Endpoints:
 
 ```bash
 # 1. Clone
-git clone https://github.com/veritasfuji-japan/veritas_clean_test2.git
-cd veritas_clean_test2
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
 
 # 2. Virtualenv
 python3.11 -m venv .venv
@@ -819,7 +819,7 @@ For academic use, please cite the DOI:
   title  = {VERITAS OS: Proto-AGI Decision OS},
   year   = {2025},
   doi    = {10.5281/zenodo.17688094},
-  url    = {https://github.com/veritasfuji-japan/veritas_clean_test2}
+  url    = {https://github.com/veritasfuji-japan/veritas_os}
 }
 ```
 
@@ -863,7 +863,7 @@ This project is influenced by:
 
 ### Contact
 
-* GitHub Issues: [https://github.com/veritasfuji-japan/veritas_clean_test2/issues](https://github.com/veritasfuji-japan/veritas_clean_test2/issues)
+* GitHub Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 * Email: `veritas.fuji@gmail.com`
 
 ---

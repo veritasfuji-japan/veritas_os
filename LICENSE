@@ -87,12 +87,15 @@ implication, or otherwise, except as expressly set forth in:
 
 Where Apache License Version 2.0 or another open-source license is used,
 the full license text is provided in the relevant subdirectory LICENSE file
-(e.g., `docs/LICENSE`, `examples/LICENSE`).
+(e.g., `docs/LICENSE`, `veritas_os/templates/LICENSE`, `examples/LICENSE`).
 
 For the avoidance of doubt:
 
     - The existence of an Apache-2.0 LICENSE in `docs/` means that the
       documentation in `docs/` is licensed under Apache-2.0.
+    - The existence of an Apache-2.0 LICENSE in `veritas_os/templates/`
+      means that template assets in `veritas_os/templates/` are licensed
+      under Apache-2.0.
     - It does NOT mean that `veritas_os/` or other core code is licensed
       under Apache-2.0, unless explicitly and clearly stated.
 
@@ -127,4 +130,3 @@ please contact:
 If you are unsure whether a specific file or directory is open-source
 or proprietary, please assume it is proprietary and contact the author.
 ------------------------------------------------------------
-

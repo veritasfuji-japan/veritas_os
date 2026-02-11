@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "veritas-os"
+version = "2.0.0"
+description = "Auditable Decision OS for LLM Agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Takeshi Fujishita", email = "veritas.fuji@gmail.com" },
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "License :: Other/Proprietary License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "fastapi==0.115.0",
+  "uvicorn==0.30.3",
+  "pydantic==2.8.2",
+  "python-dotenv==1.0.1",
+  "orjson==3.11.5",
+  "PyYAML==6.0.1",
+  "joblib==1.4.2",
+  "scikit-learn==1.5.2",
+  "sentence-transformers==3.0.1",
+  "openai==1.51.0",
+  "requests==2.32.4",
+  "anthropic==0.34.2",
+  "matplotlib==3.9.2",
+  "jinja2==3.1.6",
+  "numpy==1.26.4",
+  "pandas==2.2.3",
+  "pdfplumber==0.11.4",
+  "trio==0.26.2",
+  "psutil==6.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/veritasfuji-japan/veritas_os"
+Repository = "https://github.com/veritasfuji-japan/veritas_os"
+Issues = "https://github.com/veritasfuji-japan/veritas_os/issues"
+
+[tool.setuptools.packages.find]
+include = ["veritas_os*"]
+
+[tool.setuptools.package-data]
+veritas_os = [
+  "benchmarks/*.yaml",
+  "policies/*.yaml",
+  "prompts/*.txt",
+  "sample_data/memory/*.jsonl",
+  "templates/**/*.txt",
+]
