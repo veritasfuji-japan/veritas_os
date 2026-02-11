@@ -437,7 +437,10 @@ def chat(
                     f"limit={LLM_MAX_RESPONSE_BYTES})"
                 )
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError as exc:
+                raise LLMError("Failed to parse LLM response as JSON") from exc
             text = _parse_response(provider, data)
 
             # finish_reason / usage はプロバイダごとに少し違うのでゆるめに取る

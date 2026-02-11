@@ -1,8 +1,11 @@
+import logging
 import os
 from pathlib import Path
 from typing import TextIO, Union
 
 from .paths import LOG_JSONL
+
+logger = logging.getLogger(__name__)
 
 MAX_LINES = 5000
 
@@ -53,7 +56,7 @@ def save_last_hash_marker(trust_log: Path) -> None:
                 if last_hash:
                     marker.write_text(last_hash, encoding="utf-8")
     except Exception:
-        pass
+        logger.debug("save_last_hash_marker failed for %s", trust_log, exc_info=True)
 
 
 def load_last_hash_marker(trust_log: Path) -> "str | None":
@@ -68,7 +71,7 @@ def load_last_hash_marker(trust_log: Path) -> "str | None":
             val = marker.read_text(encoding="utf-8").strip()
             return val if val else None
     except Exception:
-        pass
+        logger.debug("load_last_hash_marker failed for %s", trust_log, exc_info=True)
     return None
 
 
@@ -96,6 +99,10 @@ def rotate_if_needed() -> Path:
     # ★ セキュリティ修正: シンボリックリンク攻撃を防止
     if rotated.is_symlink() or trust_log.is_symlink():
         raise RuntimeError("Refusing to rotate: symlink detected on log paths")
+    # ★ セキュリティ: 解決済みパスがログディレクトリ内にあることを確認
+    resolved_parent = trust_log.parent.resolve()
+    if trust_log.resolve().parent != resolved_parent or rotated.resolve().parent != resolved_parent:
+        raise RuntimeError("Refusing to rotate: resolved path outside log directory")
     rotated.unlink(missing_ok=True)
     trust_log.rename(rotated)
 
