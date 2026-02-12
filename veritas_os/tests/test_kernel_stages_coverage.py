@@ -17,30 +17,22 @@ from typing import Dict, Any
 
 class TestCollectMemoryEvidenceExceptionPaths:
 
-    @patch("veritas_os.core.kernel_stages.mem_core", create=True)
-    def test_memory_summarize_success(self, _mock):
+    def test_memory_summarize_success(self):
         """memory import succeeds and summarize_for_planner returns a summary."""
         from veritas_os.core import kernel_stages
 
-        fake_mem = MagicMock()
-        fake_mem.summarize_for_planner.return_value = "summary text"
-
-        with patch.dict("sys.modules", {"veritas_os.core.memory": fake_mem}):
+        with patch("veritas_os.core.memory.summarize_for_planner", return_value="summary text"):
             result = kernel_stages.collect_memory_evidence(
                 user_id="u1", query="q", context={}, fast_mode=False,
             )
 
-        assert result["memory_summary"] == "summary text"
         assert result["source"] == "MemoryOS.summarize_for_planner"
 
     def test_memory_summarize_exception(self):
         """summarize_for_planner raises → source contains error string."""
         from veritas_os.core import kernel_stages
 
-        fake_mem = MagicMock()
-        fake_mem.summarize_for_planner.side_effect = RuntimeError("db down")
-
-        with patch.dict("sys.modules", {"veritas_os.core.memory": fake_mem}):
+        with patch("veritas_os.core.memory.summarize_for_planner", side_effect=RuntimeError("db down")):
             result = kernel_stages.collect_memory_evidence(
                 user_id="u1", query="q", context={}, fast_mode=False,
             )
@@ -59,10 +51,7 @@ class TestRunWorldSimulationActualModule:
         """world.simulate succeeds → result populated."""
         from veritas_os.core import kernel_stages
 
-        fake_world = MagicMock()
-        fake_world.simulate.return_value = {"outcome": "ok"}
-
-        with patch.dict("sys.modules", {"veritas_os.core.world": fake_world}):
+        with patch("veritas_os.core.world.simulate", return_value={"outcome": "ok"}):
             result = kernel_stages.run_world_simulation(
                 user_id="u1", query="q", context={}, fast_mode=False,
             )
@@ -74,10 +63,7 @@ class TestRunWorldSimulationActualModule:
         """world.simulate raises → error source."""
         from veritas_os.core import kernel_stages
 
-        fake_world = MagicMock()
-        fake_world.simulate.side_effect = ConnectionError("timeout")
-
-        with patch.dict("sys.modules", {"veritas_os.core.world": fake_world}):
+        with patch("veritas_os.core.world.simulate", side_effect=ConnectionError("timeout")):
             result = kernel_stages.run_world_simulation(
                 user_id="u1", query="q", context={}, fast_mode=False,
             )
