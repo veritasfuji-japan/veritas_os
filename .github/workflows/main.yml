@@ -47,12 +47,53 @@ jobs:
             --severity-level medium \
             -f txt
 
+
+  frontend:
+    name: frontend (typecheck/lint/unit/e2e/a11y)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend unit tests
+        run: pnpm --filter frontend test
+
+      - name: Frontend e2e + a11y smoke
+        env:
+          NEXT_PUBLIC_VERITAS_API_BASE_URL: http://localhost:8000
+        run: pnpm --filter frontend e2e
+
   # ============================================================
   # Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: lint
+    needs: [lint, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

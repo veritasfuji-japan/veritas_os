@@ -29,7 +29,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
-from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
+from veritas_os.api.schemas import (
+    DecideRequest,
+    DecideResponse,
+    FujiDecision,
+    GovernancePolicy,
+    GovernancePolicyUpdateRequest,
+)
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -1575,6 +1581,90 @@ def memory_get(body: dict):
 # ==============================
 # metrics for Doctor
 # ==============================
+
+
+
+GOVERNANCE_POLICY_PATH = REPO_ROOT / "api" / "governance.json"
+
+
+def _default_governance_policy() -> GovernancePolicy:
+    """Return safe defaults for governance policy bootstrap/fallback."""
+    return GovernancePolicy()
+
+
+def _read_governance_policy() -> GovernancePolicy:
+    """Load governance policy from file with a strict typed fallback."""
+    try:
+        if not GOVERNANCE_POLICY_PATH.exists():
+            return _default_governance_policy()
+
+        with open(GOVERNANCE_POLICY_PATH, encoding="utf-8") as f:
+            raw = json.load(f)
+
+        if not isinstance(raw, dict):
+            logger.warning("governance policy file has invalid shape; using defaults")
+            return _default_governance_policy()
+
+        return GovernancePolicy.model_validate(raw)
+    except Exception as e:
+        logger.warning("failed to read governance policy; using defaults: %s", _errstr(e))
+        return _default_governance_policy()
+
+
+def _write_governance_policy(policy: GovernancePolicy) -> None:
+    """Persist governance policy atomically for future DB migration compatibility."""
+    GOVERNANCE_POLICY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = policy.model_dump()
+    if _HAS_ATOMIC_IO:
+        atomic_write_json(GOVERNANCE_POLICY_PATH, payload, indent=2)
+        return
+
+    with open(GOVERNANCE_POLICY_PATH, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+
+
+def _build_policy_diff(before: GovernancePolicy, after: GovernancePolicy) -> Dict[str, Dict[str, Any]]:
+    """Return changed fields as before/after map for UI diff preview."""
+    before_dict = before.model_dump()
+    after_dict = after.model_dump()
+    diff: Dict[str, Dict[str, Any]] = {}
+    for key, before_value in before_dict.items():
+        after_value = after_dict.get(key)
+        if before_value != after_value:
+            diff[key] = {"before": before_value, "after": after_value}
+    return diff
+
+
+@app.get(
+    "/v1/governance/policy",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+def get_governance_policy() -> Dict[str, Any]:
+    """Return the current governance policy document."""
+    policy = _read_governance_policy()
+    return {"policy": policy.model_dump(), "storage": "file", "path": str(GOVERNANCE_POLICY_PATH)}
+
+
+@app.put(
+    "/v1/governance/policy",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+def update_governance_policy(body: GovernancePolicyUpdateRequest) -> Dict[str, Any]:
+    """Update governance policy and return before/after diff for safe review."""
+    before = _read_governance_policy()
+    after = body.policy
+    _write_governance_policy(after)
+    diff = _build_policy_diff(before=before, after=after)
+    _publish_event(
+        "governance.policy.updated",
+        {"diff_keys": sorted(diff.keys()), "risk_threshold": after.risk_threshold},
+    )
+    return {
+        "status": "ok",
+        "policy": after.model_dump(),
+        "before": before.model_dump(),
+        "diff": diff,
+    }
 
 @app.get("/v1/metrics", dependencies=[Depends(require_api_key)])
 def metrics():

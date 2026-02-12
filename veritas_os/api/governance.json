@@ -1,0 +1,9 @@
+{
+  "fuji_enabled": true,
+  "risk_threshold": 0.7,
+  "auto_stop_conditions": [
+    "high_risk_detected"
+  ],
+  "log_retention_days": 90,
+  "audit_strength": "standard"
+}

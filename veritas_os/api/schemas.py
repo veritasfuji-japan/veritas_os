@@ -647,3 +647,20 @@ class ChatRequest(BaseModel):
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
+
+class GovernancePolicy(BaseModel):
+    """Persisted governance policy contract for the control-plane UI/API."""
+
+    model_config = ConfigDict(extra="allow")
+
+    fuji_enabled: bool = True
+    risk_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    auto_stop_conditions: List[str] = Field(default_factory=lambda: ["high_risk_detected"])
+    log_retention_days: int = Field(default=90, ge=1, le=3650)
+    audit_strength: Literal["basic", "standard", "strict"] = "standard"
+
+
+class GovernancePolicyUpdateRequest(BaseModel):
+    """API request schema for policy updates."""
+
+    policy: GovernancePolicy
