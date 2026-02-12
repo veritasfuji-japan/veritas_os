@@ -17,13 +17,54 @@ import requests
 API_URL = os.getenv("VERITAS_API_URL", "http://localhost:8000/v1/decide")
 API_KEY = os.getenv("VERITAS_API_KEY", "test-key")  # 自分のキーに合わせて
 BASE_URL = "http://127.0.0.1:8000"
+REQUEST_TIMEOUT = float(os.getenv("VERITAS_HTTP_TIMEOUT", "10"))
 
 def wrap(text: str, width: int = 70) -> str:
     return "\n        ".join(textwrap.wrap(text, width)) if text else ""
 
-def main():
+
+def agi_next_step() -> None:
+    """VERITAS AGI の次ステップ提案を表示する。"""
+    body = {
+        "query": "VERITASをAGI化するために、次に手を入れるべきコード変更を1つだけ提案して。",
+        "context": {"user_id": "veritas_dev"},
+    }
+    response = requests.post(
+        f"{BASE_URL}/v1/decide",
+        headers={
+            "X-API-Key": API_KEY,
+            "accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        data=json.dumps(body, ensure_ascii=False),
+        timeout=REQUEST_TIMEOUT,
+    )
+    response.raise_for_status()
+    data = response.json()
+
+    # VERITAS_AGI 用のヒントとプランを表示
+    extras = data.get("extras", {})
+    agi_info = extras.get("veritas_agi") or {}
+    print("=== VERITAS AGI snapshot ===")
+    print(json.dumps(agi_info.get("snapshot", {}), ensure_ascii=False, indent=2))
+    print("meta:", agi_info.get("meta"))
+    print("hint:", agi_info.get("hint"))
+
+    print("\n=== 次にやるべきステップ案(Planner) ===")
+    planner = extras.get("planner") or {}
+    for i, step in enumerate(planner.get("steps", []), 1):
+        print(f"{i}. {step.get('title') or step.get('name')}")
+
+
+def main() -> None:
+    """通常の decide + planner 表示を実行する。"""
+    if len(sys.argv) >= 2 and sys.argv[1] == "--agi-next-step":
+        agi_next_step()
+        return
+
     if len(sys.argv) < 2:
         print("使い方: python3 decide_plan.py \"質問文…\"")
+        print("または : python3 decide_plan.py --agi-next-step")
         sys.exit(1)
 
     query = " ".join(sys.argv[1:]).strip()
@@ -42,7 +83,12 @@ def main():
     }
 
     try:
-        resp = requests.post(API_URL, headers=headers, data=json.dumps(payload))
+        resp = requests.post(
+            API_URL,
+            headers=headers,
+            data=json.dumps(payload),
+            timeout=REQUEST_TIMEOUT,
+        )
     except Exception as e:
         print("[ERROR] API 呼び出しに失敗しました:", e)
         sys.exit(1)
@@ -57,7 +103,7 @@ def main():
     # ---- chosen ----
     chosen = data.get("chosen") or {}
     chosen_title = chosen.get("title") or "(タイトルなし)"
-    chosen_desc  = chosen.get("description") or ""
+    chosen_desc = chosen.get("description") or ""
 
     print("====================================")
     print("🧠 VERITAS DECIDE + PLAN (CLI)")
@@ -120,36 +166,5 @@ def main():
         print("")
 
 
-    def agi_next_step():
-        body = {
-            "query": "VERITASをAGI化するために、次に手を入れるべきコード変更を1つだけ提案して。",
-            "context": {"user_id": "veritas_dev"}
-            }
-        r = requests.post(
-            f"{BASE_URL}/v1/decide",
-            headers={
-                "X-API-Key": API_KEY,
-                "accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            data=json.dumps(body, ensure_ascii=False),
-        )
-        r.raise_for_status()
-        data = r.json()
-
-    # VERITAS_AGI 用のヒントとプランを表示
-        extras = data.get("extras", {})
-        agi_info = extras.get("veritas_agi") or {}
-        print("=== VERITAS AGI snapshot ===")
-        print(json.dumps(agi_info.get("snapshot", {}), ensure_ascii=False, indent=2))
-        print("meta:", agi_info.get("meta"))
-        print("hint:", agi_info.get("hint"))
-
-        print("\n=== 次にやるべきステップ案(Planner) ===")
-        planner = extras.get("planner") or {}
-        for i, st in enumerate(planner.get("steps", []), 1):
-            print(f"{i}. {st.get('title') or st.get('name')}")
-
-
-    if __name__ == "__main__":
-        agi_next_step()
+if __name__ == "__main__":
+    main()
