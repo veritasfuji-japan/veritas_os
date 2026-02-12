@@ -36,6 +36,12 @@ from veritas_os.api.constants import (
     VALID_MEMORY_KINDS,
 )  # noqa: F401
 
+from veritas_os.logging.trust_log import (
+    get_trust_log_page,
+    get_trust_logs_by_request,
+)
+
+
 # ---- アトミック I/O（信頼性向上）----
 try:
     from veritas_os.core.atomic_io import atomic_append_line, atomic_write_json
@@ -1487,6 +1493,18 @@ def metrics():
 # ==============================
 # Trust Feedback
 # ==============================
+
+@app.get("/v1/trust/logs", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trust_logs(cursor: Optional[str] = None, limit: int = 50):
+    """TrustLog をページング取得する。"""
+    return get_trust_log_page(cursor=cursor, limit=limit)
+
+
+@app.get("/v1/trust/{request_id}", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trust_log_by_request(request_id: str):
+    """request_id 単位で TrustLog を取得する。"""
+    return get_trust_logs_by_request(request_id=request_id)
+
 
 @app.post("/v1/trust/feedback", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def trust_feedback(body: dict):
