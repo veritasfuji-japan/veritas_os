@@ -225,12 +225,7 @@ class TestTrustFeedback:
         assert called["extra"]["api"] == "/v1/trust/feedback"
 
     def test_trust_feedback_with_high_score(self, client, monkeypatch):
-        """
-        範囲外のスコアの処理を確認
-        
-        注: 現在の実装ではスコアのクランプは行われず、
-        そのまま記録されます
-        """
+        """範囲外の高いスコアが 1.0 にクランプされることを確認。"""
         called = {}
 
         def fake_append_trust_log(user_id, score, note, source, extra):
@@ -256,14 +251,35 @@ class TestTrustFeedback:
         
         response = client.post("/v1/trust/feedback", headers={"X-API-Key": "test-key"}, json=payload)
         
-        # 現在の実装では200を返し、スコアはそのまま記録される
         assert response.status_code == 200
-        
-        # スコアが記録されていることを確認（クランプなし）
-        assert called["score"] == 1.5
-        
-        # TODO: 将来的にスコアを0-1の範囲にクランプする
-        # 実装を追加することを推奨
+        assert called["score"] == 1.0
+
+    def test_trust_feedback_with_invalid_score(self, client, monkeypatch):
+        """不正な score 入力時は既定値 0.5 が使われることを確認。"""
+        called = {}
+
+        def fake_append_trust_log(user_id, score, note, source, extra):
+            called["user_id"] = user_id
+            called["score"] = score
+            called["note"] = note
+            called["source"] = source
+            called["extra"] = extra
+
+        monkeypatch.setattr(server.value_core, "append_trust_log", fake_append_trust_log)
+
+        payload = {
+            "user_id": "test_user",
+            "score": "not-a-number",
+            "note": "invalid score test",
+        }
+        response = client.post(
+            "/v1/trust/feedback",
+            headers={"X-API-Key": "test-key"},
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        assert called["score"] == 0.5
 
 
 # =========================

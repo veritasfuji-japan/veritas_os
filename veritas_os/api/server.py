@@ -1492,6 +1492,10 @@ def metrics():
 def trust_feedback(body: dict):
     """
     人間からのフィードバックを trust_log に記録する簡易API。
+
+    Notes:
+        score は 0.0〜1.0 に正規化してから保存する。
+        数値変換に失敗した場合は既定値 0.5 を採用する。
     """
     vc = get_value_core()
     if vc is None:
@@ -1500,7 +1504,12 @@ def trust_feedback(body: dict):
 
     try:
         uid = (body.get("user_id") or "anon")
-        score = body.get("score", 0.5)
+        raw_score = body.get("score", 0.5)
+        try:
+            score = float(raw_score)
+        except (TypeError, ValueError):
+            score = 0.5
+        score = max(0.0, min(1.0, score))
         note = body.get("note") or ""
         source = body.get("source") or "manual"
         extra = {"api": "/v1/trust/feedback"}
@@ -1521,7 +1530,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
