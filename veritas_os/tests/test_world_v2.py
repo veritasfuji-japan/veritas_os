@@ -12,7 +12,7 @@ def setup_tmp_world(tmp_path, monkeypatch):
     """
     monkeypatch.setenv("VERITAS_DATA_DIR", str(tmp_path))
 
-    import veritas_os.core.world as world_module  # noqa: WPS433 (local import OK for reload)
+    import veritas_os.core.world as world_module
     importlib.reload(world_module)
     return world_module
 
