@@ -5,6 +5,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./vitest.setup.ts"],
-    include: ["**/*.test.ts", "**/*.test.tsx"]
-  }
+    include: ["**/*.test.ts", "**/*.test.tsx"],
+  },
+  esbuild: {
+    jsx: "automatic",
+    jsxImportSource: "react",
+  },
 });
