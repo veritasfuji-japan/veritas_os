@@ -10,8 +10,8 @@
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 
-**Version**: 2.0.0  
-**Planned Release**: In Development  
+**Version**: 2.0.0-alpha  
+**Release Status**: In Development  
 **Author**: Takeshi Fujishita
 
 VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline**.
@@ -128,6 +128,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> [!WARNING]
+> Avoid placing secrets directly in shell history. Prefer a `.env` file (git-ignored) or a
+> secrets manager for production environments.
+
 ### 2) Set env vars
 
 ```bash
@@ -167,7 +171,7 @@ Example payload:
 
 ---
 
-## Security Notes (Important)
+## Operational Security Deep Dive
 
 - **Never use placeholder or short secrets**: `VERITAS_API_SECRET` should be a long,
   random value (32+ chars recommended). Placeholder or short secrets can effectively
@@ -269,21 +273,39 @@ make test PYTHON_VERSION=3.11
 
 ## Security Notes (Important)
 
+### Credential and key management
+
 - **API keys**: Avoid exporting secrets directly in shell history where possible. Prefer
   `.env` files (git-ignored) or secret managers and inject them at runtime. Rotate keys
   regularly and limit scope/permissions.
+- **Never use placeholder or short secrets**: `VERITAS_API_SECRET` should be a long,
+  random value (32+ chars recommended). Placeholder or short secrets can effectively
+  disable or weaken HMAC protection.
+
+### API and browser-facing protections
+
+- **CORS safety**: avoid wildcard origins (`*`) when `allow_credentials` is enabled.
+  Configure explicit trusted origins only.
+- **CORS and API key must be set**: configure `VERITAS_CORS_ALLOW_ORIGINS` and
+  `VERITAS_API_KEY` to avoid unsafe defaults.
+
+### Data safety and persistence
+
 - **TrustLog data**: TrustLog is append-only JSONL. If your payloads can contain PII or
   sensitive data, ensure you have access controls, retention policies, and (if needed)
   encryption at rest.
+- **Force PII masking before persisting TrustLog/Memory**: apply `redact()` prior to
+  storage to reduce leakage risk.
+- **Encryption at rest (optional)**: TrustLog/Memory are stored in plaintext; consider
+  encryption or KMS integration based on requirements.
+- **Operational logs are excluded from Git**: runtime logs (for example,
+  `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live
+  under `veritas_os/sample_data/memory/`.
 
----
+### Migration safety
 
-## Operational Security Notes
-
-- **Force PII masking before persisting TrustLog/Memory**. Apply `redact()` (PII masking) prior to storage to reduce leakage risk.
-- **Encryption at rest (optional)**: TrustLog/Memory are stored in plaintext; consider encryption or KMS integration based on requirements.
-- **CORS and API key must be set**. Configure `VERITAS_CORS_ALLOW_ORIGINS` and `VERITAS_API_KEY` to avoid unsafe defaults.
-- **Operational logs are excluded from Git**. Runtime logs (e.g., `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live under `veritas_os/sample_data/memory/`.
+- **Legacy pickle migration is risky**: if you enable legacy pickle migration for
+  MemoryOS, treat it as a short-lived migration path and disable it afterward.
 
 ---
 
