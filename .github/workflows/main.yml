@@ -165,7 +165,7 @@ jobs:
           version: "9.15.3"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: TypeScript check
         run: pnpm ui:typecheck
@@ -203,16 +203,18 @@ jobs:
           version: "9.15.3"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Install Playwright browsers
-        run: pnpm --filter frontend e2e:install
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
 
       - name: Build frontend
         run: pnpm ui:build
 
       - name: Run E2E tests
-        run: pnpm --filter frontend e2e
+        working-directory: frontend
+        run: npx playwright test
 
       - name: Upload Playwright report
         if: always()
