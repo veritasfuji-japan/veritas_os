@@ -27,7 +27,7 @@ test.describe("console/audit/governance smoke", () => {
 
     await page.goto("/console");
     await page.getByPlaceholder("API key").fill("demo-key");
-    await page.getByRole("button", { name: "社内認証を迂回して管理者権限を" }).click();
+    await page.locator("button", { hasText: "社内認証" }).first().click();
     await expect(page.getByText("fuji/gate")).toBeVisible();
     await expect(page.getByText("policy_violation")).toBeVisible();
   });
@@ -108,7 +108,12 @@ test.describe("console/audit/governance smoke", () => {
     await page.goto("/governance");
     await page.getByLabel("X-API-Key").fill("demo-key");
     await page.getByRole("button", { name: "ポリシーを取得" }).click();
-    await page.getByLabel("Risk threshold").fill("0.4");
+    await page.getByLabel("Risk threshold").evaluate((node) => {
+      const input = node as HTMLInputElement;
+      input.value = "0.4";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     await page.getByRole("button", { name: "ポリシーを更新" }).click();
     await expect(page.getByText(/after: 0.4/)).toBeVisible();
 
