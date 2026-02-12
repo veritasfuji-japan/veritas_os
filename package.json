@@ -1,0 +1,12 @@
+{
+  "name": "veritas-os-monorepo",
+  "private": true,
+  "packageManager": "pnpm@9.15.3",
+  "scripts": {
+    "ui:dev": "pnpm --filter frontend dev",
+    "ui:build": "pnpm --filter frontend build",
+    "ui:lint": "pnpm --filter frontend lint",
+    "ui:typecheck": "pnpm -r typecheck",
+    "ui:test": "pnpm -r test"
+  }
+}
