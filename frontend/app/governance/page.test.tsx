@@ -38,7 +38,7 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "現在のpolicyを取得" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/差分プレビュー/)).toBeInTheDocument();
+      expect(screen.getByText(/差分プレビュー/)).not.toBeNull();
     });
 
     fireEvent.click(screen.getByLabelText("FUJIルール有効化"));

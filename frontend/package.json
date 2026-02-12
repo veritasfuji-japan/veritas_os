@@ -36,7 +36,6 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8",
     "@playwright/test": "^1.50.1",
-    "@axe-core/playwright": "^4.10.2",
-    "@testing-library/jest-dom": "^6.6.3"
+    "@axe-core/playwright": "^4.10.2"
   }
 }

@@ -14,13 +14,12 @@ describe("MissionLayout", () => {
       </MissionLayout>
     );
 
-    expect(screen.getByRole("link", { name: /command dashboard/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /decision console/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /governance control/i })).toHaveAttribute(
-      "href",
+    expect(screen.getByRole("link", { name: /command dashboard/i })).not.toBeNull();
+    expect(screen.getByRole("link", { name: /decision console/i })).not.toBeNull();
+    expect(screen.getByRole("link", { name: /governance control/i }).getAttribute("href")).toBe(
       "/governance"
     );
-    expect(screen.getByText("Environment")).toBeInTheDocument();
-    expect(screen.getByText("Latest Event")).toBeInTheDocument();
+    expect(screen.getByText("Environment")).not.toBeNull();
+    expect(screen.getByText("Latest Event")).not.toBeNull();
   });
 });

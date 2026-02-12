@@ -32,7 +32,7 @@ describe("LiveEventStream", () => {
 
     render(<LiveEventStream />);
 
-    expect(screen.getByText("Live Event Stream")).toBeInTheDocument();
+    expect(screen.getByText("Live Event Stream")).not.toBeNull();
     expect(MockEventSource.instances.length).toBe(1);
 
     const source = MockEventSource.instances[0];
@@ -40,7 +40,7 @@ describe("LiveEventStream", () => {
       data: JSON.stringify({ id: 1, type: "decide.completed", ts: "2026-01-01T00:00:00Z", payload: { ok: true } }),
     } as MessageEvent<string>);
 
-    expect(await screen.findByText("decide.completed")).toBeInTheDocument();
-    expect(screen.getByText(/"ok": true/)).toBeInTheDocument();
+    expect(await screen.findByText("decide.completed")).not.toBeNull();
+    expect(screen.getByText(/"ok": true/)).not.toBeNull();
   });
 });

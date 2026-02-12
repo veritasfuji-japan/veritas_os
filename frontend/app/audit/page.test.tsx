@@ -30,11 +30,11 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      expect(screen.getByText("value")).toBeInTheDocument();
-      expect(screen.getByText("fuji")).toBeInTheDocument();
+      expect(screen.getByText("value")).not.toBeNull();
+      expect(screen.getByText("fuji")).not.toBeNull();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/表示件数: 2/)).toBeInTheDocument();
+    expect(screen.getByText(/表示件数: 2/)).not.toBeNull();
   });
 });

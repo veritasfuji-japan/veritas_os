@@ -10,9 +10,9 @@ describe("DecisionConsolePage", () => {
   it("renders pipeline stages in fixed order", () => {
     render(<DecisionConsolePage />);
 
-    expect(screen.getByText("1.", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText("Evidence")).toBeInTheDocument();
-    expect(screen.getByText("TrustLog")).toBeInTheDocument();
+    expect(screen.getByText("1.", { exact: false })).not.toBeNull();
+    expect(screen.getByText("Evidence")).not.toBeNull();
+    expect(screen.getByText("TrustLog")).not.toBeNull();
   });
 
   it("shows 401 message when api key is missing", async () => {
@@ -24,7 +24,7 @@ describe("DecisionConsolePage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "実行" }));
 
-    expect(await screen.findByText(/401: APIキー不足/)).toBeInTheDocument();
+    expect(await screen.findByText(/401: APIキー不足/)).not.toBeNull();
   });
 
   it("renders structured sections from decide response", async () => {
@@ -62,8 +62,8 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "実行" }));
 
     await waitFor(() => {
-      expect(screen.getByText("decision_status / chosen")).toBeInTheDocument();
-      expect(screen.getByText("memory_citations / memory_used_count")).toBeInTheDocument();
+      expect(screen.getByText("decision_status / chosen")).not.toBeNull();
+      expect(screen.getByText("memory_citations / memory_used_count")).not.toBeNull();
     });
   });
 });
