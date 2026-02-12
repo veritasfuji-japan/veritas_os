@@ -74,10 +74,13 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
+          # NOTE:
+          # - CI環境ではpnpmが自動でfrozen-lockfile=true相当になる
+          # - 本リポジトリは lockfile 未同梱運用のため、明示的に無効化して失敗を防ぐ
           if [ -f pnpm-lock.yaml ]; then
             pnpm install --frozen-lockfile
           else
-            pnpm install --no-frozen-lockfile
+            pnpm install --no-frozen-lockfile --config.frozen-lockfile=false
           fi
 
       - name: Install Playwright browser
