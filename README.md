@@ -245,7 +245,7 @@ make test
 make test-cov
 ```
 
-These targets use `uv` with `PYTHON_VERSION=3.12.7` and automatically download the
+These targets use `uv` with `PYTHON_VERSION=3.12.12` and automatically download the
 interpreter if it is not already installed.
 
 Fast smoke check:

@@ -260,7 +260,7 @@ make test
 make test-cov
 ```
 
-これらのターゲットは `uv` と `PYTHON_VERSION=3.12.7` を利用し、
+これらのターゲットは `uv` と `PYTHON_VERSION=3.12.12` を利用し、
 未導入時は Python 本体を自動取得して実行します。
 
 オプション:
