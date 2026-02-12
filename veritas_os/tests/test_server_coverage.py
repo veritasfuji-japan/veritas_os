@@ -5,12 +5,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
 _TEST_KEY = "coverage-test-key-12345"
 _AUTH = {"X-API-Key": _TEST_KEY}
+os.environ["VERITAS_API_KEY"] = _TEST_KEY
 
 import pytest
 from fastapi.testclient import TestClient
