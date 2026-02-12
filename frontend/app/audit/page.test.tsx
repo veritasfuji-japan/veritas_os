@@ -27,11 +27,18 @@ describe("TrustLogExplorerPage", () => {
 
     render(<TrustLogExplorerPage />);
 
+    // Set API key first (button is disabled without it)
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      expect(screen.getByText("value")).toBeInTheDocument();
-      expect(screen.getByText("fuji")).toBeInTheDocument();
+      // Stage names appear both in the timeline entries and the stage filter dropdown.
+      // Use getAllByText to handle the duplicate matches.
+      expect(screen.getAllByText("value").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText("fuji").length).toBeGreaterThanOrEqual(2);
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

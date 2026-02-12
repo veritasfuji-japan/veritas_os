@@ -141,3 +141,83 @@ jobs:
       - name: Fail job if tests failed
         if: steps.pytest.outcome == 'failure'
         run: exit 1
+
+  # ============================================================
+  # Frontend: typecheck + lint + unit tests + a11y
+  # ============================================================
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.3"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript check
+        run: pnpm ui:typecheck
+
+      - name: Lint
+        run: pnpm ui:lint
+
+      - name: Unit tests (vitest + a11y)
+        run: pnpm ui:test
+
+      - name: Build
+        run: pnpm ui:build
+
+  # ============================================================
+  # Frontend E2E: Playwright smoke + a11y (axe)
+  # ============================================================
+  frontend-e2e:
+    name: frontend-e2e
+    needs: frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.3"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter frontend e2e:install
+
+      - name: Build frontend
+        run: pnpm ui:build
+
+      - name: Run E2E tests
+        run: pnpm --filter frontend e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          if-no-files-found: warn
