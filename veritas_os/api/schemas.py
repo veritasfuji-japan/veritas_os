@@ -208,6 +208,18 @@ class FujiDecision(BaseModel):
     violations: List[str] = Field(default_factory=list)
 
 
+class GovernancePolicy(BaseModel):
+    """Governance policy payload used by `/v1/governance/policy`."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fuji_enabled: bool = True
+    risk_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+    auto_stop_conditions: List[str] = Field(default_factory=list, max_length=20)
+    log_retention_days: int = Field(default=90, ge=1, le=3650)
+    audit_intensity: Literal["light", "standard", "strict"] = "standard"
+
+
 class TrustLog(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -646,4 +658,3 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=500)
     memory_auto_put: bool = True
     persona_evolve: bool = True
-

@@ -47,12 +47,50 @@ jobs:
             --severity-level medium \
             -f txt
 
+
+  frontend:
+    name: frontend (lint/typecheck/unit/e2e)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend unit test
+        run: pnpm --filter frontend test
+
+      - name: Install Playwright browsers
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Frontend e2e + a11y smoke
+        run: pnpm --filter frontend test:e2e
+
   # ============================================================
   # Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: lint
+    needs: [lint, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

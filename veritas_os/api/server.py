@@ -29,7 +29,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
-from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
+from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision, GovernancePolicy
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -42,6 +42,7 @@ from veritas_os.logging.trust_log import (
     get_trust_log_page,
     get_trust_logs_by_request,
 )
+from veritas_os.governance_store import FileGovernancePolicyStore
 
 
 # ---- アトミック I/O（信頼性向上）----
@@ -72,6 +73,10 @@ except Exception as _sanitize_import_err:
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 START_TS = time.time()
+
+GOVERNANCE_POLICY_PATH = REPO_ROOT / "governance.json"
+GOVERNANCE_STORE = FileGovernancePolicyStore(GOVERNANCE_POLICY_PATH)
+
 
 # ---- .env（dotenv が無い/壊れていても server import は落とさない）----
 try:
@@ -1641,6 +1646,34 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+
+
+# ==============================
+# Governance API
+# ==============================
+
+
+@app.get("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def get_governance_policy() -> Dict[str, Any]:
+    """Return the current governance policy."""
+    try:
+        return GOVERNANCE_STORE.load()
+    except Exception as e:
+        logger.error("governance policy load failed: %s", _errstr(e))
+        raise HTTPException(status_code=500, detail="governance policy load failed")
+
+
+@app.put("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def put_governance_policy(policy: GovernancePolicy) -> Dict[str, Any]:
+    """Persist governance policy and emit an SSE update event."""
+    try:
+        before = GOVERNANCE_STORE.load()
+        after = GOVERNANCE_STORE.save(policy.model_dump())
+        _publish_event("governance.policy.updated", {"before": before, "after": after})
+        return after
+    except Exception as e:
+        logger.error("governance policy save failed: %s", _errstr(e))
+        raise HTTPException(status_code=500, detail="governance policy save failed")
 
 
 # ==============================
