@@ -6,6 +6,13 @@
 
 ---
 
+## Review Document Navigation
+
+- 文書整理ガイド: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+- 現行の一次情報: `CODE_REVIEW_STATUS.md` + `CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
+
+---
+
 ## Summary
 
 This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
