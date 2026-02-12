@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, json, urllib.request, urllib.error, subprocess, shlex, time
+import json
+import os
+import subprocess
+import time
+import urllib.error
+import urllib.request
+import urllib.parse
 from pathlib import Path
+from typing import Optional
 
 # ================================
 # パス設定（scripts/logs に統一）
@@ -27,12 +34,39 @@ API_BASE     = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
 HEALTH_URL   = f"{API_BASE}/health"
 
 
+def _validate_webhook_url(webhook_url: str) -> bool:
+    """Validate that Slack webhook URL uses HTTPS and points to Slack domains."""
+    if not webhook_url:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(webhook_url)
+    except ValueError:
+        return False
+
+    if parsed.scheme != "https":
+        return False
+
+    hostname: Optional[str] = parsed.hostname
+    if not hostname:
+        return False
+
+    allowed_hosts = {
+        "hooks.slack.com",
+        "hooks.slack-gov.com",
+    }
+    return hostname.lower() in allowed_hosts
+
+
 # ================================
 # Slack 通知
 # ================================
 def post_slack(text: str, timeout_sec: int = 12, max_retry: int = 3) -> bool:
     if not WEBHOOK:
         print("⚠️ SLACK_WEBHOOK_URL 未設定のため通知スキップ")
+        return False
+
+    if not _validate_webhook_url(WEBHOOK):
+        print("🚫 セキュリティ警告: SLACK_WEBHOOK_URL が不正なため通知を中断")
         return False
 
     body = json.dumps({"text": text}).encode("utf-8")
@@ -62,7 +96,7 @@ def post_slack(text: str, timeout_sec: int = 12, max_retry: int = 3) -> bool:
 # ================================
 # HTTP チェック
 # ================================
-def http_get(url: str, timeout=3):
+def http_get(url: str, timeout: int = 3):
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", "ignore")
@@ -85,23 +119,23 @@ def _validate_heal_script_path(script_path: Path) -> bool:
         # resolve() でシンボリックリンクを解決し、実際のパスを取得
         resolved_script = script_path.resolve(strict=True)
         resolved_scripts_dir = SCRIPTS_DIR.resolve(strict=True)
-        
+
         # ★ クロスプラットフォーム対応: is_relative_to() を使用 (Python 3.9+)
         # これはWindowsのcase-insensitivityとドライブレター問題を正しく処理
         try:
             if not resolved_script.is_relative_to(resolved_scripts_dir):
                 return False
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             # Python 3.8以前のフォールバック
             try:
                 resolved_script.relative_to(resolved_scripts_dir)
             except ValueError:
                 return False
-        
+
         # ファイル名が期待通りであることを確認
         if resolved_script.name != "heal.sh":
             return False
-        
+
         return True
     except (OSError, ValueError):
         return False
