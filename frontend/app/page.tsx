@@ -7,16 +7,20 @@ const sampleHealth: HealthResponse = {
   timestamp: new Date().toISOString()
 };
 
-export default function Home() {
+export default function Home(): JSX.Element {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center gap-4 p-6">
-      <Card title="Veritas UI Workspace">
-        <p className="text-sm text-muted-foreground">
-          frontend は packages/types と packages/design-system を参照できています。
+    <div className="flex flex-col gap-4">
+      <Card title="Layer0 Design System Ready">
+        <p className="text-muted-foreground">
+          frontend は packages/design-system のトークン・テーマ・アクセシビリティ基盤を利用しています。
         </p>
-        <pre className="mt-4 rounded-md bg-muted p-3 text-xs">{JSON.stringify(sampleHealth, null, 2)}</pre>
-        <Button className="mt-4">shadcn/ui style button</Button>
+        <pre className="font-audit mt-4 rounded-md bg-muted p-3 text-xs">
+          {JSON.stringify(sampleHealth, null, 2)}
+        </pre>
+        <Button aria-label="デザインシステム動作確認" className="mt-4">
+          Accessible action
+        </Button>
       </Card>
-    </main>
+    </div>
   );
 }
