@@ -647,3 +647,20 @@ class ChatRequest(BaseModel):
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
+
+class GovernancePolicy(BaseModel):
+    """Governance control-plane policy model (file/DB agnostic contract)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fuji_enabled: bool = True
+    risk_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    auto_stop_conditions: List[str] = Field(default_factory=list, max_length=20)
+    log_retention_days: int = Field(default=180, ge=1, le=3650)
+    audit_intensity: Literal["light", "standard", "strict"] = "standard"
+
+
+class GovernancePolicyUpdateRequest(BaseModel):
+    """Request payload for full governance policy updates."""
+
+    policy: GovernancePolicy

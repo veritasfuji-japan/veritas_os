@@ -47,6 +47,54 @@ jobs:
             --severity-level medium \
             -f txt
 
+
+  frontend:
+    name: frontend (typecheck/lint/unit/e2e/a11y)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      CI: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install --no-frozen-lockfile
+          fi
+
+      - name: Install Playwright browser
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend unit tests
+        run: pnpm --filter frontend test
+
+      - name: Frontend e2e + a11y smoke
+        run: pnpm --filter frontend e2e
+
   # ============================================================
   # Test matrix
   # ============================================================

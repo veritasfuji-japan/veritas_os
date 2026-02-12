@@ -183,6 +183,27 @@ components:
         rsi_note:
           type: string
 
+    GovernancePolicy:
+      type: object
+      required: [fuji_enabled, risk_threshold, auto_stop_conditions, log_retention_days, audit_intensity]
+      properties:
+        fuji_enabled:
+          type: boolean
+        risk_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        auto_stop_conditions:
+          type: array
+          items:
+            type: string
+        log_retention_days:
+          type: integer
+          minimum: 1
+        audit_intensity:
+          type: string
+          enum: [light, standard, strict]
+
 security:
   - ApiKeyAuth: []
 
@@ -294,6 +315,49 @@ items スキーマ
                 properties:
                   value:
                     type: string
+
+
+  /v1/governance/policy:
+    get:
+      summary: Get governance policy
+      responses:
+        "200":
+          description: Current governance policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  policy:
+                    $ref: '#/components/schemas/GovernancePolicy'
+    put:
+      summary: Update governance policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [policy]
+              properties:
+                policy:
+                  $ref: '#/components/schemas/GovernancePolicy'
+      responses:
+        "200":
+          description: Updated governance policy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  before:
+                    $ref: '#/components/schemas/GovernancePolicy'
+                  policy:
+                    $ref: '#/components/schemas/GovernancePolicy'
 
   /v1/logs/trust/{request_id}:
     get:
