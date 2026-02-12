@@ -5,6 +5,9 @@
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
+[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
+[![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
 
 **Version**: 2.0.0  
 **Planned Release**: 2025-12-01  
@@ -24,6 +27,20 @@ VERITAS OS は、LLM（例：OpenAI GPT-4.1-mini）を
 - **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
 - **English README**: `README.md`
 - **レビュー文書マップ**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+
+## 目次
+
+- [なぜVERITASか（何が違う？）](#なぜveritasか何が違う)
+- [できること](#できること)
+- [API一覧（概要）](#api一覧概要)
+- [Quickstart（最短起動）](#quickstart最短起動)
+- [セキュリティ注意（重要）](#セキュリティ注意重要)
+- [Docker（GHCR）](#dockerghcr)
+- [アーキテクチャ（高レベル）](#アーキテクチャ高レベル)
+- [TrustLog（ハッシュチェーン監査ログ）](#trustlogハッシュチェーン監査ログ)
+- [テスト](#テスト)
+- [近いロードマップ（短期）](#近いロードマップ短期)
+- [ライセンス](#ライセンス)
 
 ---
 
@@ -104,6 +121,8 @@ Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI 
 ---
 
 ## Quickstart（最短起動）
+
+> Docker での起動手順は [Docker（GHCR）](#dockerghcr) を参照してください。
 
 ### 1) インストール
 
@@ -250,7 +269,37 @@ make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
 make test PYTHON_VERSION=3.11
 ```
 
+スモークチェック（最短）:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
+```
+
 > 補足：CI は GitHub Actions で利用可能です。Coverage バッジは追加予定です。
+
+---
+
+## Docker（GHCR）
+
+最新イメージを取得:
+
+```bash
+docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+API サーバ起動:
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e OPENAI_API_KEY="YOUR_OPENAI_API_KEY" \
+  -e VERITAS_API_KEY="your-secret-api-key" \
+  -e LLM_PROVIDER="openai" \
+  -e LLM_MODEL="gpt-4.1-mini" \
+  ghcr.io/veritasfuji-japan/veritas_os:latest
+```
+
+FastAPI エントリポイントが `veritas_os.api.server:app` と異なる場合は、
+Dockerfile の `CMD` を環境に合わせて更新してください。
 
 ---
 
