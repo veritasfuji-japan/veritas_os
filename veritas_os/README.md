@@ -5,9 +5,10 @@
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-Production%20Ready%20(98%25)-green.svg)]()
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](COVERAGE_REPORT.md)
 
 
-**Version**: 2.0.0  
+**Version**: 2.0.0
 **Release Date**: 2025-12-01  
 **Author**: Takeshi Fujishita
 
