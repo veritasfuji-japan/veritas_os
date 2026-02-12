@@ -1,20 +1,24 @@
 import type { Metadata } from "next";
+import { ThemeStyles, applyThemeClass } from "@veritas/design-system";
+import { MissionLayout } from "../components/mission-layout";
 import "./globals.css";
-import { applyThemeClass } from "@veritas/design-system";
 
 export const metadata: Metadata = {
-  title: "Veritas UI",
-  description: "Veritas monorepo frontend scaffold"
+  title: "Mission Control IA",
+  description: "統治OSの運用コンソール"
 };
 
 export default function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
-}>) {
+}>): JSX.Element {
   return (
-    <html lang="ja">
-      <body className={applyThemeClass("light")}>{children}</body>
+    <html className={applyThemeClass("light")} lang="ja">
+      <body>
+        <ThemeStyles />
+        <MissionLayout>{children}</MissionLayout>
+      </body>
     </html>
   );
 }

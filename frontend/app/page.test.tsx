@@ -1,9 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import Home from "./page";
+import CommandDashboardPage from "./page";
 
-describe("Home", () => {
-  it("renders workspace card", () => {
-    render(<Home />);
-    expect(screen.getByText("Veritas UI Workspace")).toBeInTheDocument();
+describe("CommandDashboardPage", () => {
+  it("renders dashboard skeleton content", () => {
+    render(<CommandDashboardPage />);
+
+    expect(screen.getByText("Command Dashboard")).toBeInTheDocument();
+    expect(screen.getByText("Uptime Lattice")).toBeInTheDocument();
   });
 });

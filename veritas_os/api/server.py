@@ -7,10 +7,12 @@ import importlib
 import json
 import logging
 import os
+import queue
 import re
 import secrets
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,10 +22,10 @@ from typing import Any, Dict, Optional, Tuple
 # ---- ロガー設定（標準化: print → logging）----
 logger = logging.getLogger(__name__)
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Security
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
@@ -35,6 +37,12 @@ from veritas_os.api.constants import (
     MAX_RAW_BODY_LENGTH,
     VALID_MEMORY_KINDS,
 )  # noqa: F401
+
+from veritas_os.logging.trust_log import (
+    get_trust_log_page,
+    get_trust_logs_by_request,
+)
+
 
 # ---- アトミック I/O（信頼性向上）----
 try:
@@ -202,6 +210,76 @@ _pipeline_state = _LazyState()
 _fuji_state = _LazyState()
 _value_core_state = _LazyState()
 _memory_store_state = _LazyState()
+
+
+class _SSEEventHub:
+    """In-memory SSE event hub with bounded history and subscriber queues."""
+
+    def __init__(self, history_size: int = 128):
+        self._lock = threading.Lock()
+        self._history = deque(maxlen=history_size)
+        self._subscribers: set[queue.Queue] = set()
+        self._seq = 0
+
+    def publish(self, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Publish one event to all subscribers and keep it in short history."""
+        with self._lock:
+            self._seq += 1
+            event = {
+                "id": self._seq,
+                "type": event_type,
+                "ts": utc_now_iso_z(),
+                "payload": payload,
+            }
+            self._history.append(event)
+            subscribers = list(self._subscribers)
+
+        for subscriber in subscribers:
+            try:
+                subscriber.put_nowait(event)
+            except queue.Full:
+                logger.debug("sse queue full; dropping event for a slow subscriber")
+            except Exception:
+                logger.debug("failed to push sse event", exc_info=True)
+        return event
+
+    def register(self) -> queue.Queue:
+        """Register a subscriber queue and pre-fill it with recent history."""
+        q: queue.Queue = queue.Queue(maxsize=64)
+        with self._lock:
+            history = list(self._history)
+            self._subscribers.add(q)
+
+        for item in history:
+            try:
+                q.put_nowait(item)
+            except queue.Full:
+                break
+        return q
+
+    def unregister(self, subscriber: queue.Queue) -> None:
+        """Remove a subscriber queue safely."""
+        with self._lock:
+            self._subscribers.discard(subscriber)
+
+
+_event_hub = _SSEEventHub()
+
+
+
+
+def _publish_event(event_type: str, payload: Dict[str, Any]) -> None:
+    """Best-effort SSE event publication. Must never break API handlers."""
+    try:
+        _event_hub.publish(event_type=event_type, payload=payload)
+    except Exception:
+        logger.debug("failed to publish sse event", exc_info=True)
+
+
+def _format_sse_message(event: Dict[str, Any]) -> str:
+    """Format one SSE event frame."""
+    data = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+    return f"id: {event['id']}\nevent: {event['type']}\ndata: {data}\n\n"
 
 
 def _errstr(e: Exception) -> str:
@@ -503,6 +581,23 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(x_api_key.strip(), expected):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return True
+
+
+def require_api_key_header_or_query(
+    x_api_key: Optional[str] = Security(api_key_scheme),
+    api_key: Optional[str] = Query(default=None),
+):
+    """Authenticate by header (preferred) or query parameter for SSE clients."""
+    expected = (_get_expected_api_key() or "").strip()
+    if not expected:
+        raise HTTPException(status_code=500, detail="Server API key not configured")
+
+    candidate = (x_api_key or api_key or "").strip()
+    if not candidate:
+        raise HTTPException(status_code=401, detail="Missing API key")
+    if not secrets.compare_digest(candidate, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
@@ -1037,6 +1132,10 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
         items.append(entry)
         try:
             _save_json(log_json, items)
+            _publish_event(
+                "trustlog.appended",
+                {"request_id": entry.get("request_id"), "kind": entry.get("kind")},
+            )
         except Exception as e:
             logger.warning("write trust_log.json failed: %s", _errstr(e))
 
@@ -1090,6 +1189,7 @@ async def decide(req: DecideRequest, request: Request):
     p = get_decision_pipeline()
     if p is None:
         _log_decide_failure("decision_pipeline unavailable", _pipeline_state.err)
+        _publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
         return JSONResponse(
             status_code=503,
             content={
@@ -1104,6 +1204,7 @@ async def decide(req: DecideRequest, request: Request):
         payload = await p.run_decide_pipeline(req=req, request=request)
     except Exception as e:
         _log_decide_failure("decision_pipeline execution failed", e)
+        _publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
         return JSONResponse(
             status_code=503,
             content={
@@ -1118,6 +1219,24 @@ async def decide(req: DecideRequest, request: Request):
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
     # DecideResponse 側に “落ちない” バリデータがある前提で model_validate
     try:
+        _publish_event(
+            "decide.completed",
+            {
+                "ok": bool(coerced.get("ok", True)),
+                "request_id": coerced.get("request_id"),
+                "decision": coerced.get("decision"),
+            },
+        )
+        fuji_payload = coerced.get("fuji") or {}
+        if str(fuji_payload.get("status", "")).lower() in {"reject", "rejected", DECISION_REJECTED}:
+            _publish_event(
+                "fuji.rejected",
+                {
+                    "request_id": coerced.get("request_id"),
+                    "status": fuji_payload.get("status"),
+                    "reasons": fuji_payload.get("reasons", []),
+                },
+            )
         return DecideResponse.model_validate(coerced)
     except Exception as e:
         # 最後の保険：型検証で落ちても 503 ではなく JSON にして "落ちない" を優先
@@ -1131,6 +1250,10 @@ async def decide(req: DecideRequest, request: Request):
         }
         if _is_debug_mode():
             content["warn_detail"] = _errstr(e)
+        _publish_event(
+            "decide.completed",
+            {"ok": False, "warn": "response_model_validation_failed", "request_id": coerced.get("request_id")},
+        )
         return JSONResponse(
             status_code=200,
             content=content,
@@ -1219,6 +1342,11 @@ def fuji_validate(payload: dict):
         )
 
     coerced = _coerce_fuji_payload(result, action=action)
+    if str(coerced.get("status", "")).lower() in {"reject", "rejected", DECISION_REJECTED}:
+        _publish_event(
+            "fuji.rejected",
+            {"action": action, "status": coerced.get("status"), "reasons": coerced.get("reasons", [])},
+        )
     try:
         return FujiDecision.model_validate(coerced)
     except Exception as e:
@@ -1231,6 +1359,10 @@ def fuji_validate(payload: dict):
         }
         if _is_debug_mode():
             content["warn_detail"] = _errstr(e)
+        _publish_event(
+            "decide.completed",
+            {"ok": False, "warn": "response_model_validation_failed", "request_id": coerced.get("request_id")},
+        )
         return JSONResponse(
             status_code=200,
             content=content,
@@ -1484,9 +1616,48 @@ def metrics():
     return result
 
 
+@app.get("/v1/events", dependencies=[Depends(require_api_key_header_or_query)])
+async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, le=60)):
+    """Server-Sent Events stream for near-real-time UI updates."""
+    subscriber = _event_hub.register()
+
+    async def _stream():
+        try:
+            yield ": connected\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    item = subscriber.get(timeout=heartbeat_sec)
+                    yield _format_sse_message(item)
+                except queue.Empty:
+                    yield f": heartbeat {utc_now_iso_z()}\n\n"
+        finally:
+            _event_hub.unregister(subscriber)
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+
+
 # ==============================
 # Trust Feedback
 # ==============================
+
+@app.get("/v1/trust/logs", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trust_logs(cursor: Optional[str] = None, limit: int = 50):
+    """TrustLog をページング取得する。"""
+    return get_trust_log_page(cursor=cursor, limit=limit)
+
+
+@app.get("/v1/trust/{request_id}", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trust_log_by_request(request_id: str):
+    """request_id 単位で TrustLog を取得する。"""
+    return get_trust_logs_by_request(request_id=request_id)
+
 
 @app.post("/v1/trust/feedback", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def trust_feedback(body: dict):
@@ -1522,6 +1693,10 @@ def trust_feedback(body: dict):
                 source=source,
                 extra=extra,
             )
+            _publish_event(
+                "trustlog.appended",
+                {"kind": "feedback", "user_id": uid, "source": source},
+            )
             return {"status": "ok", "user_id": uid}
 
         return {"status": "error", "detail": "value_core.append_trust_log not found"}
@@ -1530,7 +1705,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 

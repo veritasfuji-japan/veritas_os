@@ -1,19 +1,24 @@
 import * as React from "react";
 import { cn } from "./utils";
 
-export function Card({
-  title,
-  className,
-  children
-}: {
+interface CardProps {
   title: string;
   className?: string;
   children: React.ReactNode;
-}) {
+}
+
+export function Card({ title, className, children }: CardProps): JSX.Element {
+  const titleId = React.useId();
+
   return (
-    <section className={cn("w-full rounded-lg border bg-background p-6 shadow-sm", className)}>
-      <h1 className="text-xl font-semibold">{title}</h1>
-      <div className="mt-3">{children}</div>
+    <section
+      aria-labelledby={titleId}
+      className={cn("w-full rounded-lg border border-border bg-surface p-6 shadow-sm", className)}
+    >
+      <h2 className="text-xl font-semibold" id={titleId}>
+        {title}
+      </h2>
+      <div className="mt-3 text-sm leading-relaxed">{children}</div>
     </section>
   );
 }

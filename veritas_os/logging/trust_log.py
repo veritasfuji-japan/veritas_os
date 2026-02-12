@@ -393,6 +393,85 @@ def get_trust_log_entry(request_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _coerce_pagination(cursor: Optional[str], limit: int, *, max_limit: int = 200) -> tuple[int, int]:
+    """TrustLog API のページング引数を正規化する。
+
+    Args:
+        cursor: オフセットを表す文字列。未指定時は 0。
+        limit: 取得件数。
+        max_limit: 1 回の取得上限。
+
+    Returns:
+        tuple[int, int]: ``(offset, safe_limit)``
+    """
+    safe_limit = max(1, min(int(limit), max_limit))
+    if cursor is None or cursor == "":
+        return 0, safe_limit
+
+    try:
+        offset = max(0, int(cursor))
+    except (TypeError, ValueError):
+        offset = 0
+    return offset, safe_limit
+
+
+def get_trust_log_page(cursor: Optional[str], limit: int) -> Dict[str, Any]:
+    """最新→過去の順で TrustLog をページング取得する。
+
+    Notes:
+        API は必ず cursor/limit で返却し、全件返却を回避する。
+    """
+    offset, safe_limit = _coerce_pagination(cursor, limit)
+    entries = load_trust_log(limit=None)
+    page_items = entries[offset: offset + safe_limit]
+    next_offset = offset + len(page_items)
+    has_more = next_offset < len(entries)
+
+    return {
+        "items": page_items,
+        "cursor": str(offset),
+        "next_cursor": str(next_offset) if has_more else None,
+        "limit": safe_limit,
+        "has_more": has_more,
+    }
+
+
+def get_trust_logs_by_request(request_id: str) -> Dict[str, Any]:
+    """request_id 単位で TrustLog エントリを取得する。"""
+    if not request_id:
+        return {
+            "request_id": request_id,
+            "items": [],
+            "count": 0,
+            "chain_ok": False,
+            "verification_result": "request_id is required",
+        }
+
+    matched = [
+        entry
+        for entry in iter_trust_log(reverse=False)
+        if entry.get("request_id") == request_id
+    ]
+
+    chain_ok = True
+    for index in range(1, len(matched)):
+        if matched[index].get("sha256_prev") != matched[index - 1].get("sha256"):
+            chain_ok = False
+            break
+
+    verification = "ok" if chain_ok else "broken"
+    if not matched:
+        verification = "not_found"
+
+    return {
+        "request_id": request_id,
+        "items": matched,
+        "count": len(matched),
+        "chain_ok": chain_ok,
+        "verification_result": verification,
+    }
+
+
 # =============================================================================
 # TrustLog 検証
 # =============================================================================
@@ -520,6 +599,8 @@ __all__ = [
     "iter_trust_log",
     "load_trust_log",
     "get_trust_log_entry",
+    "get_trust_log_page",
+    "get_trust_logs_by_request",
     "verify_trust_log",
     "write_shadow_decide",
     "get_last_hash",

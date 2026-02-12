@@ -1094,3 +1094,34 @@ def test_max_request_body_size_is_configurable():
     assert hasattr(server, "MAX_REQUEST_BODY_SIZE")
     assert isinstance(server.MAX_REQUEST_BODY_SIZE, int)
     assert server.MAX_REQUEST_BODY_SIZE > 0
+
+
+def test_events_requires_api_key_query_or_header(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+
+    no_auth = client.get("/v1/events")
+    assert no_auth.status_code == 401
+
+    assert server.require_api_key_header_or_query(
+        x_api_key=None,
+        api_key=_TEST_API_KEY,
+    ) is True
+
+
+def test_decide_failure_publishes_sse_event(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+
+    server._event_hub = server._SSEEventHub(history_size=16)
+    server._pipeline_state = server._LazyState(obj=None, err="boom", attempted=True)
+
+    response = client.post(
+        "/v1/decide",
+        headers=_AUTH_HEADERS,
+        json={"query": "sse test"},
+    )
+    assert response.status_code == 503
+
+    subscriber = server._event_hub.register()
+    item = subscriber.get(timeout=0.5)
+    assert item["type"] == "decide.completed"
+    assert item["payload"]["ok"] is False
