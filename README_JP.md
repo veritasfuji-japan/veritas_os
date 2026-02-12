@@ -26,6 +26,7 @@ VERITAS OS は、LLM（例：OpenAI GPT-4.1-mini）を
 - **Zenodo論文（英語）**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
 - **English README**: `README.md`
+- **レビュー文書マップ**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 
 ## 目次
 
