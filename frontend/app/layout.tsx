@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { AppShell, ThemeStyles, applyThemeClass } from "@veritas/design-system";
+import { ThemeStyles, applyThemeClass } from "@veritas/design-system";
+import { MissionLayout } from "../components/mission-layout";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Veritas UI",
-  description: "Veritas monorepo frontend scaffold"
+  title: "Mission Control IA",
+  description: "統治OSの運用コンソール"
 };
 
 export default function RootLayout({
@@ -16,12 +17,7 @@ export default function RootLayout({
     <html className={applyThemeClass("light")} lang="ja">
       <body>
         <ThemeStyles />
-        <AppShell
-          description="共通レイアウトとアクセシブルなデザイントークンを適用しています。"
-          title="Veritas UI Workspace"
-        >
-          {children}
-        </AppShell>
+        <MissionLayout>{children}</MissionLayout>
       </body>
     </html>
   );
