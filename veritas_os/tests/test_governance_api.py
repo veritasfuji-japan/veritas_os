@@ -11,7 +11,7 @@ from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
-os.environ.setdefault("VERITAS_API_KEY", "test-governance-key")
+os.environ["VERITAS_API_KEY"] = "test-governance-key"
 
 from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
@@ -21,8 +21,9 @@ HEADERS = {"X-API-Key": "test-governance-key"}
 
 
 @pytest.fixture(autouse=True)
-def _temp_policy(tmp_path: Path):
+def _temp_policy(tmp_path: Path, monkeypatch):
     """Use a temporary governance.json for every test."""
+    monkeypatch.setenv("VERITAS_API_KEY", "test-governance-key")
     policy_path = tmp_path / "governance.json"
     default = gov_mod.GovernancePolicy()
     policy_path.write_text(json.dumps(default.model_dump(), ensure_ascii=False, indent=2))
