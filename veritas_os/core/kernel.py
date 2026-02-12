@@ -29,6 +29,39 @@ _doctor_last_run: float = 0.0
 _doctor_active_proc: "subprocess.Popen | None" = None
 _doctor_lock = _threading.Lock()
 
+
+def _open_doctor_log_fd(log_path: str) -> int:
+    """Open a doctor log file descriptor with secure defaults.
+
+    The descriptor is opened with restrictive file permissions and validated
+    as a regular file. When available, ``O_NOFOLLOW`` is enabled to reduce
+    symlink-based redirection risks.
+
+    Args:
+        log_path: Absolute file path of the doctor log.
+
+    Returns:
+        File descriptor opened in append mode.
+
+    Raises:
+        OSError: If the file cannot be opened.
+        ValueError: If the opened path is not a regular file.
+    """
+    import os
+    import stat
+
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
+    nofollow_flag = getattr(os, "O_NOFOLLOW", 0)
+    if nofollow_flag:
+        flags |= nofollow_flag
+
+    fd = os.open(log_path, flags, 0o600)
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode):
+        os.close(fd)
+        raise ValueError("Doctor log path must point to a regular file")
+    return fd
+
 from .types import (
     ToolResult,
     OptionDict,
@@ -1092,7 +1125,7 @@ async def decide(
                 log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
                 doctor_log = log_dir / "doctor.log"
                 # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
-                fd = os.open(str(doctor_log), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+                fd = _open_doctor_log_fd(str(doctor_log))
                 try:
                     os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
                     doctor_timeout = 300  # 5 minutes max
@@ -1213,5 +1246,4 @@ async def decide(
         "decision_status": decision_status,
         "rejection_reason": rejection_reason,
     }
-
 

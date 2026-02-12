@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import os
+import stat
 from typing import Any, Dict, List
 
 import pytest
@@ -1141,3 +1143,25 @@ def test_doctor_and_rsi_helpers_smoke():
 
 
 
+
+
+def test_open_doctor_log_fd_creates_secure_regular_file(tmp_path):
+    """_open_doctor_log_fd should create a regular file with restricted permissions."""
+    log_path = tmp_path / "doctor.log"
+
+    fd = kernel._open_doctor_log_fd(str(log_path))
+    try:
+        os.write(fd, b"doctor-test\n")
+    finally:
+        os.close(fd)
+
+    st = log_path.stat()
+    assert stat.S_ISREG(st.st_mode)
+    assert stat.S_IMODE(st.st_mode) == 0o600
+    assert log_path.read_text() == "doctor-test\n"
+
+
+def test_open_doctor_log_fd_rejects_directory_path(tmp_path):
+    """_open_doctor_log_fd should fail for non-regular paths such as directories."""
+    with pytest.raises(OSError):
+        kernel._open_doctor_log_fd(str(tmp_path))
