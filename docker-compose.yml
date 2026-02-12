@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veritas-backend
+    ports:
+      - "8000:8000"
+    environment:
+      VERITAS_CORS_ALLOW_ORIGINS: ${VERITAS_CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    image: node:20-bookworm
+    container_name: veritas-frontend
+    working_dir: /app
+    command: >-
+      sh -c "corepack enable && pnpm install --frozen-lockfile &&
+      pnpm --filter frontend dev --hostname 0.0.0.0 --port 3000"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://backend:8000}
+    volumes:
+      - ./:/app
+    depends_on:
+      backend:
+        condition: service_healthy

@@ -32,3 +32,17 @@ pnpm -r typecheck
 # workspace 全体のテスト
 pnpm -r test
 ```
+
+
+## Docker Compose で一括起動
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+- frontend: `http://localhost:3000`
+- backend: `http://localhost:8000`
+- compose では frontend が `NEXT_PUBLIC_API_BASE_URL=http://backend:8000` を使用します。
+
+> 秘密情報は `docker-compose.yml` に直書きせず、`.env` 側で上書きしてください。
