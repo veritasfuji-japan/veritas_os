@@ -5,14 +5,11 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import os
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-# Set test API key before importing server
 _TEST_KEY = "coverage-test-key-12345"
-os.environ["VERITAS_API_KEY"] = _TEST_KEY
 _AUTH = {"X-API-Key": _TEST_KEY}
 
 import pytest
@@ -20,15 +17,19 @@ from fastapi.testclient import TestClient
 
 import veritas_os.api.server as server
 
-client = TestClient(server.app)
-
-
 @pytest.fixture(autouse=True)
 def _reset_rate_bucket(monkeypatch):
+    """Reset mutable auth/rate-limit state between tests."""
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_KEY)
     server._rate_bucket.clear()
     yield
     server._rate_bucket.clear()
+
+
+@pytest.fixture
+def client():
+    """Provide an isolated FastAPI test client."""
+    return TestClient(server.app)
 
 
 # ----------------------------------------------------------------

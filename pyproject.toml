@@ -40,6 +40,14 @@ dependencies = [
   "psutil==6.0.0",
 ]
 
+
+[project.optional-dependencies]
+test = [
+  "pytest==9.0.2",
+  "pytest-asyncio==0.24.0",
+  "anyio==4.10.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/veritasfuji-japan/veritas_os"
 Repository = "https://github.com/veritasfuji-japan/veritas_os"
