@@ -83,3 +83,7 @@ coverage.json
 htmlcov/
 test-reports/
 coverage-html/
+
+# Build artifacts
+*.egg-info/
+uv.lock
