@@ -19,7 +19,8 @@
       "@/*": ["./*"],
       "@veritas/design-system": ["../packages/design-system/src/index.ts"],
       "@veritas/types": ["../packages/types/src/index.ts"]
-    }
+    },
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
