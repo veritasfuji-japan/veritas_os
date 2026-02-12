@@ -83,20 +83,11 @@ jobs:
           set -euxo pipefail
           python -m pip install --upgrade pip
 
-          # requirements があれば優先して入れる
-          if [ -f requirements.txt ]; then
-            python -m pip install -r requirements.txt
-          fi
-          if [ -f requirements-dev.txt ]; then
-            python -m pip install -r requirements-dev.txt
-          fi
+          # プロジェクト依存をインストール
+          python -m pip install -r veritas_os/requirements.txt
 
-          # CIでテスト収集(import)が落ちないための最低限を強制補完
+          # テスト用追加パッケージ
           python -m pip install \
-            requests \
-            fastapi \
-            "pydantic>=2" \
-            numpy \
             httpx \
             anyio \
             pytest \
@@ -112,7 +103,7 @@ jobs:
 
           pytest -q veritas_os/tests \
             --cov=veritas_os \
-            --cov-config=.coveragerc \
+            --cov-config=veritas_os/tests/.coveragerc \
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
