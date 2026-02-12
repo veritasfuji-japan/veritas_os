@@ -300,14 +300,13 @@ class TestRunDebateStageNonFast:
         """debate.run_debate succeeds → chosen from debate result."""
         from veritas_os.core import kernel_stages
 
-        mock_debate = MagicMock()
-        mock_debate.run_debate.return_value = {
+        mock_return = {
             "chosen": {"id": "d1", "title": "Debated"},
             "options": [{"id": "d1", "title": "Debated", "score": 2.0}],
             "source": "openai_llm",
         }
 
-        with patch.dict("sys.modules", {"veritas_os.core.debate": mock_debate}):
+        with patch("veritas_os.core.debate.run_debate", return_value=mock_return):
             alts = [{"id": "1", "title": "A", "score": 1.0}]
             result = kernel_stages.run_debate_stage(
                 query="test", alternatives=alts, context={"user_id": "u1"}, fast_mode=False,
@@ -321,10 +320,7 @@ class TestRunDebateStageNonFast:
         """debate.run_debate raises → fallback picks max score."""
         from veritas_os.core import kernel_stages
 
-        mock_debate = MagicMock()
-        mock_debate.run_debate.side_effect = RuntimeError("LLM unavailable")
-
-        with patch.dict("sys.modules", {"veritas_os.core.debate": mock_debate}):
+        with patch("veritas_os.core.debate.run_debate", side_effect=RuntimeError("LLM unavailable")):
             alts = [
                 {"id": "1", "title": "Low", "score": 0.3},
                 {"id": "2", "title": "High", "score": 0.9},
@@ -340,10 +336,7 @@ class TestRunDebateStageNonFast:
         """debate.run_debate raises with empty alts → fallback option created."""
         from veritas_os.core import kernel_stages
 
-        mock_debate = MagicMock()
-        mock_debate.run_debate.side_effect = RuntimeError("fail")
-
-        with patch.dict("sys.modules", {"veritas_os.core.debate": mock_debate}):
+        with patch("veritas_os.core.debate.run_debate", side_effect=RuntimeError("fail")):
             result = kernel_stages.run_debate_stage(
                 query="test", alternatives=[], context={}, fast_mode=False,
             )
@@ -484,34 +477,32 @@ class TestUpdatePersonaAndGoalsFull:
 
 class TestSaveEpisodeToMemoryFull:
 
-    def test_mem_put_success(self):
+    @patch("veritas_os.core.memory.MEM")
+    def test_mem_put_success(self, mock_mem_store):
         """MEM.put(episodic, ...) succeeds → True."""
         from veritas_os.core import kernel_stages
 
-        mock_mem = MagicMock()
-        mock_mem.MEM = MagicMock()
-        mock_mem.MEM.put = MagicMock()
+        mock_mem_store.put = MagicMock()
 
-        with patch.dict("sys.modules", {"veritas_os.core.memory": mock_mem}):
-            result = kernel_stages.save_episode_to_memory(
-                query="test query",
-                chosen={"id": "1", "title": "chosen"},
-                context={"user_id": "u1", "request_id": "r1"},
-                intent="plan",
-                mode="normal",
-                telos_score=0.5,
-            )
+        result = kernel_stages.save_episode_to_memory(
+            query="test query",
+            chosen={"id": "1", "title": "chosen"},
+            context={"user_id": "u1", "request_id": "r1"},
+            intent="plan",
+            mode="normal",
+            telos_score=0.5,
+        )
 
         assert result is True
-        mock_mem.MEM.put.assert_called_once()
-        args = mock_mem.MEM.put.call_args
+        mock_mem_store.put.assert_called_once()
+        args = mock_mem_store.put.call_args
         assert args[0][0] == "episodic"
 
-    def test_mem_put_typeerror_fallback(self):
+    @patch("veritas_os.core.memory.MEM")
+    def test_mem_put_typeerror_fallback(self, mock_mem_store):
         """MEM.put(episodic, ...) raises TypeError → fallback 3-arg call."""
         from veritas_os.core import kernel_stages
 
-        mock_mem = MagicMock()
         call_count = 0
 
         def put_side_effect(*args, **kwargs):
@@ -521,56 +512,35 @@ class TestSaveEpisodeToMemoryFull:
                 raise TypeError("put() takes 3 positional arguments")
             return None
 
-        mock_mem.MEM = MagicMock()
-        mock_mem.MEM.put = MagicMock(side_effect=put_side_effect)
+        mock_mem_store.put = MagicMock(side_effect=put_side_effect)
 
-        with patch.dict("sys.modules", {"veritas_os.core.memory": mock_mem}):
-            result = kernel_stages.save_episode_to_memory(
-                query="test",
-                chosen={"id": "1", "title": "t"},
-                context={"user_id": "u1", "request_id": "r1"},
-                intent="test",
-                mode="fast",
-                telos_score=0.5,
-            )
+        result = kernel_stages.save_episode_to_memory(
+            query="test",
+            chosen={"id": "1", "title": "t"},
+            context={"user_id": "u1", "request_id": "r1"},
+            intent="test",
+            mode="fast",
+            telos_score=0.5,
+        )
 
         assert result is True
-        assert mock_mem.MEM.put.call_count == 2
+        assert mock_mem_store.put.call_count == 2
 
-    def test_mem_import_exception_returns_false(self):
-        """If memory module import fails → returns False."""
-        from veritas_os.core import kernel_stages
-
-        # Make import of memory fail
-        with patch.dict("sys.modules", {"veritas_os.core.memory": None}):
-            result = kernel_stages.save_episode_to_memory(
-                query="test",
-                chosen={"id": "1", "title": "t"},
-                context={"user_id": "u1"},
-                intent="test",
-                mode="fast",
-                telos_score=0.5,
-            )
-
-        assert result is False
-
-    def test_mem_put_general_exception_returns_false(self):
+    @patch("veritas_os.core.memory.MEM")
+    def test_mem_put_general_exception_returns_false(self, mock_mem_store):
         """If MEM.put raises a non-TypeError exception → returns False."""
         from veritas_os.core import kernel_stages
 
-        mock_mem = MagicMock()
-        mock_mem.MEM = MagicMock()
-        mock_mem.MEM.put = MagicMock(side_effect=ConnectionError("lost"))
+        mock_mem_store.put = MagicMock(side_effect=ConnectionError("lost"))
 
-        with patch.dict("sys.modules", {"veritas_os.core.memory": mock_mem}):
-            result = kernel_stages.save_episode_to_memory(
-                query="test",
-                chosen={"id": "1", "title": "t"},
-                context={"user_id": "u1"},
-                intent="test",
-                mode="fast",
-                telos_score=0.5,
-            )
+        result = kernel_stages.save_episode_to_memory(
+            query="test",
+            chosen={"id": "1", "title": "t"},
+            context={"user_id": "u1"},
+            intent="test",
+            mode="fast",
+            telos_score=0.5,
+        )
 
         assert result is False
 
