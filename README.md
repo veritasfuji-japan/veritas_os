@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md)
+[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 
@@ -269,6 +269,8 @@ make test PYTHON_VERSION=3.11
 
 * GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix.
 * Coverage artifacts are stored as **XML/HTML** outputs.
+* CI enforces a minimum coverage gate (`--cov-fail-under`) currently set to **85%**.
+* The coverage badge is currently a documentation snapshot value from `docs/COVERAGE_REPORT.md` (planned: automatic update from CI artifacts).
 * The CI job fails if tests fail, acting as a quality gate.
 
 ## Security Notes (Important)

@@ -67,6 +67,7 @@ jobs:
       PIP_NO_PYTHON_VERSION_WARNING: "1"
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
+      COVERAGE_FAIL_UNDER: "85"
 
     steps:
       - name: Checkout
@@ -116,7 +117,7 @@ jobs:
             --cov-report=term-missing \
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
-            --cov-fail-under=40 \
+            --cov-fail-under=${COVERAGE_FAIL_UNDER} \
             --junitxml=test-reports/pytest.xml \
             --tb=short
 
