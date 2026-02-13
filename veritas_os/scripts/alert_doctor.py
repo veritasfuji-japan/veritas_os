@@ -168,7 +168,7 @@ def run_heal():
 
     # ★ セキュリティ修正: パスを厳密に検証
     if not _validate_heal_script_path(HEAL_SCRIPT):
-        msg = f"Security check failed: heal.sh path validation failed"
+        msg = "Security check failed: heal.sh path validation failed"
         print(f"🚫 {msg}")
         return False, msg
 
