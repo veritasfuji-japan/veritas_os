@@ -46,7 +46,7 @@ import re
 import time
 import ipaddress
 import socket
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 
 import requests
@@ -92,6 +92,9 @@ WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower()
     for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")
     if host.strip()
+}
+SSRF_DENY_IPS = {
+    ipaddress.ip_address("169.254.169.254"),  # cloud metadata endpoint
 }
 
 logger = logging.getLogger(__name__)
@@ -227,17 +230,26 @@ def _extract_hostname(url: str) -> str:
     return (host or "").lower()
 
 
-def _is_private_or_local_host(hostname: str) -> bool:
-    """ホストが localhost / private / loopback / link-local かを判定する。"""
+def _is_private_or_local_host(hostname: str) -> Tuple[bool, str]:
+    """
+    ホストが SSRF 的に危険かどうかを判定する。
+
+    Returns:
+        tuple[bool, str]:
+            - bool: 危険ホストなら True
+            - str: 判定理由（構造化ログ用）
+    """
     host = (hostname or "").strip().lower()
     if not host:
-        return True
+        return True, "empty_host"
 
     if host in {"localhost", "localhost.localdomain"}:
-        return True
+        return True, "localhost"
 
     try:
         ip = ipaddress.ip_address(host)
+        if ip in SSRF_DENY_IPS:
+            return True, "explicit_deny_ip"
         return (
             ip.is_private
             or ip.is_loopback
@@ -245,15 +257,15 @@ def _is_private_or_local_host(hostname: str) -> bool:
             or ip.is_multicast
             or ip.is_reserved
             or ip.is_unspecified
-        )
+        ), "direct_ip_scope"
     except ValueError:
         pass
 
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        # 解決不能なホストは接続失敗になるため、ここでは SSRF 判定対象外。
-        return False
+        # DNS 解決不能ホストは再バインド等の監視対象として拒否。
+        return True, "dns_unresolved"
 
     for info in infos:
         ip_text = info[4][0]
@@ -261,6 +273,8 @@ def _is_private_or_local_host(hostname: str) -> bool:
             ip = ipaddress.ip_address(ip_text)
         except ValueError:
             continue
+        if ip in SSRF_DENY_IPS:
+            return True, "resolved_deny_ip"
         if (
             ip.is_private
             or ip.is_loopback
@@ -269,23 +283,44 @@ def _is_private_or_local_host(hostname: str) -> bool:
             or ip.is_reserved
             or ip.is_unspecified
         ):
+            return True, "resolved_private_scope"
+    return False, "ok"
+
+
+def _is_allowlisted_host(host: str, allowlist: Set[str]) -> bool:
+    """allowlist の完全一致または `*.example.com` 形式の前方ワイルドカード一致を許可する。"""
+    if not allowlist:
+        return True
+
+    host = (host or "").lower()
+    for allowed in allowlist:
+        candidate = allowed.strip().lower()
+        if not candidate:
+            continue
+        if candidate.startswith("*."):
+            suffix = candidate[1:]
+            if host.endswith(suffix):
+                return True
+        elif host == candidate:
             return True
     return False
 
 
-def _is_allowed_websearch_url(url: str) -> bool:
+def _validate_websearch_url(url: str) -> Tuple[bool, str]:
     """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。"""
     parsed = urlparse((url or "").strip())
     if parsed.scheme not in ("http", "https"):
-        return False
+        return False, "invalid_scheme"
 
     host = (parsed.hostname or "").lower()
-    if _is_private_or_local_host(host):
-        return False
+    blocked, reason = _is_private_or_local_host(host)
+    if blocked:
+        return False, f"host_blocked:{reason}"
 
-    if WEBSEARCH_HOST_ALLOWLIST:
-        return host in WEBSEARCH_HOST_ALLOWLIST
-    return True
+    if not _is_allowlisted_host(host, WEBSEARCH_HOST_ALLOWLIST):
+        return False, "host_not_allowlisted"
+
+    return True, "ok"
 
 
 def _is_agi_query(q: str) -> bool:
@@ -452,8 +487,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             },
         }
 
-    if not _is_allowed_websearch_url(WEBSEARCH_URL):
-        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
+    url_allowed, reject_reason = _validate_websearch_url(WEBSEARCH_URL)
+    if not url_allowed:
+        logger.warning(
+            "WEBSEARCH_URL blocked by SSRF guard url=%s reason=%s",
+            WEBSEARCH_URL,
+            reject_reason,
+        )
         return {
             "ok": False,
             "results": [],

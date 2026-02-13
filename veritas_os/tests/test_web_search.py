@@ -278,3 +278,60 @@ def test_web_search_handles_request_exception(monkeypatch) -> None:
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
 
+
+def test_validate_websearch_url_rejects_metadata_ip() -> None:
+    """メタデータIPは SSRF guard で拒否されること。"""
+    allowed, reason = web_search_mod._validate_websearch_url("http://169.254.169.254")
+
+    assert allowed is False
+    assert "host_blocked" in reason
+
+
+def test_validate_websearch_url_rejects_unresolved_host() -> None:
+    """DNS 解決不能なホストは安全側に倒して拒否する。"""
+    allowed, reason = web_search_mod._validate_websearch_url(
+        "https://no-such-host.invalid"
+    )
+
+    assert allowed is False
+    assert reason == "host_blocked:dns_unresolved"
+
+
+def test_validate_websearch_url_allowlist_supports_wildcard(monkeypatch) -> None:
+    """allowlist は *.example.com 形式のワイルドカードを許容する。"""
+    monkeypatch.setattr(
+        web_search_mod,
+        "WEBSEARCH_HOST_ALLOWLIST",
+        {"*.example.com"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        web_search_mod.socket,
+        "getaddrinfo",
+        lambda *_: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    allowed, reason = web_search_mod._validate_websearch_url("https://api.example.com")
+
+    assert allowed is True
+    assert reason == "ok"
+
+
+def test_validate_websearch_url_rejects_non_allowlisted_host(monkeypatch) -> None:
+    """allowlist 指定時は未許可ホストを拒否する。"""
+    monkeypatch.setattr(
+        web_search_mod,
+        "WEBSEARCH_HOST_ALLOWLIST",
+        {"search.example.com"},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        web_search_mod.socket,
+        "getaddrinfo",
+        lambda *_: [(None, None, None, None, ("93.184.216.34", 0))],
+    )
+
+    allowed, reason = web_search_mod._validate_websearch_url("https://api.example.com")
+
+    assert allowed is False
+    assert reason == "host_not_allowlisted"
