@@ -8,17 +8,14 @@ import json
 import random
 from collections import Counter
 from pathlib import Path
-
-import joblib
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from typing import Iterable
 
 print("[memory_train] running file:", __file__)
 
 # ▼ ここを修正：VERITAS_DIR を「このリポジトリ」にする
 #   .../veritas_clean_test2/veritas_os/scripts/memory_train.py
 #   という位置にある前提で、1つ上が repo root
-REPO_ROOT   = Path(__file__).resolve().parents[1]   # .../veritas_os
+REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 VERITAS_DIR = REPO_ROOT
 
 # データセット置き場（リポジトリ内）
@@ -27,7 +24,7 @@ DATASET_DIR.mkdir(parents=True, exist_ok=True)
 
 DATA_DIRS = [
     DATASET_DIR,
-    VERITAS_DIR / "scripts" / "logs",   # 必要なら使う
+    VERITAS_DIR / "scripts" / "logs",  # 必要なら使う
 ]
 
 # ▼ モデルの保存先もリポジトリ内 core/models に統一
@@ -35,8 +32,51 @@ MODEL_PATH = VERITAS_DIR / "core" / "models"
 MODEL_PATH.mkdir(parents=True, exist_ok=True)
 
 
+def _normalize_record(item: dict[str, object]) -> tuple[str, str] | None:
+    """Normalize one raw dataset item into a `(text, label)` pair."""
+    text = (
+        item.get("input")
+        or item.get("prompt")
+        or item.get("text")
+        or item.get("query")
+    )
+    label = item.get("decision") or item.get("label") or item.get("output")
+
+    if not isinstance(text, str) or not isinstance(label, str):
+        return None
+
+    label_norm = label.strip().lower()
+    if label_norm not in {"allow", "modify", "deny"}:
+        return None
+
+    return text.strip(), label_norm
+
+
+def _iter_payloads(file_path: Path) -> Iterable[dict[str, object]]:
+    """Yield dict payload records from a JSON or JSONL dataset file."""
+    with file_path.open("r", encoding="utf-8") as handle:
+        if file_path.suffix == ".jsonl":
+            for line in handle:
+                if not line.strip():
+                    continue
+                payload = json.loads(line)
+                if isinstance(payload, dict):
+                    yield payload
+            return
+
+        loaded = json.load(handle)
+        if isinstance(loaded, list):
+            for payload in loaded:
+                if isinstance(payload, dict):
+                    yield payload
+            return
+
+        if isinstance(loaded, dict):
+            yield loaded
+
+
 def load_decision_data() -> list[tuple[str, str]]:
-    """Load labeled decision records from JSON/JSONL files.
+    """Load labeled decision records from local JSON/JSONL files.
 
     This loader scans each directory configured in ``DATA_DIRS`` and parses
     ``*.json``/``*.jsonl`` files with multiple schema variants used by legacy
@@ -51,49 +91,28 @@ def load_decision_data() -> list[tuple[str, str]]:
             continue
 
         for pattern in patterns:
-            for file_path in glob.glob(str(data_dir / pattern)):
+            for raw_path in glob.glob(str(data_dir / pattern)):
+                file_path = Path(raw_path)
                 try:
-                    with open(file_path, "r", encoding="utf-8") as handle:
-                        if file_path.endswith(".jsonl"):
-                            payloads = [
-                                json.loads(line)
-                                for line in handle
-                                if line.strip()
-                            ]
-                        else:
-                            loaded = json.load(handle)
-                            payloads = loaded if isinstance(loaded, list) else [loaded]
+                    for item in _iter_payloads(file_path):
+                        record = _normalize_record(item)
+                        if record is not None:
+                            records.append(record)
                 except (OSError, json.JSONDecodeError) as exc:
                     print(f"⚠️ skipped invalid dataset file: {file_path} ({exc})")
                     continue
-
-                for item in payloads:
-                    if not isinstance(item, dict):
-                        continue
-
-                    text = (
-                        item.get("input")
-                        or item.get("prompt")
-                        or item.get("text")
-                        or item.get("query")
-                    )
-                    label = (
-                        item.get("decision")
-                        or item.get("label")
-                        or item.get("output")
-                    )
-                    if isinstance(text, str) and isinstance(label, str):
-                        label_norm = label.strip().lower()
-                        if label_norm in {"allow", "modify", "deny"}:
-                            records.append((text.strip(), label_norm))
 
     print(f"[memory_train] loaded records: {len(records)}")
     return records
 
 
-def train_memory_model(data):
-    from sklearn.utils.class_weight import compute_class_weight
+def train_memory_model(data: list[tuple[str, str]]) -> None:
+    """Train and persist the MemoryOS classifier from labeled records."""
+    import joblib
     import numpy as np
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.utils.class_weight import compute_class_weight
 
     print(f"[DEBUG] train_memory_model: received {len(data)} records")
     print("[memory_train] enter: len(data) =", len(data))
@@ -114,11 +133,11 @@ def train_memory_model(data):
     counts = Counter(y for _, y in data)
     min_ok = max(211, min(counts.values()))
     by_label = {"allow": [], "modify": [], "deny": []}
-    for x, y in data:
-        by_label[y].append((x, y))
+    for text, label in data:
+        by_label[label].append((text, label))
 
     balanced = []
-    for lbl, items in by_label.items():
+    for _, items in by_label.items():
         if not items:
             continue
         need = max(0, min_ok - len(items))
@@ -132,23 +151,23 @@ def train_memory_model(data):
 
     print("Class counts (after rebalance):", Counter(y for _, y in balanced))
 
-    X_texts, y = zip(*balanced)
-    X_texts = [str(t) for t in X_texts]
+    x_texts, y = zip(*balanced)
+    x_texts = [str(text) for text in x_texts]
 
     classes = np.array(["allow", "modify", "deny"])
     weights = compute_class_weight(class_weight="balanced", classes=classes, y=list(y))
-    class_weight = {c: w for c, w in zip(classes, weights)}
+    class_weight = {label: weight for label, weight in zip(classes, weights)}
     print("[DEBUG] computed class_weight:", class_weight)
 
     vec = TfidfVectorizer(max_features=4000, ngram_range=(1, 2))
-    X = vec.fit_transform(X_texts)
+    x_matrix = vec.fit_transform(x_texts)
 
     clf = LogisticRegression(
         max_iter=400,
         class_weight=class_weight,
         n_jobs=None,
     )
-    clf.fit(X, y)
+    clf.fit(x_matrix, y)
 
     joblib.dump((vec, clf), MODEL_PATH / "memory_model.pkl")
     print(f"✅ model saved → {MODEL_PATH}/memory_model.pkl")
