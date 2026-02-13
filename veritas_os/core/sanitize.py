@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import re
+import ipaddress
 from dataclasses import dataclass
 from typing import List, Dict, Any, Callable, Optional
 
@@ -298,6 +299,19 @@ def _is_likely_ip(match: str) -> bool:
         return False
 
 
+def _is_likely_ipv6(match: str) -> bool:
+    """Validate IPv6 candidates to reduce false positives."""
+    # Bare "::" is a valid IPv6 notation but often appears as punctuation.
+    if match == "::":
+        return False
+
+    try:
+        ipaddress.IPv6Address(match)
+    except ipaddress.AddressValueError:
+        return False
+    return True
+
+
 # =============================================================================
 # PII検出エンジン
 # =============================================================================
@@ -357,7 +371,7 @@ class PIIDetector:
 
             # IPアドレス
             ("ipv4", RE_IPV4, "IPアドレス", lambda m, _: _is_likely_ip(m), 0.75),
-            ("ipv6", RE_IPV6, "IPアドレス", None, 0.80),
+            ("ipv6", RE_IPV6, "IPアドレス", lambda m, _: _is_likely_ipv6(m), 0.80),
 
             # パスポート
             ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
