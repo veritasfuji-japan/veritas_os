@@ -482,6 +482,19 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             return obj
         return {"steps": []}
 
+    def _decode_first_json_value(text: str) -> Any:
+        """Extract and decode the first JSON value found in free-form text."""
+        decoder = json.JSONDecoder()
+        for i, ch in enumerate(text):
+            if ch not in "[{":
+                continue
+            try:
+                obj, _ = decoder.raw_decode(text, idx=i)
+                return obj
+            except json.JSONDecodeError:
+                continue
+        return None
+
     # 1) そのまま
     try:
         obj = json.loads(cleaned)
@@ -489,7 +502,14 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     except Exception:
         logger.debug("planner JSON parse attempt 1 (raw) failed")
 
-    # 2) {} 抜き出し
+    # 1.5) 先頭ノイズ付きの JSON を raw_decode で救済
+    obj = _decode_first_json_value(cleaned)
+    if isinstance(obj, list):
+        return _wrap_if_needed(obj)
+    if isinstance(obj, dict) and "steps" in obj:
+        return _wrap_if_needed(obj)
+
+    # 2) {} 抜き出し（旧来互換の救済）
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
