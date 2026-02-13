@@ -23,6 +23,18 @@ class ObjModelDump:
         return {"a": 1, "b": None} if not exclude_none else {"a": 1}
 
 
+class DecideReqModelDump:
+    """Lightweight request test-double for run_decide_pipeline."""
+
+    def model_dump(self, exclude_none=True):
+        del exclude_none
+        return {
+            "query": "自然言語クエリ",
+            "context": {"user_id": "u1"},
+            "fast": True,
+        }
+
+
 class ObjDict:
     def dict(self):
         return {"x": 2}
@@ -406,12 +418,9 @@ async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(
     monkeypatch.setattr(p, "call_core_decide", _fake_call_core_decide)
     monkeypatch.setattr(p.self_healing, "is_healing_enabled", lambda _ctx: True)
     monkeypatch.setattr(p, "append_trust_log", lambda *_a, **_k: None)
+    monkeypatch.setattr(p, "_check_required_modules", lambda: None)
 
-    req = ObjModelDump()
-    req.model_dump = lambda exclude_none=True: {
-        "query": "自然言語クエリ",
-        "context": {"user_id": "u1"},
-    }
+    req = DecideReqModelDump()
 
     out = await p.run_decide_pipeline(
         req=req,
