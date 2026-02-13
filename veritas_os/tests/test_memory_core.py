@@ -385,10 +385,13 @@ def test_distill_memory_for_user_success(monkeypatch):
     monkeypatch.setattr(memory, "MEM", EpisodicStore())
 
     # 2) llm_client.chat_completion をダミーに
-    def fake_chat_completion(system: str = None, user: str = None, 
-**kwargs):
+    def fake_chat_completion(
+        system_prompt: str = None,
+        user_prompt: str = None,
+        **kwargs,
+    ):
         # distill がちゃんとプロンプトを渡してきているか軽く確認
-        assert "VERITAS" in (user or "")
+        assert "VERITAS" in (user_prompt or "")
         return {"text": "SUMMARY: VERITAS と労働紛争の要約テキスト"}
 
     monkeypatch.setattr(

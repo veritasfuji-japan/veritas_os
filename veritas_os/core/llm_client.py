@@ -565,6 +565,19 @@ def chat_local(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]
     )
 
 
+def chat_completion(
+    system_prompt: str,
+    user_prompt: str,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Single, stable boundary for all internal LLM calls.
+
+    This compatibility alias exists so internal modules can consistently call
+    one function name (`chat_completion`) even if implementation details evolve.
+    """
+    return chat(system_prompt=system_prompt, user_prompt=user_prompt, **kwargs)
+
+
 __all__ = [
     "LLMProvider",
     "LLMError",
@@ -574,4 +587,5 @@ __all__ = [
     "chat_claude",
     "chat_gemini",
     "chat_local",
+    "chat_completion",
 ]
