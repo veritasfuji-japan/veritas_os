@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
-import os, json, glob, random
-from pathlib import Path
+import glob
+import json
+import random
 from collections import Counter
+from pathlib import Path
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -31,6 +33,62 @@ DATA_DIRS = [
 # ▼ モデルの保存先もリポジトリ内 core/models に統一
 MODEL_PATH = VERITAS_DIR / "core" / "models"
 MODEL_PATH.mkdir(parents=True, exist_ok=True)
+
+
+def load_decision_data() -> list[tuple[str, str]]:
+    """Load labeled decision records from JSON/JSONL files.
+
+    This loader scans each directory configured in ``DATA_DIRS`` and parses
+    ``*.json``/``*.jsonl`` files with multiple schema variants used by legacy
+    benchmark outputs. Only records with ``allow``/``modify``/``deny`` labels
+    are returned.
+    """
+    patterns = ["*.json", "*.jsonl"]
+    records: list[tuple[str, str]] = []
+
+    for data_dir in DATA_DIRS:
+        if not data_dir.exists():
+            continue
+
+        for pattern in patterns:
+            for file_path in glob.glob(str(data_dir / pattern)):
+                try:
+                    with open(file_path, "r", encoding="utf-8") as handle:
+                        if file_path.endswith(".jsonl"):
+                            payloads = [
+                                json.loads(line)
+                                for line in handle
+                                if line.strip()
+                            ]
+                        else:
+                            loaded = json.load(handle)
+                            payloads = loaded if isinstance(loaded, list) else [loaded]
+                except (OSError, json.JSONDecodeError) as exc:
+                    print(f"⚠️ skipped invalid dataset file: {file_path} ({exc})")
+                    continue
+
+                for item in payloads:
+                    if not isinstance(item, dict):
+                        continue
+
+                    text = (
+                        item.get("input")
+                        or item.get("prompt")
+                        or item.get("text")
+                        or item.get("query")
+                    )
+                    label = (
+                        item.get("decision")
+                        or item.get("label")
+                        or item.get("output")
+                    )
+                    if isinstance(text, str) and isinstance(label, str):
+                        label_norm = label.strip().lower()
+                        if label_norm in {"allow", "modify", "deny"}:
+                            records.append((text.strip(), label_norm))
+
+    print(f"[memory_train] loaded records: {len(records)}")
+    return records
 
 
 def train_memory_model(data):
@@ -95,9 +153,6 @@ def train_memory_model(data):
     joblib.dump((vec, clf), MODEL_PATH / "memory_model.pkl")
     print(f"✅ model saved → {MODEL_PATH}/memory_model.pkl")
 
-
-# （load_decision_data 以下はそのままでOK）
-# ...
 
 if __name__ == "__main__":
     data = load_decision_data()
