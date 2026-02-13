@@ -3,14 +3,11 @@
 
 from __future__ import annotations
 
-import glob
 import json
 import random
 from collections import Counter
 from pathlib import Path
 from typing import Iterable
-
-print("[memory_train] running file:", __file__)
 
 # ▼ ここを修正：VERITAS_DIR を「このリポジトリ」にする
 #   .../veritas_clean_test2/veritas_os/scripts/memory_train.py
@@ -30,6 +27,17 @@ DATA_DIRS = [
 # ▼ モデルの保存先もリポジトリ内 core/models に統一
 MODEL_PATH = VERITAS_DIR / "core" / "models"
 MODEL_PATH.mkdir(parents=True, exist_ok=True)
+
+
+def _iter_dataset_files(data_dir: Path, patterns: list[str]) -> Iterable[Path]:
+    """Yield dataset files in deterministic path order for stable training."""
+    matched: list[Path] = []
+    for pattern in patterns:
+        matched.extend(data_dir.glob(pattern))
+
+    for file_path in sorted(matched):
+        if file_path.is_file():
+            yield file_path
 
 
 def _normalize_record(item: dict[str, object]) -> tuple[str, str] | None:
@@ -90,17 +98,15 @@ def load_decision_data() -> list[tuple[str, str]]:
         if not data_dir.exists():
             continue
 
-        for pattern in patterns:
-            for raw_path in glob.glob(str(data_dir / pattern)):
-                file_path = Path(raw_path)
-                try:
-                    for item in _iter_payloads(file_path):
-                        record = _normalize_record(item)
-                        if record is not None:
-                            records.append(record)
-                except (OSError, json.JSONDecodeError) as exc:
-                    print(f"⚠️ skipped invalid dataset file: {file_path} ({exc})")
-                    continue
+        for file_path in _iter_dataset_files(data_dir, patterns):
+            try:
+                for item in _iter_payloads(file_path):
+                    record = _normalize_record(item)
+                    if record is not None:
+                        records.append(record)
+            except (OSError, json.JSONDecodeError) as exc:
+                print(f"⚠️ skipped invalid dataset file: {file_path} ({exc})")
+                continue
 
     print(f"[memory_train] loaded records: {len(records)}")
     return records

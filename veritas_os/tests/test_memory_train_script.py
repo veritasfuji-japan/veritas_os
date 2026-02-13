@@ -66,6 +66,32 @@ class MemoryTrainScriptTests(unittest.TestCase):
             ],
         )
 
+    def test_load_decision_data_uses_deterministic_file_order(self):
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            (tmp_path / "z_records.json").write_text(
+                json.dumps([{"input": "Z first by create", "decision": "allow"}]),
+                encoding="utf-8",
+            )
+
+            (tmp_path / "a_records.json").write_text(
+                json.dumps([{"input": "A second by create", "decision": "deny"}]),
+                encoding="utf-8",
+            )
+
+            module.DATA_DIRS = [tmp_path]
+            loaded = module.load_decision_data()
+
+        self.assertEqual(
+            loaded,
+            [
+                ("A second by create", "deny"),
+                ("Z first by create", "allow"),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
