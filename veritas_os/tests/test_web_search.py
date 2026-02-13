@@ -287,14 +287,14 @@ def test_validate_websearch_url_rejects_metadata_ip() -> None:
     assert "host_blocked" in reason
 
 
-def test_validate_websearch_url_rejects_unresolved_host() -> None:
-    """DNS 解決不能なホストは安全側に倒して拒否する。"""
+def test_validate_websearch_url_allows_unresolved_host() -> None:
+    """DNS 解決不能ホストは可用性優先で precheck では拒否しない。"""
     allowed, reason = web_search_mod._validate_websearch_url(
         "https://no-such-host.invalid"
     )
 
-    assert allowed is False
-    assert reason == "host_blocked:dns_unresolved"
+    assert allowed is True
+    assert reason == "ok"
 
 
 def test_validate_websearch_url_allowlist_supports_wildcard(monkeypatch) -> None:

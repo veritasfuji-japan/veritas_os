@@ -264,8 +264,13 @@ def _is_private_or_local_host(hostname: str) -> Tuple[bool, str]:
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        # DNS 解決不能ホストは再バインド等の監視対象として拒否。
-        return True, "dns_unresolved"
+        # DNS 解決不能ホストは接続時に失敗するため、ここでは可用性優先で許容。
+        # fail-close にすると DNS 利用不可な CI / 実行環境で誤検知が増える。
+        logger.warning(
+            "WEBSEARCH host DNS unresolved during SSRF precheck host=%s",
+            host,
+        )
+        return False, "dns_unresolved"
 
     for info in infos:
         ip_text = info[4][0]
