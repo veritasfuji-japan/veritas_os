@@ -197,15 +197,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: pnpm -F frontend exec playwright install --with-deps chromium chromium-headless-shell
 
       - name: Build frontend
         run: pnpm ui:build
 
       - name: Run E2E tests
-        working-directory: frontend
-        run: npx playwright test
+        run: pnpm -F frontend e2e
 
       - name: Upload Playwright report
         if: always()
