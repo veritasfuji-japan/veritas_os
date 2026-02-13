@@ -44,6 +44,8 @@ import os
 import random
 import re
 import time
+import ipaddress
+import socket
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -86,6 +88,11 @@ WEBSEARCH_RETRY_MAX_DELAY = _safe_float(
     "VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0
 )
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
+WEBSEARCH_HOST_ALLOWLIST = {
+    host.strip().lower()
+    for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")
+    if host.strip()
+}
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +225,67 @@ def _extract_hostname(url: str) -> str:
         parsed = urlparse(f"http://{candidate}")
         host = parsed.hostname
     return (host or "").lower()
+
+
+def _is_private_or_local_host(hostname: str) -> bool:
+    """ホストが localhost / private / loopback / link-local かを判定する。"""
+    host = (hostname or "").strip().lower()
+    if not host:
+        return True
+
+    if host in {"localhost", "localhost.localdomain"}:
+        return True
+
+    try:
+        ip = ipaddress.ip_address(host)
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        )
+    except ValueError:
+        pass
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        # 解決不能なホストは接続失敗になるため、ここでは SSRF 判定対象外。
+        return False
+
+    for info in infos:
+        ip_text = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_text)
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
+            return True
+    return False
+
+
+def _is_allowed_websearch_url(url: str) -> bool:
+    """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。"""
+    parsed = urlparse((url or "").strip())
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    host = (parsed.hostname or "").lower()
+    if _is_private_or_local_host(host):
+        return False
+
+    if WEBSEARCH_HOST_ALLOWLIST:
+        return host in WEBSEARCH_HOST_ALLOWLIST
+    return True
 
 
 def _is_agi_query(q: str) -> bool:
@@ -368,6 +436,24 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     raw_query = _RE_CONTROL_CHARS.sub("", raw_query)
 
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
+        return {
+            "ok": False,
+            "results": [],
+            "error": "WEBSEARCH_API unavailable",
+            "meta": {
+                "raw_count": 0,
+                "agi_filter_applied": False,
+                "agi_result_count": None,
+                "boosted_query": None,
+                "final_query": raw_query,
+                "anchor_applied": False,
+                "blacklist_applied": False,
+                "blocked_count": 0,
+            },
+        }
+
+    if not _is_allowed_websearch_url(WEBSEARCH_URL):
+        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
         return {
             "ok": False,
             "results": [],
@@ -566,4 +652,3 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 "blocked_count": 0,
             },
         }
-

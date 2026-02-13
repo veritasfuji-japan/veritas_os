@@ -309,3 +309,57 @@ class TestLooksAgiResultExtended:
             "artificial general intelligence capabilities",
             "https://research.example.com"
         ) is True
+
+
+class TestWebSearchSsrfGuard:
+    """Tests for SSRF guard helpers and endpoint validation."""
+
+    def test_private_ip_host_is_blocked(self):
+        assert web_search_mod._is_private_or_local_host("127.0.0.1") is True
+        assert web_search_mod._is_private_or_local_host("10.0.0.1") is True
+        assert web_search_mod._is_private_or_local_host("169.254.169.254") is True
+
+    def test_public_ip_host_is_allowed(self):
+        assert web_search_mod._is_private_or_local_host("8.8.8.8") is False
+
+    def test_allowlist_blocks_non_listed_host(self, monkeypatch):
+        monkeypatch.setattr(
+            web_search_mod,
+            "WEBSEARCH_HOST_ALLOWLIST",
+            {"api.allowed.example"},
+            raising=False,
+        )
+        assert (
+            web_search_mod._is_allowed_websearch_url(
+                "https://api.denied.example/search"
+            )
+            is False
+        )
+
+    def test_allowlist_allows_listed_host(self, monkeypatch):
+        monkeypatch.setattr(
+            web_search_mod,
+            "WEBSEARCH_HOST_ALLOWLIST",
+            {"api.allowed.example"},
+            raising=False,
+        )
+        assert (
+            web_search_mod._is_allowed_websearch_url(
+                "https://api.allowed.example/search"
+            )
+            is True
+        )
+
+    def test_web_search_returns_unavailable_for_blocked_endpoint(self, monkeypatch):
+        monkeypatch.setattr(
+            web_search_mod,
+            "WEBSEARCH_URL",
+            "http://127.0.0.1:8000/search",
+            raising=False,
+        )
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy", raising=False)
+
+        resp = web_search_mod.web_search("test query")
+
+        assert resp["ok"] is False
+        assert resp["error"] == "WEBSEARCH_API unavailable"
