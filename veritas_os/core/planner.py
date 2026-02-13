@@ -554,6 +554,10 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
                         buf_start = i
                     depth += 1
                 elif ch == "}":
+                    if depth == 0:
+                        # 先頭側の壊れた `}` を無視して復旧可能性を維持する
+                        i += 1
+                        continue
                     depth -= 1
                     if depth == 0 and buf_start is not None:
                         obj_str = text[buf_start : i + 1]
@@ -1258,4 +1262,3 @@ def generate_plan(
     )
 
     return steps
-

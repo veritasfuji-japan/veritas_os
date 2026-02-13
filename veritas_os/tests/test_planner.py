@@ -138,6 +138,13 @@ def test_safe_json_extract_recovers_from_broken_but_embedded_steps():
     assert ids == ["ok1", "ok2"]
 
 
+def test_safe_json_extract_ignores_leading_unbalanced_closing_brace():
+    raw = '} noise "steps": [{"id": "ok1"}, {"id": "ok2"}] tail'
+    obj = planner_core._safe_json_extract(raw)
+    ids = [s["id"] for s in obj["steps"]]
+    assert ids == ["ok1", "ok2"]
+
+
 # -------------------------------
 # _fallback_plan / _infer_veritas_stage / _fallback_plan_for_stage
 # -------------------------------
