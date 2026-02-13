@@ -33,6 +33,7 @@ import threading
 import time
 import os
 import re
+import unicodedata
 
 _logger = logging.getLogger(__name__)
 
@@ -176,6 +177,35 @@ _PROMPT_INJECTION_PATTERNS: List[tuple[re.Pattern[str], float, str]] = [
         "role_override",
     ),
 ]
+
+_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060]")
+_NON_ALNUM_RE = re.compile(r"[^\w\u3040-\u30ff\u4e00-\u9fff]+", re.UNICODE)
+
+# よく使われる同形異体文字（Cyrillic / Greek）の最小マップ。
+# すべてを網羅するものではないが、悪用されやすい文字を優先的に吸収する。
+_CONFUSABLE_ASCII_MAP = str.maketrans(
+    {
+        "а": "a",  # Cyrillic
+        "е": "e",  # Cyrillic
+        "і": "i",  # Cyrillic
+        "о": "o",  # Cyrillic
+        "р": "p",  # Cyrillic
+        "с": "c",  # Cyrillic
+        "у": "y",  # Cyrillic
+        "х": "x",  # Cyrillic
+        "Α": "a",  # Greek
+        "Β": "b",  # Greek
+        "Ε": "e",  # Greek
+        "Ι": "i",  # Greek
+        "Κ": "k",  # Greek
+        "Μ": "m",  # Greek
+        "Ν": "n",  # Greek
+        "Ο": "o",  # Greek
+        "Ρ": "p",  # Greek
+        "Τ": "t",  # Greek
+        "Χ": "x",  # Greek
+    }
+)
 
 
 # =========================================================
@@ -410,12 +440,40 @@ def _detect_prompt_injection(text: str) -> Dict[str, Any]:
     if not text:
         return {"score": 0.0, "signals": signals}
 
+    normalized = _normalize_injection_text(text)
+    compact = _NON_ALNUM_RE.sub("", normalized)
+
     for pattern, weight, label in _PROMPT_INJECTION_PATTERNS:
-        if pattern.search(text):
+        if pattern.search(normalized) or pattern.search(compact):
+            score += weight
+            signals.append(label)
+
+    compact_keyword_rules = (
+        ("jailbreak", 0.5, "jailbreak_keyword"),
+        ("promptinjection", 0.5, "jailbreak_keyword"),
+    )
+    for keyword, weight, label in compact_keyword_rules:
+        if keyword in compact and label not in signals:
             score += weight
             signals.append(label)
 
     return {"score": min(1.0, score), "signals": signals}
+
+
+def _normalize_injection_text(text: str) -> str:
+    """Normalize obfuscated text before prompt-injection detection.
+
+    Security note:
+        This routine is heuristic and intentionally conservative. It reduces
+        bypasses using zero-width characters, Unicode confusables, and excessive
+        spacing, but it does not provide complete protection against all prompt
+        injection variants.
+    """
+    normalized = unicodedata.normalize("NFKC", text or "")
+    normalized = _ZERO_WIDTH_RE.sub("", normalized)
+    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized.strip().lower()
 
 
 # ---------------------------------------------------------
@@ -1313,4 +1371,3 @@ __all__ = [
     "posthoc_check",
     "reload_policy",
 ]
-

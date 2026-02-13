@@ -50,10 +50,13 @@ def test_run_env_tool_non_dict_result(monkeypatch):
 def test_run_env_tool_exception(monkeypatch):
     def _boom(kind, **kw):
         raise RuntimeError("boom")
+
     monkeypatch.setattr(kernel, "call_tool", _boom)
     result = kernel.run_env_tool("web_search", query="test")
     assert result["ok"] is False
     assert "env_tool error" in result["error"]
+    assert result["error_code"] == "ENV_TOOL_EXECUTION_ERROR"
+    assert result["tool_kind"] == "web_search"
 
 
 # ============================================================

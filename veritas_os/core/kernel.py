@@ -146,10 +146,13 @@ def run_env_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         result.setdefault("results", [])
         return result
     except Exception as e:
+        error_message = f"env_tool error: {repr(e)[:200]}"
         return {
             "ok": False,
             "results": [],
-            "error": f"env_tool error: {repr(e)[:200]}",
+            "error": error_message,
+            "error_code": "ENV_TOOL_EXECUTION_ERROR",
+            "tool_kind": str(kind),
         }
 
 
