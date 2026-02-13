@@ -164,10 +164,37 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
         return False
 
     is_short = len(q) <= 40
+    question_prefixes = (
+        "what",
+        "why",
+        "when",
+        "where",
+        "who",
+        "which",
+        "how",
+        "can ",
+        "could ",
+        "should ",
+        "is ",
+        "are ",
+        "do ",
+        "does ",
+        "did ",
+    )
+    question_endings = (
+        "か",
+        "かね",
+        "かな",
+        "でしょうか",
+        "教えて",
+        "を教えて",
+        "知りたい",
+    )
     looks_question = (
         ("?" in q)
         or ("？" in q)
-        or q.endswith(("か", "かね", "かな", "でしょうか"))
+        or q_lower.startswith(question_prefixes)
+        or q.endswith(question_endings)
     )
     has_plan_words = any(
         k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
@@ -1231,5 +1258,4 @@ def generate_plan(
     )
 
     return steps
-
 
