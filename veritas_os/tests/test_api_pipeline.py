@@ -689,6 +689,9 @@ async def test_run_decide_pipeline_kernel_decide_missing_contract(monkeypatch, p
     # contract: metrics が最低限揃う
     for k in ["mem_hits", "memory_evidence_count", "web_hits", "web_evidence_count"]:
         assert k in metrics
+    assert "stage_latency" in metrics
+    for stage_name in ["retrieval", "web", "llm", "gate", "persist"]:
+        assert stage_name in metrics["stage_latency"]
 
 
 @pytest.mark.anyio
@@ -1035,7 +1038,6 @@ async def test_run_decide_pipeline_trustlog_and_shadow_exception_swallowed(monke
     assert isinstance(metrics, dict)
     assert "effective_risk" in metrics
     assert "gate" in payload
-
 
 
 

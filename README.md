@@ -212,8 +212,8 @@ Dockerfile `CMD` accordingly before building the image.
 ### Core execution path
 
 * `veritas_os/core/kernel.py` — orchestrates `/v1/decide`
-* `veritas_os/core/pipeline.py` — defines stage order + metrics
-* `veritas_os/core/llm_client.py` — **single** gateway for LLM calls
+* `veritas_os/core/pipeline.py` — defines stage order + metrics (`latency_ms` + `stage_latency`)
+* `veritas_os/core/llm_client.py` — **single** gateway for LLM calls (`chat_completion`)
 
 ### Safety & governance
 

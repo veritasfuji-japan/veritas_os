@@ -1853,76 +1853,21 @@ def distill_memory_for_user(
     prompt = _build_distill_prompt(user_id, target_eps)
     system_msg = "You are VERITAS Memory Distill module."
 
-    # 3) LLM コール (llm_client モジュールを直接叩く)
+    # 3) LLM コール（唯一の境界: llm_client.chat_completion）
     try:
-        import inspect
-
-        chat_fn = None
-        # 優先順で関数を探す
-        if hasattr(llm_client, "chat_completion"):
-            chat_fn = llm_client.chat_completion
-        elif hasattr(llm_client, "call_chat"):
-            chat_fn = llm_client.call_chat
-        elif hasattr(llm_client, "chat"):
-            chat_fn = llm_client.chat
-
-        if chat_fn is None:
-            logger.error(
-                "[MemoryDistill] llm_client has no chat function "
-                "(expected chat_completion / call_chat / chat)"
-            )
+        chat_fn = getattr(llm_client, "chat_completion", None)
+        if not callable(chat_fn):
+            logger.error("[MemoryDistill] llm_client.chat_completion not available")
             return None
+        kwargs: Dict[str, Any] = {"max_tokens": 1024}
+        if model:
+            kwargs["model"] = model
 
-        sig = inspect.signature(chat_fn)
-        param_names = list(sig.parameters.keys())
-
-        # chat_fn が受け取れる引数だけ詰める
-        common_kwargs: Dict[str, Any] = {}
-        if "model" in param_names:
-            common_kwargs["model"] = model or None
-        if "max_tokens" in param_names:
-            common_kwargs["max_tokens"] = 1024
-
-        resp = None
-
-        # --- パターン1: system / user / prompt をそのまま受ける系 ---
-        if "system" in param_names and ("user" in param_names or "prompt" in param_names):
-            kwargs = dict(common_kwargs)
-            kwargs["system"] = system_msg
-            if "user" in param_names:
-                kwargs["user"] = prompt
-            else:
-                kwargs["prompt"] = prompt
-            resp = chat_fn(**kwargs)
-
-        # --- パターン2: system_prompt / user_prompt 方式 ---
-        elif "system_prompt" in param_names and "user_prompt" in param_names:
-            kwargs = dict(common_kwargs)
-            # まずキーワード引数で試す
-            try:
-                resp = chat_fn(
-                    system_prompt=system_msg,
-                    user_prompt=prompt,
-                    **kwargs,
-                )
-            except TypeError:
-                # キーワードがダメな実装の場合は位置引数で再トライ
-                resp = chat_fn(system_msg, prompt, **kwargs)
-
-        # --- パターン3: system がなく、prompt / user / 位置引数でまとめて渡す系 ---
-        else:
-            combined = f"{system_msg}\n\nUser:\n{prompt}"
-            kwargs = dict(common_kwargs)
-
-            if "prompt" in param_names:
-                kwargs["prompt"] = combined
-                resp = chat_fn(**kwargs)
-            elif "user" in param_names:
-                kwargs["user"] = combined
-                resp = chat_fn(**kwargs)
-            else:
-                # 最終手段: 先頭の位置引数として渡す
-                resp = chat_fn(combined, **kwargs)
+        resp = chat_fn(
+            system_prompt=system_msg,
+            user_prompt=prompt,
+            **kwargs,
+        )
 
     except TypeError as e:
         logger.error(f"[MemoryDistill] LLM call TypeError: {e}")
@@ -2049,7 +1994,6 @@ def rebuild_vector_index():
         _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
         logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 
 

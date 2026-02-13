@@ -69,6 +69,22 @@ def test_get_endpoint_each_provider():
     assert _get_endpoint(LLMProvider.OLLAMA.value) == "http://localhost:11434/api/chat"
 
 
+def test_chat_completion_alias_calls_chat(monkeypatch):
+    called = {}
+
+    def fake_chat(**kwargs):
+        called.update(kwargs)
+        return {"text": "ok"}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+    out = llm_client.chat_completion(system_prompt="SYS", user_prompt="USER", max_tokens=12)
+
+    assert out == {"text": "ok"}
+    assert called["system_prompt"] == "SYS"
+    assert called["user_prompt"] == "USER"
+    assert called["max_tokens"] == 12
+
+
 # ------------------------------------------------------------
 # _format_request のテスト
 # ------------------------------------------------------------
