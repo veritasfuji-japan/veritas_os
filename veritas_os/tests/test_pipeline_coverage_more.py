@@ -379,3 +379,44 @@ async def test_run_decide_pipeline_smoke(monkeypatch):
 
 
 
+
+
+@pytest.mark.anyio
+async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(monkeypatch):
+    """Self-healing retries must preserve natural-language query contract."""
+    captured_queries = []
+    captured_contexts = []
+
+    async def _fake_call_core_decide(*, context, query, alternatives, min_evidence, core_fn):
+        del alternatives, min_evidence, core_fn
+        captured_queries.append(query)
+        captured_contexts.append(context)
+        if len(captured_queries) == 1:
+            return {
+                "fuji": {
+                    "rejection": {
+                        "status": "REJECTED",
+                        "error": {"code": "F-2101"},
+                        "feedback": {"action": "RETRY"},
+                    }
+                }
+            }
+        return {"fuji": {"status": "PASS"}, "chosen": {"title": "ok"}}
+
+    monkeypatch.setattr(p, "call_core_decide", _fake_call_core_decide)
+    monkeypatch.setattr(p.self_healing, "is_healing_enabled", lambda _ctx: True)
+    monkeypatch.setattr(p, "append_trust_log", lambda *_a, **_k: None)
+
+    req = p.DecideRequest(query="自然言語クエリ", context={"user_id": "u1"})
+    out = await p.run_decide_pipeline(
+        req=req,
+        request=DummyReq(query_params={}, params={}),
+    )
+
+    assert captured_queries == ["自然言語クエリ", "自然言語クエリ"]
+    assert isinstance(captured_contexts[1].get("healing"), dict)
+    assert isinstance(captured_contexts[1]["healing"].get("input"), dict)
+
+    sh = (out.get("extras") or {}).get("self_healing") or {}
+    assert isinstance(sh.get("input"), dict)
+    assert sh.get("enabled") is True
