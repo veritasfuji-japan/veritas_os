@@ -123,6 +123,13 @@ def test_safe_json_extract_top_level_list():
     assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
 
 
+def test_safe_json_extract_top_level_list_with_prefix_noise():
+    raw = 'RESULT: ' + json.dumps([{"id": "s1"}, {"id": "s2"}])
+    obj = planner_core._safe_json_extract(raw)
+    assert isinstance(obj, dict)
+    assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
+
+
 def test_safe_json_extract_code_block():
     inner = json.dumps({"steps": [{"id": "s1"}]})
     raw = f"```json\n{inner}\n```"
