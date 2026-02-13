@@ -77,6 +77,8 @@ def test_normalize_step_handles_non_list_dependencies():
         ("どう進めたらいいですか？", {}, False),  # 「どう進め」が含まれると simple_qa にならない
         ("VERITAS の弱点を教えて", {}, False),  # AGI / VERITAS 系は除外
         ("VERITAS の弱点を教えて", {"simple_qa": True}, True),  # 明示フラグ優先
+        ("what is this", {}, True),  # 英語の疑問文（?なし）
+        ("料金を教えて", {}, True),  # 日本語の短い質問（?なし）
     ],
 )
 def test_is_simple_qa_variants(query, ctx, expected):
