@@ -4,8 +4,9 @@
 # -----------------------------------
 
 import logging
+import math
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import chainlit as cl
 import httpx
@@ -17,6 +18,27 @@ VERITAS_API_URL = os.getenv("VERITAS_API_URL", "http://localhost:8000/v1/decide"
 VERITAS_API_KEY = os.getenv("VERITAS_API_KEY", "")
 
 DEFAULT_USER_ID = os.getenv("VERITAS_USER_ID", "fujishita")
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    """Return a float when conversion is possible, otherwise ``None``."""
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    """Return an int when conversion is possible, otherwise ``None``."""
+    as_float = _safe_float(value)
+    if as_float is None:
+        return None
+    return int(as_float)
 
 
 # --------- VERITAS API 呼び出しヘルパー ---------
@@ -67,12 +89,15 @@ def format_main_answer(res: Dict[str, Any]) -> str:
 
     steps_md = "\n".join(steps_md_lines) if steps_md_lines else "_まだ具体的なステップは生成されていません_"
 
-    total_value = float(values.get("total", 0.0))
+    total_value = _safe_float(values.get("total"))
+    if total_value is None:
+        total_value = 0.0
     ema = values.get("ema", None)
+    ema_float = _safe_float(ema)
 
     value_line = f"ValueCore: total={total_value:.3f}"
-    if isinstance(ema, (int, float)):
-        value_line += f" / ema={ema:.3f}"
+    if ema_float is not None:
+        value_line += f" / ema={ema_float:.3f}"
 
     md = f"""### 🧠 VERITAS の決定
 
@@ -113,18 +138,25 @@ def format_metrics(res: Dict[str, Any]) -> str:
 
     lines = ["### 📊 メトリクス"]
 
-    if latency is not None:
-        lines.append(f"- 応答レイテンシ: **{int(latency)} ms**")
-    if mem_evi_cnt is not None:
-        lines.append(f"- Memory 由来 evidence 数: **{int(mem_evi_cnt)}**")
-    if avg_u is not None:
-        lines.append(f"- 平均 world.utility: **{avg_u:.3f}**")
-    if value_ema is not None:
-        lines.append(f"- Value EMA: **{value_ema:.3f}**")
-    if eff_risk is not None:
-        lines.append(f"- effective_risk: **{eff_risk:.3f}**")
-    if telos_th is not None:
-        lines.append(f"- telos_threshold: **{telos_th:.3f}**")
+    latency_int = _safe_int(latency)
+    mem_evi_count_int = _safe_int(mem_evi_cnt)
+    avg_u_float = _safe_float(avg_u)
+    value_ema_float = _safe_float(value_ema)
+    eff_risk_float = _safe_float(eff_risk)
+    telos_th_float = _safe_float(telos_th)
+
+    if latency_int is not None:
+        lines.append(f"- 応答レイテンシ: **{latency_int} ms**")
+    if mem_evi_count_int is not None:
+        lines.append(f"- Memory 由来 evidence 数: **{mem_evi_count_int}**")
+    if avg_u_float is not None:
+        lines.append(f"- 平均 world.utility: **{avg_u_float:.3f}**")
+    if value_ema_float is not None:
+        lines.append(f"- Value EMA: **{value_ema_float:.3f}**")
+    if eff_risk_float is not None:
+        lines.append(f"- effective_risk: **{eff_risk_float:.3f}**")
+    if telos_th_float is not None:
+        lines.append(f"- telos_threshold: **{telos_th_float:.3f}**")
 
     if len(lines) == 1:
         lines.append("_メトリクス情報はまだありません_")
@@ -151,8 +183,9 @@ def format_memory_and_evidence(res: Dict[str, Any]) -> str:
 
     lines: List[str] = ["### 🧾 MemoryOS & Evidence"]
 
-    if mem_used_count is not None:
-        lines.append(f"- MemoryOS の利用件数: **{int(mem_used_count)}**")
+    mem_used_count_int = _safe_int(mem_used_count)
+    if mem_used_count_int is not None:
+        lines.append(f"- MemoryOS の利用件数: **{mem_used_count_int}**")
 
     # memory_citations
     if mem_cites:
@@ -169,7 +202,9 @@ def format_memory_and_evidence(res: Dict[str, Any]) -> str:
         for ev in mem_evi[:5]:
             src = ev.get("source")
             snip = ev.get("snippet") or ""
-            conf = float(ev.get("confidence", 0.0))
+            conf = _safe_float(ev.get("confidence"))
+            if conf is None:
+                conf = 0.0
             if len(snip) > 160:
                 snip = snip[:157] + "..."
             lines.append(f"- ({src}, conf={conf:.2f}) {snip}")
