@@ -9,10 +9,10 @@
 
 ## 1. まず最初に見る文書（現行の正）
 
-1. `CODE_REVIEW_STATUS.md`
+1. `docs/review/CODE_REVIEW_STATUS.md`
    - 修正進捗の追跡（Fix/Deferred/Accepted）
    - 実装対応の最新状態を把握する基準
-2. `CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
+2. `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
    - 実行可能な範囲での最新ランタイム確認結果
    - 環境依存で未実施の項目も明示
 
@@ -23,16 +23,16 @@
 ## 2. 参照目的別の読み分け
 
 ### A. 直近の包括レビューを読みたい
-- `CODE_REVIEW_2026_02_11.md`
-- `CODE_REVIEW_2026_02_10.md`
+- `docs/review/CODE_REVIEW_2026_02_11.md`
+- `docs/review/CODE_REVIEW_2026_02_10.md`
 
 ### B. 旧レビューの網羅版を遡りたい
-- `CODE_REVIEW_FULL.md`
-- `CODE_REVIEW_FULL_2026_02_08.md`
-- `CODE_REVIEW_2025.md`
+- `docs/review/CODE_REVIEW_FULL.md`
+- `docs/review/CODE_REVIEW_FULL_2026_02_08.md`
+- `docs/review/CODE_REVIEW_2025.md`
 
 ### C. レポート形式で確認したい
-- `CODE_REVIEW_REPORT.md`
+- `docs/review/CODE_REVIEW_REPORT.md`
 - `docs/notes/CODE_REVIEW_REPORT_20260204.md`
 - `docs/notes/code_review_20260205.md`
 
@@ -45,9 +45,9 @@
 
 今後レビュー文書を追加する場合は、次の形式を推奨します。
 
-- 日次/都度レビュー: `CODE_REVIEW_YYYY_MM_DD.md`
-- 実行確認付きレビュー: `CODE_REVIEW_YYYY_MM_DD_RUNTIME_CHECK.md`
-- 進捗管理（単一運用）: `CODE_REVIEW_STATUS.md`（固定名）
+- 日次/都度レビュー: `docs/review/CODE_REVIEW_YYYY_MM_DD.md`
+- 実行確認付きレビュー: `docs/review/CODE_REVIEW_YYYY_MM_DD_RUNTIME_CHECK.md`
+- 進捗管理（単一運用）: `docs/review/CODE_REVIEW_STATUS.md`（固定名）
 
 これにより、同種文書の探索コストを下げ、重複管理を避けます。
 
@@ -57,7 +57,7 @@
 
 - 新しいレビューを追加したら、このマップに 1 行追記する。
 - 既存内容の上書きではなく、日時付き文書で履歴を残す。
-- Issue/PR から参照する際は、まず `CODE_REVIEW_STATUS.md` をリンクする。
+- Issue/PR から参照する際は、まず `docs/review/CODE_REVIEW_STATUS.md` をリンクする。
 
 ---
 
