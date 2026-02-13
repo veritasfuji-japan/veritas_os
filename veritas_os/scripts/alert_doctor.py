@@ -35,7 +35,14 @@ HEALTH_URL   = f"{API_BASE}/health"
 
 
 def _validate_webhook_url(webhook_url: str) -> bool:
-    """Validate that Slack webhook URL uses HTTPS and points to Slack domains."""
+    """Validate Slack webhook URL format and trusted host.
+
+    Security constraints:
+    - HTTPS only.
+    - Host must be an official Slack webhook domain.
+    - No explicit port/userinfo/query/fragment.
+    - Path must start with ``/services/``.
+    """
     if not webhook_url:
         return False
     try:
@@ -46,6 +53,12 @@ def _validate_webhook_url(webhook_url: str) -> bool:
     if parsed.scheme != "https":
         return False
 
+    if parsed.port is not None:
+        return False
+
+    if parsed.username or parsed.password:
+        return False
+
     hostname: Optional[str] = parsed.hostname
     if not hostname:
         return False
@@ -54,7 +67,13 @@ def _validate_webhook_url(webhook_url: str) -> bool:
         "hooks.slack.com",
         "hooks.slack-gov.com",
     }
-    return hostname.lower() in allowed_hosts
+    if hostname.lower() not in allowed_hosts:
+        return False
+
+    if parsed.query or parsed.fragment:
+        return False
+
+    return parsed.path.startswith("/services/")
 
 
 # ================================

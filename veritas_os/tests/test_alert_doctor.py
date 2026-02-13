@@ -18,6 +18,23 @@ def test_validate_webhook_url_rejects_insecure_or_untrusted_hosts():
     assert not alert_doctor._validate_webhook_url("")
 
 
+
+
+def test_validate_webhook_url_rejects_ports_userinfo_and_extra_parts():
+    """Webhook URL with unsafe URL parts should be rejected."""
+    assert not alert_doctor._validate_webhook_url(
+        "https://hooks.slack.com:443/services/a/b/c"
+    )
+    assert not alert_doctor._validate_webhook_url(
+        "https://user@hooks.slack.com/services/a/b/c"
+    )
+    assert not alert_doctor._validate_webhook_url(
+        "https://hooks.slack.com/services/a/b/c?debug=true"
+    )
+    assert not alert_doctor._validate_webhook_url(
+        "https://hooks.slack.com/not-services/a/b/c"
+    )
+
 def test_post_slack_rejects_invalid_webhook_without_network(monkeypatch):
     """post_slack should fail fast when webhook URL is invalid."""
     monkeypatch.setattr(alert_doctor, "WEBHOOK", "http://hooks.slack.com/services/a/b/c")
