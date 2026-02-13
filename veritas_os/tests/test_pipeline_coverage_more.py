@@ -387,10 +387,10 @@ async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(
     captured_queries = []
     captured_contexts = []
 
-    async def _fake_call_core_decide(*, context, query, alternatives, min_evidence, core_fn):
-        del alternatives, min_evidence, core_fn
-        captured_queries.append(query)
-        captured_contexts.append(context)
+    async def _fake_call_core_decide(*args, **kwargs):
+        del args
+        captured_queries.append(kwargs.get("query"))
+        captured_contexts.append(kwargs.get("context") or {})
         if len(captured_queries) == 1:
             return {
                 "fuji": {
@@ -407,7 +407,12 @@ async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(
     monkeypatch.setattr(p.self_healing, "is_healing_enabled", lambda _ctx: True)
     monkeypatch.setattr(p, "append_trust_log", lambda *_a, **_k: None)
 
-    req = p.DecideRequest(query="自然言語クエリ", context={"user_id": "u1"})
+    req = ObjModelDump()
+    req.model_dump = lambda exclude_none=True: {
+        "query": "自然言語クエリ",
+        "context": {"user_id": "u1"},
+    }
+
     out = await p.run_decide_pipeline(
         req=req,
         request=DummyReq(query_params={}, params={}),
