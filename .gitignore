@@ -92,3 +92,5 @@ uv.lock
 node_modules/
 .next/
 *.tsbuildinfo
+test-results/
+playwright-report/
