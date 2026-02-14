@@ -319,8 +319,10 @@ def _is_allowed_websearch_url(url: str) -> bool:
     if WEBSEARCH_HOST_ALLOWLIST:
         if host not in WEBSEARCH_HOST_ALLOWLIST:
             return False
-        # Allowlisted hosts still must not be obviously local/private.
-        return not _is_obviously_private_or_local_host(host)
+        # Allowlisted hosts must also resolve to public IPs.
+        # This prevents DNS rebinding/misconfiguration from tunneling
+        # requests into private networks.
+        return not _is_private_or_local_host(host)
 
     if _is_private_or_local_host(host):
         return False

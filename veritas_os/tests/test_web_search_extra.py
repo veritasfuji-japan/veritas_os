@@ -461,11 +461,37 @@ class TestWebSearchSsrfGuard:
             {"api.allowed.example"},
             raising=False,
         )
+        monkeypatch.setattr(
+            web_search_mod,
+            "_is_private_or_local_host",
+            lambda *_: False,
+            raising=False,
+        )
         assert (
             web_search_mod._is_allowed_websearch_url(
                 "https://api.allowed.example/search"
             )
             is True
+        )
+
+    def test_allowlist_rejects_private_resolution(self, monkeypatch):
+        monkeypatch.setattr(
+            web_search_mod,
+            "WEBSEARCH_HOST_ALLOWLIST",
+            {"api.allowed.example"},
+            raising=False,
+        )
+        monkeypatch.setattr(
+            web_search_mod,
+            "_is_private_or_local_host",
+            lambda *_: True,
+            raising=False,
+        )
+        assert (
+            web_search_mod._is_allowed_websearch_url(
+                "https://api.allowed.example/search"
+            )
+            is False
         )
 
     def test_web_search_returns_unavailable_for_blocked_endpoint(self, monkeypatch):
