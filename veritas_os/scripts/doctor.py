@@ -311,10 +311,14 @@ def analyze_logs():
     # ファイル群を走査
     for path in files:
         name = os.path.basename(path)
-        if   name.startswith("decide_"):  cat = "decide"
-        elif name.startswith("health_"):  cat = "health"
-        elif "status" in name:            cat = "status"
-        else:                             cat = "other"
+        if name.startswith("decide_"):
+            cat = "decide"
+        elif name.startswith("health_"):
+            cat = "health"
+        elif "status" in name:
+            cat = "status"
+        else:
+            cat = "other"
 
         try:
             items = _read_json_or_jsonl(path)
@@ -404,7 +408,7 @@ def analyze_logs():
         if trustlog_stats['last_hash']:
             print(f"   🔑 最終ハッシュ: {trustlog_stats['last_hash']}")
     else:
-        print(f"   ❌ ハッシュチェーン検証: FAILED")
+        print("   ❌ ハッシュチェーン検証: FAILED")
         if trustlog_stats['chain_breaks'] > 0:
             print(f"   ⚠️ チェーン破損: {trustlog_stats['chain_breaks']} 箇所")
             if trustlog_stats['first_break']:
