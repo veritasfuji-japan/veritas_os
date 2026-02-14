@@ -227,13 +227,21 @@ def _extract_hostname(url: str) -> str:
     return (host or "").lower()
 
 
-def _is_private_or_local_host(hostname: str) -> bool:
-    """ホストが localhost / private / loopback / link-local かを判定する。"""
+def _is_obviously_private_or_local_host(hostname: str) -> bool:
+    """文字列情報だけで private/local と判断できるホストを検出する。"""
     host = (hostname or "").strip().lower()
     if not host:
         return True
 
     if host in {"localhost", "localhost.localdomain"}:
+        return True
+
+    # Single-label host names and local/internal pseudo-TLDs are typically
+    # internal-only and should not be used for outbound web search endpoints.
+    if "." not in host:
+        return True
+
+    if host.endswith((".local", ".internal", ".localhost", ".localdomain")):
         return True
 
     try:
@@ -249,11 +257,21 @@ def _is_private_or_local_host(hostname: str) -> bool:
     except ValueError:
         pass
 
+    return False
+
+
+def _is_private_or_local_host(hostname: str) -> bool:
+    """ホストが localhost / private / loopback / link-local かを判定する。"""
+    host = (hostname or "").strip().lower()
+    if _is_obviously_private_or_local_host(host):
+        return True
+
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        # 解決不能なホストは接続失敗になるため、ここでは SSRF 判定対象外。
-        return False
+        # DNS解決不能なホストは誤設定かローカル向け名の可能性が高いため、
+        # 保守的にブロックする。
+        return True
 
     for info in infos:
         ip_text = info[4][0]
@@ -284,11 +302,15 @@ def _is_allowed_websearch_url(url: str) -> bool:
         return False
 
     host = (parsed.hostname or "").lower()
+    if WEBSEARCH_HOST_ALLOWLIST:
+        if host not in WEBSEARCH_HOST_ALLOWLIST:
+            return False
+        # Allowlisted hosts still must not be obviously local/private.
+        return not _is_obviously_private_or_local_host(host)
+
     if _is_private_or_local_host(host):
         return False
 
-    if WEBSEARCH_HOST_ALLOWLIST:
-        return host in WEBSEARCH_HOST_ALLOWLIST
     return True
 
 

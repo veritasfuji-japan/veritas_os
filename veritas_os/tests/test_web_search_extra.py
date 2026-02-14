@@ -133,6 +133,25 @@ class TestIsBlockedResult:
         ) is False
 
 
+class TestWebSearchHostSafety:
+    """Tests for host-level SSRF safety validation."""
+
+    def test_blocks_single_label_hostname(self):
+        assert web_search_mod._is_private_or_local_host("intranet") is True
+
+    def test_blocks_local_suffix_hostname(self):
+        assert web_search_mod._is_private_or_local_host("search.internal") is True
+
+    def test_unresolvable_host_is_blocked(self, monkeypatch):
+        import socket
+
+        def fake_getaddrinfo(*_args, **_kwargs):
+            raise socket.gaierror("unresolvable")
+
+        monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
+        assert web_search_mod._is_private_or_local_host("example.com") is True
+
+
 class DummyResponse:
     """Mock response for requests.post."""
     def __init__(self, data: Dict[str, Any], status_code: int = 200):
