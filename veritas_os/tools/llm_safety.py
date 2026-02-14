@@ -20,6 +20,7 @@ FUJI Gate から呼ばれる「安全ヘッド」。
 """
 
 from __future__ import annotations
+import importlib.util
 from typing import Any, Dict, List
 import json
 import logging
@@ -30,10 +31,9 @@ import time
 
 logger = logging.getLogger(__name__)
 
-try:
-    # OpenAI クライアント（インポートできなければ使わない）
+if importlib.util.find_spec("openai") is not None:  # pragma: no cover
     from openai import OpenAI  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
+else:  # pragma: no cover
     OpenAI = None  # type: ignore
 
 
