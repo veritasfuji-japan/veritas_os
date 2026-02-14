@@ -440,6 +440,14 @@ class TestWebSearchSsrfGuard:
             is False
         )
 
+    def test_http_scheme_is_blocked(self):
+        assert (
+            web_search_mod._is_allowed_websearch_url(
+                "http://api.allowed.example/search"
+            )
+            is False
+        )
+
     def test_allowlist_blocks_non_listed_host(self, monkeypatch):
         monkeypatch.setattr(
             web_search_mod,
