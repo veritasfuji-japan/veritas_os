@@ -1462,7 +1462,24 @@ def memory_put(body: dict):
                 meta_for_store.setdefault("user_id", user_id)
                 meta_for_store.setdefault("kind", kind)
 
-                if hasattr(store, "put_episode"):
+                if hasattr(store, "put"):
+                    vector_item = {
+                        "text": text_clean,
+                        "tags": tags,
+                        "meta": meta_for_store,
+                    }
+                    try:
+                        new_id = store.put(kind, vector_item)
+                    except TypeError:
+                        if hasattr(store, "put_episode"):
+                            new_id = store.put_episode(
+                                text=text_clean,
+                                tags=tags,
+                                meta=meta_for_store,
+                            )
+                        else:
+                            raise
+                elif hasattr(store, "put_episode"):
                     new_id = store.put_episode(
                         text=text_clean,
                         tags=tags,
@@ -1705,7 +1722,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
