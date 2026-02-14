@@ -53,7 +53,7 @@ def run_bench(yaml_name: str) -> None:
     print(f"- id   : {bench_id}")
     print(f"- name : {name}")
     print(f"- POST : {url}")
-    print(f"- using API_KEY from env VERITAS_API_KEY")
+    print("- using API_KEY from env VERITAS_API_KEY")
 
     resp = requests.post(url, headers=headers, json=req_payload, timeout=120)
     print(f"- HTTP : {resp.status_code}")
