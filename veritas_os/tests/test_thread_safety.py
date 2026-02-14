@@ -145,6 +145,22 @@ class TestCosineIndexThreadSafety:
         assert results[0][0][1] > 0.99  # Very high similarity
 
 
+def test_rejects_non_finite_vectors(tmp_path: Path):
+    """CosineIndex should reject NaN/Inf vectors to avoid poisoned results."""
+    pytest.importorskip("numpy")
+    import numpy as np
+
+    idx = CosineIndex(dim=2, path=tmp_path / "test.npz")
+
+    with pytest.raises(ValueError, match="finite"):
+        idx.add(np.array([[np.nan, 0.0]], dtype=np.float32), ["bad_nan"])
+
+    idx.add(np.array([[1.0, 0.0]], dtype=np.float32), ["ok"])
+
+    with pytest.raises(ValueError, match="finite"):
+        idx.search(np.array([[np.inf, 0.0]], dtype=np.float32), k=1)
+
+
 class TestMemoryStoreThreadSafety:
     """Tests for MemoryStore thread safety."""
 
