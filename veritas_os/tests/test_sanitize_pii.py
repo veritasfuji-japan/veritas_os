@@ -42,6 +42,23 @@ def test_phone_patterns_do_not_match_embedded_digits() -> None:
     assert phones == []
 
 
+def test_detect_pii_accepts_non_string_inputs() -> None:
+    """detect_pii should safely coerce non-string payload values."""
+    byte_result = detect_pii(b"mail: test@example.com")
+    assert any(item["type"] == "email" for item in byte_result)
+
+    int_result = detect_pii(12345)
+    assert int_result == []
+
+
+def test_mask_pii_handles_non_string_bytes_via_detector() -> None:
+    """PIIDetector.mask should decode bytes before masking."""
+    detector = PIIDetector()
+    masked = detector.mask(b"contact: test@example.com")
+    assert "test@example.com" not in masked
+    assert "〔メール〕" in masked
+
+
 class TestEmailDetection:
     """Tests for email address detection."""
 

@@ -379,18 +379,28 @@ class PIIDetector:
             ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
         ]
 
-    def _prepare_input_text(self, text: str | None) -> str:
+    def _prepare_input_text(self, text: object | None) -> str:
         """Normalize input text for PII scanning.
 
         Args:
-            text: Raw input text. ``None`` is treated as an empty string.
+            text: Raw input value. ``None`` is treated as an empty string.
 
         Returns:
-            Sanitized string.
+            String representation that is safe to scan.
+
+        Security:
+            API payloads can contain non-string values when validation is bypassed
+            or when this utility is used directly. Converting unknown objects to
+            bounded text avoids ``TypeError`` crashes that may otherwise leak
+            internals through unhandled exceptions.
         """
         if text is None:
             return ""
-        return text
+        if isinstance(text, str):
+            return text
+        if isinstance(text, bytes):
+            return text.decode("utf-8", errors="replace")
+        return str(text)
 
     def _detect_in_segment(self, text: str, offset: int = 0) -> List[PIIMatch]:
         """Detect PII inside a single bounded text segment.
@@ -503,7 +513,7 @@ class PIIDetector:
         results.sort(key=lambda x: x.start)
         return results
 
-    def mask(self, text: str | None, mask_format: str = "〔{token}〕") -> str:
+    def mask(self, text: object | None, mask_format: str = "〔{token}〕") -> str:
         """
         テキスト内のPIIをマスク
 
@@ -514,18 +524,16 @@ class PIIDetector:
         Returns:
             マスク済みテキスト
         """
-        if text is None:
+        normalized_text = self._prepare_input_text(text)
+        if normalized_text == "":
             return ""
 
-        if text == "":
-            return ""
-
-        detections = self.detect(text)
+        detections = self.detect(normalized_text)
         if not detections:
-            return text
+            return normalized_text
 
         # 後ろから置換（インデックスがずれないように）
-        result = text
+        result = normalized_text
         for det in reversed(detections):
             token = self._get_mask_token(det.type)
             mask_str = mask_format.format(token=token)
@@ -565,7 +573,7 @@ class PIIDetector:
 _default_detector = PIIDetector(validate_checksums=True)
 
 
-def detect_pii(text: str | None) -> List[Dict[str, Any]]:
+def detect_pii(text: object | None) -> List[Dict[str, Any]]:
     """
     テキストからPIIを検出
 
@@ -588,7 +596,7 @@ def detect_pii(text: str | None) -> List[Dict[str, Any]]:
     ]
 
 
-def mask_pii(text: str) -> str:
+def mask_pii(text: object | None) -> str:
     """
     テキスト内のPIIをマスク（後方互換性のため維持）
 
