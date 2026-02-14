@@ -1,6 +1,7 @@
 # veritas_os/tests/test_pipeline_coverage_more.py
 from __future__ import annotations
 
+import importlib
 import inspect
 from typing import Any, Dict
 
@@ -21,6 +22,18 @@ class DummyReq:
 class ObjModelDump:
     def model_dump(self, exclude_none=True):
         return {"a": 1, "b": None} if not exclude_none else {"a": 1}
+
+
+class DecideReqModelDump:
+    """Lightweight request test-double for run_decide_pipeline."""
+
+    def model_dump(self, exclude_none=True):
+        del exclude_none
+        return {
+            "query": "自然言語クエリ",
+            "context": {"user_id": "u1"},
+            "fast": True,
+        }
 
 
 class ObjDict:
@@ -379,3 +392,58 @@ async def test_run_decide_pipeline_smoke(monkeypatch):
 
 
 
+
+
+@pytest.mark.anyio
+async def test_self_healing_keeps_query_and_moves_payload_to_context_and_extras(monkeypatch):
+    """Self-healing retries must preserve natural-language query contract."""
+    captured_queries = []
+    captured_contexts = []
+
+    async def _fake_call_core_decide(*args, **kwargs):
+        del args
+        captured_queries.append(kwargs.get("query"))
+        captured_contexts.append(kwargs.get("context") or {})
+        if len(captured_queries) == 1:
+            return {
+                "fuji": {
+                    "rejection": {
+                        "status": "REJECTED",
+                        "error": {"code": "F-2101"},
+                        "feedback": {"action": "RETRY"},
+                    }
+                }
+            }
+        return {"fuji": {"status": "PASS"}, "chosen": {"title": "ok"}}
+
+    monkeypatch.setattr(p, "call_core_decide", _fake_call_core_decide)
+    monkeypatch.setattr(p.self_healing, "is_healing_enabled", lambda _ctx: True)
+    monkeypatch.setattr(p, "append_trust_log", lambda *_a, **_k: None)
+    monkeypatch.setattr(p, "_check_required_modules", lambda: None)
+
+    original_import_module = importlib.import_module
+
+    def _fake_import_module(name, package=None):
+        if name == "veritas_os.core.kernel":
+            class _KernelModule:
+                decide = object()
+
+            return _KernelModule()
+        return original_import_module(name, package)
+
+    monkeypatch.setattr(importlib, "import_module", _fake_import_module)
+
+    req = DecideReqModelDump()
+
+    out = await p.run_decide_pipeline(
+        req=req,
+        request=DummyReq(query_params={}, params={}),
+    )
+
+    assert captured_queries == ["自然言語クエリ", "自然言語クエリ"]
+    assert isinstance(captured_contexts[1].get("healing"), dict)
+    assert isinstance(captured_contexts[1]["healing"].get("input"), dict)
+
+    sh = (out.get("extras") or {}).get("self_healing") or {}
+    assert isinstance(sh.get("input"), dict)
+    assert sh.get("enabled") is True
