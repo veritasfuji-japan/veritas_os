@@ -527,20 +527,36 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         """
         decoder = json.JSONDecoder()
         attempts = 0
-        for match in re.finditer(r"[\[{]", text):
+        cursor = 0
+
+        while True:
+            brace_idx = text.find("{", cursor)
+            bracket_idx = text.find("[", cursor)
+
+            if brace_idx == -1 and bracket_idx == -1:
+                return None
+
+            if brace_idx == -1:
+                i = bracket_idx
+            elif bracket_idx == -1:
+                i = brace_idx
+            else:
+                i = min(brace_idx, bracket_idx)
+
             if attempts >= _MAX_JSON_DECODE_ATTEMPTS:
                 logger.warning(
                     "planner JSON decoder probe limit reached (%d attempts)",
                     _MAX_JSON_DECODE_ATTEMPTS,
                 )
-                break
-            i = match.start()
+                return None
+
             try:
                 obj, _ = decoder.raw_decode(text, idx=i)
                 return obj
             except json.JSONDecodeError:
                 attempts += 1
-                continue
+                cursor = i + 1
+
         return None
 
     # 1) そのまま
