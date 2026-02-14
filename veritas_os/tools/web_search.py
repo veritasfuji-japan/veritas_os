@@ -75,6 +75,12 @@ def _safe_int(key: str, default: int) -> int:
         return default
 
 
+def _safe_int_with_min(key: str, default: int, minimum: int) -> int:
+    """環境変数を整数として読み取り、下限値を適用して返す。"""
+    value = _safe_int(key, default)
+    return max(value, minimum)
+
+
 def _safe_float(key: str, default: float) -> float:
     try:
         return float(os.getenv(key, str(default)))
@@ -82,11 +88,13 @@ def _safe_float(key: str, default: float) -> float:
         return default
 
 
-WEBSEARCH_MAX_RETRIES = _safe_int("VERITAS_WEBSEARCH_MAX_RETRIES", 3)
-WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
-WEBSEARCH_RETRY_MAX_DELAY = _safe_float(
-    "VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0
+WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
+    "VERITAS_WEBSEARCH_MAX_RETRIES",
+    3,
+    1,
 )
+WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
+WEBSEARCH_RETRY_MAX_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0)
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
 WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower()
