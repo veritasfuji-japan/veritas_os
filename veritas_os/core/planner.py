@@ -527,21 +527,10 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         """
         decoder = json.JSONDecoder()
         attempts = 0
-        cursor = 0
 
-        while True:
-            brace_idx = text.find("{", cursor)
-            bracket_idx = text.find("[", cursor)
-
-            if brace_idx == -1 and bracket_idx == -1:
-                return None
-
-            if brace_idx == -1:
-                i = bracket_idx
-            elif bracket_idx == -1:
-                i = brace_idx
-            else:
-                i = min(brace_idx, bracket_idx)
+        for i, ch in enumerate(text):
+            if ch not in "[{":
+                continue
 
             if attempts >= _MAX_JSON_DECODE_ATTEMPTS:
                 logger.warning(
@@ -555,7 +544,6 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
                 return obj
             except json.JSONDecodeError:
                 attempts += 1
-                cursor = i + 1
 
         return None
 
