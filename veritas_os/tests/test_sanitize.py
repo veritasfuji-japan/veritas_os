@@ -64,6 +64,17 @@ def test_detector_prepare_input_text_handles_none_and_truncates(caplog):
     with caplog.at_level("WARNING"):
         prepared = detector._prepare_input_text(oversized)
 
-    assert len(prepared) == sanitize._MAX_PII_INPUT_LENGTH
-    assert "PII input truncated" in caplog.text
+    assert prepared == oversized
+    assert "PII input truncated" not in caplog.text
 
+
+def test_detect_pii_scans_large_text_without_truncating(caplog):
+    huge_prefix = "x" * sanitize._MAX_PII_INPUT_LENGTH
+    email = "very.large.user@example.com"
+    text = f"{huge_prefix}\n{email}"
+
+    with caplog.at_level("WARNING"):
+        matches = sanitize.detect_pii(text)
+
+    assert any(match["type"] == "email" and match["value"] == email for match in matches)
+    assert "PII input segmented for scanning" in caplog.text
