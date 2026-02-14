@@ -22,7 +22,6 @@ import yaml
 # ----- Config -----
 
 API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
-API_KEY = os.getenv("VERITAS_API_KEY", "dev-key")  # ※サーバ側と合わせておく
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 BENCH_DIR = REPO_ROOT / "benchmarks"
@@ -32,6 +31,13 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def run_bench(yaml_name: str) -> None:
+    """ベンチマーク YAML を読み込み、API 実行結果をログ保存する。"""
+    api_key = os.getenv("VERITAS_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "VERITAS_API_KEY is required. Set VERITAS_API_KEY before running bench.py"
+        )
+
     bench_file = BENCH_DIR / yaml_name
     if not bench_file.exists():
         raise FileNotFoundError(f"benchmark file not found: {bench_file}")
@@ -46,7 +52,7 @@ def run_bench(yaml_name: str) -> None:
     url = f"{API_BASE}/v1/decide"
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
+        "X-API-Key": api_key,
     }
 
     print("=== VERITAS benchmark ===")

@@ -15,7 +15,6 @@ import textwrap
 import requests
 
 API_URL = os.getenv("VERITAS_API_URL", "http://localhost:8000/v1/decide")
-API_KEY = os.getenv("VERITAS_API_KEY", "test-key")  # 自分のキーに合わせて
 BASE_URL = "http://127.0.0.1:8000"
 REQUEST_TIMEOUT = float(os.getenv("VERITAS_HTTP_TIMEOUT", "10"))
 
@@ -23,8 +22,18 @@ def wrap(text: str, width: int = 70) -> str:
     return "\n        ".join(textwrap.wrap(text, width)) if text else ""
 
 
+def get_api_key() -> str:
+    """環境変数 ``VERITAS_API_KEY`` から API キーを取得する。"""
+    api_key = os.getenv("VERITAS_API_KEY", "").strip()
+    if not api_key:
+        print("[ERROR] VERITAS_API_KEY が未設定です。環境変数を設定して再実行してください。")
+        sys.exit(2)
+    return api_key
+
+
 def agi_next_step() -> None:
     """VERITAS AGI の次ステップ提案を表示する。"""
+    api_key = get_api_key()
     body = {
         "query": "VERITASをAGI化するために、次に手を入れるべきコード変更を1つだけ提案して。",
         "context": {"user_id": "veritas_dev"},
@@ -32,7 +41,7 @@ def agi_next_step() -> None:
     response = requests.post(
         f"{BASE_URL}/v1/decide",
         headers={
-            "X-API-Key": API_KEY,
+            "X-API-Key": api_key,
             "accept": "application/json",
             "Content-Type": "application/json",
         },
@@ -68,6 +77,7 @@ def main() -> None:
         sys.exit(1)
 
     query = " ".join(sys.argv[1:]).strip()
+    api_key = get_api_key()
 
     payload = {
         "query": query,
@@ -79,7 +89,7 @@ def main() -> None:
 
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
+        "X-API-Key": api_key,
     }
 
     try:
