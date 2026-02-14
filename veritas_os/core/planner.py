@@ -15,6 +15,9 @@ from . import code_planner  # ★ 追加
 
 logger = logging.getLogger(__name__)
 
+# LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
+_MAX_JSON_EXTRACT_CHARS = 200_000
+
 
 class StepDict(TypedDict, total=False):
     """Planner step definition for normalized step payloads."""
@@ -453,11 +456,19 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     """
     LLM の出力から JSON を安全に取り出す（救出エンジン）。
     ※ _safe_parse が外側の互換層。
+    大きすぎる入力は先頭のみを使って解析し、DoSリスクを低減する。
     """
     if not raw:
         return {"steps": []}
 
     cleaned = raw.strip()
+    if len(cleaned) > _MAX_JSON_EXTRACT_CHARS:
+        logger.warning(
+            "planner JSON extraction input too large (%d chars); truncating to %d chars",
+            len(cleaned),
+            _MAX_JSON_EXTRACT_CHARS,
+        )
+        cleaned = cleaned[:_MAX_JSON_EXTRACT_CHARS]
 
     # ``` の先頭/末尾だけ来た時も対策
     if cleaned.startswith("```"):
