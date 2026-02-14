@@ -117,19 +117,26 @@ def get_last_hash() -> str | None:
                 # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
                 return load_last_hash_marker(LOG_JSONL)
             with open(LOG_JSONL, "rb") as f:
-                # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
-                chunk_size = min(65536, file_size)
-                f.seek(file_size - chunk_size)
-                raw = f.read()
-                # ★ UTF-8 境界安全: seek がマルチバイト文字の途中に
-                # 当たる可能性があるため errors="replace" で安全にデコード。
-                # 置換文字は先頭の不完全行にのみ影響し、lines[-1] は
-                # 常に EOF まで読み込んだ完全な行なので安全。
-                chunk = raw.decode("utf-8", errors="replace")
-                lines = chunk.strip().split("\n")
-                if lines:
-                    last = json.loads(lines[-1])
-                    return last.get("sha256")
+                start = max(0, file_size - 65536)
+                while True:
+                    f.seek(start)
+                    raw = f.read(file_size - start)
+                    chunk = raw.decode("utf-8", errors="replace")
+                    lines = chunk.splitlines()
+                    if not lines:
+                        return None
+
+                    if start > 0 and "\n" not in chunk and start > 0:
+                        start = max(0, start - 65536)
+                        continue
+
+                    try:
+                        last = json.loads(lines[-1])
+                        return last.get("sha256")
+                    except json.JSONDecodeError:
+                        if start == 0:
+                            return None
+                        start = max(0, start - 65536)
         except Exception as exc:
             logger.warning("get_last_hash failed: %s", exc)
         return None

@@ -180,6 +180,13 @@ def test_get_last_hash_invalid_json_returns_none(temp_log_env):
     assert trust_log.get_last_hash() is None
 
 
+def test_get_last_hash_handles_very_large_last_line(temp_log_env):
+    payload = {"sha256": "large123", "blob": "x" * 70000}
+    temp_log_env["jsonl"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    assert trust_log.get_last_hash() == "large123"
+
+
 # ============================
 #  append_trust_log のチェーン検証
 # ============================
