@@ -406,7 +406,7 @@ class PIIDetector:
     def _validate_my_number(self, match: str, context: str) -> bool:
         return _is_valid_my_number(match)
 
-    def detect(self, text: str) -> List[PIIMatch]:
+    def detect(self, text: str | None) -> List[PIIMatch]:
         """
         テキストからPIIを検出
 
@@ -461,7 +461,7 @@ class PIIDetector:
         results.sort(key=lambda x: x.start)
         return results
 
-    def mask(self, text: str, mask_format: str = "〔{token}〕") -> str:
+    def mask(self, text: str | None, mask_format: str = "〔{token}〕") -> str:
         """
         テキスト内のPIIをマスク
 
@@ -472,8 +472,11 @@ class PIIDetector:
         Returns:
             マスク済みテキスト
         """
-        if not text:
-            return text
+        if text is None:
+            return ""
+
+        if text == "":
+            return ""
 
         detections = self.detect(text)
         if not detections:
@@ -520,7 +523,7 @@ class PIIDetector:
 _default_detector = PIIDetector(validate_checksums=True)
 
 
-def detect_pii(text: str) -> List[Dict[str, Any]]:
+def detect_pii(text: str | None) -> List[Dict[str, Any]]:
     """
     テキストからPIIを検出
 
