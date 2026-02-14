@@ -199,6 +199,30 @@ def test_put_appends_jsonl_and_updates_index(memory_env):
     assert ids == [item_id]
 
 
+def test_put_rejects_too_long_text(memory_env):
+    """put は過大な text を拒否して ValueError を送出する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+    too_long = "x" * (store.MAX_ITEM_TEXT_LENGTH + 1)
+
+    with pytest.raises(ValueError, match="Item text too long"):
+        ms.put("episodic", {"text": too_long, "tags": [], "meta": {}})
+
+
+def test_put_validates_tags_and_meta_types(memory_env):
+    """put は tags / meta の型不正を拒否する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+
+    with pytest.raises(TypeError, match="item.tags must be a list"):
+        ms.put("episodic", {"text": "ok", "tags": "not-list", "meta": {}})
+
+    with pytest.raises(TypeError, match="item.meta must be a dict"):
+        ms.put("episodic", {"text": "ok", "tags": [], "meta": "not-dict"})
+
+
 # ---------------------------------------------------------
 # search: 空クエリ
 # ---------------------------------------------------------
@@ -339,4 +363,3 @@ def test_put_episode_delegates_to_put(memory_env, monkeypatch):
     assert it["meta"] == {"foo": "bar"}
     # ts は put_episode 側で埋められている
     assert isinstance(it["ts"], (int, float))
-

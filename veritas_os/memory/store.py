@@ -28,6 +28,9 @@ BASE = HOME_MEMORY
 # クエリ長の上限（DoS対策）
 MAX_QUERY_LENGTH = 10000
 
+# 登録テキスト長の上限（DoS/ストレージ膨張対策）
+MAX_ITEM_TEXT_LENGTH = 20000
+
 # JSONL ファイルサイズの上限（起動時の再構築 / 検索時の読み込み用、100MB）
 MAX_JSONL_FILE_SIZE = 100 * 1024 * 1024
 
@@ -140,13 +143,8 @@ class MemoryStore:
         """
         if kind not in FILES:
             raise ValueError(f"Unknown memory kind: {kind!r}. Must be one of {set(FILES)}")
-        j = {
-            "id":   item.get("id") or uuid.uuid4().hex,
-            "ts":   item.get("ts") or time.time(),
-            "tags": item.get("tags") or [],
-            "text": item.get("text") or "",
-            "meta": item.get("meta") or {},
-        }
+
+        j = self._normalize_item(item)
 
         # ベクトル化（ロック外で実行 - 計算コストが高い）
         vec = self.emb.embed([j["text"]])
@@ -162,6 +160,32 @@ class MemoryStore:
             self.idx[kind].add(vec, [j["id"]])
 
         return j["id"]
+
+    def _normalize_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize and validate memory item payload before persistence."""
+        if not isinstance(item, dict):
+            raise TypeError("item must be a dict")
+
+        text = str(item.get("text") or "")
+        if len(text) > MAX_ITEM_TEXT_LENGTH:
+            raise ValueError(f"Item text too long (max {MAX_ITEM_TEXT_LENGTH} chars)")
+
+        tags = item.get("tags") or []
+        if not isinstance(tags, list):
+            raise TypeError("item.tags must be a list")
+        normalized_tags = [str(tag) for tag in tags]
+
+        meta = item.get("meta") or {}
+        if not isinstance(meta, dict):
+            raise TypeError("item.meta must be a dict")
+
+        return {
+            "id": item.get("id") or uuid.uuid4().hex,
+            "ts": item.get("ts") or time.time(),
+            "tags": normalized_tags,
+            "text": text,
+            "meta": meta,
+        }
 
     def _load_payloads_for_ids(self, kind: str, ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """JSONL を逐次走査し、指定 id の payload だけを読み込む。"""
