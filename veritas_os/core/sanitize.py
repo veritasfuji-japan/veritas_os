@@ -380,52 +380,28 @@ class PIIDetector:
         ]
 
     def _prepare_input_text(self, text: str | None) -> str:
-        """Normalize and safely bound input text for PII scanning.
+        """Normalize input text for PII scanning.
 
         Args:
             text: Raw input text. ``None`` is treated as an empty string.
 
         Returns:
-            Sanitized string clipped to the configured maximum length.
+            Sanitized string.
         """
         if text is None:
             return ""
-
-        if len(text) > _MAX_PII_INPUT_LENGTH:
-            _logger.warning(
-                "PII input truncated from %d to %d chars",
-                len(text),
-                _MAX_PII_INPUT_LENGTH,
-            )
-            return text[:_MAX_PII_INPUT_LENGTH]
         return text
 
-    def _validate_credit_card(self, match: str, context: str) -> bool:
-        return _is_valid_credit_card(match)
-
-    def _validate_my_number(self, match: str, context: str) -> bool:
-        return _is_valid_my_number(match)
-
-    def _iter_patterns_by_priority(self) -> List[tuple]:
-        """Return detection patterns ordered by confidence.
-
-        Overlap resolution keeps the first accepted match, therefore scanning
-        higher-confidence patterns first reduces false positives when multiple
-        patterns can match the same substring.
-        """
-        return sorted(self._patterns, key=lambda item: item[4], reverse=True)
-
-    def detect(self, text: str | None) -> List[PIIMatch]:
-        """
-        テキストからPIIを検出
+    def _detect_in_segment(self, text: str, offset: int = 0) -> List[PIIMatch]:
+        """Detect PII inside a single bounded text segment.
 
         Args:
-            text: 検査対象テキスト
+            text: Segment text.
+            offset: Absolute offset applied to resulting match positions.
 
         Returns:
-            検出されたPIIのリスト
+            Detected matches with absolute positions.
         """
-        text = self._prepare_input_text(text)
         if not text:
             return []
 
@@ -460,11 +436,68 @@ class PIIDetector:
                 results.append(PIIMatch(
                     type=name,
                     value=value,
-                    start=start,
-                    end=end,
+                    start=start + offset,
+                    end=end + offset,
                     confidence=confidence,
                 ))
                 detected_ranges.append((start, end))
+
+        return results
+
+    def _validate_credit_card(self, match: str, context: str) -> bool:
+        return _is_valid_credit_card(match)
+
+    def _validate_my_number(self, match: str, context: str) -> bool:
+        return _is_valid_my_number(match)
+
+    def _iter_patterns_by_priority(self) -> List[tuple]:
+        """Return detection patterns ordered by confidence.
+
+        Overlap resolution keeps the first accepted match, therefore scanning
+        higher-confidence patterns first reduces false positives when multiple
+        patterns can match the same substring.
+        """
+        return sorted(self._patterns, key=lambda item: item[4], reverse=True)
+
+    def detect(self, text: str | None) -> List[PIIMatch]:
+        """
+        テキストからPIIを検出
+
+        Args:
+            text: 検査対象テキスト
+
+        Returns:
+            検出されたPIIのリスト
+        """
+        text = self._prepare_input_text(text)
+        if not text:
+            return []
+
+        if len(text) <= _MAX_PII_INPUT_LENGTH:
+            results = self._detect_in_segment(text)
+        else:
+            _logger.warning(
+                "PII input segmented for scanning: %d chars (segment size=%d)",
+                len(text),
+                _MAX_PII_INPUT_LENGTH,
+            )
+            results = []
+            overlap = 128
+            segment_size = _MAX_PII_INPUT_LENGTH
+            step = max(1, segment_size - overlap)
+            seen_ranges: set[tuple[int, int]] = set()
+
+            for start in range(0, len(text), step):
+                end = min(len(text), start + segment_size)
+                segment_matches = self._detect_in_segment(text[start:end], offset=start)
+                for match in segment_matches:
+                    span = (match.start, match.end)
+                    if span not in seen_ranges:
+                        seen_ranges.add(span)
+                        results.append(match)
+
+                if end == len(text):
+                    break
 
         # 位置順にソート
         results.sort(key=lambda x: x.start)
