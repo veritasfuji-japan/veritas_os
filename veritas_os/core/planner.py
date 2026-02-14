@@ -95,22 +95,39 @@ def _normalize_step(
     default_risk: float = 0.1,
 ) -> StepDict:
     """
-    1つの step に対して、eta_hours / risk / dependencies を必ず埋める。
-    すでに値がある場合はそのまま尊重し、欠けているものだけ補完する。
+    1つの step に対して、eta_hours / risk / dependencies を安全な値へ正規化する。
+
+    - eta_hours: 数値へ変換し、負値は 0.0 に丸める
+    - risk: 数値へ変換し、0.0〜1.0 の範囲へ丸める
+    - dependencies: list[str] に正規化
+
+    既存値がある場合も型不正な値は補正し、後続処理での型崩れを防ぐ。
     """
     s: StepDict = dict(step)
 
-    if "eta_hours" not in s:
-        try:
-            s["eta_hours"] = float(default_eta_hours)
-        except Exception:
-            s["eta_hours"] = 1.0
+    try:
+        fallback_eta = float(default_eta_hours)
+    except Exception:
+        fallback_eta = 1.0
 
-    if "risk" not in s:
-        try:
-            s["risk"] = float(default_risk)
-        except Exception:
-            s["risk"] = 0.1
+    eta_candidate = s.get("eta_hours", fallback_eta)
+    try:
+        eta_hours = float(eta_candidate)
+    except Exception:
+        eta_hours = fallback_eta
+    s["eta_hours"] = max(0.0, eta_hours)
+
+    try:
+        fallback_risk = float(default_risk)
+    except Exception:
+        fallback_risk = 0.1
+
+    risk_candidate = s.get("risk", fallback_risk)
+    try:
+        risk_value = float(risk_candidate)
+    except Exception:
+        risk_value = fallback_risk
+    s["risk"] = min(1.0, max(0.0, risk_value))
 
     deps = s.get("dependencies")
     if not isinstance(deps, list):
