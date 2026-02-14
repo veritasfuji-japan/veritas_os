@@ -110,12 +110,17 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     captured: Dict[str, Any] = {}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str,
+        headers: Dict[str, Any],
+        json: Dict[str, Any],
+        timeout: int,
+        **kwargs: Any,
     ):
         # ざっくりヘッダ・URL・ペイロードを検証
         captured["url"] = url
         captured["headers"] = headers
         captured["payload"] = json
+        captured["kwargs"] = kwargs
         return DummyResponse(data)
 
     # requests.post をモック
@@ -128,6 +133,7 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     assert captured["headers"]["X-API-KEY"] == web_search_mod.WEBSEARCH_KEY
     assert captured["payload"]["q"] == "normal query"
     assert captured["payload"]["num"] == 4  # max_results * 2
+    assert captured["kwargs"]["allow_redirects"] is False
 
     # レスポンスの検証
     assert resp["ok"] is True
@@ -161,7 +167,7 @@ def test_web_search_retries_on_timeout(monkeypatch) -> None:
     calls = {"count": 0}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         calls["count"] += 1
         if calls["count"] == 1:
@@ -209,7 +215,7 @@ def test_web_search_agi_query_filters_and_trims(monkeypatch) -> None:
     captured: Dict[str, Any] = {}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         captured["payload"] = json
         return DummyResponse(data)
@@ -250,7 +256,7 @@ def test_web_search_agi_query_no_agi_like_results(monkeypatch) -> None:
     }
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         return DummyResponse(data)
 

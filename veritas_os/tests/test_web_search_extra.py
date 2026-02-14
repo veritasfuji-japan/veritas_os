@@ -178,7 +178,7 @@ class TestWebSearchVeritasContext:
 
         captured = {}
 
-        def fake_post(url, headers, json, timeout):
+        def fake_post(url, headers, json, timeout, **kwargs):
             captured["payload"] = json
             return DummyResponse({"organic": []})
 
@@ -211,7 +211,7 @@ class TestWebSearchVeritasContext:
             ]
         }
 
-        def fake_post(url, headers, json, timeout):
+        def fake_post(url, headers, json, timeout, **kwargs):
             return DummyResponse(data)
 
         monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
@@ -233,7 +233,7 @@ class TestWebSearchEdgeCases:
         )
         monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
 
-        def fake_post(url, headers, json, timeout):
+        def fake_post(url, headers, json, timeout, **kwargs):
             return DummyResponse({"organic": []})
 
         monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
@@ -250,7 +250,7 @@ class TestWebSearchEdgeCases:
         )
         monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
 
-        def fake_post(url, headers, json, timeout):
+        def fake_post(url, headers, json, timeout, **kwargs):
             return DummyResponse({})  # No organic key
 
         monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
@@ -275,7 +275,7 @@ class TestWebSearchEdgeCases:
             ]
         }
 
-        def fake_post(url, headers, json, timeout):
+        def fake_post(url, headers, json, timeout, **kwargs):
             return DummyResponse(data)
 
         monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
