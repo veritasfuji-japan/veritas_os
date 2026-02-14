@@ -39,6 +39,8 @@ _logger = logging.getLogger(__name__)
 
 # Luhnチェック時の入力文字列長上限（DoS対策）
 _MAX_CARD_INPUT_LENGTH = 256
+# PII検査対象の入力長上限（ReDoS/CPU DoS対策）
+_MAX_PII_INPUT_LENGTH = 1_000_000
 
 
 # =============================================================================
@@ -377,6 +379,27 @@ class PIIDetector:
             ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
         ]
 
+    def _prepare_input_text(self, text: str | None) -> str:
+        """Normalize and safely bound input text for PII scanning.
+
+        Args:
+            text: Raw input text. ``None`` is treated as an empty string.
+
+        Returns:
+            Sanitized string clipped to the configured maximum length.
+        """
+        if text is None:
+            return ""
+
+        if len(text) > _MAX_PII_INPUT_LENGTH:
+            _logger.warning(
+                "PII input truncated from %d to %d chars",
+                len(text),
+                _MAX_PII_INPUT_LENGTH,
+            )
+            return text[:_MAX_PII_INPUT_LENGTH]
+        return text
+
     def _validate_credit_card(self, match: str, context: str) -> bool:
         return _is_valid_credit_card(match)
 
@@ -393,14 +416,9 @@ class PIIDetector:
         Returns:
             検出されたPIIのリスト
         """
+        text = self._prepare_input_text(text)
         if not text:
             return []
-
-        # ★ セキュリティ: 入力長制限（ReDoS / CPU DoS 防止）
-        _MAX_PII_INPUT_LENGTH = 1_000_000  # 1M chars (~1 MB for ASCII)
-        if len(text) > _MAX_PII_INPUT_LENGTH:
-            _logger.warning("PII input truncated from %d to %d chars", len(text), _MAX_PII_INPUT_LENGTH)
-            text = text[:_MAX_PII_INPUT_LENGTH]
 
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用
