@@ -57,6 +57,13 @@ def test_looks_agi_result_false_for_unrelated() -> None:
     assert web_search_mod._looks_agi_result(title, snippet, url) is False
 
 
+def test_sanitize_max_results_clamps_values() -> None:
+    assert web_search_mod._sanitize_max_results(0) == 1
+    assert web_search_mod._sanitize_max_results(101) == 100
+    assert web_search_mod._sanitize_max_results("3") == 3
+    assert web_search_mod._sanitize_max_results("abc") == 5
+
+
 # -----------------------------
 # web_search 本体のテスト
 # -----------------------------
@@ -277,4 +284,3 @@ def test_web_search_handles_request_exception(monkeypatch) -> None:
     assert resp["ok"] is False
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
-
