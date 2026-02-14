@@ -14,6 +14,7 @@ Usage:
 import json
 import hashlib
 from pathlib import Path
+from typing import Iterable, Any
 
 # パスの設定（環境に応じて調整）
 try:
@@ -57,9 +58,13 @@ def compute_hash(prev_hash: str | None, entry: dict) -> str:
     return hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
 
-def iter_entries():
-    """JSONLファイルから1行ずつエントリを読み込む"""
-    with open(LOG_JSONL, encoding="utf-8") as f:
+def iter_entries(log_path: Path = LOG_JSONL) -> Iterable[dict[str, Any]]:
+    """Yield JSON entries from a trust-log JSONL file.
+
+    Invalid JSON lines are skipped with a warning so one broken line does not
+    block verification of the rest of the file.
+    """
+    with open(log_path, encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -69,6 +74,44 @@ def iter_entries():
             except json.JSONDecodeError as e:
                 print(f"⚠️  JSON decode error: {e}")
                 continue
+
+
+def verify_entries(entries: Iterable[dict[str, Any]]) -> tuple[int, list[dict[str, Any]], str | None]:
+    """Verify trust-log chain/hash integrity for a stream of entries.
+
+    Returns a tuple of (total_entries, errors, last_hash).
+    """
+    prev_hash = None
+    total = 0
+    errors: list[dict[str, Any]] = []
+
+    for i, entry in enumerate(entries, 1):
+        total = i
+        sha_prev = entry.get("sha256_prev")
+        sha_self = entry.get("sha256")
+
+        if sha_prev != prev_hash:
+            errors.append({
+                "line": i,
+                "type": "chain_break",
+                "expected_prev": prev_hash,
+                "actual_prev": sha_prev,
+                "entry_id": entry.get("request_id", "unknown"),
+            })
+
+        calc_hash = compute_hash(sha_prev, entry)
+        if calc_hash != sha_self:
+            errors.append({
+                "line": i,
+                "type": "hash_mismatch",
+                "expected": calc_hash,
+                "actual": sha_self,
+                "entry_id": entry.get("request_id", "unknown"),
+            })
+
+        prev_hash = sha_self
+
+    return total, errors, prev_hash
 
 
 def main():
@@ -82,38 +125,7 @@ def main():
         print(f"   Expected location: {LOG_JSONL}")
         return 1
     
-    prev_hash = None
-    total = 0
-    errors = []
-    
-    for i, entry in enumerate(iter_entries(), 1):
-        total = i
-        sha_prev = entry.get("sha256_prev")
-        sha_self = entry.get("sha256")
-        
-        # 1. チェーン連続性の検証
-        if sha_prev != prev_hash:
-            errors.append({
-                "line": i,
-                "type": "chain_break",
-                "expected_prev": prev_hash,
-                "actual_prev": sha_prev,
-                "entry_id": entry.get("request_id", "unknown"),
-            })
-        
-        # 2. ハッシュ値の検証（論文の式に従う）
-        # hₜ = SHA256(hₜ₋₁ || rₜ)
-        calc_hash = compute_hash(sha_prev, entry)
-        if calc_hash != sha_self:
-            errors.append({
-                "line": i,
-                "type": "hash_mismatch",
-                "expected": calc_hash,
-                "actual": sha_self,
-                "entry_id": entry.get("request_id", "unknown"),
-            })
-        
-        prev_hash = sha_self
+    total, errors, last_hash = verify_entries(iter_entries())
     
     print(f"Total entries: {total}")
     print()
@@ -126,7 +138,7 @@ def main():
         chain_breaks = sum(1 for e in errors if e['type'] == 'chain_break')
         hash_mismatches = sum(1 for e in errors if e['type'] == 'hash_mismatch')
         
-        print(f"Error breakdown:")
+        print("Error breakdown:")
         print(f"  Chain breaks:    {chain_breaks}")
         print(f"  Hash mismatches: {hash_mismatches}")
         print()
@@ -160,21 +172,14 @@ def main():
     else:
         print("✅ Verification PASSED")
         print(f"   All {total} entries are valid")
-        print(f"   Hash chain is intact")
+        print("   Hash chain is intact")
         print()
-        print("   First entry hash: " + (prev_hash[:16] if total > 0 else "N/A") + "...")
-        if total > 0:
-            # 最後のハッシュを表示（チェーンの最新状態）
-            with open(LOG_JSONL, encoding="utf-8") as f:
-                lines = f.readlines()
-            if lines:
-                last_entry = json.loads(lines[-1])
-                last_hash = last_entry.get("sha256", "")
-                print(f"   Last entry hash:  {last_hash[:16]}...")
+        print("   Current chain head hash: " + (last_hash[:16] if total > 0 and last_hash else "N/A") + "...")
+        if total > 0 and last_hash:
+            print(f"   Last entry hash:  {last_hash[:16]}...")
         
         return 0
 
 
 if __name__ == "__main__":
     exit(main())
-
