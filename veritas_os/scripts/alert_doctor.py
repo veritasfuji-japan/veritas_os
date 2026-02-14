@@ -91,6 +91,34 @@ def _safe_snippet(text: str, max_chars: int = MAX_HEAL_OUTPUT_CHARS) -> str:
     return f"{one_line[:max_chars]}..."
 
 
+def _validate_health_url(url: str) -> bool:
+    """Validate health-check URL to avoid accidental SSRF.
+
+    The alerting workflow should only probe a local Veritas API endpoint.
+    Allowed destinations are loopback hosts over HTTP/HTTPS without
+    embedded credentials.
+    """
+    if not url:
+        return False
+
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except ValueError:
+        return False
+
+    if parsed.scheme not in {"http", "https"}:
+        return False
+
+    if parsed.username or parsed.password:
+        return False
+
+    hostname: Optional[str] = parsed.hostname
+    if not hostname:
+        return False
+
+    return hostname.lower() in {"localhost", "127.0.0.1", "::1"}
+
+
 # ================================
 # Slack 通知
 # ================================
@@ -131,7 +159,10 @@ def post_slack(text: str, timeout_sec: int = 12, max_retry: int = 3) -> bool:
 # HTTP チェック
 # ================================
 def http_get(url: str, timeout: int = 3):
-    """Run a lightweight HTTP GET and return ``(status, body_or_error)``."""
+    """Run a lightweight local HTTP GET and return ``(status, body_or_error)``."""
+    if not _validate_health_url(url):
+        return None, "health URL blocked by security policy"
+
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", "ignore")
