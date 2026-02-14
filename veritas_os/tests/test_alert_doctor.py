@@ -84,6 +84,27 @@ def test_safe_snippet_truncates_and_flattens_whitespace():
     assert len(got) == 23
 
 
+def test_validate_health_url_accepts_only_localhosts():
+    """Health URL should allow only loopback destinations."""
+    assert alert_doctor._validate_health_url("http://127.0.0.1:8000/health")
+    assert alert_doctor._validate_health_url("https://localhost/health")
+    assert not alert_doctor._validate_health_url("http://example.com/health")
+    assert not alert_doctor._validate_health_url("http://user@127.0.0.1/health")
+
+
+def test_http_get_blocks_non_local_url_without_network(monkeypatch):
+    """http_get should reject non-local targets before urlopen is called."""
+
+    def _unexpected_call(*_args, **_kwargs):
+        raise AssertionError("Network call must not happen for blocked URL")
+
+    monkeypatch.setattr(alert_doctor.urllib.request, "urlopen", _unexpected_call)
+
+    status, body = alert_doctor.http_get("http://example.com/health")
+    assert status is None
+    assert body == "health URL blocked by security policy"
+
+
 def test_run_heal_truncates_failure_output(monkeypatch, tmp_path):
     """run_heal should sanitize and truncate subprocess failure output."""
     heal_script = tmp_path / "heal.sh"
