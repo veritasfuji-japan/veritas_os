@@ -204,6 +204,16 @@ def test_safe_parse_truncates_oversized_input(caplog):
     assert any("input too large" in rec.message for rec in caplog.records)
 
 
+def test_safe_json_extract_limits_decoder_probe_count(caplog):
+    raw = "[" * (planner_core._MAX_JSON_DECODE_ATTEMPTS + 20)
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("probe limit reached" in rec.message for rec in caplog.records)
+
+
 # -------------------------------
 # _fallback_plan / _infer_veritas_stage / _fallback_plan_for_stage
 # -------------------------------
