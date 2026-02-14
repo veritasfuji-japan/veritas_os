@@ -223,6 +223,36 @@ def test_put_validates_tags_and_meta_types(memory_env):
         ms.put("episodic", {"text": "ok", "tags": [], "meta": "not-dict"})
 
 
+def test_put_validates_id_shape_and_length(memory_env):
+    """put は不正な id 形状と過剰長 id を拒否する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+
+    with pytest.raises(TypeError, match="item.id must be a scalar value"):
+        ms.put("episodic", {"id": {"bad": "id"}, "text": "ok", "tags": [], "meta": {}})
+
+    with pytest.raises(ValueError, match="item.id must not be empty"):
+        ms.put("episodic", {"id": "   ", "text": "ok", "tags": [], "meta": {}})
+
+    too_long_id = "a" * (store.MAX_ITEM_ID_LENGTH + 1)
+    with pytest.raises(ValueError, match="item.id too long"):
+        ms.put("episodic", {"id": too_long_id, "text": "ok", "tags": [], "meta": {}})
+
+
+def test_put_normalizes_scalar_id(memory_env):
+    """put は scalar な id を文字列に正規化して保存する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+    item_id = ms.put("episodic", {"id": 42, "text": "hello", "tags": [], "meta": {}})
+
+    assert item_id == "42"
+    content = files["episodic"].read_text(encoding="utf-8").splitlines()
+    row = json.loads(content[0])
+    assert row["id"] == "42"
+
+
 # ---------------------------------------------------------
 # search: 空クエリ
 # ---------------------------------------------------------
