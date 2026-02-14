@@ -1,11 +1,11 @@
 # veritas/memory/index_cosine.py
-import logging
 import os
 import threading
+import logging
 
 import numpy as np
 from pathlib import Path
-from typing import List, Tuple, Iterable, Optional, Any
+from typing import Any, Iterable, List, Optional, Tuple
 
 from veritas_os.core.atomic_io import atomic_write_npz
 
@@ -47,6 +47,12 @@ def _allow_legacy_pickle_npz() -> bool:
     return False
 
 
+def _validate_finite_array(name: str, values: np.ndarray) -> None:
+    """Raise ValueError when an input vector contains NaN/Inf values."""
+    if not np.isfinite(values).all():
+        raise ValueError(f"CosineIndex.{name}: vectors must be finite (no NaN/Inf)")
+
+
 class CosineIndex:
     """
     シンプルな Cosine 類似度インデックス + 永続化 (.npz)
@@ -73,9 +79,9 @@ class CosineIndex:
     def _load(self) -> None:
         with self._lock:
             try:
-                data = np.load(self.path, allow_pickle=False)
-                self.vecs = data["vecs"].astype(np.float32)
-                self.ids = [str(i) for i in data["ids"].tolist()]
+                with np.load(self.path, allow_pickle=False) as data:
+                    self.vecs = data["vecs"].astype(np.float32)
+                    self.ids = [str(i) for i in data["ids"].tolist()]
                 return
             except Exception as e:
                 # ★ M-18 修正: エラーをログに記録（破損と不在を区別可能に）
@@ -103,9 +109,9 @@ class CosineIndex:
                         self.path,
                     )
                     try:
-                        data = np.load(self.path, allow_pickle=True)
-                        self.vecs = data["vecs"].astype(np.float32)
-                        self.ids = [str(i) for i in data["ids"].tolist()]
+                        with np.load(self.path, allow_pickle=True) as data:
+                            self.vecs = data["vecs"].astype(np.float32)
+                            self.ids = [str(i) for i in data["ids"].tolist()]
                         # Immediately re-save without pickle to migrate
                         self.save()
                         logger.info(
@@ -143,11 +149,12 @@ class CosineIndex:
         with self._lock:
             return len(self.ids)
 
-    def add(self, vecs: Any, ids: Iterable[str]):
+    def add(self, vecs: Any, ids: Iterable[str]) -> None:
         """ベクトルと id を追加して即保存（スレッドセーフ）"""
         vecs = np.asarray(vecs, dtype=np.float32)
         if vecs.ndim == 1:
             vecs = vecs.reshape(1, -1)
+        _validate_finite_array("add", vecs)
 
         if vecs.shape[1] != self.dim:
             raise ValueError(f"CosineIndex.add: dim mismatch {vecs.shape[1]} != {self.dim}")
@@ -168,12 +175,19 @@ class CosineIndex:
     def search(self, qv: Any, k: int = 8) -> List[List[Tuple[str, float]]]:
         """
         qv: (D,) or (Q, D)
+        k: 取得する上位件数（1以上）
         戻り値: [[(id, score), ...], ...]  （クエリごとに1リスト）
         スレッドセーフ: 検索中は一貫したスナップショットを使用
         """
+        if k < 1:
+            raise ValueError(f"CosineIndex.search: k must be >= 1, got {k}")
+
         q = np.asarray(qv, dtype=np.float32)
         if q.ndim == 1:
             q = q.reshape(1, -1)
+        _validate_finite_array("search", q)
+        if q.shape[1] != self.dim:
+            raise ValueError(f"CosineIndex.search: dim mismatch {q.shape[1]} != {self.dim}")
 
         with self._lock:
             # ロック内でスナップショットを取得

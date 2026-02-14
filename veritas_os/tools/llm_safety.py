@@ -20,6 +20,7 @@ FUJI Gate から呼ばれる「安全ヘッド」。
 """
 
 from __future__ import annotations
+import importlib.util
 from typing import Any, Dict, List
 import json
 import logging
@@ -30,10 +31,9 @@ import time
 
 logger = logging.getLogger(__name__)
 
-try:
-    # OpenAI クライアント（インポートできなければ使わない）
+if importlib.util.find_spec("openai") is not None:  # pragma: no cover
     from openai import OpenAI  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
+else:  # pragma: no cover
     OpenAI = None  # type: ignore
 
 
@@ -73,6 +73,39 @@ _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
 
 def _norm(s: str) -> str:
     return (s or "").replace("　", " ").strip().casefold()
+
+
+def _normalize_categories(categories: list[Any], max_categories: int) -> list[str]:
+    """LLM が返すカテゴリ配列を監査しやすい安全な形式へ正規化する。
+
+    Args:
+        categories: LLM レスポンス上のカテゴリ配列。
+        max_categories: 返却上限。0 以下は 0 扱い。
+
+    Returns:
+        重複除去済み・トリム済み・長さ制限済みのカテゴリ一覧。
+    """
+    safe_limit = max(0, int(max_categories))
+    if safe_limit == 0:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+
+    for raw in categories:
+        category = str(raw).strip()
+        if not category:
+            continue
+        # 監査ログ肥大化を避けるため、カテゴリ1件あたりの長さを制限
+        category = category[:64]
+        if category in seen:
+            continue
+        normalized.append(category)
+        seen.add(category)
+        if len(normalized) >= safe_limit:
+            break
+
+    return normalized
 
 
 def _heuristic_analyze(text: str) -> Dict[str, Any]:
@@ -268,7 +301,7 @@ def _analyze_with_llm(
         llm_categories=[str(c) for c in cats],
         heuristic=heuristic,
     )
-    scored_categories = scoring["categories"][:max_categories]
+    scored_categories = _normalize_categories(scoring["categories"], max_categories)
     scored_risk = float(scoring["risk_score"])
     scoring_notes = scoring.get("notes") or []
     if scoring_notes:

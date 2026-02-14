@@ -2,6 +2,8 @@
 """Comprehensive tests for PII detection and masking."""
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from veritas_os.core.sanitize import (
@@ -13,7 +15,48 @@ from veritas_os.core.sanitize import (
     _is_valid_my_number,
     _is_likely_phone,
     _is_likely_ip,
+    _is_likely_ipv6,
 )
+
+
+def test_detector_prioritizes_high_confidence_on_overlap() -> None:
+    """Higher-confidence patterns should win when matches overlap."""
+    detector = PIIDetector(validate_checksums=False)
+    detector._patterns = [
+        ("low", re.compile(r"abc"), "LOW", None, 0.1),
+        ("high", re.compile(r"abc"), "HIGH", None, 0.9),
+    ]
+
+    matches = detector.detect("abc")
+
+    assert len(matches) == 1
+    assert matches[0].type == "high"
+
+
+def test_phone_patterns_do_not_match_embedded_digits() -> None:
+    """Domestic phone regexes should not match when surrounded by digits."""
+    text = "顧客ID1090123456789は連絡先ではない"
+    result = detect_pii(text)
+
+    phones = [r for r in result if r["type"] == "phone_mobile"]
+    assert phones == []
+
+
+def test_detect_pii_accepts_non_string_inputs() -> None:
+    """detect_pii should safely coerce non-string payload values."""
+    byte_result = detect_pii(b"mail: test@example.com")
+    assert any(item["type"] == "email" for item in byte_result)
+
+    int_result = detect_pii(12345)
+    assert int_result == []
+
+
+def test_mask_pii_handles_non_string_bytes_via_detector() -> None:
+    """PIIDetector.mask should decode bytes before masking."""
+    detector = PIIDetector()
+    masked = detector.mask(b"contact: test@example.com")
+    assert "test@example.com" not in masked
+    assert "〔メール〕" in masked
 
 
 class TestEmailDetection:
@@ -356,6 +399,19 @@ class TestIPHeuristics:
         assert not _is_likely_ip("1.2.3")
 
 
+class TestIPv6Heuristics:
+    """Tests for IPv6 address heuristics."""
+
+    def test_valid_ipv6(self):
+        assert _is_likely_ipv6("2001:db8::1")
+
+    def test_bare_double_colon_excluded(self):
+        assert not _is_likely_ipv6("::")
+
+    def test_invalid_ipv6(self):
+        assert not _is_likely_ipv6("2001:::1")
+
+
 class TestPIIDetector:
     """Tests for PIIDetector class."""
 
@@ -367,7 +423,7 @@ class TestPIIDetector:
     def test_mask_empty_text(self):
         detector = PIIDetector()
         assert detector.mask("") == ""
-        assert detector.mask(None) is None
+        assert detector.mask(None) == ""
 
     def test_no_overlap_detection(self):
         """Overlapping patterns should not produce duplicate detections."""

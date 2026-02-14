@@ -29,24 +29,30 @@ def _parse_cors_origins(raw_value: str) -> list[str]:
 
 
 def _parse_float(env_key: str, default: float) -> float:
-    """環境変数からfloatを取得"""
+    """環境変数から float を取得し、不正値時は警告して既定値を返す。"""
     val = os.getenv(env_key)
     if val is None:
         return default
     try:
         return float(val)
     except ValueError:
+        logging.getLogger(__name__).warning(
+            "Invalid float for %s; falling back to default.", env_key
+        )
         return default
 
 
 def _parse_int(env_key: str, default: int) -> int:
-    """環境変数からintを取得"""
+    """環境変数から int を取得し、不正値時は警告して既定値を返す。"""
     val = os.getenv(env_key)
     if val is None:
         return default
     try:
         return int(val)
     except ValueError:
+        logging.getLogger(__name__).warning(
+            "Invalid int for %s; falling back to default.", env_key
+        )
         return default
 
 

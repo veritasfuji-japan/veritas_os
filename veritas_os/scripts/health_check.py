@@ -53,6 +53,31 @@ WITHIN = timedelta(days=1)   # 「最近」の基準（24h 以内）
 
 
 # ===== セキュリティ: URL バリデーション =====
+def _is_valid_ipv4(hostname: str) -> bool:
+    """IPv4 アドレス形式とオクテット範囲を検証する。"""
+    if not re.match(r"^\d{1,3}(?:\.\d{1,3}){3}$", hostname):
+        return False
+    octets = hostname.split(".")
+    return all(0 <= int(octet) <= 255 for octet in octets)
+
+
+def _is_valid_hostname(hostname: str) -> bool:
+    """RFC に準拠した安全なホスト名かどうかを検証する。"""
+    if len(hostname) > 253:
+        return False
+
+    labels = hostname.split(".")
+    for label in labels:
+        if not label or len(label) > 63:
+            return False
+        if label.startswith("-") or label.endswith("-"):
+            return False
+        if not re.match(r"^[a-zA-Z0-9-]+$", label):
+            return False
+
+    return True
+
+
 def _validate_url(url: str) -> Optional[str]:
     """
     ★ セキュリティ修正: URL を検証し、安全な場合のみ返す。
@@ -74,40 +99,49 @@ def _validate_url(url: str) -> Optional[str]:
         if char in url:
             return None
 
-    try:
-        parsed = urlparse(url)
+    parsed = urlparse(url)
 
-        # スキームの検証（http/https のみ）
-        if parsed.scheme not in ("http", "https"):
-            return None
-
-        # ホスト名の検証
-        hostname = parsed.hostname
-        if not hostname:
-            return None
-
-        # ホスト名は英数字、ハイフン、ドットのみ（IDN は punycode に変換済み前提）
-        if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", hostname):
-            # IPv4 アドレスの場合は別途チェック
-            if not re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname):
-                return None
-
-        # ポートの検証
-        port = parsed.port
-        if port is not None:
-            if not (1 <= port <= 65535):
-                return None
-
-        # パスに危険な文字がないか再確認
-        path = parsed.path or ""
-        for char in dangerous_chars:
-            if char in path:
-                return None
-
-        return url
-
-    except Exception:
+    # スキームの検証（http/https のみ）
+    if parsed.scheme not in ("http", "https"):
         return None
+
+    # 認証情報付き URL を禁止（資格情報漏えい防止）
+    if parsed.username or parsed.password:
+        return None
+
+    # クエリ/フラグメントは不要なため禁止（予期しない挙動を防止）
+    if parsed.query or parsed.fragment:
+        return None
+
+    # ホスト名の検証
+    hostname = parsed.hostname
+    if not hostname:
+        return None
+
+    # IPv4 風（数字とドットのみ）の場合はオクテット範囲を厳密検証
+    if re.match(r"^[0-9.]+$", hostname):
+        if not _is_valid_ipv4(hostname):
+            return None
+    # ホスト名を RFC 準拠で厳密検証
+    elif not _is_valid_hostname(hostname):
+        return None
+
+    # ポートの検証
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+
+    if port is not None and not (1 <= port <= 65535):
+        return None
+
+    # パスに危険な文字がないか再確認
+    path = parsed.path or ""
+    for char in dangerous_chars:
+        if char in path:
+            return None
+
+    return url
 
 
 API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")

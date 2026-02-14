@@ -75,6 +75,12 @@ def _safe_int(key: str, default: int) -> int:
         return default
 
 
+def _safe_int_with_min(key: str, default: int, minimum: int) -> int:
+    """環境変数を整数として読み取り、下限値を適用して返す。"""
+    value = _safe_int(key, default)
+    return max(value, minimum)
+
+
 def _safe_float(key: str, default: float) -> float:
     try:
         return float(os.getenv(key, str(default)))
@@ -82,11 +88,13 @@ def _safe_float(key: str, default: float) -> float:
         return default
 
 
-WEBSEARCH_MAX_RETRIES = _safe_int("VERITAS_WEBSEARCH_MAX_RETRIES", 3)
-WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
-WEBSEARCH_RETRY_MAX_DELAY = _safe_float(
-    "VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0
+WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
+    "VERITAS_WEBSEARCH_MAX_RETRIES",
+    3,
+    1,
 )
+WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
+WEBSEARCH_RETRY_MAX_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0)
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
 WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower()
@@ -171,7 +179,12 @@ def _post_with_retry(
     payload: Dict[str, Any],
     timeout: int,
 ) -> requests.Response:
-    """外部API呼び出しを再試行しつつ実行する。"""
+    """外部API呼び出しを再試行しつつ実行する。
+
+    Security note:
+        Redirects are disabled so that a trusted WEBSEARCH endpoint cannot
+        bounce requests to internal/private addresses (SSRF via redirect).
+    """
     last_exc: Optional[Exception] = None
     for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
         try:
@@ -180,6 +193,7 @@ def _post_with_retry(
                 headers=headers,
                 json=payload,
                 timeout=timeout,
+                allow_redirects=False,
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
@@ -227,13 +241,21 @@ def _extract_hostname(url: str) -> str:
     return (host or "").lower()
 
 
-def _is_private_or_local_host(hostname: str) -> bool:
-    """ホストが localhost / private / loopback / link-local かを判定する。"""
+def _is_obviously_private_or_local_host(hostname: str) -> bool:
+    """文字列情報だけで private/local と判断できるホストを検出する。"""
     host = (hostname or "").strip().lower()
     if not host:
         return True
 
     if host in {"localhost", "localhost.localdomain"}:
+        return True
+
+    # Single-label host names and local/internal pseudo-TLDs are typically
+    # internal-only and should not be used for outbound web search endpoints.
+    if "." not in host:
+        return True
+
+    if host.endswith((".local", ".internal", ".localhost", ".localdomain")):
         return True
 
     try:
@@ -249,11 +271,21 @@ def _is_private_or_local_host(hostname: str) -> bool:
     except ValueError:
         pass
 
+    return False
+
+
+def _is_private_or_local_host(hostname: str) -> bool:
+    """ホストが localhost / private / loopback / link-local かを判定する。"""
+    host = (hostname or "").strip().lower()
+    if _is_obviously_private_or_local_host(host):
+        return True
+
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror:
-        # 解決不能なホストは接続失敗になるため、ここでは SSRF 判定対象外。
-        return False
+        # DNS解決不能なホストは誤設定かローカル向け名の可能性が高いため、
+        # 保守的にブロックする。
+        return True
 
     for info in infos:
         ip_text = info[4][0]
@@ -274,17 +306,31 @@ def _is_private_or_local_host(hostname: str) -> bool:
 
 
 def _is_allowed_websearch_url(url: str) -> bool:
-    """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。"""
+    """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。
+
+    Security note:
+        API key を平文送信しないため、HTTPS のみ許可する。
+    """
     parsed = urlparse((url or "").strip())
-    if parsed.scheme not in ("http", "https"):
+    if parsed.scheme != "https":
+        return False
+
+    # URL 埋め込み資格情報の利用を禁止し、誤設定や漏えいリスクを低減する。
+    if parsed.username or parsed.password:
         return False
 
     host = (parsed.hostname or "").lower()
+    if WEBSEARCH_HOST_ALLOWLIST:
+        if host not in WEBSEARCH_HOST_ALLOWLIST:
+            return False
+        # Allowlisted hosts must also resolve to public IPs.
+        # This prevents DNS rebinding/misconfiguration from tunneling
+        # requests into private networks.
+        return not _is_private_or_local_host(host)
+
     if _is_private_or_local_host(host):
         return False
 
-    if WEBSEARCH_HOST_ALLOWLIST:
-        return host in WEBSEARCH_HOST_ALLOWLIST
     return True
 
 
@@ -422,6 +468,80 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
     return False
 
 
+def _sanitize_max_results(max_results: Any, *, default: int = 5) -> int:
+    """`max_results` を安全な範囲に丸める。"""
+    try:
+        result = int(max_results)
+    except (TypeError, ValueError):
+        result = default
+    return min(max(result, 1), 100)
+
+
+def _build_meta(
+    *,
+    raw_count: int,
+    agi_filter_applied: bool,
+    agi_result_count: Optional[int],
+    boosted_query: Optional[str],
+    final_query: str,
+    anchor_applied: bool,
+    blacklist_applied: bool,
+    blocked_count: int,
+) -> Dict[str, Any]:
+    """`web_search` のレスポンス meta 部分を共通生成する。"""
+    return {
+        "raw_count": raw_count,
+        "agi_filter_applied": agi_filter_applied,
+        "agi_result_count": agi_result_count,
+        "boosted_query": boosted_query,
+        "final_query": final_query,
+        "anchor_applied": anchor_applied,
+        "blacklist_applied": blacklist_applied,
+        "blocked_count": blocked_count,
+    }
+
+
+def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """外部APIの検索結果1件を安全に正規化する。
+
+    Security note:
+        - URL は http/https スキームのみ許可する。
+        - title/snippet/url は上限長で切り詰め、過大レスポンスによる
+          メモリ消費やログ汚染リスクを緩和する。
+    """
+    raw_url = item.get("link") or item.get("url") or ""
+    url = _normalize_str(raw_url, limit=2048).strip()
+
+    if url:
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ("http", "https"):
+            return None
+
+    title = _normalize_str(item.get("title") or "", limit=512)
+    snippet = _normalize_str(item.get("snippet") or item.get("description") or "", limit=2048)
+    return {"title": title, "url": url, "snippet": snippet}
+
+
+def _classify_websearch_error(error: Exception) -> str:
+    """Web検索失敗の種別を分類して監査ログで使う。"""
+    if isinstance(error, requests.exceptions.Timeout):
+        return "timeout"
+    if isinstance(error, requests.exceptions.HTTPError):
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if status_code is not None:
+            if 400 <= status_code < 500:
+                return "http_4xx"
+            if status_code >= 500:
+                return "http_5xx"
+        return "http_error"
+    if isinstance(error, requests.exceptions.RequestException):
+        return "request_exception"
+    if isinstance(error, ValueError):
+        return "response_parse"
+    return "unexpected"
+
+
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Serper.dev を使った Web 検索アダプタ。
@@ -435,51 +555,32 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     # ★ クエリインジェクション対策: 制御文字を除去
     raw_query = _RE_CONTROL_CHARS.sub("", raw_query)
 
+    unavailable_response = {
+        "ok": False,
+        "results": [],
+        "error": "WEBSEARCH_API unavailable",
+        "meta": _build_meta(
+            raw_count=0,
+            agi_filter_applied=False,
+            agi_result_count=None,
+            boosted_query=None,
+            final_query=raw_query,
+            anchor_applied=False,
+            blacklist_applied=False,
+            blocked_count=0,
+        ),
+    }
+
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
-        return {
-            "ok": False,
-            "results": [],
-            "error": "WEBSEARCH_API unavailable",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
-        }
+        return unavailable_response
 
     if not _is_allowed_websearch_url(WEBSEARCH_URL):
         logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
-        return {
-            "ok": False,
-            "results": [],
-            "error": "WEBSEARCH_API unavailable",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
-        }
+        return unavailable_response
 
     # max_results の下限・上限を守る（極端値対策）
     # ★ M-15 修正: 上限を追加してリソース枯渇を防止
-    try:
-        mr = int(max_results)
-    except Exception:
-        mr = 5
-    if mr < 1:
-        mr = 1
-    if mr > 100:
-        mr = 100
+    mr = _sanitize_max_results(max_results)
 
     try:
         headers = {
@@ -534,21 +635,36 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             payload=payload,
             timeout=15,
         )
-        resp.raise_for_status()
-        data: Dict[str, Any] = resp.json()
+        try:
+            data: Dict[str, Any] = resp.json()
+        except ValueError as exc:
+            logger.warning(
+                "WEBSEARCH_API response parse error category=%s",
+                _classify_websearch_error(exc),
+            )
+            return {
+                "ok": False,
+                "results": [],
+                "error": "WEBSEARCH_API error: request failed",
+                "meta": _build_meta(
+                    raw_count=0,
+                    agi_filter_applied=False,
+                    agi_result_count=None,
+                    boosted_query=None,
+                    final_query=raw_query,
+                    anchor_applied=False,
+                    blacklist_applied=False,
+                    blocked_count=0,
+                ),
+            }
 
         organic = data.get("organic") or []
         raw_items: List[Dict[str, Any]] = []
         for item in organic:
-            url = item.get("link") or item.get("url") or ""
-            # URL スキーム検証: 安全なスキーム (http/https) のみ許可
-            if url:
-                parsed_url = urlparse(url)
-                if parsed_url.scheme not in ("http", "https"):
-                    continue
-            title = item.get("title") or ""
-            snippet = item.get("snippet") or item.get("description") or ""
-            raw_items.append({"title": title, "url": url, "snippet": snippet})
+            normalized = _normalize_result_item(item)
+            if normalized is None:
+                continue
+            raw_items.append(normalized)
 
         # ----------------------------
         # 3) VERITAS文脈の時だけ、結果側ブラックリスト（二重防衛）
@@ -586,32 +702,32 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                     "ok": True,
                     "results": [],
                     "error": "no_agi_like_results",
-                    "meta": {
-                        "raw_count": len(raw_items),
-                        "agi_filter_applied": True,
-                        "agi_result_count": 0,
-                        "boosted_query": boosted_query,
-                        "final_query": q_to_send,  # ★Serperに投げた最終
-                        "anchor_applied": anchor_applied,
-                        "blacklist_applied": blacklist_applied,
-                        "blocked_count": blocked_count,
-                    },
+                    "meta": _build_meta(
+                        raw_count=len(raw_items),
+                        agi_filter_applied=True,
+                        agi_result_count=0,
+                        boosted_query=boosted_query,
+                        final_query=q_to_send,
+                        anchor_applied=anchor_applied,
+                        blacklist_applied=blacklist_applied,
+                        blocked_count=blocked_count,
+                    ),
                 }
 
             return {
                 "ok": True,
                 "results": agi_items[:mr],
                 "error": None,
-                "meta": {
-                    "raw_count": len(raw_items),
-                    "agi_filter_applied": True,
-                    "agi_result_count": len(agi_items),
-                    "boosted_query": boosted_query,
-                    "final_query": q_to_send,  # ★Serperに投げた最終
-                    "anchor_applied": anchor_applied,
-                    "blacklist_applied": blacklist_applied,
-                    "blocked_count": blocked_count,
-                },
+                "meta": _build_meta(
+                    raw_count=len(raw_items),
+                    agi_filter_applied=True,
+                    agi_result_count=len(agi_items),
+                    boosted_query=boosted_query,
+                    final_query=q_to_send,
+                    anchor_applied=anchor_applied,
+                    blacklist_applied=blacklist_applied,
+                    blocked_count=blocked_count,
+                ),
             }
 
         # ----------------------------
@@ -621,34 +737,39 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "ok": True,
             "results": filtered_items[:mr],
             "error": None,
-            "meta": {
-                "raw_count": len(raw_items),
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": boosted_query,
-                "final_query": q_to_send,  # ★Serperに投げた最終（通常は raw_query と一致）
-                "anchor_applied": anchor_applied,
-                "blacklist_applied": blacklist_applied,
-                "blocked_count": blocked_count,
-            },
+            "meta": _build_meta(
+                raw_count=len(raw_items),
+                agi_filter_applied=False,
+                agi_result_count=None,
+                boosted_query=boosted_query,
+                final_query=q_to_send,
+                anchor_applied=anchor_applied,
+                blacklist_applied=blacklist_applied,
+                blocked_count=blocked_count,
+            ),
         }
 
     except Exception as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
         # 詳細はログに記録し、クライアントには汎用的なエラーメッセージのみ返す
-        logger.warning("WEBSEARCH_API error: %s: %s", type(e).__name__, e)
+        logger.warning(
+            "WEBSEARCH_API error category=%s type=%s: %s",
+            _classify_websearch_error(e),
+            type(e).__name__,
+            e,
+        )
         return {
             "ok": False,
             "results": [],
             "error": "WEBSEARCH_API error: request failed",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
+            "meta": _build_meta(
+                raw_count=0,
+                agi_filter_applied=False,
+                agi_result_count=None,
+                boosted_query=None,
+                final_query=raw_query,
+                anchor_applied=False,
+                blacklist_applied=False,
+                blocked_count=0,
+            ),
         }
