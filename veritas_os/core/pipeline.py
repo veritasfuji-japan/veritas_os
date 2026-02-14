@@ -2241,7 +2241,7 @@ async def run_decide_pipeline(
 
     if raw and healing_enabled:
         original_task = query
-        current_query = query
+        latest_healing_input: Optional[Dict[str, Any]] = None
         current_context = dict(context or {})
         while True:
             rejection = _extract_rejection(raw)
@@ -2305,6 +2305,7 @@ async def run_decide_pipeline(
                 }
             )
             prev_healing_input = healing_input
+            latest_healing_input = healing_input
 
             if stop_reason:
                 healing_stop_reason = stop_reason
@@ -2322,13 +2323,13 @@ async def run_decide_pipeline(
                 "action": decision.action.value,
                 "feedback": rejection.get("feedback"),
                 "policy_decision": decision.reason,
+                "input": healing_input,
             }
-            current_query = json.dumps(healing_input, ensure_ascii=False)
             try:
                 raw0 = await call_core_decide(
                     core_fn=core_decide,  # type: ignore[arg-type]
                     context=current_context,
-                    query=current_query,
+                    query=query,
                     alternatives=input_alts,
                     min_evidence=min_ev,
                 )
@@ -2381,6 +2382,7 @@ async def run_decide_pipeline(
                     "enabled": True,
                     "attempts": healing_attempts,
                     "stop_reason": healing_stop_reason,
+                    "input": latest_healing_input,
                 }
             )
 
