@@ -64,6 +64,32 @@ def test_sanitize_max_results_clamps_values() -> None:
     assert web_search_mod._sanitize_max_results("abc") == 5
 
 
+def test_normalize_result_item_rejects_unsafe_scheme() -> None:
+    """危険なスキームは正規化段階で除外する。"""
+    item = {
+        "title": "bad",
+        "link": "javascript:alert(1)",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_normalize_result_item_truncates_long_fields() -> None:
+    """検索結果の各フィールドは上限長で切り詰める。"""
+    item = {
+        "title": "t" * 700,
+        "link": "https://example.com/" + ("p" * 3000),
+        "snippet": "s" * 3000,
+    }
+
+    normalized = web_search_mod._normalize_result_item(item)
+
+    assert normalized is not None
+    assert len(normalized["title"]) == 512
+    assert len(normalized["url"]) == 2048
+    assert len(normalized["snippet"]) == 2048
+
+
 # -----------------------------
 # web_search 本体のテスト
 # -----------------------------

@@ -495,6 +495,27 @@ def _build_meta(
     }
 
 
+def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """外部APIの検索結果1件を安全に正規化する。
+
+    Security note:
+        - URL は http/https スキームのみ許可する。
+        - title/snippet/url は上限長で切り詰め、過大レスポンスによる
+          メモリ消費やログ汚染リスクを緩和する。
+    """
+    raw_url = item.get("link") or item.get("url") or ""
+    url = _normalize_str(raw_url, limit=2048).strip()
+
+    if url:
+        parsed_url = urlparse(url)
+        if parsed_url.scheme not in ("http", "https"):
+            return None
+
+    title = _normalize_str(item.get("title") or "", limit=512)
+    snippet = _normalize_str(item.get("snippet") or item.get("description") or "", limit=2048)
+    return {"title": title, "url": url, "snippet": snippet}
+
+
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Serper.dev を使った Web 検索アダプタ。
@@ -593,15 +614,10 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         organic = data.get("organic") or []
         raw_items: List[Dict[str, Any]] = []
         for item in organic:
-            url = item.get("link") or item.get("url") or ""
-            # URL スキーム検証: 安全なスキーム (http/https) のみ許可
-            if url:
-                parsed_url = urlparse(url)
-                if parsed_url.scheme not in ("http", "https"):
-                    continue
-            title = item.get("title") or ""
-            snippet = item.get("snippet") or item.get("description") or ""
-            raw_items.append({"title": title, "url": url, "snippet": snippet})
+            normalized = _normalize_result_item(item)
+            if normalized is None:
+                continue
+            raw_items.append(normalized)
 
         # ----------------------------
         # 3) VERITAS文脈の時だけ、結果側ブラックリスト（二重防衛）
