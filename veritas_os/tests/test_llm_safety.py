@@ -161,6 +161,26 @@ def test_score_risk_prefers_heuristic_override():
     assert "heuristic_risk_override" in scored["notes"]
 
 
+def test_normalize_categories_deduplicates_and_clips():
+    """カテゴリ正規化は重複を除去し、各要素を64文字で制限する。"""
+    overlong = "x" * 120
+    normalized = llm_safety._normalize_categories(
+        [" PII ", "PII", "", "illicit", overlong],
+        max_categories=10,
+    )
+
+    assert normalized[0] == "PII"
+    assert normalized[1] == "illicit"
+    assert len(normalized[2]) == 64
+    assert len(normalized) == 3
+
+
+def test_normalize_categories_respects_non_positive_limit():
+    """上限が 0 以下なら空配列を返す。"""
+    normalized = llm_safety._normalize_categories(["PII", "illicit"], max_categories=0)
+    assert normalized == []
+
+
 # -----------------------------
 # run() の挙動テスト
 # -----------------------------
