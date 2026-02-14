@@ -37,3 +37,17 @@ def test_validate_url_rejects_invalid_ip_and_port() -> None:
 def test_validate_url_accepts_safe_http_url() -> None:
     safe_url = "https://127.0.0.1:8000/health"
     assert health_check._validate_url(safe_url) == safe_url
+
+
+def test_validate_url_rejects_hostname_label_starting_with_hyphen() -> None:
+    assert health_check._validate_url("https://-bad.example.com/health") is None
+
+
+def test_validate_url_rejects_hostname_label_ending_with_hyphen() -> None:
+    assert health_check._validate_url("https://bad-.example.com/health") is None
+
+
+def test_validate_url_rejects_hostname_label_too_long() -> None:
+    long_label = "a" * 64
+    url = f"https://{long_label}.example.com/health"
+    assert health_check._validate_url(url) is None
