@@ -1,5 +1,6 @@
 # tests/test_web_search_extra.py
 """Additional tests for web_search module to improve coverage."""
+
 from __future__ import annotations
 
 import importlib
@@ -35,6 +36,24 @@ class TestNormalizeStr:
         assert "BadStr" in result  # repr fallback
 
 
+class TestSafeIntHelpers:
+    """Tests for integer environment helper functions."""
+
+    def test_safe_int_with_min_uses_floor(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_WEBSEARCH_MAX_RETRIES", "0")
+        assert (
+            web_search_mod._safe_int_with_min("VERITAS_WEBSEARCH_MAX_RETRIES", 3, 1)
+            == 1
+        )
+
+    def test_safe_int_with_min_falls_back_on_invalid_value(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_WEBSEARCH_MAX_RETRIES", "invalid")
+        assert (
+            web_search_mod._safe_int_with_min("VERITAS_WEBSEARCH_MAX_RETRIES", 3, 1)
+            == 3
+        )
+
+
 class TestShouldEnforceVeritasAnchor:
     """Tests for _should_enforce_veritas_anchor function."""
 
@@ -43,19 +62,41 @@ class TestShouldEnforceVeritasAnchor:
         assert web_search_mod._should_enforce_veritas_anchor(None) is False
 
     def test_bureau_veritas_excluded(self):
-        assert web_search_mod._should_enforce_veritas_anchor("bureau veritas certification") is False
-        assert web_search_mod._should_enforce_veritas_anchor("bureauveritas.com") is False
+        assert (
+            web_search_mod._should_enforce_veritas_anchor(
+                "bureau veritas certification"
+            )
+            is False
+        )
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("bureauveritas.com") is False
+        )
 
     def test_veritas_os_triggers(self):
-        assert web_search_mod._should_enforce_veritas_anchor("veritas os documentation") is True
-        assert web_search_mod._should_enforce_veritas_anchor("trustlog verification") is True
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("veritas os documentation")
+            is True
+        )
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("trustlog verification")
+            is True
+        )
         assert web_search_mod._should_enforce_veritas_anchor("fuji gate safety") is True
-        assert web_search_mod._should_enforce_veritas_anchor("valuecore alignment") is True
-        assert web_search_mod._should_enforce_veritas_anchor("veritas_os package") is True
-        assert web_search_mod._should_enforce_veritas_anchor("veritas-os github") is True
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("valuecore alignment") is True
+        )
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("veritas_os package") is True
+        )
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("veritas-os github") is True
+        )
 
     def test_normal_query_not_triggered(self):
-        assert web_search_mod._should_enforce_veritas_anchor("python web framework") is False
+        assert (
+            web_search_mod._should_enforce_veritas_anchor("python web framework")
+            is False
+        )
 
 
 class TestApplyAnchorAndBlacklist:
@@ -64,7 +105,9 @@ class TestApplyAnchorAndBlacklist:
     def test_applies_anchor_when_needed(self):
         result = web_search_mod._apply_anchor_and_blacklist("veritas query")
         assert result["anchor_applied"] is True
-        assert "VERITAS OS" in result["final_query"] or "TrustLog" in result["final_query"]
+        assert (
+            "VERITAS OS" in result["final_query"] or "TrustLog" in result["final_query"]
+        )
 
     def test_no_anchor_when_already_present(self):
         query = "veritas os trustlog fuji"
@@ -83,54 +126,65 @@ class TestIsBlockedResult:
     """Tests for _is_blocked_result function."""
 
     def test_blocks_blacklisted_keyword_in_title(self):
-        assert web_search_mod._is_blocked_result(
-            "Bureau Veritas certification",
-            "some snippet",
-            "https://example.com"
-        ) is True
+        assert (
+            web_search_mod._is_blocked_result(
+                "Bureau Veritas certification", "some snippet", "https://example.com"
+            )
+            is True
+        )
 
     def test_blocks_blacklisted_site_in_url(self):
-        assert web_search_mod._is_blocked_result(
-            "Some title",
-            "some snippet",
-            "https://bureauveritas.com/page"
-        ) is True
+        assert (
+            web_search_mod._is_blocked_result(
+                "Some title", "some snippet", "https://bureauveritas.com/page"
+            )
+            is True
+        )
 
     def test_blocks_veritas_com(self):
-        assert web_search_mod._is_blocked_result(
-            "Veritas Storage",
-            "backup solutions",
-            "https://www.veritas.com/product"
-        ) is True
+        assert (
+            web_search_mod._is_blocked_result(
+                "Veritas Storage", "backup solutions", "https://www.veritas.com/product"
+            )
+            is True
+        )
 
     def test_blocks_veritas_com_without_scheme(self):
-        assert web_search_mod._is_blocked_result(
-            "Veritas Storage",
-            "backup solutions",
-            "veritas.com/product"
-        ) is True
+        assert (
+            web_search_mod._is_blocked_result(
+                "Veritas Storage", "backup solutions", "veritas.com/product"
+            )
+            is True
+        )
 
     def test_allows_clean_result(self):
-        assert web_search_mod._is_blocked_result(
-            "Python Tutorial",
-            "Learn Python programming",
-            "https://python.org/tutorial"
-        ) is False
+        assert (
+            web_search_mod._is_blocked_result(
+                "Python Tutorial",
+                "Learn Python programming",
+                "https://python.org/tutorial",
+            )
+            is False
+        )
 
     def test_blocks_bureauveritas_wildcard(self):
         # Test bureauveritas.* wildcard blocking
-        assert web_search_mod._is_blocked_result(
-            "ISO Certification",
-            "Quality management",
-            "https://www.bureauveritas.co.jp/services"
-        ) is True
+        assert (
+            web_search_mod._is_blocked_result(
+                "ISO Certification",
+                "Quality management",
+                "https://www.bureauveritas.co.jp/services",
+            )
+            is True
+        )
 
     def test_allows_veritas_substring_in_path(self):
-        assert web_search_mod._is_blocked_result(
-            "Example",
-            "Some snippet",
-            "https://example.com/path/veritas.com/info"
-        ) is False
+        assert (
+            web_search_mod._is_blocked_result(
+                "Example", "Some snippet", "https://example.com/path/veritas.com/info"
+            )
+            is False
+        )
 
 
 class TestWebSearchHostSafety:
@@ -154,6 +208,7 @@ class TestWebSearchHostSafety:
 
 class DummyResponse:
     """Mock response for requests.post."""
+
     def __init__(self, data: Dict[str, Any], status_code: int = 200):
         self._data = data
         self.status_code = status_code
@@ -187,7 +242,10 @@ class TestWebSearchVeritasContext:
         resp = web_search_mod.web_search("veritas os documentation", max_results=3)
 
         assert resp["ok"] is True
-        assert resp["meta"]["anchor_applied"] is True or resp["meta"]["blacklist_applied"] is True
+        assert (
+            resp["meta"]["anchor_applied"] is True
+            or resp["meta"]["blacklist_applied"] is True
+        )
 
     def test_veritas_query_blocks_bureauveritas_results(self, monkeypatch):
         """VERITAS context should filter out Bureau Veritas results."""
@@ -290,7 +348,10 @@ class TestIsAgiQueryExtended:
     """Extended tests for _is_agi_query."""
 
     def test_artificial_general_intelligence_full(self):
-        assert web_search_mod._is_agi_query("artificial general intelligence safety") is True
+        assert (
+            web_search_mod._is_agi_query("artificial general intelligence safety")
+            is True
+        )
 
     def test_case_insensitive_agi(self):
         assert web_search_mod._is_agi_query("AGI") is True
@@ -302,32 +363,40 @@ class TestLooksAgiResultExtended:
     """Extended tests for _looks_agi_result."""
 
     def test_openai_site(self):
-        assert web_search_mod._looks_agi_result(
-            "GPT-5 Research",
-            "AI capabilities",
-            "https://openai.com/research"
-        ) is True
+        assert (
+            web_search_mod._looks_agi_result(
+                "GPT-5 Research", "AI capabilities", "https://openai.com/research"
+            )
+            is True
+        )
 
     def test_deepmind_site(self):
-        assert web_search_mod._looks_agi_result(
-            "Gemini",
-            "AI research",
-            "https://deepmind.com/research"
-        ) is True
+        assert (
+            web_search_mod._looks_agi_result(
+                "Gemini", "AI research", "https://deepmind.com/research"
+            )
+            is True
+        )
 
     def test_keyword_agi_in_snippet(self):
-        assert web_search_mod._looks_agi_result(
-            "Book Review",
-            "Discussion about AGI and AI risk",
-            "https://blog.example.com"
-        ) is True
+        assert (
+            web_search_mod._looks_agi_result(
+                "Book Review",
+                "Discussion about AGI and AI risk",
+                "https://blog.example.com",
+            )
+            is True
+        )
 
     def test_keyword_artificial_general_intelligence(self):
-        assert web_search_mod._looks_agi_result(
-            "Research Paper",
-            "artificial general intelligence capabilities",
-            "https://research.example.com"
-        ) is True
+        assert (
+            web_search_mod._looks_agi_result(
+                "Research Paper",
+                "artificial general intelligence capabilities",
+                "https://research.example.com",
+            )
+            is True
+        )
 
 
 class TestWebSearchSsrfGuard:
@@ -340,7 +409,6 @@ class TestWebSearchSsrfGuard:
 
     def test_public_ip_host_is_allowed(self):
         assert web_search_mod._is_private_or_local_host("8.8.8.8") is False
-
 
     def test_embedded_credentials_are_blocked(self):
         assert (
