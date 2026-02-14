@@ -171,7 +171,12 @@ def _post_with_retry(
     payload: Dict[str, Any],
     timeout: int,
 ) -> requests.Response:
-    """外部API呼び出しを再試行しつつ実行する。"""
+    """外部API呼び出しを再試行しつつ実行する。
+
+    Security note:
+        Redirects are disabled so that a trusted WEBSEARCH endpoint cannot
+        bounce requests to internal/private addresses (SSRF via redirect).
+    """
     last_exc: Optional[Exception] = None
     for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
         try:
@@ -180,6 +185,7 @@ def _post_with_retry(
                 headers=headers,
                 json=payload,
                 timeout=timeout,
+                allow_redirects=False,
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
