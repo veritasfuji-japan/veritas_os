@@ -88,6 +88,13 @@ MAX_LOG_SIZE = 100
 # 基本API
 # =========================
 
+
+def _get_denial_reason(tool_name: str) -> str:
+    """Return a stable reason code for denied tool calls."""
+    if tool_name in BLOCKED_TOOLS:
+        return "blocked"
+    return "not_in_whitelist"
+
 def allowed(tool_name: str) -> bool:
     """
     ツール実行が許可されているか判定
@@ -156,9 +163,7 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             "error": error_msg,
             "meta": {
                 "status": "denied",
-                "reason": "not_in_whitelist"
-                if normalized_kind not in ALLOWED_TOOLS
-                else "blocked",
+                "reason": _get_denial_reason(normalized_kind),
             },
         }
 
@@ -483,5 +488,4 @@ __all__ = [
     "BLOCKED_TOOLS",
     "TOOL_REGISTRY",
 ]
-
 

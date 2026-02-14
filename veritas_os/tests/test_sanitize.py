@@ -55,3 +55,15 @@ def test_mask_pii_does_not_change_non_pii_text():
     assert masked == text
 
 
+def test_detector_prepare_input_text_handles_none_and_truncates(caplog):
+    detector = sanitize.PIIDetector()
+
+    assert detector._prepare_input_text(None) == ""
+
+    oversized = "a" * (sanitize._MAX_PII_INPUT_LENGTH + 10)
+    with caplog.at_level("WARNING"):
+        prepared = detector._prepare_input_text(oversized)
+
+    assert len(prepared) == sanitize._MAX_PII_INPUT_LENGTH
+    assert "PII input truncated" in caplog.text
+

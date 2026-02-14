@@ -15,6 +15,23 @@ from . import code_planner  # ★ 追加
 
 logger = logging.getLogger(__name__)
 
+# LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
+_MAX_JSON_EXTRACT_CHARS = 200_000
+
+
+def _truncate_json_extract_input(raw: str) -> str:
+    """Limit JSON extraction input size to reduce parser and regex DoS risk."""
+    cleaned = raw.strip()
+    if len(cleaned) <= _MAX_JSON_EXTRACT_CHARS:
+        return cleaned
+
+    logger.warning(
+        "planner JSON extraction input too large (%d chars); truncating to %d chars",
+        len(cleaned),
+        _MAX_JSON_EXTRACT_CHARS,
+    )
+    return cleaned[:_MAX_JSON_EXTRACT_CHARS]
+
 
 class StepDict(TypedDict, total=False):
     """Planner step definition for normalized step payloads."""
@@ -78,22 +95,39 @@ def _normalize_step(
     default_risk: float = 0.1,
 ) -> StepDict:
     """
-    1つの step に対して、eta_hours / risk / dependencies を必ず埋める。
-    すでに値がある場合はそのまま尊重し、欠けているものだけ補完する。
+    1つの step に対して、eta_hours / risk / dependencies を安全な値へ正規化する。
+
+    - eta_hours: 数値へ変換し、負値は 0.0 に丸める
+    - risk: 数値へ変換し、0.0〜1.0 の範囲へ丸める
+    - dependencies: list[str] に正規化
+
+    既存値がある場合も型不正な値は補正し、後続処理での型崩れを防ぐ。
     """
     s: StepDict = dict(step)
 
-    if "eta_hours" not in s:
-        try:
-            s["eta_hours"] = float(default_eta_hours)
-        except Exception:
-            s["eta_hours"] = 1.0
+    try:
+        fallback_eta = float(default_eta_hours)
+    except Exception:
+        fallback_eta = 1.0
 
-    if "risk" not in s:
-        try:
-            s["risk"] = float(default_risk)
-        except Exception:
-            s["risk"] = 0.1
+    eta_candidate = s.get("eta_hours", fallback_eta)
+    try:
+        eta_hours = float(eta_candidate)
+    except Exception:
+        eta_hours = fallback_eta
+    s["eta_hours"] = max(0.0, eta_hours)
+
+    try:
+        fallback_risk = float(default_risk)
+    except Exception:
+        fallback_risk = 0.1
+
+    risk_candidate = s.get("risk", fallback_risk)
+    try:
+        risk_value = float(risk_candidate)
+    except Exception:
+        risk_value = fallback_risk
+    s["risk"] = min(1.0, max(0.0, risk_value))
 
     deps = s.get("dependencies")
     if not isinstance(deps, list):
@@ -438,7 +472,7 @@ def _safe_parse(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, str):
         raw = str(raw)
 
-    s = raw.strip()
+    s = _truncate_json_extract_input(raw)
     if not s:
         return {"steps": []}
 
@@ -453,11 +487,12 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     """
     LLM の出力から JSON を安全に取り出す（救出エンジン）。
     ※ _safe_parse が外側の互換層。
+    大きすぎる入力は先頭のみを使って解析し、DoSリスクを低減する。
     """
     if not raw:
         return {"steps": []}
 
-    cleaned = raw.strip()
+    cleaned = _truncate_json_extract_input(raw)
 
     # ``` の先頭/末尾だけ来た時も対策
     if cleaned.startswith("```"):
@@ -482,6 +517,19 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             return obj
         return {"steps": []}
 
+    def _decode_first_json_value(text: str) -> Any:
+        """Extract and decode the first JSON value found in free-form text."""
+        decoder = json.JSONDecoder()
+        for i, ch in enumerate(text):
+            if ch not in "[{":
+                continue
+            try:
+                obj, _ = decoder.raw_decode(text, idx=i)
+                return obj
+            except json.JSONDecodeError:
+                continue
+        return None
+
     # 1) そのまま
     try:
         obj = json.loads(cleaned)
@@ -489,7 +537,14 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     except Exception:
         logger.debug("planner JSON parse attempt 1 (raw) failed")
 
-    # 2) {} 抜き出し
+    # 1.5) 先頭ノイズ付きの JSON を raw_decode で救済
+    obj = _decode_first_json_value(cleaned)
+    if isinstance(obj, list):
+        return _wrap_if_needed(obj)
+    if isinstance(obj, dict) and "steps" in obj:
+        return _wrap_if_needed(obj)
+
+    # 2) {} 抜き出し（旧来互換の救済）
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1

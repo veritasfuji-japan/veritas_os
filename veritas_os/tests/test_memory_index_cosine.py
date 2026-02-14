@@ -255,6 +255,30 @@ def test_search_multi_query_returns_same_length_as_queries():
     assert res[1][0][0] == "y"
 
 
+def test_search_dim_mismatch_raises():
+    """クエリ次元が index.dim と異なる場合は ValueError。"""
+    idx = CosineIndex(dim=3)
+    idx.add(np.array([[1.0, 0.0, 0.0]], dtype=np.float32), ids=["a"])
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(np.array([1.0, 0.0], dtype=np.float32), k=1)
+
+    msg = str(exc.value)
+    assert "dim mismatch" in msg
+    assert "2 != 3" in msg
+
+
+def test_search_invalid_k_raises():
+    """k が 1 未満の場合は ValueError。"""
+    idx = CosineIndex(dim=2)
+    idx.add(np.array([[1.0, 0.0]], dtype=np.float32), ids=["x"])
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(np.array([1.0, 0.0], dtype=np.float32), k=0)
+
+    assert "k must be >= 1" in str(exc.value)
+
+
 # ---------------------------------------------------------
 # 永続化: save / _load のラウンドトリップ
 # ---------------------------------------------------------

@@ -247,7 +247,7 @@ def merge_trust_logs(
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     print(f"\n✅ Merged {len(items)} unique logs → {out_path}")
-    print(f"   Output format: JSONL (one JSON per line)")
+    print("   Output format: JSONL (one JSON per line)")
     if recompute_hash:
         print("   Note: sha256 / sha256_prev chain has been recomputed.")
 

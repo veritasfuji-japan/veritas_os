@@ -13,6 +13,7 @@ from veritas_os.core.sanitize import (
     _is_valid_my_number,
     _is_likely_phone,
     _is_likely_ip,
+    _is_likely_ipv6,
 )
 
 
@@ -354,6 +355,19 @@ class TestIPHeuristics:
 
     def test_non_ip_format(self):
         assert not _is_likely_ip("1.2.3")
+
+
+class TestIPv6Heuristics:
+    """Tests for IPv6 address heuristics."""
+
+    def test_valid_ipv6(self):
+        assert _is_likely_ipv6("2001:db8::1")
+
+    def test_bare_double_colon_excluded(self):
+        assert not _is_likely_ipv6("::")
+
+    def test_invalid_ipv6(self):
+        assert not _is_likely_ipv6("2001:::1")
 
 
 class TestPIIDetector:

@@ -66,6 +66,36 @@ def test_normalize_step_handles_non_list_dependencies():
     assert normalized["dependencies"] == []
 
 
+def test_normalize_step_clamps_eta_and_risk_ranges():
+    step = {
+        "id": "s1",
+        "eta_hours": -3,
+        "risk": 1.7,
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(step)
+
+    assert normalized["eta_hours"] == 0.0
+    assert normalized["risk"] == 1.0
+
+
+def test_normalize_step_uses_defaults_for_invalid_existing_values():
+    step = {
+        "id": "s1",
+        "eta_hours": "invalid",
+        "risk": object(),
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(
+        step,
+        default_eta_hours=2.5,
+        default_risk=0.3,
+    )
+
+    assert normalized["eta_hours"] == pytest.approx(2.5)
+    assert normalized["risk"] == pytest.approx(0.3)
+
+
 # -------------------------------
 # _is_simple_qa / _simple_qa_plan
 # -------------------------------
@@ -123,6 +153,13 @@ def test_safe_json_extract_top_level_list():
     assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
 
 
+def test_safe_json_extract_top_level_list_with_prefix_noise():
+    raw = 'RESULT: ' + json.dumps([{"id": "s1"}, {"id": "s2"}])
+    obj = planner_core._safe_json_extract(raw)
+    assert isinstance(obj, dict)
+    assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
+
+
 def test_safe_json_extract_code_block():
     inner = json.dumps({"steps": [{"id": "s1"}]})
     raw = f"```json\n{inner}\n```"
@@ -143,6 +180,28 @@ def test_safe_json_extract_ignores_leading_unbalanced_closing_brace():
     obj = planner_core._safe_json_extract(raw)
     ids = [s["id"] for s in obj["steps"]]
     assert ids == ["ok1", "ok2"]
+
+
+def test_safe_json_extract_truncates_oversized_input(caplog):
+    payload = json.dumps({"steps": [{"id": "ok1"}]})
+    raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("input too large" in rec.message for rec in caplog.records)
+
+
+def test_safe_parse_truncates_oversized_input(caplog):
+    payload = json.dumps({"steps": [{"id": "ok1"}]})
+    raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_parse(raw)
+
+    assert obj["steps"] == []
+    assert any("input too large" in rec.message for rec in caplog.records)
 
 
 # -------------------------------

@@ -168,12 +168,18 @@ class CosineIndex:
     def search(self, qv: Any, k: int = 8) -> List[List[Tuple[str, float]]]:
         """
         qv: (D,) or (Q, D)
+        k: 取得する上位件数（1以上）
         戻り値: [[(id, score), ...], ...]  （クエリごとに1リスト）
         スレッドセーフ: 検索中は一貫したスナップショットを使用
         """
+        if k < 1:
+            raise ValueError(f"CosineIndex.search: k must be >= 1, got {k}")
+
         q = np.asarray(qv, dtype=np.float32)
         if q.ndim == 1:
             q = q.reshape(1, -1)
+        if q.shape[1] != self.dim:
+            raise ValueError(f"CosineIndex.search: dim mismatch {q.shape[1]} != {self.dim}")
 
         with self._lock:
             # ロック内でスナップショットを取得
