@@ -2,6 +2,8 @@
 """Comprehensive tests for PII detection and masking."""
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from veritas_os.core.sanitize import (
@@ -15,6 +17,20 @@ from veritas_os.core.sanitize import (
     _is_likely_ip,
     _is_likely_ipv6,
 )
+
+
+def test_detector_prioritizes_high_confidence_on_overlap() -> None:
+    """Higher-confidence patterns should win when matches overlap."""
+    detector = PIIDetector(validate_checksums=False)
+    detector._patterns = [
+        ("low", re.compile(r"abc"), "LOW", None, 0.1),
+        ("high", re.compile(r"abc"), "HIGH", None, 0.9),
+    ]
+
+    matches = detector.detect("abc")
+
+    assert len(matches) == 1
+    assert matches[0].type == "high"
 
 
 class TestEmailDetection:

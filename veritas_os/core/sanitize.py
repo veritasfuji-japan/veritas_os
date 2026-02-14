@@ -33,7 +33,7 @@ import logging
 import re
 import ipaddress
 from dataclasses import dataclass
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any
 
 _logger = logging.getLogger(__name__)
 
@@ -406,6 +406,15 @@ class PIIDetector:
     def _validate_my_number(self, match: str, context: str) -> bool:
         return _is_valid_my_number(match)
 
+    def _iter_patterns_by_priority(self) -> List[tuple]:
+        """Return detection patterns ordered by confidence.
+
+        Overlap resolution keeps the first accepted match, therefore scanning
+        higher-confidence patterns first reduces false positives when multiple
+        patterns can match the same substring.
+        """
+        return sorted(self._patterns, key=lambda item: item[4], reverse=True)
+
     def detect(self, text: str | None) -> List[PIIMatch]:
         """
         テキストからPIIを検出
@@ -423,7 +432,7 @@ class PIIDetector:
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用
 
-        for name, pattern, token, validator, confidence in self._patterns:
+        for name, pattern, token, validator, confidence in self._iter_patterns_by_priority():
             for match in pattern.finditer(text):
                 start, end = match.start(), match.end()
                 value = match.group()
