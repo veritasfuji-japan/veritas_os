@@ -40,6 +40,17 @@ def test_allowed_false_for_blocked_tool(clean_tools_state):
     assert tools.allowed("web_search") is False
 
 
+def test_call_tool_denied_reason_is_blocked_for_blocked_tool(clean_tools_state):
+    tools.ALLOWED_TOOLS.add("web_search")
+    tools.BLOCKED_TOOLS.add("web_search")
+
+    resp = tools.call_tool("web_search", query="blocked test")
+
+    assert resp["ok"] is False
+    assert resp["meta"]["status"] == "denied"
+    assert resp["meta"]["reason"] == "blocked"
+
+
 def test_allowed_false_for_unknown_tool(clean_tools_state):
     tools.ALLOWED_TOOLS.add("web_search")
     assert tools.allowed("unknown_tool") is False
