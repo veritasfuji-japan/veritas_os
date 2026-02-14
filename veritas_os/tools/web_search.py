@@ -516,6 +516,26 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     return {"title": title, "url": url, "snippet": snippet}
 
 
+def _classify_websearch_error(error: Exception) -> str:
+    """Web検索失敗の種別を分類して監査ログで使う。"""
+    if isinstance(error, requests.exceptions.Timeout):
+        return "timeout"
+    if isinstance(error, requests.exceptions.HTTPError):
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if status_code is not None:
+            if 400 <= status_code < 500:
+                return "http_4xx"
+            if status_code >= 500:
+                return "http_5xx"
+        return "http_error"
+    if isinstance(error, requests.exceptions.RequestException):
+        return "request_exception"
+    if isinstance(error, ValueError):
+        return "response_parse"
+    return "unexpected"
+
+
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Serper.dev を使った Web 検索アダプタ。
@@ -609,7 +629,28 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             payload=payload,
             timeout=15,
         )
-        data: Dict[str, Any] = resp.json()
+        try:
+            data: Dict[str, Any] = resp.json()
+        except ValueError as exc:
+            logger.warning(
+                "WEBSEARCH_API response parse error category=%s",
+                _classify_websearch_error(exc),
+            )
+            return {
+                "ok": False,
+                "results": [],
+                "error": "WEBSEARCH_API error: request failed",
+                "meta": _build_meta(
+                    raw_count=0,
+                    agi_filter_applied=False,
+                    agi_result_count=None,
+                    boosted_query=None,
+                    final_query=raw_query,
+                    anchor_applied=False,
+                    blacklist_applied=False,
+                    blocked_count=0,
+                ),
+            }
 
         organic = data.get("organic") or []
         raw_items: List[Dict[str, Any]] = []
@@ -705,7 +746,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     except Exception as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
         # 詳細はログに記録し、クライアントには汎用的なエラーメッセージのみ返す
-        logger.warning("WEBSEARCH_API error: %s: %s", type(e).__name__, e)
+        logger.warning(
+            "WEBSEARCH_API error category=%s type=%s: %s",
+            _classify_websearch_error(e),
+            type(e).__name__,
+            e,
+        )
         return {
             "ok": False,
             "results": [],

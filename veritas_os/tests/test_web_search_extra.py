@@ -318,6 +318,28 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
+
+class TestClassifyWebsearchError:
+    """Tests for _classify_websearch_error helper."""
+
+    def test_timeout_error(self):
+        err = web_search_mod.requests.exceptions.Timeout("boom")
+        assert web_search_mod._classify_websearch_error(err) == "timeout"
+
+    def test_http_4xx_error(self):
+        response = type("Response", (), {"status_code": 404})()
+        err = web_search_mod.requests.exceptions.HTTPError(response=response)
+        assert web_search_mod._classify_websearch_error(err) == "http_4xx"
+
+    def test_http_5xx_error(self):
+        response = type("Response", (), {"status_code": 503})()
+        err = web_search_mod.requests.exceptions.HTTPError(response=response)
+        assert web_search_mod._classify_websearch_error(err) == "http_5xx"
+
+    def test_parse_error(self):
+        err = ValueError("invalid json")
+        assert web_search_mod._classify_websearch_error(err) == "response_parse"
+
     def test_result_with_missing_fields(self, monkeypatch):
         """Handle results with missing title/snippet/link."""
         monkeypatch.setattr(
