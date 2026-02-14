@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 from veritas_os.scripts import memory_train
 
@@ -58,3 +59,16 @@ def test_load_decision_data_skips_malformed_json(monkeypatch, tmp_path: Path) ->
     records = memory_train.load_decision_data()
 
     assert records == []
+
+
+def test_load_training_dependencies_raises_runtime_error_on_missing_package() -> None:
+    with patch(
+        "veritas_os.scripts.memory_train.import_module",
+        side_effect=ModuleNotFoundError("No module named 'numpy'"),
+    ):
+        try:
+            memory_train._load_training_dependencies()
+        except RuntimeError as exc:
+            assert "Missing package" in str(exc)
+        else:
+            raise AssertionError("RuntimeError was not raised")

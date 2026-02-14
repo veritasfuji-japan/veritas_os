@@ -8,12 +8,9 @@ import json
 import os
 import random
 from collections import Counter
+from importlib import import_module
 from pathlib import Path
-from typing import Iterable
-
-import joblib
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from typing import Any, Iterable
 
 print("[memory_train] running file:", __file__)
 
@@ -122,9 +119,42 @@ def load_decision_data() -> list[tuple[str, str]]:
     return records
 
 
+def _load_training_dependencies() -> tuple[Any, Any, Any, Any, Any]:
+    """Load optional ML dependencies only when model training is requested.
+
+    Returns:
+        Tuple containing ``numpy``, ``joblib``, ``TfidfVectorizer``,
+        ``LogisticRegression`` and ``compute_class_weight``.
+
+    Raises:
+        RuntimeError: If one of the optional dependencies is not installed.
+    """
+    try:
+        np = import_module("numpy")
+        joblib = import_module("joblib")
+        text_mod = import_module("sklearn.feature_extraction.text")
+        linear_mod = import_module("sklearn.linear_model")
+        weight_mod = import_module("sklearn.utils.class_weight")
+    except ModuleNotFoundError as exc:
+        missing_pkg = exc.name or "required dependency"
+        raise RuntimeError(
+            "memory_train requires optional training dependencies. "
+            f"Missing package: {missing_pkg}."
+        ) from exc
+
+    return (
+        np,
+        joblib,
+        text_mod.TfidfVectorizer,
+        linear_mod.LogisticRegression,
+        weight_mod.compute_class_weight,
+    )
+
+
 def train_memory_model(data):
-    from sklearn.utils.class_weight import compute_class_weight
-    import numpy as np
+    np, joblib, tfidf_vectorizer, logistic_regression, compute_class_weight = (
+        _load_training_dependencies()
+    )
 
     print(f"[DEBUG] train_memory_model: received {len(data)} records")
     print("[memory_train] enter: len(data) =", len(data))
@@ -171,10 +201,10 @@ def train_memory_model(data):
     class_weight = {c: w for c, w in zip(classes, weights)}
     print("[DEBUG] computed class_weight:", class_weight)
 
-    vec = TfidfVectorizer(max_features=4000, ngram_range=(1, 2))
+    vec = tfidf_vectorizer(max_features=4000, ngram_range=(1, 2))
     x_data = vec.fit_transform(x_texts)
 
-    clf = LogisticRegression(
+    clf = logistic_regression(
         max_iter=400,
         class_weight=class_weight,
         n_jobs=None,
