@@ -31,6 +31,9 @@ MAX_QUERY_LENGTH = 10000
 # 登録テキスト長の上限（DoS/ストレージ膨張対策）
 MAX_ITEM_TEXT_LENGTH = 20000
 
+# ID 長の上限（ログ肥大化・メモリ枯渇対策）
+MAX_ITEM_ID_LENGTH = 128
+
 # JSONL ファイルサイズの上限（起動時の再構築 / 検索時の読み込み用、100MB）
 MAX_JSONL_FILE_SIZE = 100 * 1024 * 1024
 
@@ -162,9 +165,29 @@ class MemoryStore:
         return j["id"]
 
     def _normalize_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Normalize and validate memory item payload before persistence."""
+        """Normalize and validate a memory item before persistence.
+
+        Security hardening:
+        - `id` is normalized to a bounded, hashable string to avoid malformed
+          payloads that can corrupt in-memory cache updates.
+        - `text` length is bounded to reduce abuse risk.
+        """
         if not isinstance(item, dict):
             raise TypeError("item must be a dict")
+
+        item_id = item.get("id")
+        if item_id is None:
+            normalized_id = uuid.uuid4().hex
+        else:
+            if isinstance(item_id, (dict, list, set, tuple)):
+                raise TypeError("item.id must be a scalar value")
+            normalized_id = str(item_id).strip()
+            if not normalized_id:
+                raise ValueError("item.id must not be empty")
+            if len(normalized_id) > MAX_ITEM_ID_LENGTH:
+                raise ValueError(
+                    f"item.id too long (max {MAX_ITEM_ID_LENGTH} chars)"
+                )
 
         text = str(item.get("text") or "")
         if len(text) > MAX_ITEM_TEXT_LENGTH:
@@ -180,7 +203,7 @@ class MemoryStore:
             raise TypeError("item.meta must be a dict")
 
         return {
-            "id": item.get("id") or uuid.uuid4().hex,
+            "id": normalized_id,
             "ts": item.get("ts") or time.time(),
             "tags": normalized_tags,
             "text": text,
