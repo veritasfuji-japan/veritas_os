@@ -1,5 +1,7 @@
 """Tests for veritas_os/scripts/alert_doctor.py."""
 
+from pathlib import Path
+
 from veritas_os.scripts import alert_doctor
 
 
@@ -18,8 +20,6 @@ def test_validate_webhook_url_rejects_insecure_or_untrusted_hosts():
     assert not alert_doctor._validate_webhook_url("")
 
 
-
-
 def test_validate_webhook_url_rejects_ports_userinfo_and_extra_parts():
     """Webhook URL with unsafe URL parts should be rejected."""
     assert not alert_doctor._validate_webhook_url(
@@ -34,6 +34,7 @@ def test_validate_webhook_url_rejects_ports_userinfo_and_extra_parts():
     assert not alert_doctor._validate_webhook_url(
         "https://hooks.slack.com/not-services/a/b/c"
     )
+
 
 def test_post_slack_rejects_invalid_webhook_without_network(monkeypatch):
     """post_slack should fail fast when webhook URL is invalid."""
@@ -70,3 +71,41 @@ def test_post_slack_succeeds_with_valid_webhook(monkeypatch):
     monkeypatch.setattr(alert_doctor.time, "sleep", lambda *_args, **_kwargs: None)
 
     assert alert_doctor.post_slack("hello", max_retry=1) is True
+
+
+def test_safe_snippet_truncates_and_flattens_whitespace():
+    """_safe_snippet should flatten whitespace and cap long text."""
+    source = "line1\nline2\tline3 " + ("x" * 500)
+    got = alert_doctor._safe_snippet(source, max_chars=20)
+
+    assert "\n" not in got
+    assert "\t" not in got
+    assert got.endswith("...")
+    assert len(got) == 23
+
+
+def test_run_heal_truncates_failure_output(monkeypatch, tmp_path):
+    """run_heal should sanitize and truncate subprocess failure output."""
+    heal_script = tmp_path / "heal.sh"
+    heal_script.write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+
+    monkeypatch.setattr(alert_doctor, "HEAL_SCRIPT", Path(heal_script))
+    monkeypatch.setattr(
+        alert_doctor,
+        "_validate_heal_script_path",
+        lambda *_args, **_kwargs: True,
+    )
+
+    def _raise(*_args, **_kwargs):
+        raise alert_doctor.subprocess.CalledProcessError(
+            1,
+            ["/bin/bash", "heal.sh"],
+            output="A" * 1000,
+        )
+
+    monkeypatch.setattr(alert_doctor.subprocess, "check_output", _raise)
+
+    ok, info = alert_doctor.run_heal()
+    assert ok is False
+    assert info.startswith("heal failed: rc=1, out=")
+    assert info.endswith("...")
