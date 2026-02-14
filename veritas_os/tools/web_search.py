@@ -426,6 +426,39 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
     return False
 
 
+def _sanitize_max_results(max_results: Any, *, default: int = 5) -> int:
+    """`max_results` を安全な範囲に丸める。"""
+    try:
+        result = int(max_results)
+    except (TypeError, ValueError):
+        result = default
+    return min(max(result, 1), 100)
+
+
+def _build_meta(
+    *,
+    raw_count: int,
+    agi_filter_applied: bool,
+    agi_result_count: Optional[int],
+    boosted_query: Optional[str],
+    final_query: str,
+    anchor_applied: bool,
+    blacklist_applied: bool,
+    blocked_count: int,
+) -> Dict[str, Any]:
+    """`web_search` のレスポンス meta 部分を共通生成する。"""
+    return {
+        "raw_count": raw_count,
+        "agi_filter_applied": agi_filter_applied,
+        "agi_result_count": agi_result_count,
+        "boosted_query": boosted_query,
+        "final_query": final_query,
+        "anchor_applied": anchor_applied,
+        "blacklist_applied": blacklist_applied,
+        "blocked_count": blocked_count,
+    }
+
+
 def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     """
     Serper.dev を使った Web 検索アダプタ。
@@ -443,16 +476,16 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         "ok": False,
         "results": [],
         "error": "WEBSEARCH_API unavailable",
-        "meta": {
-            "raw_count": 0,
-            "agi_filter_applied": False,
-            "agi_result_count": None,
-            "boosted_query": None,
-            "final_query": raw_query,
-            "anchor_applied": False,
-            "blacklist_applied": False,
-            "blocked_count": 0,
-        },
+        "meta": _build_meta(
+            raw_count=0,
+            agi_filter_applied=False,
+            agi_result_count=None,
+            boosted_query=None,
+            final_query=raw_query,
+            anchor_applied=False,
+            blacklist_applied=False,
+            blocked_count=0,
+        ),
     }
 
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
@@ -464,14 +497,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
 
     # max_results の下限・上限を守る（極端値対策）
     # ★ M-15 修正: 上限を追加してリソース枯渇を防止
-    try:
-        mr = int(max_results)
-    except Exception:
-        mr = 5
-    if mr < 1:
-        mr = 1
-    if mr > 100:
-        mr = 100
+    mr = _sanitize_max_results(max_results)
 
     try:
         headers = {
@@ -526,7 +552,6 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             payload=payload,
             timeout=15,
         )
-        resp.raise_for_status()
         data: Dict[str, Any] = resp.json()
 
         organic = data.get("organic") or []
@@ -578,32 +603,32 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                     "ok": True,
                     "results": [],
                     "error": "no_agi_like_results",
-                    "meta": {
-                        "raw_count": len(raw_items),
-                        "agi_filter_applied": True,
-                        "agi_result_count": 0,
-                        "boosted_query": boosted_query,
-                        "final_query": q_to_send,  # ★Serperに投げた最終
-                        "anchor_applied": anchor_applied,
-                        "blacklist_applied": blacklist_applied,
-                        "blocked_count": blocked_count,
-                    },
+                    "meta": _build_meta(
+                        raw_count=len(raw_items),
+                        agi_filter_applied=True,
+                        agi_result_count=0,
+                        boosted_query=boosted_query,
+                        final_query=q_to_send,
+                        anchor_applied=anchor_applied,
+                        blacklist_applied=blacklist_applied,
+                        blocked_count=blocked_count,
+                    ),
                 }
 
             return {
                 "ok": True,
                 "results": agi_items[:mr],
                 "error": None,
-                "meta": {
-                    "raw_count": len(raw_items),
-                    "agi_filter_applied": True,
-                    "agi_result_count": len(agi_items),
-                    "boosted_query": boosted_query,
-                    "final_query": q_to_send,  # ★Serperに投げた最終
-                    "anchor_applied": anchor_applied,
-                    "blacklist_applied": blacklist_applied,
-                    "blocked_count": blocked_count,
-                },
+                "meta": _build_meta(
+                    raw_count=len(raw_items),
+                    agi_filter_applied=True,
+                    agi_result_count=len(agi_items),
+                    boosted_query=boosted_query,
+                    final_query=q_to_send,
+                    anchor_applied=anchor_applied,
+                    blacklist_applied=blacklist_applied,
+                    blocked_count=blocked_count,
+                ),
             }
 
         # ----------------------------
@@ -613,16 +638,16 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "ok": True,
             "results": filtered_items[:mr],
             "error": None,
-            "meta": {
-                "raw_count": len(raw_items),
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": boosted_query,
-                "final_query": q_to_send,  # ★Serperに投げた最終（通常は raw_query と一致）
-                "anchor_applied": anchor_applied,
-                "blacklist_applied": blacklist_applied,
-                "blocked_count": blocked_count,
-            },
+            "meta": _build_meta(
+                raw_count=len(raw_items),
+                agi_filter_applied=False,
+                agi_result_count=None,
+                boosted_query=boosted_query,
+                final_query=q_to_send,
+                anchor_applied=anchor_applied,
+                blacklist_applied=blacklist_applied,
+                blocked_count=blocked_count,
+            ),
         }
 
     except Exception as e:
@@ -633,14 +658,14 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "ok": False,
             "results": [],
             "error": "WEBSEARCH_API error: request failed",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
+            "meta": _build_meta(
+                raw_count=0,
+                agi_filter_applied=False,
+                agi_result_count=None,
+                boosted_query=None,
+                final_query=raw_query,
+                anchor_applied=False,
+                blacklist_applied=False,
+                blocked_count=0,
+            ),
         }
