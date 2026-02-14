@@ -322,6 +322,15 @@ class TestWebSearchSsrfGuard:
     def test_public_ip_host_is_allowed(self):
         assert web_search_mod._is_private_or_local_host("8.8.8.8") is False
 
+
+    def test_embedded_credentials_are_blocked(self):
+        assert (
+            web_search_mod._is_allowed_websearch_url(
+                "https://user:pass@api.allowed.example/search"
+            )
+            is False
+        )
+
     def test_allowlist_blocks_non_listed_host(self, monkeypatch):
         monkeypatch.setattr(
             web_search_mod,
