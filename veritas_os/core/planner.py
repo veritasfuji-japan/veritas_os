@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
 _MAX_JSON_EXTRACT_CHARS = 200_000
+_MAX_JSON_DECODE_ATTEMPTS = 2_048
 
 
 def _truncate_json_extract_input(raw: str) -> str:
@@ -518,15 +519,27 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         return {"steps": []}
 
     def _decode_first_json_value(text: str) -> Any:
-        """Extract and decode the first JSON value found in free-form text."""
+        """Extract and decode the first JSON value found in free-form text.
+
+        The decoding probe count is bounded to avoid excessive CPU usage when
+        malformed text contains a very large number of ``{"`` / ``[``
+        characters.
+        """
         decoder = json.JSONDecoder()
-        for i, ch in enumerate(text):
-            if ch not in "[{":
-                continue
+        attempts = 0
+        for match in re.finditer(r"[\[{]", text):
+            if attempts >= _MAX_JSON_DECODE_ATTEMPTS:
+                logger.warning(
+                    "planner JSON decoder probe limit reached (%d attempts)",
+                    _MAX_JSON_DECODE_ATTEMPTS,
+                )
+                break
+            i = match.start()
             try:
                 obj, _ = decoder.raw_decode(text, idx=i)
                 return obj
             except json.JSONDecodeError:
+                attempts += 1
                 continue
         return None
 
