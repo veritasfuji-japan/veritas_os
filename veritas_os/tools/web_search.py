@@ -306,9 +306,13 @@ def _is_private_or_local_host(hostname: str) -> bool:
 
 
 def _is_allowed_websearch_url(url: str) -> bool:
-    """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。"""
+    """WEBSEARCH endpoint のスキーム・ホスト安全性を検証する。
+
+    Security note:
+        API key を平文送信しないため、HTTPS のみ許可する。
+    """
     parsed = urlparse((url or "").strip())
-    if parsed.scheme not in ("http", "https"):
+    if parsed.scheme != "https":
         return False
 
     # URL 埋め込み資格情報の利用を禁止し、誤設定や漏えいリスクを低減する。
