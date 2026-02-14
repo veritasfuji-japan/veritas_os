@@ -66,6 +66,36 @@ def test_normalize_step_handles_non_list_dependencies():
     assert normalized["dependencies"] == []
 
 
+def test_normalize_step_clamps_eta_and_risk_ranges():
+    step = {
+        "id": "s1",
+        "eta_hours": -3,
+        "risk": 1.7,
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(step)
+
+    assert normalized["eta_hours"] == 0.0
+    assert normalized["risk"] == 1.0
+
+
+def test_normalize_step_uses_defaults_for_invalid_existing_values():
+    step = {
+        "id": "s1",
+        "eta_hours": "invalid",
+        "risk": object(),
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(
+        step,
+        default_eta_hours=2.5,
+        default_risk=0.3,
+    )
+
+    assert normalized["eta_hours"] == pytest.approx(2.5)
+    assert normalized["risk"] == pytest.approx(0.3)
+
+
 # -------------------------------
 # _is_simple_qa / _simple_qa_plan
 # -------------------------------
