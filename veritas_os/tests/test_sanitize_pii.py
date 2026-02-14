@@ -33,6 +33,15 @@ def test_detector_prioritizes_high_confidence_on_overlap() -> None:
     assert matches[0].type == "high"
 
 
+def test_phone_patterns_do_not_match_embedded_digits() -> None:
+    """Domestic phone regexes should not match when surrounded by digits."""
+    text = "顧客ID1090123456789は連絡先ではない"
+    result = detect_pii(text)
+
+    phones = [r for r in result if r["type"] == "phone_mobile"]
+    assert phones == []
+
+
 class TestEmailDetection:
     """Tests for email address detection."""
 

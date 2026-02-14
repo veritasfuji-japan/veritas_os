@@ -66,7 +66,7 @@ RE_EMAIL = re.compile(
 # 偽陽性を減らすため、より厳密なパターンを使用
 # --- 日本の携帯: 070/080/090-XXXX-XXXX
 RE_PHONE_JP_MOBILE = re.compile(
-    r'0[789]0[-\s]?\d{4}[-\s]?\d{4}'
+    r'(?<!\d)0[789]0[-\s]?\d{4}[-\s]?\d{4}(?!\d)'
 )
 # 日本の固定電話: 0X-XXXX-XXXX または 0XX-XXX-XXXX
 RE_PHONE_JP_LANDLINE = re.compile(
@@ -74,7 +74,7 @@ RE_PHONE_JP_LANDLINE = re.compile(
 )
 # 国際電話: +XX-XXX... 形式
 RE_PHONE_INTL = re.compile(
-    r'\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}(?:[-\s]?\d{1,4})?'
+    r'(?<!\d)\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}(?:[-\s]?\d{1,4})?(?!\d)'
 )
 # フリーダイヤル: 0120-XXX-XXX, 0800-XXX-XXXX
 RE_PHONE_FREE = re.compile(
