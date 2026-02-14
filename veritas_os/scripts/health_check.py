@@ -61,6 +61,23 @@ def _is_valid_ipv4(hostname: str) -> bool:
     return all(0 <= int(octet) <= 255 for octet in octets)
 
 
+def _is_valid_hostname(hostname: str) -> bool:
+    """RFC に準拠した安全なホスト名かどうかを検証する。"""
+    if len(hostname) > 253:
+        return False
+
+    labels = hostname.split(".")
+    for label in labels:
+        if not label or len(label) > 63:
+            return False
+        if label.startswith("-") or label.endswith("-"):
+            return False
+        if not re.match(r"^[a-zA-Z0-9-]+$", label):
+            return False
+
+    return True
+
+
 def _validate_url(url: str) -> Optional[str]:
     """
     ★ セキュリティ修正: URL を検証し、安全な場合のみ返す。
@@ -105,8 +122,8 @@ def _validate_url(url: str) -> Optional[str]:
     if re.match(r"^[0-9.]+$", hostname):
         if not _is_valid_ipv4(hostname):
             return None
-    # ホスト名は英数字、ハイフン、ドットのみ（IDN は punycode に変換済み前提）
-    elif not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$", hostname):
+    # ホスト名を RFC 準拠で厳密検証
+    elif not _is_valid_hostname(hostname):
         return None
 
     # ポートの検証
