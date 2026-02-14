@@ -19,6 +19,20 @@ logger = logging.getLogger(__name__)
 _MAX_JSON_EXTRACT_CHARS = 200_000
 
 
+def _truncate_json_extract_input(raw: str) -> str:
+    """Limit JSON extraction input size to reduce parser and regex DoS risk."""
+    cleaned = raw.strip()
+    if len(cleaned) <= _MAX_JSON_EXTRACT_CHARS:
+        return cleaned
+
+    logger.warning(
+        "planner JSON extraction input too large (%d chars); truncating to %d chars",
+        len(cleaned),
+        _MAX_JSON_EXTRACT_CHARS,
+    )
+    return cleaned[:_MAX_JSON_EXTRACT_CHARS]
+
+
 class StepDict(TypedDict, total=False):
     """Planner step definition for normalized step payloads."""
 
@@ -441,7 +455,7 @@ def _safe_parse(raw: Any) -> Dict[str, Any]:
     if not isinstance(raw, str):
         raw = str(raw)
 
-    s = raw.strip()
+    s = _truncate_json_extract_input(raw)
     if not s:
         return {"steps": []}
 
@@ -461,14 +475,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     if not raw:
         return {"steps": []}
 
-    cleaned = raw.strip()
-    if len(cleaned) > _MAX_JSON_EXTRACT_CHARS:
-        logger.warning(
-            "planner JSON extraction input too large (%d chars); truncating to %d chars",
-            len(cleaned),
-            _MAX_JSON_EXTRACT_CHARS,
-        )
-        cleaned = cleaned[:_MAX_JSON_EXTRACT_CHARS]
+    cleaned = _truncate_json_extract_input(raw)
 
     # ``` の先頭/末尾だけ来た時も対策
     if cleaned.startswith("```"):
