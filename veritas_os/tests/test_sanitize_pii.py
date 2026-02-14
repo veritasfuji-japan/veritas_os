@@ -381,7 +381,7 @@ class TestPIIDetector:
     def test_mask_empty_text(self):
         detector = PIIDetector()
         assert detector.mask("") == ""
-        assert detector.mask(None) is None
+        assert detector.mask(None) == ""
 
     def test_no_overlap_detection(self):
         """Overlapping patterns should not produce duplicate detections."""
