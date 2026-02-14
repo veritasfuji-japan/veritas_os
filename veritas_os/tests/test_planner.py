@@ -152,6 +152,17 @@ def test_safe_json_extract_ignores_leading_unbalanced_closing_brace():
     assert ids == ["ok1", "ok2"]
 
 
+def test_safe_json_extract_truncates_oversized_input(caplog):
+    payload = json.dumps({"steps": [{"id": "ok1"}]})
+    raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("input too large" in rec.message for rec in caplog.records)
+
+
 # -------------------------------
 # _fallback_plan / _infer_veritas_stage / _fallback_plan_for_stage
 # -------------------------------
