@@ -279,6 +279,10 @@ def _is_allowed_websearch_url(url: str) -> bool:
     if parsed.scheme not in ("http", "https"):
         return False
 
+    # URL 埋め込み資格情報の利用を禁止し、誤設定や漏えいリスクを低減する。
+    if parsed.username or parsed.password:
+        return False
+
     host = (parsed.hostname or "").lower()
     if _is_private_or_local_host(host):
         return False
@@ -435,40 +439,28 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     # ★ クエリインジェクション対策: 制御文字を除去
     raw_query = _RE_CONTROL_CHARS.sub("", raw_query)
 
+    unavailable_response = {
+        "ok": False,
+        "results": [],
+        "error": "WEBSEARCH_API unavailable",
+        "meta": {
+            "raw_count": 0,
+            "agi_filter_applied": False,
+            "agi_result_count": None,
+            "boosted_query": None,
+            "final_query": raw_query,
+            "anchor_applied": False,
+            "blacklist_applied": False,
+            "blocked_count": 0,
+        },
+    }
+
     if not WEBSEARCH_URL or not WEBSEARCH_KEY:
-        return {
-            "ok": False,
-            "results": [],
-            "error": "WEBSEARCH_API unavailable",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
-        }
+        return unavailable_response
 
     if not _is_allowed_websearch_url(WEBSEARCH_URL):
         logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
-        return {
-            "ok": False,
-            "results": [],
-            "error": "WEBSEARCH_API unavailable",
-            "meta": {
-                "raw_count": 0,
-                "agi_filter_applied": False,
-                "agi_result_count": None,
-                "boosted_query": None,
-                "final_query": raw_query,
-                "anchor_applied": False,
-                "blacklist_applied": False,
-                "blocked_count": 0,
-            },
-        }
+        return unavailable_response
 
     # max_results の下限・上限を守る（極端値対策）
     # ★ M-15 修正: 上限を追加してリソース枯渇を防止
