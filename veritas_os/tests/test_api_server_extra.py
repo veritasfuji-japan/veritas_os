@@ -749,6 +749,44 @@ def test_memory_put_vector_and_size_and_kind():
     assert data["size"] == len(text)  # size は text 長さ
 
 
+
+
+def test_memory_put_respects_kind_for_vector_store(monkeypatch):
+    """
+    /v1/memory/put が vector 保存時に kind を保持して
+    store.put(kind, item) を呼ぶことを確認。
+    """
+
+    calls = {}
+
+    class DummyStore:
+        def put(self, kind, item):
+            calls["kind"] = kind
+            calls["item"] = item
+            return "dummy-id"
+
+        def put_episode(self, text, tags=None, meta=None):
+            raise AssertionError("put_episode should not be used when put is available")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: DummyStore())
+
+    res = server.memory_put(
+        {
+            "user_id": "u-kind",
+            "kind": "skills",
+            "text": "hello",
+            "tags": ["t1"],
+            "meta": {"source": "test"},
+        }
+    )
+
+    assert res["ok"] is True
+    assert res["vector"]["saved"] is True
+    assert calls["kind"] == "skills"
+    assert calls["item"]["text"] == "hello"
+    assert calls["item"]["meta"]["kind"] == "skills"
+
+
 def test_memory_search_filters_by_user(monkeypatch):
     """
     memory_search:
