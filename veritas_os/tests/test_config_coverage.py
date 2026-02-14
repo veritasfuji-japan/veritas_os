@@ -74,6 +74,14 @@ def test_parse_float_invalid(monkeypatch):
     assert _parse_float("TEST_FLOAT_KEY", 9.9) == 9.9
 
 
+def test_parse_float_invalid_logs_warning(monkeypatch, caplog):
+    monkeypatch.setenv("TEST_FLOAT_KEY", "bad")
+    caplog.set_level(logging.WARNING)
+
+    assert _parse_float("TEST_FLOAT_KEY", 1.0) == 1.0
+    assert "Invalid float for TEST_FLOAT_KEY" in caplog.text
+
+
 def test_parse_float_empty(monkeypatch):
     monkeypatch.setenv("TEST_FLOAT_KEY", "")
     # empty string -> ValueError -> default
@@ -97,6 +105,14 @@ def test_parse_int_valid(monkeypatch):
 def test_parse_int_invalid(monkeypatch):
     monkeypatch.setenv("TEST_INT_KEY", "abc")
     assert _parse_int("TEST_INT_KEY", 99) == 99
+
+
+def test_parse_int_invalid_logs_warning(monkeypatch, caplog):
+    monkeypatch.setenv("TEST_INT_KEY", "bad")
+    caplog.set_level(logging.WARNING)
+
+    assert _parse_int("TEST_INT_KEY", 2) == 2
+    assert "Invalid int for TEST_INT_KEY" in caplog.text
 
 
 def test_parse_int_float_string(monkeypatch):
