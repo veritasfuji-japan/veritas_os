@@ -20,8 +20,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
   const pathname = usePathname();
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_hsl(var(--ds-color-primary)/0.18),_transparent_56%)]" aria-hidden="true" />
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground before:pointer-events-none before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_top,_hsl(var(--ds-color-primary)/0.18),_transparent_56%)]">
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[280px_1fr]">
         <aside aria-label="サイドバー" className="border-b border-border/80 bg-surface/95 p-6 backdrop-blur lg:border-b-0 lg:border-r">
           <a
