@@ -461,6 +461,24 @@ class TestWebSearchSsrfGuard:
             is False
         )
 
+    def test_normalize_result_item_blocks_localhost_url(self):
+        item = {
+            "title": "Local",
+            "link": "https://localhost/admin",
+            "snippet": "internal",
+        }
+
+        assert web_search_mod._normalize_result_item(item) is None
+
+    def test_normalize_result_item_blocks_private_ip_url(self):
+        item = {
+            "title": "Metadata",
+            "link": "https://169.254.169.254/latest/meta-data",
+            "snippet": "internal service",
+        }
+
+        assert web_search_mod._normalize_result_item(item) is None
+
     def test_allowlist_blocks_non_listed_host(self, monkeypatch):
         monkeypatch.setattr(
             web_search_mod,

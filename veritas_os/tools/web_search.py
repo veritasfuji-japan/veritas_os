@@ -518,6 +518,7 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     Security note:
         - URL は http/https スキームのみ許可する。
         - URL に hostname が無いものや userinfo を含むものは除外する。
+        - localhost/private IP など内部向けURLは除外する。
         - title/snippet/url は上限長で切り詰め、過大レスポンスによる
           メモリ消費やログ汚染リスクを緩和する。
     """
@@ -531,6 +532,8 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
         if not parsed_url.hostname:
             return None
         if parsed_url.username or parsed_url.password:
+            return None
+        if _is_private_or_local_host(parsed_url.hostname):
             return None
 
     title = _normalize_str(item.get("title") or "", limit=512)
