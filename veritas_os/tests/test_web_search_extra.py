@@ -192,6 +192,19 @@ class TestIsBlockedResult:
             is False
         )
 
+    def test_extract_hostname_trailing_dot_is_normalized(self):
+        assert (
+            web_search_mod._extract_hostname("https://example.com./path")
+            == "example.com"
+        )
+
+
+class TestHostCanonicalization:
+    """Tests for hostname normalization helper."""
+
+    def test_canonicalize_hostname_strips_trailing_dot(self):
+        assert web_search_mod._canonicalize_hostname("Example.COM.") == "example.com"
+
 
 class TestWebSearchHostSafety:
     """Tests for host-level SSRF safety validation."""
