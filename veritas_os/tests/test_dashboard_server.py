@@ -43,6 +43,12 @@ def test_validate_log_dir_rejects_sensitive_paths(tmp_path):
         assert result == tmp_path
 
 
+def test_validate_log_dir_rejects_sensitive_paths_even_with_root_base(tmp_path):
+    """allowed_base が広すぎる設定でもセンシティブパスは拒否される。"""
+    result = dashboard_server._validate_log_dir("/etc", Path("/"))
+    assert result == Path("/")
+
+
 def test_validate_log_dir_handles_path_traversal_attempt(tmp_path):
     """'../' を使ったパストラバーサル攻撃は拒否される。"""
     traversal_path = str(tmp_path / ".." / ".." / "etc")
