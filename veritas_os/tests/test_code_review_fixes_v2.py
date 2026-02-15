@@ -101,6 +101,22 @@ class TestRotateHashChainContinuity:
         marker_hash = rotate.load_last_hash_marker(log_path)
         assert marker_hash == "hash2"
 
+
+    def test_save_last_hash_marker_reads_beyond_single_chunk(self, tmp_path):
+        """Large tail data should still yield the true final record hash."""
+        log_path = tmp_path / "trust_log.jsonl"
+
+        large_entry = {"sha256": "hash_large", "payload": "x" * 70000}
+        final_entry = {"sha256": "hash_final", "payload": "final"}
+        log_path.write_text(
+            "\n".join((json.dumps(large_entry), json.dumps(final_entry))) + "\n",
+            encoding="utf-8",
+        )
+
+        rotate.save_last_hash_marker(log_path)
+
+        assert rotate.load_last_hash_marker(log_path) == "hash_final"
+
     def test_get_last_hash_uses_marker_after_rotation(self, tmp_path, monkeypatch):
         """After rotation empties the file, get_last_hash falls back to marker."""
         from veritas_os.logging import trust_log

@@ -12,6 +12,7 @@ MAX_LINES = 5000
 # ★ ローテーション時にハッシュチェーンの連続性を保つためのマーカーファイル
 # 最終ハッシュ値を保存し、新しいファイルの最初のエントリで参照する
 _LAST_HASH_MARKER = ".last_hash"
+_READ_CHUNK_SIZE = 65536
 
 
 def _get_trust_log_path() -> Path:
@@ -29,6 +30,42 @@ def _get_last_hash_marker_path(trust_log: Path) -> Path:
     return trust_log.parent / _LAST_HASH_MARKER
 
 
+def _read_last_nonempty_line(path: Path) -> str | None:
+    """大きなログでも末尾の非空行を安全に取得する。"""
+    if not path.exists():
+        return None
+
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        file_size = f.tell()
+        if file_size == 0:
+            return None
+
+        pos = file_size
+        buf = b""
+        newline_count = 0
+
+        while pos > 0:
+            read_size = min(_READ_CHUNK_SIZE, pos)
+            pos -= read_size
+            f.seek(pos)
+            chunk = f.read(read_size)
+            if not chunk:
+                break
+
+            buf = chunk + buf
+            newline_count += chunk.count(b"\n")
+
+            # 末尾行の直前に改行が見つかれば、これ以上読み戻さなくてよい。
+            if newline_count >= 2 or (newline_count >= 1 and not buf.endswith(b"\n")):
+                break
+
+    for raw_line in reversed(buf.splitlines()):
+        if raw_line.strip():
+            return raw_line.decode("utf-8", errors="replace")
+    return None
+
+
 def save_last_hash_marker(trust_log: Path) -> None:
     """ローテーション前に最終ハッシュ値をマーカーファイルに保存する。
 
@@ -41,20 +78,13 @@ def save_last_hash_marker(trust_log: Path) -> None:
     try:
         if not trust_log.exists():
             return
-        file_size = trust_log.stat().st_size
-        if file_size == 0:
+        last_line = _read_last_nonempty_line(trust_log)
+        if not last_line:
             return
-        with open(trust_log, "rb") as f:
-            chunk_size = min(65536, file_size)
-            f.seek(file_size - chunk_size)
-            raw = f.read()
-            chunk = raw.decode("utf-8", errors="replace")
-            lines = chunk.strip().split("\n")
-            if lines:
-                last = _json.loads(lines[-1])
-                last_hash = last.get("sha256")
-                if last_hash:
-                    marker.write_text(last_hash, encoding="utf-8")
+        last = _json.loads(last_line)
+        last_hash = last.get("sha256")
+        if last_hash:
+            marker.write_text(last_hash, encoding="utf-8")
     except Exception:
         logger.debug("save_last_hash_marker failed for %s", trust_log, exc_info=True)
 
