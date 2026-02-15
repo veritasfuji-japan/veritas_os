@@ -85,6 +85,42 @@ def _resolve_dashboard_password() -> tuple[str, bool]:
 DASHBOARD_PASSWORD, _password_auto_generated = _resolve_dashboard_password()
 
 
+def _warn_if_ephemeral_password_with_multi_workers(
+    is_auto_generated: bool,
+) -> None:
+    """Warn when ephemeral dashboard password is used with multiple workers.
+
+    Security/operations note:
+        Process-local random passwords make authentication non-deterministic in
+        multi-worker deployments (e.g. ``uvicorn --workers 4``). Each worker
+        may have a different password, causing intermittent authentication
+        failures.
+    """
+    if not is_auto_generated:
+        return
+
+    worker_candidates = (
+        os.getenv("UVICORN_WORKERS", ""),
+        os.getenv("WEB_CONCURRENCY", ""),
+    )
+    for raw_workers in worker_candidates:
+        try:
+            workers = int(raw_workers.strip())
+        except (ValueError, TypeError):
+            continue
+        if workers > 1:
+            logger.warning(
+                "Ephemeral DASHBOARD_PASSWORD with workers=%s may cause "
+                "intermittent authentication failures. Configure an explicit "
+                "DASHBOARD_PASSWORD for multi-worker deployments.",
+                workers,
+            )
+            return
+
+
+_warn_if_ephemeral_password_with_multi_workers(_password_auto_generated)
+
+
 def verify_credentials(
     credentials: HTTPBasicCredentials = Depends(security),  # noqa: B008
 ) -> str:

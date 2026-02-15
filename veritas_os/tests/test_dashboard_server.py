@@ -115,6 +115,31 @@ def test_resolve_dashboard_password_uses_explicit_value(monkeypatch):
     assert password == "configured-secret"
     assert auto_generated is False
 
+
+
+def test_warn_if_ephemeral_password_with_multi_workers_logs_warning(
+    monkeypatch, caplog
+):
+    """Auto-generated password + multi-worker env should emit warning."""
+    monkeypatch.setenv("UVICORN_WORKERS", "3")
+    caplog.set_level("WARNING")
+
+    dashboard_server._warn_if_ephemeral_password_with_multi_workers(True)
+
+    assert "intermittent authentication failures" in caplog.text
+
+
+def test_warn_if_ephemeral_password_with_single_worker_no_warning(
+    monkeypatch, caplog
+):
+    """Single-worker deployment should not emit multi-worker warning."""
+    monkeypatch.setenv("UVICORN_WORKERS", "1")
+    caplog.set_level("WARNING")
+
+    dashboard_server._warn_if_ephemeral_password_with_multi_workers(True)
+
+    assert "intermittent authentication failures" not in caplog.text
+
 def test_health_check_ok(client: TestClient):
     res = client.get("/health")
     assert res.status_code == 200
