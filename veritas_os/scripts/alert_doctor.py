@@ -101,7 +101,8 @@ def _validate_health_url(url: str) -> bool:
 
     The alerting workflow should only probe a local Veritas API endpoint.
     Allowed destinations are loopback hosts over HTTP/HTTPS without
-    embedded credentials.
+    embedded credentials. To avoid broad localhost access, only the
+    ``/health`` endpoint is permitted and query/fragment parts are denied.
     """
     if not url:
         return False
@@ -117,6 +118,9 @@ def _validate_health_url(url: str) -> bool:
     if parsed.username or parsed.password:
         return False
 
+    if parsed.query or parsed.fragment:
+        return False
+
     try:
         parsed.port
     except ValueError:
@@ -124,6 +128,10 @@ def _validate_health_url(url: str) -> bool:
 
     hostname: Optional[str] = parsed.hostname
     if not hostname:
+        return False
+
+    normalized_path = parsed.path or "/"
+    if normalized_path != "/health":
         return False
 
     return hostname.lower() in {"localhost", "127.0.0.1", "::1"}

@@ -96,6 +96,11 @@ def test_validate_health_url_accepts_only_localhosts():
     """Health URL should allow only loopback destinations."""
     assert alert_doctor._validate_health_url("http://127.0.0.1:8000/health")
     assert alert_doctor._validate_health_url("https://localhost/health")
+    assert not alert_doctor._validate_health_url("http://127.0.0.1:8000/")
+    assert not alert_doctor._validate_health_url("http://127.0.0.1:8000/metrics")
+    assert not alert_doctor._validate_health_url(
+        "http://127.0.0.1:8000/health?verbose=1"
+    )
     assert not alert_doctor._validate_health_url("http://example.com/health")
     assert not alert_doctor._validate_health_url("http://user@127.0.0.1/health")
 
