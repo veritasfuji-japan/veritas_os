@@ -200,6 +200,19 @@ def test_normalize_repo_item_uses_safe_defaults():
     assert result["stars"] == 7
 
 
+def test_normalize_repo_item_drops_unsafe_html_url():
+    result = github_adapter._normalize_repo_item(
+        {
+            "full_name": "owner/repo",
+            "html_url": "javascript:alert(1)",
+            "description": "demo",
+            "stargazers_count": 1,
+        }
+    )
+
+    assert result["html_url"] == ""
+
+
 def test_safe_float_non_finite_returns_default(monkeypatch):
     monkeypatch.setenv("VERITAS_GITHUB_RETRY_DELAY", "nan")
     assert github_adapter._safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.5) == 1.5

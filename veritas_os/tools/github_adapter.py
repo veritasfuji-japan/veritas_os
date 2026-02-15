@@ -12,6 +12,7 @@ import os
 import random
 import re
 import time
+from urllib.parse import urlsplit
 
 import requests
 
@@ -88,12 +89,34 @@ def _normalize_repo_item(item: dict) -> dict:
         except (TypeError, ValueError):
             stars = 0
 
+    html_url = _sanitize_html_url(item.get("html_url"))
+
     return {
         "full_name": str(item.get("full_name") or ""),
-        "html_url": str(item.get("html_url") or ""),
+        "html_url": html_url,
         "description": str(item.get("description") or ""),
         "stars": stars,
     }
+
+
+def _sanitize_html_url(raw_url: object) -> str:
+    """Return a safe GitHub repository URL or an empty string.
+
+    Only absolute HTTP(S) URLs are accepted to reduce the risk of unsafe
+    schemes (e.g. ``javascript:``) or malformed link injection.
+    """
+    url = str(raw_url or "").strip()
+    if not url:
+        return ""
+
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"}:
+        logger.warning("Dropped GitHub html_url with unsafe scheme: %r", parsed.scheme)
+        return ""
+    if not parsed.netloc:
+        logger.warning("Dropped GitHub html_url without host")
+        return ""
+    return url
 
 
 def _compute_backoff(attempt: int) -> float:
