@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import re
 import ipaddress
+from bisect import bisect_left
 from dataclasses import dataclass
 from typing import List, Dict, Any
 
@@ -567,18 +568,27 @@ class PIIDetector:
         )
 
         selected: List[PIIMatch] = []
+        occupied_starts: List[int] = []
         occupied_ranges: List[tuple[int, int]] = []
 
         for candidate in prioritized:
-            has_overlap = any(
-                candidate.start < existing_end
-                and candidate.end > existing_start
-                for existing_start, existing_end in occupied_ranges
-            )
+            insert_at = bisect_left(occupied_starts, candidate.start)
+
+            has_overlap = False
+            if insert_at > 0:
+                prev_start, prev_end = occupied_ranges[insert_at - 1]
+                has_overlap = candidate.start < prev_end and candidate.end > prev_start
+
+            if not has_overlap and insert_at < len(occupied_ranges):
+                next_start, next_end = occupied_ranges[insert_at]
+                has_overlap = candidate.start < next_end and candidate.end > next_start
+
             if has_overlap:
                 continue
+
             selected.append(candidate)
-            occupied_ranges.append((candidate.start, candidate.end))
+            occupied_starts.insert(insert_at, candidate.start)
+            occupied_ranges.insert(insert_at, (candidate.start, candidate.end))
 
         selected.sort(key=lambda item: item.start)
         return selected
