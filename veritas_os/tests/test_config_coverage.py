@@ -13,6 +13,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from veritas_os.core.config import (
+    _parse_bool,
     _parse_cors_origins,
     _parse_float,
     _parse_int,
@@ -74,6 +75,14 @@ def test_parse_float_invalid(monkeypatch):
     assert _parse_float("TEST_FLOAT_KEY", 9.9) == 9.9
 
 
+def test_parse_float_invalid_logs_warning(monkeypatch, caplog):
+    monkeypatch.setenv("TEST_FLOAT_KEY", "bad")
+    caplog.set_level(logging.WARNING)
+
+    assert _parse_float("TEST_FLOAT_KEY", 1.0) == 1.0
+    assert "Invalid float for TEST_FLOAT_KEY" in caplog.text
+
+
 def test_parse_float_empty(monkeypatch):
     monkeypatch.setenv("TEST_FLOAT_KEY", "")
     # empty string -> ValueError -> default
@@ -99,10 +108,47 @@ def test_parse_int_invalid(monkeypatch):
     assert _parse_int("TEST_INT_KEY", 99) == 99
 
 
+def test_parse_int_invalid_logs_warning(monkeypatch, caplog):
+    monkeypatch.setenv("TEST_INT_KEY", "bad")
+    caplog.set_level(logging.WARNING)
+
+    assert _parse_int("TEST_INT_KEY", 2) == 2
+    assert "Invalid int for TEST_INT_KEY" in caplog.text
+
+
 def test_parse_int_float_string(monkeypatch):
     monkeypatch.setenv("TEST_INT_KEY", "3.5")
     # "3.5" -> ValueError for int() -> default
     assert _parse_int("TEST_INT_KEY", 10) == 10
+
+
+# ============================================================
+# _parse_bool
+# ============================================================
+
+def test_parse_bool_default(monkeypatch):
+    monkeypatch.delenv("TEST_BOOL_KEY", raising=False)
+    assert _parse_bool("TEST_BOOL_KEY", True) is True
+
+
+def test_parse_bool_truthy_values(monkeypatch):
+    for value in ["1", "true", "TRUE", " yes ", "On"]:
+        monkeypatch.setenv("TEST_BOOL_KEY", value)
+        assert _parse_bool("TEST_BOOL_KEY", False) is True
+
+
+def test_parse_bool_falsy_values(monkeypatch):
+    for value in ["0", "false", "FALSE", " no ", "Off", ""]:
+        monkeypatch.setenv("TEST_BOOL_KEY", value)
+        assert _parse_bool("TEST_BOOL_KEY", True) is False
+
+
+def test_parse_bool_invalid_logs_warning(monkeypatch, caplog):
+    monkeypatch.setenv("TEST_BOOL_KEY", "maybe")
+    caplog.set_level(logging.WARNING)
+
+    assert _parse_bool("TEST_BOOL_KEY", True) is True
+    assert "Invalid bool for TEST_BOOL_KEY" in caplog.text
 
 
 # ============================================================
@@ -263,6 +309,12 @@ def test_fuji_config_defaults():
     fc = FujiConfig()
     assert fc.default_min_evidence == 1
     assert fc.max_uncertainty == pytest.approx(0.60)
+
+
+def test_fuji_config_poc_mode_truthy(monkeypatch):
+    monkeypatch.setenv("VERITAS_POC_MODE", "yes")
+    fc = FujiConfig()
+    assert fc.poc_mode is True
 
 
 # ============================================================

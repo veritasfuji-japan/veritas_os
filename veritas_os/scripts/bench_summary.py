@@ -171,7 +171,7 @@ def main() -> None:
         if decision_status_set:
             print(f"  decision_status : {dict(collections.Counter(decision_status_set))}")
         else:
-            print(f"  decision_status : N/A")
+            print("  decision_status : N/A")
 
         print(
             f"  平均 elapsed    : {avg_elapsed:.3f} sec"

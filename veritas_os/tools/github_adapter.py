@@ -7,14 +7,14 @@ GitHub Adapter for VERITAS Environment Tools
 """
 
 import logging
+import math
 import os
 import random
+import re
 import time
+from urllib.parse import urlsplit
 
 import requests
-
-
-GITHUB_TOKEN = os.environ.get("VERITAS_GITHUB_TOKEN", "").strip()
 
 
 def _safe_int(key: str, default: int) -> int:
@@ -25,13 +25,17 @@ def _safe_int(key: str, default: int) -> int:
 
 
 def _safe_float(key: str, default: float) -> float:
+    """環境変数を有限な float として取得し、異常値は default に戻す。"""
     try:
-        return float(os.getenv(key, str(default)))
+        value = float(os.getenv(key, str(default)))
     except (ValueError, TypeError):
         return default
+    if not math.isfinite(value):
+        return default
+    return value
 
 
-GITHUB_MAX_RETRIES = _safe_int("VERITAS_GITHUB_MAX_RETRIES", 3)
+GITHUB_MAX_RETRIES = max(_safe_int("VERITAS_GITHUB_MAX_RETRIES", 3), 1)
 GITHUB_RETRY_DELAY = _safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.0)
 GITHUB_RETRY_MAX_DELAY = _safe_float("VERITAS_GITHUB_RETRY_MAX_DELAY", 8.0)
 GITHUB_RETRY_JITTER = _safe_float("VERITAS_GITHUB_RETRY_JITTER", 0.1)
@@ -43,6 +47,68 @@ MAX_QUERY_LEN = 256
 GITHUB_API_MAX_PER_PAGE = 100
 
 logger = logging.getLogger(__name__)
+
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_TRUSTED_GITHUB_HOSTS = {"github.com", "www.github.com"}
+_RE_REPO_PATH = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$")
+_RESERVED_GITHUB_PATH_ROOTS = {
+    "about",
+    "account",
+    "apps",
+    "collections",
+    "explore",
+    "features",
+    "issues",
+    "join",
+    "login",
+    "marketplace",
+    "new",
+    "notifications",
+    "orgs",
+    "organizations",
+    "pricing",
+    "pulls",
+    "search",
+    "settings",
+    "site",
+    "sponsors",
+    "topics",
+}
+
+
+def _get_github_token() -> str:
+    """Return the latest GitHub token from environment variables.
+
+    The token is resolved at call time so that emergency token rotations can
+    take effect without restarting the running process.
+
+    Security:
+        Tokens containing control characters are rejected. This prevents
+        malformed ``Authorization`` headers and reduces header-injection risk
+        from accidentally tainted environment values.
+    """
+    raw_token = os.getenv("VERITAS_GITHUB_TOKEN", "")
+    token = raw_token.strip()
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in token):
+        logger.warning("VERITAS_GITHUB_TOKEN contains control characters")
+        return ""
+    return token
+
+
+def _get_retry_settings() -> tuple[int, float, float, float]:
+    """Return GitHub retry settings from current environment values.
+
+    Reading these values at call time allows emergency configuration updates
+    (e.g. temporarily lowering retries during incidents) without restarting
+    the process.
+    """
+    max_retries = max(_safe_int("VERITAS_GITHUB_MAX_RETRIES", GITHUB_MAX_RETRIES), 1)
+    retry_delay = _safe_float("VERITAS_GITHUB_RETRY_DELAY", GITHUB_RETRY_DELAY)
+    retry_max_delay = _safe_float(
+        "VERITAS_GITHUB_RETRY_MAX_DELAY", GITHUB_RETRY_MAX_DELAY
+    )
+    retry_jitter = _safe_float("VERITAS_GITHUB_RETRY_JITTER", GITHUB_RETRY_JITTER)
+    return max_retries, retry_delay, retry_max_delay, retry_jitter
 
 
 def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
@@ -56,6 +122,8 @@ def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
     if raw is None:
         raw = ""
     q = str(raw).replace("\n", " ").replace("\r", " ").strip()
+    q = _RE_CONTROL_CHARS.sub(" ", q)
+    q = " ".join(q.split())
     truncated = False
     if len(q) > max_len:
         q = q[:max_len]
@@ -63,11 +131,81 @@ def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
     return q, truncated
 
 
-def _compute_backoff(attempt: int) -> float:
+def _normalize_repo_item(item: dict) -> dict:
+    """Normalize a GitHub repository item with safe default values."""
+    stars = item.get("stargazers_count", 0)
+    if not isinstance(stars, int):
+        try:
+            stars = int(stars)
+        except (TypeError, ValueError):
+            stars = 0
+
+    html_url = _sanitize_html_url(item.get("html_url"))
+
+    return {
+        "full_name": str(item.get("full_name") or ""),
+        "html_url": html_url,
+        "description": str(item.get("description") or ""),
+        "stars": stars,
+    }
+
+
+def _sanitize_html_url(raw_url: object) -> str:
+    """Return a safe GitHub repository URL or an empty string.
+
+    Only absolute HTTPS URLs are accepted to reduce the risk of unsafe
+    schemes (e.g. ``javascript:``), downgraded transport, or malformed link
+    injection.
+
+    Security policy:
+        - Only GitHub hosts are allowed because this field is rendered as an
+          external link in clients and should never point to arbitrary domains.
+        - URL-embedded credentials are always rejected to prevent accidental
+          leakage of secrets via logs or UI.
+        - Query strings and fragments are rejected to avoid displaying tracking
+          parameters or ambiguous destinations.
+        - Only canonical repository paths (``/owner/repo``) are accepted.
+    """
+    url = str(raw_url or "").strip()
+    if not url:
+        return ""
+
+    parsed = urlsplit(url)
+    if parsed.scheme != "https":
+        logger.warning("Dropped GitHub html_url with unsafe scheme: %r", parsed.scheme)
+        return ""
+    if not parsed.netloc:
+        logger.warning("Dropped GitHub html_url without host")
+        return ""
+    if parsed.username or parsed.password:
+        logger.warning("Dropped GitHub html_url containing credentials")
+        return ""
+    if (parsed.hostname or "").lower() not in _TRUSTED_GITHUB_HOSTS:
+        logger.warning("Dropped GitHub html_url with untrusted host: %r", parsed.hostname)
+        return ""
+    if parsed.query or parsed.fragment:
+        logger.warning("Dropped GitHub html_url containing query or fragment")
+        return ""
+    if not _RE_REPO_PATH.fullmatch(parsed.path or ""):
+        logger.warning("Dropped GitHub html_url with non-repo path: %r", parsed.path)
+        return ""
+    owner = (parsed.path or "").strip("/").split("/", maxsplit=1)[0].lower()
+    if owner in _RESERVED_GITHUB_PATH_ROOTS:
+        logger.warning("Dropped GitHub html_url with reserved root path: %r", owner)
+        return ""
+    return url
+
+
+def _compute_backoff(
+    attempt: int,
+    retry_delay: float,
+    retry_max_delay: float,
+    retry_jitter: float,
+) -> float:
     """指数バックオフの待機時間を算出する（ジッター込み）。"""
-    base_delay = max(GITHUB_RETRY_DELAY, 0.0)
-    max_delay = max(GITHUB_RETRY_MAX_DELAY, base_delay)
-    jitter = max(GITHUB_RETRY_JITTER, 0.0)
+    base_delay = max(retry_delay, 0.0)
+    max_delay = max(retry_max_delay, base_delay)
+    jitter = max(retry_jitter, 0.0)
     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
     if jitter:
         delay += random.uniform(0, delay * jitter)
@@ -86,19 +224,26 @@ def _get_with_retry(
     timeout: int,
 ) -> requests.Response:
     """GitHub API 呼び出しを再試行しつつ実行する。"""
+    max_retries, retry_delay, retry_max_delay, retry_jitter = _get_retry_settings()
     last_exc: Exception | None = None
-    for attempt in range(1, GITHUB_MAX_RETRIES + 1):
+    for attempt in range(1, max_retries + 1):
         try:
             response = requests.get(
                 url,
                 headers=headers,
                 params=params,
                 timeout=timeout,
+                allow_redirects=False,
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
-                if attempt < GITHUB_MAX_RETRIES:
-                    delay = _compute_backoff(attempt)
+                if attempt < max_retries:
+                    delay = _compute_backoff(
+                        attempt,
+                        retry_delay,
+                        retry_max_delay,
+                        retry_jitter,
+                    )
                     logger.warning(
                         "GitHub retryable status=%s attempt=%s, sleep=%.2fs",
                         status_code,
@@ -111,8 +256,13 @@ def _get_with_retry(
             return response
         except requests.exceptions.RequestException as exc:
             last_exc = exc
-            if attempt < GITHUB_MAX_RETRIES:
-                delay = _compute_backoff(attempt)
+            if attempt < max_retries:
+                delay = _compute_backoff(
+                    attempt,
+                    retry_delay,
+                    retry_max_delay,
+                    retry_jitter,
+                )
                 logger.warning(
                     "GitHub request error attempt=%s, sleep=%.2fs: %s: %s",
                     attempt,
@@ -140,7 +290,8 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
           "meta": { ... }
         }
     """
-    if not GITHUB_TOKEN:
+    token = _get_github_token()
+    if not token:
         return {
             "ok": False,
             "results": [],
@@ -169,7 +320,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
     }
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Authorization": f"Bearer {token}",
     }
 
     try:
@@ -185,16 +336,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         }
 
     items = data.get("items", []) or []
-    results = []
-    for it in items:
-        results.append(
-            {
-                "full_name": it.get("full_name"),
-                "html_url": it.get("html_url"),
-                "description": it.get("description"),
-                "stars": it.get("stargazers_count", 0),
-            }
-        )
+    results = [_normalize_repo_item(it) for it in items if isinstance(it, dict)]
 
     return {
         "ok": True,

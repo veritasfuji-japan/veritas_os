@@ -1,11 +1,11 @@
 # veritas/memory/index_cosine.py
-import logging
 import os
 import threading
+import logging
 
 import numpy as np
 from pathlib import Path
-from typing import List, Tuple, Iterable, Optional, Any
+from typing import Any, Iterable, List, Optional, Tuple
 
 from veritas_os.core.atomic_io import atomic_write_npz
 
@@ -47,6 +47,35 @@ def _allow_legacy_pickle_npz() -> bool:
     return False
 
 
+def _validate_finite_array(name: str, values: np.ndarray) -> None:
+    """Raise ValueError when an input vector contains NaN/Inf values."""
+    if not np.isfinite(values).all():
+        raise ValueError(f"CosineIndex.{name}: vectors must be finite (no NaN/Inf)")
+
+
+def _ensure_2d_vectors(name: str, values: Any) -> np.ndarray:
+    """Convert inputs to a 2D float32 matrix and validate rank.
+
+    Args:
+        name: Operation name used in error messages (e.g. ``"add"``).
+        values: User-provided vector or matrix-like value.
+
+    Returns:
+        A ``(N, D)`` numpy array in ``float32``.
+
+    Raises:
+        ValueError: If ``values`` is not a 1D or 2D array-like input.
+    """
+    arr = np.asarray(values, dtype=np.float32)
+    if arr.ndim == 1:
+        return arr.reshape(1, -1)
+    if arr.ndim != 2:
+        raise ValueError(
+            f"CosineIndex.{name}: vectors must be 1D or 2D, got ndim={arr.ndim}"
+        )
+    return arr
+
+
 class CosineIndex:
     """
     シンプルな Cosine 類似度インデックス + 永続化 (.npz)
@@ -58,6 +87,18 @@ class CosineIndex:
     """
 
     def __init__(self, dim: int, path: Optional[Path] = None):
+        """Create a cosine index.
+
+        Args:
+            dim: Vector dimensionality. Must be a positive integer.
+            path: Optional `.npz` persistence path.
+
+        Raises:
+            ValueError: If ``dim`` is not a positive integer.
+        """
+        if not isinstance(dim, int) or dim < 1:
+            raise ValueError(f"CosineIndex.__init__: dim must be a positive int, got {dim!r}")
+
         self.dim = dim
         self.path = Path(path) if path is not None else None
         self._lock = threading.RLock()  # リエントラントロック
@@ -73,9 +114,10 @@ class CosineIndex:
     def _load(self) -> None:
         with self._lock:
             try:
-                data = np.load(self.path, allow_pickle=False)
-                self.vecs = data["vecs"].astype(np.float32)
-                self.ids = [str(i) for i in data["ids"].tolist()]
+                with np.load(self.path, allow_pickle=False) as data:
+                    self.vecs = data["vecs"].astype(np.float32)
+                    self.ids = [str(i) for i in data["ids"].tolist()]
+                self._validate_loaded_index_or_reset()
                 return
             except Exception as e:
                 # ★ M-18 修正: エラーをログに記録（破損と不在を区別可能に）
@@ -103,9 +145,10 @@ class CosineIndex:
                         self.path,
                     )
                     try:
-                        data = np.load(self.path, allow_pickle=True)
-                        self.vecs = data["vecs"].astype(np.float32)
-                        self.ids = [str(i) for i in data["ids"].tolist()]
+                        with np.load(self.path, allow_pickle=True) as data:
+                            self.vecs = data["vecs"].astype(np.float32)
+                            self.ids = [str(i) for i in data["ids"].tolist()]
+                        self._validate_loaded_index_or_reset()
                         # Immediately re-save without pickle to migrate
                         self.save()
                         logger.info(
@@ -121,6 +164,48 @@ class CosineIndex:
                         )
 
             # 壊れていたら諦めて空からスタート
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+
+    def _validate_loaded_index_or_reset(self) -> None:
+        """Validate loaded arrays and reset to empty index when data is inconsistent."""
+        if self.vecs.ndim != 2:
+            logger.warning(
+                "[CosineIndex] Invalid vecs ndim (%d), resetting index: %s",
+                self.vecs.ndim,
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+            return
+
+        if self.vecs.shape[1] != self.dim:
+            logger.warning(
+                "[CosineIndex] Loaded vec dim mismatch (%d != %d), resetting index: %s",
+                self.vecs.shape[1],
+                self.dim,
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+            return
+
+        if len(self.ids) != self.vecs.shape[0]:
+            logger.warning(
+                "[CosineIndex] Loaded ids/vec count mismatch (%d != %d), resetting index: %s",
+                len(self.ids),
+                self.vecs.shape[0],
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+            return
+
+        if not np.isfinite(self.vecs).all():
+            logger.warning(
+                "[CosineIndex] Loaded vecs include non-finite values (NaN/Inf), resetting index: %s",
+                self.path,
+            )
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)
             self.ids = []
 
@@ -143,11 +228,10 @@ class CosineIndex:
         with self._lock:
             return len(self.ids)
 
-    def add(self, vecs: Any, ids: Iterable[str]):
+    def add(self, vecs: Any, ids: Iterable[str]) -> None:
         """ベクトルと id を追加して即保存（スレッドセーフ）"""
-        vecs = np.asarray(vecs, dtype=np.float32)
-        if vecs.ndim == 1:
-            vecs = vecs.reshape(1, -1)
+        vecs = _ensure_2d_vectors("add", vecs)
+        _validate_finite_array("add", vecs)
 
         if vecs.shape[1] != self.dim:
             raise ValueError(f"CosineIndex.add: dim mismatch {vecs.shape[1]} != {self.dim}")
@@ -168,12 +252,17 @@ class CosineIndex:
     def search(self, qv: Any, k: int = 8) -> List[List[Tuple[str, float]]]:
         """
         qv: (D,) or (Q, D)
+        k: 取得する上位件数（1以上）
         戻り値: [[(id, score), ...], ...]  （クエリごとに1リスト）
         スレッドセーフ: 検索中は一貫したスナップショットを使用
         """
-        q = np.asarray(qv, dtype=np.float32)
-        if q.ndim == 1:
-            q = q.reshape(1, -1)
+        if k < 1:
+            raise ValueError(f"CosineIndex.search: k must be >= 1, got {k}")
+
+        q = _ensure_2d_vectors("search", qv)
+        _validate_finite_array("search", q)
+        if q.shape[1] != self.dim:
+            raise ValueError(f"CosineIndex.search: dim mismatch {q.shape[1]} != {self.dim}")
 
         with self._lock:
             # ロック内でスナップショットを取得

@@ -21,7 +21,6 @@ Usage (モジュールとして):
 
 from __future__ import annotations
 
-import html as html_mod
 import json
 import logging
 import os
@@ -32,6 +31,8 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
+from veritas_os.api.constants import MAX_LOG_FILE_SIZE, SENSITIVE_SYSTEM_PATHS
+
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="VERITAS Dashboard", version="1.0.0")
@@ -39,17 +40,105 @@ security = HTTPBasic()
 
 # ===== 認証設定 =====
 
-DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
-_env_password = os.getenv("DASHBOARD_PASSWORD", "")
-_password_auto_generated = False
-if not _env_password:
-    _env_password = secrets.token_urlsafe(24)
-    _password_auto_generated = True
-DASHBOARD_PASSWORD = _env_password
+
+def _resolve_dashboard_username() -> str:
+    """Resolve dashboard username while rejecting blank values.
+
+    Security note:
+        Empty usernames make brute-force and misconfiguration detection harder,
+        so blank values are normalized to a safe default with a warning.
+    """
+    username = os.getenv("DASHBOARD_USERNAME", "veritas").strip()
+    if username:
+        return username
+
+    logger.warning(
+        "DASHBOARD_USERNAME is blank; falling back to default 'veritas'."
+    )
+    return "veritas"
+
+
+def _is_truthy_env(value: str) -> bool:
+    """Return True when ``value`` is a truthy environment-style flag."""
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_dashboard_password() -> tuple[str, bool]:
+    """Resolve dashboard password with production-safe defaults.
+
+    Returns:
+        tuple[str, bool]:
+            - password string.
+            - True when password is auto-generated for this process.
+
+    Raises:
+        RuntimeError: When running in production without explicit password.
+    """
+    env_password = os.getenv("DASHBOARD_PASSWORD", "").strip()
+    if env_password:
+        return env_password, False
+
+    veritas_env = os.getenv("VERITAS_ENV", "").strip().lower()
+    is_production = veritas_env in {"prod", "production"}
+    allow_ephemeral = _is_truthy_env(
+        os.getenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", "")
+    )
+
+    if is_production and not allow_ephemeral:
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD is required in production "
+            "(set VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD=1 to override)."
+        )
+
+    logger.warning(
+        "DASHBOARD_PASSWORD is not set; using an ephemeral auto-generated "
+        "password for this process."
+    )
+    return secrets.token_urlsafe(24), True
+
+
+DASHBOARD_PASSWORD, _password_auto_generated = _resolve_dashboard_password()
+DASHBOARD_USERNAME = _resolve_dashboard_username()
+
+
+def _warn_if_ephemeral_password_with_multi_workers(
+    is_auto_generated: bool,
+) -> None:
+    """Warn when ephemeral dashboard password is used with multiple workers.
+
+    Security/operations note:
+        Process-local random passwords make authentication non-deterministic in
+        multi-worker deployments (e.g. ``uvicorn --workers 4``). Each worker
+        may have a different password, causing intermittent authentication
+        failures.
+    """
+    if not is_auto_generated:
+        return
+
+    worker_candidates = (
+        os.getenv("UVICORN_WORKERS", ""),
+        os.getenv("WEB_CONCURRENCY", ""),
+    )
+    for raw_workers in worker_candidates:
+        try:
+            workers = int(raw_workers.strip())
+        except (ValueError, TypeError):
+            continue
+        if workers > 1:
+            logger.warning(
+                "Ephemeral DASHBOARD_PASSWORD with workers=%s may cause "
+                "intermittent authentication failures. Configure an explicit "
+                "DASHBOARD_PASSWORD for multi-worker deployments.",
+                workers,
+            )
+            return
+
+
+_warn_if_ephemeral_password_with_multi_workers(_password_auto_generated)
 
 
 def verify_credentials(
-    credentials: HTTPBasicCredentials = Depends(security),
+    credentials: HTTPBasicCredentials = Depends(security),  # noqa: B008
 ) -> str:
     """
     Verify HTTP Basic Auth credentials.
@@ -81,44 +170,41 @@ def verify_credentials(
 
 # ===== パス設定 =====
 
-from veritas_os.api.constants import MAX_LOG_FILE_SIZE, SENSITIVE_SYSTEM_PATHS
-
 BASE_DIR = Path(__file__).resolve().parents[1]
 default_log_dir = BASE_DIR / "scripts" / "logs"
 
 
+def _is_sensitive_path(path: Path) -> bool:
+    """Return True when ``path`` points to a known sensitive system location."""
+    for sensitive in SENSITIVE_SYSTEM_PATHS:
+        try:
+            sensitive_path = Path(sensitive).expanduser().resolve()
+            if path == sensitive_path or sensitive_path in path.parents:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
 def _validate_log_dir(log_dir_str: str, allowed_base: Path) -> Path:
-    """
-    Validate and sanitize the log directory path to prevent path traversal.
-
-    Only allows paths that are under the allowed_base directory.
-    This prevents path traversal attacks that could expose sensitive system files.
-
-    Args:
-        log_dir_str: String path from environment variable
-        allowed_base: The allowed base directory for logs
-
-    Returns:
-        Validated Path object (always under allowed_base)
-
-    Note:
-        Falls back to allowed_base if the path is invalid or outside allowed_base.
-    """
+    """Validate log directory path against traversal and sensitive locations."""
     try:
         resolved = Path(log_dir_str).expanduser().resolve()
         allowed_resolved = allowed_base.resolve()
 
-        # Allow exact match with allowed_base
+        if _is_sensitive_path(resolved):
+            logger.warning(
+                "VERITAS_LOG_DIR '%s' points to sensitive path, using default",
+                resolved,
+            )
+            return allowed_base
+
         if resolved == allowed_resolved:
             return resolved
 
-        # Allow child paths of allowed_base (resolved path must have allowed_base as parent)
-        # Check if allowed_resolved is a parent of resolved
         if allowed_resolved in resolved.parents:
             return resolved
 
-        # Reject all paths outside allowed_base - this is the security fix
-        # Previously, arbitrary paths were allowed if not in SENSITIVE_SYSTEM_PATHS
         logger.warning(
             "VERITAS_LOG_DIR '%s' is outside allowed base '%s', using default",
             resolved,
@@ -126,9 +212,8 @@ def _validate_log_dir(log_dir_str: str, allowed_base: Path) -> Path:
         )
         return allowed_base
 
-    except (OSError, ValueError) as e:
-        # Fall back to default on any path resolution error
-        logger.warning("Invalid VERITAS_LOG_DIR, using default: %s", e)
+    except (OSError, ValueError) as error:
+        logger.warning("Invalid VERITAS_LOG_DIR, using default: %s", error)
         return allowed_base
 
 

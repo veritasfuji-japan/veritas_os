@@ -94,6 +94,29 @@ def _compute_sha256(payload: dict) -> str:
     return hashlib.sha256(s).hexdigest()
 
 
+def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
+    """Return the newest valid ``sha256`` value from JSONL lines.
+
+    The tail chunk used by :func:`get_last_hash` may include partially written
+    trailing data (for example if a previous process crashed mid-write).
+    Instead of failing hard on the last line, this helper scans backward and
+    returns the most recent decodable JSON object containing a string ``sha256``
+    field.
+    """
+    for line in reversed(lines):
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        sha = payload.get("sha256") if isinstance(payload, dict) else None
+        if isinstance(sha, str) and sha:
+            return sha
+    return None
+
+
 def get_last_hash() -> str | None:
     """直近の trust_log.jsonl から最後の SHA-256 値を取得。
 
@@ -117,19 +140,25 @@ def get_last_hash() -> str | None:
                 # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
                 return load_last_hash_marker(LOG_JSONL)
             with open(LOG_JSONL, "rb") as f:
-                # ★ H-6 修正: バッファを 64KB に拡大（大きなエントリに対応）
-                chunk_size = min(65536, file_size)
-                f.seek(file_size - chunk_size)
-                raw = f.read()
-                # ★ UTF-8 境界安全: seek がマルチバイト文字の途中に
-                # 当たる可能性があるため errors="replace" で安全にデコード。
-                # 置換文字は先頭の不完全行にのみ影響し、lines[-1] は
-                # 常に EOF まで読み込んだ完全な行なので安全。
-                chunk = raw.decode("utf-8", errors="replace")
-                lines = chunk.strip().split("\n")
-                if lines:
-                    last = json.loads(lines[-1])
-                    return last.get("sha256")
+                start = max(0, file_size - 65536)
+                while True:
+                    f.seek(start)
+                    raw = f.read(file_size - start)
+                    chunk = raw.decode("utf-8", errors="replace")
+                    lines = chunk.splitlines()
+                    if not lines:
+                        return None
+
+                    if start > 0 and "\n" not in chunk and start > 0:
+                        start = max(0, start - 65536)
+                        continue
+
+                    sha = _extract_last_sha256_from_lines(lines)
+                    if sha is not None:
+                        return sha
+                    if start == 0:
+                        return None
+                    start = max(0, start - 65536)
         except Exception as exc:
             logger.warning("get_last_hash failed: %s", exc)
         return None
@@ -140,9 +169,12 @@ def calc_sha256(payload: dict) -> str:
 
     NOTE: ensure_ascii=False を使用してハッシュチェーンの
     append_trust_log / verify_trust_log と整合性を保つ。
+
+    以前は ``json.dumps`` の失敗時に ``TypeError`` をそのまま送出していたが、
+    ``_compute_sha256`` と挙動をそろえるため ``default=str`` フォールバックを
+    含む実装に統一する。
     """
-    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return _compute_sha256(payload)
 
 
 def _load_logs_json() -> list:

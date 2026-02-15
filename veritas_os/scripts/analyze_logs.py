@@ -5,7 +5,11 @@
 VERITAS Log Analyzer (Doctor Dashboard + CSV + Graph)
 """
 
-import json, re, sys, csv, argparse
+import argparse
+import csv
+import json
+import re
+import sys
 from pathlib import Path
 from datetime import datetime
 from collections import Counter, defaultdict
@@ -276,5 +280,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
     main()
-
 

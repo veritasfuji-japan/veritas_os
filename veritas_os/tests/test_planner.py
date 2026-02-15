@@ -66,6 +66,36 @@ def test_normalize_step_handles_non_list_dependencies():
     assert normalized["dependencies"] == []
 
 
+def test_normalize_step_clamps_eta_and_risk_ranges():
+    step = {
+        "id": "s1",
+        "eta_hours": -3,
+        "risk": 1.7,
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(step)
+
+    assert normalized["eta_hours"] == 0.0
+    assert normalized["risk"] == 1.0
+
+
+def test_normalize_step_uses_defaults_for_invalid_existing_values():
+    step = {
+        "id": "s1",
+        "eta_hours": "invalid",
+        "risk": object(),
+        "dependencies": [],
+    }
+    normalized = planner_core._normalize_step(
+        step,
+        default_eta_hours=2.5,
+        default_risk=0.3,
+    )
+
+    assert normalized["eta_hours"] == pytest.approx(2.5)
+    assert normalized["risk"] == pytest.approx(0.3)
+
+
 # -------------------------------
 # _is_simple_qa / _simple_qa_plan
 # -------------------------------
@@ -77,6 +107,8 @@ def test_normalize_step_handles_non_list_dependencies():
         ("どう進めたらいいですか？", {}, False),  # 「どう進め」が含まれると simple_qa にならない
         ("VERITAS の弱点を教えて", {}, False),  # AGI / VERITAS 系は除外
         ("VERITAS の弱点を教えて", {"simple_qa": True}, True),  # 明示フラグ優先
+        ("what is this", {}, True),  # 英語の疑問文（?なし）
+        ("料金を教えて", {}, True),  # 日本語の短い質問（?なし）
     ],
 )
 def test_is_simple_qa_variants(query, ctx, expected):
@@ -114,8 +146,23 @@ def test_safe_json_extract_plain_dict():
     assert obj["steps"][0]["id"] == "s1"
 
 
+def test_safe_json_extract_plain_dict_without_steps_key():
+    raw = json.dumps({"message": "ok"})
+    obj = planner_core._safe_json_extract(raw)
+    assert isinstance(obj, dict)
+    assert obj["message"] == "ok"
+    assert obj["steps"] == []
+
+
 def test_safe_json_extract_top_level_list():
     raw = json.dumps([{"id": "s1"}, {"id": "s2"}])
+    obj = planner_core._safe_json_extract(raw)
+    assert isinstance(obj, dict)
+    assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
+
+
+def test_safe_json_extract_top_level_list_with_prefix_noise():
+    raw = 'RESULT: ' + json.dumps([{"id": "s1"}, {"id": "s2"}])
     obj = planner_core._safe_json_extract(raw)
     assert isinstance(obj, dict)
     assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
@@ -128,12 +175,70 @@ def test_safe_json_extract_code_block():
     assert obj["steps"][0]["id"] == "s1"
 
 
+def test_safe_parse_selects_valid_json_from_multiple_fenced_blocks():
+    raw = """
+    before
+    ```json
+    {"steps": [}
+    ```
+    between
+    ```json
+    {"steps": [{"id": "s2"}]}
+    ```
+    after
+    """
+
+    obj = planner_core._safe_parse(raw)
+
+    assert isinstance(obj, dict)
+    assert [s["id"] for s in obj["steps"]] == ["s2"]
+
+
 def test_safe_json_extract_recovers_from_broken_but_embedded_steps():
     # 全体としては壊れているが、"steps" 配列内のオブジェクトは valid JSON
     raw = 'prefix "steps": [{"id": "ok1"}, {"id": "ok2"} BROKEN'
     obj = planner_core._safe_json_extract(raw)
     ids = [s["id"] for s in obj["steps"]]
     assert ids == ["ok1", "ok2"]
+
+
+def test_safe_json_extract_ignores_leading_unbalanced_closing_brace():
+    raw = '} noise "steps": [{"id": "ok1"}, {"id": "ok2"}] tail'
+    obj = planner_core._safe_json_extract(raw)
+    ids = [s["id"] for s in obj["steps"]]
+    assert ids == ["ok1", "ok2"]
+
+
+def test_safe_json_extract_truncates_oversized_input(caplog):
+    payload = json.dumps({"steps": [{"id": "ok1"}]})
+    raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("input too large" in rec.message for rec in caplog.records)
+
+
+def test_safe_parse_truncates_oversized_input(caplog):
+    payload = json.dumps({"steps": [{"id": "ok1"}]})
+    raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_parse(raw)
+
+    assert obj["steps"] == []
+    assert any("input too large" in rec.message for rec in caplog.records)
+
+
+def test_safe_json_extract_limits_decoder_probe_count(caplog):
+    raw = "[" * (planner_core._MAX_JSON_DECODE_ATTEMPTS + 20)
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("probe limit reached" in rec.message for rec in caplog.records)
 
 
 # -------------------------------

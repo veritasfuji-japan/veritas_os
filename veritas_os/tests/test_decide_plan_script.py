@@ -52,7 +52,9 @@ class DecidePlanScriptTests(unittest.TestCase):
             called["value"] = True
 
         with mock.patch.object(module, "agi_next_step", fake_agi_next_step):
-            with mock.patch.object(module.sys, "argv", ["decide_plan.py", "--agi-next-step"]):
+            with mock.patch.object(
+                module.sys, "argv", ["decide_plan.py", "--agi-next-step"]
+            ):
                 module.main()
 
         self.assertTrue(called["value"])
@@ -64,6 +66,7 @@ class DecidePlanScriptTests(unittest.TestCase):
         def fake_post(url, headers, data, timeout):
             request_info["url"] = url
             request_info["timeout"] = timeout
+            request_info["headers"] = headers
             return DummyResponse(
                 {
                     "chosen": {"title": "plan"},
@@ -71,14 +74,18 @@ class DecidePlanScriptTests(unittest.TestCase):
                 }
             )
 
-        with mock.patch.object(module.requests, "post", side_effect=fake_post):
-            with mock.patch.object(module.sys, "argv", ["decide_plan.py", "hello"]):
-                with self.assertRaises(SystemExit) as exc_info:
-                    module.main()
+        with mock.patch.dict(
+            module.os.environ, {"VERITAS_API_KEY": "expected-key"}, clear=False
+        ):
+            with mock.patch.object(module.requests, "post", side_effect=fake_post):
+                with mock.patch.object(module.sys, "argv", ["decide_plan.py", "hello"]):
+                    with self.assertRaises(SystemExit) as exc_info:
+                        module.main()
 
         self.assertEqual(exc_info.exception.code, 0)
         self.assertEqual(request_info["url"], module.API_URL)
         self.assertEqual(request_info["timeout"], module.REQUEST_TIMEOUT)
+        self.assertEqual(request_info["headers"]["X-API-Key"], "expected-key")
 
     def test_agi_next_step_request_has_timeout(self):
         module = load_module()
@@ -87,6 +94,7 @@ class DecidePlanScriptTests(unittest.TestCase):
         def fake_post(url, headers, data, timeout):
             request_info["url"] = url
             request_info["timeout"] = timeout
+            request_info["headers"] = headers
             return DummyResponse(
                 {
                     "extras": {
@@ -96,11 +104,25 @@ class DecidePlanScriptTests(unittest.TestCase):
                 }
             )
 
-        with mock.patch.object(module.requests, "post", side_effect=fake_post):
-            module.agi_next_step()
+        with mock.patch.dict(
+            module.os.environ, {"VERITAS_API_KEY": "expected-key"}, clear=False
+        ):
+            with mock.patch.object(module.requests, "post", side_effect=fake_post):
+                module.agi_next_step()
 
         self.assertEqual(request_info["url"], f"{module.BASE_URL}/v1/decide")
         self.assertEqual(request_info["timeout"], module.REQUEST_TIMEOUT)
+        self.assertEqual(request_info["headers"]["X-API-Key"], "expected-key")
+
+    def test_main_exits_when_api_key_missing(self):
+        module = load_module()
+
+        with mock.patch.dict(module.os.environ, {"VERITAS_API_KEY": ""}, clear=False):
+            with mock.patch.object(module.sys, "argv", ["decide_plan.py", "hello"]):
+                with self.assertRaises(SystemExit) as exc_info:
+                    module.main()
+
+        self.assertEqual(exc_info.exception.code, 2)
 
 
 if __name__ == "__main__":

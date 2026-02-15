@@ -58,6 +58,15 @@ def test_cosine_index_init_with_nonexistent_path(tmp_path):
     assert idx.ids == []
 
 
+@pytest.mark.parametrize("invalid_dim", [0, -1, 1.5, "2", None])
+def test_cosine_index_init_with_invalid_dim_raises(invalid_dim):
+    """dim が正の int でない場合は ValueError。"""
+    with pytest.raises(ValueError) as exc:
+        CosineIndex(dim=invalid_dim)  # type: ignore[arg-type]
+
+    assert "dim must be a positive int" in str(exc.value)
+
+
 def test_cosine_index_init_with_broken_npz(tmp_path):
     """
     path あり & 中身が壊れたファイル → 例外を飲み込んで空からスタート。
@@ -109,6 +118,34 @@ def test_cosine_index_legacy_npz_migrates_on_opt_in(tmp_path, monkeypatch):
     assert idx_reloaded.size == 2
     assert idx_reloaded.ids == ["a", "b"]
 
+
+def test_cosine_index_load_dim_mismatch_resets_to_empty(tmp_path):
+    """保存データの次元と指定 dim が不一致なら空インデックスに戻す。"""
+    p = tmp_path / "index.npz"
+    vecs = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+    ids = np.array(["x"], dtype=str)
+    np.savez(p, vecs=vecs, ids=ids)
+
+    idx = CosineIndex(dim=2, path=p)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
+
+def test_cosine_index_load_ids_count_mismatch_resets_to_empty(tmp_path):
+    """保存データの ids 数と vec 数が不一致なら空インデックスに戻す。"""
+    p = tmp_path / "index.npz"
+    vecs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    ids = np.array(["x"], dtype=str)
+    np.savez(p, vecs=vecs, ids=ids)
+
+    idx = CosineIndex(dim=2, path=p)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
 # ---------------------------------------------------------
 # add: ベクトル追加とエラーケース
 # ---------------------------------------------------------
@@ -153,6 +190,27 @@ def test_add_dim_mismatch_raises():
     assert "dim mismatch" in msg
     assert "3 != 4" in msg
 
+
+def test_add_with_invalid_rank_raises():
+    """3次元配列は add で受け付けず ValueError。"""
+    idx = CosineIndex(dim=2)
+    vecs = np.ones((1, 1, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError) as exc:
+        idx.add(vecs, ids=["a"])
+
+    assert "vectors must be 1D or 2D" in str(exc.value)
+
+
+def test_search_with_invalid_rank_raises():
+    """3次元配列は search で受け付けず ValueError。"""
+    idx = CosineIndex(dim=2)
+    qv = np.ones((1, 1, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(qv, k=1)
+
+    assert "vectors must be 1D or 2D" in str(exc.value)
 
 def test_add_ids_length_mismatch_raises():
     """ids の長さと vecs.shape[0] が違う場合も ValueError。"""
@@ -253,6 +311,30 @@ def test_search_multi_query_returns_same_length_as_queries():
     # それぞれ最も近い id が返っている
     assert res[0][0][0] == "x"
     assert res[1][0][0] == "y"
+
+
+def test_search_dim_mismatch_raises():
+    """クエリ次元が index.dim と異なる場合は ValueError。"""
+    idx = CosineIndex(dim=3)
+    idx.add(np.array([[1.0, 0.0, 0.0]], dtype=np.float32), ids=["a"])
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(np.array([1.0, 0.0], dtype=np.float32), k=1)
+
+    msg = str(exc.value)
+    assert "dim mismatch" in msg
+    assert "2 != 3" in msg
+
+
+def test_search_invalid_k_raises():
+    """k が 1 未満の場合は ValueError。"""
+    idx = CosineIndex(dim=2)
+    idx.add(np.array([[1.0, 0.0]], dtype=np.float32), ids=["x"])
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(np.array([1.0, 0.0], dtype=np.float32), k=0)
+
+    assert "k must be >= 1" in str(exc.value)
 
 
 # ---------------------------------------------------------

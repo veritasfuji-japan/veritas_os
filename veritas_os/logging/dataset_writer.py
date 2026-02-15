@@ -71,6 +71,15 @@ def _f2(x: Any, default: float = 0.0) -> float:
         return default
 
 
+def _i0(x: Any, default: int = 0) -> int:
+    """安全な int 変換（失敗時は default、負数は 0 に丸める）"""
+    try:
+        parsed = int(x)
+    except (TypeError, ValueError):
+        return default
+    return max(parsed, 0)
+
+
 def _summarize_alternatives(alts: List[Dict[str, Any]] | None, k: int = 5) -> List[Dict[str, Any]]:
     """選択肢を要約（最大 k 件）"""
     out: List[Dict[str, Any]] = []
@@ -133,7 +142,7 @@ def build_dataset_record(
     # MemoryOS 使用状況
     mem = (res_payload or {}).get("memory", {}) or {}
     mem_used = bool(mem.get("used", False))
-    mem_citation = int(mem.get("citations", 0) or 0)
+    mem_citation = _i0(mem.get("citations", 0), 0)
 
     # FUJI / Gate のステータス（Enumに正規化）
     raw_status = gate.get("decision_status", DecisionStatus.ALLOW.value)
@@ -384,6 +393,9 @@ def search_dataset(
     if not path.exists():
         return []
 
+    if limit <= 0:
+        return []
+
     # ★ セキュリティ: 巨大ファイルによるメモリ枯渇を防止
     try:
         if path.stat().st_size > MAX_DATASET_STATS_SIZE:
@@ -445,4 +457,3 @@ __all__ = [
     "get_dataset_stats",
     "search_dataset",
 ]
-

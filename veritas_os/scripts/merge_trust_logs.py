@@ -84,6 +84,11 @@ def _normalize_for_hash(entry: Dict[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, ensure_ascii=False)
 
 
+def _stable_entry_fingerprint(entry: Dict[str, Any]) -> str:
+    """Return a deterministic fingerprint for entries without request_id."""
+    return _sha256(_normalize_for_hash(entry))
+
+
 def load_any_json(path: Path) -> List[Dict[str, Any]]:
     """
     JSON / JSONL / JSON with items[] をいい感じに読み込む。
@@ -215,7 +220,11 @@ def merge_trust_logs(
                         uniq[rid] = item
             else:
                 # request_id が無いエントリは created_at/timestamp をキーとして扱う
-                ts_key = item.get("created_at") or item.get("timestamp") or str(hash(str(item)))
+                ts_key = (
+                    item.get("created_at")
+                    or item.get("timestamp")
+                    or _stable_entry_fingerprint(item)
+                )
                 existing = uniq.get(ts_key)
                 if not existing:
                     uniq[ts_key] = item
@@ -247,7 +256,7 @@ def merge_trust_logs(
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
 
     print(f"\n✅ Merged {len(items)} unique logs → {out_path}")
-    print(f"   Output format: JSONL (one JSON per line)")
+    print("   Output format: JSONL (one JSON per line)")
     if recompute_hash:
         print("   Note: sha256 / sha256_prev chain has been recomputed.")
 
@@ -293,4 +302,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

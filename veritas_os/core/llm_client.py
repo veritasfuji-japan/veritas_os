@@ -178,17 +178,35 @@ def _format_request(
     """
     extra_messages = extra_messages or []
 
+    def _normalize_extra_messages(messages: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """Validate extra_messages and normalize each entry to string role/content.
+
+        Non-dict entries are ignored to prevent malformed caller input from
+        triggering runtime errors during request construction.
+        """
+        normalized_messages: List[Dict[str, str]] = []
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+
+            role = str(message.get("role") or "user")
+            content = str(message.get("content") or "")
+            normalized_messages.append({"role": role, "content": content})
+        return normalized_messages
+
     # ★ セキュリティ: extra_messages の件数制限（DoS防止）
     _MAX_EXTRA_MESSAGES = 100
     if len(extra_messages) > _MAX_EXTRA_MESSAGES:
         log.warning("extra_messages truncated from %d to %d", len(extra_messages), _MAX_EXTRA_MESSAGES)
         extra_messages = extra_messages[:_MAX_EXTRA_MESSAGES]
 
+    extra_messages = _normalize_extra_messages(extra_messages)
+
     if provider == LLMProvider.ANTHROPIC.value:
         msgs: List[Dict[str, str]] = [{"role": "user", "content": user_prompt}]
         for m in extra_messages:
-            role = m.get("role") or "user"
-            content = m.get("content") or ""
+            role = m["role"]
+            content = m["content"]
             msgs.append({"role": role, "content": content})
 
         return {
@@ -204,8 +222,8 @@ def _format_request(
         # system + user + extra を 1 テキストにまとめる簡易実装
         extra_text = ""
         for m in extra_messages:
-            role = m.get("role") or "user"
-            content = m.get("content") or ""
+            role = m["role"]
+            content = m["content"]
             extra_text += f"\n\n[{role}]\n{content}"
 
         full_text = f"{system_prompt}\n\n{user_prompt}{extra_text}"
@@ -226,8 +244,8 @@ def _format_request(
             {"role": "user", "content": user_prompt},
         ]
         for m in extra_messages:
-            role = m.get("role") or "user"
-            content = m.get("content") or ""
+            role = m["role"]
+            content = m["content"]
             msgs.append({"role": role, "content": content})
 
         return {
@@ -242,8 +260,8 @@ def _format_request(
         {"role": "user", "content": user_prompt},
     ]
     for m in extra_messages:
-        role = m.get("role") or "user"
-        content = m.get("content") or ""
+        role = m["role"]
+        content = m["content"]
         msgs.append({"role": role, "content": content})
 
     return {
@@ -565,6 +583,19 @@ def chat_local(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]
     )
 
 
+def chat_completion(
+    system_prompt: str,
+    user_prompt: str,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Single, stable boundary for all internal LLM calls.
+
+    This compatibility alias exists so internal modules can consistently call
+    one function name (`chat_completion`) even if implementation details evolve.
+    """
+    return chat(system_prompt=system_prompt, user_prompt=user_prompt, **kwargs)
+
+
 __all__ = [
     "LLMProvider",
     "LLMError",
@@ -574,4 +605,5 @@ __all__ = [
     "chat_claude",
     "chat_gemini",
     "chat_local",
+    "chat_completion",
 ]

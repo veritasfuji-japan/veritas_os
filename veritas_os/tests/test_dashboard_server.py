@@ -43,6 +43,12 @@ def test_validate_log_dir_rejects_sensitive_paths(tmp_path):
         assert result == tmp_path
 
 
+def test_validate_log_dir_rejects_sensitive_paths_even_with_root_base(tmp_path):
+    """allowed_base が広すぎる設定でもセンシティブパスは拒否される。"""
+    result = dashboard_server._validate_log_dir("/etc", Path("/"))
+    assert result == Path("/")
+
+
 def test_validate_log_dir_handles_path_traversal_attempt(tmp_path):
     """'../' を使ったパストラバーサル攻撃は拒否される。"""
     traversal_path = str(tmp_path / ".." / ".." / "etc")
@@ -73,6 +79,86 @@ def client(monkeypatch, tmp_path) -> TestClient:
 # =====================================================================
 # /health （認証不要）
 # =====================================================================
+
+
+
+
+
+def test_resolve_dashboard_username_uses_default_when_blank(monkeypatch):
+    """Blank dashboard username should fall back to secure default."""
+    monkeypatch.setenv("DASHBOARD_USERNAME", "   ")
+
+    username = dashboard_server._resolve_dashboard_username()
+
+    assert username == "veritas"
+
+
+def test_resolve_dashboard_username_uses_explicit_value(monkeypatch):
+    """Configured dashboard username should be used as-is."""
+    monkeypatch.setenv("DASHBOARD_USERNAME", "ops-admin")
+
+    username = dashboard_server._resolve_dashboard_username()
+
+    assert username == "ops-admin"
+
+
+def test_resolve_dashboard_password_requires_explicit_value_in_production(monkeypatch):
+    """Production mode should fail fast without explicit dashboard password."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.delenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="DASHBOARD_PASSWORD is required"):
+        dashboard_server._resolve_dashboard_password()
+
+
+def test_resolve_dashboard_password_allows_ephemeral_override(monkeypatch):
+    """Ephemeral password may be enabled explicitly for exceptional operations."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", "1")
+
+    password, auto_generated = dashboard_server._resolve_dashboard_password()
+
+    assert isinstance(password, str)
+    assert len(password) > 10
+    assert auto_generated is True
+
+
+def test_resolve_dashboard_password_uses_explicit_value(monkeypatch):
+    """Explicit password should always take precedence over generated values."""
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "configured-secret")
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    password, auto_generated = dashboard_server._resolve_dashboard_password()
+
+    assert password == "configured-secret"
+    assert auto_generated is False
+
+
+
+def test_warn_if_ephemeral_password_with_multi_workers_logs_warning(
+    monkeypatch, caplog
+):
+    """Auto-generated password + multi-worker env should emit warning."""
+    monkeypatch.setenv("UVICORN_WORKERS", "3")
+    caplog.set_level("WARNING")
+
+    dashboard_server._warn_if_ephemeral_password_with_multi_workers(True)
+
+    assert "intermittent authentication failures" in caplog.text
+
+
+def test_warn_if_ephemeral_password_with_single_worker_no_warning(
+    monkeypatch, caplog
+):
+    """Single-worker deployment should not emit multi-worker warning."""
+    monkeypatch.setenv("UVICORN_WORKERS", "1")
+    caplog.set_level("WARNING")
+
+    dashboard_server._warn_if_ephemeral_password_with_multi_workers(True)
+
+    assert "intermittent authentication failures" not in caplog.text
 
 def test_health_check_ok(client: TestClient):
     res = client.get("/health")

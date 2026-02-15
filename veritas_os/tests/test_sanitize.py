@@ -55,3 +55,68 @@ def test_mask_pii_does_not_change_non_pii_text():
     assert masked == text
 
 
+def test_detector_prepare_input_text_handles_none_and_truncates(caplog):
+    detector = sanitize.PIIDetector()
+
+    assert detector._prepare_input_text(None) == ""
+
+    oversized = "a" * (sanitize._MAX_PII_INPUT_LENGTH + 10)
+    with caplog.at_level("WARNING"):
+        prepared = detector._prepare_input_text(oversized)
+
+    assert prepared == oversized
+    assert "PII input truncated" not in caplog.text
+
+
+def test_detect_pii_scans_large_text_without_truncating(caplog):
+    huge_prefix = "x" * sanitize._MAX_PII_INPUT_LENGTH
+    email = "very.large.user@example.com"
+    text = f"{huge_prefix}\n{email}"
+
+    with caplog.at_level("WARNING"):
+        matches = sanitize.detect_pii(text)
+
+    assert any(match["type"] == "email" and match["value"] == email for match in matches)
+    assert "PII input segmented for scanning" in caplog.text
+
+
+def test_detector_mask_uses_fallback_on_invalid_mask_format(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{unknown}")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text
+
+
+def test_detector_mask_uses_fallback_on_broken_braces(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{token")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text
+
+
+def test_detector_mask_accepts_non_string_mask_format():
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    masked = detector.mask(text, mask_format=123)  # type: ignore[arg-type]
+
+    assert masked == "連絡先は 123 です"
+
+
+def test_detector_mask_uses_fallback_on_positional_format(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{}")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text

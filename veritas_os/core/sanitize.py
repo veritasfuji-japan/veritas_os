@@ -31,13 +31,18 @@ from __future__ import annotations
 
 import logging
 import re
+import ipaddress
 from dataclasses import dataclass
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any
 
 _logger = logging.getLogger(__name__)
 
 # Luhnチェック時の入力文字列長上限（DoS対策）
 _MAX_CARD_INPUT_LENGTH = 256
+# PII検査対象の入力長上限（ReDoS/CPU DoS対策）
+_MAX_PII_INPUT_LENGTH = 1_000_000
+# 1回の検出で保持する一致数上限（メモリ消費抑止）
+_MAX_PII_MATCHES = 10_000
 
 
 # =============================================================================
@@ -63,7 +68,7 @@ RE_EMAIL = re.compile(
 # 偽陽性を減らすため、より厳密なパターンを使用
 # --- 日本の携帯: 070/080/090-XXXX-XXXX
 RE_PHONE_JP_MOBILE = re.compile(
-    r'0[789]0[-\s]?\d{4}[-\s]?\d{4}'
+    r'(?<!\d)0[789]0[-\s]?\d{4}[-\s]?\d{4}(?!\d)'
 )
 # 日本の固定電話: 0X-XXXX-XXXX または 0XX-XXX-XXXX
 RE_PHONE_JP_LANDLINE = re.compile(
@@ -71,7 +76,7 @@ RE_PHONE_JP_LANDLINE = re.compile(
 )
 # 国際電話: +XX-XXX... 形式
 RE_PHONE_INTL = re.compile(
-    r'\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}(?:[-\s]?\d{1,4})?'
+    r'(?<!\d)\+\d{1,3}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}(?:[-\s]?\d{1,4})?(?!\d)'
 )
 # フリーダイヤル: 0120-XXX-XXX, 0800-XXX-XXXX
 RE_PHONE_FREE = re.compile(
@@ -148,9 +153,13 @@ RE_IPV6 = re.compile(
 )
 
 # --- URLクレデンシャル ---
-# http://user:password@host 形式
+# http://userinfo@host / http://user:password@host 形式
+# Security:
+#   RFC 3986 では userinfo に ":" を含まない ``user@host`` 形式も許可される。
+#   既存実装は ``user:password`` のみを検出しており、アクセストークン等を
+#   user 部分に埋め込んだ URL を見逃す可能性があったため包括的に検出する。
 RE_URL_CREDENTIAL = re.compile(
-    r'(?:https?|ftp)://[^:@\s]+:[^:@\s]+@[^\s/]+'
+    r'(?:https?|ftp)://[^@\s/]+@[^\s/]+'
 )
 
 # --- 銀行口座番号（日本）---
@@ -298,6 +307,19 @@ def _is_likely_ip(match: str) -> bool:
         return False
 
 
+def _is_likely_ipv6(match: str) -> bool:
+    """Validate IPv6 candidates to reduce false positives."""
+    # Bare "::" is a valid IPv6 notation but often appears as punctuation.
+    if match == "::":
+        return False
+
+    try:
+        ipaddress.IPv6Address(match)
+    except ipaddress.AddressValueError:
+        return False
+    return True
+
+
 # =============================================================================
 # PII検出エンジン
 # =============================================================================
@@ -357,41 +379,59 @@ class PIIDetector:
 
             # IPアドレス
             ("ipv4", RE_IPV4, "IPアドレス", lambda m, _: _is_likely_ip(m), 0.75),
-            ("ipv6", RE_IPV6, "IPアドレス", None, 0.80),
+            ("ipv6", RE_IPV6, "IPアドレス", lambda m, _: _is_likely_ipv6(m), 0.80),
 
             # パスポート
             ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
         ]
 
-    def _validate_credit_card(self, match: str, context: str) -> bool:
-        return _is_valid_credit_card(match)
-
-    def _validate_my_number(self, match: str, context: str) -> bool:
-        return _is_valid_my_number(match)
-
-    def detect(self, text: str) -> List[PIIMatch]:
-        """
-        テキストからPIIを検出
+    def _prepare_input_text(self, text: object | None) -> str:
+        """Normalize input text for PII scanning.
 
         Args:
-            text: 検査対象テキスト
+            text: Raw input value. ``None`` is treated as an empty string.
 
         Returns:
-            検出されたPIIのリスト
+            String representation that is safe to scan.
+
+        Security:
+            API payloads can contain non-string values when validation is bypassed
+            or when this utility is used directly. Converting unknown objects to
+            bounded text avoids ``TypeError`` crashes that may otherwise leak
+            internals through unhandled exceptions.
+        """
+        if text is None:
+            return ""
+        if isinstance(text, str):
+            return text
+        if isinstance(text, bytes):
+            return text.decode("utf-8", errors="replace")
+        return str(text)
+
+    def _detect_in_segment(
+        self,
+        text: str,
+        offset: int = 0,
+        max_matches: int | None = None,
+    ) -> List[PIIMatch]:
+        """Detect PII inside a single bounded text segment.
+
+        Args:
+            text: Segment text.
+            offset: Absolute offset applied to resulting match positions.
+            max_matches: Maximum number of matches to collect in this call.
+
+        Returns:
+            Detected matches with absolute positions.
         """
         if not text:
             return []
 
-        # ★ セキュリティ: 入力長制限（ReDoS / CPU DoS 防止）
-        _MAX_PII_INPUT_LENGTH = 1_000_000  # 1M chars (~1 MB for ASCII)
-        if len(text) > _MAX_PII_INPUT_LENGTH:
-            _logger.warning("PII input truncated from %d to %d chars", len(text), _MAX_PII_INPUT_LENGTH)
-            text = text[:_MAX_PII_INPUT_LENGTH]
-
+        limit = _MAX_PII_MATCHES if max_matches is None else max(0, max_matches)
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用
 
-        for name, pattern, token, validator, confidence in self._patterns:
+        for name, pattern, token, validator, confidence in self._iter_patterns_by_priority():
             for match in pattern.finditer(text):
                 start, end = match.start(), match.end()
                 value = match.group()
@@ -416,20 +456,134 @@ class PIIDetector:
                     if not validator(value, context):
                         continue
 
+                if len(results) >= limit:
+                    _logger.warning(
+                        "PII match limit reached in segment: %d",
+                        limit,
+                    )
+                    return results
+
                 results.append(PIIMatch(
                     type=name,
                     value=value,
-                    start=start,
-                    end=end,
+                    start=start + offset,
+                    end=end + offset,
                     confidence=confidence,
                 ))
                 detected_ranges.append((start, end))
 
-        # 位置順にソート
-        results.sort(key=lambda x: x.start)
         return results
 
-    def mask(self, text: str, mask_format: str = "〔{token}〕") -> str:
+    def _validate_credit_card(self, match: str, context: str) -> bool:
+        return _is_valid_credit_card(match)
+
+    def _validate_my_number(self, match: str, context: str) -> bool:
+        return _is_valid_my_number(match)
+
+    def _iter_patterns_by_priority(self) -> List[tuple]:
+        """Return detection patterns ordered by confidence.
+
+        Overlap resolution keeps the first accepted match, therefore scanning
+        higher-confidence patterns first reduces false positives when multiple
+        patterns can match the same substring.
+        """
+        return sorted(self._patterns, key=lambda item: item[4], reverse=True)
+
+    def detect(self, text: str | None) -> List[PIIMatch]:
+        """
+        テキストからPIIを検出
+
+        Args:
+            text: 検査対象テキスト
+
+        Returns:
+            検出されたPIIのリスト
+        """
+        text = self._prepare_input_text(text)
+        if not text:
+            return []
+
+        if len(text) <= _MAX_PII_INPUT_LENGTH:
+            results = self._detect_in_segment(text, max_matches=_MAX_PII_MATCHES)
+        else:
+            _logger.warning(
+                "PII input segmented for scanning: %d chars (segment size=%d)",
+                len(text),
+                _MAX_PII_INPUT_LENGTH,
+            )
+            results = []
+            overlap = 128
+            segment_size = _MAX_PII_INPUT_LENGTH
+            step = max(1, segment_size - overlap)
+            seen_ranges: set[tuple[int, int]] = set()
+
+            for start in range(0, len(text), step):
+                remaining = _MAX_PII_MATCHES - len(results)
+                if remaining <= 0:
+                    _logger.warning(
+                        "PII match limit reached during segmented scan: %d",
+                        _MAX_PII_MATCHES,
+                    )
+                    break
+
+                end = min(len(text), start + segment_size)
+                segment_matches = self._detect_in_segment(
+                    text[start:end],
+                    offset=start,
+                    max_matches=remaining,
+                )
+                for match in segment_matches:
+                    span = (match.start, match.end)
+                    if span not in seen_ranges:
+                        seen_ranges.add(span)
+                        results.append(match)
+
+                if end == len(text):
+                    break
+
+        return self._resolve_global_overlaps(results)
+
+    def _resolve_global_overlaps(self, matches: List[PIIMatch]) -> List[PIIMatch]:
+        """Resolve overlapping spans using confidence across all segments.
+
+        Segment-based scanning avoids CPU spikes for huge payloads, but the same
+        region can still be detected by different patterns when matches are
+        produced from neighboring segments. This pass enforces a single winner
+        per overlapping range using confidence and then restores positional
+        ordering for deterministic masking.
+
+        Args:
+            matches: Raw detection list from one-shot or segmented scanning.
+
+        Returns:
+            De-duplicated matches ordered by ``start`` offset.
+        """
+        if not matches:
+            return []
+
+        prioritized = sorted(
+            matches,
+            key=lambda item: (-item.confidence, item.start, item.end),
+        )
+
+        selected: List[PIIMatch] = []
+        occupied_ranges: List[tuple[int, int]] = []
+
+        for candidate in prioritized:
+            has_overlap = any(
+                candidate.start < existing_end
+                and candidate.end > existing_start
+                for existing_start, existing_end in occupied_ranges
+            )
+            if has_overlap:
+                continue
+            selected.append(candidate)
+            occupied_ranges.append((candidate.start, candidate.end))
+
+        selected.sort(key=lambda item: item.start)
+        return selected
+
+    def mask(self, text: object | None, mask_format: str = "〔{token}〕") -> str:
         """
         テキスト内のPIIをマスク
 
@@ -440,18 +594,19 @@ class PIIDetector:
         Returns:
             マスク済みテキスト
         """
-        if not text:
-            return text
+        normalized_text = self._prepare_input_text(text)
+        if normalized_text == "":
+            return ""
 
-        detections = self.detect(text)
+        detections = self.detect(normalized_text)
         if not detections:
-            return text
+            return normalized_text
 
         # 後ろから置換（インデックスがずれないように）
-        result = text
+        result = normalized_text
         for det in reversed(detections):
             token = self._get_mask_token(det.type)
-            mask_str = mask_format.format(token=token)
+            mask_str = self._build_mask_text(mask_format, token)
             result = result[:det.start] + mask_str + result[det.end:]
 
         return result
@@ -479,6 +634,28 @@ class PIIDetector:
         }
         return token_map.get(pii_type, "PII")
 
+    def _build_mask_text(self, mask_format: object, token: str) -> str:
+        """Build mask text safely even when format strings are malformed.
+
+        Args:
+            mask_format: User-provided format template.
+            token: Localized PII token.
+
+        Returns:
+            Interpolated mask text. Falls back to ``〔{token}〕`` when format
+            parsing fails.
+
+        Security:
+            Invalid ``mask_format`` values from API inputs previously raised
+            exceptions and could break sanitization endpoints. Recovering with a
+            default format keeps masking available and avoids accidental 500s.
+        """
+        try:
+            return str(mask_format).format(token=token)
+        except (AttributeError, IndexError, KeyError, ValueError):
+            _logger.warning("Invalid mask_format; falling back to default")
+            return f"〔{token}〕"
+
 
 # =============================================================================
 # グローバルインスタンスと互換性関数
@@ -488,7 +665,7 @@ class PIIDetector:
 _default_detector = PIIDetector(validate_checksums=True)
 
 
-def detect_pii(text: str) -> List[Dict[str, Any]]:
+def detect_pii(text: object | None) -> List[Dict[str, Any]]:
     """
     テキストからPIIを検出
 
@@ -511,7 +688,7 @@ def detect_pii(text: str) -> List[Dict[str, Any]]:
     ]
 
 
-def mask_pii(text: str) -> str:
+def mask_pii(text: object | None) -> str:
     """
     テキスト内のPIIをマスク（後方互換性のため維持）
 

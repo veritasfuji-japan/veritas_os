@@ -14,6 +14,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -551,6 +552,50 @@ if not os.getenv("VERITAS_API_KEY"):
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+def _resolve_expected_api_key_with_source() -> tuple[str, str]:
+    """Resolve API key value and source name without exposing secrets.
+
+    Returns:
+        tuple[str, str]:
+            - effective API key value (may be empty)
+            - source label: ``env``, ``api_key_default``, ``config`` or
+              ``missing``.
+    """
+    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
+    if env_key:
+        return env_key, "env"
+
+    default_key = API_KEY_DEFAULT.strip()
+    if default_key:
+        return default_key, "api_key_default"
+
+    config_key = (getattr(cfg, "api_key", "") or "").strip()
+    if config_key:
+        return config_key, "config"
+    return "", "missing"
+
+
+
+
+@lru_cache(maxsize=4)
+def _log_api_key_source_once(source: str) -> None:
+    """Log API key source with fixed messages to avoid secret-log findings.
+
+    Security:
+        The log body is selected from hard-coded constants only. No runtime
+        values are interpolated, preventing accidental secret propagation to
+        logs and reducing false positives in static secret-scanning rules.
+    """
+    if source == "env":
+        logger.info("Resolved API key source: env")
+        return
+    if source == "api_key_default":
+        logger.info("Resolved API key source: api_key_default")
+        return
+    if source == "config":
+        logger.info("Resolved API key source: config")
+        return
+    logger.info("Resolved API key source: missing")
 
 def _get_expected_api_key() -> str:
     """
@@ -558,16 +603,9 @@ def _get_expected_api_key() -> str:
     モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
     テスト時は API_KEY_DEFAULT を monkeypatch で上書き可能（レガシー互換）。
     """
-    # 1. 環境変数を優先
-    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
-    if env_key:
-        return env_key
-    # 2. テスト互換: API_KEY_DEFAULT がmonkeypatchで設定されていれば使用
-    if API_KEY_DEFAULT:
-        return API_KEY_DEFAULT.strip()
-    # 3. フォールバック: configからの取得（レガシー互換）
-    config_key = (getattr(cfg, "api_key", "") or "").strip()
-    return config_key
+    key, source = _resolve_expected_api_key_with_source()
+    _log_api_key_source_once(source)
+    return key
 
 
 def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
@@ -1001,8 +1039,16 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 
 
 def _is_debug_mode() -> bool:
-    """VERITAS_DEBUG_MODE が有効かどうかを判定する。"""
-    return os.getenv("VERITAS_DEBUG_MODE", "").lower() in ("1", "true", "yes")
+    """Return whether debug mode is explicitly enabled by environment variable.
+
+    Security note:
+        Debug mode widens error visibility, so we allow only a strict set of
+        truthy values and default to ``False`` for everything else.
+    """
+    debug_flag = os.getenv("VERITAS_DEBUG_MODE", "")
+    normalized_flag = debug_flag.strip().lower()
+    debug_truthy_values = {"1", "true", "yes", "on"}
+    return normalized_flag in debug_truthy_values
 
 
 @app.get("/")
@@ -1463,7 +1509,24 @@ def memory_put(body: dict):
                 meta_for_store.setdefault("user_id", user_id)
                 meta_for_store.setdefault("kind", kind)
 
-                if hasattr(store, "put_episode"):
+                if hasattr(store, "put"):
+                    vector_item = {
+                        "text": text_clean,
+                        "tags": tags,
+                        "meta": meta_for_store,
+                    }
+                    try:
+                        new_id = store.put(kind, vector_item)
+                    except TypeError:
+                        if hasattr(store, "put_episode"):
+                            new_id = store.put_episode(
+                                text=text_clean,
+                                tags=tags,
+                                meta=meta_for_store,
+                            )
+                        else:
+                            raise
+                elif hasattr(store, "put_episode"):
                     new_id = store.put_episode(
                         text=text_clean,
                         tags=tags,
@@ -1742,8 +1805,4 @@ def governance_put(body: dict):
             status_code=500,
             content={"ok": False, "error": "Failed to update governance policy"},
         )
-
-
-
-
 

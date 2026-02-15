@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](COVERAGE_REPORT.md)
+[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
 
@@ -347,6 +347,8 @@ Dockerfile の `CMD` を環境に合わせて更新してください。
 ## 近いロードマップ（短期）
 
 * CI（GitHub Actions）：pytest + coverage + レポート生成
+* CI ではカバレッジ下限（`--cov-fail-under`）を **85%** に設定しています。
+* Coverage バッジ値は現在 `docs/COVERAGE_REPORT.md` 由来のスナップショットです（将来的に CI artifact からの自動更新を想定）。
 * セキュリティ強化：入力検証、ログ/秘密情報の衛生
 * Policy-as-Code：**規程 → ValueCore/FUJIルール → テスト自動生成**（コンパイラ層）
 

@@ -234,11 +234,23 @@ def _iter_files() -> list[str]:
 
 def _read_json_or_jsonl(path: str) -> list[dict]:
     """
-    1ファイルから辞書のリストを返す。
-    - 先頭文字で JSON / JSONL を判定
-    - 壊れ行はスキップ
-    - {"items":[...]} 形式は items を展開
-    ★ CPU/OOM対策: ファイルサイズ制限とアイテム数上限を適用
+    Read one file as JSON or JSONL and return a bounded list of records.
+
+    This parser first attempts a full JSON parse to support the following
+    patterns commonly seen in log outputs:
+
+    * Single object: ``{"key": "value"}``
+    * Wrapped items: ``{"items": [{...}, ...]}``
+    * Top-level array: ``[{...}, {...}]``
+
+    If the full parse fails, it falls back to line-delimited JSON (JSONL).
+    Corrupted JSONL rows are skipped so that one bad line does not block the
+    whole diagnosis.
+
+    Security/reliability controls:
+
+    * Skip overly large files (``MAX_FILE_SIZE``)
+    * Limit parsed items per file (``MAX_ITEMS_PER_FILE``)
     """
     # ★ CPU/OOM対策: ファイルサイズチェック
     try:
@@ -250,31 +262,47 @@ def _read_json_or_jsonl(path: str) -> list[dict]:
         return []
 
     items: list[dict] = []
-    with open(path, "r", encoding="utf-8") as f:
-        head = f.read(1)
-        if not head:
-            return []
-        f.seek(0)
 
-        if head == "{":  # JSON
-            data = json.load(f)
-            if isinstance(data, dict) and isinstance(data.get("items"), list):
-                items.extend(data["items"][:MAX_ITEMS_PER_FILE])
-            else:
-                items.append(data)
-        else:            # JSONL
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    items.append(json.loads(line))
-                except Exception:
-                    # 破損行は無視して続行
-                    continue
-                # ★ CPU/OOM対策: アイテム数の上限チェック
-                if len(items) >= MAX_ITEMS_PER_FILE:
-                    break
+    def _bounded_extend(values: list) -> None:
+        """Extend ``items`` up to ``MAX_ITEMS_PER_FILE`` entries."""
+        remaining = MAX_ITEMS_PER_FILE - len(items)
+        if remaining <= 0:
+            return
+        items.extend(values[:remaining])
+
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+        if not content:
+            return []
+
+    # Prefer JSON first (handles leading whitespace safely).
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError:
+        data = None
+
+    if data is not None:
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            _bounded_extend(data["items"])
+        elif isinstance(data, list):
+            _bounded_extend(data)
+        else:
+            _bounded_extend([data])
+        return items
+
+    # Fallback: JSONL mode
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError:
+            # 破損行は無視して続行
+            continue
+        # ★ CPU/OOM対策: アイテム数の上限チェック
+        if len(items) >= MAX_ITEMS_PER_FILE:
+            break
     return items
 
 
@@ -311,10 +339,14 @@ def analyze_logs():
     # ファイル群を走査
     for path in files:
         name = os.path.basename(path)
-        if   name.startswith("decide_"):  cat = "decide"
-        elif name.startswith("health_"):  cat = "health"
-        elif "status" in name:            cat = "status"
-        else:                             cat = "other"
+        if name.startswith("decide_"):
+            cat = "decide"
+        elif name.startswith("health_"):
+            cat = "health"
+        elif "status" in name:
+            cat = "status"
+        else:
+            cat = "other"
 
         try:
             items = _read_json_or_jsonl(path)
@@ -404,7 +436,7 @@ def analyze_logs():
         if trustlog_stats['last_hash']:
             print(f"   🔑 最終ハッシュ: {trustlog_stats['last_hash']}")
     else:
-        print(f"   ❌ ハッシュチェーン検証: FAILED")
+        print("   ❌ ハッシュチェーン検証: FAILED")
         if trustlog_stats['chain_breaks'] > 0:
             print(f"   ⚠️ チェーン破損: {trustlog_stats['chain_breaks']} 箇所")
             if trustlog_stats['first_break']:
@@ -421,5 +453,4 @@ def analyze_logs():
 
 if __name__ == "__main__":
     analyze_logs()
-
 

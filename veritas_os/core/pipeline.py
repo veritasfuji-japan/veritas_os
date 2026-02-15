@@ -978,6 +978,16 @@ async def run_decide_pipeline(
             extras["metrics"].get("web_evidence_count", 0),
             default=0,
         )
+
+        stage_latency = extras["metrics"].get("stage_latency")
+        if not isinstance(stage_latency, dict):
+            stage_latency = {}
+        for stage_name in ("retrieval", "web", "llm", "gate", "persist"):
+            try:
+                stage_latency[stage_name] = max(0, int(stage_latency.get(stage_name, 0) or 0))
+            except Exception:
+                stage_latency[stage_name] = 0
+        extras["metrics"]["stage_latency"] = stage_latency
     
         # backward compat
         try:
@@ -1690,6 +1700,13 @@ async def run_decide_pipeline(
             "web_evidence_count": 0,
             "fast_mode": False,
             "mem_evidence_count": 0,  # backward compat
+            "stage_latency": {
+                "retrieval": 0,
+                "web": 0,
+                "llm": 0,
+                "gate": 0,
+                "persist": 0,
+            },
         },
         "fast_mode": False,
         "env_tools": {},
@@ -1779,6 +1796,7 @@ async def run_decide_pipeline(
     # =========================================================
     # MemoryOS retrieval (best-effort) + contracts
     # =========================================================
+    retrieval_stage_started_at = time.time()
     retrieved: List[Dict[str, Any]] = []
     want_doc = False
     raw_memory_kinds = context.get("memory_kinds") or body.get("memory_kinds")
@@ -1911,6 +1929,11 @@ async def run_decide_pipeline(
             response_extras.setdefault("env_tools", {})
             response_extras["env_tools"]["memory_error"] = repr(e)
 
+    response_extras["metrics"]["stage_latency"]["retrieval"] = max(
+        0,
+        int((time.time() - retrieval_stage_started_at) * 1000),
+    )
+
     memory_citations_list: List[Dict[str, Any]] = []
     for r in retrieved[:10]:
         cid = r.get("id")
@@ -1948,6 +1971,7 @@ async def run_decide_pipeline(
 
     should_run_web = bool(query and want_web and (not fast_mode or web_explicit or is_veritas_query))
 
+    web_stage_started_at = time.time()
     if should_run_web:
         ws = None
         ws_final_query = query  # ★ evidence に残す最終query（アンカー後が来る想定）
@@ -2072,6 +2096,10 @@ async def run_decide_pipeline(
             }
 
     response_extras["metrics"]["web_evidence_count"] = int(web_evidence_added)
+    response_extras["metrics"]["stage_latency"]["web"] = max(
+        0,
+        int((time.time() - web_stage_started_at) * 1000),
+    )
 
     # =========================================================
     # options normalization + planner→alts for veritas queries
@@ -2213,7 +2241,7 @@ async def run_decide_pipeline(
 
     if raw and healing_enabled:
         original_task = query
-        current_query = query
+        latest_healing_input: Optional[Dict[str, Any]] = None
         current_context = dict(context or {})
         while True:
             rejection = _extract_rejection(raw)
@@ -2277,6 +2305,7 @@ async def run_decide_pipeline(
                 }
             )
             prev_healing_input = healing_input
+            latest_healing_input = healing_input
 
             if stop_reason:
                 healing_stop_reason = stop_reason
@@ -2294,13 +2323,13 @@ async def run_decide_pipeline(
                 "action": decision.action.value,
                 "feedback": rejection.get("feedback"),
                 "policy_decision": decision.reason,
+                "input": healing_input,
             }
-            current_query = json.dumps(healing_input, ensure_ascii=False)
             try:
                 raw0 = await call_core_decide(
                     core_fn=core_decide,  # type: ignore[arg-type]
                     context=current_context,
-                    query=current_query,
+                    query=query,
                     alternatives=input_alts,
                     min_evidence=min_ev,
                 )
@@ -2353,6 +2382,7 @@ async def run_decide_pipeline(
                     "enabled": True,
                     "attempts": healing_attempts,
                     "stop_reason": healing_stop_reason,
+                    "input": latest_healing_input,
                 }
             )
 
@@ -2668,6 +2698,7 @@ async def run_decide_pipeline(
     # =========================================================
     # Gate decision
     # =========================================================
+    gate_stage_started_at = time.time()
     decision_status, rejection_reason = "allow", None
     modifications = fuji_dict.get("modifications") or []
 
@@ -2692,6 +2723,11 @@ async def run_decide_pipeline(
         decision_status = "rejected"
         rejection_reason = f"FUJI gate: high risk ({effective_risk:.2f}) & low telos (<{telos_threshold:.2f})"
         chosen, alts = {}, []
+
+    response_extras["metrics"]["stage_latency"]["gate"] = max(
+        0,
+        int((time.time() - gate_stage_started_at) * 1000),
+    )
 
     # =========================================================
     # Value learning: EMA update (best-effort)
@@ -2994,6 +3030,7 @@ async def run_decide_pipeline(
         except Exception as e2:
             _warn(f"[ReasonOS] meta_log append skipped: {e2}")
 
+        llm_stage_started_at = time.time()
         try:
             llm_reason = None
             if reason_core is not None and hasattr(reason_core, "generate_reason"):
@@ -3021,6 +3058,13 @@ async def run_decide_pipeline(
                 "reflection": reflection,
                 "llm": llm_reason,
             }
+            extras_for_llm = payload.setdefault("extras", {})
+            if isinstance(extras_for_llm, dict):
+                extras_for_llm.setdefault("metrics", {})
+                if isinstance(extras_for_llm["metrics"], dict):
+                    stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
+                    if isinstance(stage_latency, dict):
+                        stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
         except Exception as e2:
             _warn(f"[ReasonOS] LLM reason failed: {e2}")
             tips = reflection.get("improvement_tips") or []
@@ -3029,6 +3073,13 @@ async def run_decide_pipeline(
                 "next_value_boost": reflection.get("next_value_boost", 0.0),
                 "reflection": reflection,
             }
+            extras_for_llm = payload.setdefault("extras", {})
+            if isinstance(extras_for_llm, dict):
+                extras_for_llm.setdefault("metrics", {})
+                if isinstance(extras_for_llm["metrics"], dict):
+                    stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
+                    if isinstance(stage_latency, dict):
+                        stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
     except Exception as e:
         _warn(f"[ReasonOS] final fallback failed: {e}")
         payload["reason"] = {"note": "reflection/LLM both failed"}
@@ -3107,6 +3158,7 @@ async def run_decide_pipeline(
     # =========================================================
     # Persist (best-effort)
     # =========================================================
+    persist_stage_started_at = time.time()
     try:
         Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
         Path(DATASET_DIR).mkdir(parents=True, exist_ok=True)
@@ -3175,6 +3227,14 @@ async def run_decide_pipeline(
             dataset_path.write_text(json.dumps(persist, ensure_ascii=False), encoding="utf-8")
     except Exception as e:
         _warn(f"[persist] decide record skipped: {e}")
+    finally:
+        extras_for_persist = payload.setdefault("extras", {})
+        if isinstance(extras_for_persist, dict):
+            extras_for_persist.setdefault("metrics", {})
+            if isinstance(extras_for_persist["metrics"], dict):
+                stage_latency = extras_for_persist["metrics"].setdefault("stage_latency", {})
+                if isinstance(stage_latency, dict):
+                    stage_latency["persist"] = max(0, int((time.time() - persist_stage_started_at) * 1000))
 
     # =========================================================
     # WorldState update (best-effort)

@@ -57,6 +57,68 @@ def test_looks_agi_result_false_for_unrelated() -> None:
     assert web_search_mod._looks_agi_result(title, snippet, url) is False
 
 
+def test_safe_float_rejects_non_finite_values(monkeypatch) -> None:
+    """環境変数が非有限値ならデフォルト値にフォールバックする。"""
+    monkeypatch.setenv("VERITAS_WEBSEARCH_RETRY_DELAY", "nan")
+    assert web_search_mod._safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.5) == 1.5
+
+    monkeypatch.setenv("VERITAS_WEBSEARCH_RETRY_DELAY", "inf")
+    assert web_search_mod._safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 2.5) == 2.5
+
+
+def test_sanitize_max_results_clamps_values() -> None:
+    assert web_search_mod._sanitize_max_results(0) == 1
+    assert web_search_mod._sanitize_max_results(101) == 100
+    assert web_search_mod._sanitize_max_results("3") == 3
+    assert web_search_mod._sanitize_max_results("abc") == 5
+
+
+def test_normalize_result_item_rejects_unsafe_scheme() -> None:
+    """危険なスキームは正規化段階で除外する。"""
+    item = {
+        "title": "bad",
+        "link": "javascript:alert(1)",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_normalize_result_item_rejects_url_with_userinfo() -> None:
+    """userinfo を含む URL は漏えいリスク低減のため除外する。"""
+    item = {
+        "title": "bad",
+        "link": "https://user:secret@example.com/path",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_normalize_result_item_rejects_url_without_hostname() -> None:
+    """host を含まない URL は不正入力として除外する。"""
+    item = {
+        "title": "bad",
+        "link": "https:///missing-host",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_normalize_result_item_truncates_long_fields() -> None:
+    """検索結果の各フィールドは上限長で切り詰める。"""
+    item = {
+        "title": "t" * 700,
+        "link": "https://example.com/" + ("p" * 3000),
+        "snippet": "s" * 3000,
+    }
+
+    normalized = web_search_mod._normalize_result_item(item)
+
+    assert normalized is not None
+    assert len(normalized["title"]) == 512
+    assert len(normalized["url"]) == 2048
+    assert len(normalized["snippet"]) == 2048
+
+
 # -----------------------------
 # web_search 本体のテスト
 # -----------------------------
@@ -103,12 +165,17 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     captured: Dict[str, Any] = {}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str,
+        headers: Dict[str, Any],
+        json: Dict[str, Any],
+        timeout: int,
+        **kwargs: Any,
     ):
         # ざっくりヘッダ・URL・ペイロードを検証
         captured["url"] = url
         captured["headers"] = headers
         captured["payload"] = json
+        captured["kwargs"] = kwargs
         return DummyResponse(data)
 
     # requests.post をモック
@@ -121,6 +188,7 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     assert captured["headers"]["X-API-KEY"] == web_search_mod.WEBSEARCH_KEY
     assert captured["payload"]["q"] == "normal query"
     assert captured["payload"]["num"] == 4  # max_results * 2
+    assert captured["kwargs"]["allow_redirects"] is False
 
     # レスポンスの検証
     assert resp["ok"] is True
@@ -154,7 +222,7 @@ def test_web_search_retries_on_timeout(monkeypatch) -> None:
     calls = {"count": 0}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         calls["count"] += 1
         if calls["count"] == 1:
@@ -202,7 +270,7 @@ def test_web_search_agi_query_filters_and_trims(monkeypatch) -> None:
     captured: Dict[str, Any] = {}
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         captured["payload"] = json
         return DummyResponse(data)
@@ -243,7 +311,7 @@ def test_web_search_agi_query_no_agi_like_results(monkeypatch) -> None:
     }
 
     def fake_post(
-        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int
+        url: str, headers: Dict[str, Any], json: Dict[str, Any], timeout: int, **kwargs: Any
     ):
         return DummyResponse(data)
 
@@ -277,4 +345,3 @@ def test_web_search_handles_request_exception(monkeypatch) -> None:
     assert resp["ok"] is False
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
-

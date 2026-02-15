@@ -69,6 +69,22 @@ def test_get_endpoint_each_provider():
     assert _get_endpoint(LLMProvider.OLLAMA.value) == "http://localhost:11434/api/chat"
 
 
+def test_chat_completion_alias_calls_chat(monkeypatch):
+    called = {}
+
+    def fake_chat(**kwargs):
+        called.update(kwargs)
+        return {"text": "ok"}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+    out = llm_client.chat_completion(system_prompt="SYS", user_prompt="USER", max_tokens=12)
+
+    assert out == {"text": "ok"}
+    assert called["system_prompt"] == "SYS"
+    assert called["user_prompt"] == "USER"
+    assert called["max_tokens"] == 12
+
+
 # ------------------------------------------------------------
 # _format_request のテスト
 # ------------------------------------------------------------
@@ -183,6 +199,24 @@ def test_format_request_ollama_with_extra_messages():
     assert msgs[1] == {"role": "user", "content": "USER"}
     assert msgs[2] == {"role": "assistant", "content": "A1"}
     assert msgs[3] == {"role": "user", "content": "implicit"}
+
+
+def test_format_request_ignores_non_dict_extra_messages():
+    payload = _format_request(
+        provider=LLMProvider.OPENAI,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gpt-4.1-mini",
+        temperature=0.1,
+        max_tokens=100,
+        extra_messages=["invalid", {"role": "assistant", "content": 123}],
+    )
+
+    assert payload["messages"] == [
+        {"role": "system", "content": "SYS"},
+        {"role": "user", "content": "USER"},
+        {"role": "assistant", "content": "123"},
+    ]
 
 
 # ------------------------------------------------------------

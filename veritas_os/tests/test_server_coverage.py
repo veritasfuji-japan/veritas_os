@@ -423,6 +423,21 @@ def test_is_debug_mode_on(monkeypatch):
     assert server._is_debug_mode() is True
 
 
+def test_is_debug_mode_with_spaces(monkeypatch):
+    monkeypatch.setenv("VERITAS_DEBUG_MODE", "  TRUE  ")
+    assert server._is_debug_mode() is True
+
+
+def test_is_debug_mode_on_keyword(monkeypatch):
+    monkeypatch.setenv("VERITAS_DEBUG_MODE", "on")
+    assert server._is_debug_mode() is True
+
+
+def test_is_debug_mode_unknown_value(monkeypatch):
+    monkeypatch.setenv("VERITAS_DEBUG_MODE", "enabled")
+    assert server._is_debug_mode() is False
+
+
 # ----------------------------------------------------------------
 # 42. _is_placeholder_secret
 # ----------------------------------------------------------------

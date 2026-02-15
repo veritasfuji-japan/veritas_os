@@ -143,6 +143,56 @@ def test_get_expected_api_key_falls_back_to_default(monkeypatch):
     assert got == "cfg-key"
 
 
+
+
+def test_resolve_expected_api_key_with_source_precedence(monkeypatch):
+    """環境変数 > API_KEY_DEFAULT > cfg.api_key の優先順を確認する。"""
+    monkeypatch.setenv("VERITAS_API_KEY", "env-key")
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "default-key")
+    monkeypatch.setattr(server.cfg, "api_key", "cfg-key")
+
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "env-key"
+    assert source == "env"
+
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "default-key"
+    assert source == "api_key_default"
+
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "cfg-key"
+    assert source == "config"
+
+    monkeypatch.setattr(server.cfg, "api_key", "")
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == ""
+    assert source == "missing"
+
+
+
+
+def test_log_api_key_source_once_logs_once_per_label(monkeypatch):
+    """同一ラベルは1回だけログされ、異なるラベルは個別にログされる。"""
+    server._log_api_key_source_once.cache_clear()
+
+    logged_messages = []
+
+    def _fake_info(message, *args):
+        logged_messages.append(message % args)
+
+    monkeypatch.setattr(server.logger, "info", _fake_info)
+
+    server._log_api_key_source_once("env")
+    server._log_api_key_source_once("env")
+    server._log_api_key_source_once("config")
+
+    assert logged_messages == [
+        "Resolved API key source: env",
+        "Resolved API key source: config",
+    ]
+
 def test_get_cfg_fallback_disables_cors(monkeypatch):
     """
     get_cfg が失敗したときに CORS を完全拒否するフォールバックになること。
@@ -747,6 +797,44 @@ def test_memory_put_vector_and_size_and_kind():
     assert vec["kind"] == "skills"  # kind 正常化
     assert vec["id"] is not None
     assert data["size"] == len(text)  # size は text 長さ
+
+
+
+
+def test_memory_put_respects_kind_for_vector_store(monkeypatch):
+    """
+    /v1/memory/put が vector 保存時に kind を保持して
+    store.put(kind, item) を呼ぶことを確認。
+    """
+
+    calls = {}
+
+    class DummyStore:
+        def put(self, kind, item):
+            calls["kind"] = kind
+            calls["item"] = item
+            return "dummy-id"
+
+        def put_episode(self, text, tags=None, meta=None):
+            raise AssertionError("put_episode should not be used when put is available")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: DummyStore())
+
+    res = server.memory_put(
+        {
+            "user_id": "u-kind",
+            "kind": "skills",
+            "text": "hello",
+            "tags": ["t1"],
+            "meta": {"source": "test"},
+        }
+    )
+
+    assert res["ok"] is True
+    assert res["vector"]["saved"] is True
+    assert calls["kind"] == "skills"
+    assert calls["item"]["text"] == "hello"
+    assert calls["item"]["meta"]["kind"] == "skills"
 
 
 def test_memory_search_filters_by_user(monkeypatch):

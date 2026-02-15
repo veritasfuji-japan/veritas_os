@@ -204,6 +204,19 @@ class TestBuildDatasetRecord:
             assert record["labels"]["status"] == status
             assert record["labels"]["blocked"] == (status == "rejected")
 
+
+    def test_memory_citations_negative_value_is_sanitized(self):
+        """memory citations の負数が 0 に正規化されることを確認"""
+        req = create_dummy_request()
+        res = create_dummy_response(memory_used=True)
+        res["memory"]["citations"] = -5
+        meta = create_dummy_meta()
+
+        record = build_dataset_record(req, res, meta)
+
+        assert record["labels"]["memory_citations"] == 0
+        assert record["response"]["memory"]["citations"] == 0
+
     def test_memory_usage_tracking(self):
         """メモリ使用状況が正しく記録されることを確認"""
         req = create_dummy_request()
@@ -227,7 +240,6 @@ class TestBuildDatasetRecord:
 # =========================
 # バリデーションテスト
 # =========================
-
 
 class TestValidateRecord:
     """validate_record 関数のテスト"""
@@ -552,6 +564,17 @@ class TestSearchDataset:
             results = search_dataset(path=path, limit=5)
             
             assert len(results) == 5
+
+    def test_search_with_non_positive_limit(self, tmp_path):
+        """limit が 0 以下の場合は空配列を返すことを確認"""
+        dataset_path = tmp_path / "dataset.jsonl"
+        dataset_path.write_text(
+            '{"ts":1,"request":{"payload":{"query":"q"}},"response":{"chosen":{"score":0.5}},"labels":{"status":"allow","memory_used":false}}\n',
+            encoding="utf-8",
+        )
+
+        assert search_dataset(limit=0, path=dataset_path) == []
+        assert search_dataset(limit=-1, path=dataset_path) == []
 
     def test_search_combined_filters(self):
         """複数フィルタの組み合わせが正しく動作することを確認"""

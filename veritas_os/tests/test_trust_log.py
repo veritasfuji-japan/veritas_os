@@ -98,6 +98,12 @@ def test_calc_sha256_matches_manual_hash():
     assert h == expected
 
 
+def test_calc_sha256_handles_unserializable_objects():
+    payload = {"x": {1, 2, 3}}
+    h = trust_log.calc_sha256(payload)
+    assert re.fullmatch(r"[0-9a-f]{64}", h)
+
+
 # ============================
 #  _load_logs_json / _save_json のテスト
 # ============================
@@ -178,6 +184,33 @@ def test_get_last_hash_reads_last_line_sha256(temp_log_env):
 def test_get_last_hash_invalid_json_returns_none(temp_log_env):
     temp_log_env["jsonl"].write_text("not a json\n", encoding="utf-8")
     assert trust_log.get_last_hash() is None
+
+
+def test_get_last_hash_handles_very_large_last_line(temp_log_env):
+    payload = {"sha256": "large123", "blob": "x" * 70000}
+    temp_log_env["jsonl"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    assert trust_log.get_last_hash() == "large123"
+
+
+def test_get_last_hash_skips_trailing_partial_json_line(temp_log_env):
+    valid = json.dumps({"sha256": "stable_hash"})
+    partial = '{"sha256": "broken"'
+    temp_log_env["jsonl"].write_text(f"{valid}\n{partial}", encoding="utf-8")
+
+    assert trust_log.get_last_hash() == "stable_hash"
+
+
+def test_extract_last_sha256_from_lines_ignores_invalid_entries():
+    lines = [
+        "",
+        "not-json",
+        json.dumps(["list", "is", "ignored"]),
+        json.dumps({"sha256": ""}),
+        json.dumps({"sha256": "good_hash"}),
+    ]
+
+    assert trust_log._extract_last_sha256_from_lines(lines) == "good_hash"
 
 
 # ============================
@@ -336,5 +369,4 @@ def test_write_shadow_decide_falls_back_to_context_query_and_none_fuji(temp_log_
     assert rec["request_id"] == request_id
     assert rec["query"] == "from context"
     assert rec["fuji"] is None
-
 
