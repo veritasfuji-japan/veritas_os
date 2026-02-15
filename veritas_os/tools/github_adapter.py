@@ -9,6 +9,7 @@ GitHub Adapter for VERITAS Environment Tools
 import logging
 import os
 import random
+import re
 import time
 
 import requests
@@ -41,6 +42,8 @@ GITHUB_API_MAX_PER_PAGE = 100
 
 logger = logging.getLogger(__name__)
 
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
 
 def _get_github_token() -> str:
     """Return the latest GitHub token from environment variables.
@@ -62,11 +65,30 @@ def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
     if raw is None:
         raw = ""
     q = str(raw).replace("\n", " ").replace("\r", " ").strip()
+    q = _RE_CONTROL_CHARS.sub(" ", q)
+    q = " ".join(q.split())
     truncated = False
     if len(q) > max_len:
         q = q[:max_len]
         truncated = True
     return q, truncated
+
+
+def _normalize_repo_item(item: dict) -> dict:
+    """Normalize a GitHub repository item with safe default values."""
+    stars = item.get("stargazers_count", 0)
+    if not isinstance(stars, int):
+        try:
+            stars = int(stars)
+        except (TypeError, ValueError):
+            stars = 0
+
+    return {
+        "full_name": str(item.get("full_name") or ""),
+        "html_url": str(item.get("html_url") or ""),
+        "description": str(item.get("description") or ""),
+        "stars": stars,
+    }
 
 
 def _compute_backoff(attempt: int) -> float:
@@ -192,16 +214,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         }
 
     items = data.get("items", []) or []
-    results = []
-    for it in items:
-        results.append(
-            {
-                "full_name": it.get("full_name"),
-                "html_url": it.get("html_url"),
-                "description": it.get("description"),
-                "stars": it.get("stargazers_count", 0),
-            }
-        )
+    results = [_normalize_repo_item(it) for it in items if isinstance(it, dict)]
 
     return {
         "ok": True,

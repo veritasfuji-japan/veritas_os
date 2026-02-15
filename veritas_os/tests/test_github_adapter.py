@@ -10,6 +10,10 @@ def test_prepare_query_basic_and_truncate():
     assert q == "foo bar"
     assert truncated is False
 
+    q_ctrl, truncated_ctrl = github_adapter._prepare_query("a\x00\x1fb")
+    assert q_ctrl == "a b"
+    assert truncated_ctrl is False
+
     # None でも落ちない
     q2, truncated2 = github_adapter._prepare_query(None)
     assert q2 == ""
@@ -177,3 +181,19 @@ def test_get_github_token_reads_latest_env(monkeypatch):
 
     monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "token-b")
     assert github_adapter._get_github_token() == "token-b"
+
+
+def test_normalize_repo_item_uses_safe_defaults():
+    result = github_adapter._normalize_repo_item(
+        {
+            "full_name": None,
+            "html_url": None,
+            "description": None,
+            "stargazers_count": "7",
+        }
+    )
+
+    assert result["full_name"] == ""
+    assert result["html_url"] == ""
+    assert result["description"] == ""
+    assert result["stars"] == 7
