@@ -344,6 +344,53 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
+    def test_non_list_organic_payload_is_ignored(self, monkeypatch):
+        """Ignore malformed `organic` payloads that are not lists."""
+        monkeypatch.setattr(
+            web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+        )
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            return DummyResponse({"organic": {"title": "bad"}})
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        resp = web_search_mod.web_search("test query", max_results=5)
+
+        assert resp["ok"] is True
+        assert resp["results"] == []
+
+    def test_non_dict_organic_items_are_ignored(self, monkeypatch):
+        """Drop malformed result entries that are not dictionaries."""
+        monkeypatch.setattr(
+            web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+        )
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+        data = {
+            "organic": [
+                "bad-item",
+                123,
+                {
+                    "title": "Valid",
+                    "link": "https://example.com",
+                    "snippet": "ok",
+                },
+            ]
+        }
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            return DummyResponse(data)
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        resp = web_search_mod.web_search("test query", max_results=5)
+
+        assert resp["ok"] is True
+        assert len(resp["results"]) == 1
+        assert resp["results"][0]["url"] == "https://example.com"
+
 
 class TestClassifyWebsearchError:
     """Tests for _classify_websearch_error helper."""
