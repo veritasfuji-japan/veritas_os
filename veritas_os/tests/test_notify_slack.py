@@ -86,6 +86,45 @@ class NotifySlackTests(unittest.TestCase):
 
         self.assertEqual(exit_code, 1)
 
+    def test_send_slack_rejects_non_https_webhook_url(self):
+        """Non-HTTPS webhook URLs should be rejected before network call."""
+        module = load_module()
+
+        with mock.patch.object(module.requests, "post") as mock_post:
+            exit_code = module.send_slack_notification(
+                "http://hooks.slack.com/services/a/b/c",
+                "hello",
+            )
+
+        self.assertEqual(exit_code, 1)
+        mock_post.assert_not_called()
+
+    def test_send_slack_rejects_non_slack_host(self):
+        """Unexpected hosts should be rejected to reduce SSRF risk."""
+        module = load_module()
+
+        with mock.patch.object(module.requests, "post") as mock_post:
+            exit_code = module.send_slack_notification(
+                "https://example.com/services/a/b/c",
+                "hello",
+            )
+
+        self.assertEqual(exit_code, 1)
+        mock_post.assert_not_called()
+
+    def test_send_slack_rejects_userinfo_in_url(self):
+        """Webhook URLs containing userinfo should be treated as invalid."""
+        module = load_module()
+
+        with mock.patch.object(module.requests, "post") as mock_post:
+            exit_code = module.send_slack_notification(
+                "https://user:pass@hooks.slack.com/services/a/b/c",
+                "hello",
+            )
+
+        self.assertEqual(exit_code, 1)
+        mock_post.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
