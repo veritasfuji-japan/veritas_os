@@ -60,7 +60,12 @@ def _validate_webhook_url(webhook_url: str) -> bool:
     if parsed.scheme != "https":
         return False
 
-    if parsed.port is not None:
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return False
+
+    if parsed_port is not None:
         return False
 
     if parsed.username or parsed.password:
@@ -110,6 +115,11 @@ def _validate_health_url(url: str) -> bool:
         return False
 
     if parsed.username or parsed.password:
+        return False
+
+    try:
+        parsed.port
+    except ValueError:
         return False
 
     hostname: Optional[str] = parsed.hostname
