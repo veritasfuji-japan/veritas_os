@@ -261,3 +261,25 @@ def test_get_retry_settings_reads_latest_env(monkeypatch):
     monkeypatch.setenv("VERITAS_GITHUB_RETRY_JITTER", "0.2")
 
     assert github_adapter._get_retry_settings() == (7, 0.25, 3.5, 0.2)
+
+
+def test_github_search_repos_rejects_non_dict_payload(monkeypatch):
+    """Non-dict API JSON payloads are rejected safely."""
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
+
+    class DummyResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return ["unexpected-list"]
+
+    monkeypatch.setattr(github_adapter.requests, "get", lambda *args, **kwargs: DummyResp())
+
+    res = github_adapter.github_search_repos("veritas_os")
+
+    assert res["ok"] is False
+    assert res["results"] == []
+    assert res["error"] == "GitHub API error: invalid response payload"
