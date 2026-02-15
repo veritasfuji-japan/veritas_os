@@ -176,6 +176,15 @@ class CosineIndex:
             )
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)
             self.ids = []
+            return
+
+        if not np.isfinite(self.vecs).all():
+            logger.warning(
+                "[CosineIndex] Loaded vecs include non-finite values (NaN/Inf), resetting index: %s",
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
 
     def save(self) -> None:
         if self.path is None:
