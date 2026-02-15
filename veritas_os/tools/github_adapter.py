@@ -7,6 +7,7 @@ GitHub Adapter for VERITAS Environment Tools
 """
 
 import logging
+import math
 import os
 import random
 import re
@@ -23,13 +24,17 @@ def _safe_int(key: str, default: int) -> int:
 
 
 def _safe_float(key: str, default: float) -> float:
+    """環境変数を有限な float として取得し、異常値は default に戻す。"""
     try:
-        return float(os.getenv(key, str(default)))
+        value = float(os.getenv(key, str(default)))
     except (ValueError, TypeError):
         return default
+    if not math.isfinite(value):
+        return default
+    return value
 
 
-GITHUB_MAX_RETRIES = _safe_int("VERITAS_GITHUB_MAX_RETRIES", 3)
+GITHUB_MAX_RETRIES = max(_safe_int("VERITAS_GITHUB_MAX_RETRIES", 3), 1)
 GITHUB_RETRY_DELAY = _safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.0)
 GITHUB_RETRY_MAX_DELAY = _safe_float("VERITAS_GITHUB_RETRY_MAX_DELAY", 8.0)
 GITHUB_RETRY_JITTER = _safe_float("VERITAS_GITHUB_RETRY_JITTER", 0.1)
@@ -122,6 +127,7 @@ def _get_with_retry(
                 headers=headers,
                 params=params,
                 timeout=timeout,
+                allow_redirects=False,
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):

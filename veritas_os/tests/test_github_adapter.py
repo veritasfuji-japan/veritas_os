@@ -71,11 +71,12 @@ def test_github_search_repos_success(monkeypatch):
         def json(self):
             return self._payload
 
-    def fake_get(url, headers=None, params=None, timeout=None):
+    def fake_get(url, headers=None, params=None, timeout=None, **kwargs):
         # URL・パラメータがそれなりに渡っているかだけ軽く確認
         assert "api.github.com/search/repositories" in url
         assert params["q"] == "veritas_os"
         assert params["per_page"] == 3
+        assert kwargs.get("allow_redirects") is False
         assert "Authorization" in headers
         assert "dummy-token" in headers["Authorization"]
         payload = {
@@ -197,3 +198,8 @@ def test_normalize_repo_item_uses_safe_defaults():
     assert result["html_url"] == ""
     assert result["description"] == ""
     assert result["stars"] == 7
+
+
+def test_safe_float_non_finite_returns_default(monkeypatch):
+    monkeypatch.setenv("VERITAS_GITHUB_RETRY_DELAY", "nan")
+    assert github_adapter._safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.5) == 1.5
