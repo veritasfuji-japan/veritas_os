@@ -11,6 +11,12 @@ import pytest
 web_search_mod = importlib.import_module("veritas_os.tools.web_search")
 
 
+@pytest.fixture(autouse=True)
+def clear_host_safety_cache() -> None:
+    """Host safety判定のキャッシュを各テストで初期化する。"""
+    web_search_mod._is_private_or_local_host.cache_clear()
+
+
 class TestNormalizeStr:
     """Tests for _normalize_str helper function."""
 
