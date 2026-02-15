@@ -9,10 +9,12 @@ Security considerations:
 import datetime
 import os
 import sys
+from urllib.parse import urlparse
 
 import requests
 
 DEFAULT_TIMEOUT_SEC = 10
+ALLOWED_WEBHOOK_HOSTS = {"hooks.slack.com", "hooks.slack-gov.com"}
 
 
 def build_payload(message: str) -> dict[str, str]:
@@ -21,8 +23,27 @@ def build_payload(message: str) -> dict[str, str]:
     return {"text": f"🧠 *VERITAS通知*\n>{message}\n🕒 {timestamp}"}
 
 
+def is_allowed_slack_webhook_url(webhook_url: str) -> bool:
+    """Validate Slack webhook URL to reduce SSRF and exfiltration risks.
+
+    Allowed endpoints are limited to HTTPS webhook hosts managed by Slack.
+    """
+    parsed = urlparse(webhook_url)
+    if parsed.scheme != "https":
+        return False
+    if parsed.username or parsed.password:
+        return False
+    if parsed.hostname not in ALLOWED_WEBHOOK_HOSTS:
+        return False
+    return parsed.path.startswith("/services/")
+
+
 def send_slack_notification(webhook_url: str, message: str) -> int:
     """Send a Slack notification and return a process-compatible exit code."""
+    if not is_allowed_slack_webhook_url(webhook_url):
+        print("[ERROR] Invalid SLACK_WEBHOOK_URL. Only Slack HTTPS webhook URLs are allowed.")
+        return 1
+
     payload = build_payload(message)
 
     try:
