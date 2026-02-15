@@ -143,6 +143,34 @@ def test_get_expected_api_key_falls_back_to_default(monkeypatch):
     assert got == "cfg-key"
 
 
+
+
+def test_resolve_expected_api_key_with_source_precedence(monkeypatch):
+    """環境変数 > API_KEY_DEFAULT > cfg.api_key の優先順を確認する。"""
+    monkeypatch.setenv("VERITAS_API_KEY", "env-key")
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "default-key")
+    monkeypatch.setattr(server.cfg, "api_key", "cfg-key")
+
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "env-key"
+    assert source == "env"
+
+    monkeypatch.delenv("VERITAS_API_KEY", raising=False)
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "default-key"
+    assert source == "api_key_default"
+
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == "cfg-key"
+    assert source == "config"
+
+    monkeypatch.setattr(server.cfg, "api_key", "")
+    key, source = server._resolve_expected_api_key_with_source()
+    assert key == ""
+    assert source == "missing"
+
+
 def test_get_cfg_fallback_disables_cors(monkeypatch):
     """
     get_cfg が失敗したときに CORS を完全拒否するフォールバックになること。

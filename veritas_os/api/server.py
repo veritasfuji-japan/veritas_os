@@ -550,6 +550,31 @@ if not os.getenv("VERITAS_API_KEY"):
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
+_api_key_source_logged: str | None = None
+
+
+def _resolve_expected_api_key_with_source() -> tuple[str, str]:
+    """Resolve API key value and source name without exposing secrets.
+
+    Returns:
+        tuple[str, str]:
+            - effective API key value (may be empty)
+            - source label: ``env``, ``api_key_default``, ``config`` or
+              ``missing``.
+    """
+    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
+    if env_key:
+        return env_key, "env"
+
+    default_key = API_KEY_DEFAULT.strip()
+    if default_key:
+        return default_key, "api_key_default"
+
+    config_key = (getattr(cfg, "api_key", "") or "").strip()
+    if config_key:
+        return config_key, "config"
+    return "", "missing"
+
 
 def _get_expected_api_key() -> str:
     """
@@ -557,16 +582,13 @@ def _get_expected_api_key() -> str:
     モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
     テスト時は API_KEY_DEFAULT を monkeypatch で上書き可能（レガシー互換）。
     """
-    # 1. 環境変数を優先
-    env_key = (os.getenv("VERITAS_API_KEY") or "").strip()
-    if env_key:
-        return env_key
-    # 2. テスト互換: API_KEY_DEFAULT がmonkeypatchで設定されていれば使用
-    if API_KEY_DEFAULT:
-        return API_KEY_DEFAULT.strip()
-    # 3. フォールバック: configからの取得（レガシー互換）
-    config_key = (getattr(cfg, "api_key", "") or "").strip()
-    return config_key
+    global _api_key_source_logged
+
+    key, source = _resolve_expected_api_key_with_source()
+    if source != _api_key_source_logged:
+        logger.info("Resolved API key source: %s", source)
+        _api_key_source_logged = source
+    return key
 
 
 def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
@@ -1730,7 +1752,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
