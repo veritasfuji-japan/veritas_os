@@ -430,7 +430,9 @@ class PIIDetector:
 
         limit = _MAX_PII_MATCHES if max_matches is None else max(0, max_matches)
         results: List[PIIMatch] = []
-        detected_ranges: List[tuple] = []  # 重複検出防止用
+        # 重複検出防止用（start順で保持し、近傍のみ比較してO(n log n)化）
+        detected_starts: List[int] = []
+        detected_ranges: List[tuple[int, int]] = []
 
         for name, pattern, token, validator, confidence in self._iter_patterns_by_priority():
             for match in pattern.finditer(text):
@@ -438,11 +440,19 @@ class PIIDetector:
                 value = match.group()
 
                 # 重複範囲チェック（より高信頼度のパターンを優先）
+                # Security/Performance:
+                #   既存の全件走査は一致数が多い入力で二乗時間になるため、
+                #   start順に保持した区間の近傍のみを確認してDoS耐性を高める。
+                insert_at = bisect_left(detected_starts, start)
                 is_overlap = False
-                for existing_start, existing_end in detected_ranges:
-                    if start < existing_end and end > existing_start:
-                        is_overlap = True
-                        break
+
+                if insert_at > 0:
+                    prev_start, prev_end = detected_ranges[insert_at - 1]
+                    is_overlap = start < prev_end and end > prev_start
+
+                if not is_overlap and insert_at < len(detected_ranges):
+                    next_start, next_end = detected_ranges[insert_at]
+                    is_overlap = start < next_end and end > next_start
 
                 if is_overlap:
                     continue
@@ -471,7 +481,8 @@ class PIIDetector:
                     end=end + offset,
                     confidence=confidence,
                 ))
-                detected_ranges.append((start, end))
+                detected_starts.insert(insert_at, start)
+                detected_ranges.insert(insert_at, (start, end))
 
         return results
 

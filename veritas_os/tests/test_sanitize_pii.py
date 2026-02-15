@@ -573,3 +573,17 @@ class TestComplexScenarios:
         text = "これは普通の日本語テキストです。特に個人情報は含まれていません。"
         masked = mask_pii(text)
         assert masked == text
+
+
+def test_detect_in_segment_uses_neighbor_overlap_checks() -> None:
+    """In-segment overlap handling should keep adjacent non-overlapping spans."""
+    detector = PIIDetector(validate_checksums=False)
+    detector._patterns = [
+        ("first", re.compile(r"abc"), "FIRST", None, 0.9),
+        ("second", re.compile(r"def"), "SECOND", None, 0.8),
+        ("overlap", re.compile(r"bcde"), "OVERLAP", None, 0.7),
+    ]
+
+    matches = detector.detect("abcdef")
+
+    assert [m.type for m in matches] == ["first", "second"]
