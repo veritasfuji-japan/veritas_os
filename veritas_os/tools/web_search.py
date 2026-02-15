@@ -66,6 +66,22 @@ if WEBSEARCH_URL:
         )
         WEBSEARCH_URL = ""
 
+
+def _resolve_websearch_credentials() -> tuple[str, str]:
+    """Return current WebSearch URL and API key with runtime env override.
+
+    Credentials are resolved at call time so emergency rotations can be
+    reflected without process restarts. For backward compatibility with
+    existing tests and embedding code, module-level constants remain the
+    fallback when environment variables are unset.
+    """
+    env_url = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
+    env_key = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
+
+    websearch_url = env_url or WEBSEARCH_URL
+    websearch_key = env_key or WEBSEARCH_KEY
+    return websearch_url, websearch_key
+
 # ★ クエリインジェクション対策: 制御文字の除去パターン
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -607,11 +623,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         ),
     }
 
-    if not WEBSEARCH_URL or not WEBSEARCH_KEY:
+    websearch_url, websearch_key = _resolve_websearch_credentials()
+
+    if not websearch_url or not websearch_key:
         return unavailable_response
 
-    if not _is_allowed_websearch_url(WEBSEARCH_URL):
-        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
+    if not _is_allowed_websearch_url(websearch_url):
+        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", websearch_url)
         return unavailable_response
 
     # max_results の下限・上限を守る（極端値対策）
@@ -620,7 +638,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
 
     try:
         headers = {
-            "X-API-KEY": WEBSEARCH_KEY,
+            "X-API-KEY": websearch_key,
             "Content-Type": "application/json",
         }
 
@@ -666,7 +684,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         }
 
         resp = _post_with_retry(
-            WEBSEARCH_URL,
+            websearch_url,
             headers=headers,
             payload=payload,
             timeout=15,

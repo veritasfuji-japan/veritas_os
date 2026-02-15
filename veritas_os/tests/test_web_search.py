@@ -122,6 +122,38 @@ def test_normalize_result_item_truncates_long_fields() -> None:
 # -----------------------------
 # web_search 本体のテスト
 # -----------------------------
+
+
+def test_resolve_websearch_credentials_prefers_runtime_env(monkeypatch) -> None:
+    """実行時の環境変数が資格情報解決で優先される。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://fallback.example/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "fallback-key", raising=False)
+    monkeypatch.setenv("VERITAS_WEBSEARCH_URL", "https://runtime.example/serper")
+    monkeypatch.setenv("VERITAS_WEBSEARCH_KEY", "runtime-key")
+
+    resolved_url, resolved_key = web_search_mod._resolve_websearch_credentials()
+
+    assert resolved_url == "https://runtime.example/serper"
+    assert resolved_key == "runtime-key"
+
+
+def test_resolve_websearch_credentials_falls_back_to_module_defaults(monkeypatch) -> None:
+    """環境変数が空の場合は既存のモジュール設定を利用する。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://fallback.example/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "fallback-key", raising=False)
+    monkeypatch.delenv("VERITAS_WEBSEARCH_URL", raising=False)
+    monkeypatch.delenv("VERITAS_WEBSEARCH_KEY", raising=False)
+
+    resolved_url, resolved_key = web_search_mod._resolve_websearch_credentials()
+
+    assert resolved_url == "https://fallback.example/serper"
+    assert resolved_key == "fallback-key"
+
+
 def test_web_search_returns_error_when_not_configured(monkeypatch) -> None:
     """URL / KEY が設定されていない場合、config エラーを返す"""
     monkeypatch.setattr(web_search_mod, "WEBSEARCH_URL", "", raising=False)
