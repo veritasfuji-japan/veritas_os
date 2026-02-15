@@ -222,12 +222,34 @@ def analyze_trustlog() -> dict:
 # ---- helpers -----------------------------------------------------------
 def _iter_files() -> list[str]:
     """PATTERNS に一致するログの絶対パスを mtime 昇順で返す（重複除去）"""
+    log_dir_resolved = LOG_DIR.resolve()
+
+    def _is_safe_log_file(path_str: str) -> bool:
+        """LOG_DIR 配下の通常ファイルのみ解析対象として許可する。"""
+        try:
+            path_obj = Path(path_str)
+            resolved = path_obj.resolve()
+        except (OSError, RuntimeError):
+            return False
+
+        if log_dir_resolved not in resolved.parents:
+            return False
+        if path_obj.is_symlink() or (not resolved.is_file()):
+            return False
+        return True
+
     seen, files = set(), []
     for pat in PATTERNS:
         for p in glob.glob(os.path.join(LOG_DIR, pat)):
-            if p not in seen and os.path.getsize(p) > 0:
-                seen.add(p)
-                files.append(p)
+            if p in seen or not _is_safe_log_file(p):
+                continue
+            try:
+                if os.path.getsize(p) <= 0:
+                    continue
+            except OSError:
+                continue
+            seen.add(p)
+            files.append(p)
     files.sort(key=lambda p: os.path.getmtime(p))
     return files
 
@@ -453,4 +475,3 @@ def analyze_logs():
 
 if __name__ == "__main__":
     analyze_logs()
-
