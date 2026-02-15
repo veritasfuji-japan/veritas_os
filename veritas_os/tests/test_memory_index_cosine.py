@@ -191,6 +191,27 @@ def test_add_dim_mismatch_raises():
     assert "3 != 4" in msg
 
 
+def test_add_with_invalid_rank_raises():
+    """3次元配列は add で受け付けず ValueError。"""
+    idx = CosineIndex(dim=2)
+    vecs = np.ones((1, 1, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError) as exc:
+        idx.add(vecs, ids=["a"])
+
+    assert "vectors must be 1D or 2D" in str(exc.value)
+
+
+def test_search_with_invalid_rank_raises():
+    """3次元配列は search で受け付けず ValueError。"""
+    idx = CosineIndex(dim=2)
+    qv = np.ones((1, 1, 2), dtype=np.float32)
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(qv, k=1)
+
+    assert "vectors must be 1D or 2D" in str(exc.value)
+
 def test_add_ids_length_mismatch_raises():
     """ids の長さと vecs.shape[0] が違う場合も ValueError。"""
     idx = CosineIndex(dim=2)
