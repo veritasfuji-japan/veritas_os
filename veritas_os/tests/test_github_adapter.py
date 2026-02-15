@@ -175,6 +175,12 @@ def test_github_search_repos_retries_on_timeout(monkeypatch):
     assert res["results"][0]["full_name"] == "veritasfuji-japan/veritas_os"
 
 
+def test_get_github_token_rejects_control_chars(monkeypatch):
+    """Tokens with control characters are rejected for header safety."""
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "token\nvalue")
+    assert github_adapter._get_github_token() == ""
+
+
 def test_get_github_token_reads_latest_env(monkeypatch):
     """Environment token updates are reflected without module reload."""
     monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "token-a")
