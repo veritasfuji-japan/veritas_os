@@ -235,3 +235,13 @@ def test_sanitize_html_url_allows_github_hosts():
 
 def test_sanitize_html_url_rejects_insecure_http_scheme():
     assert github_adapter._sanitize_html_url("http://github.com/owner/repo") == ""
+
+
+def test_sanitize_html_url_rejects_query_and_fragment():
+    assert github_adapter._sanitize_html_url("https://github.com/owner/repo?tab=readme") == ""
+    assert github_adapter._sanitize_html_url("https://github.com/owner/repo#readme") == ""
+
+
+def test_sanitize_html_url_rejects_non_repo_paths():
+    assert github_adapter._sanitize_html_url("https://github.com/owner") == ""
+    assert github_adapter._sanitize_html_url("https://github.com/settings/profile") == ""

@@ -50,6 +50,30 @@ logger = logging.getLogger(__name__)
 
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _TRUSTED_GITHUB_HOSTS = {"github.com", "www.github.com"}
+_RE_REPO_PATH = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$")
+_RESERVED_GITHUB_PATH_ROOTS = {
+    "about",
+    "account",
+    "apps",
+    "collections",
+    "explore",
+    "features",
+    "issues",
+    "join",
+    "login",
+    "marketplace",
+    "new",
+    "notifications",
+    "orgs",
+    "organizations",
+    "pricing",
+    "pulls",
+    "search",
+    "settings",
+    "site",
+    "sponsors",
+    "topics",
+}
 
 
 def _get_github_token() -> str:
@@ -112,6 +136,9 @@ def _sanitize_html_url(raw_url: object) -> str:
           external link in clients and should never point to arbitrary domains.
         - URL-embedded credentials are always rejected to prevent accidental
           leakage of secrets via logs or UI.
+        - Query strings and fragments are rejected to avoid displaying tracking
+          parameters or ambiguous destinations.
+        - Only canonical repository paths (``/owner/repo``) are accepted.
     """
     url = str(raw_url or "").strip()
     if not url:
@@ -129,6 +156,16 @@ def _sanitize_html_url(raw_url: object) -> str:
         return ""
     if (parsed.hostname or "").lower() not in _TRUSTED_GITHUB_HOSTS:
         logger.warning("Dropped GitHub html_url with untrusted host: %r", parsed.hostname)
+        return ""
+    if parsed.query or parsed.fragment:
+        logger.warning("Dropped GitHub html_url containing query or fragment")
+        return ""
+    if not _RE_REPO_PATH.fullmatch(parsed.path or ""):
+        logger.warning("Dropped GitHub html_url with non-repo path: %r", parsed.path)
+        return ""
+    owner = (parsed.path or "").strip("/").split("/", maxsplit=1)[0].lower()
+    if owner in _RESERVED_GITHUB_PATH_ROOTS:
+        logger.warning("Dropped GitHub html_url with reserved root path: %r", owner)
         return ""
     return url
 
