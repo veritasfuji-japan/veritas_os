@@ -21,9 +21,15 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_hsl(var(--ds-color-primary)/0.18),_transparent_56%)]" />
+      <a
+        href="#main-content"
+        className="sr-only z-[var(--ds-z-overlay)] rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[hsl(var(--ds-color-focus-ring))]"
+      >
+        メインコンテンツへスキップ
+      </a>
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_hsl(var(--ds-color-primary)/0.18),_transparent_56%)]" aria-hidden="true" />
       <div className="relative grid min-h-screen grid-cols-1 lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-border/80 bg-surface/95 p-6 backdrop-blur lg:border-b-0 lg:border-r">
+        <aside aria-label="サイドバー" className="border-b border-border/80 bg-surface/95 p-6 backdrop-blur lg:border-b-0 lg:border-r">
           <div className="mb-8">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Mission Control IA</p>
             <h1 className="mt-2 text-2xl font-semibold">統治OS</h1>
@@ -65,7 +71,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
               </Card>
             </div>
           </header>
-          <main className="flex-1 p-6">{children}</main>
+          <main id="main-content" className="flex-1 p-6" tabIndex={-1}>{children}</main>
         </div>
       </div>
     </div>
