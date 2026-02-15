@@ -14,9 +14,6 @@ import time
 import requests
 
 
-GITHUB_TOKEN = os.environ.get("VERITAS_GITHUB_TOKEN", "").strip()
-
-
 def _safe_int(key: str, default: int) -> int:
     try:
         return int(os.getenv(key, str(default)))
@@ -43,6 +40,15 @@ MAX_QUERY_LEN = 256
 GITHUB_API_MAX_PER_PAGE = 100
 
 logger = logging.getLogger(__name__)
+
+
+def _get_github_token() -> str:
+    """Return the latest GitHub token from environment variables.
+
+    The token is resolved at call time so that emergency token rotations can
+    take effect without restarting the running process.
+    """
+    return os.getenv("VERITAS_GITHUB_TOKEN", "").strip()
 
 
 def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
@@ -140,7 +146,8 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
           "meta": { ... }
         }
     """
-    if not GITHUB_TOKEN:
+    token = _get_github_token()
+    if not token:
         return {
             "ok": False,
             "results": [],
@@ -169,7 +176,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
     }
     headers = {
         "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Authorization": f"Bearer {token}",
     }
 
     try:

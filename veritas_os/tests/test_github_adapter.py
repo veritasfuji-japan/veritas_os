@@ -1,7 +1,6 @@
 # veritas_os/tests/test_github_adapter.py
 # -*- coding: utf-8 -*-
 
-import types
 from veritas_os.tools import github_adapter
 
 
@@ -28,7 +27,7 @@ def test_github_search_repos_without_token(monkeypatch):
     VERITAS_GITHUB_TOKEN が設定されていない場合は
     即エラーを返す（API を叩かない）。
     """
-    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "")
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "")
 
     res = github_adapter.github_search_repos("veritas_os")
 
@@ -41,7 +40,7 @@ def test_github_search_repos_empty_query(monkeypatch):
     """
     トークンはあるがクエリが空 / 空白のみ → empty_query エラー。
     """
-    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
 
     res = github_adapter.github_search_repos("   ")
 
@@ -55,7 +54,7 @@ def test_github_search_repos_success(monkeypatch):
     正常系: GitHub API が成功したときに shape が整っているか。
     実際のネットワークは叩かず、requests.get をモックする。
     """
-    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
 
     class DummyResp:
         def __init__(self, payload):
@@ -110,7 +109,7 @@ def test_github_search_repos_handles_api_error(monkeypatch):
     GitHub API 側で例外が起きたときも、
     GitHub API error: ... というエラーを返して落ちないこと。
     """
-    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
 
     def fake_get(*args, **kwargs):
         raise RuntimeError("boom")
@@ -126,7 +125,7 @@ def test_github_search_repos_handles_api_error(monkeypatch):
 
 def test_github_search_repos_retries_on_timeout(monkeypatch):
     """一時的なタイムアウト時に再試行する。"""
-    monkeypatch.setattr(github_adapter, "GITHUB_TOKEN", "dummy-token")
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
     monkeypatch.setattr(github_adapter, "GITHUB_MAX_RETRIES", 2)
     monkeypatch.setattr(github_adapter, "GITHUB_RETRY_DELAY", 0.0)
     monkeypatch.setattr(github_adapter, "GITHUB_RETRY_MAX_DELAY", 0.0)
@@ -169,3 +168,12 @@ def test_github_search_repos_retries_on_timeout(monkeypatch):
     assert calls["count"] == 2
     assert res["ok"] is True
     assert res["results"][0]["full_name"] == "veritasfuji-japan/veritas_os"
+
+
+def test_get_github_token_reads_latest_env(monkeypatch):
+    """Environment token updates are reflected without module reload."""
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "token-a")
+    assert github_adapter._get_github_token() == "token-a"
+
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "token-b")
+    assert github_adapter._get_github_token() == "token-b"
