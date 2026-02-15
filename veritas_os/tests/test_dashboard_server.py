@@ -102,6 +102,22 @@ def test_resolve_dashboard_username_uses_explicit_value(monkeypatch):
     assert username == "ops-admin"
 
 
+def test_validate_explicit_dashboard_password_rejects_control_chars():
+    """Control characters in password should be rejected for safety."""
+    with pytest.raises(RuntimeError, match="control characters"):
+        dashboard_server._validate_explicit_dashboard_password("bad\nsecret")
+
+
+def test_validate_explicit_dashboard_password_warns_when_too_short(caplog):
+    """Short explicit password should be accepted with security warning."""
+    caplog.set_level("WARNING")
+
+    password = dashboard_server._validate_explicit_dashboard_password("shortpwd")
+
+    assert password == "shortpwd"
+    assert "shorter than 12 characters" in caplog.text
+
+
 def test_resolve_dashboard_password_requires_explicit_value_in_production(monkeypatch):
     """Production mode should fail fast without explicit dashboard password."""
     monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)

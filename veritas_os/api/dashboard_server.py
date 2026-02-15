@@ -63,6 +63,29 @@ def _is_truthy_env(value: str) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _validate_explicit_dashboard_password(password: str) -> str:
+    """Validate explicit dashboard password and emit security warnings.
+
+    Security policy:
+        - Control characters are rejected to prevent malformed Basic-Auth
+          headers and reduce log/header injection risk.
+        - Short passwords are accepted for backward compatibility but a
+          warning is emitted because weak credentials increase brute-force risk.
+    """
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in password):
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD contains control characters and is rejected."
+        )
+
+    if len(password) < 12:
+        logger.warning(
+            "DASHBOARD_PASSWORD is shorter than 12 characters. "
+            "This increases brute-force risk in production."
+        )
+
+    return password
+
+
 def _resolve_dashboard_password() -> tuple[str, bool]:
     """Resolve dashboard password with production-safe defaults.
 
@@ -76,7 +99,7 @@ def _resolve_dashboard_password() -> tuple[str, bool]:
     """
     env_password = os.getenv("DASHBOARD_PASSWORD", "").strip()
     if env_password:
-        return env_password, False
+        return _validate_explicit_dashboard_password(env_password), False
 
     veritas_env = os.getenv("VERITAS_ENV", "").strip().lower()
     is_production = veritas_env in {"prod", "production"}
