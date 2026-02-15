@@ -201,6 +201,24 @@ def test_format_request_ollama_with_extra_messages():
     assert msgs[3] == {"role": "user", "content": "implicit"}
 
 
+def test_format_request_ignores_non_dict_extra_messages():
+    payload = _format_request(
+        provider=LLMProvider.OPENAI,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gpt-4.1-mini",
+        temperature=0.1,
+        max_tokens=100,
+        extra_messages=["invalid", {"role": "assistant", "content": 123}],
+    )
+
+    assert payload["messages"] == [
+        {"role": "system", "content": "SYS"},
+        {"role": "user", "content": "USER"},
+        {"role": "assistant", "content": "123"},
+    ]
+
+
 # ------------------------------------------------------------
 # _parse_response のテスト
 # ------------------------------------------------------------
