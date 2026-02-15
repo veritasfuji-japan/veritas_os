@@ -151,9 +151,13 @@ RE_IPV6 = re.compile(
 )
 
 # --- URLクレデンシャル ---
-# http://user:password@host 形式
+# http://userinfo@host / http://user:password@host 形式
+# Security:
+#   RFC 3986 では userinfo に ":" を含まない ``user@host`` 形式も許可される。
+#   既存実装は ``user:password`` のみを検出しており、アクセストークン等を
+#   user 部分に埋め込んだ URL を見逃す可能性があったため包括的に検出する。
 RE_URL_CREDENTIAL = re.compile(
-    r'(?:https?|ftp)://[^:@\s]+:[^:@\s]+@[^\s/]+'
+    r'(?:https?|ftp)://[^@\s/]+@[^\s/]+'
 )
 
 # --- 銀行口座番号（日本）---
