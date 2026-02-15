@@ -53,6 +53,29 @@ def _validate_finite_array(name: str, values: np.ndarray) -> None:
         raise ValueError(f"CosineIndex.{name}: vectors must be finite (no NaN/Inf)")
 
 
+def _ensure_2d_vectors(name: str, values: Any) -> np.ndarray:
+    """Convert inputs to a 2D float32 matrix and validate rank.
+
+    Args:
+        name: Operation name used in error messages (e.g. ``"add"``).
+        values: User-provided vector or matrix-like value.
+
+    Returns:
+        A ``(N, D)`` numpy array in ``float32``.
+
+    Raises:
+        ValueError: If ``values`` is not a 1D or 2D array-like input.
+    """
+    arr = np.asarray(values, dtype=np.float32)
+    if arr.ndim == 1:
+        return arr.reshape(1, -1)
+    if arr.ndim != 2:
+        raise ValueError(
+            f"CosineIndex.{name}: vectors must be 1D or 2D, got ndim={arr.ndim}"
+        )
+    return arr
+
+
 class CosineIndex:
     """
     シンプルな Cosine 類似度インデックス + 永続化 (.npz)
@@ -207,9 +230,7 @@ class CosineIndex:
 
     def add(self, vecs: Any, ids: Iterable[str]) -> None:
         """ベクトルと id を追加して即保存（スレッドセーフ）"""
-        vecs = np.asarray(vecs, dtype=np.float32)
-        if vecs.ndim == 1:
-            vecs = vecs.reshape(1, -1)
+        vecs = _ensure_2d_vectors("add", vecs)
         _validate_finite_array("add", vecs)
 
         if vecs.shape[1] != self.dim:
@@ -238,9 +259,7 @@ class CosineIndex:
         if k < 1:
             raise ValueError(f"CosineIndex.search: k must be >= 1, got {k}")
 
-        q = np.asarray(qv, dtype=np.float32)
-        if q.ndim == 1:
-            q = q.reshape(1, -1)
+        q = _ensure_2d_vectors("search", qv)
         _validate_finite_array("search", q)
         if q.shape[1] != self.dim:
             raise ValueError(f"CosineIndex.search: dim mismatch {q.shape[1]} != {self.dim}")
