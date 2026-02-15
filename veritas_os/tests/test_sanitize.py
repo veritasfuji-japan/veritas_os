@@ -100,3 +100,23 @@ def test_detector_mask_uses_fallback_on_broken_braces(caplog):
 
     assert masked == "連絡先は 〔メール〕 です"
     assert "Invalid mask_format; falling back to default" in caplog.text
+
+
+def test_detector_mask_accepts_non_string_mask_format():
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    masked = detector.mask(text, mask_format=123)  # type: ignore[arg-type]
+
+    assert masked == "連絡先は 123 です"
+
+
+def test_detector_mask_uses_fallback_on_positional_format(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{}")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text
