@@ -80,6 +80,41 @@ def client(monkeypatch, tmp_path) -> TestClient:
 # /health （認証不要）
 # =====================================================================
 
+
+
+def test_resolve_dashboard_password_requires_explicit_value_in_production(monkeypatch):
+    """Production mode should fail fast without explicit dashboard password."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.delenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", raising=False)
+
+    with pytest.raises(RuntimeError, match="DASHBOARD_PASSWORD is required"):
+        dashboard_server._resolve_dashboard_password()
+
+
+def test_resolve_dashboard_password_allows_ephemeral_override(monkeypatch):
+    """Ephemeral password may be enabled explicitly for exceptional operations."""
+    monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", "1")
+
+    password, auto_generated = dashboard_server._resolve_dashboard_password()
+
+    assert isinstance(password, str)
+    assert len(password) > 10
+    assert auto_generated is True
+
+
+def test_resolve_dashboard_password_uses_explicit_value(monkeypatch):
+    """Explicit password should always take precedence over generated values."""
+    monkeypatch.setenv("DASHBOARD_PASSWORD", "configured-secret")
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    password, auto_generated = dashboard_server._resolve_dashboard_password()
+
+    assert password == "configured-secret"
+    assert auto_generated is False
+
 def test_health_check_ok(client: TestClient):
     res = client.get("/health")
     assert res.status_code == 200
