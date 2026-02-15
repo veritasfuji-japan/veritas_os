@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LiveEventStream } from "./live-event-stream";
@@ -42,5 +42,30 @@ describe("LiveEventStream", () => {
 
     expect(await screen.findByText("decide.completed")).toBeInTheDocument();
     expect(screen.getByText(/"ok": true/)).toBeInTheDocument();
+  });
+
+  it("shows validation error and avoids connecting when API base URL is invalid", () => {
+    vi.stubGlobal("EventSource", MockEventSource);
+
+    render(<LiveEventStream />);
+
+    fireEvent.change(screen.getByLabelText("API Base URL"), { target: { value: "not a url" } });
+
+    expect(screen.getByText("有効な API Base URL を入力してください。")).toBeInTheDocument();
+    expect(MockEventSource.instances.length).toBe(1);
+  });
+
+  it("shows a security warning when API key is configured", () => {
+    vi.stubGlobal("EventSource", MockEventSource);
+
+    render(<LiveEventStream />);
+
+    fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "secret-token" } });
+
+    expect(
+      screen.getByText(
+        "Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.",
+      ),
+    ).toBeInTheDocument();
   });
 });

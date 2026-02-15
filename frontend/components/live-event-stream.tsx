@@ -13,13 +13,26 @@ interface StreamEvent {
   payload: Record<string, unknown>;
 }
 
-function buildEventUrl(apiBase: string, apiKey: string): string {
-  const base = apiBase.replace(/\/$/, "");
-  const url = new URL(`${base}/v1/events`);
-  if (apiKey.trim()) {
-    url.searchParams.set("api_key", apiKey.trim());
+/**
+ * Build the SSE endpoint URL from operator-provided connection settings.
+ * Returns `null` when the base URL is malformed so that the caller can
+ * surface validation feedback without crashing rendering.
+ */
+function buildEventUrl(apiBase: string, apiKey: string): string | null {
+  const base = apiBase.trim().replace(/\/$/, "");
+  if (!base) {
+    return null;
   }
-  return url.toString();
+
+  try {
+    const url = new URL(`${base}/v1/events`);
+    if (apiKey.trim()) {
+      url.searchParams.set("api_key", apiKey.trim());
+    }
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 export function LiveEventStream(): JSX.Element {
@@ -30,8 +43,14 @@ export function LiveEventStream(): JSX.Element {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const streamUrl = useMemo(() => buildEventUrl(apiBase, apiKey), [apiBase, apiKey]);
+  const hasInvalidApiBase = apiBase.trim().length > 0 && streamUrl === null;
 
   useEffect(() => {
+    if (!streamUrl) {
+      setConnected(false);
+      return;
+    }
+
     let source: EventSource | null = null;
     let mounted = true;
 
@@ -97,6 +116,14 @@ export function LiveEventStream(): JSX.Element {
       <p className="mb-2 text-xs text-muted-foreground">
         Status: {connected ? "🟢 connected" : "🟡 reconnecting"}
       </p>
+      {hasInvalidApiBase ? (
+        <p className="mb-2 text-xs text-destructive">有効な API Base URL を入力してください。</p>
+      ) : null}
+      {apiKey.trim().length > 0 ? (
+        <p className="mb-2 text-xs text-amber-600">
+          Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.
+        </p>
+      ) : null}
 
       <div className="max-h-72 space-y-2 overflow-auto pr-1">
         {events.length === 0 ? (
