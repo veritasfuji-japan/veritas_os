@@ -216,3 +216,18 @@ def test_normalize_repo_item_drops_unsafe_html_url():
 def test_safe_float_non_finite_returns_default(monkeypatch):
     monkeypatch.setenv("VERITAS_GITHUB_RETRY_DELAY", "nan")
     assert github_adapter._safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.5) == 1.5
+
+
+def test_sanitize_html_url_rejects_untrusted_domain():
+    assert github_adapter._sanitize_html_url("https://evil.example/repo") == ""
+
+
+def test_sanitize_html_url_rejects_embedded_credentials():
+    assert github_adapter._sanitize_html_url("https://user:secret@github.com/owner/repo") == ""
+
+
+def test_sanitize_html_url_allows_github_hosts():
+    assert (
+        github_adapter._sanitize_html_url("https://github.com/owner/repo")
+        == "https://github.com/owner/repo"
+    )

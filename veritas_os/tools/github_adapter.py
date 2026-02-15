@@ -49,6 +49,7 @@ GITHUB_API_MAX_PER_PAGE = 100
 logger = logging.getLogger(__name__)
 
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_TRUSTED_GITHUB_HOSTS = {"github.com", "www.github.com"}
 
 
 def _get_github_token() -> str:
@@ -104,6 +105,12 @@ def _sanitize_html_url(raw_url: object) -> str:
 
     Only absolute HTTP(S) URLs are accepted to reduce the risk of unsafe
     schemes (e.g. ``javascript:``) or malformed link injection.
+
+    Security policy:
+        - Only GitHub hosts are allowed because this field is rendered as an
+          external link in clients and should never point to arbitrary domains.
+        - URL-embedded credentials are always rejected to prevent accidental
+          leakage of secrets via logs or UI.
     """
     url = str(raw_url or "").strip()
     if not url:
@@ -115,6 +122,12 @@ def _sanitize_html_url(raw_url: object) -> str:
         return ""
     if not parsed.netloc:
         logger.warning("Dropped GitHub html_url without host")
+        return ""
+    if parsed.username or parsed.password:
+        logger.warning("Dropped GitHub html_url containing credentials")
+        return ""
+    if (parsed.hostname or "").lower() not in _TRUSTED_GITHUB_HOSTS:
+        logger.warning("Dropped GitHub html_url with untrusted host: %r", parsed.hostname)
         return ""
     return url
 
