@@ -201,6 +201,22 @@ class TestIterFiles:
         (tmp_path / "decide_empty.json").write_text("")
         assert doctor._iter_files() == []
 
+    def test_skips_symlink_files(self, tmp_path, monkeypatch):
+        _patch_paths(monkeypatch, tmp_path)
+        target = tmp_path / "real.json"
+        target.write_text('{"x": 1}')
+        symlink = tmp_path / "decide_link.json"
+        symlink.symlink_to(target)
+
+        assert doctor._iter_files() == []
+
+    def test_skips_non_regular_files(self, tmp_path, monkeypatch):
+        _patch_paths(monkeypatch, tmp_path)
+        special = tmp_path / "decide_named_pipe.json"
+        os.mkfifo(special)
+
+        assert doctor._iter_files() == []
+
 
 # ---------------------------------------------------------------------------
 # _read_json_or_jsonl
