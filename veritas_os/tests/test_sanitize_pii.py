@@ -10,6 +10,7 @@ from veritas_os.core.sanitize import (
     mask_pii,
     detect_pii,
     PIIDetector,
+    PIIMatch,
     _luhn_check,
     _is_valid_credit_card,
     _is_valid_my_number,
@@ -94,6 +95,26 @@ def test_detect_pii_stops_segmented_scan_at_match_limit(monkeypatch: pytest.Monk
     result = detector.detect(text)
 
     assert len(result) == 2
+
+
+def test_resolve_global_overlaps_scales_without_quadratic_checks() -> None:
+    """Global overlap resolution should handle many disjoint matches efficiently."""
+    detector = PIIDetector(validate_checksums=False)
+    size = 2000
+    matches = [
+        PIIMatch(
+            type="email",
+            value=f"u{idx}@x.com",
+            start=idx * 10,
+            end=(idx * 10) + 5,
+            confidence=0.5,
+        )
+        for idx in range(size)
+    ]
+
+    resolved = detector._resolve_global_overlaps(matches)
+
+    assert len(resolved) == size
 
 
 class TestEmailDetection:
