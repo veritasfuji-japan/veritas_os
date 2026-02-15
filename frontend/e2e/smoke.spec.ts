@@ -82,7 +82,13 @@ test.describe("Accessibility (axe)", () => {
         .disableRules(["color-contrast"])
         .analyze();
 
-      expect(results.violations).toEqual([]);
+      const violations = results.violations.map((v) => ({
+        id: v.id,
+        impact: v.impact,
+        description: v.description,
+        nodes: v.nodes.map((n) => n.html.slice(0, 120)),
+      }));
+      expect(violations).toEqual([]);
     });
   }
 });

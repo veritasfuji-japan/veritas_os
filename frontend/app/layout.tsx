@@ -15,8 +15,10 @@ export default function RootLayout({
 }>): JSX.Element {
   return (
     <html className={applyThemeClass("light")} lang="ja">
-      <body>
+      <head>
         <ThemeStyles />
+      </head>
+      <body>
         <MissionLayout>{children}</MissionLayout>
       </body>
     </html>
