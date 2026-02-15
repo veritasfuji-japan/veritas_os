@@ -18,9 +18,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI ? "npx next start -H 127.0.0.1" : "pnpm dev",
+    command: process.env.CI
+      ? "npx next build && npx next start -H 127.0.0.1"
+      : "pnpm dev",
     url: "http://127.0.0.1:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: 180_000,
   },
 });
