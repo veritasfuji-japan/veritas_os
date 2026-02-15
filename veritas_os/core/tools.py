@@ -378,20 +378,45 @@ def _log_tool_usage(
             del _tool_usage_log[: len(_tool_usage_log) - MAX_LOG_SIZE]
 
 
+_SENSITIVE_KEYWORDS = (
+    "api_key",
+    "apikey",
+    "token",
+    "password",
+    "secret",
+    "authorization",
+    "auth",
+)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    """Return ``True`` when ``key`` appears to contain sensitive credentials."""
+    normalized = key.strip().lower().replace("-", "_")
+    return any(keyword in normalized for keyword in _SENSITIVE_KEYWORDS)
+
+
+def _sanitize_value(value: Any) -> Any:
+    """Sanitize nested values while preserving JSON-serializable structure."""
+    if isinstance(value, dict):
+        return _sanitize_args(value)
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_value(item) for item in value)
+    if isinstance(value, str) and len(value) > 200:
+        return value[:200] + "..."
+    return value
+
+
 def _sanitize_args(args: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    引数から機密情報を除外
-    """
+    """引数から機密情報を除外し、過度に長い文字列を切り詰める。"""
     sanitized: Dict[str, Any] = {}
 
     for key, value in args.items():
-        lower = key.lower()
-        if lower in {"api_key", "token", "password", "secret"}:
+        if _is_sensitive_key(key):
             sanitized[key] = "***REDACTED***"
-        elif isinstance(value, str) and len(value) > 200:
-            sanitized[key] = value[:200] + "..."
         else:
-            sanitized[key] = value
+            sanitized[key] = _sanitize_value(value)
 
     return sanitized
 
@@ -488,4 +513,3 @@ __all__ = [
     "BLOCKED_TOOLS",
     "TOOL_REGISTRY",
 ]
-

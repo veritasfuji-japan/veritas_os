@@ -217,6 +217,36 @@ def test_sanitize_args_redacts_and_truncates():
     assert sanitized["body"].endswith("...")
 
 
+
+
+def test_sanitize_args_redacts_nested_sensitive_values():
+    args = {
+        "headers": {"Authorization": "Bearer super-secret-token"},
+        "payload": {"nested_api_key": "my-key", "safe": "value"},
+        "list_values": [
+            {"auth_token": "abc"},
+            "x" * 250,
+        ],
+    }
+
+    sanitized = tools._sanitize_args(args)
+
+    assert sanitized["headers"]["Authorization"] == "***REDACTED***"
+    assert sanitized["payload"]["nested_api_key"] == "***REDACTED***"
+    assert sanitized["payload"]["safe"] == "value"
+    assert sanitized["list_values"][0]["auth_token"] == "***REDACTED***"
+    assert sanitized["list_values"][1].endswith("...")
+
+
+def test_sanitize_args_normalizes_hyphenated_sensitive_keys():
+    args = {"x-api-key": "secret", "db-password": "pw", "normal": "ok"}
+
+    sanitized = tools._sanitize_args(args)
+
+    assert sanitized["x-api-key"] == "***REDACTED***"
+    assert sanitized["db-password"] == "***REDACTED***"
+    assert sanitized["normal"] == "ok"
+
 def test_get_tool_stats_empty_when_no_calls(clean_tools_state):
     stats = tools.get_tool_stats()
     assert stats["total_calls"] == 0
