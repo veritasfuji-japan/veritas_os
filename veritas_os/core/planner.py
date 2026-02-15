@@ -477,9 +477,19 @@ def _safe_parse(raw: Any) -> Dict[str, Any]:
     if not s:
         return {"steps": []}
 
-    m = _FENCE_RE.search(s)
-    if m:
-        s = m.group(1).strip()
+    fence_matches = list(_FENCE_RE.finditer(s))
+    if fence_matches:
+        fallback_parsed: Optional[Dict[str, Any]] = None
+        for fence_match in fence_matches:
+            fenced = fence_match.group(1).strip()
+            parsed = _safe_json_extract_core(fenced)
+            if parsed.get("steps"):
+                return parsed
+            if fallback_parsed is None:
+                fallback_parsed = parsed
+
+        if fallback_parsed is not None:
+            return fallback_parsed
 
     return _safe_json_extract_core(s)
 
