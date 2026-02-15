@@ -41,6 +41,8 @@ _logger = logging.getLogger(__name__)
 _MAX_CARD_INPUT_LENGTH = 256
 # PII検査対象の入力長上限（ReDoS/CPU DoS対策）
 _MAX_PII_INPUT_LENGTH = 1_000_000
+# 1回の検出で保持する一致数上限（メモリ消費抑止）
+_MAX_PII_MATCHES = 10_000
 
 
 # =============================================================================
@@ -406,12 +408,18 @@ class PIIDetector:
             return text.decode("utf-8", errors="replace")
         return str(text)
 
-    def _detect_in_segment(self, text: str, offset: int = 0) -> List[PIIMatch]:
+    def _detect_in_segment(
+        self,
+        text: str,
+        offset: int = 0,
+        max_matches: int | None = None,
+    ) -> List[PIIMatch]:
         """Detect PII inside a single bounded text segment.
 
         Args:
             text: Segment text.
             offset: Absolute offset applied to resulting match positions.
+            max_matches: Maximum number of matches to collect in this call.
 
         Returns:
             Detected matches with absolute positions.
@@ -419,6 +427,7 @@ class PIIDetector:
         if not text:
             return []
 
+        limit = _MAX_PII_MATCHES if max_matches is None else max(0, max_matches)
         results: List[PIIMatch] = []
         detected_ranges: List[tuple] = []  # 重複検出防止用
 
@@ -446,6 +455,13 @@ class PIIDetector:
 
                     if not validator(value, context):
                         continue
+
+                if len(results) >= limit:
+                    _logger.warning(
+                        "PII match limit reached in segment: %d",
+                        limit,
+                    )
+                    return results
 
                 results.append(PIIMatch(
                     type=name,
@@ -488,7 +504,7 @@ class PIIDetector:
             return []
 
         if len(text) <= _MAX_PII_INPUT_LENGTH:
-            results = self._detect_in_segment(text)
+            results = self._detect_in_segment(text, max_matches=_MAX_PII_MATCHES)
         else:
             _logger.warning(
                 "PII input segmented for scanning: %d chars (segment size=%d)",
@@ -502,8 +518,20 @@ class PIIDetector:
             seen_ranges: set[tuple[int, int]] = set()
 
             for start in range(0, len(text), step):
+                remaining = _MAX_PII_MATCHES - len(results)
+                if remaining <= 0:
+                    _logger.warning(
+                        "PII match limit reached during segmented scan: %d",
+                        _MAX_PII_MATCHES,
+                    )
+                    break
+
                 end = min(len(text), start + segment_size)
-                segment_matches = self._detect_in_segment(text[start:end], offset=start)
+                segment_matches = self._detect_in_segment(
+                    text[start:end],
+                    offset=start,
+                    max_matches=remaining,
+                )
                 for match in segment_matches:
                     span = (match.start, match.end)
                     if span not in seen_ranges:

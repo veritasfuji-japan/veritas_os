@@ -73,6 +73,29 @@ def test_detect_resolves_cross_pattern_overlap_by_confidence() -> None:
     assert matches[0].type == "high"
 
 
+def test_detect_pii_caps_excessive_match_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Detector should cap results to avoid memory pressure on crafted input."""
+    monkeypatch.setattr("veritas_os.core.sanitize._MAX_PII_MATCHES", 3)
+    detector = PIIDetector(validate_checksums=False)
+
+    # Repeated emails generate many valid matches without overlap.
+    result = detector.detect("a@x.com b@x.com c@x.com d@x.com")
+
+    assert len(result) == 3
+
+
+def test_detect_pii_stops_segmented_scan_at_match_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Segmented scans should stop once the global match cap is reached."""
+    monkeypatch.setattr("veritas_os.core.sanitize._MAX_PII_INPUT_LENGTH", 20)
+    monkeypatch.setattr("veritas_os.core.sanitize._MAX_PII_MATCHES", 2)
+
+    detector = PIIDetector(validate_checksums=False)
+    text = " ".join(["a@x.com", "b@x.com", "c@x.com"])
+    result = detector.detect(text)
+
+    assert len(result) == 2
+
+
 class TestEmailDetection:
     """Tests for email address detection."""
 
