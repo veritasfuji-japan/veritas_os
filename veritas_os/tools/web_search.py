@@ -47,6 +47,7 @@ import re
 import time
 import ipaddress
 import socket
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -279,8 +280,13 @@ def _is_obviously_private_or_local_host(hostname: str) -> bool:
     return False
 
 
+@lru_cache(maxsize=256)
 def _is_private_or_local_host(hostname: str) -> bool:
-    """ホストが localhost / private / loopback / link-local かを判定する。"""
+    """ホストが localhost / private / loopback / link-local かを判定する。
+
+    DNS 解決は外部 I/O であり繰り返すと遅延や負荷が大きくなるため、
+    直近の判定結果を LRU キャッシュする。
+    """
     host = (hostname or "").strip().lower()
     if _is_obviously_private_or_local_host(host):
         return True
