@@ -78,3 +78,25 @@ def test_detect_pii_scans_large_text_without_truncating(caplog):
 
     assert any(match["type"] == "email" and match["value"] == email for match in matches)
     assert "PII input segmented for scanning" in caplog.text
+
+
+def test_detector_mask_uses_fallback_on_invalid_mask_format(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{unknown}")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text
+
+
+def test_detector_mask_uses_fallback_on_broken_braces(caplog):
+    detector = sanitize.PIIDetector()
+    text = "連絡先は test.user@example.com です"
+
+    with caplog.at_level("WARNING"):
+        masked = detector.mask(text, mask_format="{token")
+
+    assert masked == "連絡先は 〔メール〕 です"
+    assert "Invalid mask_format; falling back to default" in caplog.text

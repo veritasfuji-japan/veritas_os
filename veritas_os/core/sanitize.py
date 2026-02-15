@@ -540,7 +540,7 @@ class PIIDetector:
         result = normalized_text
         for det in reversed(detections):
             token = self._get_mask_token(det.type)
-            mask_str = mask_format.format(token=token)
+            mask_str = self._build_mask_text(mask_format, token)
             result = result[:det.start] + mask_str + result[det.end:]
 
         return result
@@ -567,6 +567,28 @@ class PIIDetector:
             "passport_jp": "パスポート番号",
         }
         return token_map.get(pii_type, "PII")
+
+    def _build_mask_text(self, mask_format: str, token: str) -> str:
+        """Build mask text safely even when format strings are malformed.
+
+        Args:
+            mask_format: User-provided format string.
+            token: Localized PII token.
+
+        Returns:
+            Interpolated mask text. Falls back to ``〔{token}〕`` when format
+            parsing fails.
+
+        Security:
+            Invalid ``mask_format`` values from API inputs previously raised
+            exceptions and could break sanitization endpoints. Recovering with a
+            default format keeps masking available and avoids accidental 500s.
+        """
+        try:
+            return mask_format.format(token=token)
+        except (KeyError, ValueError):
+            _logger.warning("Invalid mask_format; falling back to default")
+            return f"〔{token}〕"
 
 
 # =============================================================================
