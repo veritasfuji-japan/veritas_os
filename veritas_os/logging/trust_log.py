@@ -147,9 +147,12 @@ def calc_sha256(payload: dict) -> str:
 
     NOTE: ensure_ascii=False を使用してハッシュチェーンの
     append_trust_log / verify_trust_log と整合性を保つ。
+
+    以前は ``json.dumps`` の失敗時に ``TypeError`` をそのまま送出していたが、
+    ``_compute_sha256`` と挙動をそろえるため ``default=str`` フォールバックを
+    含む実装に統一する。
     """
-    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return _compute_sha256(payload)
 
 
 def _load_logs_json() -> list:
