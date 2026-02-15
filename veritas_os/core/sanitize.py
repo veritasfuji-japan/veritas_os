@@ -568,11 +568,11 @@ class PIIDetector:
         }
         return token_map.get(pii_type, "PII")
 
-    def _build_mask_text(self, mask_format: str, token: str) -> str:
+    def _build_mask_text(self, mask_format: object, token: str) -> str:
         """Build mask text safely even when format strings are malformed.
 
         Args:
-            mask_format: User-provided format string.
+            mask_format: User-provided format template.
             token: Localized PII token.
 
         Returns:
@@ -585,8 +585,8 @@ class PIIDetector:
             default format keeps masking available and avoids accidental 500s.
         """
         try:
-            return mask_format.format(token=token)
-        except (KeyError, ValueError):
+            return str(mask_format).format(token=token)
+        except (AttributeError, IndexError, KeyError, ValueError):
             _logger.warning("Invalid mask_format; falling back to default")
             return f"〔{token}〕"
 
