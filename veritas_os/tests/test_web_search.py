@@ -57,6 +57,15 @@ def test_looks_agi_result_false_for_unrelated() -> None:
     assert web_search_mod._looks_agi_result(title, snippet, url) is False
 
 
+def test_safe_float_rejects_non_finite_values(monkeypatch) -> None:
+    """環境変数が非有限値ならデフォルト値にフォールバックする。"""
+    monkeypatch.setenv("VERITAS_WEBSEARCH_RETRY_DELAY", "nan")
+    assert web_search_mod._safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.5) == 1.5
+
+    monkeypatch.setenv("VERITAS_WEBSEARCH_RETRY_DELAY", "inf")
+    assert web_search_mod._safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 2.5) == 2.5
+
+
 def test_sanitize_max_results_clamps_values() -> None:
     assert web_search_mod._sanitize_max_results(0) == 1
     assert web_search_mod._sanitize_max_results(101) == 100

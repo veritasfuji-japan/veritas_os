@@ -40,6 +40,7 @@ env:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import random
 import re
@@ -82,10 +83,14 @@ def _safe_int_with_min(key: str, default: int, minimum: int) -> int:
 
 
 def _safe_float(key: str, default: float) -> float:
+    """環境変数を有限な浮動小数として取得し、異常値は default に戻す。"""
     try:
-        return float(os.getenv(key, str(default)))
+        value = float(os.getenv(key, str(default)))
     except (ValueError, TypeError):
         return default
+    if not math.isfinite(value):
+        return default
+    return value
 
 
 WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
