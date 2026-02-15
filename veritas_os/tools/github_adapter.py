@@ -81,8 +81,18 @@ def _get_github_token() -> str:
 
     The token is resolved at call time so that emergency token rotations can
     take effect without restarting the running process.
+
+    Security:
+        Tokens containing control characters are rejected. This prevents
+        malformed ``Authorization`` headers and reduces header-injection risk
+        from accidentally tainted environment values.
     """
-    return os.getenv("VERITAS_GITHUB_TOKEN", "").strip()
+    raw_token = os.getenv("VERITAS_GITHUB_TOKEN", "")
+    token = raw_token.strip()
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in token):
+        logger.warning("VERITAS_GITHUB_TOKEN contains control characters")
+        return ""
+    return token
 
 
 def _get_retry_settings() -> tuple[int, float, float, float]:
