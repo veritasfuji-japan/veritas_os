@@ -100,6 +100,22 @@ def load_bench_results() -> List[Dict[str, Any]]:
     return results
 
 
+def _build_decision_status_counter(rows: List[Dict[str, Any]]) -> collections.Counter:
+    """Count decision statuses while preserving duplicate occurrences.
+
+    Notes:
+        A previous implementation converted statuses to a set before counting,
+        which collapsed duplicates and always produced 1 per unique status.
+        This helper keeps full frequency information for reliable summaries.
+    """
+    statuses = [
+        row["decision_status"]
+        for row in rows
+        if row.get("decision_status") is not None
+    ]
+    return collections.Counter(statuses)
+
+
 def main() -> None:
     results = load_bench_results()
     if not results:
@@ -158,18 +174,14 @@ def main() -> None:
             if isinstance(r.get("tasks_count"), int)
         ]
 
-        latest_row = rows[-1]  # 最後の 1 件を「最新」とみなす
-        decision_status_set = {
-            r["decision_status"] for r in rows
-            if r.get("decision_status") is not None
-        }
+        decision_status_counter = _build_decision_status_counter(rows)
 
         print(f"[{bench_id}] {name}")
         print(f"  実行回数        : {len(rows)}")
         print(f"  200 OK          : {ok_count} / {len(status_codes)}")
 
-        if decision_status_set:
-            print(f"  decision_status : {dict(collections.Counter(decision_status_set))}")
+        if decision_status_counter:
+            print(f"  decision_status : {dict(decision_status_counter)}")
         else:
             print("  decision_status : N/A")
 
