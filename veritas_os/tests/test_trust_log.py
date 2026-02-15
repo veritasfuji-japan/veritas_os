@@ -193,6 +193,26 @@ def test_get_last_hash_handles_very_large_last_line(temp_log_env):
     assert trust_log.get_last_hash() == "large123"
 
 
+def test_get_last_hash_skips_trailing_partial_json_line(temp_log_env):
+    valid = json.dumps({"sha256": "stable_hash"})
+    partial = '{"sha256": "broken"'
+    temp_log_env["jsonl"].write_text(f"{valid}\n{partial}", encoding="utf-8")
+
+    assert trust_log.get_last_hash() == "stable_hash"
+
+
+def test_extract_last_sha256_from_lines_ignores_invalid_entries():
+    lines = [
+        "",
+        "not-json",
+        json.dumps(["list", "is", "ignored"]),
+        json.dumps({"sha256": ""}),
+        json.dumps({"sha256": "good_hash"}),
+    ]
+
+    assert trust_log._extract_last_sha256_from_lines(lines) == "good_hash"
+
+
 # ============================
 #  append_trust_log のチェーン検証
 # ============================
@@ -349,5 +369,4 @@ def test_write_shadow_decide_falls_back_to_context_query_and_none_fuji(temp_log_
     assert rec["request_id"] == request_id
     assert rec["query"] == "from context"
     assert rec["fuji"] is None
-
 
