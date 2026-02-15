@@ -293,9 +293,9 @@ def _is_private_or_local_host(hostname: str) -> bool:
 
     try:
         infos = socket.getaddrinfo(host, None)
-    except socket.gaierror:
-        # DNS解決不能なホストは誤設定かローカル向け名の可能性が高いため、
-        # 保守的にブロックする。
+    except (socket.gaierror, OSError, UnicodeError):
+        # DNS解決不能や不正なホスト名（IDNA変換エラー等）は
+        # 誤設定かローカル向け名の可能性が高いため、保守的にブロックする。
         return True
 
     for info in infos:
