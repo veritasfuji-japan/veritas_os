@@ -146,6 +146,14 @@ def test_safe_json_extract_plain_dict():
     assert obj["steps"][0]["id"] == "s1"
 
 
+def test_safe_json_extract_plain_dict_without_steps_key():
+    raw = json.dumps({"message": "ok"})
+    obj = planner_core._safe_json_extract(raw)
+    assert isinstance(obj, dict)
+    assert obj["message"] == "ok"
+    assert obj["steps"] == []
+
+
 def test_safe_json_extract_top_level_list():
     raw = json.dumps([{"id": "s1"}, {"id": "s2"}])
     obj = planner_core._safe_json_extract(raw)
