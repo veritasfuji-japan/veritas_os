@@ -1000,10 +1000,16 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 
 
 def _is_debug_mode() -> bool:
-    """VERITAS_DEBUG_MODE が有効かどうかを判定する。"""
+    """Return whether debug mode is explicitly enabled by environment variable.
+
+    Security note:
+        Debug mode widens error visibility, so we allow only a strict set of
+        truthy values and default to ``False`` for everything else.
+    """
     debug_flag = os.getenv("VERITAS_DEBUG_MODE", "")
     normalized_flag = debug_flag.strip().lower()
-    return normalized_flag in ("1", "true", "yes")
+    debug_truthy_values = {"1", "true", "yes", "on"}
+    return normalized_flag in debug_truthy_values
 
 
 @app.get("/")
@@ -1724,7 +1730,6 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 
 
