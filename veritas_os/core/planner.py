@@ -578,7 +578,9 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     obj = _decode_first_json_value(cleaned)
     if isinstance(obj, list):
         return _wrap_if_needed(obj)
-    if isinstance(obj, dict) and "steps" in obj:
+    if isinstance(obj, dict) and (
+        "steps" in obj or cleaned.lstrip().startswith("{")
+    ):
         return _wrap_if_needed(obj)
 
     # 2) {} 抜き出し（旧来互換の救済）
