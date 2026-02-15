@@ -83,6 +83,26 @@ def test_normalize_result_item_rejects_unsafe_scheme() -> None:
     assert web_search_mod._normalize_result_item(item) is None
 
 
+def test_normalize_result_item_rejects_url_with_userinfo() -> None:
+    """userinfo を含む URL は漏えいリスク低減のため除外する。"""
+    item = {
+        "title": "bad",
+        "link": "https://user:secret@example.com/path",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_normalize_result_item_rejects_url_without_hostname() -> None:
+    """host を含まない URL は不正入力として除外する。"""
+    item = {
+        "title": "bad",
+        "link": "https:///missing-host",
+        "snippet": "x",
+    }
+    assert web_search_mod._normalize_result_item(item) is None
+
+
 def test_normalize_result_item_truncates_long_fields() -> None:
     """検索結果の各フィールドは上限長で切り詰める。"""
     item = {
