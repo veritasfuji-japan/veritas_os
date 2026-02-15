@@ -245,3 +245,13 @@ def test_sanitize_html_url_rejects_query_and_fragment():
 def test_sanitize_html_url_rejects_non_repo_paths():
     assert github_adapter._sanitize_html_url("https://github.com/owner") == ""
     assert github_adapter._sanitize_html_url("https://github.com/settings/profile") == ""
+
+
+def test_get_retry_settings_reads_latest_env(monkeypatch):
+    """Retry settings are resolved at call time from environment."""
+    monkeypatch.setenv("VERITAS_GITHUB_MAX_RETRIES", "7")
+    monkeypatch.setenv("VERITAS_GITHUB_RETRY_DELAY", "0.25")
+    monkeypatch.setenv("VERITAS_GITHUB_RETRY_MAX_DELAY", "3.5")
+    monkeypatch.setenv("VERITAS_GITHUB_RETRY_JITTER", "0.2")
+
+    assert github_adapter._get_retry_settings() == (7, 0.25, 3.5, 0.2)
