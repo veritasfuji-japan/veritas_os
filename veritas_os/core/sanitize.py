@@ -513,9 +513,47 @@ class PIIDetector:
                 if end == len(text):
                     break
 
-        # 位置順にソート
-        results.sort(key=lambda x: x.start)
-        return results
+        return self._resolve_global_overlaps(results)
+
+    def _resolve_global_overlaps(self, matches: List[PIIMatch]) -> List[PIIMatch]:
+        """Resolve overlapping spans using confidence across all segments.
+
+        Segment-based scanning avoids CPU spikes for huge payloads, but the same
+        region can still be detected by different patterns when matches are
+        produced from neighboring segments. This pass enforces a single winner
+        per overlapping range using confidence and then restores positional
+        ordering for deterministic masking.
+
+        Args:
+            matches: Raw detection list from one-shot or segmented scanning.
+
+        Returns:
+            De-duplicated matches ordered by ``start`` offset.
+        """
+        if not matches:
+            return []
+
+        prioritized = sorted(
+            matches,
+            key=lambda item: (-item.confidence, item.start, item.end),
+        )
+
+        selected: List[PIIMatch] = []
+        occupied_ranges: List[tuple[int, int]] = []
+
+        for candidate in prioritized:
+            has_overlap = any(
+                candidate.start < existing_end
+                and candidate.end > existing_start
+                for existing_start, existing_end in occupied_ranges
+            )
+            if has_overlap:
+                continue
+            selected.append(candidate)
+            occupied_ranges.append((candidate.start, candidate.end))
+
+        selected.sort(key=lambda item: item.start)
+        return selected
 
     def mask(self, text: object | None, mask_format: str = "〔{token}〕") -> str:
         """

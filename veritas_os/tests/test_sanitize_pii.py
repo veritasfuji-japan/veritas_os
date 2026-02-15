@@ -59,6 +59,20 @@ def test_mask_pii_handles_non_string_bytes_via_detector() -> None:
     assert "〔メール〕" in masked
 
 
+def test_detect_resolves_cross_pattern_overlap_by_confidence() -> None:
+    """Overlap resolution should keep only the highest-confidence match."""
+    detector = PIIDetector(validate_checksums=False)
+    detector._patterns = [
+        ("low", re.compile(r"1234"), "LOW", None, 0.1),
+        ("high", re.compile(r"1234"), "HIGH", None, 0.9),
+    ]
+
+    matches = detector.detect("abc1234xyz")
+
+    assert len(matches) == 1
+    assert matches[0].type == "high"
+
+
 class TestEmailDetection:
     """Tests for email address detection."""
 
