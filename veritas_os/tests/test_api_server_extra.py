@@ -173,9 +173,9 @@ def test_resolve_expected_api_key_with_source_precedence(monkeypatch):
 
 
 
-def test_log_api_key_source_change_logs_only_on_change(monkeypatch):
-    """同一ソース連続時はログ重複せず、変更時のみ記録する。"""
-    monkeypatch.setattr(server, "_api_key_source_logged", None)
+def test_log_api_key_source_once_logs_once_per_label(monkeypatch):
+    """同一ラベルは1回だけログされ、異なるラベルは個別にログされる。"""
+    server._log_api_key_source_once.cache_clear()
 
     logged_messages = []
 
@@ -184,9 +184,9 @@ def test_log_api_key_source_change_logs_only_on_change(monkeypatch):
 
     monkeypatch.setattr(server.logger, "info", _fake_info)
 
-    server._log_api_key_source_change("env")
-    server._log_api_key_source_change("env")
-    server._log_api_key_source_change("config")
+    server._log_api_key_source_once("env")
+    server._log_api_key_source_once("env")
+    server._log_api_key_source_once("config")
 
     assert logged_messages == [
         "Resolved API key source: env",

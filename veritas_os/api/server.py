@@ -14,6 +14,7 @@ import threading
 import time
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -550,10 +551,6 @@ if not os.getenv("VERITAS_API_KEY"):
 
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-_api_key_source_logged: str | None = None
-_api_key_source_lock = threading.Lock()
-
-
 def _resolve_expected_api_key_with_source() -> tuple[str, str]:
     """Resolve API key value and source name without exposing secrets.
 
@@ -579,21 +576,15 @@ def _resolve_expected_api_key_with_source() -> tuple[str, str]:
 
 
 
-def _log_api_key_source_change(source: str) -> None:
-    """Log effective API key source only when it changes (thread-safe).
+@lru_cache(maxsize=4)
+def _log_api_key_source_once(source: str) -> None:
+    """Log API key source once per source label without storing secrets.
 
     Security:
-        The function logs only a bounded source label and never logs the API
-        key itself. A lock protects the mutable module state from concurrent
-        request races.
+        Only bounded source labels are logged (never API key values). The
+        cache is thread-safe and avoids custom shared mutable state.
     """
-    global _api_key_source_logged
-
-    with _api_key_source_lock:
-        if source == _api_key_source_logged:
-            return
-        logger.info("Resolved API key source: %s", source)
-        _api_key_source_logged = source
+    logger.info("Resolved API key source: %s", source)
 
 def _get_expected_api_key() -> str:
     """
@@ -602,7 +593,7 @@ def _get_expected_api_key() -> str:
     テスト時は API_KEY_DEFAULT を monkeypatch で上書き可能（レガシー互換）。
     """
     key, source = _resolve_expected_api_key_with_source()
-    _log_api_key_source_change(source)
+    _log_api_key_source_once(source)
     return key
 
 
