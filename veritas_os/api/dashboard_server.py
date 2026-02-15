@@ -40,7 +40,22 @@ security = HTTPBasic()
 
 # ===== 認証設定 =====
 
-DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
+
+def _resolve_dashboard_username() -> str:
+    """Resolve dashboard username while rejecting blank values.
+
+    Security note:
+        Empty usernames make brute-force and misconfiguration detection harder,
+        so blank values are normalized to a safe default with a warning.
+    """
+    username = os.getenv("DASHBOARD_USERNAME", "veritas").strip()
+    if username:
+        return username
+
+    logger.warning(
+        "DASHBOARD_USERNAME is blank; falling back to default 'veritas'."
+    )
+    return "veritas"
 
 
 def _is_truthy_env(value: str) -> bool:
@@ -83,6 +98,7 @@ def _resolve_dashboard_password() -> tuple[str, bool]:
 
 
 DASHBOARD_PASSWORD, _password_auto_generated = _resolve_dashboard_password()
+DASHBOARD_USERNAME = _resolve_dashboard_username()
 
 
 def _warn_if_ephemeral_password_with_multi_workers(
