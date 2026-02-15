@@ -33,7 +33,11 @@ def is_allowed_slack_webhook_url(webhook_url: str) -> bool:
         return False
     if parsed.username or parsed.password:
         return False
+    if parsed.query or parsed.fragment:
+        return False
     if parsed.hostname not in ALLOWED_WEBHOOK_HOSTS:
+        return False
+    if parsed.port not in (None, 443):
         return False
     return parsed.path.startswith("/services/")
 
