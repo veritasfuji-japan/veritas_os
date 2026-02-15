@@ -103,8 +103,9 @@ def _normalize_repo_item(item: dict) -> dict:
 def _sanitize_html_url(raw_url: object) -> str:
     """Return a safe GitHub repository URL or an empty string.
 
-    Only absolute HTTP(S) URLs are accepted to reduce the risk of unsafe
-    schemes (e.g. ``javascript:``) or malformed link injection.
+    Only absolute HTTPS URLs are accepted to reduce the risk of unsafe
+    schemes (e.g. ``javascript:``), downgraded transport, or malformed link
+    injection.
 
     Security policy:
         - Only GitHub hosts are allowed because this field is rendered as an
@@ -117,7 +118,7 @@ def _sanitize_html_url(raw_url: object) -> str:
         return ""
 
     parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"}:
+    if parsed.scheme != "https":
         logger.warning("Dropped GitHub html_url with unsafe scheme: %r", parsed.scheme)
         return ""
     if not parsed.netloc:
