@@ -36,6 +36,14 @@ def test_validate_webhook_url_rejects_ports_userinfo_and_extra_parts():
     )
 
 
+
+
+def test_validate_webhook_url_rejects_malformed_port():
+    """Webhook URL with malformed port should be rejected safely."""
+    assert not alert_doctor._validate_webhook_url(
+        "https://hooks.slack.com:abc/services/a/b/c"
+    )
+
 def test_post_slack_rejects_invalid_webhook_without_network(monkeypatch):
     """post_slack should fail fast when webhook URL is invalid."""
     monkeypatch.setattr(alert_doctor, "WEBHOOK", "http://hooks.slack.com/services/a/b/c")
@@ -91,6 +99,12 @@ def test_validate_health_url_accepts_only_localhosts():
     assert not alert_doctor._validate_health_url("http://example.com/health")
     assert not alert_doctor._validate_health_url("http://user@127.0.0.1/health")
 
+
+
+
+def test_validate_health_url_rejects_malformed_port():
+    """Health URL with malformed port should be rejected safely."""
+    assert not alert_doctor._validate_health_url("http://127.0.0.1:abc/health")
 
 def test_http_get_blocks_non_local_url_without_network(monkeypatch):
     """http_get should reject non-local targets before urlopen is called."""
