@@ -551,6 +551,7 @@ if not os.getenv("VERITAS_API_KEY"):
 api_key_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 _api_key_source_logged: str | None = None
+_api_key_source_lock = threading.Lock()
 
 
 def _resolve_expected_api_key_with_source() -> tuple[str, str]:
@@ -576,18 +577,32 @@ def _resolve_expected_api_key_with_source() -> tuple[str, str]:
     return "", "missing"
 
 
+
+
+def _log_api_key_source_change(source: str) -> None:
+    """Log effective API key source only when it changes (thread-safe).
+
+    Security:
+        The function logs only a bounded source label and never logs the API
+        key itself. A lock protects the mutable module state from concurrent
+        request races.
+    """
+    global _api_key_source_logged
+
+    with _api_key_source_lock:
+        if source == _api_key_source_logged:
+            return
+        logger.info("Resolved API key source: %s", source)
+        _api_key_source_logged = source
+
 def _get_expected_api_key() -> str:
     """
     ★ セキュリティ修正: APIキーを毎回環境変数から取得。
     モジュールレベル変数に保持しないことで、メモリダンプによる漏洩リスクを軽減。
     テスト時は API_KEY_DEFAULT を monkeypatch で上書き可能（レガシー互換）。
     """
-    global _api_key_source_logged
-
     key, source = _resolve_expected_api_key_with_source()
-    if source != _api_key_source_logged:
-        logger.info("Resolved API key source: %s", source)
-        _api_key_source_logged = source
+    _log_api_key_source_change(source)
     return key
 
 
