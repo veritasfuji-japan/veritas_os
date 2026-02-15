@@ -94,6 +94,29 @@ def _compute_sha256(payload: dict) -> str:
     return hashlib.sha256(s).hexdigest()
 
 
+def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
+    """Return the newest valid ``sha256`` value from JSONL lines.
+
+    The tail chunk used by :func:`get_last_hash` may include partially written
+    trailing data (for example if a previous process crashed mid-write).
+    Instead of failing hard on the last line, this helper scans backward and
+    returns the most recent decodable JSON object containing a string ``sha256``
+    field.
+    """
+    for line in reversed(lines):
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        sha = payload.get("sha256") if isinstance(payload, dict) else None
+        if isinstance(sha, str) and sha:
+            return sha
+    return None
+
+
 def get_last_hash() -> str | None:
     """直近の trust_log.jsonl から最後の SHA-256 値を取得。
 
@@ -130,13 +153,12 @@ def get_last_hash() -> str | None:
                         start = max(0, start - 65536)
                         continue
 
-                    try:
-                        last = json.loads(lines[-1])
-                        return last.get("sha256")
-                    except json.JSONDecodeError:
-                        if start == 0:
-                            return None
-                        start = max(0, start - 65536)
+                    sha = _extract_last_sha256_from_lines(lines)
+                    if sha is not None:
+                        return sha
+                    if start == 0:
+                        return None
+                    start = max(0, start - 65536)
         except Exception as exc:
             logger.warning("get_last_hash failed: %s", exc)
         return None
