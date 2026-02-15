@@ -211,6 +211,13 @@ class TestWebSearchHostSafety:
         monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
         assert web_search_mod._is_private_or_local_host("example.com") is True
 
+    def test_invalid_hostname_resolution_error_is_blocked(self, monkeypatch):
+        def fake_getaddrinfo(*_args, **_kwargs):
+            raise UnicodeError("idna encode failure")
+
+        monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
+        assert web_search_mod._is_private_or_local_host("bad_host") is True
+
 
 class DummyResponse:
     """Mock response for requests.post."""
