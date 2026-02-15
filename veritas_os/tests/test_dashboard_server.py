@@ -82,6 +82,26 @@ def client(monkeypatch, tmp_path) -> TestClient:
 
 
 
+
+
+def test_resolve_dashboard_username_uses_default_when_blank(monkeypatch):
+    """Blank dashboard username should fall back to secure default."""
+    monkeypatch.setenv("DASHBOARD_USERNAME", "   ")
+
+    username = dashboard_server._resolve_dashboard_username()
+
+    assert username == "veritas"
+
+
+def test_resolve_dashboard_username_uses_explicit_value(monkeypatch):
+    """Configured dashboard username should be used as-is."""
+    monkeypatch.setenv("DASHBOARD_USERNAME", "ops-admin")
+
+    username = dashboard_server._resolve_dashboard_username()
+
+    assert username == "ops-admin"
+
+
 def test_resolve_dashboard_password_requires_explicit_value_in_production(monkeypatch):
     """Production mode should fail fast without explicit dashboard password."""
     monkeypatch.delenv("DASHBOARD_PASSWORD", raising=False)
