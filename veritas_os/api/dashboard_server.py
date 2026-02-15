@@ -41,12 +41,48 @@ security = HTTPBasic()
 # ===== 認証設定 =====
 
 DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "veritas")
-_env_password = os.getenv("DASHBOARD_PASSWORD", "")
-_password_auto_generated = False
-if not _env_password:
-    _env_password = secrets.token_urlsafe(24)
-    _password_auto_generated = True
-DASHBOARD_PASSWORD = _env_password
+
+
+def _is_truthy_env(value: str) -> bool:
+    """Return True when ``value`` is a truthy environment-style flag."""
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_dashboard_password() -> tuple[str, bool]:
+    """Resolve dashboard password with production-safe defaults.
+
+    Returns:
+        tuple[str, bool]:
+            - password string.
+            - True when password is auto-generated for this process.
+
+    Raises:
+        RuntimeError: When running in production without explicit password.
+    """
+    env_password = os.getenv("DASHBOARD_PASSWORD", "").strip()
+    if env_password:
+        return env_password, False
+
+    veritas_env = os.getenv("VERITAS_ENV", "").strip().lower()
+    is_production = veritas_env in {"prod", "production"}
+    allow_ephemeral = _is_truthy_env(
+        os.getenv("VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD", "")
+    )
+
+    if is_production and not allow_ephemeral:
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD is required in production "
+            "(set VERITAS_ALLOW_EPHEMERAL_DASHBOARD_PASSWORD=1 to override)."
+        )
+
+    logger.warning(
+        "DASHBOARD_PASSWORD is not set; using an ephemeral auto-generated "
+        "password for this process."
+    )
+    return secrets.token_urlsafe(24), True
+
+
+DASHBOARD_PASSWORD, _password_auto_generated = _resolve_dashboard_password()
 
 
 def verify_credentials(
