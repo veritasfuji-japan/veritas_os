@@ -695,8 +695,20 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             }
 
         organic = data.get("organic") or []
+        if not isinstance(organic, list):
+            logger.warning(
+                "WEBSEARCH_API returned non-list organic payload type=%s",
+                type(organic).__name__,
+            )
+            organic = []
         raw_items: List[Dict[str, Any]] = []
         for item in organic:
+            if not isinstance(item, dict):
+                logger.warning(
+                    "WEBSEARCH_API dropped non-dict organic item type=%s",
+                    type(item).__name__,
+                )
+                continue
             normalized = _normalize_result_item(item)
             if normalized is None:
                 continue
