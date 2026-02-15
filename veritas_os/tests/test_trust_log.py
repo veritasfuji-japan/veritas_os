@@ -98,6 +98,12 @@ def test_calc_sha256_matches_manual_hash():
     assert h == expected
 
 
+def test_calc_sha256_handles_unserializable_objects():
+    payload = {"x": {1, 2, 3}}
+    h = trust_log.calc_sha256(payload)
+    assert re.fullmatch(r"[0-9a-f]{64}", h)
+
+
 # ============================
 #  _load_logs_json / _save_json のテスト
 # ============================
