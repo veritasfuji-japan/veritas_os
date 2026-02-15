@@ -58,6 +58,15 @@ def test_cosine_index_init_with_nonexistent_path(tmp_path):
     assert idx.ids == []
 
 
+@pytest.mark.parametrize("invalid_dim", [0, -1, 1.5, "2", None])
+def test_cosine_index_init_with_invalid_dim_raises(invalid_dim):
+    """dim が正の int でない場合は ValueError。"""
+    with pytest.raises(ValueError) as exc:
+        CosineIndex(dim=invalid_dim)  # type: ignore[arg-type]
+
+    assert "dim must be a positive int" in str(exc.value)
+
+
 def test_cosine_index_init_with_broken_npz(tmp_path):
     """
     path あり & 中身が壊れたファイル → 例外を飲み込んで空からスタート。
@@ -108,6 +117,34 @@ def test_cosine_index_legacy_npz_migrates_on_opt_in(tmp_path, monkeypatch):
     idx_reloaded = CosineIndex(dim=2, path=p)
     assert idx_reloaded.size == 2
     assert idx_reloaded.ids == ["a", "b"]
+
+
+def test_cosine_index_load_dim_mismatch_resets_to_empty(tmp_path):
+    """保存データの次元と指定 dim が不一致なら空インデックスに戻す。"""
+    p = tmp_path / "index.npz"
+    vecs = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+    ids = np.array(["x"], dtype=str)
+    np.savez(p, vecs=vecs, ids=ids)
+
+    idx = CosineIndex(dim=2, path=p)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
+
+def test_cosine_index_load_ids_count_mismatch_resets_to_empty(tmp_path):
+    """保存データの ids 数と vec 数が不一致なら空インデックスに戻す。"""
+    p = tmp_path / "index.npz"
+    vecs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    ids = np.array(["x"], dtype=str)
+    np.savez(p, vecs=vecs, ids=ids)
+
+    idx = CosineIndex(dim=2, path=p)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
 
 # ---------------------------------------------------------
 # add: ベクトル追加とエラーケース

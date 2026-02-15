@@ -64,6 +64,18 @@ class CosineIndex:
     """
 
     def __init__(self, dim: int, path: Optional[Path] = None):
+        """Create a cosine index.
+
+        Args:
+            dim: Vector dimensionality. Must be a positive integer.
+            path: Optional `.npz` persistence path.
+
+        Raises:
+            ValueError: If ``dim`` is not a positive integer.
+        """
+        if not isinstance(dim, int) or dim < 1:
+            raise ValueError(f"CosineIndex.__init__: dim must be a positive int, got {dim!r}")
+
         self.dim = dim
         self.path = Path(path) if path is not None else None
         self._lock = threading.RLock()  # リエントラントロック
@@ -82,6 +94,7 @@ class CosineIndex:
                 with np.load(self.path, allow_pickle=False) as data:
                     self.vecs = data["vecs"].astype(np.float32)
                     self.ids = [str(i) for i in data["ids"].tolist()]
+                self._validate_loaded_index_or_reset()
                 return
             except Exception as e:
                 # ★ M-18 修正: エラーをログに記録（破損と不在を区別可能に）
@@ -112,6 +125,7 @@ class CosineIndex:
                         with np.load(self.path, allow_pickle=True) as data:
                             self.vecs = data["vecs"].astype(np.float32)
                             self.ids = [str(i) for i in data["ids"].tolist()]
+                        self._validate_loaded_index_or_reset()
                         # Immediately re-save without pickle to migrate
                         self.save()
                         logger.info(
@@ -127,6 +141,39 @@ class CosineIndex:
                         )
 
             # 壊れていたら諦めて空からスタート
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+
+    def _validate_loaded_index_or_reset(self) -> None:
+        """Validate loaded arrays and reset to empty index when data is inconsistent."""
+        if self.vecs.ndim != 2:
+            logger.warning(
+                "[CosineIndex] Invalid vecs ndim (%d), resetting index: %s",
+                self.vecs.ndim,
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+            return
+
+        if self.vecs.shape[1] != self.dim:
+            logger.warning(
+                "[CosineIndex] Loaded vec dim mismatch (%d != %d), resetting index: %s",
+                self.vecs.shape[1],
+                self.dim,
+                self.path,
+            )
+            self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+            self.ids = []
+            return
+
+        if len(self.ids) != self.vecs.shape[0]:
+            logger.warning(
+                "[CosineIndex] Loaded ids/vec count mismatch (%d != %d), resetting index: %s",
+                len(self.ids),
+                self.vecs.shape[0],
+                self.path,
+            )
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)
             self.ids = []
 
