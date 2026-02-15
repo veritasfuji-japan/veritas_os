@@ -103,7 +103,7 @@ WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
 WEBSEARCH_RETRY_MAX_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0)
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
 WEBSEARCH_HOST_ALLOWLIST = {
-    host.strip().lower()
+    host.strip().lower().rstrip(".")
     for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")
     if host.strip()
 }
@@ -244,12 +244,29 @@ def _extract_hostname(url: str) -> str:
     if not host and "://" not in candidate:
         parsed = urlparse(f"http://{candidate}")
         host = parsed.hostname
-    return (host or "").lower()
+    return (host or "").lower().rstrip(".")
+
+
+def _canonicalize_hostname(hostname: str) -> str:
+    """Normalize hostnames for policy checks and allowlist matching.
+
+    DNS hostnames may be represented with a trailing dot (absolute form),
+    such as ``example.com.``. Treating these as distinct strings can bypass
+    exact-match checks and create inconsistent SSRF protections.
+
+    Args:
+        hostname: Raw hostname string.
+
+    Returns:
+        Canonicalized lowercase hostname without surrounding whitespace
+        or a trailing dot.
+    """
+    return (hostname or "").strip().lower().rstrip(".")
 
 
 def _is_obviously_private_or_local_host(hostname: str) -> bool:
     """文字列情報だけで private/local と判断できるホストを検出する。"""
-    host = (hostname or "").strip().lower()
+    host = _canonicalize_hostname(hostname)
     if not host:
         return True
 
@@ -287,7 +304,7 @@ def _is_private_or_local_host(hostname: str) -> bool:
     DNS 解決は外部 I/O であり繰り返すと遅延や負荷が大きくなるため、
     直近の判定結果を LRU キャッシュする。
     """
-    host = (hostname or "").strip().lower()
+    host = _canonicalize_hostname(hostname)
     if _is_obviously_private_or_local_host(host):
         return True
 
@@ -330,7 +347,7 @@ def _is_allowed_websearch_url(url: str) -> bool:
     if parsed.username or parsed.password:
         return False
 
-    host = (parsed.hostname or "").lower()
+    host = _canonicalize_hostname(parsed.hostname or "")
     if WEBSEARCH_HOST_ALLOWLIST:
         if host not in WEBSEARCH_HOST_ALLOWLIST:
             return False
@@ -518,6 +535,7 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     Security note:
         - URL は http/https スキームのみ許可する。
         - URL に hostname が無いものや userinfo を含むものは除外する。
+        - localhost/private IP など内部向けURLは除外する。
         - title/snippet/url は上限長で切り詰め、過大レスポンスによる
           メモリ消費やログ汚染リスクを緩和する。
     """
@@ -531,6 +549,8 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
         if not parsed_url.hostname:
             return None
         if parsed_url.username or parsed_url.password:
+            return None
+        if _is_private_or_local_host(parsed_url.hostname):
             return None
 
     title = _normalize_str(item.get("title") or "", limit=512)
@@ -675,8 +695,20 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             }
 
         organic = data.get("organic") or []
+        if not isinstance(organic, list):
+            logger.warning(
+                "WEBSEARCH_API returned non-list organic payload type=%s",
+                type(organic).__name__,
+            )
+            organic = []
         raw_items: List[Dict[str, Any]] = []
         for item in organic:
+            if not isinstance(item, dict):
+                logger.warning(
+                    "WEBSEARCH_API dropped non-dict organic item type=%s",
+                    type(item).__name__,
+                )
+                continue
             normalized = _normalize_result_item(item)
             if normalized is None:
                 continue

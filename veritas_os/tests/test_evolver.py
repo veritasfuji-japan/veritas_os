@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import veritas_os.api.evolver as evolver
 from veritas_os.api.schemas import PersonaState
 
@@ -102,6 +100,23 @@ def test_apply_persona_attaches_meta_block():
     assert meta["principles"] == ["safety"]
 
 
+def test_apply_persona_overwrites_invalid_meta_block():
+    """`_persona` が dict 以外でも安全に上書きできること。"""
+    persona = PersonaState(
+        name="VERITAS",
+        style="nerdy",
+        tone="friendly",
+        principles=["safety"],
+        last_updated="2024-01-01T00:00:00Z",
+    )
+    chosen = {"title": "some decision", "_persona": "broken"}
+
+    enriched = evolver.apply_persona(chosen, persona)
+
+    assert isinstance(enriched["_persona"], dict)
+    assert enriched["_persona"]["name"] == "VERITAS"
+
+
 # ------------------------------
 # evolve_persona
 # ------------------------------
@@ -194,3 +209,15 @@ def test_generate_suggestions_handles_non_numeric_uncertainty():
     # 最低限、30分ステップの提案は含まれている
     assert any("30分で検証できる最小ステップ" in a for a in res["actions"])
 
+
+def test_generate_suggestions_uses_confidence_as_inverse_uncertainty():
+    """uncertainty 未指定時は confidence から補完して判定する。"""
+    query = "テストクエリ"
+    chosen = {
+        "text": "本文",
+        "confidence": 0.2,
+    }
+
+    res = evolver.generate_suggestions(query, chosen, alts=[])
+
+    assert any("一次情報" in a for a in res["actions"])

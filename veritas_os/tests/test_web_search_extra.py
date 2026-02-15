@@ -192,6 +192,19 @@ class TestIsBlockedResult:
             is False
         )
 
+    def test_extract_hostname_trailing_dot_is_normalized(self):
+        assert (
+            web_search_mod._extract_hostname("https://example.com./path")
+            == "example.com"
+        )
+
+
+class TestHostCanonicalization:
+    """Tests for hostname normalization helper."""
+
+    def test_canonicalize_hostname_strips_trailing_dot(self):
+        assert web_search_mod._canonicalize_hostname("Example.COM.") == "example.com"
+
 
 class TestWebSearchHostSafety:
     """Tests for host-level SSRF safety validation."""
@@ -331,6 +344,53 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
+    def test_non_list_organic_payload_is_ignored(self, monkeypatch):
+        """Ignore malformed `organic` payloads that are not lists."""
+        monkeypatch.setattr(
+            web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+        )
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            return DummyResponse({"organic": {"title": "bad"}})
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        resp = web_search_mod.web_search("test query", max_results=5)
+
+        assert resp["ok"] is True
+        assert resp["results"] == []
+
+    def test_non_dict_organic_items_are_ignored(self, monkeypatch):
+        """Drop malformed result entries that are not dictionaries."""
+        monkeypatch.setattr(
+            web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+        )
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+        data = {
+            "organic": [
+                "bad-item",
+                123,
+                {
+                    "title": "Valid",
+                    "link": "https://example.com",
+                    "snippet": "ok",
+                },
+            ]
+        }
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            return DummyResponse(data)
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        resp = web_search_mod.web_search("test query", max_results=5)
+
+        assert resp["ok"] is True
+        assert len(resp["results"]) == 1
+        assert resp["results"][0]["url"] == "https://example.com"
+
 
 class TestClassifyWebsearchError:
     """Tests for _classify_websearch_error helper."""
@@ -460,6 +520,24 @@ class TestWebSearchSsrfGuard:
             )
             is False
         )
+
+    def test_normalize_result_item_blocks_localhost_url(self):
+        item = {
+            "title": "Local",
+            "link": "https://localhost/admin",
+            "snippet": "internal",
+        }
+
+        assert web_search_mod._normalize_result_item(item) is None
+
+    def test_normalize_result_item_blocks_private_ip_url(self):
+        item = {
+            "title": "Metadata",
+            "link": "https://169.254.169.254/latest/meta-data",
+            "snippet": "internal service",
+        }
+
+        assert web_search_mod._normalize_result_item(item) is None
 
     def test_allowlist_blocks_non_listed_host(self, monkeypatch):
         monkeypatch.setattr(
