@@ -85,6 +85,22 @@ def _get_github_token() -> str:
     return os.getenv("VERITAS_GITHUB_TOKEN", "").strip()
 
 
+def _get_retry_settings() -> tuple[int, float, float, float]:
+    """Return GitHub retry settings from current environment values.
+
+    Reading these values at call time allows emergency configuration updates
+    (e.g. temporarily lowering retries during incidents) without restarting
+    the process.
+    """
+    max_retries = max(_safe_int("VERITAS_GITHUB_MAX_RETRIES", GITHUB_MAX_RETRIES), 1)
+    retry_delay = _safe_float("VERITAS_GITHUB_RETRY_DELAY", GITHUB_RETRY_DELAY)
+    retry_max_delay = _safe_float(
+        "VERITAS_GITHUB_RETRY_MAX_DELAY", GITHUB_RETRY_MAX_DELAY
+    )
+    retry_jitter = _safe_float("VERITAS_GITHUB_RETRY_JITTER", GITHUB_RETRY_JITTER)
+    return max_retries, retry_delay, retry_max_delay, retry_jitter
+
+
 def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
     """
     生のクエリ文字列を GitHub API 用に整形する。
@@ -170,11 +186,16 @@ def _sanitize_html_url(raw_url: object) -> str:
     return url
 
 
-def _compute_backoff(attempt: int) -> float:
+def _compute_backoff(
+    attempt: int,
+    retry_delay: float,
+    retry_max_delay: float,
+    retry_jitter: float,
+) -> float:
     """指数バックオフの待機時間を算出する（ジッター込み）。"""
-    base_delay = max(GITHUB_RETRY_DELAY, 0.0)
-    max_delay = max(GITHUB_RETRY_MAX_DELAY, base_delay)
-    jitter = max(GITHUB_RETRY_JITTER, 0.0)
+    base_delay = max(retry_delay, 0.0)
+    max_delay = max(retry_max_delay, base_delay)
+    jitter = max(retry_jitter, 0.0)
     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
     if jitter:
         delay += random.uniform(0, delay * jitter)
@@ -193,8 +214,9 @@ def _get_with_retry(
     timeout: int,
 ) -> requests.Response:
     """GitHub API 呼び出しを再試行しつつ実行する。"""
+    max_retries, retry_delay, retry_max_delay, retry_jitter = _get_retry_settings()
     last_exc: Exception | None = None
-    for attempt in range(1, GITHUB_MAX_RETRIES + 1):
+    for attempt in range(1, max_retries + 1):
         try:
             response = requests.get(
                 url,
@@ -205,8 +227,13 @@ def _get_with_retry(
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
-                if attempt < GITHUB_MAX_RETRIES:
-                    delay = _compute_backoff(attempt)
+                if attempt < max_retries:
+                    delay = _compute_backoff(
+                        attempt,
+                        retry_delay,
+                        retry_max_delay,
+                        retry_jitter,
+                    )
                     logger.warning(
                         "GitHub retryable status=%s attempt=%s, sleep=%.2fs",
                         status_code,
@@ -219,8 +246,13 @@ def _get_with_retry(
             return response
         except requests.exceptions.RequestException as exc:
             last_exc = exc
-            if attempt < GITHUB_MAX_RETRIES:
-                delay = _compute_backoff(attempt)
+            if attempt < max_retries:
+                delay = _compute_backoff(
+                    attempt,
+                    retry_delay,
+                    retry_max_delay,
+                    retry_jitter,
+                )
                 logger.warning(
                     "GitHub request error attempt=%s, sleep=%.2fs: %s: %s",
                     attempt,
