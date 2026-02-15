@@ -167,6 +167,25 @@ def test_safe_json_extract_code_block():
     assert obj["steps"][0]["id"] == "s1"
 
 
+def test_safe_parse_selects_valid_json_from_multiple_fenced_blocks():
+    raw = """
+    before
+    ```json
+    {"steps": [}
+    ```
+    between
+    ```json
+    {"steps": [{"id": "s2"}]}
+    ```
+    after
+    """
+
+    obj = planner_core._safe_parse(raw)
+
+    assert isinstance(obj, dict)
+    assert [s["id"] for s in obj["steps"]] == ["s2"]
+
+
 def test_safe_json_extract_recovers_from_broken_but_embedded_steps():
     # 全体としては壊れているが、"steps" 配列内のオブジェクトは valid JSON
     raw = 'prefix "steps": [{"id": "ok1"}, {"id": "ok2"} BROKEN'
