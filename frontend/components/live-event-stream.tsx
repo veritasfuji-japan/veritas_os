@@ -51,6 +51,11 @@ export function LiveEventStream(): JSX.Element {
       return;
     }
 
+    if (typeof EventSource === "undefined") {
+      setConnected(false);
+      return;
+    }
+
     let source: EventSource | null = null;
     let mounted = true;
 

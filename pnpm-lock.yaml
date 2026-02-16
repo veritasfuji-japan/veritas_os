@@ -1,0 +1,88 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+  .:
+    specifiers: {}
+
+  frontend:
+    dependencies:
+      '@veritas/design-system':
+        specifier: workspace:*
+        version: link:../packages/design-system
+      '@veritas/types':
+        specifier: workspace:*
+        version: link:../packages/types
+      class-variance-authority:
+        specifier: ^0.7.1
+      clsx:
+        specifier: ^2.1.1
+      lucide-react:
+        specifier: ^0.469.0
+      next:
+        specifier: 15.5.10
+      react:
+        specifier: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+      tailwind-merge:
+        specifier: ^2.6.0
+    devDependencies:
+      '@axe-core/playwright':
+        specifier: ^4.10.2
+      '@playwright/test':
+        specifier: ^1.55.0
+      '@testing-library/react':
+        specifier: ^16.1.0
+      '@types/node':
+        specifier: ^22.10.2
+      '@types/react':
+        specifier: ^18.3.18
+      '@types/react-dom':
+        specifier: ^18.3.5
+      autoprefixer:
+        specifier: ^10.4.20
+      eslint:
+        specifier: ^8.57.1
+      eslint-config-next:
+        specifier: 14.2.24
+      jsdom:
+        specifier: ^25.0.1
+      postcss:
+        specifier: ^8.4.49
+      tailwindcss:
+        specifier: ^3.4.17
+      typescript:
+        specifier: ^5.7.2
+      vitest:
+        specifier: ^2.1.8
+
+  packages/design-system:
+    dependencies:
+      class-variance-authority:
+        specifier: ^0.7.1
+      clsx:
+        specifier: ^2.1.1
+      tailwind-merge:
+        specifier: ^2.6.0
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.18
+      typescript:
+        specifier: ^5.7.2
+      vitest:
+        specifier: ^2.1.8
+
+  packages/types:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+      vitest:
+        specifier: ^2.1.8
+
+packages: {}
+
+snapshots: {}
