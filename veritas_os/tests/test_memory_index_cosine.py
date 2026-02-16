@@ -85,6 +85,35 @@ def test_cosine_index_init_with_broken_npz(tmp_path):
     assert idx.ids == []
 
 
+def test_cosine_index_refuses_symlink_path(tmp_path):
+    """シンボリックリンクの index path は安全上の理由で読み込まない。"""
+    real = tmp_path / "real_index.npz"
+    vecs = np.array([[1.0, 0.0]], dtype=np.float32)
+    ids = np.array(["real"], dtype=str)
+    np.savez(real, vecs=vecs, ids=ids)
+
+    link = tmp_path / "index_link.npz"
+    link.symlink_to(real)
+
+    idx = CosineIndex(dim=2, path=link)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
+
+def test_cosine_index_refuses_non_regular_file_path(tmp_path):
+    """ディレクトリを path に指定した場合は空インデックスにフォールバック。"""
+    d = tmp_path / "not_a_file.npz"
+    d.mkdir()
+
+    idx = CosineIndex(dim=2, path=d)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
+
 def test_cosine_index_legacy_npz_requires_opt_in(tmp_path, monkeypatch):
     """レガシーnpz(allow_pickleが必要)はopt-inしないと無視される。"""
     p = tmp_path / "legacy_index.npz"

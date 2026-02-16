@@ -76,6 +76,36 @@ def _ensure_2d_vectors(name: str, values: Any) -> np.ndarray:
     return arr
 
 
+def _is_safe_index_path(path: Path) -> bool:
+    """Return ``True`` when ``path`` is a regular non-symlink file.
+
+    Security rationale:
+        - Symlinks can redirect reads to unexpected files.
+        - Non-regular files (directories/devices/FIFOs) can cause unsafe behavior.
+    """
+    try:
+        if path.is_symlink():
+            logger.warning(
+                "[CosineIndex] Refusing to load from symlink path for security: %s",
+                path,
+            )
+            return False
+        if not path.is_file():
+            logger.warning(
+                "[CosineIndex] Refusing to load from non-regular file: %s",
+                path,
+            )
+            return False
+    except OSError as exc:
+        logger.warning(
+            "[CosineIndex] Failed to stat index path (%s): %s",
+            path,
+            exc,
+        )
+        return False
+    return True
+
+
 class CosineIndex:
     """
     シンプルな Cosine 類似度インデックス + 永続化 (.npz)
@@ -113,6 +143,11 @@ class CosineIndex:
     # ---- 永続化 -------------------------------------------------
     def _load(self) -> None:
         with self._lock:
+            if not _is_safe_index_path(self.path):
+                self.vecs = np.zeros((0, self.dim), dtype=np.float32)
+                self.ids = []
+                return
+
             try:
                 with np.load(self.path, allow_pickle=False) as data:
                     self.vecs = data["vecs"].astype(np.float32)
