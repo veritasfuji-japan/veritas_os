@@ -170,6 +170,13 @@ def test_safe_json_extract_top_level_list_with_prefix_noise():
     assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
 
 
+def test_safe_json_extract_prefers_embedded_steps_over_leading_non_steps_object():
+    raw = 'noise {"meta": 1} and then {"steps": [{"id": "s1"}]}'
+    obj = planner_core._safe_json_extract(raw)
+
+    assert [s["id"] for s in obj["steps"]] == ["s1"]
+
+
 def test_safe_json_extract_code_block():
     inner = json.dumps({"steps": [{"id": "s1"}]})
     raw = f"```json\n{inner}\n```"

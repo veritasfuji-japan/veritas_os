@@ -542,13 +542,13 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             return obj
         return {"steps": []}
 
-    def _decode_first_json_value(text: str) -> Any:
-        """Extract and decode the first JSON value found in free-form text.
+    def _iter_decoded_json_values(text: str):
+        """Yield JSON values decoded from free-form text.
 
-        The decoding probe count is bounded to avoid excessive CPU usage when
-        malformed text contains a very large number of ``{"`` / ``[``
-        characters. We also skip decode calls when a candidate cannot possibly
-        close (for example, ``[`` after the last ``]``).
+        The probe count is bounded to avoid excessive CPU usage when malformed
+        text contains a very large number of ``{"`` / ``[`` characters.
+        Candidates that cannot possibly close are skipped before decoding
+        attempts.
         """
         decoder = json.JSONDecoder()
         attempts = 0
@@ -575,11 +575,9 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
 
             try:
                 obj, _ = decoder.raw_decode(text, idx=i)
-                return obj
+                yield obj
             except json.JSONDecodeError:
                 continue
-
-        return None
 
     # 1) そのまま
     try:
@@ -589,13 +587,19 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         logger.debug("planner JSON parse attempt 1 (raw) failed")
 
     # 1.5) 先頭ノイズ付きの JSON を raw_decode で救済
-    obj = _decode_first_json_value(cleaned)
-    if isinstance(obj, list):
-        return _wrap_if_needed(obj)
-    if isinstance(obj, dict) and (
-        "steps" in obj or cleaned.lstrip().startswith("{")
-    ):
-        return _wrap_if_needed(obj)
+    fallback_from_raw_decode: Optional[Dict[str, Any]] = None
+    for obj in _iter_decoded_json_values(cleaned):
+        if isinstance(obj, list):
+            return _wrap_if_needed(obj)
+
+        if isinstance(obj, dict) and "steps" in obj:
+            return _wrap_if_needed(obj)
+
+        if isinstance(obj, dict) and fallback_from_raw_decode is None:
+            fallback_from_raw_decode = _wrap_if_needed(obj)
+
+    if fallback_from_raw_decode and cleaned.lstrip().startswith("{"):
+        return fallback_from_raw_decode
 
     # 2) {} 抜き出し（旧来互換の救済）
     try:
