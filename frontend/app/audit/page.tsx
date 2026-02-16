@@ -221,6 +221,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         <div className="mb-3 flex items-center gap-2 text-xs">
           <span className="font-medium">ステージフィルタ</span>
           <select
+            aria-label="ステージフィルタ"
             className="rounded-md border border-border bg-background px-2 py-1"
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}
