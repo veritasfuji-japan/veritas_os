@@ -532,6 +532,12 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Security hardening: browsers only honor HSTS over HTTPS.
+    # Sending this header proactively helps production deployments enforce
+    # transport security and reduces protocol-downgrade attack surface.
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -1768,6 +1774,5 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
-
 
 

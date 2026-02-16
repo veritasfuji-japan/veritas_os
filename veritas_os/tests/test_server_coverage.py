@@ -174,6 +174,10 @@ def test_security_headers_present():
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("X-XSS-Protection") == "1; mode=block"
+    assert (
+        resp.headers.get("Strict-Transport-Security")
+        == "max-age=31536000; includeSubDomains"
+    )
     assert resp.headers.get("Cache-Control") == "no-store"
 
 
