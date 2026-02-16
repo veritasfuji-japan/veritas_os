@@ -283,3 +283,25 @@ def test_github_search_repos_rejects_non_dict_payload(monkeypatch):
     assert res["ok"] is False
     assert res["results"] == []
     assert res["error"] == "GitHub API error: invalid response payload"
+
+
+def test_github_search_repos_rejects_non_list_items(monkeypatch):
+    """Dict payload with non-list items is rejected safely."""
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
+
+    class DummyResp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"items": {"full_name": "owner/repo"}}
+
+    monkeypatch.setattr(github_adapter.requests, "get", lambda *args, **kwargs: DummyResp())
+
+    res = github_adapter.github_search_repos("veritas_os")
+
+    assert res["ok"] is False
+    assert res["results"] == []
+    assert res["error"] == "GitHub API error: invalid response payload"
