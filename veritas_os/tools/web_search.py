@@ -56,15 +56,32 @@ import requests
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
+
+def _sanitize_websearch_url(url: str) -> str:
+    """Validate env-derived web search URL and drop unsafe schemes.
+
+    Security note:
+        Runtime env overrides are useful for incident response, but they must
+        still respect scheme restrictions to avoid accidental use of
+        non-network schemes (e.g. ``file://``).
+    """
+    candidate = (url or "").strip()
+    if not candidate:
+        return ""
+
+    parsed = urlparse(candidate)
+    if parsed.scheme in ("http", "https"):
+        return candidate
+
+    logging.getLogger(__name__).warning(
+        "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
+        parsed.scheme,
+    )
+    return ""
+
+
 # ★ SSRF対策: WEBSEARCH_URL のスキームを検証
-if WEBSEARCH_URL:
-    _parsed_ws_url = urlparse(WEBSEARCH_URL)
-    if _parsed_ws_url.scheme not in ("http", "https"):
-        logging.getLogger(__name__).warning(
-            "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
-            _parsed_ws_url.scheme,
-        )
-        WEBSEARCH_URL = ""
+WEBSEARCH_URL = _sanitize_websearch_url(WEBSEARCH_URL)
 
 
 def _resolve_websearch_credentials() -> tuple[str, str]:
@@ -75,7 +92,7 @@ def _resolve_websearch_credentials() -> tuple[str, str]:
     existing tests and embedding code, module-level constants remain the
     fallback when environment variables are unset.
     """
-    env_url = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
+    env_url = _sanitize_websearch_url(os.getenv("VERITAS_WEBSEARCH_URL", ""))
     env_key = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
     websearch_url = env_url or WEBSEARCH_URL

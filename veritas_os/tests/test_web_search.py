@@ -124,6 +124,26 @@ def test_normalize_result_item_truncates_long_fields() -> None:
 # -----------------------------
 
 
+def test_sanitize_websearch_url_rejects_unsafe_scheme() -> None:
+    """危険なスキームの URL は空文字へ正規化する。"""
+    assert web_search_mod._sanitize_websearch_url("file:///etc/passwd") == ""
+
+
+def test_resolve_websearch_credentials_ignores_unsafe_runtime_url(monkeypatch) -> None:
+    """実行時 URL が危険なスキームならモジュール既定値へフォールバックする。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://fallback.example/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "fallback-key", raising=False)
+    monkeypatch.setenv("VERITAS_WEBSEARCH_URL", "file:///etc/passwd")
+    monkeypatch.setenv("VERITAS_WEBSEARCH_KEY", "runtime-key")
+
+    resolved_url, resolved_key = web_search_mod._resolve_websearch_credentials()
+
+    assert resolved_url == "https://fallback.example/serper"
+    assert resolved_key == "runtime-key"
+
+
 def test_resolve_websearch_credentials_prefers_runtime_env(monkeypatch) -> None:
     """実行時の環境変数が資格情報解決で優先される。"""
     monkeypatch.setattr(
