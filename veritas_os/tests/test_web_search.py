@@ -154,6 +154,41 @@ def test_resolve_websearch_credentials_falls_back_to_module_defaults(monkeypatch
     assert resolved_key == "fallback-key"
 
 
+
+
+def test_resolve_websearch_host_allowlist_prefers_runtime_env(monkeypatch) -> None:
+    """実行時の allowlist 環境変数を優先して解決する。"""
+    monkeypatch.setattr(
+        web_search_mod,
+        "WEBSEARCH_HOST_ALLOWLIST",
+        {"fallback.example", "fallback2.example"},
+        raising=False,
+    )
+    monkeypatch.setenv(
+        "VERITAS_WEBSEARCH_HOST_ALLOWLIST",
+        "runtime.example, runtime2.example",
+    )
+
+    resolved_allowlist = web_search_mod._resolve_websearch_host_allowlist()
+
+    assert resolved_allowlist == {"runtime.example", "runtime2.example"}
+
+
+def test_resolve_websearch_host_allowlist_falls_back_to_module_defaults(monkeypatch) -> None:
+    """allowlist 環境変数が空ならモジュール既定値にフォールバックする。"""
+    monkeypatch.setattr(
+        web_search_mod,
+        "WEBSEARCH_HOST_ALLOWLIST",
+        {"fallback.example", "fallback2.example"},
+        raising=False,
+    )
+    monkeypatch.delenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", raising=False)
+
+    resolved_allowlist = web_search_mod._resolve_websearch_host_allowlist()
+
+    assert resolved_allowlist == {"fallback.example", "fallback2.example"}
+
+
 def test_web_search_returns_error_when_not_configured(monkeypatch) -> None:
     """URL / KEY が設定されていない場合、config エラーを返す"""
     monkeypatch.setattr(web_search_mod, "WEBSEARCH_URL", "", raising=False)
