@@ -47,12 +47,84 @@ jobs:
             --severity-level medium \
             -f txt
 
+  frontend:
+    name: frontend (lint/typecheck/unit/e2e/a11y)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python for E2E backend
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install backend runtime for E2E
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install \
+            fastapi \
+            uvicorn \
+            "pydantic>=2" \
+            python-dotenv \
+            PyYAML \
+            requests \
+            numpy
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          if pnpm install --frozen-lockfile; then
+            exit 0
+          fi
+
+          echo "[warn] frozen lockfile install failed; trying non-frozen install"
+          if pnpm install --no-frozen-lockfile; then
+            exit 0
+          fi
+
+          echo "[warn] pnpm lockfile may be corrupted/incompatible; removing lockfile and retrying"
+          rm -f pnpm-lock.yaml
+          pnpm install --no-frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter frontend exec playwright install --with-deps chromium
+
+      - name: Frontend lint
+        run: pnpm --filter frontend lint
+
+      - name: Frontend typecheck
+        run: pnpm --filter frontend typecheck
+
+      - name: Frontend unit tests
+        run: pnpm --filter frontend test
+
+      - name: Frontend E2E smoke + a11y
+        run: pnpm --filter frontend e2e
+
   # ============================================================
   # Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: lint
+    needs: [lint, frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

@@ -1,3 +1,4 @@
+import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -27,11 +28,15 @@ describe("TrustLogExplorerPage", () => {
 
     render(<TrustLogExplorerPage />);
 
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      expect(screen.getByText("value")).toBeInTheDocument();
-      expect(screen.getByText("fuji")).toBeInTheDocument();
+      expect(screen.getByText(/request_id: req-1/)).toBeInTheDocument();
+      expect(screen.getByText(/request_id: req-2/)).toBeInTheDocument();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);

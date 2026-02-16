@@ -151,6 +151,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
           <label className="space-y-1 text-xs">
             <span className="font-medium">API Base URL</span>
             <input
+              aria-label="API Base URL"
               className="w-full rounded-md border border-border bg-background px-2 py-2"
               value={apiBase}
               onChange={(event) => setApiBase(event.target.value)}
@@ -159,6 +160,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
           <label className="space-y-1 text-xs">
             <span className="font-medium">X-API-Key</span>
             <input
+              aria-label="X-API-Key"
               className="w-full rounded-md border border-border bg-background px-2 py-2"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}

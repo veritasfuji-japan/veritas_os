@@ -43,6 +43,7 @@ from veritas_os.logging.trust_log import (
     get_trust_log_page,
     get_trust_logs_by_request,
 )
+from veritas_os.api.governance_store import GovernancePolicyStore
 
 
 # ---- アトミック I/O（信頼性向上）----
@@ -211,6 +212,7 @@ _pipeline_state = _LazyState()
 _fuji_state = _LazyState()
 _value_core_state = _LazyState()
 _memory_store_state = _LazyState()
+_governance_store_state = _LazyState()
 
 
 class _SSEEventHub:
@@ -465,6 +467,28 @@ def get_memory_store() -> Optional[Any]:
         _memory_store_state.obj = None
         logger.warning("memory store import failed: %s", _memory_store_state.err)
         return None
+
+
+def get_governance_store() -> GovernancePolicyStore:
+    """Return singleton governance policy store (file-backed)."""
+    global _governance_store_state
+
+    if _governance_store_state.obj is not None:
+        return _governance_store_state.obj
+
+    if not _governance_store_state.attempted:
+        _governance_store_state.attempted = True
+        try:
+            _governance_store_state.obj = GovernancePolicyStore(REPO_ROOT / "governance.json")
+            _governance_store_state.err = None
+        except Exception as exc:
+            _governance_store_state.obj = None
+            _governance_store_state.err = f"{type(exc).__name__}: {exc}"
+            logger.error("governance store init failed: %s", _governance_store_state.err)
+
+    if _governance_store_state.obj is None:
+        raise HTTPException(status_code=500, detail="governance store unavailable")
+    return _governance_store_state.obj
 
 
 # ==============================
@@ -1776,3 +1800,15 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "internal error in trust_feedback"}
 
 
+@app.get("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def get_governance_policy() -> Dict[str, Any]:
+    """Get current governance policy from control plane store."""
+    store = get_governance_store()
+    return store.get_policy()
+
+
+@app.put("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def put_governance_policy(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Update governance policy in control plane store."""
+    store = get_governance_store()
+    return store.save_policy(body)
