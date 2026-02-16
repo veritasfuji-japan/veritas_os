@@ -439,6 +439,91 @@ class TestClassifyWebsearchError:
         # Should handle gracefully
 
 
+class TestResultFilteringHelpers:
+    """Tests for helper functions extracted from web_search orchestration."""
+
+    def test_normalize_organic_items_drops_non_list_payload(self):
+        assert web_search_mod._normalize_organic_items({"organic": {}}) == []
+
+    def test_normalize_organic_items_keeps_only_valid_entries(self):
+        data = {
+            "organic": [
+                "bad",
+                {
+                    "title": "Valid",
+                    "link": "https://example.com",
+                    "snippet": "ok",
+                },
+                {
+                    "title": "Private",
+                    "link": "https://127.0.0.1/private",
+                    "snippet": "blocked",
+                },
+            ]
+        }
+        normalized = web_search_mod._normalize_organic_items(data)
+        assert normalized == [
+            {
+                "title": "Valid",
+                "url": "https://example.com",
+                "snippet": "ok",
+            }
+        ]
+
+    def test_filter_veritas_context_results_bypasses_when_not_enforced(self):
+        items = [
+            {
+                "title": "Bureau Veritas",
+                "url": "https://bureauveritas.com",
+                "snippet": "blocked when enforced",
+            }
+        ]
+        filtered, blocked = web_search_mod._filter_veritas_context_results(
+            items,
+            enforce_veritas_filter=False,
+        )
+        assert filtered == items
+        assert blocked == 0
+
+    def test_filter_veritas_context_results_blocks_blacklisted_items(self):
+        items = [
+            {
+                "title": "VERITAS OS",
+                "url": "https://github.com/veritas-os/docs",
+                "snippet": "trustlog",
+            },
+            {
+                "title": "Bureau Veritas",
+                "url": "https://bureauveritas.com/cert",
+                "snippet": "certification",
+            },
+        ]
+        filtered, blocked = web_search_mod._filter_veritas_context_results(
+            items,
+            enforce_veritas_filter=True,
+        )
+        assert len(filtered) == 1
+        assert filtered[0]["url"].startswith("https://github.com")
+        assert blocked == 1
+
+    def test_filter_agi_results_keeps_only_agi_like_results(self):
+        items = [
+            {
+                "title": "General news",
+                "url": "https://example.com/news",
+                "snippet": "unrelated",
+            },
+            {
+                "title": "AGI research",
+                "url": "https://openreview.net/forum?id=1",
+                "snippet": "artificial general intelligence",
+            },
+        ]
+        agi_items = web_search_mod._filter_agi_results(items)
+        assert len(agi_items) == 1
+        assert "openreview.net" in agi_items[0]["url"]
+
+
 class TestIsAgiQueryExtended:
     """Extended tests for _is_agi_query."""
 

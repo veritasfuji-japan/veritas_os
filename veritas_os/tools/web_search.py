@@ -610,6 +610,71 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     return {"title": title, "url": url, "snippet": snippet}
 
 
+def _normalize_organic_items(data: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Normalize ``organic`` items from API payload and drop invalid entries.
+
+    Security note:
+        Invalid payload types are ignored instead of trusted. This keeps the
+        parser resilient against provider-side schema drift and malformed data
+        without broad exception swallowing.
+    """
+    organic = data.get("organic") or []
+    if not isinstance(organic, list):
+        logger.warning(
+            "WEBSEARCH_API returned non-list organic payload type=%s",
+            type(organic).__name__,
+        )
+        return []
+
+    normalized_items: List[Dict[str, str]] = []
+    for item in organic:
+        if not isinstance(item, dict):
+            logger.warning(
+                "WEBSEARCH_API dropped non-dict organic item type=%s",
+                type(item).__name__,
+            )
+            continue
+        normalized = _normalize_result_item(item)
+        if normalized is not None:
+            normalized_items.append(normalized)
+    return normalized_items
+
+
+def _filter_veritas_context_results(
+    raw_items: List[Dict[str, str]],
+    enforce_veritas_filter: bool,
+) -> tuple[List[Dict[str, str]], int]:
+    """Apply VERITAS-context deny filtering and count blocked results."""
+    if not enforce_veritas_filter:
+        return raw_items, 0
+
+    blocked_count = 0
+    filtered_items: List[Dict[str, str]] = []
+    for item in raw_items:
+        if _is_blocked_result(
+            item.get("title") or "",
+            item.get("snippet") or "",
+            item.get("url") or "",
+        ):
+            blocked_count += 1
+            continue
+        filtered_items.append(item)
+    return filtered_items, blocked_count
+
+
+def _filter_agi_results(items: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Return only AGI-like items based on title/snippet/url heuristics."""
+    agi_items: List[Dict[str, str]] = []
+    for item in items:
+        if _looks_agi_result(
+            item.get("title") or "",
+            item.get("snippet") or "",
+            item.get("url") or "",
+        ):
+            agi_items.append(item)
+    return agi_items
+
+
 def _classify_websearch_error(error: Exception) -> str:
     """Web検索失敗の種別を分類して監査ログで使う。"""
     if isinstance(error, requests.exceptions.Timeout):
@@ -748,56 +813,21 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                 ),
             }
 
-        organic = data.get("organic") or []
-        if not isinstance(organic, list):
-            logger.warning(
-                "WEBSEARCH_API returned non-list organic payload type=%s",
-                type(organic).__name__,
-            )
-            organic = []
-        raw_items: List[Dict[str, Any]] = []
-        for item in organic:
-            if not isinstance(item, dict):
-                logger.warning(
-                    "WEBSEARCH_API dropped non-dict organic item type=%s",
-                    type(item).__name__,
-                )
-                continue
-            normalized = _normalize_result_item(item)
-            if normalized is None:
-                continue
-            raw_items.append(normalized)
+        raw_items = _normalize_organic_items(data)
 
         # ----------------------------
         # 3) VERITAS文脈の時だけ、結果側ブラックリスト（二重防衛）
         # ----------------------------
-        blocked_count = 0
-        filtered_items: List[Dict[str, Any]] = []
-        if enforce:
-            for it in raw_items:
-                if _is_blocked_result(
-                    it.get("title") or "",
-                    it.get("snippet") or "",
-                    it.get("url") or "",
-                ):
-                    blocked_count += 1
-                    continue
-                filtered_items.append(it)
-        else:
-            filtered_items = raw_items
+        filtered_items, blocked_count = _filter_veritas_context_results(
+            raw_items,
+            enforce_veritas_filter=enforce,
+        )
 
         # ----------------------------
         # 4) AGI文脈なら AGIっぽさフィルタ
         # ----------------------------
         if agi_query:
-            agi_items: List[Dict[str, Any]] = []
-            for it in filtered_items:
-                if _looks_agi_result(
-                    it.get("title") or "",
-                    it.get("snippet") or "",
-                    it.get("url") or "",
-                ):
-                    agi_items.append(it)
+            agi_items = _filter_agi_results(filtered_items)
 
             if not agi_items:
                 return {
