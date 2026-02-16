@@ -110,6 +110,24 @@ def _safe_float(key: str, default: float) -> float:
     return value
 
 
+def _resolve_websearch_host_allowlist() -> set[str]:
+    """Return host allowlist with runtime env override.
+
+    Security note:
+        Incident response may require tightening allowlisted hosts immediately.
+        This resolver mirrors credential resolution so operators can update the
+        allowlist without restarting the process.
+    """
+    env_allowlist_raw = os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "")
+    if env_allowlist_raw.strip():
+        return {
+            host.strip().lower().rstrip(".")
+            for host in env_allowlist_raw.split(",")
+            if host.strip()
+        }
+    return WEBSEARCH_HOST_ALLOWLIST
+
+
 WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
     "VERITAS_WEBSEARCH_MAX_RETRIES",
     3,
@@ -364,8 +382,9 @@ def _is_allowed_websearch_url(url: str) -> bool:
         return False
 
     host = _canonicalize_hostname(parsed.hostname or "")
-    if WEBSEARCH_HOST_ALLOWLIST:
-        if host not in WEBSEARCH_HOST_ALLOWLIST:
+    host_allowlist = _resolve_websearch_host_allowlist()
+    if host_allowlist:
+        if host not in host_allowlist:
             return False
         # Allowlisted hosts must also resolve to public IPs.
         # This prevents DNS rebinding/misconfiguration from tunneling
