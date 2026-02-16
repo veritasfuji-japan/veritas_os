@@ -233,6 +233,19 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     )
     has_plan_words = any(
         k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
+    ) or any(
+        k in q_lower
+        for k in [
+            "roadmap",
+            "plan",
+            "strategy",
+            "next step",
+            "next steps",
+            "implementation",
+            "implement",
+            "task",
+            "tasks",
+        ]
     )
 
     if is_short and looks_question and not has_plan_words:
