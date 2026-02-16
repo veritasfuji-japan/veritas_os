@@ -63,6 +63,12 @@ def test_detect_simple_qa_patterns():
     assert kernel._detect_simple_qa(long_q) is None
 
 
+def test_detect_simple_qa_mixed_language_and_spacing():
+    """日英混在・余分スペースでも simple_qa が検出されることを確認。"""
+    assert kernel._detect_simple_qa("What   time is it   today?") == "time"
+    assert kernel._detect_simple_qa("what day is it today??") == "weekday"
+    assert kernel._detect_simple_qa("What is the date today?") == "date"
+
 def test_detect_knowledge_qa_patterns():
     # 「〜とは？」系
     assert kernel._detect_knowledge_qa("東京とは？") is True
