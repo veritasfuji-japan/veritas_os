@@ -109,6 +109,8 @@ def test_normalize_step_uses_defaults_for_invalid_existing_values():
         ("VERITAS の弱点を教えて", {"simple_qa": True}, True),  # 明示フラグ優先
         ("what is this", {}, True),  # 英語の疑問文（?なし）
         ("料金を教えて", {}, True),  # 日本語の短い質問（?なし）
+        ("How should we implement this?", {}, False),  # 計画系キーワードを含む英語
+        ("What's the roadmap for rollout?", {}, False),  # roadmap は simple_qa から除外
     ],
 )
 def test_is_simple_qa_variants(query, ctx, expected):
