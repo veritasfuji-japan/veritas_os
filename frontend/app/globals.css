@@ -7,9 +7,22 @@
 }
 
 body {
-  background: hsl(var(--ds-color-background));
+  background:
+    radial-gradient(circle at top, hsl(var(--ds-color-primary) / 0.18), transparent 56%),
+    hsl(var(--ds-color-background));
   color: hsl(var(--ds-color-foreground));
   font-family: var(--ds-font-sans);
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto 1fr;
+}
+
+@media (min-width: 1024px) {
+  body {
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+  }
 }
 
 code,
