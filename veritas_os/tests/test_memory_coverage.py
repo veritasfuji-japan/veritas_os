@@ -36,6 +36,25 @@ class TestAllowLegacyPickleMigration:
         monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "no")
         assert memory._allow_legacy_pickle_migration() is False
 
+    def test_sunset_passed_forces_false(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "1")
+        monkeypatch.setenv("VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET", "2000-01-01")
+        assert memory._allow_legacy_pickle_migration() is False
+
+
+class TestLegacyPickleMigrationSunset:
+    def test_past_sunset(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET", "2000-01-01")
+        assert memory._legacy_pickle_migration_sunset_passed() is True
+
+    def test_future_sunset(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET", "2999-12-31")
+        assert memory._legacy_pickle_migration_sunset_passed() is False
+
+    def test_invalid_sunset_fails_closed(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET", "invalid-date")
+        assert memory._legacy_pickle_migration_sunset_passed() is True
+
 
 class TestShouldDeletePickleAfterMigration:
     def test_default_delete(self, monkeypatch):
