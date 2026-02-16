@@ -243,6 +243,24 @@ def test_safe_json_extract_limits_decoder_probe_count(caplog):
     assert any("probe limit reached" in rec.message for rec in caplog.records)
 
 
+def test_safe_json_extract_step_object_uses_raw_decode_with_brace_in_string():
+    raw = 'prefix "steps": [{"id": "ok1", "detail": "brace } inside"}, {"id": "ok2"}] tail'
+    obj = planner_core._safe_json_extract(raw)
+
+    ids = [s["id"] for s in obj["steps"]]
+    assert ids == ["ok1", "ok2"]
+
+
+def test_safe_json_extract_step_object_attempt_limit(caplog):
+    raw = '"steps": [' + ("{" * (planner_core._MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS + 20))
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("extraction attempt limit reached" in rec.message for rec in caplog.records)
+
+
 # -------------------------------
 # _fallback_plan / _infer_veritas_stage / _fallback_plan_for_stage
 # -------------------------------
