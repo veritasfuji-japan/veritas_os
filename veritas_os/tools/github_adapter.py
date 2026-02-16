@@ -347,6 +347,17 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
         }
 
     items = data.get("items", []) or []
+    if not isinstance(items, list):
+        logger.warning(
+            "GitHub API error: unexpected items payload type=%s",
+            type(items).__name__,
+        )
+        return {
+            "ok": False,
+            "results": [],
+            "error": "GitHub API error: invalid response payload",
+        }
+
     results = [_normalize_repo_item(it) for it in items if isinstance(it, dict)]
 
     return {
