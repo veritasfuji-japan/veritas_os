@@ -69,4 +69,13 @@ describe("LiveEventStream", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("keeps rendering when EventSource is unavailable in runtime", () => {
+    vi.stubGlobal("EventSource", undefined);
+
+    render(<LiveEventStream />);
+
+    expect(screen.getByText("Live Event Stream")).toBeInTheDocument();
+    expect(screen.getByText(/Status: 🟡 reconnecting/)).toBeInTheDocument();
+  });
 });
