@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
 _MAX_JSON_EXTRACT_CHARS = 200_000
 _MAX_JSON_DECODE_ATTEMPTS = 512
+_MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS = 512
 
 
 def _truncate_json_extract_input(raw: str) -> str:
@@ -626,7 +627,15 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             continue
 
     # 4) "steps":[{...},{...}] から dict だけ拾う（最後の保険）
+    #    NOTE: 以前の手書きパーサよりも、JSONDecoder を使って保守性を向上。
     def _extract_step_objects(text: str) -> List[Dict[str, Any]]:
+        """Extract dict objects from a ``"steps"`` JSON-like array.
+
+        This parser is intentionally tolerant to partially broken LLM output.
+        It scans forward from ``"steps": [`` and decodes each object candidate
+        with ``json.JSONDecoder().raw_decode``. The decode attempt count is
+        bounded to reduce CPU abuse risk from malformed inputs.
+        """
         idx = text.find('"steps"')
         if idx == -1:
             return []
@@ -634,51 +643,38 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         if idx == -1:
             return []
 
+        objs: List[Dict[str, Any]] = []
+        decoder = json.JSONDecoder()
+        attempts = 0
         i = idx + 1
         n = len(text)
 
-        in_str = False
-        esc = False
-        depth = 0
-        buf_start: Optional[int] = None
-        objs: List[Dict[str, Any]] = []
-
         while i < n:
+            if attempts >= _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS:
+                logger.warning(
+                    "planner step object extraction attempt limit reached (%d)",
+                    _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS,
+                )
+                break
+
             ch = text[i]
+            if ch == "]":
+                break
 
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-            else:
-                if ch == '"':
-                    in_str = True
-                elif ch == "{":
-                    if depth == 0:
-                        buf_start = i
-                    depth += 1
-                elif ch == "}":
-                    if depth == 0:
-                        # 先頭側の壊れた `}` を無視して復旧可能性を維持する
-                        i += 1
-                        continue
-                    depth -= 1
-                    if depth == 0 and buf_start is not None:
-                        obj_str = text[buf_start : i + 1]
-                        try:
-                            obj = json.loads(obj_str)
-                            if isinstance(obj, dict):
-                                objs.append(obj)
-                        except Exception:
-                            logger.debug("planner step object parse failed: %s", obj_str[:80])
-                        buf_start = None
-                elif ch == "]":
-                    break
+            if ch != "{":
+                i += 1
+                continue
 
-            i += 1
+            attempts += 1
+            try:
+                obj, end = decoder.raw_decode(text, idx=i)
+            except json.JSONDecodeError:
+                i += 1
+                continue
+
+            if isinstance(obj, dict):
+                objs.append(obj)
+            i = end
 
         return objs
 
