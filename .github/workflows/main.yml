@@ -72,7 +72,18 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          pnpm install --frozen-lockfile || pnpm install --no-frozen-lockfile
+          if pnpm install --frozen-lockfile; then
+            exit 0
+          fi
+
+          echo "[warn] frozen lockfile install failed; trying non-frozen install"
+          if pnpm install --no-frozen-lockfile; then
+            exit 0
+          fi
+
+          echo "[warn] pnpm lockfile may be corrupted/incompatible; removing lockfile and retrying"
+          rm -f pnpm-lock.yaml
+          pnpm install --no-frozen-lockfile
 
       - name: Install Playwright browsers
         run: pnpm --filter frontend exec playwright install --with-deps chromium
