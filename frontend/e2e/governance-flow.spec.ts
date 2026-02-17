@@ -4,6 +4,8 @@ import AxeBuilder from "@axe-core/playwright";
 const TEST_KEY = process.env.VERITAS_API_KEY ?? "test-e2e-key";
 
 test("console → audit → governance update flow", async ({ page }) => {
+  test.setTimeout(90_000);
+
   await page.goto("/console");
   await expect(page.getByRole("heading", { name: "Decision Console" }).first()).toBeVisible();
 
@@ -20,10 +22,12 @@ test("console → audit → governance update flow", async ({ page }) => {
     .locator("p")
     .filter({ hasText: /401|503|HTTP|ネットワークエラー|schema不一致/ })
     .first();
-  await Promise.race([
-    fujiSection.waitFor({ state: "visible", timeout: 30000 }),
-    consoleError.waitFor({ state: "visible", timeout: 30000 }),
-  ]).catch(() => undefined);
+  const decideOutcome = await Promise.race<"fuji" | "error" | "timeout">([
+    fujiSection.waitFor({ state: "visible", timeout: 15_000 }).then(() => "fuji"),
+    consoleError.waitFor({ state: "visible", timeout: 15_000 }).then(() => "error"),
+    page.waitForTimeout(15_000).then(() => "timeout"),
+  ]);
+  expect(decideOutcome).not.toBe("timeout");
 
   const requestText = await page
     .locator('section[aria-label="trust_log"] pre')
