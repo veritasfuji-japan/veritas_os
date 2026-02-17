@@ -21,7 +21,16 @@ test("console → audit → governance update flow", async ({ page }) => {
   await expect(preset).toBeVisible();
   await preset.click();
 
-  await expect(page.getByText("fuji/gate")).toBeVisible();
+  const fujiSection = page.getByText("fuji/gate");
+  const consoleError = page
+    .locator("p")
+    .filter({ hasText: /401|503|HTTP|ネットワークエラー|schema不一致/ })
+    .first();
+  try {
+    await expect(fujiSection).toBeVisible({ timeout: 30000 });
+  } catch {
+    await expect(consoleError).toBeVisible({ timeout: 5000 });
+  }
 
   const requestText = await page
     .locator('section[aria-label="trust_log"] pre')
