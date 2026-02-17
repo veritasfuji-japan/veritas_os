@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
 _MAX_JSON_EXTRACT_CHARS = 200_000
 _MAX_JSON_DECODE_ATTEMPTS = 512
+_MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS = 512
 
 
 def _truncate_json_extract_input(raw: str) -> str:
@@ -233,6 +234,19 @@ def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
     )
     has_plan_words = any(
         k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
+    ) or any(
+        k in q_lower
+        for k in [
+            "roadmap",
+            "plan",
+            "strategy",
+            "next step",
+            "next steps",
+            "implementation",
+            "implement",
+            "task",
+            "tasks",
+        ]
     )
 
     if is_short and looks_question and not has_plan_words:
@@ -528,13 +542,13 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             return obj
         return {"steps": []}
 
-    def _decode_first_json_value(text: str) -> Any:
-        """Extract and decode the first JSON value found in free-form text.
+    def _iter_decoded_json_values(text: str):
+        """Yield JSON values decoded from free-form text.
 
-        The decoding probe count is bounded to avoid excessive CPU usage when
-        malformed text contains a very large number of ``{"`` / ``[``
-        characters. We also skip decode calls when a candidate cannot possibly
-        close (for example, ``[`` after the last ``]``).
+        The probe count is bounded to avoid excessive CPU usage when malformed
+        text contains a very large number of ``{"`` / ``[`` characters.
+        Candidates that cannot possibly close are skipped before decoding
+        attempts.
         """
         decoder = json.JSONDecoder()
         attempts = 0
@@ -561,11 +575,9 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
 
             try:
                 obj, _ = decoder.raw_decode(text, idx=i)
-                return obj
+                yield obj
             except json.JSONDecodeError:
                 continue
-
-        return None
 
     # 1) そのまま
     try:
@@ -575,13 +587,19 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         logger.debug("planner JSON parse attempt 1 (raw) failed")
 
     # 1.5) 先頭ノイズ付きの JSON を raw_decode で救済
-    obj = _decode_first_json_value(cleaned)
-    if isinstance(obj, list):
-        return _wrap_if_needed(obj)
-    if isinstance(obj, dict) and (
-        "steps" in obj or cleaned.lstrip().startswith("{")
-    ):
-        return _wrap_if_needed(obj)
+    fallback_from_raw_decode: Optional[Dict[str, Any]] = None
+    for obj in _iter_decoded_json_values(cleaned):
+        if isinstance(obj, list):
+            return _wrap_if_needed(obj)
+
+        if isinstance(obj, dict) and "steps" in obj:
+            return _wrap_if_needed(obj)
+
+        if isinstance(obj, dict) and fallback_from_raw_decode is None:
+            fallback_from_raw_decode = _wrap_if_needed(obj)
+
+    if fallback_from_raw_decode and cleaned.lstrip().startswith("{"):
+        return fallback_from_raw_decode
 
     # 2) {} 抜き出し（旧来互換の救済）
     try:
@@ -613,7 +631,15 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
             continue
 
     # 4) "steps":[{...},{...}] から dict だけ拾う（最後の保険）
+    #    NOTE: 以前の手書きパーサよりも、JSONDecoder を使って保守性を向上。
     def _extract_step_objects(text: str) -> List[Dict[str, Any]]:
+        """Extract dict objects from a ``"steps"`` JSON-like array.
+
+        This parser is intentionally tolerant to partially broken LLM output.
+        It scans forward from ``"steps": [`` and decodes each object candidate
+        with ``json.JSONDecoder().raw_decode``. The decode attempt count is
+        bounded to reduce CPU abuse risk from malformed inputs.
+        """
         idx = text.find('"steps"')
         if idx == -1:
             return []
@@ -621,51 +647,38 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         if idx == -1:
             return []
 
+        objs: List[Dict[str, Any]] = []
+        decoder = json.JSONDecoder()
+        attempts = 0
         i = idx + 1
         n = len(text)
 
-        in_str = False
-        esc = False
-        depth = 0
-        buf_start: Optional[int] = None
-        objs: List[Dict[str, Any]] = []
-
         while i < n:
+            if attempts >= _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS:
+                logger.warning(
+                    "planner step object extraction attempt limit reached (%d)",
+                    _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS,
+                )
+                break
+
             ch = text[i]
+            if ch == "]":
+                break
 
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-            else:
-                if ch == '"':
-                    in_str = True
-                elif ch == "{":
-                    if depth == 0:
-                        buf_start = i
-                    depth += 1
-                elif ch == "}":
-                    if depth == 0:
-                        # 先頭側の壊れた `}` を無視して復旧可能性を維持する
-                        i += 1
-                        continue
-                    depth -= 1
-                    if depth == 0 and buf_start is not None:
-                        obj_str = text[buf_start : i + 1]
-                        try:
-                            obj = json.loads(obj_str)
-                            if isinstance(obj, dict):
-                                objs.append(obj)
-                        except Exception:
-                            logger.debug("planner step object parse failed: %s", obj_str[:80])
-                        buf_start = None
-                elif ch == "]":
-                    break
+            if ch != "{":
+                i += 1
+                continue
 
-            i += 1
+            attempts += 1
+            try:
+                obj, end = decoder.raw_decode(text, idx=i)
+            except json.JSONDecodeError:
+                i += 1
+                continue
+
+            if isinstance(obj, dict):
+                objs.append(obj)
+            i = end
 
         return objs
 

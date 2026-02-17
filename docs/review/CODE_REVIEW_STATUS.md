@@ -129,10 +129,10 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 **Location**: `memory/store.py:9-12`
 **Fix**: Made configurable via `VERITAS_MEMORY_DIR` environment variable
 
-### ⏸️ M-4: Brute-force JSON extraction in `planner.py`
-**Status**: DEFERRED (complex refactoring)
-**Location**: `core/planner.py:455-530`
-**Reason**: The manual parser works correctly. Refactoring to `json.JSONDecoder().raw_decode()` would require extensive testing. Acceptable for now.
+### ✅ M-4: Brute-force JSON extraction in `planner.py`
+**Status**: FIXED (2026-02-16)
+**Location**: `core/planner.py`
+**Fix**: Reworked the JSON rescue path to iterate `json.JSONDecoder().raw_decode()` candidates and prefer objects that include `steps`, preventing early capture of unrelated leading JSON objects while keeping decode-attempt limits for DoS resistance. Added a regression test for noisy-prefix payloads in `tests/test_planner.py`.
 
 ### ⏸️ M-5: Lazy state initialization race conditions
 **Status**: DEFERRED (acceptable with GIL)

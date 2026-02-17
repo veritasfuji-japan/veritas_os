@@ -52,14 +52,50 @@ def _allow_legacy_pickle_migration() -> bool:
     この機能は廃止予定です。新しいデータは JSON 形式で保存されます。
     """
     value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
-    if value in {"1", "true", "yes", "y", "on"}:
+    if value not in {"1", "true", "yes", "y", "on"}:
+        return False
+
+    if _legacy_pickle_migration_sunset_passed():
+        logger.error(
+            "[SECURITY] Legacy pickle migration is disabled because the "
+            "deprecation sunset date has passed. "
+            "Please migrate using a trusted offline workflow."
+        )
+        return False
+
+    logger.warning(
+        "[SECURITY] Legacy pickle migration is enabled. "
+        "This feature is DEPRECATED and will be removed in a future version. "
+        "Please ensure all data is migrated to JSON format."
+    )
+    return True
+
+
+def _legacy_pickle_migration_sunset_passed() -> bool:
+    """Return ``True`` when pickle migration must be forcibly disabled.
+
+    Security note:
+        Pickle migration is a temporary escape hatch and must have a clear end
+        date. The sunset date is configurable via
+        ``VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET`` (``YYYY-MM-DD``). If the
+        value is malformed, we fail closed (treat as expired) to avoid
+        accidentally keeping insecure behavior enabled.
+    """
+    sunset_raw = os.getenv(
+        "VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET",
+        "2026-06-30",
+    ).strip()
+    try:
+        sunset_date = datetime.strptime(sunset_raw, "%Y-%m-%d").date()
+    except ValueError:
         logger.warning(
-            "[SECURITY] Legacy pickle migration is enabled. "
-            "This feature is DEPRECATED and will be removed in a future version. "
-            "Please ensure all data is migrated to JSON format."
+            "[SECURITY] Invalid VERITAS_MEMORY_PICKLE_MIGRATION_SUNSET=%r. "
+            "Expected YYYY-MM-DD; disabling legacy pickle migration.",
+            sunset_raw,
         )
         return True
-    return False
+
+    return datetime.now(timezone.utc).date() > sunset_date
 
 
 def _should_delete_pickle_after_migration() -> bool:
@@ -1994,7 +2030,6 @@ def rebuild_vector_index():
         _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
         logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 
 

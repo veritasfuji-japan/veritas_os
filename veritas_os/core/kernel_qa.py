@@ -87,24 +87,50 @@ def detect_simple_qa(q: str) -> str | None:
     if any(k in ql for k in AGI_BLOCK_KEYWORDS):
         return None
 
-    # 短いクエリのみ対象
-    if len(q) > 25:
+    qj = q.replace("　", " ")
+    normalized = " ".join(qj.split())
+    normalized_lower = normalized.lower().rstrip("？?!.。")
+
+    # 短いクエリのみ対象（ただし日英混在の短文QAは少し長くても許容）
+    mixed_language_simple_qa = (
+        "today" in normalized_lower
+        and (
+            "what time" in normalized_lower
+            or "time is it" in normalized_lower
+            or "what day" in normalized_lower
+            or "what is the date" in normalized_lower
+            or "what's the date" in normalized_lower
+            or "date" in normalized_lower
+        )
+    )
+    if len(normalized) > 25 and not mixed_language_simple_qa:
         return None
 
-    qj = q.replace("　", " ")
+    if SIMPLE_QA_PATTERNS["time"].search(normalized):
+        return "time"
+    if SIMPLE_QA_PATTERNS["weekday"].search(normalized):
+        return "weekday"
+    if SIMPLE_QA_PATTERNS["date"].search(normalized):
+        return "date"
+    if SIMPLE_QA_PATTERNS["time_en"].search(normalized_lower):
+        return "time"
+    if SIMPLE_QA_PATTERNS["weekday_en"].search(normalized_lower):
+        return "weekday"
+    if (
+        ("what's the date" in normalized_lower or "what is the date" in normalized_lower)
+        and "today" in normalized_lower
+    ):
+        return "date"
+    if "today" in normalized_lower and "date" in normalized_lower and len(normalized_lower) < 40:
+        return "date"
 
-    if SIMPLE_QA_PATTERNS["time"].search(qj):
-        return "time"
-    if SIMPLE_QA_PATTERNS["weekday"].search(qj):
+    # 日英混在の短文クエリを許容（レビュー指摘の端境ケース対応）
+    if "today" in normalized_lower and "what day" in normalized_lower:
         return "weekday"
-    if SIMPLE_QA_PATTERNS["date"].search(qj):
-        return "date"
-    if SIMPLE_QA_PATTERNS["time_en"].search(ql):
+    if "today" in normalized_lower and (
+        "what time" in normalized_lower or "time is it" in normalized_lower
+    ):
         return "time"
-    if SIMPLE_QA_PATTERNS["weekday_en"].search(ql):
-        return "weekday"
-    if "today" in ql and "date" in ql and len(ql) < 40:
-        return "date"
 
     return None
 

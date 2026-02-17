@@ -56,15 +56,48 @@ import requests
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
+
+def _sanitize_websearch_url(url: str) -> str:
+    """Validate env-derived web search URL and drop unsafe schemes.
+
+    Security note:
+        Runtime env overrides are useful for incident response, but they must
+        still respect scheme restrictions to avoid accidental use of
+        non-network schemes (e.g. ``file://``).
+    """
+    candidate = (url or "").strip()
+    if not candidate:
+        return ""
+
+    parsed = urlparse(candidate)
+    if parsed.scheme in ("http", "https"):
+        return candidate
+
+    logging.getLogger(__name__).warning(
+        "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
+        parsed.scheme,
+    )
+    return ""
+
+
 # ★ SSRF対策: WEBSEARCH_URL のスキームを検証
-if WEBSEARCH_URL:
-    _parsed_ws_url = urlparse(WEBSEARCH_URL)
-    if _parsed_ws_url.scheme not in ("http", "https"):
-        logging.getLogger(__name__).warning(
-            "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
-            _parsed_ws_url.scheme,
-        )
-        WEBSEARCH_URL = ""
+WEBSEARCH_URL = _sanitize_websearch_url(WEBSEARCH_URL)
+
+
+def _resolve_websearch_credentials() -> tuple[str, str]:
+    """Return current WebSearch URL and API key with runtime env override.
+
+    Credentials are resolved at call time so emergency rotations can be
+    reflected without process restarts. For backward compatibility with
+    existing tests and embedding code, module-level constants remain the
+    fallback when environment variables are unset.
+    """
+    env_url = _sanitize_websearch_url(os.getenv("VERITAS_WEBSEARCH_URL", ""))
+    env_key = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
+
+    websearch_url = env_url or WEBSEARCH_URL
+    websearch_key = env_key or WEBSEARCH_KEY
+    return websearch_url, websearch_key
 
 # ★ クエリインジェクション対策: 制御文字の除去パターン
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -92,6 +125,24 @@ def _safe_float(key: str, default: float) -> float:
     if not math.isfinite(value):
         return default
     return value
+
+
+def _resolve_websearch_host_allowlist() -> set[str]:
+    """Return host allowlist with runtime env override.
+
+    Security note:
+        Incident response may require tightening allowlisted hosts immediately.
+        This resolver mirrors credential resolution so operators can update the
+        allowlist without restarting the process.
+    """
+    env_allowlist_raw = os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "")
+    if env_allowlist_raw.strip():
+        return {
+            host.strip().lower().rstrip(".")
+            for host in env_allowlist_raw.split(",")
+            if host.strip()
+        }
+    return WEBSEARCH_HOST_ALLOWLIST
 
 
 WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
@@ -348,8 +399,9 @@ def _is_allowed_websearch_url(url: str) -> bool:
         return False
 
     host = _canonicalize_hostname(parsed.hostname or "")
-    if WEBSEARCH_HOST_ALLOWLIST:
-        if host not in WEBSEARCH_HOST_ALLOWLIST:
+    host_allowlist = _resolve_websearch_host_allowlist()
+    if host_allowlist:
+        if host not in host_allowlist:
             return False
         # Allowlisted hosts must also resolve to public IPs.
         # This prevents DNS rebinding/misconfiguration from tunneling
@@ -607,11 +659,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         ),
     }
 
-    if not WEBSEARCH_URL or not WEBSEARCH_KEY:
+    websearch_url, websearch_key = _resolve_websearch_credentials()
+
+    if not websearch_url or not websearch_key:
         return unavailable_response
 
-    if not _is_allowed_websearch_url(WEBSEARCH_URL):
-        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", WEBSEARCH_URL)
+    if not _is_allowed_websearch_url(websearch_url):
+        logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", websearch_url)
         return unavailable_response
 
     # max_results の下限・上限を守る（極端値対策）
@@ -620,7 +674,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
 
     try:
         headers = {
-            "X-API-KEY": WEBSEARCH_KEY,
+            "X-API-KEY": websearch_key,
             "Content-Type": "application/json",
         }
 
@@ -666,7 +720,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         }
 
         resp = _post_with_retry(
-            WEBSEARCH_URL,
+            websearch_url,
             headers=headers,
             payload=payload,
             timeout=15,

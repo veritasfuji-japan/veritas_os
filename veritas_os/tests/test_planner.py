@@ -109,6 +109,8 @@ def test_normalize_step_uses_defaults_for_invalid_existing_values():
         ("VERITAS の弱点を教えて", {"simple_qa": True}, True),  # 明示フラグ優先
         ("what is this", {}, True),  # 英語の疑問文（?なし）
         ("料金を教えて", {}, True),  # 日本語の短い質問（?なし）
+        ("How should we implement this?", {}, False),  # 計画系キーワードを含む英語
+        ("What's the roadmap for rollout?", {}, False),  # roadmap は simple_qa から除外
     ],
 )
 def test_is_simple_qa_variants(query, ctx, expected):
@@ -166,6 +168,13 @@ def test_safe_json_extract_top_level_list_with_prefix_noise():
     obj = planner_core._safe_json_extract(raw)
     assert isinstance(obj, dict)
     assert [s["id"] for s in obj["steps"]] == ["s1", "s2"]
+
+
+def test_safe_json_extract_prefers_embedded_steps_over_leading_non_steps_object():
+    raw = 'noise {"meta": 1} and then {"steps": [{"id": "s1"}]}'
+    obj = planner_core._safe_json_extract(raw)
+
+    assert [s["id"] for s in obj["steps"]] == ["s1"]
 
 
 def test_safe_json_extract_code_block():
@@ -239,6 +248,24 @@ def test_safe_json_extract_limits_decoder_probe_count(caplog):
 
     assert obj["steps"] == []
     assert any("probe limit reached" in rec.message for rec in caplog.records)
+
+
+def test_safe_json_extract_step_object_uses_raw_decode_with_brace_in_string():
+    raw = 'prefix "steps": [{"id": "ok1", "detail": "brace } inside"}, {"id": "ok2"}] tail'
+    obj = planner_core._safe_json_extract(raw)
+
+    ids = [s["id"] for s in obj["steps"]]
+    assert ids == ["ok1", "ok2"]
+
+
+def test_safe_json_extract_step_object_attempt_limit(caplog):
+    raw = '"steps": [' + ("{" * (planner_core._MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS + 20))
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_json_extract(raw)
+
+    assert obj["steps"] == []
+    assert any("extraction attempt limit reached" in rec.message for rec in caplog.records)
 
 
 # -------------------------------
