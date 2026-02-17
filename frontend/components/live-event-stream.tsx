@@ -2,8 +2,6 @@
 
 import { Card } from "@veritas/design-system";
 import { useEffect, useMemo, useRef, useState } from "react";
-
-const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
 
 interface StreamEvent {
@@ -14,39 +12,32 @@ interface StreamEvent {
 }
 
 /**
- * Build the SSE endpoint URL from operator-provided connection settings.
- * Returns `null` when the base URL is malformed so that the caller can
- * surface validation feedback without crashing rendering.
+ * Build a same-origin SSE endpoint URL routed through Next.js rewrites.
  */
-function buildEventUrl(apiBase: string, apiKey: string): string | null {
-  const base = apiBase.trim().replace(/\/$/, "");
-  if (!base) {
-    return null;
+function buildEventUrl(apiKey: string): string {
+  const params = new URLSearchParams();
+  if (apiKey.trim()) {
+    params.set("api_key", apiKey.trim());
   }
-
-  try {
-    const url = new URL(`${base}/v1/events`);
-    if (apiKey.trim()) {
-      url.searchParams.set("api_key", apiKey.trim());
-    }
-    return url.toString();
-  } catch {
-    return null;
-  }
+  const query = params.toString();
+  return query ? `/api/v1/events?${query}` : "/api/v1/events";
 }
 
 export function LiveEventStream(): JSX.Element {
-  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [apiKey, setApiKey] = useState(ENV_API_KEY);
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const streamUrl = useMemo(() => buildEventUrl(apiBase, apiKey), [apiBase, apiKey]);
-  const hasInvalidApiBase = apiBase.trim().length > 0 && streamUrl === null;
+  const streamUrl = useMemo(() => buildEventUrl(apiKey), [apiKey]);
 
   useEffect(() => {
     if (!streamUrl) {
+      setConnected(false);
+      return;
+    }
+
+    if (typeof EventSource === "undefined") {
       setConnected(false);
       return;
     }
@@ -95,14 +86,6 @@ export function LiveEventStream(): JSX.Element {
     <Card title="Live Event Stream" className="border-primary/40 bg-surface/80">
       <div className="mb-3 grid gap-3 md:grid-cols-2">
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          API Base URL
-          <input
-            value={apiBase}
-            onChange={(event) => setApiBase(event.target.value)}
-            className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
           API Key
           <input
             value={apiKey}
@@ -116,9 +99,6 @@ export function LiveEventStream(): JSX.Element {
       <p className="mb-2 text-xs text-muted-foreground">
         Status: {connected ? "🟢 connected" : "🟡 reconnecting"}
       </p>
-      {hasInvalidApiBase ? (
-        <p className="mb-2 text-xs text-destructive">有効な API Base URL を入力してください。</p>
-      ) : null}
       {apiKey.trim().length > 0 ? (
         <p className="mb-2 text-xs text-amber-600">
           Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.

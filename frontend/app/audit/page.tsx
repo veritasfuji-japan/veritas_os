@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import { buildApiUrl } from "@/lib/api";
 
-const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
 const PAGE_LIMIT = 50;
+const E2E_MODE = process.env.NEXT_PUBLIC_E2E === "1";
 
 interface TrustLogItem {
   request_id?: string;
@@ -41,7 +42,6 @@ function toPrettyJson(value: unknown): string {
 }
 
 export default function TrustLogExplorerPage(): JSX.Element {
-  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [apiKey, setApiKey] = useState(ENV_API_KEY);
   const [cursor, setCursor] = useState<string | null>(null);
   const [items, setItems] = useState<TrustLogItem[]>([]);
@@ -78,7 +78,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         params.set("cursor", nextCursor);
       }
 
-      const response = await fetch(`${apiBase.replace(/\/$/, "")}/v1/trust/logs?${params.toString()}`, {
+      const response = await fetch(`${buildApiUrl("/v1/trust/logs")}?${params.toString()}`, {
         headers: {
           "X-API-Key": apiKey.trim(),
         },
@@ -104,6 +104,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
     }
   };
 
+
+  const handleLoadLatest = (): void => {
+    void loadLogs(null, true);
+  };
+
   const searchByRequestId = async (): Promise<void> => {
     const value = requestId.trim();
     setRequestResult(null);
@@ -115,7 +120,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase.replace(/\/$/, "")}/v1/trust/${encodeURIComponent(value)}`, {
+      const response = await fetch(buildApiUrl(`/v1/trust/${encodeURIComponent(value)}`), {
         headers: {
           "X-API-Key": apiKey.trim(),
         },
@@ -140,6 +145,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      <div data-testid="audit-ready" className="sr-only">audit-ready</div>
       <Card title="TrustLog Explorer" className="border-primary/50 bg-surface/85">
         <p className="text-sm text-muted-foreground">
           /v1/trust/logs と /v1/trust/{"{request_id}"} を使って、監査証跡を時系列に確認します。
@@ -149,16 +155,10 @@ export default function TrustLogExplorerPage(): JSX.Element {
       <Card title="Connection" className="bg-background/75">
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 text-xs">
-            <span className="font-medium">API Base URL</span>
-            <input
-              className="w-full rounded-md border border-border bg-background px-2 py-2"
-              value={apiBase}
-              onChange={(event) => setApiBase(event.target.value)}
-            />
-          </label>
-          <label className="space-y-1 text-xs">
             <span className="font-medium">X-API-Key</span>
             <input
+              data-testid="audit-api-key-input"
+              aria-label="X-API-Key"
               className="w-full rounded-md border border-border bg-background px-2 py-2"
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
@@ -173,7 +173,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
             type="button"
             className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
             disabled={loading || !apiKey.trim()}
-            onClick={() => void loadLogs(null, true)}
+            onClick={handleLoadLatest}
           >
             最新ログを読み込み
           </button>
@@ -187,6 +187,8 @@ export default function TrustLogExplorerPage(): JSX.Element {
           </button>
         </div>
       </Card>
+
+      {E2E_MODE ? <p className="text-xs text-muted-foreground">E2E mode: 初期取得は手動実行です。</p> : null}
 
       <Card title="request_id 検索" className="bg-background/75">
         <div className="flex flex-col gap-2 md:flex-row">
@@ -219,6 +221,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         <div className="mb-3 flex items-center gap-2 text-xs">
           <span className="font-medium">ステージフィルタ</span>
           <select
+            aria-label="ステージフィルタ"
             className="rounded-md border border-border bg-background px-2 py-1"
             value={stageFilter}
             onChange={(event) => setStageFilter(event.target.value)}

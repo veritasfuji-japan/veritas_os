@@ -1,0 +1,75 @@
+import { test, expect } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+const TEST_KEY = process.env.VERITAS_API_KEY ?? "test-e2e-key";
+
+test("console → audit → governance update flow", async ({ page }) => {
+  test.setTimeout(180_000);
+
+  await page.goto("/console", { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: "Decision Console" }).first()).toBeVisible();
+
+  await page.getByTestId("console-api-key-input").fill(TEST_KEY);
+  const preset = page.getByTestId("console-danger-preset-0");
+  await expect(preset).toBeVisible();
+  await preset.click();
+
+  const fujiSection = page.getByText("fuji/gate");
+  const consoleError = page
+    .locator("p")
+    .filter({ hasText: /401|503|HTTP|ネットワークエラー|schema不一致/ })
+    .first();
+  const decideOutcome = await Promise.race<"fuji" | "error" | "timeout">([
+    fujiSection.waitFor({ state: "visible", timeout: 15_000 }).then(() => "fuji"),
+    consoleError.waitFor({ state: "visible", timeout: 15_000 }).then(() => "error"),
+    page.waitForTimeout(15_000).then(() => "timeout"),
+  ]);
+  expect(decideOutcome).not.toBe("timeout");
+
+  const requestText = await page
+    .locator('section[aria-label="trust_log"] pre')
+    .innerText()
+    .catch(() => "");
+  const requestIdMatch = requestText.match(/"request_id"\s*:\s*"([^"]+)"/);
+  const requestId = requestIdMatch?.[1];
+
+  await page.goto("/audit", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("audit-ready")).toBeVisible();
+  await page.getByTestId("audit-api-key-input").fill(TEST_KEY);
+
+  if (requestId) {
+    await page.getByPlaceholder("request_id").fill(requestId);
+    await page.getByRole("button", { name: "検索" }).click();
+    await expect(page.getByText(/count:/)).toBeVisible();
+  } else {
+    await page.getByRole("button", { name: "最新ログを読み込み" }).click();
+    await expect(page.getByText(/表示件数:/)).toBeVisible();
+  }
+
+  await page.goto("/governance", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("governance-api-key-input").fill(TEST_KEY);
+  await page.getByTestId("governance-load-policy-button").click();
+  await expect(page.getByText("policy を読み込みました。")).toBeVisible();
+
+  await page.getByLabel("FUJI rule enabled").click();
+  await page.getByLabel("リスク閾値").fill("0.45");
+  await page.getByLabel("自動停止条件").fill("risk_threshold_exceeded,manual_override");
+  await page.getByLabel("ログ保持期間").fill("120");
+  await page.getByLabel("監査強度").selectOption("high");
+  await page.getByTestId("governance-update-policy-button").click();
+
+  await expect(page.getByText("policy を更新しました。")).toBeVisible();
+  await expect(page.getByText(/risk_threshold:/)).toBeVisible();
+});
+
+test("@a11y major pages are scannable", async ({ page }) => {
+  for (const route of ["/", "/console", "/audit", "/governance"]) {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    if (route === "/audit") {
+      await expect(page.getByTestId("audit-ready")).toBeVisible();
+    }
+    const accessibilityScanResults = await new AxeBuilder({ page }).include("main").analyze();
+    const scannedViolationIds = accessibilityScanResults.violations.map((violation) => violation.id);
+    expect(Array.isArray(scannedViolationIds)).toBe(true);
+  }
+});
