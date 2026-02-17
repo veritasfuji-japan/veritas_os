@@ -63,6 +63,14 @@ test.describe("Smoke: 3-minute demo flow", () => {
 // ============================================================
 
 test.describe("Accessibility (axe)", () => {
+  // Rules excluded from assertions:
+  // - color-contrast: design-token colours use CSS custom properties that
+  //   axe cannot resolve, producing false positives.
+  // - region: Next.js injects internal elements (e.g. route-announcer)
+  //   outside landmarks that we cannot control.  All *application* content
+  //   is inside proper landmark elements.
+  const IGNORED_RULES = new Set(["color-contrast", "region"]);
+
   const pages = [
     { path: "/", name: "Dashboard" },
     { path: "/console", name: "Console" },
@@ -80,23 +88,18 @@ test.describe("Accessibility (axe)", () => {
 
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa"])
-        .disableRules([
-          // Design-token colors use CSS custom properties that axe cannot
-          // resolve, causing false positives on contrast checks.
-          "color-contrast",
-          // The region rule is best-practice only (not WCAG), but some
-          // axe-core builds tag it as wcag2a.  Disable explicitly since
-          // wrapper divs around landmark children can trigger false positives.
-          "region",
-        ])
         .analyze();
 
-      const violations = results.violations.map((v) => ({
-        id: v.id,
-        impact: v.impact,
-        description: v.description,
-        nodes: v.nodes.map((n) => n.html.slice(0, 200)),
-      }));
+      // Filter results in JS — more reliable than disableRules() which
+      // can be ignored by certain axe-core/playwright version combinations.
+      const violations = results.violations
+        .filter((v) => !IGNORED_RULES.has(v.id))
+        .map((v) => ({
+          id: v.id,
+          impact: v.impact,
+          description: v.description,
+          nodes: v.nodes.map((n) => n.html.slice(0, 200)),
+        }));
       expect(violations).toEqual([]);
     });
   }
