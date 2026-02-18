@@ -162,6 +162,8 @@ def _sanitize_html_url(raw_url: object) -> str:
           external link in clients and should never point to arbitrary domains.
         - URL-embedded credentials are always rejected to prevent accidental
           leakage of secrets via logs or UI.
+        - Explicit non-default ports are rejected to avoid ambiguous
+          destinations and reduce risks from host spoofing tricks.
         - Query strings and fragments are rejected to avoid displaying tracking
           parameters or ambiguous destinations.
         - Only canonical repository paths (``/owner/repo``) are accepted.
@@ -180,6 +182,17 @@ def _sanitize_html_url(raw_url: object) -> str:
     if parsed.username or parsed.password:
         logger.warning("Dropped GitHub html_url containing credentials")
         return ""
+
+    try:
+        port = parsed.port
+    except ValueError:
+        logger.warning("Dropped GitHub html_url with invalid port")
+        return ""
+
+    if port not in (None, 443):
+        logger.warning("Dropped GitHub html_url with unsupported port: %r", port)
+        return ""
+
     if (parsed.hostname or "").lower() not in _TRUSTED_GITHUB_HOSTS:
         logger.warning("Dropped GitHub html_url with untrusted host: %r", parsed.hostname)
         return ""
