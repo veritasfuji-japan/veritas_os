@@ -402,7 +402,8 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     if isinstance(value, tuple):
-        return tuple(_sanitize_value(item) for item in value)
+        # Keep the payload JSON-serializable for telemetry/log export.
+        return [_sanitize_value(item) for item in value]
     if isinstance(value, str) and len(value) > 200:
         return value[:200] + "..."
     return value
@@ -428,8 +429,11 @@ def get_tool_usage_log(limit: int = 100) -> List[Dict[str, Any]]:
     Args:
         limit: 取得する最大件数
     """
+    normalized_limit = max(0, int(limit))
+    if normalized_limit == 0:
+        return []
     with _tool_usage_log_lock:
-        return _tool_usage_log[-limit:][::-1]
+        return _tool_usage_log[-normalized_limit:][::-1]
 
 
 def clear_tool_usage_log() -> None:
