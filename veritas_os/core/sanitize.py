@@ -160,7 +160,8 @@ RE_IPV6 = re.compile(
 #   既存実装は ``user:password`` のみを検出しており、アクセストークン等を
 #   user 部分に埋め込んだ URL を見逃す可能性があったため包括的に検出する。
 RE_URL_CREDENTIAL = re.compile(
-    r'(?:https?|ftp)://[^@\s/]+@[^\s/]+'
+    r'(?:https?|ftp)://[^@\s/]+@[^\s/]+',
+    re.IGNORECASE,
 )
 
 # --- 銀行口座番号（日本）---

@@ -373,6 +373,13 @@ class TestURLCredentialDetection:
         creds = [r for r in result if r["type"] == "url_credential"]
         assert len(creds) == 1
 
+    def test_uppercase_scheme_detected(self):
+        """Credential URLs should be detected regardless of scheme casing."""
+        text = "URL: HTTPS://user:pass@example.com/path"
+        result = detect_pii(text)
+        creds = [r for r in result if r["type"] == "url_credential"]
+        assert len(creds) == 1
+
     def test_credential_masking(self):
         text = "ftp://user:pass@ftp.example.com"
         masked = mask_pii(text)
