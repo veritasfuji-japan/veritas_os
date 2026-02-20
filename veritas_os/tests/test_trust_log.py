@@ -170,15 +170,15 @@ def test_get_last_hash_no_file_returns_none(temp_log_env):
 def test_get_last_hash_reads_last_line_sha256(temp_log_env):
     # 2行分の JSONL を書いて、最後の sha256 を返せるか
     entries = [
-        {"sha256": "aaa111"},
-        {"sha256": "bbb222"},
+        {"sha256": "a" * 64},
+        {"sha256": "b" * 64},
     ]
     with open(temp_log_env["jsonl"], "w", encoding="utf-8") as f:
         for e in entries:
             f.write(json.dumps(e) + "\n")
 
     last = trust_log.get_last_hash()
-    assert last == "bbb222"
+    assert last == "b" * 64
 
 
 def test_get_last_hash_invalid_json_returns_none(temp_log_env):
@@ -187,30 +187,41 @@ def test_get_last_hash_invalid_json_returns_none(temp_log_env):
 
 
 def test_get_last_hash_handles_very_large_last_line(temp_log_env):
-    payload = {"sha256": "large123", "blob": "x" * 70000}
+    payload = {"sha256": "c" * 64, "blob": "x" * 70000}
     temp_log_env["jsonl"].write_text(json.dumps(payload) + "\n", encoding="utf-8")
 
-    assert trust_log.get_last_hash() == "large123"
+    assert trust_log.get_last_hash() == "c" * 64
 
 
 def test_get_last_hash_skips_trailing_partial_json_line(temp_log_env):
-    valid = json.dumps({"sha256": "stable_hash"})
+    valid = json.dumps({"sha256": "d" * 64})
     partial = '{"sha256": "broken"'
     temp_log_env["jsonl"].write_text(f"{valid}\n{partial}", encoding="utf-8")
 
-    assert trust_log.get_last_hash() == "stable_hash"
+    assert trust_log.get_last_hash() == "d" * 64
 
 
 def test_extract_last_sha256_from_lines_ignores_invalid_entries():
+    valid_hash = "a" * 64
     lines = [
         "",
         "not-json",
         json.dumps(["list", "is", "ignored"]),
         json.dumps({"sha256": ""}),
         json.dumps({"sha256": "good_hash"}),
+        json.dumps({"sha256": valid_hash}),
     ]
 
-    assert trust_log._extract_last_sha256_from_lines(lines) == "good_hash"
+    assert trust_log._extract_last_sha256_from_lines(lines) == valid_hash
+
+
+def test_extract_last_sha256_from_lines_rejects_non_hex_sha256():
+    lines = [
+        json.dumps({"sha256": "g" * 64}),
+        json.dumps({"sha256": "123"}),
+    ]
+
+    assert trust_log._extract_last_sha256_from_lines(lines) is None
 
 
 # ============================

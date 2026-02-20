@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,8 @@ except Exception as _import_err:  # pragma: no cover
     )
 
 logger = logging.getLogger(__name__)
+
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
 LOG_JSON = LOG_DIR / "trust_log.json"
@@ -112,7 +115,7 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
             continue
 
         sha = payload.get("sha256") if isinstance(payload, dict) else None
-        if isinstance(sha, str) and sha:
+        if isinstance(sha, str) and _SHA256_HEX_RE.fullmatch(sha):
             return sha
     return None
 
