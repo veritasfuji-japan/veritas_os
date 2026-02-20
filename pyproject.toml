@@ -45,6 +45,9 @@ Homepage = "https://github.com/veritasfuji-japan/veritas_os"
 Repository = "https://github.com/veritasfuji-japan/veritas_os"
 Issues = "https://github.com/veritasfuji-japan/veritas_os/issues"
 
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
 [tool.setuptools.packages.find]
 include = ["veritas_os*"]
 

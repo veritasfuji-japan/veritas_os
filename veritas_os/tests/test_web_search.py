@@ -4,8 +4,24 @@ from __future__ import annotations
 from typing import Any, Dict
 import importlib
 
+import pytest
+
 # veritas_os.tools.web_search モジュール本体を明示的にロード
 web_search_mod = importlib.import_module("veritas_os.tools.web_search")
+
+
+@pytest.fixture()
+def _bypass_ssrf(monkeypatch):
+    """Bypass DNS-based SSRF host checks.
+
+    CI / sandbox environments often cannot resolve external hostnames
+    (e.g. example.com).  Tests that mock ``requests.post`` never make
+    real HTTP calls, so the DNS-based guard is irrelevant.
+    """
+    web_search_mod._is_private_or_local_host.cache_clear()
+    monkeypatch.setattr(
+        web_search_mod, "_is_private_or_local_host", lambda _host: False,
+    )
 
 
 class DummyResponse:
@@ -103,7 +119,7 @@ def test_normalize_result_item_rejects_url_without_hostname() -> None:
     assert web_search_mod._normalize_result_item(item) is None
 
 
-def test_normalize_result_item_truncates_long_fields() -> None:
+def test_normalize_result_item_truncates_long_fields(_bypass_ssrf) -> None:
     """検索結果の各フィールドは上限長で切り詰める。"""
     item = {
         "title": "t" * 700,
@@ -221,7 +237,7 @@ def test_web_search_returns_error_when_not_configured(monkeypatch) -> None:
     assert "WEBSEARCH_API unavailable" in resp["error"]
 
 
-def test_web_search_normal_query_returns_results(monkeypatch) -> None:
+def test_web_search_normal_query_returns_results(monkeypatch, _bypass_ssrf) -> None:
     """通常クエリでは AGI フィルタ無しでそのまま結果を返す"""
     # 疑似的な設定
     monkeypatch.setattr(
@@ -286,7 +302,7 @@ def test_web_search_normal_query_returns_results(monkeypatch) -> None:
     assert resp["meta"]["boosted_query"] is None
 
 
-def test_web_search_retries_on_timeout(monkeypatch) -> None:
+def test_web_search_retries_on_timeout(monkeypatch, _bypass_ssrf) -> None:
     """一時的なタイムアウト時に再試行する。"""
     monkeypatch.setattr(
         web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -326,7 +342,7 @@ def test_web_search_retries_on_timeout(monkeypatch) -> None:
     assert resp["results"][0]["title"] == "Result 1"
 
 
-def test_web_search_agi_query_filters_and_trims(monkeypatch) -> None:
+def test_web_search_agi_query_filters_and_trims(monkeypatch, _bypass_ssrf) -> None:
     """AGI クエリではブースト + フィルタがかかる"""
     monkeypatch.setattr(
         web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -380,7 +396,7 @@ def test_web_search_agi_query_filters_and_trims(monkeypatch) -> None:
     assert len(resp["results"]) == 1  # max_results=1 で切り詰め
 
 
-def test_web_search_agi_query_no_agi_like_results(monkeypatch) -> None:
+def test_web_search_agi_query_no_agi_like_results(monkeypatch, _bypass_ssrf) -> None:
     """AGI クエリだが AGI っぽい結果が無い場合、no_agi_like_results を返す"""
     monkeypatch.setattr(
         web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -415,7 +431,7 @@ def test_web_search_agi_query_no_agi_like_results(monkeypatch) -> None:
     assert "boosted_query" in resp["meta"]
 
 
-def test_web_search_handles_request_exception(monkeypatch) -> None:
+def test_web_search_handles_request_exception(monkeypatch, _bypass_ssrf) -> None:
     """requests.post で例外が出た場合に、エラーとしてハンドリングされること"""
     monkeypatch.setattr(
         web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False

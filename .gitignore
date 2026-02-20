@@ -87,3 +87,10 @@ coverage-html/
 # Build artifacts
 *.egg-info/
 uv.lock
+
+# --- Node / Frontend ---
+node_modules/
+.next/
+*.tsbuildinfo
+test-results/
+playwright-report/
