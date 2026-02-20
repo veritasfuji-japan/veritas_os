@@ -17,6 +17,19 @@ def clear_host_safety_cache() -> None:
     web_search_mod._is_private_or_local_host.cache_clear()
 
 
+@pytest.fixture()
+def _bypass_ssrf(monkeypatch):
+    """Bypass DNS-based SSRF host checks.
+
+    CI / sandbox environments often cannot resolve external hostnames
+    (e.g. example.com).  Tests that mock ``requests.post`` never make
+    real HTTP calls, so the DNS-based guard is irrelevant.
+    """
+    monkeypatch.setattr(
+        web_search_mod, "_is_private_or_local_host", lambda _host: False,
+    )
+
+
 class TestNormalizeStr:
     """Tests for _normalize_str helper function."""
 
@@ -250,7 +263,7 @@ class DummyResponse:
 class TestWebSearchVeritasContext:
     """Tests for web_search with VERITAS context."""
 
-    def test_veritas_query_applies_anchor_and_blacklist(self, monkeypatch):
+    def test_veritas_query_applies_anchor_and_blacklist(self, monkeypatch, _bypass_ssrf):
         """VERITAS OS query should apply anchor and blacklist."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -273,7 +286,7 @@ class TestWebSearchVeritasContext:
             or resp["meta"]["blacklist_applied"] is True
         )
 
-    def test_veritas_query_blocks_bureauveritas_results(self, monkeypatch):
+    def test_veritas_query_blocks_bureauveritas_results(self, monkeypatch, _bypass_ssrf):
         """VERITAS context should filter out Bureau Veritas results."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -310,7 +323,7 @@ class TestWebSearchVeritasContext:
 class TestWebSearchEdgeCases:
     """Edge case tests for web_search."""
 
-    def test_empty_organic_results(self, monkeypatch):
+    def test_empty_organic_results(self, monkeypatch, _bypass_ssrf):
         """Handle response with no organic results."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -327,7 +340,7 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
-    def test_missing_organic_key(self, monkeypatch):
+    def test_missing_organic_key(self, monkeypatch, _bypass_ssrf):
         """Handle response missing organic key."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -344,7 +357,7 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
-    def test_non_list_organic_payload_is_ignored(self, monkeypatch):
+    def test_non_list_organic_payload_is_ignored(self, monkeypatch, _bypass_ssrf):
         """Ignore malformed `organic` payloads that are not lists."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -361,7 +374,7 @@ class TestWebSearchEdgeCases:
         assert resp["ok"] is True
         assert resp["results"] == []
 
-    def test_non_dict_organic_items_are_ignored(self, monkeypatch):
+    def test_non_dict_organic_items_are_ignored(self, monkeypatch, _bypass_ssrf):
         """Drop malformed result entries that are not dictionaries."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
@@ -413,7 +426,7 @@ class TestClassifyWebsearchError:
         err = ValueError("invalid json")
         assert web_search_mod._classify_websearch_error(err) == "response_parse"
 
-    def test_result_with_missing_fields(self, monkeypatch):
+    def test_result_with_missing_fields(self, monkeypatch, _bypass_ssrf):
         """Handle results with missing title/snippet/link."""
         monkeypatch.setattr(
             web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False

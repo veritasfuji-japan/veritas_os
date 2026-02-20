@@ -31,6 +31,7 @@ from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
+from veritas_os.api.governance import get_policy, update_policy
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -482,7 +483,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=bool(_cors_origins),
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["X-API-Key", "X-Timestamp", "X-Nonce", "X-Signature", "Content-Type", "Authorization"],
 )
 
@@ -1776,3 +1777,37 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "internal error in trust_feedback"}
 
 
+# ==============================
+# Governance Policy API
+# ==============================
+
+@app.get("/v1/governance/policy", dependencies=[Depends(require_api_key)])
+def governance_get():
+    """Return the current governance policy."""
+    try:
+        policy = get_policy()
+        return {"ok": True, "policy": policy}
+    except Exception as e:
+        logger.error("governance_get failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load governance policy"},
+        )
+
+
+@app.put("/v1/governance/policy", dependencies=[Depends(require_api_key)])
+def governance_put(body: dict):
+    """Update the governance policy (partial merge)."""
+    try:
+        updated = update_policy(body)
+        _publish_event(
+            "governance.updated",
+            {"updated_by": updated.get("updated_by", "api")},
+        )
+        return {"ok": True, "policy": updated}
+    except Exception as e:
+        logger.error("governance_put failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to update governance policy"},
+        )
