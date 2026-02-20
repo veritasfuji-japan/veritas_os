@@ -149,7 +149,7 @@ def get_last_hash() -> str | None:
                     if not lines:
                         return None
 
-                    if start > 0 and "\n" not in chunk and start > 0:
+                    if "\n" not in chunk and start > 0:
                         start = max(0, start - 65536)
                         continue
 

@@ -28,19 +28,19 @@ logger = logging.getLogger(__name__)
 try:
     from ..tools.web_search import web_search as _web_search_impl
 except Exception as e:  # pragma: no cover - 実装が無い環境でもOK
-    logger.info(f"[ToolOS] web_search not available: {e}")
+    logger.info("[ToolOS] web_search not available: %s", e)
     _web_search_impl = None  # type: ignore[assignment]
 
 try:
     from ..tools.github_adapter import github_search_repos as _github_search_impl
 except Exception as e:  # pragma: no cover
-    logger.info(f"[ToolOS] github_search not available: {e}")
+    logger.info("[ToolOS] github_search not available: %s", e)
     _github_search_impl = None  # type: ignore[assignment]
 
 try:
     from ..tools.llm_safety import run as _llm_safety_impl
 except Exception as e:  # pragma: no cover
-    logger.info(f"[ToolOS] llm_safety not available: {e}")
+    logger.info("[ToolOS] llm_safety not available: %s", e)
     _llm_safety_impl = None  # type: ignore[assignment]
 
 
@@ -95,6 +95,7 @@ def _get_denial_reason(tool_name: str) -> str:
         return "blocked"
     return "not_in_whitelist"
 
+
 def allowed(tool_name: str) -> bool:
     """
     ツール実行が許可されているか判定
@@ -113,16 +114,16 @@ def allowed(tool_name: str) -> bool:
 
     # 明示的にブロックされているツール
     if tool_name in BLOCKED_TOOLS:
-        logger.warning(f"Tool explicitly blocked: {tool_name}")
+        logger.warning("Tool explicitly blocked: %s", tool_name)
         return False
 
     # ホワイトリストにあるツール
     if tool_name in ALLOWED_TOOLS:
-        logger.debug(f"Tool allowed: {tool_name}")
+        logger.debug("Tool allowed: %s", tool_name)
         return True
 
     # デフォルトは拒否（ホワイトリスト方式）
-    logger.warning(f"Tool not in whitelist: {tool_name}")
+    logger.warning("Tool not in whitelist: %s", tool_name)
     return False
 
 
@@ -267,14 +268,14 @@ def add_allowed_tool(tool_name: str) -> None:
     """許可ツールをホワイトリストに追加"""
     tool_name = str(tool_name).strip().lower()
     ALLOWED_TOOLS.add(tool_name)
-    logger.info(f"Tool added to whitelist: {tool_name}")
+    logger.info("Tool added to whitelist: %s", tool_name)
 
 
 def remove_allowed_tool(tool_name: str) -> None:
     """許可ツールをホワイトリストから削除"""
     tool_name = str(tool_name).strip().lower()
     ALLOWED_TOOLS.discard(tool_name)
-    logger.info(f"Tool removed from whitelist: {tool_name}")
+    logger.info("Tool removed from whitelist: %s", tool_name)
 
 
 def block_tool(tool_name: str) -> None:
@@ -282,14 +283,14 @@ def block_tool(tool_name: str) -> None:
     tool_name = str(tool_name).strip().lower()
     BLOCKED_TOOLS.add(tool_name)
     ALLOWED_TOOLS.discard(tool_name)
-    logger.warning(f"Tool blocked: {tool_name}")
+    logger.warning("Tool blocked: %s", tool_name)
 
 
 def unblock_tool(tool_name: str) -> None:
     """ツールのブロックを解除"""
     tool_name = str(tool_name).strip().lower()
     BLOCKED_TOOLS.discard(tool_name)
-    logger.info(f"Tool unblocked: {tool_name}")
+    logger.info("Tool unblocked: %s", tool_name)
 
 
 def get_allowed_tools() -> Set[str]:
@@ -375,7 +376,7 @@ def _log_tool_usage(
 
         # ログサイズ制限
         if len(_tool_usage_log) > MAX_LOG_SIZE:
-            del _tool_usage_log[: len(_tool_usage_log) - MAX_LOG_SIZE]
+            _tool_usage_log[:] = _tool_usage_log[-MAX_LOG_SIZE:]
 
 
 _SENSITIVE_KEYWORDS = (

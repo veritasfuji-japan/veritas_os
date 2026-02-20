@@ -552,7 +552,7 @@ def chat_gpt4_mini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, 
 
 def chat_claude(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
     """Claude 用ショートカット（将来用）"""
-    kwargs.setdefault("model", "claude-3-sonnet-20240229")
+    kwargs.setdefault("model", "claude-3-5-sonnet-20241022")
     return chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,

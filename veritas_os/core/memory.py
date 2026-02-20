@@ -319,7 +319,7 @@ class VectorMemory:
             from sentence_transformers import SentenceTransformer
 
             self.model = SentenceTransformer(self.model_name)
-            logger.info(f"[VectorMemory] Loaded model: {self.model_name}")
+            logger.info("[VectorMemory] Loaded model: %s", self.model_name)
         except ImportError:
             logger.warning(
                 "[VectorMemory] sentence-transformers not available. "
@@ -327,7 +327,7 @@ class VectorMemory:
             )
             self.model = None
         except Exception as e:
-            logger.error(f"[VectorMemory] Failed to load model: {e}")
+            logger.error("[VectorMemory] Failed to load model: %s", e)
             self.model = None
 
     def _load_index(self):
@@ -423,14 +423,14 @@ class VectorMemory:
                         backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
                         legacy_pkl_path.rename(backup_path)
                         logger.info(
-                            f"[VectorMemory] Migrated to JSON. Backup: {backup_path}"
+                            "[VectorMemory] Migrated to JSON. Backup: %s", backup_path
                         )
                     return
                 except Exception as e:
-                    logger.warning(f"[VectorMemory] Pickle migration failed: {e}")
+                    logger.warning("[VectorMemory] Pickle migration failed: %s", e)
 
         except Exception as e:
-            logger.error(f"[VectorMemory] Failed to load index: {e}")
+            logger.error("[VectorMemory] Failed to load index: %s", e)
 
     def _save_index(self):
         """インデックスをJSON形式で永続化（セキュリティ向上のためpickle廃止）"""
@@ -475,10 +475,10 @@ class VectorMemory:
             self.index_path = json_path
 
             logger.info(
-                f"[VectorMemory] Saved JSON index: {len(self.documents)} documents"
+                "[VectorMemory] Saved JSON index: %d documents", len(self.documents)
             )
         except Exception as e:
-            logger.error(f"[VectorMemory] Failed to save index: {e}")
+            logger.error("[VectorMemory] Failed to save index: %s", e)
 
     def add(
         self,
@@ -535,11 +535,11 @@ class VectorMemory:
                 if len(self.documents) % 100 == 0 and self.index_path:
                     self._save_index()
 
-            logger.debug(f"[VectorMemory] Added document: {doc['id']}")
+            logger.debug("[VectorMemory] Added document: %s", doc["id"])
             return True
 
         except Exception as e:
-            logger.error(f"[VectorMemory] Failed to add document: {e}")
+            logger.error("[VectorMemory] Failed to add document: %s", e)
             return False
 
     def search(
@@ -630,7 +630,7 @@ class VectorMemory:
             return top_results
 
         except Exception as e:
-            logger.error(f"[VectorMemory] Search failed: {e}")
+            logger.error("[VectorMemory] Search failed: %s", e)
             return []
 
     @staticmethod
@@ -651,7 +651,7 @@ class VectorMemory:
             return similarities
 
         except Exception as e:
-            logger.error(f"[VectorMemory] Cosine similarity calculation failed: {e}")
+            logger.error("[VectorMemory] Cosine similarity calculation failed: %s", e)
             import numpy as np
 
             return np.zeros(len(matrix))
@@ -732,7 +732,7 @@ MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.pkl"
 VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.pkl"
 
-logger.info(f"[MemoryModel] module loaded from: {__file__}")
+logger.info("[MemoryModel] module loaded from: %s", __file__)
 
 # memory_model.pkl のロード（分類器用）
 # ★ セキュリティ修正: joblib.load()は内部でpickleを使用するため、
@@ -790,7 +790,7 @@ try:
         logger.info("[VectorMemory] Using built-in VectorMemory implementation")
 
 except Exception as e:
-    logger.error(f"[VectorMemory] Initialization failed: {e}")
+    logger.error("[VectorMemory] Initialization failed: %s", e)
     MEM_VEC = None
 
 
@@ -804,7 +804,7 @@ def predict_decision_status(query_text: str) -> str:
         pred = MODEL.predict([query_text])[0]
         return str(pred)
     except Exception as e:
-        logger.error(f"[MemoryModel] predict_decision_status error: {e}")
+        logger.error("[MemoryModel] predict_decision_status error: %s", e)
         return "unknown"
 
 
@@ -827,7 +827,7 @@ def predict_gate_label(text: str) -> Dict[str, float]:
                 prob_allow = float(max(probs))
             return {"allow": prob_allow}
         except Exception as e:
-            logger.error(f"[MemoryModel] MEM_CLF.predict_proba error: {e}")
+            logger.error("[MemoryModel] MEM_CLF.predict_proba error: %s", e)
 
     # 2) MODEL (memory_model.pkl) に predict_proba があれば使う
     if MODEL is not None and hasattr(MODEL, "predict_proba"):
@@ -840,7 +840,7 @@ def predict_gate_label(text: str) -> Dict[str, float]:
             else:
                 prob_allow = float(max(probs))
         except Exception as e:
-            logger.error(f"[MemoryModel] MODEL.predict_proba error: {e}")
+            logger.error("[MemoryModel] MODEL.predict_proba error: %s", e)
 
     return {"allow": prob_allow}
 
@@ -895,7 +895,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             try:
                 fcntl.flock(fh.fileno(), fcntl.LOCK_UN)  # type: ignore
             except Exception as e:
-                logger.error(f"[MemoryOS] unlock failed: {e}")
+                logger.error("[MemoryOS] unlock failed: %s", e)
             fh.close()
     else:
         # Windows or 非POSIX: .lock ファイルで排他
@@ -932,7 +932,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                 # (file could be deleted between exists() check and unlink())
                 lockfile.unlink(missing_ok=True)
             except Exception as e:
-                logger.error(f"[MemoryOS] lockfile cleanup failed: {e}")
+                logger.error("[MemoryOS] lockfile cleanup failed: %s", e)
 
 
 # ============================
@@ -1013,7 +1013,7 @@ class MemoryStore:
                     return data
 
         if not self.path.exists():
-            logger.debug(f"[MemoryOS] memory file not found: {self.path}")
+            logger.debug("[MemoryOS] memory file not found: %s", self.path)
             data: List[Dict[str, Any]] = []
         else:
             try:
@@ -1022,10 +1022,10 @@ class MemoryStore:
                         raw = json.load(f)
                 data = self._normalize(raw)
             except json.JSONDecodeError as e:
-                logger.error(f"[MemoryOS] JSON decode error: {e}")
+                logger.error("[MemoryOS] JSON decode error: %s", e)
                 data = []
             except Exception as e:
-                logger.error(f"[MemoryOS] load error: {e}")
+                logger.error("[MemoryOS] load error: %s", e)
                 data = []
 
         # キャッシュ更新
@@ -1056,7 +1056,7 @@ class MemoryStore:
 
             return True
         except Exception as e:
-            logger.error(f"[MemoryOS] save error: {e}")
+            logger.error("[MemoryOS] save error: %s", e)
             return False
 
     def put(self, user_id: str, key: str, value: Any) -> bool:
@@ -1222,7 +1222,7 @@ class MemoryStore:
         if not episodic:
             return {}
 
-        logger.debug(f"[MemoryOS][KVS] episodic hits={len(episodic)}")
+        logger.debug("[MemoryOS][KVS] episodic hits=%d", len(episodic))
         return {"episodic": episodic[:k]}
 
     def put_episode(
@@ -1268,7 +1268,7 @@ class MemoryStore:
                         meta=meta or {},
                     )
                 except Exception as e:
-                    logger.warning(f"[MemoryOS] put_episode MEM_VEC.add error: {e}")
+                    logger.warning("[MemoryOS] put_episode MEM_VEC.add error: %s", e)
 
         return key
 
@@ -1293,10 +1293,8 @@ class MemoryStore:
             ts = ep.get("ts")
             if ts:
                 try:
-                    # Python 3.14 以降での推奨パターン（UTCの timezone-aware datetime）
                     dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-                    # 既存仕様に合わせて naive + "Z" にする場合
-                    ts_str = dt.replace(tzinfo=None).isoformat() + "Z"
+                    ts_str = dt.isoformat().replace("+00:00", "Z")
                 except Exception:
                     ts_str = "unknown"
             else:
@@ -1519,7 +1517,7 @@ def add(
                     meta=entry_meta,
                 )
             except Exception as e:
-                logger.warning(f"[MemoryOS.add] MEM_VEC.add error: {e}")
+                logger.warning("[MemoryOS.add] MEM_VEC.add error: %s", e)
 
     return record
 
@@ -1559,9 +1557,9 @@ def put(*args, **kwargs) -> bool:
                     base_text = text or json.dumps(doc, ensure_ascii=False)
                     success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
                     if success:
-                        logger.debug(f"[MemoryOS] Added to vector index: {kind}")
+                        logger.debug("[MemoryOS] Added to vector index: %s", kind)
                 except Exception as e:
-                    logger.warning(f"[MemoryOS] MEM_VEC.add error (fallback to KVS): {e}")
+                    logger.warning("[MemoryOS] MEM_VEC.add error (fallback to KVS): %s", e)
 
         # KVSにも保存
         user_id = meta.get("user_id", kind)
@@ -1722,10 +1720,10 @@ def search(
                     "[MemoryOS] MEM_VEC.search(old sig) no hits; fallback to KVS"
                 )
             except Exception as e:
-                logger.warning(f"[MemoryOS] MEM_VEC.search(old sig) error: {e}")
+                logger.warning("[MemoryOS] MEM_VEC.search(old sig) error: %s", e)
 
         except Exception as e:
-            logger.warning(f"[MemoryOS] MEM_VEC.search error: {e}")
+            logger.warning("[MemoryOS] MEM_VEC.search error: %s", e)
 
     # ===========================
     # 2) フォールバック: KVS simple search
@@ -1845,7 +1843,7 @@ def distill_memory_for_user(
     try:
         all_records = MEM.list_all(user_id=user_id)
     except Exception as e:
-        logger.error(f"[MemoryDistill] list_all failed for user={user_id}: {e}")
+        logger.error("[MemoryDistill] list_all failed for user=%s: %s", user_id, e)
         return None
 
     episodic: List[Dict[str, Any]] = []
@@ -1878,7 +1876,7 @@ def distill_memory_for_user(
         episodic.append(ep)
 
     if not episodic:
-        logger.info(f"[MemoryDistill] no episodic records for user={user_id}")
+        logger.info("[MemoryDistill] no episodic records for user=%s", user_id)
         return None
 
     # 新しい順にソートして max_items までに圧縮
@@ -1906,10 +1904,10 @@ def distill_memory_for_user(
         )
 
     except TypeError as e:
-        logger.error(f"[MemoryDistill] LLM call TypeError: {e}")
+        logger.error("[MemoryDistill] LLM call TypeError: %s", e)
         return None
     except Exception as e:
-        logger.error(f"[MemoryDistill] LLM call failed: {e}")
+        logger.error("[MemoryDistill] LLM call failed: %s", e)
         return None
 
     # 4) レスポンスからテキストを取り出す
@@ -2024,7 +2022,7 @@ def rebuild_vector_index():
                 }
             )
 
-        logger.info(f"[MemoryOS] Found {len(documents)} documents to index")
+        logger.info("[MemoryOS] Found %d documents to index", len(documents))
 
         # インデックス再構築
         _vec.rebuild_index(documents)  # type: ignore[arg-type]
