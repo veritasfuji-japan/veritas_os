@@ -247,12 +247,33 @@ def test_sanitize_args_normalizes_hyphenated_sensitive_keys():
     assert sanitized["db-password"] == "***REDACTED***"
     assert sanitized["normal"] == "ok"
 
+
+def test_sanitize_args_converts_tuple_to_list_for_json_safety():
+    args = {
+        "events": (
+            {"Authorization": "Bearer token-value"},
+            "ok",
+        )
+    }
+
+    sanitized = tools._sanitize_args(args)
+
+    assert isinstance(sanitized["events"], list)
+    assert sanitized["events"][0]["Authorization"] == "***REDACTED***"
+    assert sanitized["events"][1] == "ok"
+
 def test_get_tool_stats_empty_when_no_calls(clean_tools_state):
     stats = tools.get_tool_stats()
     assert stats["total_calls"] == 0
     assert math.isclose(stats["success_rate"], 0.0)
     assert stats["allowed_tools_count"] == len(tools.ALLOWED_TOOLS)
     assert stats["blocked_tools_count"] == len(tools.BLOCKED_TOOLS)
+
+
+def test_get_tool_usage_log_returns_empty_for_negative_limit(clean_tools_state):
+    tools._log_tool_usage(tool="dummy", args={}, status="success")
+
+    assert tools.get_tool_usage_log(limit=-1) == []
 
 
 def test_get_tool_stats_counts_success_and_status(clean_tools_state):

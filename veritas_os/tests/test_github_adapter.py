@@ -232,6 +232,14 @@ def test_sanitize_html_url_rejects_embedded_credentials():
     assert github_adapter._sanitize_html_url("https://user:secret@github.com/owner/repo") == ""
 
 
+def test_sanitize_html_url_rejects_non_default_https_port():
+    assert github_adapter._sanitize_html_url("https://github.com:444/owner/repo") == ""
+
+
+def test_sanitize_html_url_rejects_invalid_port():
+    assert github_adapter._sanitize_html_url("https://github.com:abc/owner/repo") == ""
+
+
 def test_sanitize_html_url_allows_github_hosts():
     assert (
         github_adapter._sanitize_html_url("https://github.com/owner/repo")
