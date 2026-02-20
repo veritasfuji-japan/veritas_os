@@ -9,11 +9,13 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 1. /console — render preset buttons and pipeline stages
   test("Console page renders pipeline and presets", async ({ page }) => {
     await page.goto("/console");
-    await expect(page.getByText("Decision Console")).toBeVisible();
+    // Use heading role to avoid strict-mode clash with the sidebar nav text
+    await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
     await expect(page.getByText("Pipeline Visualizer")).toBeVisible();
     await expect(page.getByText("Evidence")).toBeVisible();
     await expect(page.getByText("FUJI")).toBeVisible();
-    await expect(page.getByText("TrustLog")).toBeVisible();
+    // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
+    await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
 
     // Danger presets are visible
     const presetButtons = page.locator("button").filter({ hasText: "..." });
@@ -23,17 +25,17 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 2. /audit — TrustLog explorer renders
   test("Audit page renders TrustLog explorer", async ({ page }) => {
     await page.goto("/audit");
-    await expect(page.getByText("TrustLog Explorer")).toBeVisible();
-    await expect(page.getByText("request_id 検索")).toBeVisible();
-    await expect(page.getByText("Timeline")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "TrustLog Explorer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "request_id 検索" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
     await expect(page.getByPlaceholder("request_id")).toBeVisible();
   });
 
   // 3. /governance — load governance UI
   test("Governance page renders controls", async ({ page }) => {
     await page.goto("/governance");
-    await expect(page.getByText("Governance Control")).toBeVisible();
-    await expect(page.getByText("ポリシーを読み込む")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Governance Control" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ポリシーを読み込む" })).toBeVisible();
 
     // Connection inputs
     await expect(page.getByLabel("X-API-Key")).toBeVisible();
@@ -42,7 +44,7 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 4. Navigation works across all pages
   test("Navigation sidebar links work", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("Command Dashboard")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Command Dashboard" })).toBeVisible();
 
     // Click Console
     await page.getByRole("link", { name: /Decision Console/i }).click();
