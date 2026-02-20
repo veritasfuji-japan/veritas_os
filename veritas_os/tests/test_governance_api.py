@@ -140,3 +140,99 @@ class TestGovernanceModule:
         assert policy.risk_thresholds.allow_upper == 0.40
         assert policy.auto_stop.enabled is True
         assert policy.log_retention.retention_days == 90
+
+    def test_load_returns_defaults_when_file_missing(self, tmp_path, monkeypatch):
+        """When governance file does not exist, return defaults."""
+        missing = tmp_path / "does_not_exist.json"
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", missing):
+            policy = gov_mod.get_policy()
+        assert policy["version"] == "governance_v1"
+        assert policy["fuji_rules"]["pii_check"] is True
+
+    def test_load_handles_corrupt_json(self, tmp_path):
+        """When governance file has bad JSON, return defaults."""
+        bad = tmp_path / "bad.json"
+        bad.write_text("NOT-VALID-JSON!!!")
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", bad):
+            policy = gov_mod.get_policy()
+        assert policy["version"] == "governance_v1"
+
+    def test_update_creates_missing_nested_key(self, tmp_path):
+        """When nested key is non-dict, update_policy creates it."""
+        p = tmp_path / "gov.json"
+        p.write_text(json.dumps({"fuji_rules": "broken", "version": "v0"}))
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", p):
+            result = gov_mod.update_policy({"fuji_rules": {"pii_check": False}})
+        assert result["fuji_rules"]["pii_check"] is False
+
+    def test_update_overrides_version(self, tmp_path):
+        """version scalar key is overridden by patch."""
+        p = tmp_path / "gov.json"
+        p.write_text(json.dumps(gov_mod.GovernancePolicy().model_dump()))
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", p):
+            result = gov_mod.update_policy({"version": "custom_v9"})
+        assert result["version"] == "custom_v9"
+
+
+# ----------------------------------------------------------------
+# Server governance endpoint error paths
+# ----------------------------------------------------------------
+
+class TestGovernanceServerErrors:
+    def test_get_policy_internal_error(self, monkeypatch):
+        """GET /v1/governance/policy returns 500 on internal error."""
+        def boom():
+            raise RuntimeError("db down")
+        monkeypatch.setattr(srv, "get_policy", boom)
+        resp = client.get("/v1/governance/policy", headers=HEADERS)
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert "error" in body
+
+    def test_put_policy_internal_error(self, monkeypatch):
+        """PUT /v1/governance/policy returns 500 on internal error."""
+        def boom(body):
+            raise RuntimeError("write fail")
+        monkeypatch.setattr(srv, "update_policy", boom)
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json={"fuji_rules": {}},
+        )
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+
+
+# ----------------------------------------------------------------
+# fuji_validate error-path coverage
+# ----------------------------------------------------------------
+
+class TestFujiValidateErrorPaths:
+    def test_runtime_error_returns_error_structure(self, monkeypatch):
+        """Non-impl RuntimeError in fuji_validate → 200 with error."""
+        fake = type("F", (), {"validate_action": None, "validate": None})()
+        monkeypatch.setattr(srv, "get_fuji_core", lambda: fake)
+        monkeypatch.setattr(
+            srv, "_call_fuji",
+            lambda fc, action, ctx: (_ for _ in ()).throw(RuntimeError("random")),
+        )
+        resp = client.post("/v1/fuji/validate", headers=HEADERS, json={"action": "x"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "error"
+        assert body["reasons"] == ["Validation failed"]
+
+    def test_general_exception_returns_error_structure(self, monkeypatch):
+        """General exception in fuji_validate → 200 with error."""
+        fake = type("F", (), {"validate_action": None, "validate": None})()
+        monkeypatch.setattr(srv, "get_fuji_core", lambda: fake)
+        monkeypatch.setattr(
+            srv, "_call_fuji",
+            lambda fc, action, ctx: (_ for _ in ()).throw(ValueError("oops")),
+        )
+        resp = client.post("/v1/fuji/validate", headers=HEADERS, json={"action": "x"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "error"
