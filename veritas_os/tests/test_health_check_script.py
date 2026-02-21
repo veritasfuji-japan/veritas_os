@@ -58,6 +58,11 @@ def test_validate_url_rejects_whitespace_and_control_chars() -> None:
     assert health_check._validate_url("https://127.0.0.1:8000/hea\nlth") is None
 
 
+def test_validate_url_rejects_percent_encoded_control_chars() -> None:
+    assert health_check._validate_url("https://127.0.0.1:8000/health%0a") is None
+    assert health_check._validate_url("https://127.0.0.1:8000/health%0D") is None
+
+
 def test_check_server_disables_redirect_following(monkeypatch) -> None:
     class DummyResponse:
         ok = True

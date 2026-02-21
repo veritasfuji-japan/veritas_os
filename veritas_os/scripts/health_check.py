@@ -96,6 +96,12 @@ def _validate_url(url: str) -> Optional[str]:
     if url != url.strip() or re.search(r"[\x00-\x1f\x7f\s]", url):
         return None
 
+    # パーセントエンコードされた制御文字を禁止（例: %0a, %0d）
+    # requests / curl がそのまま送信しても、下流ログ解析や中間プロキシで
+    # 予期しない解釈をされるリスクを下げるために拒否する。
+    if re.search(r"%(?:0[0-9a-fA-F]|1[0-9a-fA-F]|7f)", url):
+        return None
+
     # 危険な文字を検出（コマンドインジェクション防止）
     dangerous_chars = [";", "|", "&", "$", "`", "(", ")", "{", "}", "<", ">", "\n", "\r", "\\"]
     for char in dangerous_chars:
