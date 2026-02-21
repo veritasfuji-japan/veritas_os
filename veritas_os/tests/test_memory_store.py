@@ -223,6 +223,24 @@ def test_put_validates_tags_and_meta_types(memory_env):
         ms.put("episodic", {"text": "ok", "tags": [], "meta": "not-dict"})
 
 
+def test_put_validates_tags_constraints(memory_env):
+    """put は tags の件数・要素長・空要素を検証する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+
+    too_many_tags = [f"t{i}" for i in range(store.MAX_TAGS_PER_ITEM + 1)]
+    with pytest.raises(ValueError, match="item.tags too many"):
+        ms.put("episodic", {"text": "ok", "tags": too_many_tags, "meta": {}})
+
+    too_long_tag = "x" * (store.MAX_TAG_LENGTH + 1)
+    with pytest.raises(ValueError, match="item.tags element too long"):
+        ms.put("episodic", {"text": "ok", "tags": [too_long_tag], "meta": {}})
+
+    with pytest.raises(ValueError, match="item.tags must not contain empty values"):
+        ms.put("episodic", {"text": "ok", "tags": ["   "], "meta": {}})
+
+
 def test_put_validates_id_shape_and_length(memory_env):
     """put は不正な id 形状と過剰長 id を拒否する。"""
     store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
