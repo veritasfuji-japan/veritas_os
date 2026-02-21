@@ -175,6 +175,15 @@ def test_security_headers_present():
     assert resp.headers.get("X-Frame-Options") == "DENY"
     assert resp.headers.get("X-XSS-Protection") == "1; mode=block"
     assert (
+        resp.headers.get("Content-Security-Policy")
+        == "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    )
+    assert (
+        resp.headers.get("Permissions-Policy")
+        == "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+        "magnetometer=(), microphone=(), payment=(), usb=()"
+    )
+    assert (
         resp.headers.get("Strict-Transport-Security")
         == "max-age=31536000; includeSubDomains"
     )
