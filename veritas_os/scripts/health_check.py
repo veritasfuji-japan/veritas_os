@@ -14,17 +14,16 @@ import os
 import json
 import subprocess
 import re
+import importlib.util
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 
 # requests ライブラリ（セキュリティ向上のため curl subprocess を置換）
-try:
+HAS_REQUESTS = importlib.util.find_spec("requests") is not None
+if HAS_REQUESTS:
     import requests
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
 
 # ===== パス設定 =====
 HERE = Path(__file__).resolve().parent      # .../veritas_os/scripts
@@ -91,6 +90,10 @@ def _validate_url(url: str) -> Optional[str]:
         検証済みの URL（安全な場合）、または None（不正な場合）
     """
     if not url or not isinstance(url, str):
+        return None
+
+    # 前後空白および制御文字混入を禁止（ログ混乱や解析の曖昧化を防止）
+    if url != url.strip() or re.search(r"[\x00-\x1f\x7f\s]", url):
         return None
 
     # 危険な文字を検出（コマンドインジェクション防止）
