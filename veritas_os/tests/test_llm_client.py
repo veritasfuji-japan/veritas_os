@@ -657,8 +657,8 @@ def test_chat_claude_shortcut(monkeypatch):
 
     res = llm_client.chat_claude("SYS", "USER")
     assert called["provider"] == LLMProvider.ANTHROPIC.value
-    assert called["model"] == "claude-3-sonnet-20240229"
-    assert res["model"] == "claude-3-sonnet-20240229"
+    assert called["model"] == "claude-3-5-sonnet-20241022"
+    assert res["model"] == "claude-3-5-sonnet-20241022"
 
 
 def test_chat_gemini_shortcut(monkeypatch):

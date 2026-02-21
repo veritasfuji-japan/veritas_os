@@ -280,9 +280,6 @@ def _post_with_retry(
                 time.sleep(delay)
                 continue
             raise
-    if last_exc:
-        raise last_exc
-    raise RuntimeError("WEBSEARCH request failed without exception")
 
 
 def _extract_hostname(url: str) -> str:
