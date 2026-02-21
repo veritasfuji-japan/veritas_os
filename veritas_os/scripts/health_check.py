@@ -14,17 +14,16 @@ import os
 import json
 import subprocess
 import re
+import importlib.util
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse
 
 # requests ライブラリ（セキュリティ向上のため curl subprocess を置換）
-try:
+HAS_REQUESTS = importlib.util.find_spec("requests") is not None
+if HAS_REQUESTS:
     import requests
-    HAS_REQUESTS = True
-except ImportError:
-    HAS_REQUESTS = False
 
 # ===== パス設定 =====
 HERE = Path(__file__).resolve().parent      # .../veritas_os/scripts
@@ -91,6 +90,16 @@ def _validate_url(url: str) -> Optional[str]:
         検証済みの URL（安全な場合）、または None（不正な場合）
     """
     if not url or not isinstance(url, str):
+        return None
+
+    # 前後空白および制御文字混入を禁止（ログ混乱や解析の曖昧化を防止）
+    if url != url.strip() or re.search(r"[\x00-\x1f\x7f\s]", url):
+        return None
+
+    # パーセントエンコードされた制御文字を禁止（例: %0a, %0d）
+    # requests / curl がそのまま送信しても、下流ログ解析や中間プロキシで
+    # 予期しない解釈をされるリスクを下げるために拒否する。
+    if re.search(r"%(?:0[0-9a-fA-F]|1[0-9a-fA-F]|7f)", url):
         return None
 
     # 危険な文字を検出（コマンドインジェクション防止）
@@ -202,7 +211,8 @@ def check_server() -> Dict[str, Any]:
     # requests ライブラリを優先使用（セキュリティ向上）
     if HAS_REQUESTS:
         try:
-            resp = requests.get(url, timeout=3)
+            # Redirect 追従を無効化し、検証済み URL 以外への遷移を防止する。
+            resp = requests.get(url, timeout=3, allow_redirects=False)
             body = resp.text
             ok = resp.ok and ('"ok":true' in body.replace(" ", "").lower())
             return {

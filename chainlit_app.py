@@ -41,6 +41,14 @@ def _safe_int(value: Any) -> Optional[int]:
     return int(as_float)
 
 
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    """Return a finite float for formatting, or a default value."""
+    parsed = _safe_float(value)
+    if parsed is None:
+        return default
+    return parsed
+
+
 # --------- VERITAS API 呼び出しヘルパー ---------
 
 async def call_veritas_decide(query: str) -> Dict[str, Any]:
@@ -76,8 +84,8 @@ def format_main_answer(res: Dict[str, Any]) -> str:
     desc = chosen.get("description") or ""
 
     decision_status = gate.get("decision_status") or res.get("decision_status")
-    risk = gate.get("risk", 0.0)
-    telos = res.get("telos_score", 0.0)
+    risk = _coerce_float(gate.get("risk"), default=0.0)
+    telos = _coerce_float(res.get("telos_score"), default=0.0)
 
     # Planner ステップ（上位5件）
     steps = (planner.get("steps") or [])[:5]

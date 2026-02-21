@@ -97,6 +97,24 @@ def test_detect_pii_stops_segmented_scan_at_match_limit(monkeypatch: pytest.Monk
     assert len(result) == 2
 
 
+def test_segmented_scan_prefers_higher_confidence_for_duplicate_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When windows overlap, duplicate spans should keep the highest confidence."""
+    monkeypatch.setattr("veritas_os.core.sanitize._MAX_PII_INPUT_LENGTH", 20)
+    detector = PIIDetector(validate_checksums=False)
+    detector._patterns = [
+        ("low", re.compile(r"a@x\.com"), "LOW", None, 0.1),
+        ("high", re.compile(r"a@x\.com"), "HIGH", None, 0.9),
+    ]
+
+    text = "z" * 12 + " a@x.com " + "z" * 20
+    result = detector.detect(text)
+
+    assert len(result) == 1
+    assert result[0].type == "high"
+
+
 def test_resolve_global_overlaps_scales_without_quadratic_checks() -> None:
     """Global overlap resolution should handle many disjoint matches efficiently."""
     detector = PIIDetector(validate_checksums=False)

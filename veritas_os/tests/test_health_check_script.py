@@ -51,3 +51,37 @@ def test_validate_url_rejects_hostname_label_too_long() -> None:
     long_label = "a" * 64
     url = f"https://{long_label}.example.com/health"
     assert health_check._validate_url(url) is None
+
+
+def test_validate_url_rejects_whitespace_and_control_chars() -> None:
+    assert health_check._validate_url(" https://127.0.0.1:8000/health") is None
+    assert health_check._validate_url("https://127.0.0.1:8000/hea\nlth") is None
+
+
+def test_validate_url_rejects_percent_encoded_control_chars() -> None:
+    assert health_check._validate_url("https://127.0.0.1:8000/health%0a") is None
+    assert health_check._validate_url("https://127.0.0.1:8000/health%0D") is None
+
+
+def test_check_server_disables_redirect_following(monkeypatch) -> None:
+    class DummyResponse:
+        ok = True
+        status_code = 200
+        text = '{"ok": true}'
+
+    called: dict[str, object] = {}
+
+    def fake_get(url: str, timeout: int, allow_redirects: bool):
+        called["url"] = url
+        called["timeout"] = timeout
+        called["allow_redirects"] = allow_redirects
+        return DummyResponse()
+
+    monkeypatch.setattr(health_check, "HAS_REQUESTS", True)
+    monkeypatch.setattr(health_check.requests, "get", fake_get)
+
+    result = health_check.check_server()
+
+    assert result["ok"] is True
+    assert called["timeout"] == 3
+    assert called["allow_redirects"] is False
