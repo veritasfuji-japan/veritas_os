@@ -30,17 +30,17 @@ class TestSafeInt:
 
     def test_valid_int(self):
         """Valid int should be returned."""
-        assert fuji_mod._safe_int(42, default=0) == 42
-        assert fuji_mod._safe_int("10", default=0) == 10
+        assert fuji_mod._safe_nonneg_int(42, default=0) == 42
+        assert fuji_mod._safe_nonneg_int("10", default=0) == 10
 
     def test_invalid_returns_default(self):
         """Invalid input should return default."""
-        assert fuji_mod._safe_int("not a number", default=5) == 5
-        assert fuji_mod._safe_int(None, default=0) == 0
+        assert fuji_mod._safe_nonneg_int("not a number", default=5) == 5
+        assert fuji_mod._safe_nonneg_int(None, default=0) == 0
 
     def test_negative_returns_default(self):
         """Negative int should return default."""
-        assert fuji_mod._safe_int(-5, default=0) == 0
+        assert fuji_mod._safe_nonneg_int(-5, default=0) == 0
 
 
 class TestToText:

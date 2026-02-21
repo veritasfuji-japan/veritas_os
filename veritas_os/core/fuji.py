@@ -227,7 +227,8 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _safe_int(x: Any, default: int) -> int:
+def _safe_nonneg_int(x: Any, default: int) -> int:
+    """安全に非負整数に変換する。負の値はデフォルト値を返す。"""
     try:
         v = int(x)
         return v if v >= 0 else default
@@ -1084,7 +1085,7 @@ def fuji_gate(
     telos_score = _safe_float(ctx.get("telos_score", ctx.get("value_ema", 0.5)), 0.5)
     safe_applied = bool(ctx.get("fuji_safe_applied") or ctx.get("pii_already_masked"))
 
-    min_evidence = _safe_int(
+    min_evidence = _safe_nonneg_int(
         ctx.get("min_evidence")
         or ctx.get("fuji_min_evidence")
         or os.getenv("VERITAS_MIN_EVIDENCE", DEFAULT_MIN_EVIDENCE),

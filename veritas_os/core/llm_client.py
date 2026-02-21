@@ -58,16 +58,24 @@ class LLMError(Exception):
 # =========================
 
 
-def _safe_int(key: str, default: int) -> int:
-    """環境変数を int として安全に取得する。"""
+def _env_int(key: str, default: int) -> int:
+    """環境変数を int として安全に取得する。
+
+    Note: utils.py の _safe_float(value, default) とは異なり、
+    この関数は環境変数名をキーとして取得する。
+    """
     try:
         return int(os.getenv(key, str(default)))
     except (TypeError, ValueError):
         return default
 
 
-def _safe_float(key: str, default: float) -> float:
-    """環境変数を float として安全に取得する。"""
+def _env_float(key: str, default: float) -> float:
+    """環境変数を float として安全に取得する。
+
+    Note: utils.py の _safe_float(value, default) とは異なり、
+    この関数は環境変数名をキーとして取得する。
+    """
     try:
         return float(os.getenv(key, str(default)))
     except (TypeError, ValueError):
@@ -77,13 +85,13 @@ LLM_PROVIDER = os.environ.get("LLM_PROVIDER", LLMProvider.OPENAI.value)
 # ★ 現在のデフォルトは gpt-4.1-mini を想定（env で上書き可）
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4.1-mini")
 
-LLM_TIMEOUT = _safe_float("LLM_TIMEOUT", 60.0)
-LLM_CONNECT_TIMEOUT = _safe_float("LLM_CONNECT_TIMEOUT", 10.0)
-LLM_MAX_RETRIES = _safe_int("LLM_MAX_RETRIES", 3)
-LLM_RETRY_DELAY = _safe_float("LLM_RETRY_DELAY", 2.0)
+LLM_TIMEOUT = _env_float("LLM_TIMEOUT", 60.0)
+LLM_CONNECT_TIMEOUT = _env_float("LLM_CONNECT_TIMEOUT", 10.0)
+LLM_MAX_RETRIES = _env_int("LLM_MAX_RETRIES", 3)
+LLM_RETRY_DELAY = _env_float("LLM_RETRY_DELAY", 2.0)
 
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
-LLM_MAX_RESPONSE_BYTES = _safe_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
+LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
 
 
 # =========================
@@ -447,7 +455,23 @@ def chat(
                     continue
                 raise LLMError(f"Rate limited after {LLM_MAX_RETRIES} retries (status=429)")
 
-            # その他エラー
+            # 5xx サーバーエラーは一時的な障害のためリトライ
+            if 500 <= resp.status_code < 600:
+                body = resp.text[:200] if resp.text else ""
+                log.warning(
+                    "LLM server error (provider=%s, status=%s, attempt=%s): %s",
+                    provider,
+                    resp.status_code,
+                    attempt,
+                    body,
+                )
+                if attempt < LLM_MAX_RETRIES:
+                    wait_time = LLM_RETRY_DELAY * (2 ** (attempt - 1))
+                    time.sleep(wait_time)
+                    continue
+                raise LLMError(f"Server error after {LLM_MAX_RETRIES} retries (status={resp.status_code})")
+
+            # その他エラー（4xx）
             if resp.status_code >= 400:
                 # ★ セキュリティ: APIレスポンス本文はログに記録し、例外には含めない（情報漏洩防止）
                 body = resp.text[:200] if resp.text else ""
@@ -552,7 +576,7 @@ def chat_gpt4_mini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, 
 
 def chat_claude(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
     """Claude 用ショートカット（将来用）"""
-    kwargs.setdefault("model", "claude-3-5-sonnet-20241022")
+    kwargs.setdefault("model", "claude-opus-4-6")
     return chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
@@ -563,7 +587,7 @@ def chat_claude(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any
 
 def chat_gemini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
     """Gemini 用ショートカット（将来用）"""
-    kwargs.setdefault("model", "gemini-pro")
+    kwargs.setdefault("model", "gemini-1.5-pro")
     return chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
