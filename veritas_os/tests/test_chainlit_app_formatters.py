@@ -85,3 +85,18 @@ def test_format_main_answer_handles_string_ema() -> None:
     )
 
     assert "total=1.500 / ema=2.250" in result
+
+
+def test_format_main_answer_handles_non_numeric_gate_values() -> None:
+    """Formatter should default invalid risk/telos values to 0.000."""
+    result = module.format_main_answer(
+        {
+            "chosen": {"title": "A"},
+            "gate": {"decision_status": "allow", "risk": "high"},
+            "telos_score": "unknown",
+            "values": {"total": 1.0},
+        }
+    )
+
+    assert "FUJIリスク: **0.000**" in result
+    assert "Telosスコア: **0.000**" in result
