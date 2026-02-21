@@ -499,8 +499,13 @@ class PIIDetector:
         Overlap resolution keeps the first accepted match, therefore scanning
         higher-confidence patterns first reduces false positives when multiple
         patterns can match the same substring.
+
+        The result is cached on first call since pattern priority does not
+        change after ``__init__``.
         """
-        return sorted(self._patterns, key=lambda item: item[4], reverse=True)
+        if not hasattr(self, "_sorted_patterns"):
+            self._sorted_patterns = sorted(self._patterns, key=lambda item: item[4], reverse=True)
+        return self._sorted_patterns
 
     def detect(self, text: str | None) -> List[PIIMatch]:
         """

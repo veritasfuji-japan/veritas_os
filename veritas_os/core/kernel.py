@@ -1143,19 +1143,25 @@ async def decide(
                         _doctor_active_proc = proc
                     # Reap the subprocess in a background thread to prevent zombies;
                     # enforce a timeout to avoid indefinitely hanging processes.
-                    def _wait_with_timeout(p: subprocess.Popen, t: int) -> None:
-                        try:
-                            p.wait(timeout=t)
-                        except subprocess.TimeoutExpired:
-                            p.kill()
-                            p.wait()
-                        finally:
-                            with _doctor_lock:
-                                # NOTE: nested function needs its own global declaration
-                                global _doctor_active_proc
-                                if _doctor_active_proc is p:
-                                    _doctor_active_proc = None
-                    _threading.Thread(target=_wait_with_timeout, args=(proc, doctor_timeout), daemon=True).start()
+                    def _make_doctor_reaper(p: subprocess.Popen, t: int):
+                        """タイムアウト付きでdoctorプロセスを待機し、終了後にアクティブ追跡をクリアする。"""
+                        def _run():
+                            try:
+                                p.wait(timeout=t)
+                            except subprocess.TimeoutExpired:
+                                p.kill()
+                                p.wait()
+                            finally:
+                                with _doctor_lock:
+                                    global _doctor_active_proc
+                                    if _doctor_active_proc is p:
+                                        _doctor_active_proc = None
+                        return _run
+
+                    _threading.Thread(
+                        target=_make_doctor_reaper(proc, doctor_timeout),
+                        daemon=True,
+                    ).start()
                 finally:
                     # Close our copy of the fd; the subprocess has its own copy.
                     os.close(fd)
