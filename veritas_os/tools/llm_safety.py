@@ -69,6 +69,7 @@ _RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
 # 敬称（さん/様/氏/先生/殿）付きの名前パターンに限定する（sanitize.py と同様のアプローチ）
 # 例: "山田太郎さん", "田中 様", "鈴木先生"
 _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 def _norm(s: str) -> str:
@@ -83,7 +84,7 @@ def _normalize_categories(categories: list[Any], max_categories: int) -> list[st
         max_categories: 返却上限。0 以下は 0 扱い。
 
     Returns:
-        重複除去済み・トリム済み・長さ制限済みのカテゴリ一覧。
+        重複除去済み・トリム済み・長さ制限済み・制御文字除去済みのカテゴリ一覧。
     """
     safe_limit = max(0, int(max_categories))
     if safe_limit == 0:
@@ -96,12 +97,17 @@ def _normalize_categories(categories: list[Any], max_categories: int) -> list[st
         category = str(raw).strip()
         if not category:
             continue
+        category = _RE_CONTROL_CHARS.sub("", category)
+        category = re.sub(r"\s+", " ", category).strip()
+        if not category:
+            continue
         # 監査ログ肥大化を避けるため、カテゴリ1件あたりの長さを制限
         category = category[:64]
-        if category in seen:
+        dedupe_key = category.casefold()
+        if dedupe_key in seen:
             continue
         normalized.append(category)
-        seen.add(category)
+        seen.add(dedupe_key)
         if len(normalized) >= safe_limit:
             break
 

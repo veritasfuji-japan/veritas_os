@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -35,6 +36,8 @@ except Exception as _import_err:  # pragma: no cover
     )
 
 logger = logging.getLogger(__name__)
+
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
 LOG_JSON = LOG_DIR / "trust_log.json"
@@ -95,14 +98,21 @@ def _compute_sha256(payload: dict) -> str:
 
 
 def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
-    """Return the newest valid ``sha256`` value from JSONL lines.
+    """Return the newest usable ``sha256`` value from JSONL lines.
 
     The tail chunk used by :func:`get_last_hash` may include partially written
     trailing data (for example if a previous process crashed mid-write).
     Instead of failing hard on the last line, this helper scans backward and
     returns the most recent decodable JSON object containing a string ``sha256``
     field.
+
+    Security:
+        Canonical SHA-256 hex values are preferred. If no canonical value is
+        present, this function falls back to the newest non-empty string for
+        backward compatibility with legacy logs, while emitting a warning.
     """
+    fallback_sha: str | None = None
+
     for line in reversed(lines):
         if not line:
             continue
@@ -112,9 +122,20 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
             continue
 
         sha = payload.get("sha256") if isinstance(payload, dict) else None
-        if isinstance(sha, str) and sha:
+        if not isinstance(sha, str) or not sha:
+            continue
+
+        if _SHA256_HEX_RE.fullmatch(sha):
             return sha
-    return None
+
+        if fallback_sha is None:
+            fallback_sha = sha
+
+    if fallback_sha is not None:
+        logger.warning(
+            "Found non-canonical sha256 in trust log tail; using fallback value"
+        )
+    return fallback_sha
 
 
 def get_last_hash() -> str | None:
