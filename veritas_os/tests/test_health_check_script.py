@@ -53,6 +53,11 @@ def test_validate_url_rejects_hostname_label_too_long() -> None:
     assert health_check._validate_url(url) is None
 
 
+def test_validate_url_rejects_whitespace_and_control_chars() -> None:
+    assert health_check._validate_url(" https://127.0.0.1:8000/health") is None
+    assert health_check._validate_url("https://127.0.0.1:8000/hea\nlth") is None
+
+
 def test_check_server_disables_redirect_following(monkeypatch) -> None:
     class DummyResponse:
         ok = True
