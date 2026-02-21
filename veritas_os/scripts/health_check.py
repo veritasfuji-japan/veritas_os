@@ -202,7 +202,8 @@ def check_server() -> Dict[str, Any]:
     # requests ライブラリを優先使用（セキュリティ向上）
     if HAS_REQUESTS:
         try:
-            resp = requests.get(url, timeout=3)
+            # Redirect 追従を無効化し、検証済み URL 以外への遷移を防止する。
+            resp = requests.get(url, timeout=3, allow_redirects=False)
             body = resp.text
             ok = resp.ok and ('"ok":true' in body.replace(" ", "").lower())
             return {
