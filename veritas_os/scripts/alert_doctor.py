@@ -9,6 +9,7 @@ Security notes:
 
 import os
 import json
+import stat
 import subprocess
 import time
 import urllib.parse
@@ -198,6 +199,7 @@ def _validate_heal_script_path(script_path: Path) -> bool:
     - シンボリックリンク攻撃を防止
     - パス走査（..）攻撃を防止
     - クロスプラットフォーム対応（Windows含む）
+    - world/group writable なスクリプトを拒否
     """
     try:
         # resolve() でシンボリックリンクを解決し、実際のパスを取得
@@ -218,6 +220,15 @@ def _validate_heal_script_path(script_path: Path) -> bool:
 
         # ファイル名が期待通りであることを確認
         if resolved_script.name != "heal.sh":
+            return False
+
+        # 通常ファイルのみ許可（デバイスファイルやディレクトリを除外）
+        if not resolved_script.is_file():
+            return False
+
+        # Unix では group/other writable を拒否し、改ざんリスクを下げる
+        mode = resolved_script.stat().st_mode
+        if os.name != "nt" and mode & (stat.S_IWGRP | stat.S_IWOTH):
             return False
 
         return True
