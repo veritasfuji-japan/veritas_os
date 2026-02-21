@@ -134,7 +134,8 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
 
     # Metadata
     current["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    current["updated_by"] = patch.get("updated_by", "api")
+    # ★ セキュリティ修正: updated_by フィールドのサイズ制限（DoS対策）
+    current["updated_by"] = str(patch.get("updated_by", "api"))[:200]
 
     # Validate through pydantic
     validated = GovernancePolicy.model_validate(current)
