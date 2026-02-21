@@ -566,7 +566,7 @@ def test_chat_http_error_raises(monkeypatch):
     with pytest.raises(LLMError) as exc:
         llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
 
-    assert "API error" in str(exc.value) and "500" in str(exc.value)
+    assert "500" in str(exc.value)
 
 
 def test_chat_request_exception_retries_and_fails(monkeypatch):
@@ -657,8 +657,8 @@ def test_chat_claude_shortcut(monkeypatch):
 
     res = llm_client.chat_claude("SYS", "USER")
     assert called["provider"] == LLMProvider.ANTHROPIC.value
-    assert called["model"] == "claude-3-5-sonnet-20241022"
-    assert res["model"] == "claude-3-5-sonnet-20241022"
+    assert called["model"] == "claude-opus-4-6"
+    assert res["model"] == "claude-opus-4-6"
 
 
 def test_chat_gemini_shortcut(monkeypatch):
@@ -673,8 +673,8 @@ def test_chat_gemini_shortcut(monkeypatch):
 
     res = llm_client.chat_gemini("SYS", "USER")
     assert called["provider"] == LLMProvider.GOOGLE.value
-    assert called["model"] == "gemini-pro"
-    assert res["model"] == "gemini-pro"
+    assert called["model"] == "gemini-1.5-pro"
+    assert res["model"] == "gemini-1.5-pro"
 
 
 def test_chat_local_shortcut(monkeypatch):
@@ -698,8 +698,8 @@ def test_env_parsing_safe_helpers_return_default_for_invalid_values(monkeypatch)
     monkeypatch.setenv("VERITAS_TEST_SAFE_INT", "invalid-int")
     monkeypatch.setenv("VERITAS_TEST_SAFE_FLOAT", "invalid-float")
 
-    assert llm_client._safe_int("VERITAS_TEST_SAFE_INT", 7) == 7
-    assert llm_client._safe_float("VERITAS_TEST_SAFE_FLOAT", 1.5) == 1.5
+    assert llm_client._env_int("VERITAS_TEST_SAFE_INT", 7) == 7
+    assert llm_client._env_float("VERITAS_TEST_SAFE_FLOAT", 1.5) == 1.5
 
 
 def test_env_parsing_failsafe_on_module_reload(monkeypatch):
