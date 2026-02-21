@@ -34,6 +34,10 @@ MAX_ITEM_TEXT_LENGTH = 20000
 # ID 長の上限（ログ肥大化・メモリ枯渇対策）
 MAX_ITEM_ID_LENGTH = 128
 
+# タグ数・タグ長の上限（メタデータ過剰入力による DoS/ログ肥大化対策）
+MAX_TAGS_PER_ITEM = 64
+MAX_TAG_LENGTH = 128
+
 # JSONL ファイルサイズの上限（起動時の再構築 / 検索時の読み込み用、100MB）
 MAX_JSONL_FILE_SIZE = 100 * 1024 * 1024
 
@@ -196,7 +200,21 @@ class MemoryStore:
         tags = item.get("tags") or []
         if not isinstance(tags, list):
             raise TypeError("item.tags must be a list")
-        normalized_tags = [str(tag) for tag in tags]
+        if len(tags) > MAX_TAGS_PER_ITEM:
+            raise ValueError(
+                f"item.tags too many (max {MAX_TAGS_PER_ITEM} items)"
+            )
+
+        normalized_tags: List[str] = []
+        for raw_tag in tags:
+            normalized_tag = str(raw_tag).strip()
+            if not normalized_tag:
+                raise ValueError("item.tags must not contain empty values")
+            if len(normalized_tag) > MAX_TAG_LENGTH:
+                raise ValueError(
+                    f"item.tags element too long (max {MAX_TAG_LENGTH} chars)"
+                )
+            normalized_tags.append(normalized_tag)
 
         meta = item.get("meta") or {}
         if not isinstance(meta, dict):
