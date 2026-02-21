@@ -149,3 +149,19 @@ def test_run_heal_truncates_failure_output(monkeypatch, tmp_path):
     assert ok is False
     assert info.startswith("heal failed: rc=1, out=")
     assert info.endswith("...")
+
+
+def test_validate_heal_script_path_rejects_group_writable_file(tmp_path):
+    """_validate_heal_script_path should reject group/other writable scripts."""
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    heal_script = scripts_dir / "heal.sh"
+    heal_script.write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+    heal_script.chmod(0o775)
+
+    original_scripts_dir = alert_doctor.SCRIPTS_DIR
+    alert_doctor.SCRIPTS_DIR = scripts_dir
+    try:
+        assert not alert_doctor._validate_heal_script_path(heal_script)
+    finally:
+        alert_doctor.SCRIPTS_DIR = original_scripts_dir
