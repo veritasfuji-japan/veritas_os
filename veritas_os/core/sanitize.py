@@ -533,7 +533,7 @@ class PIIDetector:
             overlap = 128
             segment_size = _MAX_PII_INPUT_LENGTH
             step = max(1, segment_size - overlap)
-            seen_ranges: set[tuple[int, int]] = set()
+            dedupe_candidates: List[PIIMatch] = []
 
             for start in range(0, len(text), step):
                 remaining = _MAX_PII_MATCHES - len(results)
@@ -550,11 +550,8 @@ class PIIDetector:
                     offset=start,
                     max_matches=remaining,
                 )
-                for match in segment_matches:
-                    span = (match.start, match.end)
-                    if span not in seen_ranges:
-                        seen_ranges.add(span)
-                        results.append(match)
+                dedupe_candidates.extend(segment_matches)
+                results = self._merge_matches_by_span(dedupe_candidates)
 
                 if end == len(text):
                     break
@@ -609,6 +606,34 @@ class PIIDetector:
 
         selected.sort(key=lambda item: item.start)
         return selected
+
+    def _merge_matches_by_span(self, matches: List[PIIMatch]) -> List[PIIMatch]:
+        """Collapse duplicate spans while keeping the most reliable detection.
+
+        Segment-based scanning can report the same absolute span multiple times
+        because neighboring windows overlap intentionally. Keeping only the first
+        observation may discard a higher-confidence pattern detected in a later
+        segment, so this helper keeps the strongest candidate for each span.
+        """
+        if not matches:
+            return []
+
+        best_by_span: Dict[tuple[int, int], PIIMatch] = {}
+        for match in matches:
+            span = (match.start, match.end)
+            current = best_by_span.get(span)
+            if current is None or (
+                match.confidence,
+                match.type,
+                match.value,
+            ) > (
+                current.confidence,
+                current.type,
+                current.value,
+            ):
+                best_by_span[span] = match
+
+        return list(best_by_span.values())
 
     def mask(self, text: object | None, mask_format: str = "〔{token}〕") -> str:
         """
