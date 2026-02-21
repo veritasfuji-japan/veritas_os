@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useId, useState } from "react";
 import { Button, Card } from "@veritas/design-system";
+import { type DecideResponse, isDecideResponse } from "@veritas/types";
 
 const PIPELINE_STAGES = [
   "Evidence",
@@ -21,8 +22,7 @@ const DANGER_PRESETS = [
 
 const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
-
-type DecideResponse = Record<string, unknown>;
+const ENV_API_KEY_STATUS = ENV_API_KEY ? "configured" : "not configured";
 
 /**
  * Render-safe serializer for unknown values.
@@ -87,9 +87,10 @@ interface SectionProps {
 }
 
 function ResultSection({ title, value }: SectionProps): JSX.Element {
+  const titleId = useId();
   return (
-    <section aria-label={title} className="space-y-2">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+    <section aria-labelledby={titleId} className="space-y-2">
+      <h3 className="text-sm font-semibold text-foreground" id={titleId}>{title}</h3>
       <pre className="overflow-x-auto rounded-md border border-border bg-background/70 p-3 text-xs text-foreground">
         {renderValue(value)}
       </pre>
@@ -104,14 +105,6 @@ export default function DecisionConsolePage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DecideResponse | null>(null);
-
-  const maskedEnvState = useMemo(() => {
-    if (!ENV_API_KEY) {
-      return "not configured";
-    }
-
-    return "configured";
-  }, []);
 
   const runDecision = async (nextQuery?: string): Promise<void> => {
     const queryToUse = (nextQuery ?? query).trim();
@@ -163,13 +156,13 @@ export default function DecisionConsolePage(): JSX.Element {
       }
 
       const payload: unknown = await response.json();
-      if (!payload || typeof payload !== "object") {
+      if (!isDecideResponse(payload)) {
         setError("schema不一致: レスポンスがオブジェクトではありません。");
         setResult(null);
         return;
       }
 
-      setResult(payload as DecideResponse);
+      setResult(payload);
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
       setResult(null);
@@ -185,12 +178,18 @@ export default function DecisionConsolePage(): JSX.Element {
           POST /v1/decide を直接実行し、意思決定パイプラインを可視化します。
         </p>
         <p className="text-xs text-muted-foreground">
-          API key env status: <span className="font-semibold">{maskedEnvState}</span>
+          API key env status: <span className="font-semibold">{ENV_API_KEY_STATUS}</span>
         </p>
       </Card>
 
       <Card title="Request" className="bg-background/75">
-        <div className="space-y-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runDecision();
+          }}
+          className="space-y-3"
+        >
           <label className="block space-y-1 text-xs">
             <span className="font-medium">API Base URL</span>
             <input
@@ -240,14 +239,14 @@ export default function DecisionConsolePage(): JSX.Element {
             </div>
           </div>
 
-          <Button onClick={() => void runDecision()} disabled={loading}>
+          <Button type="submit" disabled={loading}>
             {loading ? "実行中..." : "実行"}
           </Button>
 
           {error ? (
-            <p className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">{error}</p>
+            <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">{error}</p>
           ) : null}
-        </div>
+        </form>
       </Card>
 
       <PipelineVisualizer />
