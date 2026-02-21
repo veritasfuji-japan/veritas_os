@@ -175,6 +175,16 @@ def test_normalize_categories_deduplicates_and_clips():
     assert len(normalized) == 3
 
 
+
+
+def test_normalize_categories_strips_controls_and_casefold_dedup():
+    """制御文字を除去し、大文字小文字差分の重複を抑止する。"""
+    normalized = llm_safety._normalize_categories(
+        [" PII\x00", "pii", "\n\tillicit\r", "ILLICIT"],
+        max_categories=10,
+    )
+
+    assert normalized == ["PII", "illicit"]
 def test_normalize_categories_respects_non_positive_limit():
     """上限が 0 以下なら空配列を返す。"""
     normalized = llm_safety._normalize_categories(["PII", "illicit"], max_categories=0)
