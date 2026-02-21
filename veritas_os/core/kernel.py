@@ -30,6 +30,35 @@ _doctor_active_proc: "subprocess.Popen | None" = None
 _doctor_lock = _threading.Lock()
 
 
+def _is_safe_python_executable(executable_path: str | None) -> bool:
+    """Validate that a Python executable path is safe to launch.
+
+    Args:
+        executable_path: Path candidate, usually ``sys.executable``.
+
+    Returns:
+        ``True`` when the path points to an executable Python interpreter.
+
+    Security:
+        Auto-doctor launches a subprocess. Rejecting missing, non-absolute,
+        non-executable, or unexpected binary names reduces command hijacking
+        risk when runtime environment variables are tampered with.
+    """
+    import os
+
+    if not executable_path:
+        return False
+    if not os.path.isabs(executable_path):
+        return False
+    if not os.path.isfile(executable_path):
+        return False
+    if not os.access(executable_path, os.X_OK):
+        return False
+
+    executable_name = os.path.basename(executable_path).lower().replace(".exe", "")
+    return bool(re.match(r"^(python|pypy)[0-9.]*$", executable_name))
+
+
 def _open_doctor_log_fd(log_path: str) -> int:
     """Open a doctor log file descriptor with secure defaults.
 
@@ -1113,16 +1142,9 @@ async def decide(
                 import os
                 from pathlib import Path
 
-                # ★ セキュリティ修正: sys.executableの検証
                 python_executable = sys.executable
-                if not python_executable or not os.path.isfile(python_executable):
+                if not _is_safe_python_executable(python_executable):
                     raise ValueError("Invalid Python executable path")
-
-                # ★ セキュリティ修正: executableがPythonインタプリタであることを確認
-                executable_name = os.path.basename(python_executable).lower()
-                # 正規表現で厳密にマッチ: python, python3, python3.x, pypy, pypy3等
-                if not re.match(r'^(python|pypy)[0-9.]*$', executable_name.replace('.exe', '')):
-                    raise ValueError(f"Unexpected executable name: {executable_name}")
 
                 log_dir = Path(os.path.expanduser("~/.veritas/logs"))
                 log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -1255,4 +1277,3 @@ async def decide(
         "decision_status": decision_status,
         "rejection_reason": rejection_reason,
     }
-

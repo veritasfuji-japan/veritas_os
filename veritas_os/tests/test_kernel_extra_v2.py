@@ -28,6 +28,37 @@ import pytest
 from veritas_os.core import kernel
 
 
+
+
+# =========================================================
+# _is_safe_python_executable
+# =========================================================
+
+class TestIsSafePythonExecutable:
+    def test_returns_false_for_none(self):
+        assert kernel._is_safe_python_executable(None) is False
+
+    def test_returns_false_for_relative_path(self):
+        assert kernel._is_safe_python_executable("python3") is False
+
+    def test_returns_false_for_non_executable_file(self, tmp_path):
+        file_path = tmp_path / "python3"
+        file_path.write_text("#!/bin/false\n")
+        file_path.chmod(0o600)
+        assert kernel._is_safe_python_executable(str(file_path)) is False
+
+    def test_returns_false_for_unexpected_executable_name(self, tmp_path):
+        file_path = tmp_path / "bash"
+        file_path.write_text("#!/bin/false\n")
+        file_path.chmod(0o700)
+        assert kernel._is_safe_python_executable(str(file_path)) is False
+
+    def test_returns_true_for_python_like_executable(self, tmp_path):
+        file_path = tmp_path / "python3.12"
+        file_path.write_text("#!/bin/true\n")
+        file_path.chmod(0o700)
+        assert kernel._is_safe_python_executable(str(file_path)) is True
+
 # =========================================================
 # _open_doctor_log_fd
 # =========================================================
