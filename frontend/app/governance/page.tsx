@@ -65,8 +65,29 @@ const FUJI_LABELS: Record<keyof FujiRules, string> = {
   llm_safety_head: "LLM Safety Head (AI安全ヘッド)",
 };
 
+/**
+ * Structural equality check via recursive key-value comparison.
+ * Handles primitives, arrays, and plain objects. Avoids JSON.stringify
+ * to prevent issues with undefined values and key-ordering non-determinism.
+ */
 function deepEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+  if (a === b) return true;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object" || a === null || b === null) return false;
+
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((key) => deepEqual(objA[key], objB[key]));
 }
 
 /* ---------- sub-components ---------- */
@@ -77,19 +98,31 @@ interface ToggleRowProps {
   onChange: (v: boolean) => void;
 }
 
+/**
+ * Accessible on/off switch. Uses a native <button role="switch"> to avoid
+ * conflicts between the ARIA switch role and the native checkbox role.
+ */
 function ToggleRow({ label, checked, onChange }: ToggleRowProps): JSX.Element {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
       <span>{label}</span>
-      <input
-        type="checkbox"
+      <button
+        type="button"
         role="switch"
+        aria-checked={checked}
         aria-label={label}
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 accent-primary"
-      />
-    </label>
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          checked ? "bg-primary" : "bg-border"
+        }`}
+      >
+        <span
+          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+            checked ? "translate-x-[1.125rem]" : "translate-x-0.5"
+          }`}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -141,7 +174,13 @@ function NumberRow({ label, value, min, max, onChange }: NumberRowProps): JSX.El
         min={min}
         max={max}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const raw = e.target.value;
+          const n = Number(raw);
+          if (raw !== "" && !Number.isNaN(n)) {
+            onChange(n);
+          }
+        }}
         className="w-24 rounded-md border border-border bg-background px-2 py-1 text-right"
       />
     </label>
@@ -149,6 +188,48 @@ function NumberRow({ label, value, min, max, onChange }: NumberRowProps): JSX.El
 }
 
 /* ---------- diff preview ---------- */
+
+interface DiffChange {
+  path: string;
+  old: string;
+  next: string;
+}
+
+/**
+ * Recursively collects changed leaf paths between two policy objects.
+ * Pure function: returns a new array rather than mutating an outer variable.
+ */
+function collectChanges(
+  prefix: string,
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): DiffChange[] {
+  const changes: DiffChange[] = [];
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const av = a[key];
+    const bv = b[key];
+    if (deepEqual(av, bv)) continue;
+    if (
+      typeof av === "object" && av !== null && !Array.isArray(av) &&
+      typeof bv === "object" && bv !== null && !Array.isArray(bv)
+    ) {
+      changes.push(
+        ...collectChanges(
+          `${prefix}.${key}`,
+          av as Record<string, unknown>,
+          bv as Record<string, unknown>,
+        ),
+      );
+    } else {
+      changes.push({
+        path: `${prefix}.${key}`,
+        old: JSON.stringify(av),
+        next: JSON.stringify(bv),
+      });
+    }
+  }
+  return changes;
+}
 
 interface DiffPreviewProps {
   before: GovernancePolicy | null;
@@ -160,29 +241,7 @@ function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
     return <p className="text-xs text-muted-foreground">変更はありません。</p>;
   }
 
-  const changes: { path: string; old: string; next: string }[] = [];
-
-  function collect(prefix: string, a: Record<string, unknown>, b: Record<string, unknown>): void {
-    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      const av = a[key];
-      const bv = b[key];
-      if (deepEqual(av, bv)) continue;
-      if (
-        typeof av === "object" && av !== null && !Array.isArray(av) &&
-        typeof bv === "object" && bv !== null && !Array.isArray(bv)
-      ) {
-        collect(`${prefix}.${key}`, av as Record<string, unknown>, bv as Record<string, unknown>);
-      } else {
-        changes.push({
-          path: `${prefix}.${key}`,
-          old: JSON.stringify(av),
-          next: JSON.stringify(bv),
-        });
-      }
-    }
-  }
-
-  collect(
+  const changes = collectChanges(
     "",
     before as unknown as Record<string, unknown>,
     after as unknown as Record<string, unknown>,
@@ -278,13 +337,12 @@ export default function GovernanceControlPage(): JSX.Element {
     }
   }, [apiBase, apiKey, draft]);
 
-  /* -- auto-load on mount -- */
-  useEffect(() => {
-    if (apiKey.trim()) {
-      void fetchPolicy();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  /* -- auto-load on mount if API key is pre-configured via env --
+     fetchPolicy is intentionally omitted from the dependency array: the
+     effect must run exactly once at mount, not on every apiBase/apiKey
+     change.  Manual re-fetches are done via the "ポリシーを読み込む" button. */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (apiKey.trim()) void fetchPolicy(); }, []);
 
   /* -- updater helpers -- */
   function updateFuji<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void {
@@ -309,6 +367,12 @@ export default function GovernanceControlPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      {/* Screen-reader live region for async state announcements */}
+      <div aria-live="polite" aria-atomic="true" className="sr-only">
+        {loading ? "ポリシーを読み込んでいます..." : ""}
+        {saving ? "ポリシーを保存しています..." : ""}
+      </div>
+
       {/* Header */}
       <Card title="Governance Control" className="border-primary/50 bg-surface/85">
         <p className="text-sm text-muted-foreground">
