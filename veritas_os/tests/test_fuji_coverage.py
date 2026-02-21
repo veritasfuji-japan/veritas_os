@@ -481,13 +481,13 @@ class TestUtilityFunctions:
         assert "T" in result
 
     def test_safe_int_valid(self):
-        assert fuji._safe_int("5", 0) == 5
+        assert fuji._safe_nonneg_int("5", 0) == 5
 
     def test_safe_int_negative(self):
-        assert fuji._safe_int(-1, 10) == 10
+        assert fuji._safe_nonneg_int(-1, 10) == 10
 
     def test_safe_int_invalid(self):
-        assert fuji._safe_int("abc", 42) == 42
+        assert fuji._safe_nonneg_int("abc", 42) == 42
 
     def test_normalize_text(self):
         assert fuji._normalize_text("  Hello　World  ") == "hello world"
