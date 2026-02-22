@@ -1,0 +1,15 @@
+VERITAS Notice File
+
+Copyright (c) 2025 Takeshi Fujishita and VERITAS contributors.
+
+This repository contains proprietary Core components and selected open-licensed
+interface components. License scope is defined by the top-level LICENSE and
+subdirectory LICENSE files.
+
+Primary project repository:
+https://github.com/veritasfuji-japan/veritas_os
+
+Attribution guidance:
+- Keep this NOTICE file in redistributions where required by applicable
+  license terms.
+- Keep copyright and attribution notices intact.
