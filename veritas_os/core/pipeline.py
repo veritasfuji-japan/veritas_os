@@ -313,6 +313,8 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
 
 def _get_memory_store() -> Optional[Any]:
     """pipeline.mem を参照するラッパー（テストが monkeypatch で pipeline.mem をパッチ可能にする）。"""
+    if mem is None:
+        return None
     return _get_memory_store_impl(mem=mem)
 
 
