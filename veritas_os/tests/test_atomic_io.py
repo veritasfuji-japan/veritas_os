@@ -89,6 +89,23 @@ class TestAtomicWriteText:
 
         assert Path(target).read_text() == "content"
 
+    def test_handles_partial_os_write(self, tmp_path: Path):
+        """Test robustness when os.write writes only part of the buffer."""
+        target = tmp_path / "partial.txt"
+        payload = "abcdefghijklmnopqrstuvwxyz"
+
+        original_write = os.write
+
+        def partial_write(fd: int, data: bytes) -> int:
+            if len(data) > 4:
+                return original_write(fd, data[:4])
+            return original_write(fd, data)
+
+        with mock.patch("os.write", side_effect=partial_write):
+            atomic_write_text(target, payload)
+
+        assert target.read_text() == payload
+
 
 class TestAtomicWriteJson:
     """Tests for atomic_write_json function."""
@@ -201,6 +218,23 @@ class TestAtomicAppendLine:
 
         assert target.exists()
         assert target.read_text() == "line\n"
+
+    def test_append_handles_partial_os_write(self, tmp_path: Path):
+        """Test append durability when os.write performs partial writes."""
+        target = tmp_path / "partial.log"
+        payload = "line-with-partial-write"
+
+        original_write = os.write
+
+        def partial_write(fd: int, data: bytes) -> int:
+            if len(data) > 3:
+                return original_write(fd, data[:3])
+            return original_write(fd, data)
+
+        with mock.patch("os.write", side_effect=partial_write):
+            atomic_append_line(target, payload)
+
+        assert target.read_text() == f"{payload}\n"
 
 
 class TestAtomicWriteNpz:

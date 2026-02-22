@@ -43,6 +43,18 @@ def _ensure_parent_dir(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Write all bytes to a file descriptor, handling partial writes safely."""
+    total_written = 0
+    data_len = len(data)
+
+    while total_written < data_len:
+        written = os.write(fd, data[total_written:])
+        if written <= 0:
+            raise OSError("os.write returned 0 bytes; unable to complete write")
+        total_written += written
+
+
 def _atomic_write_bytes(path: Path, data: bytes) -> None:
     """
     Atomically write bytes to a file.
@@ -69,7 +81,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         if hasattr(os, 'fchmod'):
             os.fchmod(fd, 0o600)
         # Write data
-        os.write(fd, data)
+        _write_all(fd, data)
         # Flush to disk
         os.fsync(fd)
         os.close(fd)
@@ -245,7 +257,7 @@ def atomic_append_line(
         0o600
     )
     try:
-        os.write(fd, line.encode(encoding))
+        _write_all(fd, line.encode(encoding))
         os.fsync(fd)
     finally:
         os.close(fd)
