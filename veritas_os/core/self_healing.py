@@ -20,7 +20,8 @@ from .fuji_codes import FujiAction
 
 logger = logging.getLogger(__name__)
 
-def _safe_int(env_key: str, default: int) -> int:
+def _env_int(env_key: str, default: int) -> int:
+    """環境変数を int として安全に取得する（キー名を引数として受け取る版）。"""
     val = os.getenv(env_key)
     if val is None:
         return default
@@ -30,7 +31,8 @@ def _safe_int(env_key: str, default: int) -> int:
         return default
 
 
-def _safe_float(env_key: str, default: float) -> float:
+def _env_float(env_key: str, default: float) -> float:
+    """環境変数を float として安全に取得する（キー名を引数として受け取る版）。"""
     val = os.getenv(env_key)
     if val is None:
         return default
@@ -40,10 +42,10 @@ def _safe_float(env_key: str, default: float) -> float:
         return default
 
 
-MAX_HEALING_ATTEMPTS = _safe_int("VERITAS_MAX_HEALING_ATTEMPTS", 3)
-MAX_HEALING_STEPS = _safe_int("VERITAS_HEALING_MAX_STEPS", 6)
-MAX_HEALING_SECONDS = _safe_float("VERITAS_HEALING_MAX_SECONDS", 20.0)
-MAX_CONSECUTIVE_SAME_ERROR = _safe_int("VERITAS_HEALING_MAX_SAME_ERROR", 2)
+MAX_HEALING_ATTEMPTS = _env_int("VERITAS_MAX_HEALING_ATTEMPTS", 3)
+MAX_HEALING_STEPS = _env_int("VERITAS_HEALING_MAX_STEPS", 6)
+MAX_HEALING_SECONDS = _env_float("VERITAS_HEALING_MAX_SECONDS", 20.0)
+MAX_CONSECUTIVE_SAME_ERROR = _env_int("VERITAS_HEALING_MAX_SAME_ERROR", 2)
 
 
 @dataclass(frozen=True)
