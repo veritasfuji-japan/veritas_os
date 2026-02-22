@@ -1,21 +1,75 @@
-THIRD-PARTY NOTICES (Initial Template)
+THIRD-PARTY NOTICES
 
-This file is an initial notice template for third-party software
-licenses used by VERITAS components.
+Last updated: 2026-02-22
 
-Important:
-- Dependency-specific notices may be generated and expanded in future releases.
-- Package manager lockfiles and dependency metadata should be consulted for
-  authoritative dependency listings.
+This file documents third-party license obligations for distributed VERITAS
+artifacts. It is based on dependency manifests currently committed in this
+repository. Downstream redistributors remain responsible for validating the
+final dependency set in built artifacts.
 
-Potential sources of third-party license obligations in this repository include:
-- Python dependencies listed in requirements and lock/manifests
-- JavaScript/TypeScript dependencies in package.json and pnpm lockfiles
-- Container base images and OS packages referenced by Dockerfile
+Security / compliance warning:
+- If this notice file is stale relative to lockfiles or build outputs,
+  redistribution may violate attribution or notice requirements.
+- Treat updates to dependency manifests as a trigger to review this file.
 
-Maintainers should update this file before each release with:
-- dependency name
-- version
-- license
-- copyright notice
-- source URL (if required)
+1) Python dependencies (runtime + tooling)
+Source manifest: `veritas_os/requirements.txt`
+
+Representative dependencies declared in the manifest include:
+- fastapi
+- uvicorn
+- pydantic
+- requests
+- numpy
+- scipy
+- faiss-cpu
+- sentence-transformers
+- opencv-python
+- pytest
+- pytest-cov
+
+Note:
+- Exact transitive dependency versions and licenses depend on resolver output.
+- Before release, generate a full dependency report from the locked environment
+  and append package name, version, license, copyright, and source URL.
+
+2) JavaScript / TypeScript dependencies
+Source manifests:
+- `package.json` (workspace root)
+- `frontend/package.json`
+- `packages/design-system/package.json`
+- `packages/types/package.json`
+
+Representative dependencies declared in manifests include:
+- next
+- react
+- react-dom
+- tailwindcss
+- class-variance-authority
+- clsx
+- tailwind-merge
+- @playwright/test
+- vitest
+- @testing-library/react
+- typescript
+
+Note:
+- Exact resolved versions and transitive dependency licenses are determined by
+  `pnpm-lock.yaml` at build time.
+- Before release, produce a lockfile-based notice report and include license
+  texts where required.
+
+3) Container and OS package obligations
+Potential additional obligations may arise from:
+- `Dockerfile` base image license terms
+- Installed OS packages in container layers
+
+Before release:
+- Record base image digest and license terms.
+- Export package list from image layers and merge applicable notices.
+
+4) Maintainer checklist (release gate)
+- [ ] Regenerate dependency inventory from lockfiles / pinned environments.
+- [ ] Verify each dependency license compatibility with distribution model.
+- [ ] Include required attribution texts in distributed artifacts.
+- [ ] Re-check trademark usage against `TRADEMARKS`.
