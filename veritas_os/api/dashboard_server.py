@@ -25,9 +25,11 @@ import json
 import logging
 import os
 import secrets
+import threading
+import time
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 
@@ -160,7 +162,107 @@ def _warn_if_ephemeral_password_with_multi_workers(
 _warn_if_ephemeral_password_with_multi_workers(_password_auto_generated)
 
 
+def _get_failed_auth_policy() -> tuple[int, int]:
+    """Return failed-auth throttling policy.
+
+    Returns:
+        tuple[int, int]:
+            - max failures allowed within a window.
+            - lockout window in seconds.
+
+    Security note:
+        Invalid values are ignored with warnings to keep startup resilient and
+        avoid accidental DoS from misconfiguration.
+    """
+    raw_max_failures = os.getenv("DASHBOARD_AUTH_MAX_FAILURES", "5").strip()
+    raw_window_seconds = os.getenv("DASHBOARD_AUTH_WINDOW_SECONDS", "300").strip()
+
+    max_failures = 5
+    window_seconds = 300
+
+    try:
+        parsed_failures = int(raw_max_failures)
+        if parsed_failures >= 1:
+            max_failures = parsed_failures
+        else:
+            raise ValueError
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid DASHBOARD_AUTH_MAX_FAILURES=%r; using default %s.",
+            raw_max_failures,
+            max_failures,
+        )
+
+    try:
+        parsed_window = int(raw_window_seconds)
+        if parsed_window >= 1:
+            window_seconds = parsed_window
+        else:
+            raise ValueError
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid DASHBOARD_AUTH_WINDOW_SECONDS=%r; using default %s.",
+            raw_window_seconds,
+            window_seconds,
+        )
+
+    return max_failures, window_seconds
+
+
+_FAILED_AUTH_MAX_FAILURES, _FAILED_AUTH_WINDOW_SECONDS = _get_failed_auth_policy()
+_FAILED_AUTH_ATTEMPTS: dict[str, list[float]] = {}
+_FAILED_AUTH_LOCK = threading.Lock()
+
+
+def _collect_recent_failures(
+    now: float,
+    failure_timestamps: list[float],
+    window_seconds: int,
+) -> list[float]:
+    """Return failure timestamps still inside the throttling window."""
+    lower_bound = now - window_seconds
+    return [timestamp for timestamp in failure_timestamps if timestamp >= lower_bound]
+
+
+def _is_dashboard_auth_locked(identifier: str, now: float | None = None) -> bool:
+    """Return ``True`` when failed auth attempts exceed the lock threshold."""
+    current_time = now if now is not None else time.time()
+    with _FAILED_AUTH_LOCK:
+        history = _FAILED_AUTH_ATTEMPTS.get(identifier, [])
+        recent = _collect_recent_failures(
+            now=current_time,
+            failure_timestamps=history,
+            window_seconds=_FAILED_AUTH_WINDOW_SECONDS,
+        )
+        if recent:
+            _FAILED_AUTH_ATTEMPTS[identifier] = recent
+        else:
+            _FAILED_AUTH_ATTEMPTS.pop(identifier, None)
+        return len(recent) >= _FAILED_AUTH_MAX_FAILURES
+
+
+def _record_failed_dashboard_auth(identifier: str, now: float | None = None) -> None:
+    """Store a failed dashboard authentication attempt for throttling."""
+    current_time = now if now is not None else time.time()
+    with _FAILED_AUTH_LOCK:
+        history = _FAILED_AUTH_ATTEMPTS.get(identifier, [])
+        recent = _collect_recent_failures(
+            now=current_time,
+            failure_timestamps=history,
+            window_seconds=_FAILED_AUTH_WINDOW_SECONDS,
+        )
+        recent.append(current_time)
+        _FAILED_AUTH_ATTEMPTS[identifier] = recent
+
+
+def _clear_failed_dashboard_auth(identifier: str) -> None:
+    """Clear failed-auth tracking for ``identifier`` after successful login."""
+    with _FAILED_AUTH_LOCK:
+        _FAILED_AUTH_ATTEMPTS.pop(identifier, None)
+
+
 def verify_credentials(
+    request: Request,
     credentials: HTTPBasicCredentials = Depends(security),  # noqa: B008
 ) -> str:
     """
@@ -175,6 +277,22 @@ def verify_credentials(
     Raises:
         HTTPException: If authentication fails
     """
+    client_host = request.client.host if request.client else "unknown"
+    throttle_key = f"{client_host}:{credentials.username}"
+
+    if _is_dashboard_auth_locked(throttle_key):
+        logger.warning(
+            "Dashboard auth temporarily locked due to repeated failures "
+            "(client=%s username=%s).",
+            client_host,
+            credentials.username,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many authentication failures. Try again later.",
+            headers={"Retry-After": str(_FAILED_AUTH_WINDOW_SECONDS)},
+        )
+
     correct_username = secrets.compare_digest(
         credentials.username, DASHBOARD_USERNAME
     )
@@ -183,11 +301,14 @@ def verify_credentials(
     )
 
     if not (correct_username and correct_password):
+        _record_failed_dashboard_auth(throttle_key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Basic"},
         )
+
+    _clear_failed_dashboard_auth(throttle_key)
     return credentials.username
 
 
