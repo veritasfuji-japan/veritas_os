@@ -206,6 +206,10 @@ class _LazyState:
     obj: Any = None
     err: Optional[str] = None
     attempted: bool = False
+    lock: threading.Lock = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        self.lock = threading.Lock()
 
 
 _cfg_state = _LazyState()
@@ -313,24 +317,28 @@ def get_cfg() -> Any:
     if _cfg_state.obj is not None:
         return _cfg_state.obj
 
-    if _cfg_state.attempted and _cfg_state.err is not None:
-        return _cfg_state.obj
+    with _cfg_state.lock:
+        # ダブルチェック（ロック取得後に再確認）
+        if _cfg_state.obj is not None:
+            return _cfg_state.obj
+        if _cfg_state.attempted and _cfg_state.err is not None:
+            return _cfg_state.obj
 
-    _cfg_state.attempted = True
-    try:
-        mod = importlib.import_module("veritas_os.core.config")
-        cfg = getattr(mod, "cfg")
-        _cfg_state.obj = cfg
-        _cfg_state.err = None
-        return cfg
-    except Exception as e:
-        _cfg_state.err = _errstr(e)
-        _cfg_state.obj = SimpleNamespace(
-            cors_allow_origins=[],
-            api_key="",
-        )
-        logger.warning("cfg import failed -> fallback: %s", _cfg_state.err)
-        return _cfg_state.obj
+        _cfg_state.attempted = True
+        try:
+            mod = importlib.import_module("veritas_os.core.config")
+            cfg = getattr(mod, "cfg")
+            _cfg_state.obj = cfg
+            _cfg_state.err = None
+            return cfg
+        except Exception as e:
+            _cfg_state.err = _errstr(e)
+            _cfg_state.obj = SimpleNamespace(
+                cors_allow_origins=[],
+                api_key="",
+            )
+            logger.warning("cfg import failed -> fallback: %s", _cfg_state.err)
+            return _cfg_state.obj
 
 
 def get_decision_pipeline() -> Optional[Any]:
@@ -341,20 +349,23 @@ def get_decision_pipeline() -> Optional[Any]:
     global _pipeline_state
     if _pipeline_state.obj is not None:
         return _pipeline_state.obj
-    if _pipeline_state.attempted and _pipeline_state.err is not None:
-        return None
+    with _pipeline_state.lock:
+        if _pipeline_state.obj is not None:
+            return _pipeline_state.obj
+        if _pipeline_state.attempted and _pipeline_state.err is not None:
+            return None
 
-    _pipeline_state.attempted = True
-    try:
-        p = importlib.import_module("veritas_os.core.pipeline")
-        _pipeline_state.obj = p
-        _pipeline_state.err = None
-        return p
-    except Exception as e:
-        _pipeline_state.err = _errstr(e)
-        _pipeline_state.obj = None
-        logger.warning("decision pipeline import failed: %s", _pipeline_state.err)
-        return None
+        _pipeline_state.attempted = True
+        try:
+            p = importlib.import_module("veritas_os.core.pipeline")
+            _pipeline_state.obj = p
+            _pipeline_state.err = None
+            return p
+        except Exception as e:
+            _pipeline_state.err = _errstr(e)
+            _pipeline_state.obj = None
+            logger.warning("decision pipeline import failed: %s", _pipeline_state.err)
+            return None
 
 
 def get_fuji_core() -> Optional[Any]:
@@ -377,21 +388,24 @@ def get_fuji_core() -> Optional[Any]:
 
     if _fuji_state.obj is not None:
         return _fuji_state.obj
-    if _fuji_state.attempted and _fuji_state.err is not None:
-        return None
+    with _fuji_state.lock:
+        if _fuji_state.obj is not None:
+            return _fuji_state.obj
+        if _fuji_state.attempted and _fuji_state.err is not None:
+            return None
 
-    _fuji_state.attempted = True
-    try:
-        m = importlib.import_module("veritas_os.core.fuji")
-        _fuji_state.obj = m
-        _fuji_state.err = None
-        fuji_core = m
-        return m
-    except Exception as e:
-        _fuji_state.err = _errstr(e)
-        _fuji_state.obj = None
-        logger.warning("fuji_core import failed: %s", _fuji_state.err)
-        return None
+        _fuji_state.attempted = True
+        try:
+            m = importlib.import_module("veritas_os.core.fuji")
+            _fuji_state.obj = m
+            _fuji_state.err = None
+            fuji_core = m
+            return m
+        except Exception as e:
+            _fuji_state.err = _errstr(e)
+            _fuji_state.obj = None
+            logger.warning("fuji_core import failed: %s", _fuji_state.err)
+            return None
 
 
 def get_value_core() -> Optional[Any]:
@@ -410,21 +424,24 @@ def get_value_core() -> Optional[Any]:
 
     if _value_core_state.obj is not None:
         return _value_core_state.obj
-    if _value_core_state.attempted and _value_core_state.err is not None:
-        return None
+    with _value_core_state.lock:
+        if _value_core_state.obj is not None:
+            return _value_core_state.obj
+        if _value_core_state.attempted and _value_core_state.err is not None:
+            return None
 
-    _value_core_state.attempted = True
-    try:
-        m = importlib.import_module("veritas_os.core.value_core")
-        _value_core_state.obj = m
-        _value_core_state.err = None
-        value_core = m
-        return m
-    except Exception as e:
-        _value_core_state.err = _errstr(e)
-        _value_core_state.obj = None
-        logger.warning("value_core import failed: %s", _value_core_state.err)
-        return None
+        _value_core_state.attempted = True
+        try:
+            m = importlib.import_module("veritas_os.core.value_core")
+            _value_core_state.obj = m
+            _value_core_state.err = None
+            value_core = m
+            return m
+        except Exception as e:
+            _value_core_state.err = _errstr(e)
+            _value_core_state.obj = None
+            logger.warning("value_core import failed: %s", _value_core_state.err)
+            return None
 
 
 def get_memory_store() -> Optional[Any]:
@@ -445,28 +462,31 @@ def get_memory_store() -> Optional[Any]:
 
     if _memory_store_state.obj is not None:
         return _memory_store_state.obj
-    if _memory_store_state.attempted and _memory_store_state.err is not None:
-        return None
+    with _memory_store_state.lock:
+        if _memory_store_state.obj is not None:
+            return _memory_store_state.obj
+        if _memory_store_state.attempted and _memory_store_state.err is not None:
+            return None
 
-    _memory_store_state.attempted = True
-    try:
-        m = importlib.import_module("veritas_os.core.memory")
-        store = getattr(m, "MEM", None)
-        if store is None:
-            # module-style memory (search/put/get on module)
-            if any(hasattr(m, a) for a in ("search", "put", "get")):
-                store = m
-            else:
-                raise RuntimeError("MEM not found in veritas_os.core.memory")
-        _memory_store_state.obj = store
-        _memory_store_state.err = None
-        MEMORY_STORE = store
-        return store
-    except Exception as e:
-        _memory_store_state.err = _errstr(e)
-        _memory_store_state.obj = None
-        logger.warning("memory store import failed: %s", _memory_store_state.err)
-        return None
+        _memory_store_state.attempted = True
+        try:
+            m = importlib.import_module("veritas_os.core.memory")
+            store = getattr(m, "MEM", None)
+            if store is None:
+                # module-style memory (search/put/get on module)
+                if any(hasattr(m, a) for a in ("search", "put", "get")):
+                    store = m
+                else:
+                    raise RuntimeError("MEM not found in veritas_os.core.memory")
+            _memory_store_state.obj = store
+            _memory_store_state.err = None
+            MEMORY_STORE = store
+            return store
+        except Exception as e:
+            _memory_store_state.err = _errstr(e)
+            _memory_store_state.obj = None
+            logger.warning("memory store import failed: %s", _memory_store_state.err)
+            return None
 
 
 # ==============================
@@ -667,6 +687,7 @@ def require_api_key_header_or_query(
 
 _NONCE_TTL_SEC = 300
 _NONCE_MAX = 5000  # 簡易上限
+_NONCE_MAX_LENGTH = 256  # ノンス長の上限（メモリ消費抑止）
 _nonce_store: Dict[str, float] = {}
 _nonce_lock = threading.Lock()  # ★ スレッドセーフ化
 
@@ -767,6 +788,10 @@ def _check_and_register_nonce(nonce: str) -> bool:
         - Store limited to ``_NONCE_MAX`` (5000) entries.
         - Thread-safe via ``_nonce_lock``.
     """
+    # ★ セキュリティ: ノンス長の上限チェック（超長いノンスによるメモリ枯渇防止）
+    if len(nonce) > _NONCE_MAX_LENGTH:
+        return False
+
     with _nonce_lock:
         _cleanup_nonces_unsafe()
         if nonce in _nonce_store:

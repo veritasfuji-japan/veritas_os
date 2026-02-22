@@ -155,15 +155,15 @@ def test_advance_state_different_error_resets_count() -> None:
     assert state.last_error_code == "F-2101"
 
 
-# ── _safe_int / _safe_float env parsing with invalid values ───────────
+# ── _env_int / _env_float env parsing with invalid values ───────────
 
 def test_safe_int_invalid_value() -> None:
     with mock.patch.dict(os.environ, {"VERITAS_TEST_INT": "notanint"}):
-        result = self_healing._safe_int("VERITAS_TEST_INT", 42)
+        result = self_healing._env_int("VERITAS_TEST_INT", 42)
         assert result == 42
 
 
 def test_safe_float_invalid_value() -> None:
     with mock.patch.dict(os.environ, {"VERITAS_TEST_FLOAT": "notafloat"}):
-        result = self_healing._safe_float("VERITAS_TEST_FLOAT", 3.14)
+        result = self_healing._env_float("VERITAS_TEST_FLOAT", 3.14)
         assert result == 3.14

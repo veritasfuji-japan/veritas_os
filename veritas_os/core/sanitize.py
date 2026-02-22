@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import ipaddress
 from bisect import bisect_left
 from dataclasses import dataclass
@@ -387,6 +388,9 @@ class PIIDetector:
             ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
         ]
 
+        # パターンソートキャッシュ用ロック（スレッドセーフな遅延初期化のため）
+        self._sort_lock = threading.Lock()
+
     def _prepare_input_text(self, text: object | None) -> str:
         """Normalize input text for PII scanning.
 
@@ -500,12 +504,22 @@ class PIIDetector:
         higher-confidence patterns first reduces false positives when multiple
         patterns can match the same substring.
 
-        The result is cached on first call since pattern priority does not
-        change after ``__init__``.
+        The result is cached after the first sort. A lock ensures that only
+        one thread performs the sort even under concurrent access, making this
+        method thread-safe.
         """
-        if not hasattr(self, "_sorted_patterns"):
-            self._sorted_patterns = sorted(self._patterns, key=lambda item: item[4], reverse=True)
-        return self._sorted_patterns
+        cached = getattr(self, "_sorted_patterns", None)
+        if cached is not None:
+            return cached
+        with self._sort_lock:
+            # ダブルチェックロック: ロック取得後に再確認
+            cached = getattr(self, "_sorted_patterns", None)
+            if cached is not None:
+                return cached
+            self._sorted_patterns: List[tuple] = sorted(
+                self._patterns, key=lambda item: item[4], reverse=True
+            )
+            return self._sorted_patterns
 
     def detect(self, text: str | None) -> List[PIIMatch]:
         """
