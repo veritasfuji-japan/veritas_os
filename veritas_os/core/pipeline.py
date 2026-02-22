@@ -308,18 +308,7 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
     return out
 
 
-def _ensure_metrics_contract(extras: Dict[str, Any]) -> None:
-    extras.setdefault("metrics", {})
-    m = extras["metrics"]
-    m.setdefault("mem_hits", 0)
-    m.setdefault("memory_evidence_count", 0)
-    m.setdefault("web_hits", 0)
-    m.setdefault("web_evidence_count", 0)
-    m.setdefault("fast_mode", False)
-    extras.setdefault("fast_mode", False)
-
-
-
+# _ensure_metrics_contract -> pipeline_contracts.py に移動済み（上部 import）
 
 
 def _norm_alt(o: Any) -> Dict[str, Any]:
