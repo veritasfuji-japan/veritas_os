@@ -27,16 +27,16 @@ if HAS_REQUESTS:
     import requests
 
 # ===== パス設定 =====
-HERE = Path(__file__).resolve().parent      # .../veritas_os/scripts
-HOME = HERE.parent.parent                   # .../veritas_clean_test2
+HERE = Path(__file__).resolve().parent  # .../veritas_os/scripts
+VERITAS_DIR = HERE.parent  # .../veritas_os
 
-SCRIPTS_BASE = HOME / "scripts"
-LOGS_DIR     = SCRIPTS_BASE / "logs"
-BACKUPS_DIR  = SCRIPTS_BASE / "backups"
+# scripts 配下を正規の運用ディレクトリとして扱う
+SCRIPTS_BASE = HERE
+LOGS_DIR = SCRIPTS_BASE / "logs"
+BACKUPS_DIR = SCRIPTS_BASE / "backups"
 
-# Doctor レポートは ~/veritas/reports 配下に出す構成に合わせる
-VERITAS_DIR  = Path(__file__).resolve().parent      # .../veritas_os/scripts
-REPORT_DIR   = VERITAS_DIR / "reports"
+# Doctor レポートは veritas_os/reports 配下に保存する
+REPORT_DIR = VERITAS_DIR / "reports"
 REPORT_HTML  = REPORT_DIR / "doctor_dashboard.html"
 REPORT_JSON  = REPORT_DIR / "doctor_report.json"
 

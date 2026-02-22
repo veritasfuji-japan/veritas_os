@@ -97,3 +97,9 @@ def test_check_server_disables_redirect_following(monkeypatch) -> None:
     assert result["ok"] is True
     assert called["timeout"] == 3
     assert called["allow_redirects"] is False
+
+
+def test_paths_are_scoped_to_repo_scripts_directory() -> None:
+    assert health_check.SCRIPTS_BASE == health_check.HERE
+    assert health_check.LOGS_DIR == health_check.HERE / "logs"
+    assert health_check.BACKUPS_DIR == health_check.HERE / "backups"
