@@ -15,6 +15,7 @@ import json
 import subprocess
 import re
 import importlib.util
+import ipaddress
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -127,6 +128,9 @@ def _validate_url(url: str) -> Optional[str]:
     if not hostname:
         return None
 
+    if not _is_allowed_health_host(hostname):
+        return None
+
     # IPv4 風（数字とドットのみ）の場合はオクテット範囲を厳密検証
     if re.match(r"^[0-9.]+$", hostname):
         if not _is_valid_ipv4(hostname):
@@ -151,6 +155,34 @@ def _validate_url(url: str) -> Optional[str]:
             return None
 
     return url
+
+
+def _is_allowed_health_host(hostname: str) -> bool:
+    """ヘルスチェック先として許可するホストかを判定する。
+
+    セキュリティ上の理由から、デフォルトでは loopback / private /
+    localhost のみ許可する。
+    `VERITAS_HEALTH_ALLOW_PUBLIC=1` の場合のみ公開ホストを許可する。
+    """
+    allow_public = os.getenv("VERITAS_HEALTH_ALLOW_PUBLIC", "0") == "1"
+    if allow_public:
+        return True
+
+    lower_host = hostname.lower().rstrip(".")
+    if lower_host == "localhost" or lower_host.endswith(".localhost"):
+        return True
+
+    try:
+        ip_value = ipaddress.ip_address(lower_host)
+    except ValueError:
+        # DNS 名はデフォルト拒否（SSRF 影響の縮小）
+        return False
+
+    return (
+        ip_value.is_loopback
+        or ip_value.is_private
+        or ip_value.is_link_local
+    )
 
 
 API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
