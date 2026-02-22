@@ -179,6 +179,29 @@ class TestAnalyzeDict:
         assert result["ok"] is True
 
 
+class TestAnalyzeValidation:
+    """Validation and edge-case tests for analyze/analyze_dict."""
+
+    def test_min_evidence_invalid_string_is_safe(self):
+        """Invalid min_evidence values should not raise parsing errors."""
+        result = crit_mod.analyze(
+            option={"title": "t"},
+            evidence=[],
+            context={"min_evidence": "not-a-number"},
+        )
+        assert isinstance(result, list)
+
+    def test_min_evidence_negative_is_clamped(self):
+        """Negative min_evidence should be clamped to zero."""
+        result = crit_mod.analyze(
+            option={"title": "t"},
+            evidence=[],
+            context={"min_evidence": -5},
+        )
+        issues = {item.get("issue") for item in result}
+        assert "根拠不足" not in issues
+
+
 class TestNormSeverity:
     """Tests for _norm_severity helper."""
 

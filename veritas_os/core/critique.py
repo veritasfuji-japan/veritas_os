@@ -103,6 +103,14 @@ def _as_float(x: Any, default: float = 0.0) -> float:
         return float(default)
 
 
+def _as_non_negative_int(x: Any, default: int) -> int:
+    """Convert to int and clamp negatives to 0; return default on parse errors."""
+    try:
+        return max(int(x), 0)
+    except (TypeError, ValueError):
+        return max(int(default), 0)
+
+
 def _crit(
     issue: str,
     severity: Severity,
@@ -168,7 +176,7 @@ def analyze(
     critiques: List[Dict[str, Any]] = []
 
     # ==== 閾値（context から取得 / デフォルト付き） ====
-    min_evidence: int = int(ctx.get("min_evidence", 2))
+    min_evidence: int = _as_non_negative_int(ctx.get("min_evidence", 2), 2)
     risk_threshold: float = _as_float(ctx.get("risk_threshold", 0.7), 0.7)
     complexity_threshold: float = _as_float(ctx.get("complexity_threshold", 5.0), 5.0)
     value_threshold: float = _as_float(ctx.get("value_threshold", 0.3), 0.3)
@@ -583,5 +591,4 @@ if __name__ == "__main__":
     summary = summarize_critiques(result1)
     print(summary)
     print("\n=== Self-Test Finished ===")
-
 
