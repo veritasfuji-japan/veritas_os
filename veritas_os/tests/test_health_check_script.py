@@ -39,6 +39,18 @@ def test_validate_url_accepts_safe_http_url() -> None:
     assert health_check._validate_url(safe_url) == safe_url
 
 
+def test_validate_url_rejects_public_host_by_default() -> None:
+    assert health_check._validate_url("https://example.com/health") is None
+
+
+def test_validate_url_accepts_public_host_when_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_HEALTH_ALLOW_PUBLIC", "1")
+    assert (
+        health_check._validate_url("https://example.com/health")
+        == "https://example.com/health"
+    )
+
+
 def test_validate_url_rejects_hostname_label_starting_with_hyphen() -> None:
     assert health_check._validate_url("https://-bad.example.com/health") is None
 
