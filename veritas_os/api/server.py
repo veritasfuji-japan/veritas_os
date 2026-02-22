@@ -1,6 +1,7 @@
 # veritas_os/api/server.py
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import importlib
@@ -1368,7 +1369,8 @@ def fuji_validate(payload: dict):
             content={"detail": "fuji_core unavailable"}
         )
 
-    action = payload.get("action", "") or ""
+    # ★ セキュリティ修正: action フィールドのサイズ制限（DoS対策）
+    action = str(payload.get("action", "") or "")[:10_000]
     context = payload.get("context") or {}
 
     try:
@@ -1589,7 +1591,8 @@ def memory_search(payload: dict):
         return {"ok": False, "error": "memory store unavailable", "hits": [], "count": 0}
 
     try:
-        q = payload.get("query", "")
+        # ★ セキュリティ修正: query フィールドのサイズ制限（DoS対策）
+        q = str(payload.get("query", ""))[:10_000]
         kinds = payload.get("kinds")
         try:
             k = max(1, min(int(payload.get("k", 8)), 100))
@@ -1649,6 +1652,9 @@ def memory_get(body: dict):
         key = body.get("key")
         if not uid or not key:
             return {"ok": False, "error": "user_id and key are required", "value": None}
+        # ★ セキュリティ修正: user_id/key フィールドのサイズ制限（DoS対策）
+        uid = str(uid)[:500]
+        key = str(key)[:500]
         value = _store_get(store, uid, key)
         return {"ok": True, "value": value}
     except Exception as e:
@@ -1706,13 +1712,15 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
     subscriber = _event_hub.register()
 
     async def _stream():
+        # ★ 修正: blocking な subscriber.get() を asyncio.to_thread 経由で実行し、
+        # イベントループのスレッドプールを枯渇させないようにする。
         try:
             yield ": connected\n\n"
             while True:
                 if await request.is_disconnected():
                     break
                 try:
-                    item = subscriber.get(timeout=heartbeat_sec)
+                    item = await asyncio.to_thread(subscriber.get, timeout=heartbeat_sec)
                     yield _format_sse_message(item)
                 except queue.Empty:
                     yield f": heartbeat {utc_now_iso_z()}\n\n"
@@ -1758,15 +1766,16 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "value_core unavailable"}
 
     try:
-        uid = (body.get("user_id") or "anon")
+        uid = str(body.get("user_id") or "anon")[:500]
         raw_score = body.get("score", 0.5)
         try:
             score = float(raw_score)
         except (TypeError, ValueError):
             score = 0.5
         score = max(0.0, min(1.0, score))
-        note = body.get("note") or ""
-        source = body.get("source") or "manual"
+        # ★ セキュリティ修正: note/source フィールドのサイズ制限（DoS対策）
+        note = str(body.get("note") or "")[:10_000]
+        source = str(body.get("source") or "manual")[:200]
         extra = {"api": "/v1/trust/feedback"}
 
         if hasattr(vc, "append_trust_log"):
