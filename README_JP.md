@@ -8,6 +8,7 @@
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- docs/COVERAGE_REPORT.md のスナップショット値。CIゲートは .github/workflows/main.yml で管理 -->
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
 **Version**: 2.0.0-alpha  
 **Release Status**: 開発中  
