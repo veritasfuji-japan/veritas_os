@@ -242,7 +242,6 @@ def _post_with_retry(
         Redirects are disabled so that a trusted WEBSEARCH endpoint cannot
         bounce requests to internal/private addresses (SSRF via redirect).
     """
-    last_exc: Optional[Exception] = None
     for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
         try:
             response = requests.post(
@@ -267,7 +266,6 @@ def _post_with_retry(
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as exc:
-            last_exc = exc
             if attempt < WEBSEARCH_MAX_RETRIES:
                 delay = _compute_backoff(attempt)
                 logger.warning(
