@@ -1,23 +1,21 @@
-
-# VERITAS OS v2.0 — LLMエージェントのための監査可能な意思決定OS（Proto-AGI Skeleton）
+# VERITAS OS v2.0 — LLMエージェント向け監査可能な意思決定OS（Proto-AGI Skeleton）
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
+[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- docs/COVERAGE_REPORT.md のスナップショット値。CIゲートは .github/workflows/main.yml で管理 -->
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README EN](https://img.shields.io/badge/README-English-1d4ed8.svg)](README.md)
 
-**Version**: 2.0.0  
-**Planned Release**: 2025-12-01  
+**Version**: 2.0.0-alpha  
+**Release Status**: 開発中  
 **Author**: Takeshi Fujishita
 
-VERITAS OS は、LLM（例：OpenAI GPT-4.1-mini）を  
-**「安全ゲート付き・再現可能・監査可能」**な意思決定エンジンとして運用するための **Decision OS** です。
+VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **決定論的・安全ゲート付き・ハッシュチェーン監査可能** な意思決定パイプラインで包みます。
 
-> メンタルモデル：**LLM = CPU** / **VERITAS OS = その上に載る意思決定OS**
+> メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision / Agent OS**
 
 ---
 
@@ -26,40 +24,40 @@ VERITAS OS は、LLM（例：OpenAI GPT-4.1-mini）を
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo論文（英語）**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo論文（日本語）**: https://doi.org/10.5281/zenodo.17838456
-- **English README**: `README.md`
+- **日本語README**: `README_JP.md`
 - **レビュー文書マップ**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 
 ## 目次
 
-- [なぜVERITASか（何が違う？）](#なぜveritasか何が違う)
+- [なぜVERITASか](#なぜveritasか)
 - [できること](#できること)
-- [API一覧（概要）](#api一覧概要)
-- [Quickstart（最短起動）](#quickstart最短起動)
+- [API概要](#api概要)
+- [Quickstart](#quickstart)
 - [セキュリティ注意（重要）](#セキュリティ注意重要)
 - [Docker（GHCR）](#dockerghcr)
 - [アーキテクチャ（高レベル）](#アーキテクチャ高レベル)
 - [TrustLog（ハッシュチェーン監査ログ）](#trustlogハッシュチェーン監査ログ)
 - [テスト](#テスト)
-- [近いロードマップ（短期）](#近いロードマップ短期)
+- [ロードマップ（短期）](#ロードマップ短期)
 - [ライセンス](#ライセンス)
 
 ---
 
-## なぜVERITASか（何が違う？）
+## なぜVERITASか
 
-多くの「エージェントFW」は自律性・ツール実行を中心に設計されています。  
-VERITAS は **ガバナンス（統制）** を中心に置きます。
+多くの「エージェントフレームワーク」は自律性やツール実行を最適化します。  
+VERITAS は **ガバナンス** を最適化します。
 
-- **FUJI Gate** による安全・倫理・コンプライアンスの最終判定（allow/modify/rejected）
-- ステージ固定の **決定パイプライン**（毎回同じ順序で実行 → 再現性が高い）
-- **TrustLog（ハッシュチェーン）**による監査証跡（改ざん検知可能）
-- **MemoryOS + WorldModel** を「入力の一級市民」として扱う（記憶と世界状態が意思決定に入る）
-- **Doctor（診断/可視化）**で運用メトリクスを確認できる
+- 最終ゲート（**FUJI Gate**）で安全性とコンプライアンスを強制
+- 再現可能な意思決定パイプライン（固定ステージ、構造化出力）
+- **ハッシュチェーンTrustLog** による監査可能性（改ざん検知）
+- **MemoryOS + WorldModel** を一次入力として扱う
+- **Doctorダッシュボード** による運用可視性（健全性・リスク分布）
 
 **想定ユーザー**
-- エージェント研究 / AI Safety 研究者
-- LLMを規制・高リスク領域で運用したいチーム（金融・医療・法務・公共など）
-- ガバナンス/コンプライアンス（ポリシー駆動のLLM運用基盤を作りたい）
+- AI safety / エージェント研究者
+- 規制領域・高リスク領域でLLMを運用するチーム
+- ポリシー駆動LLM基盤を作るガバナンス/コンプライアンス担当
 
 ---
 
@@ -67,63 +65,55 @@ VERITAS は **ガバナンス（統制）** を中心に置きます。
 
 ### `/v1/decide` — フル意思決定ループ（構造化JSON）
 
-`POST /v1/decide` は、意思決定の全過程を **構造化されたJSON** として返します。
+`POST /v1/decide` は構造化された意思決定レコードを返します。
 
-主要フィールド（簡易）：
+主要フィールド（簡易）:
 
 | フィールド | 意味 |
 |---|---|
-| `chosen` | 選択したアクション + 根拠、確信度、不確実性、効用、リスク |
+| `chosen` | 選択アクション + 根拠、不確実性、効用、リスク |
 | `alternatives[]` | 他の候補アクション |
-| `evidence[]` | 参照した根拠（MemoryOS / WorldModel / 任意ツールなど） |
-| `critique` | 自己批判・弱点・前提の穴（dict） |
-| `debate[]` | 擬似マルチエージェント討論（賛成/反対/第三者） |
+| `evidence[]` | 使用した根拠（MemoryOS / WorldModel / 任意ツール） |
+| `critique[]` | 自己批判と弱点 |
+| `debate[]` | 賛成/反対/第三者視点 |
 | `telos_score` | ValueCoreに対する整合スコア |
 | `fuji` | FUJI Gate判定（allow / modify / rejected） |
-| `gate.decision_status` | 正規化された最終ステータス（`DecisionStatus`） |
-| `trust_log` | ハッシュチェーンされたTrustLog（`sha256_prev` など） |
+| `gate.decision_status` | 正規化済み最終ステータス（`DecisionStatus`） |
+| `trust_log` | ハッシュチェーンTrustLogエントリ（`sha256_prev`） |
 
-意思決定パイプライン（メンタルモデル）：
+パイプラインのメンタルモデル:
 
 ```text
 Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
-````
+```
 
-> **注意（kernel 経由 vs pipeline 経由）**  
-> `kernel.py` 経由の `/v1/decide` では `telos_score` は `telos_weights` から簡易算出され、  
-> `pipeline.py` の **ValueCore 評価**（`value_core.evaluate`）や **TrustLog への監査書き込み** は
-> **実行されません**。ValueCore/TrustLog を含む完全な評価・監査が必要な場合は
-> **pipeline 経由**の実行を前提にしてください。
+同梱サブシステム:
 
-同梱サブシステム：
-
-* **MemoryOS** — エピソード/セマンティック記憶、検索
-* **WorldModel** — 世界状態、プロジェクト進行のスナップショット
-* **ValueCore** — 価値関数 & Value EMA
-* **FUJI Gate** — 安全/倫理/コンプライアンスのゲート
-* **TrustLog** — 監査ログ（JSONL, ハッシュチェーン）
-* **Doctor** — 診断レポート/可視化
+- **MemoryOS** — エピソード/セマンティック記憶と検索
+- **WorldModel** — 世界状態、プロジェクト、進捗スナップショット
+- **ValueCore** — 価値関数と Value EMA
+- **FUJI Gate** — 安全/倫理/コンプライアンスゲート
+- **TrustLog** — ハッシュチェーン監査ログ（JSONL）
+- **Doctor** — 診断とダッシュボード
 
 ---
 
-## API一覧（概要）
+## API概要
 
-保護されたエンドポイントは `X-API-Key` が必要です。
+保護対象エンドポイントは `X-API-Key` が必要です。
 
-| Method | Path                  | 説明              |
-| ------ | --------------------- | --------------- |
-| GET    | `/health`             | ヘルスチェック         |
-| POST   | `/v1/decide`          | フル意思決定          |
+| Method | Path                  | 説明 |
+| ------ | --------------------- | ---- |
+| GET    | `/health`             | ヘルスチェック |
+| POST   | `/v1/decide`          | フル意思決定ループ |
 | POST   | `/v1/fuji/validate`   | 単一アクションをFUJIで評価 |
-| POST   | `/v1/memory/put`      | 記憶の保存           |
-| GET    | `/v1/memory/get`      | 記憶の取得           |
-| GET    | `/v1/logs/trust/{id}` | TrustLogエントリ取得  |
+| POST   | `/v1/memory/put`      | 記憶を保存 |
+| GET    | `/v1/memory/get`      | 記憶を取得 |
+| GET    | `/v1/logs/trust/{id}` | TrustLogエントリをIDで取得 |
 
 ---
 
-## Quickstart（最短起動）
-
-> Docker での起動手順は [Docker（GHCR）](#dockerghcr) を参照してください。
+## Quickstart
 
 ### 1) インストール
 
@@ -137,7 +127,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 2) 環境変数
+> [!WARNING]
+> シークレットをシェル履歴へ直接残す運用は避けてください。`.env`（gitignore対象）または本番向けシークレットマネージャーを推奨します。
+
+### 2) 環境変数設定
 
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
@@ -145,12 +138,10 @@ export VERITAS_API_KEY="your-secret-api-key"
 export VERITAS_API_SECRET="your-long-random-secret"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
-export VERITAS_ENCRYPTED_LOG_ROOT="/path/to/encrypted/logs"
-export VERITAS_REQUIRE_ENCRYPTED_LOG_DIR="1"
 export VERITAS_MAX_REQUEST_BODY_SIZE="10485760"
 ```
 
-### 3) サーバ起動
+### 3) サーバー起動
 
 ```bash
 python -m uvicorn veritas_os.api.server:app --reload --port 8000
@@ -158,19 +149,19 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
 
 ### 4) Swagger UIで試す
 
-* `http://127.0.0.1:8000/docs` を開く
-* `Authorize` で `X-API-Key: $VERITAS_API_KEY` を入力
-* `POST /v1/decide` を実行
+- 開く: `http://127.0.0.1:8000/docs`
+- 認証ヘッダー: `X-API-Key: $VERITAS_API_KEY`
+- 実行: `POST /v1/decide`
 
-サンプル：
+例:
 
 ```json
 {
-  "query": "明日の外出前に天気を確認すべき？",
+  "query": "明日の外出前に天気を確認すべきですか？",
   "context": {
     "user_id": "test_user",
-    "goals": ["健康", "効率"],
-    "constraints": ["時間制限"],
+    "goals": ["health", "efficiency"],
+    "constraints": ["time limit"],
     "affect_hint": "focused"
   }
 }
@@ -178,117 +169,23 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
 
 ---
 
-## セキュリティ注意（重要）
+## Operational Security Deep Dive
 
-- **プレースホルダや短すぎるシークレットは禁止**:
-  `VERITAS_API_SECRET` は長いランダム値（推奨32文字以上）を設定してください。
-  プレースホルダや短い値はHMAC保護を無効化・弱体化する恐れがあります。
-- **CORSの安全性**: `allow_credentials` を有効にした状態で
-  ワイルドカード（`*`）を使わず、信頼できるオリジンのみを許可してください。
-- **Legacy pickle移行は危険**:
-  MemoryOSで旧pickle移行を有効にする場合は、移行完了後に必ず無効化してください。
-
----
-
-## アーキテクチャ（高レベル）
-
-### コアの実行経路
-
-* `veritas_os/core/kernel.py` — `/v1/decide` の統括
-* `veritas_os/core/pipeline.py` — ステージ順序とメトリクス
-* `veritas_os/core/llm_client.py` — **LLM呼び出しの単一窓口**
-
-### 安全/ガバナンス
-
-* `veritas_os/core/fuji.py` — FUJI Gate（allow/modify/rejected）
-* `veritas_os/core/value_core.py` — 価値関数 & Value EMA
-* `veritas_os/logging/*` — TrustLog（ハッシュチェーン監査ログ）
-
-### 記憶/世界状態
-
-* `veritas_os/core/memory.py` — MemoryOS
-* `veritas_os/core/world.py` — World state スナップショット
-
----
-
-## TrustLog（ハッシュチェーン監査ログ）
-
-TrustLog は JSONL（1行1レコード）の追記型ログです。
-各レコードは前のレコードのハッシュを参照します。
-
-```text
-h_t = SHA256(h_{t-1} || r_t)
-```
-
-これにより、決定履歴は **改ざん検知可能**な監査証跡として扱えます。
-
-### ログ保存パス（`scripts/logs` vs `~/.veritas`）
-
-- **`scripts/logs`（既定）**: `veritas_os.logging.paths` 経由で保存される TrustLog/ダッシュボード用ログの既定パスです。  
-  `VERITAS_DATA_DIR` または `VERITAS_LOG_ROOT` を設定している場合は、そのパスが優先されます。
-- **`~/.veritas`（既定）**: ValueCore の補助ログ（`~/.veritas/trust_log.jsonl` など）や、
-  Kernel 直呼び時の Doctor ログ（`~/.veritas/logs/doctor.log` など）が保存されます。
-
-**使い分け/注意点**
-- `/v1/decide` を **pipeline 経由**で実行している場合は主に `scripts/logs` に出力されます。
-- **Kernel 直呼び**や ValueCore 単体のユーティリティは `~/.veritas` を参照するため、
-  監査・解析の際は **両方のパスにログが分散し得る**ことに注意してください。
-- ログ保存先を統一したい場合は `VERITAS_DATA_DIR`/`VERITAS_LOG_ROOT` の設定を優先してください。
-  いずれのパスも **機微情報が含まれる可能性**があるため、アクセス権限と保管ポリシーを必ず確認してください。
-
-### ログ保管ポリシー（暗号化 + 権限制御の推奨）
-
-VERITAS のログは機微情報を含む可能性があるため、**暗号化ボリューム上に保管する運用**を推奨します。
-以下の環境変数でログ出力先の強制と権限制御を行えます。
-
-- `VERITAS_ENCRYPTED_LOG_ROOT`: 暗号化済みボリューム上のログ保存先
-- `VERITAS_REQUIRE_ENCRYPTED_LOG_DIR=1`: ログ出力先を暗号化パスに強制
-
-運用上の推奨:
-- 暗号化ボリューム（LUKS, BitLocker, EBS暗号化等）へマウント
-- ログディレクトリは **chmod 700**（所有者のみアクセス）
-- バックアップ先も暗号化 & アクセス制御を必須にする
-
----
-
-## テスト
-
-再現性重視（推奨）:
-
-```bash
-make test
-make test-cov
-```
-
-これらのターゲットは `uv` と `PYTHON_VERSION=3.12.12` を利用し、
-未導入時は Python 本体を自動取得して実行します。
-
-オプション:
-
-```bash
-make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
-make test PYTHON_VERSION=3.11
-```
-
-スモークチェック（最短）:
-
-```bash
-make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
-```
-
-> 補足：CI は GitHub Actions で利用可能です。Coverage バッジは追加予定です。
+- **プレースホルダ/短いシークレットは使用しない**: `VERITAS_API_SECRET` は長くランダムな値（推奨32文字以上）を設定してください。短い値や既知値はHMAC保護を実質的に弱体化します。
+- **CORS安全性**: `allow_credentials` が有効な場合、ワイルドカードオリジン（`*`）は避け、信頼済みオリジンを明示してください。
+- **Legacy pickle移行は高リスク**: MemoryOS で旧pickle移行を有効化する場合、短期移行用途に限定し、完了後は無効化してください。
 
 ---
 
 ## Docker（GHCR）
 
-最新イメージを取得:
+最新イメージ取得:
 
 ```bash
 docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
 ```
 
-API サーバ起動:
+APIサーバー起動（上記uvicornコマンド相当）:
 
 ```bash
 docker run --rm -p 8000:8000 \
@@ -299,67 +196,152 @@ docker run --rm -p 8000:8000 \
   ghcr.io/veritasfuji-japan/veritas_os:latest
 ```
 
-FastAPI エントリポイントが `veritas_os.api.server:app` と異なる場合は、
-Dockerfile の `CMD` を環境に合わせて更新してください。
+FastAPIエントリポイントが `veritas_os.api.server:app` と異なる場合は、イメージビルド前に Dockerfile の `CMD` を環境に合わせて更新してください。
 
 ---
+
+## アーキテクチャ（高レベル）
+
+### コア実行パス
+
+- `veritas_os/core/kernel.py` — `/v1/decide` のオーケストレーション
+- `veritas_os/core/pipeline.py` — ステージ順序 + メトリクス（`latency_ms` と `stage_latency`）
+- `veritas_os/core/llm_client.py` — LLM呼び出しの**単一**ゲートウェイ（`chat_completion`）
+
+### 安全性とガバナンス
+
+- `veritas_os/core/fuji.py` — FUJI Gate（allow/modify/reject）
+- `veritas_os/core/value_core.py` — 価値関数 + Value EMA
+- `veritas_os/logging/trust_log.py`（または相当実装） — ハッシュチェーンTrustLog
+
+### 記憶と世界状態
+
+- `veritas_os/core/memory.py` — MemoryOSフロントエンド
+- `veritas_os/core/world.py` — 世界状態スナップショット
+
+---
+
+## TrustLog（ハッシュチェーン監査ログ）
+
+TrustLog は追記専用JSONLです。各エントリはハッシュポインタを持ちます。
+
+```text
+h_t = SHA256(h_{t-1} || r_t)
+```
+
+これにより整合性検証と改ざん検知可能な監査証跡を実現します。
+
+---
+
+## テスト
+
+推奨（再現性重視）:
+
+```bash
+make test
+make test-cov
+```
+
+これらのターゲットは `uv` + `PYTHON_VERSION=3.12.12` を利用し、未導入時はインタプリタを自動取得します。
+
+スモークチェック:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_api_constants.py"
+```
+
+オプション上書き:
+
+```bash
+make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
+make test PYTHON_VERSION=3.11
+```
+
+### CI / Quality Gate
+
+- GitHub Actions は Python 3.11/3.12 マトリクスで **pytest + coverage** を実行
+- Coverage成果物は **XML/HTML** で保存
+- CIは最小カバレッジゲート（`--cov-fail-under`）を現在 **85%** に設定
+- Coverageバッジは現時点で `docs/COVERAGE_REPORT.md` のドキュメントスナップショット値（将来的にCI成果物から自動更新予定）
+- テスト失敗時はCIジョブが失敗し、品質ゲートとして機能
 
 ## セキュリティ注意（重要）
 
-- **APIキー**: 可能な限りシェル履歴に残る `export` を避け、`.env`（gitignore）
-  や Secret Manager を使って実行時に注入してください。定期的なローテーションと
-  最小権限の付与を推奨します。
-- **TrustLogのデータ**: TrustLog は JSONL の追記ログです。ペイロードに個人情報
-  や機密情報が含まれる可能性がある場合、アクセス制御、保持期間、必要に応じて
-  保存時暗号化を実施してください。
+### 認証情報・鍵管理
+
+- **APIキー**: シェル履歴に直接残る `export` は可能な限り避け、`.env`（gitignore対象）またはシークレットマネージャー利用を推奨。定期ローテーションと最小権限設定を実施してください。
+- **プレースホルダ/短いシークレットを使わない**: `VERITAS_API_SECRET` は長くランダムな値（推奨32文字以上）を設定。短い値や既知値はHMAC保護を実質的に無効化・弱体化する恐れがあります。
+
+### API・ブラウザ向け保護
+
+- **CORS安全性**: `allow_credentials` を有効にしたままワイルドカード（`*`）を許可しないでください。信頼済みオリジンのみ明示設定してください。
+- **CORS と APIキーは必須設定**: unsafe defaultを避けるため、`VERITAS_CORS_ALLOW_ORIGINS` と `VERITAS_API_KEY` を必ず設定してください。
+
+### データ安全性・永続化
+
+- **TrustLogデータ**: TrustLogは追記専用JSONLです。ペイロードにPII/機微情報が含まれる可能性がある場合、アクセス制御・保持期間・必要に応じた保存時暗号化を実施してください。
+- **TrustLog/Memory保存前にPIIマスキングを強制**: 漏えいリスク低減のため保存前に `redact()` を適用してください。
+- **保存時暗号化（任意）**: TrustLog/Memoryは平文保存です。要件に応じて暗号化またはKMS統合を検討してください。
+- **運用ログはGit管理対象外**: 例として `veritas_os/memory/*.jsonl` のランタイムログは `.gitignore` で除外され、匿名化サンプルは `veritas_os/sample_data/memory/` 配下にあります。
+
+### 移行時の安全性
+
+- **Legacy pickle移行は高リスク**: MemoryOSの旧pickle移行を有効化する場合、短期移行パスとして扱い、移行完了後に必ず無効化してください。
 
 ---
 
-## 運用・セキュリティ上の注意
+## ロードマップ（短期）
 
-- **TrustLog / Memory の保存前に PII マスクを強制することを推奨**します。保存前に `redact()`（PIIマスク）を通すことで、ログ/記憶に機微情報が残るリスクを低減できます。
-- **暗号化 at rest（オプション）**: TrustLog / Memory は平文保存のため、要件に応じて暗号化やKMS連携を検討してください。
-- **CORS と API Key の未設定は危険**です。`VERITAS_CORS_ALLOW_ORIGINS` と `VERITAS_API_KEY` を必ず設定してください。
-- **運用ログは Git 管理から除外**します。`veritas_os/memory/*.jsonl` などのランタイムログは `.gitignore` 対象とし、匿名化済みサンプルは `veritas_os/sample_data/memory/` に配置します。
-
-### 起動時ハードエラー条件（L1運用ポリシー）
-
-本番環境（`ENV=prod` 相当）では、以下のセキュリティ要求を **警告止まりにせず起動時ハードエラー**として扱うことを推奨します。
-
-| 項目 | 最低要件（起動を止める条件） | 理由 |
-|---|---|---|
-| `VERITAS_API_SECRET` 長 | 32文字未満、空、既定プレースホルダ値を検出したら起動失敗 | 短い/既知シークレットは署名なりすまし耐性を大幅に低下させるため |
-| Legacy pickle移行 | `VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1` での恒常運用を禁止（移行専用ジョブ以外は起動失敗） | pickle由来のデシリアライズ面は攻撃面積が大きく、平常運用へ持ち込むべきではないため |
-| CORS | `allow_credentials=True` かつ `VERITAS_CORS_ALLOW_ORIGINS` 未設定/実質空/`*` 混入時は起動失敗 | 認証付きリクエストで広すぎるオリジン許可はデータ漏えいリスクを増大させるため |
-
-#### 運用ルール（明文化）
-
-1. **開発環境**: 警告ログで許容。ただしCIでは上記3項目を fail-fast で検証する。
-2. **ステージング環境**: 本番同等（ハードエラー）を必須化する。
-3. **本番環境**: 例外申請のない限り、上記3項目に違反した設定での起動を禁止する。
-
-> ⚠️ セキュリティ警告: 起動時ハードエラー化を行わない場合、
-> 設定ミスが「気づきにくい警告」のまま残留し、
-> 認証・データ保護境界の弱体化が長期化するリスクがあります。
-
----
-
-## 近いロードマップ（短期）
-
-* CI（GitHub Actions）：pytest + coverage + レポート生成
-* CI ではカバレッジ下限（`--cov-fail-under`）を **85%** に設定しています。
-* Coverage バッジ値は現在 `docs/COVERAGE_REPORT.md` 由来のスナップショットです（将来的に CI artifact からの自動更新を想定）。
-* セキュリティ強化：入力検証、ログ/秘密情報の衛生
-* Policy-as-Code：**規程 → ValueCore/FUJIルール → テスト自動生成**（コンパイラ層）
+- CI（GitHub Actions）: pytest + coverage + artifactレポート
+- セキュリティ強化: 入力検証と秘密情報/ログ衛生
+- Policy-as-Code: **Policy → ValueCore/FUJIルール → テスト自動生成**（コンパイラ層）
 
 ---
 
 ## ライセンス
 
-**All Rights Reserved（プロプライエタリ）**。本リポジトリは
-オープンソースではありません。使用・改変・配布は、サブディレクトリに
-明示された LICENSE がある場合を除き制限されています。
-詳細は [`LICENSE`](LICENSE) を参照してください。
+このリポジトリは、ディレクトリ単位でスコープが明確な **マルチライセンス** 構成です。
+
+### ライセンスマトリクス（ディレクトリ別）
+
+| Scope | License | 商用利用 | 再配布 | 備考 |
+|---|---|---|---|---|
+| Default（明示上書きのない全体） | VERITAS Core Proprietary EULA（`/LICENSE`） | 契約必要 | 書面許可なし不可 | Core意思決定ロジックとパイプラインを含む |
+| `spec/` | MIT（`/spec/LICENSE`） | 可 | 可 | オープンなインターフェース成果物 |
+| `sdk/` | MIT（`/sdk/LICENSE`） | 可 | 可 | SDKインターフェース層 |
+| `cli/` | MIT（`/cli/LICENSE`） | 可 | 可 | CLIインターフェース層 |
+| `policies/examples/` | MIT（`/policies/examples/LICENSE`） | 可 | 可 | ポリシーテンプレート/例 |
+
+### Core不正利用防止の主な制限（概要）
+
+Core Proprietary EULA の下で、以下は禁止されます。
+
+- Core（または実質的に同等機能）を競合マネージドサービスとして提供する行為
+- ライセンスキー・メータリング・その他技術的保護の回避
+- 著作権表示、帰属表示、プロプライエタリ表示、商標表示の削除
+- 商用契約なしでのCore再配布または商用本番利用
+
+詳細は [`LICENSE`](LICENSE)、[`TRADEMARKS`](TRADEMARKS)、[`NOTICE`](NOTICE) を参照してください。
+
+### 既存ユーザー向け移行ノート
+
+本変更は既存方針を、より明確な二層構造として明文化したものです。
+
+- Coreは既定でプロプライエタリのまま
+- インターフェース資産はディレクトリ単位で明示的にオープンライセンス化
+- 本変更でCoreロジック（Planner/Kernel/FUJI/TrustLogパイプライン内部）はオープンソース化されません
+
+### ライセンス分離ロードマップ（Plan B モノレポ → Plan A マルチレポ）
+
+Phase 1（このPR）:
+- モノレポ内でのディレクトリスコープライセンス（Core proprietary + interface MIT）
+
+Phase 2（次PR群）:
+- `veritas-spec`（OpenAPI/schema）
+- `veritas-sdk-python`, `veritas-sdk-js`
+- `veritas-cli`
+- `veritas-policy-templates`
+- `veritas_os` は proprietary Core に集中
 
 学術用途では Zenodo DOI を引用してください。
 
@@ -381,5 +363,5 @@ Dockerfile の `CMD` を環境に合わせて更新してください。
 
 ## 連絡先
 
-* Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
-* Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
+- Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
+- Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
