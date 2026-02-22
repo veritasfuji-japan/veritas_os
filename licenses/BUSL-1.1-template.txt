@@ -1,0 +1,17 @@
+# Business Source License 1.1 (BUSL-1.1) - VERITAS Template (Not Active)
+# SPDX reference: BUSL-1.1
+#
+# IMPORTANT:
+# - This file is a planning template only.
+# - BUSL-1.1 is NOT currently adopted for VERITAS Core by this file alone.
+# - Formal adoption requires legal review and explicit maintainer decision.
+
+Parameters to fill if adopted:
+- Licensor: <LEGAL ENTITY OR INDIVIDUAL>
+- Licensed Work: <DESCRIPTION>
+- Additional Use Grant: <OPTIONAL>
+- Change Date: <YYYY-MM-DD>
+- Change License: <e.g., Apache-2.0>
+
+Reference text:
+https://spdx.org/licenses/BUSL-1.1.html
