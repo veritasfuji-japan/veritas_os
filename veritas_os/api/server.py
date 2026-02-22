@@ -529,10 +529,24 @@ async def limit_body_size(request: Request, call_next):
 # クリックジャッキング、MIMEスニッフィング、XSS攻撃を防止
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    """Apply baseline response security headers for API endpoints.
+
+    Notes:
+        - A strict Content Security Policy (CSP) is attached even for JSON API
+          responses to reduce the risk of accidental HTML rendering and inline
+          script execution in browser-based tooling.
+        - ``Permissions-Policy`` disables powerful browser features by default
+          because this API does not require them.
+    """
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    response.headers["Permissions-Policy"] = (
+        "accelerometer=(), camera=(), geolocation=(), gyroscope=(), "
+        "magnetometer=(), microphone=(), payment=(), usb=()"
+    )
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     # Security hardening: browsers only honor HSTS over HTTPS.
     # Sending this header proactively helps production deployments enforce
