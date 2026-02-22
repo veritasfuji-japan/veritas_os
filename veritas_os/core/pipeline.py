@@ -79,7 +79,7 @@ from .pipeline_evidence import (
     _evidencepy_to_pipeline_item,
 )
 from .pipeline_memory_adapter import (
-    _get_memory_store,
+    _get_memory_store as _get_memory_store_impl,
     _call_with_accepted_kwargs,
     _memory_has,
     _memory_search,
@@ -309,6 +309,11 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
 
 
 # _ensure_metrics_contract -> pipeline_contracts.py に移動済み（上部 import）
+
+
+def _get_memory_store() -> Optional[Any]:
+    """pipeline.mem を参照するラッパー（テストが monkeypatch で pipeline.mem をパッチ可能にする）。"""
+    return _get_memory_store_impl(mem=mem)
 
 
 def _norm_alt(o: Any) -> Dict[str, Any]:
