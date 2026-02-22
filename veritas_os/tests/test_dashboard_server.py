@@ -176,6 +176,68 @@ def test_warn_if_ephemeral_password_with_single_worker_no_warning(
 
     assert "intermittent authentication failures" not in caplog.text
 
+
+def test_failed_auth_policy_uses_defaults_when_invalid(monkeypatch, caplog):
+    """Invalid policy env vars should fall back to safe defaults."""
+    monkeypatch.setenv("DASHBOARD_AUTH_MAX_FAILURES", "zero")
+    monkeypatch.setenv("DASHBOARD_AUTH_WINDOW_SECONDS", "")
+    caplog.set_level("WARNING")
+
+    max_failures, window_seconds = dashboard_server._get_failed_auth_policy()
+
+    assert max_failures == 5
+    assert window_seconds == 300
+    assert "Invalid DASHBOARD_AUTH_MAX_FAILURES" in caplog.text
+    assert "Invalid DASHBOARD_AUTH_WINDOW_SECONDS" in caplog.text
+
+
+def test_failed_auth_tracking_counts_within_window(monkeypatch):
+    """Failed auth entries should expire after the configured time window."""
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_MAX_FAILURES", 2)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_WINDOW_SECONDS", 10)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_ATTEMPTS", {})
+
+    key = "127.0.0.1:testuser"
+    dashboard_server._record_failed_dashboard_auth(key, now=100.0)
+    dashboard_server._record_failed_dashboard_auth(key, now=109.0)
+
+    assert dashboard_server._is_dashboard_auth_locked(key, now=109.5) is True
+    assert dashboard_server._is_dashboard_auth_locked(key, now=111.0) is False
+
+
+def test_verify_credentials_returns_429_after_repeated_failures(
+    client: TestClient,
+    monkeypatch,
+):
+    """Repeated failed auth attempts should trigger temporary lockout."""
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_MAX_FAILURES", 2)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_WINDOW_SECONDS", 60)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_ATTEMPTS", {})
+
+    first = client.get("/", auth=("testuser", "wrong-pass"))
+    second = client.get("/", auth=("testuser", "wrong-pass"))
+    locked = client.get("/", auth=("testuser", "wrong-pass"))
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert locked.status_code == 429
+    assert locked.headers.get("retry-after") == "60"
+
+
+def test_verify_credentials_success_clears_failed_auth(client: TestClient, monkeypatch):
+    """Successful login should clear lock history for the same identity."""
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_MAX_FAILURES", 3)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_WINDOW_SECONDS", 60)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_ATTEMPTS", {})
+
+    failed = client.get("/", auth=("testuser", "wrong-pass"))
+    ok = client.get("/", auth=("testuser", "testpass"))
+    failed_again = client.get("/", auth=("testuser", "wrong-pass"))
+
+    assert failed.status_code == 401
+    assert ok.status_code == 200
+    assert failed_again.status_code == 401
+
 def test_health_check_ok(client: TestClient):
     res = client.get("/health")
     assert res.status_code == 200
@@ -294,4 +356,3 @@ def test_download_report_ok(client: TestClient):
     # FileResponse → text/html になっているはず
     assert "text/html" in res.headers.get("content-type", "").lower()
     assert "doctor report" in res.text
-
