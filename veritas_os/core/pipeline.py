@@ -48,6 +48,55 @@ from .utils import (
 )
 from . import self_healing
 
+# ---- pipeline サブモジュール（分割済み） ----
+from .pipeline_helpers import (
+    _as_str,
+    _norm_severity,
+    _now_iso,
+    _to_bool_local,
+    _set_int_metric,
+    _set_bool_metric,
+    _lazy_import,
+    _extract_rejection,
+    _summarize_last_output,
+    _query_is_step1_hint,
+    _has_step1_minimum_evidence,
+)
+from .pipeline_critique import (
+    _default_findings,
+    _pad_findings,
+    _critique_fallback,
+    _list_to_findings,
+    _normalize_critique_payload,
+    _ensure_critique_required,
+    _chosen_to_option,
+    _run_critique_best_effort,
+)
+from .pipeline_evidence import (
+    _norm_evidence_item,
+    _dedupe_evidence,
+    _norm_evidence_item_simple,
+    _evidencepy_to_pipeline_item,
+)
+from .pipeline_memory_adapter import (
+    _get_memory_store,
+    _call_with_accepted_kwargs,
+    _memory_has,
+    _memory_search,
+    _memory_put,
+    _memory_add_usage,
+)
+from .pipeline_web_adapter import (
+    _normalize_web_payload,
+    _extract_web_results,
+)
+from .pipeline_contracts import (
+    _ensure_full_contract,
+    _ensure_metrics_contract,
+    _deep_merge_dict,
+    _merge_extras_preserving_contract,
+)
+
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
     _HAS_ATOMIC_IO = True
@@ -563,115 +612,10 @@ async def call_core_decide(
 
 
 # =========================================================
-# Memory adapter (supports mem.search OR mem.MEM.search)
+# Memory adapter -> pipeline_memory_adapter.py に移動済み
+# (_get_memory_store, _call_with_accepted_kwargs, _memory_has,
+#  _memory_search, _memory_put, _memory_add_usage)
 # =========================================================
-
-def _get_memory_store() -> Optional[Any]:
-    if mem is None:
-        return None
-    # module-level functions
-    if hasattr(mem, "search") or hasattr(mem, "put") or hasattr(mem, "get"):
-        return mem
-    # store object
-    store = getattr(mem, "MEM", None)
-    if store is not None:
-        return store
-    return None
-
-
-def _call_with_accepted_kwargs(fn, kwargs: Dict[str, Any]) -> Any:
-    """inspectで受け取れるkwargsだけ渡す（put/search/add_usageなどの差異吸収）"""
-    try:
-        sig = inspect.signature(fn)
-        accepted = set(sig.parameters.keys())
-        filtered = {k: v for k, v in kwargs.items() if k in accepted}
-        return fn(**filtered)
-    except Exception:
-        # signatureが取れない/壊れてる場合はそのまま投げる
-        return fn(**kwargs)
-
-
-def _memory_has(store: Any, name: str) -> bool:
-    try:
-        return callable(getattr(store, name))
-    except Exception:
-        return False
-
-
-def _memory_search(store: Any, **kwargs: Any) -> Any:
-    """
-    Try best-effort to call store.search with varying signatures.
-    """
-    if not _memory_has(store, "search"):
-        raise RuntimeError("memory.search not available")
-
-    fn = getattr(store, "search")
-    # 1) 可能なkwargsだけ渡す
-    try:
-        return _call_with_accepted_kwargs(fn, dict(kwargs))
-    except TypeError:
-        pass
-
-    # 2) Minimal fallbacks
-    q = kwargs.get("query")
-    k = kwargs.get("k", 8)
-
-    try:
-        return fn(query=q, k=k)  # type: ignore
-    except Exception:
-        pass
-
-    try:
-        return fn(q, k)  # type: ignore
-    except Exception:
-        return fn(query=q)  # type: ignore
-
-
-def _memory_put(store: Any, user_id: Any, *, key: str, value: Any, meta: Any = None) -> None:
-    if not _memory_has(store, "put"):
-        return None
-    fn = getattr(store, "put")
-    # 1) kwargs filtering
-    try:
-        _call_with_accepted_kwargs(
-            fn,
-            {"user_id": user_id, "key": key, "value": value, "meta": meta},
-        )
-        return None
-    except Exception:
-        pass
-
-    # 2) positional variants
-    try:
-        fn(user_id, key=key, value=value, meta=meta)  # type: ignore
-        return None
-    except Exception:
-        pass
-    try:
-        fn(user_id, key, value)  # type: ignore
-        return None
-    except Exception:
-        pass
-    try:
-        fn(key, value)  # type: ignore
-        return None
-    except Exception:
-        return None
-
-
-def _memory_add_usage(store: Any, user_id: Any, cited_ids: List[str]) -> None:
-    if not _memory_has(store, "add_usage"):
-        return None
-    fn = getattr(store, "add_usage")
-    try:
-        _call_with_accepted_kwargs(fn, {"user_id": user_id, "cited_ids": cited_ids})
-        return None
-    except Exception:
-        pass
-    try:
-        fn(user_id, cited_ids)  # type: ignore
-    except Exception:
-        return None
 
 
 # =========================================================
@@ -705,33 +649,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         return None
 
 
-def _normalize_web_payload(payload: Any) -> Optional[Dict[str, Any]]:
-    """
-    web_search の戻り値を {"ok": bool, "results": list} に正規化する。
-    tools.web_search の contract を基本として、異形も吸収する。
-    """
-    if payload is None:
-        return None
-
-    if isinstance(payload, dict):
-        out = dict(payload)
-        # results が無い/壊れている場合の救済
-        if "results" not in out or not isinstance(out.get("results"), list):
-            for k in ("items", "hits", "organic", "organic_results"):
-                if isinstance(out.get(k), list):
-                    out["results"] = out[k]
-                    break
-        out.setdefault("results", [])
-        # ok が無ければ「取得できた扱い」で True
-        if "ok" not in out:
-            out["ok"] = True
-        return out
-
-    if isinstance(payload, list):
-        return {"ok": True, "results": payload}
-
-    s = str(payload)
-    return {"ok": True, "results": [{"title": s, "url": "", "snippet": s}]}
+# _normalize_web_payload -> pipeline_web_adapter.py に移動済み
 
 # =========================================================
 # evidence.py -> pipeline item
@@ -742,53 +660,8 @@ except Exception as e:  # pragma: no cover
     evidence_core = None  # type: ignore
     _warn(f"[WARN][pipeline] evidence import failed (OPTIONAL): {repr(e)}")
 
-
-def _norm_evidence_item_simple(ev: Any) -> Optional[Dict[str, Any]]:
-    """Module-level evidence normalizer (lightweight shim).
-
-    The full version lives inside the pipeline function as a nested def.
-    This shim is used by ``_evidencepy_to_pipeline_item`` which is defined
-    at module level and therefore cannot see the nested version.
-    """
-    if not isinstance(ev, dict):
-        return None
-    try:
-        ev2 = dict(ev)
-        if "confidence" not in ev2 and "weight" in ev2:
-            ev2["confidence"] = ev2.get("weight")
-        if ("title" not in ev2 or ev2.get("title") in (None, "")) and "kind" in ev2:
-            ev2["title"] = f"local:{ev2.get('kind')}"
-        if ("uri" not in ev2 or ev2.get("uri") in (None, "")) and "kind" in ev2:
-            ev2["uri"] = f"internal:evidence:{ev2.get('kind')}"
-        src = ev2.get("source") or "local"
-        conf_raw = ev2.get("confidence", 0.7)
-        conf = max(0.0, min(1.0, float(conf_raw if conf_raw is not None else 0.7)))
-        snippet = ev2.get("snippet")
-        snippet_s = "" if snippet is None else str(snippet)
-        uri = ev2.get("uri")
-        uri_s = str(uri) if uri is not None else None
-        return {
-            "source": str(src),
-            "uri": uri_s,
-            "title": str(ev2.get("title") or ""),
-            "snippet": snippet_s,
-            "confidence": conf,
-        }
-    except Exception:
-        return None
-
-
-def _evidencepy_to_pipeline_item(ev: dict) -> dict | None:
-    return _norm_evidence_item_simple(
-        {
-            "source": ev.get("source", "local"),
-            "uri": f"internal:evidence:{ev.get('kind','unknown')}",
-            "title": f"local_{ev.get('kind','unknown')}",
-            "snippet": ev.get("snippet", ""),
-            "confidence": float(ev.get("weight", 0.5) or 0.5),
-            "tags": ev.get("tags") or [],
-        }
-    )
+# _norm_evidence_item_simple, _evidencepy_to_pipeline_item ->
+# pipeline_evidence.py に移動済み（上部 import で re-export 済み）
 
 
 # =========================================================
@@ -814,866 +687,28 @@ async def run_decide_pipeline(
     # ★ 必須モジュールの存在確認（欠落時は明確なエラー）
     _check_required_modules()
 
-    # -------------------------------
-    # local helpers (contract hardening)
-    # -------------------------------
-    def _lazy_import(mod_path: str, attr: Optional[str] = None) -> Any:
-        """ISSUE-4 style import isolation: never crash at import-time."""
-        try:
-            import importlib
-            m = importlib.import_module(mod_path)
-            return getattr(m, attr) if attr else m
-        except Exception as e:
-            _warn(f"[lazy_import] {mod_path}{'.'+attr if attr else ''} skipped: {e}")
-            return None
-
-    # -------------------------------
-    # ISSUE-2: Critique required (audit hardening)  [COMPLETE / FINAL]
-    #   - Critique must never be empty
-    #   - critique MUST be dict (never list)  ✅（あなたの方針）
-    #   - findings must have >= 3 items
-    #   - normalize legacy/list/text payloads
-    #   - never raise (best-effort)
+    # -----------------------------------------------------------------------
+    # 注: 以下の nested ヘルパーはサブモジュールに移動済みのため削除した。
+    # モジュールレベルの import で参照可能（後方互換維持）。
     #
-    # Usage (pipeline side):
-    #   critique_obj = await _run_critique_best_effort(...)
-    #   response["critique"] = _ensure_critique_required(..., critique_obj=critique_obj, ...)
-    #   # NOTE: "append" しない。常に上書きで dict を格納。
-    # -------------------------------
-    
-    
-    # -------------------------------
-    # tiny utils (no free vars / safe)
-    # -------------------------------
-    
-    def _now_iso() -> str:
-        return datetime.now(timezone.utc).isoformat()
-    
-    
-    def _to_bool(x: Any) -> bool:
-        if isinstance(x, bool):
-            return x
-        if x is None:
-            return False
-        if isinstance(x, (int, float)):
-            return x != 0
-        try:
-            s = str(x).strip().lower()
-        except Exception:
-            return False
-        return s in ("1", "true", "yes", "y", "on")
-    
-    
-    def _as_str(x: Any, *, limit: int = 2000) -> str:
-        try:
-            s = "" if x is None else str(x)
-        except Exception:
-            s = repr(x)
-        if limit and len(s) > limit:
-            return s[:limit]
-        return s
-    
-    
-    def _norm_severity(x: Any) -> str:
-        try:
-            s = str(x).lower().strip()
-        except Exception:
-            s = "med"
-        if s in ("high", "h", "critical", "crit"):
-            return "high"
-        if s in ("low", "l"):
-            return "low"
-        return "med"
-    
-    
-    def _set_int_metric(
-        extras: Dict[str, Any],
-        key: str,
-        value: Any,
-        default: int = 0,
-    ) -> None:
-        extras.setdefault("metrics", {})
-        if not isinstance(extras["metrics"], dict):
-            extras["metrics"] = {}
-        try:
-            extras["metrics"][key] = int(value)
-        except Exception:
-            extras["metrics"][key] = int(default)
-    
-    
-    def _set_bool_metric(
-        extras: Dict[str, Any],
-        key: str,
-        value: Any,
-        default: bool = False,
-    ) -> None:
-        extras.setdefault("metrics", {})
-        if not isinstance(extras["metrics"], dict):
-            extras["metrics"] = {}
-        try:
-            extras["metrics"][key] = _to_bool(value)
-        except Exception:
-            extras["metrics"][key] = bool(default)
-    
-    
-    # -------------------------------
-    # ISSUE-2.5: Contract helpers (fix NameError + invariants)
-    #   - Provide _ensure_full_contract to avoid NameError
-    #   - NEVER references free vars -> safe
-    # -------------------------------
-    
-    def _ensure_full_contract(
-        extras: Dict[str, Any],
-        *,
-        fast_mode_default: bool,
-        context_obj: Dict[str, Any],
-        query_str: str = "",
-    ) -> None:
-        """
-        Strong contract (safe, no free vars):
-        - extras.fast_mode always exists (bool)
-        - extras.metrics.{mem_hits, memory_evidence_count, web_hits, web_evidence_count, fast_mode} always exist
-        - backward compat: metrics.mem_evidence_count
-        - extras.env_tools always dict
-        - extras.memory_meta always dict
-        - extras.memory_meta.context always dict and has context.fast(bool)
-        - extras.memory_meta.query filled if possible (query_str)
-        """
-        if not isinstance(extras, dict):
-            return
-    
-        extras.setdefault("metrics", {})
-        if not isinstance(extras["metrics"], dict):
-            extras["metrics"] = {}
-    
-        extras.setdefault("env_tools", {})
-        if not isinstance(extras["env_tools"], dict):
-            extras["env_tools"] = {}
-    
-        extras.setdefault("memory_meta", {})
-        if not isinstance(extras["memory_meta"], dict):
-            extras["memory_meta"] = {}
-    
-        # fast_mode
-        extras["fast_mode"] = _to_bool(extras.get("fast_mode", fast_mode_default))
-        _set_bool_metric(
-            extras,
-            "fast_mode",
-            (extras.get("metrics", {}) or {}).get("fast_mode", extras["fast_mode"]),
-            default=extras["fast_mode"],
-        )
-    
-        # ints
-        _set_int_metric(extras, "mem_hits", extras["metrics"].get("mem_hits", 0), default=0)
-        _set_int_metric(
-            extras,
-            "memory_evidence_count",
-            extras["metrics"].get("memory_evidence_count", 0),
-            default=0,
-        )
-        _set_int_metric(extras, "web_hits", extras["metrics"].get("web_hits", 0), default=0)
-        _set_int_metric(
-            extras,
-            "web_evidence_count",
-            extras["metrics"].get("web_evidence_count", 0),
-            default=0,
-        )
-
-        stage_latency = extras["metrics"].get("stage_latency")
-        if not isinstance(stage_latency, dict):
-            stage_latency = {}
-        for stage_name in ("retrieval", "web", "llm", "gate", "persist"):
-            try:
-                stage_latency[stage_name] = max(0, int(stage_latency.get(stage_name, 0) or 0))
-            except Exception:
-                stage_latency[stage_name] = 0
-        extras["metrics"]["stage_latency"] = stage_latency
-    
-        # backward compat
-        try:
-            extras["metrics"].setdefault(
-                "mem_evidence_count",
-                int(extras["metrics"].get("mem_evidence_count", 0) or 0),
-            )
-        except Exception:
-            extras["metrics"]["mem_evidence_count"] = 0
-    
-        # memory_meta.context merge
-        mm = extras["memory_meta"]
-        try:
-            base_ctx = dict(context_obj) if isinstance(context_obj, dict) else {}
-        except Exception:
-            base_ctx = {}
-    
-        mm_ctx = mm.get("context")
-        if not isinstance(mm_ctx, dict):
-            mm_ctx = dict(base_ctx)
-            mm["context"] = mm_ctx
-        else:
-            for k, v in base_ctx.items():
-                mm_ctx.setdefault(k, v)
-    
-        # invariant: context.fast
-        mm_ctx["fast"] = _to_bool(mm_ctx.get("fast", extras["fast_mode"]))
-    
-        # invariant: memory_meta.query
-        try:
-            existing_q = mm.get("query")
-            if not (isinstance(existing_q, str) and existing_q.strip()):
-                if isinstance(query_str, str) and query_str.strip():
-                    mm["query"] = query_str
-        except Exception:
-            pass
-    
-    
-    # -------------------------------
-    # Critique enforcement core
-    # -------------------------------
-    
-    def _default_findings() -> List[Dict[str, Any]]:
-        """
-        最低3項目を満たすための “監査の定番指摘”
-        NOTE: fix は日本語で統一（UI一貫性）
-        """
-        return [
-            {
-                "severity": "med",
-                "message": "Evidence coverage may be insufficient or not independently verified",
-                "code": "CRITIQUE_EVIDENCE_COVERAGE",
-                "fix": "一次ソース + 独立ソース2件以上で裏取りし、根拠を decision.evidence に紐付けてください。",
-                "details": {"hint": "primary+independent", "min_sources": 3},
-            },
-            {
-                "severity": "med",
-                "message": "Assumptions / scope / constraints might be under-specified",
-                "code": "CRITIQUE_SCOPE_UNSPECIFIED",
-                "fix": "目的・スコープ・制約・禁止事項・KPI を context に固定してください。",
-                "details": {"hint": "goal/scope/constraints/kpi"},
-            },
-            {
-                "severity": "med",
-                "message": "Alternatives / trade-offs are not fully compared",
-                "code": "CRITIQUE_ALTERNATIVES_WEAK",
-                "fix": "少なくとも2案を比較し、採用/不採用理由（トレードオフ）を明示してください。",
-                "details": {"hint": "compare>=2", "include": ["pros", "cons", "tradeoffs"]},
-            },
-        ]
-    
-    
-    def _pad_findings(findings: Any, *, min_items: int = 3) -> List[Dict[str, Any]]:
-        """
-        findings を List[Dict] に正規化 + min_items までパッド。
-        例外は出さない。
-        """
-        out: List[Dict[str, Any]] = []
-    
-        if isinstance(findings, list):
-            for it in findings:
-                if isinstance(it, dict):
-                    it2 = dict(it)
-                    it2["severity"] = _norm_severity(it2.get("severity", "med"))
-                    it2.setdefault(
-                        "message",
-                        it2.get("message")
-                        or it2.get("issue")
-                        or it2.get("msg")
-                        or "Critique finding",
-                    )
-                    it2.setdefault("code", it2.get("code") or "CRITIQUE_GENERIC")
-    
-                    # details を dict 強制
-                    if "details" in it2 and not isinstance(it2.get("details"), dict):
-                        it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-    
-                    # fix は任意
-                    if "fix" in it2 and it2.get("fix") is not None:
-                        it2["fix"] = _as_str(it2.get("fix"), limit=1000)
-    
-                    out.append(it2)
-                else:
-                    out.append(
-                        {
-                            "severity": "med",
-                            "message": _as_str(it, limit=500),
-                            "code": "CRITIQUE_TEXT",
-                        }
-                    )
-    
-        elif isinstance(findings, dict):
-            it2 = dict(findings)
-            it2["severity"] = _norm_severity(it2.get("severity", "med"))
-            it2.setdefault(
-                "message",
-                it2.get("message") or it2.get("issue") or it2.get("msg") or "Critique finding",
-            )
-            it2.setdefault("code", it2.get("code") or "CRITIQUE_GENERIC")
-    
-            if "details" in it2 and not isinstance(it2.get("details"), dict):
-                it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-    
-            if "fix" in it2 and it2.get("fix") is not None:
-                it2["fix"] = _as_str(it2.get("fix"), limit=1000)
-    
-            out = [it2]
-    
-        elif findings is not None:
-            out = [
-                {
-                    "severity": "med",
-                    "message": _as_str(findings, limit=500),
-                    "code": "CRITIQUE_TEXT",
-                }
-            ]
-    
-        defaults = _default_findings()
-        i = 0
-        while len(out) < int(min_items):
-            out.append(dict(defaults[i % len(defaults)]))
-            i += 1
-    
-        # 最終固定（必須キー）
-        fixed: List[Dict[str, Any]] = []
-        for it in out:
-            if not isinstance(it, dict):
-                fixed.append(
-                    {
-                        "severity": "med",
-                        "message": _as_str(it, limit=500),
-                        "code": "CRITIQUE_TEXT",
-                    }
-                )
-                continue
-    
-            it2 = dict(it)
-            it2["severity"] = _norm_severity(it2.get("severity", "med"))
-            it2["message"] = _as_str(it2.get("message") or "Critique finding", limit=1000)
-            it2["code"] = _as_str(it2.get("code") or "CRITIQUE_GENERIC", limit=120)
-    
-            if "details" in it2 and not isinstance(it2.get("details"), dict):
-                it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-    
-            fixed.append(it2)
-    
-        return fixed
-    
-    
-    def _critique_fallback(
-        *,
-        reason: str,
-        query: str = "",
-        chosen: Any = None,
-    ) -> Dict[str, Any]:
-        """
-        critique が取れない時の dict 契約 fallback（必ず findings>=3）
-        """
-        chosen_title = ""
-        try:
-            if isinstance(chosen, dict):
-                chosen_title = _as_str(
-                    chosen.get("title") or chosen.get("name") or chosen.get("chosen") or "",
-                    limit=120,
-                )
-            elif chosen is not None:
-                chosen_title = _as_str(chosen, limit=120)
-        except Exception:
-            chosen_title = ""
-    
-        findings = _pad_findings(
-            [
-                {
-                    "severity": "high",
-                    "message": "Critique unavailable -> auditability reduced",
-                    "code": "CRITIQUE_MISSING",
-                    "fix": "critique module / pipeline integration を確認し、再実行してください。",
-                }
-            ],
-            min_items=3,
-        )
-    
-        return {
-            "ok": False,
-            "mode": "fallback",
-            "reason": _as_str(reason, limit=200),
-            "summary": "Critique missing/failed. Manual review required.",
-            "findings": findings,
-            "recommendations": [
-                "Re-run decision with critique enabled",
-                "Inspect TrustLog for evidence/debate/gate consistency",
-            ],
-            "query": _as_str(query, limit=500),
-            "chosen_title": chosen_title,
-            "ts": _now_iso(),
-        }
-    
-    
-    def _list_to_findings(items: List[Any]) -> List[Dict[str, Any]]:
-        """
-        critique.analyze() の List[{'issue','severity','details','fix'}] を findings に変換
-        """
-        out: List[Dict[str, Any]] = []
-        for it in items or []:
-            if isinstance(it, dict):
-                sev = _norm_severity(it.get("severity", "med"))
-                issue = it.get("issue") or it.get("message") or it.get("msg") or "Critique finding"
-                fix = it.get("fix")
-                details = it.get("details") if isinstance(it.get("details"), dict) else {}
-                out.append(
-                    {
-                        "severity": sev,
-                        "message": _as_str(issue, limit=1000),
-                        "code": _as_str(it.get("code") or "CRITIQUE_RULE", limit=120),
-                        "details": details,
-                        "fix": _as_str(fix, limit=1000) if fix is not None else None,
-                    }
-                )
-            else:
-                out.append(
-                    {
-                        "severity": "med",
-                        "message": _as_str(it, limit=500),
-                        "code": "CRITIQUE_TEXT",
-                    }
-                )
-        return out
-    
-    
-    def _normalize_critique_payload(x: Any, *, min_findings: int = 3) -> Dict[str, Any]:
-        """
-        Normalize critique to dict ALWAYS (never raise).
-        Enforce findings >= min_findings.
-    
-        Accepts:
-          - dict: passthrough + defaults + findings padding
-          - list: treat as critique items list -> findings
-          - str/other: wrap as text finding
-          - None: returns {} (caller will fallback)
-        """
-        if x is None:
-            return {}
-    
-        # legacy: list -> dict
-        if isinstance(x, list):
-            findings = _pad_findings(_list_to_findings(x), min_items=min_findings)
-            return {
-                "ok": True,
-                "mode": "legacy_list",
-                "summary": "Critique generated (legacy list normalized).",
-                "findings": findings,
-                "recommendations": [],
-                "ts": _now_iso(),
-            }
-    
-        # dict -> dict (enforce schema)
-        if isinstance(x, dict):
-            out = dict(x)
-    
-            if "ok" not in out:
-                out["ok"] = True
-    
-            out.setdefault("mode", out.get("mode") or "normal")
-            out.setdefault("ts", out.get("ts") or _now_iso())
-            out.setdefault("summary", out.get("summary") or "Critique generated.")
-    
-            # findings extraction fallbacks
-            findings = out.get("findings")
-            if findings is None:
-                if isinstance(out.get("items"), list):
-                    findings = _list_to_findings(out["items"])
-                elif isinstance(out.get("issues"), list):
-                    findings = _list_to_findings(out["issues"])
-                else:
-                    findings = []
-    
-            out["findings"] = _pad_findings(findings, min_items=min_findings)
-    
-            rec = out.get("recommendations")
-            if rec is None:
-                out["recommendations"] = []
-            elif not isinstance(rec, list):
-                out["recommendations"] = [_as_str(rec, limit=500)]
-    
-            return out
-    
-        # text/other -> dict
-        s = _as_str(x, limit=1000)
-        findings = _pad_findings(
-            [{"severity": "med", "message": s, "code": "CRITIQUE_TEXT"}],
-            min_items=min_findings,
-        )
-        return {
-            "ok": True,
-            "mode": "text",
-            "summary": "Critique normalized from text.",
-            "findings": findings,
-            "recommendations": [],
-            "ts": _now_iso(),
-        }
-    
-    
-    def _ensure_critique_required(
-        *,
-        response_extras: Dict[str, Any],
-        query: str,
-        chosen: Any,
-        critique_obj: Any,
-        min_findings: int = 3,
-    ) -> Dict[str, Any]:
-        """
-        Enforce:
-          - critique ALWAYS exists and is dict
-          - critique.findings ALWAYS list and >= min_findings
-    
-        Side effects:
-          - extras.env_tools.critique_degraded = True when fallback used
-          - extras.metrics.critique_findings_count / critique_ok
-        """
-        c = _normalize_critique_payload(critique_obj, min_findings=min_findings)
-        if not isinstance(c, dict) or not c:
-            c = _critique_fallback(reason="missing_in_response", query=query, chosen=chosen)
-    
-        # hard enforce (even if caller passed weird payload)
-        c["findings"] = _pad_findings(c.get("findings"), min_items=min_findings)
-    
-        used_fallback = bool(c.get("ok") is False) or (c.get("mode") == "fallback")
-        if used_fallback:
-            response_extras.setdefault("env_tools", {})
-            if isinstance(response_extras["env_tools"], dict):
-                response_extras["env_tools"]["critique_degraded"] = True
-    
-        response_extras.setdefault("metrics", {})
-        if isinstance(response_extras["metrics"], dict):
-            response_extras["metrics"]["critique_findings_count"] = len(c.get("findings") or [])
-            response_extras["metrics"]["critique_ok"] = bool(c.get("ok") is True)
-    
-        # (Optional) keep small trace
-        c.setdefault("query", _as_str(query, limit=500))
-        return c
-    
-    
-    def _chosen_to_option(chosen: Any) -> Dict[str, Any]:
-        """
-        critique.analyze() に渡す option を chosen から合成（壊れない）
-        """
-        opt: Dict[str, Any] = {}
-    
-        if isinstance(chosen, dict):
-            opt["title"] = chosen.get("title") or chosen.get("name") or chosen.get("chosen") or "chosen"
-            for k in ("risk", "complexity", "value", "feasibility", "timeline"):
-                if k in chosen:
-                    opt[k] = chosen.get(k)
-    
-            score = chosen.get("score")
-            if isinstance(score, dict):
-                for k in ("risk", "value", "feasibility"):
-                    if k not in opt and k in score:
-                        opt[k] = score.get(k)
-        else:
-            opt["title"] = _as_str(chosen, limit=120) if chosen is not None else "chosen"
-    
-        opt["title"] = _as_str(opt.get("title") or "chosen", limit=120)
-        return opt
-    
-    
-    async def _run_critique_best_effort(
-        *,
-        query: str,
-        chosen: Any,
-        evidence: List[Dict[str, Any]],
-        debate: Any,
-        context: Dict[str, Any],
-        user_id: str,
-        min_findings: int = 3,
-    ) -> Dict[str, Any]:
-        """
-        Try to generate critique via core module if available.
-        Never raises; returns normalized dict with findings>=min_findings.
-    
-        IMPORTANT:
-          - analyze() が list を返してもここで dict へ正規化する
-          - pipeline は response["critique"] = returned_dict を “上書き” で格納する
-        """
-        # NOTE: _lazy_import はあなたのコードベース側のユーティリティ想定
-        crit_mod = _lazy_import("veritas_os.core.critique", None)
-        if crit_mod is None:
-            return _critique_fallback(reason="critique_module_missing", query=query, chosen=chosen)
-    
-        # 推奨: core 側に analyze_dict があればそれを優先（dict契約を直接得る）
-        fn_dict = getattr(crit_mod, "analyze_dict", None)
-        fn_list = getattr(crit_mod, "analyze", None)
-    
-        option = _chosen_to_option(chosen)
-    
-        try:
-            if callable(fn_dict):
-                out = fn_dict(option, evidence, context, min_items=min_findings)  # dict contract
-                norm = _normalize_critique_payload(out, min_findings=min_findings)
-            elif callable(fn_list):
-                out = fn_list(option, evidence, context)  # list contract (legacy)
-                norm = _normalize_critique_payload(out, min_findings=min_findings)
-            else:
-                return _critique_fallback(reason="critique_analyze_missing", query=query, chosen=chosen)
-    
-            if not norm:
-                return _critique_fallback(reason="critique_returned_empty", query=query, chosen=chosen)
-    
-            norm["findings"] = _pad_findings(norm.get("findings"), min_items=min_findings)
-            norm.setdefault("summary", norm.get("summary") or "Critique generated.")
-            norm.setdefault("recommendations", norm.get("recommendations") or [])
-            norm.setdefault("mode", norm.get("mode") or "normal")
-            norm.setdefault("ts", norm.get("ts") or _now_iso())
-    
-            return norm
-    
-        except Exception as e:
-            # best-effort: never raise
-            return _critique_fallback(
-                reason=f"exception:{type(e).__name__}",
-                query=query,
-                chosen=chosen,
-            )
-
-
+    # pipeline_helpers    : _lazy_import, _as_str, _norm_severity, _now_iso,
+    #                       _to_bool_local, _set_int_metric, _set_bool_metric,
+    #                       _extract_rejection, _summarize_last_output,
+    #                       _query_is_step1_hint, _has_step1_minimum_evidence
+    # pipeline_critique   : _default_findings, _pad_findings, _critique_fallback,
+    #                       _list_to_findings, _normalize_critique_payload,
+    #                       _ensure_critique_required, _chosen_to_option,
+    #                       _run_critique_best_effort
+    # pipeline_evidence   : _norm_evidence_item, _dedupe_evidence
+    # pipeline_contracts  : _ensure_full_contract, _deep_merge_dict,
+    #                       _merge_extras_preserving_contract
+    # -----------------------------------------------------------------------
 
     # -------------------------------
-    # ISSUE-2.6: Web results extractor (contract hardening)
-    #   - Some pipelines expect _extract_web_results(ws)
-    #   - Must never raise
-    #   - Absorb many shapes: dict/list/nested {data:{results:[]}} etc.
-    # -------------------------------
-    def _extract_web_results(ws: Any) -> List[Any]:
-        """
-        web_search の戻りがどんな形でも「結果リスト」を吸い上げる。
-        - ws が list: そのまま返す
-        - ws が dict: results/items/data/hits を優先探索
-        - nested dict にも対応（1段〜2段）
-        - それ以外は []
-        """
-        try:
-            if ws is None:
-                return []
-            if isinstance(ws, list):
-                return ws
-
-            if not isinstance(ws, dict):
-                return []
-
-            # 1st pass: top-level common keys
-            for k in ("results", "items", "data", "hits"):
-                v = ws.get(k)
-                if isinstance(v, list):
-                    return v
-
-            # 2nd pass: if values are dict, look one layer deeper
-            for k in ("results", "items", "data", "hits"):
-                v = ws.get(k)
-                if isinstance(v, dict):
-                    for kk in ("results", "items", "data", "hits"):
-                        vv = v.get(kk)
-                        if isinstance(vv, list):
-                            return vv
-
-            # 3rd pass: any nested dict under typical wrappers
-            # e.g. {"ok":true,"output":{"results":[...]}}
-            for k, v in ws.items():
-                if isinstance(v, dict):
-                    for kk in ("results", "items", "data", "hits"):
-                        vv = v.get(kk)
-                        if isinstance(vv, list):
-                            return vv
-                    # one more nested level
-                    for k2, v2 in v.items():
-                        if isinstance(v2, dict):
-                            for kk in ("results", "items", "data", "hits"):
-                                vv = v2.get(kk)
-                                if isinstance(vv, list):
-                                    return vv
-        except Exception:
-            return []
-
-        return []
-
-    # -------------------------------
-    # ISSUE-2.7: Evidence normalizer / deduper (contract hardening)
-    #   - Some pipelines expect _norm_evidence_item / _dedupe_evidence
-    #   - Must never raise
-    #   - Accept legacy evidence.py style:
-    #       {source, kind, weight, snippet, tags}
-    #     -> pipeline contract:
-    #       {source, uri, title, snippet, confidence}
-    # -------------------------------
-    def _norm_evidence_item(ev: Any) -> Optional[Dict[str, Any]]:
-        """Normalize evidence entries to dict; never raise.
-        Accepts both pipeline-contract evidence and legacy/local evidence.py style:
-          - confidence <- weight (if confidence missing)
-          - title/uri synthesized from kind (if missing)
-        """
-        if not isinstance(ev, dict):
-            return None
-
-        try:
-            ev2 = dict(ev)
-
-            # ---- compat: evidence.py style -> pipeline contract ----
-            # evidence.py: {source, kind, weight, snippet, tags}
-            if "confidence" not in ev2 and "weight" in ev2:
-                try:
-                    ev2["confidence"] = ev2.get("weight")
-                except Exception:
-                    pass
-
-            if ("title" not in ev2 or ev2.get("title") in (None, "")) and "kind" in ev2:
-                try:
-                    ev2["title"] = f"local:{ev2.get('kind')}"
-                except Exception:
-                    pass
-
-            if ("uri" not in ev2 or ev2.get("uri") in (None, "")) and "kind" in ev2:
-                try:
-                    ev2["uri"] = f"internal:evidence:{ev2.get('kind')}"
-                except Exception:
-                    pass
-
-            # ---- core normalize ----
-            src = ev2.get("source")
-            if src in (None, ""):
-                src = "local"
-
-            uri = ev2.get("uri")
-            title = ev2.get("title") or ""
-
-            snippet = ev2.get("snippet")
-            try:
-                snippet_s = "" if snippet is None else str(snippet)
-            except Exception:
-                snippet_s = repr(snippet)
-
-            conf_raw = ev2.get("confidence", 0.7)
-            try:
-                conf = float(conf_raw if conf_raw is not None else 0.7)
-            except Exception:
-                conf = 0.7
-            conf = max(0.0, min(1.0, conf))
-
-            # uri は外部契約的に str に統一（dedupe/serialize 安定）
-            if uri is None:
-                uri_s = None
-            else:
-                try:
-                    uri_s = str(uri)
-                except Exception:
-                    uri_s = repr(uri)
-
-            return {
-                "source": str(src),
-                "uri": uri_s,
-                "title": str(title),
-                "snippet": snippet_s,
-                "confidence": conf,
-            }
-        except Exception:
-            return None
-
-    def _dedupe_evidence(evs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Stable dedupe for evidence list; never raise."""
-        try:
-            seen: set[tuple[str, str, str, str]] = set()
-            out: List[Dict[str, Any]] = []
-            for ev in evs:
-                if not isinstance(ev, dict):
-                    continue
-                k = (
-                    str(ev.get("source") or ""),
-                    str(ev.get("uri") or ""),
-                    str(ev.get("title") or ""),
-                    str(ev.get("snippet") or ""),
-                )
-                if k in seen:
-                    continue
-                seen.add(k)
-                out.append(ev)
-            return out
-        except Exception:
-            return []
-
-    # -------------------------------
-    # ISSUE-2.8: Extras contract merger (contract hardening)
-    #   - Some pipelines expect _merge_extras_preserving_contract
-    #   - Must never raise
-    #   - Must preserve metrics/memory_meta invariants
-    # -------------------------------
-    def _deep_merge_dict(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
-        """Safe deep merge: dict-only. Never raises."""
-        try:
-            if not isinstance(dst, dict) or not isinstance(src, dict):
-                return dst
-            for k, v in src.items():
-                if isinstance(v, dict) and isinstance(dst.get(k), dict):
-                    _deep_merge_dict(dst[k], v)  # type: ignore[index]
-                else:
-                    dst[k] = v
-            return dst
-        except Exception:
-            return dst
-
-    def _merge_extras_preserving_contract(
-        base_extras: Dict[str, Any],
-        incoming_extras: Dict[str, Any],
-        *,
-        fast_mode_default: bool,
-        context_obj: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """
-        Merge extras without losing contract keys.
-        - metrics merged deeply (never replaced by non-dict)
-        - memory_meta.context preserved and fast injected
-        - never raises
-        """
-        try:
-            if not isinstance(base_extras, dict):
-                base_extras = {}
-            if not isinstance(incoming_extras, dict):
-                _ensure_full_contract(
-                    base_extras, fast_mode_default=fast_mode_default, context_obj=context_obj
-                )
-                return base_extras
-
-            prev_metrics = base_extras.get("metrics")
-            prev_mm = base_extras.get("memory_meta")
-            prev_fast = base_extras.get("fast_mode", fast_mode_default)
-
-            _deep_merge_dict(base_extras, incoming_extras)
-
-            if not isinstance(base_extras.get("metrics"), dict):
-                base_extras["metrics"] = prev_metrics if isinstance(prev_metrics, dict) else {}
-            if not isinstance(base_extras.get("memory_meta"), dict):
-                try:
-                    base_extras["memory_meta"] = (
-                        prev_mm if isinstance(prev_mm, dict) else {"context": dict(context_obj)}
-                    )
-                except Exception:
-                    base_extras["memory_meta"] = {"context": {}}
-
-            base_extras["fast_mode"] = _to_bool(base_extras.get("fast_mode", prev_fast))
-
-            _ensure_full_contract(
-                base_extras, fast_mode_default=fast_mode_default, context_obj=context_obj
-            )
-            return base_extras
-        except Exception:
-            try:
-                if isinstance(base_extras, dict):
-                    _ensure_full_contract(
-                        base_extras, fast_mode_default=fast_mode_default, context_obj=context_obj
-                    )
-                    return base_extras
-            except Exception:
-                pass
-            return base_extras if isinstance(base_extras, dict) else {}
-
-
-
-
-
+    # Critique / Web / Evidence / Contract ヘルパーはサブモジュールに移動済み。
+    # （上部 import で利用可能）
+    
+    
     # -------------------------------
     # start
     # -------------------------------
@@ -2197,28 +1232,7 @@ async def run_decide_pipeline(
     healing_budget = self_healing.HealingBudget()
     prev_healing_input: Optional[Dict[str, Any]] = None
 
-    def _extract_rejection(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        fuji_payload = payload.get("fuji") if isinstance(payload, dict) else None
-        if not isinstance(fuji_payload, dict):
-            return None
-        rejection = fuji_payload.get("rejection")
-        if not isinstance(rejection, dict):
-            return None
-        if rejection.get("status") != "REJECTED":
-            return None
-        return rejection
-
-    def _summarize_last_output(
-        payload: Dict[str, Any],
-        plan_payload: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        chosen = payload.get("chosen") if isinstance(payload, dict) else None
-        planner_obj = payload.get("planner") if isinstance(payload, dict) else None
-        return {
-            "chosen": chosen if isinstance(chosen, dict) else {},
-            "plan": plan_payload if isinstance(plan_payload, dict) else {},
-            "planner": planner_obj if isinstance(planner_obj, dict) else {},
-        }
+    # _extract_rejection, _summarize_last_output -> pipeline_helpers.py に移動済み
 
     if core_decide is None:
         response_extras.setdefault("env_tools", {})
@@ -2786,58 +1800,7 @@ async def run_decide_pipeline(
     # Low-evidence hardening (query hint only)
     # =========================================================
 
-    def _query_is_step1_hint(q: Any) -> bool:
-        try:
-            qs = (q or "")
-            ql = qs.lower()
-            return (
-                ("step1" in ql)
-                or ("step 1" in ql)
-                or ("inventory" in ql)
-                or ("audit" in ql)
-                or ("棚卸" in qs)
-                or ("現状" in qs and ("棚卸" in qs or "整理" in qs))
-            )
-        except Exception:
-            return False
-
-    def _has_step1_minimum_evidence(evs: Any) -> bool:
-        try:
-            if not isinstance(evs, list):
-                return False
-            has_inv = False
-            has_issues = False
-            for e in evs:
-                if not isinstance(e, dict):
-                    continue
-                title = str(e.get("title") or "")
-                uri = str(e.get("uri") or "")
-                snip = str(e.get("snippet") or "")
-                kind = str(e.get("kind") or "")
-
-                if (
-                    ("inventory" in kind)
-                    or ("local:inventory" in title)
-                    or ("evidence:inventory" in uri)
-                    or ("現状機能（棚卸し）" in snip)
-                    or ("棚卸" in snip and "現状" in snip)
-                ):
-                    has_inv = True
-
-                if (
-                    ("known_issues" in kind)
-                    or ("local:known_issues" in title)
-                    or ("evidence:known_issues" in uri)
-                    or ("既知の課題/注意" in snip)
-                    or ("既知" in snip and "課題" in snip)
-                ):
-                    has_issues = True
-
-                if has_inv and has_issues:
-                    return True
-            return False
-        except Exception:
-            return False
+    # _query_is_step1_hint, _has_step1_minimum_evidence -> pipeline_helpers.py に移動済み
 
     try:
         if not isinstance(evidence, list):
