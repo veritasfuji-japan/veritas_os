@@ -366,6 +366,28 @@ def test_search_invalid_k_raises():
     assert "k must be >= 1" in str(exc.value)
 
 
+@pytest.mark.parametrize("invalid_k", [1.2, "2", None, True])
+def test_search_non_integer_k_raises(invalid_k):
+    """k が int 以外（および bool）の場合は ValueError。"""
+    idx = CosineIndex(dim=2)
+    idx.add(np.array([[1.0, 0.0]], dtype=np.float32), ids=["x"])
+
+    with pytest.raises(ValueError) as exc:
+        idx.search(np.array([1.0, 0.0], dtype=np.float32), k=invalid_k)  # type: ignore[arg-type]
+
+    assert "k must be an int" in str(exc.value)
+
+
+def test_search_tie_scores_keep_insertion_order():
+    """同点スコアでは挿入順序を維持して結果を返す。"""
+    idx = CosineIndex(dim=2)
+    idx.add(np.array([[1.0, 0.0], [1.0, 0.0]], dtype=np.float32), ids=["first", "second"])
+
+    res = idx.search(np.array([1.0, 0.0], dtype=np.float32), k=2)
+
+    assert [item_id for item_id, _ in res[0]] == ["first", "second"]
+
+
 # ---------------------------------------------------------
 # 永続化: save / _load のラウンドトリップ
 # ---------------------------------------------------------

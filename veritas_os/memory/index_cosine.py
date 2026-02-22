@@ -291,6 +291,8 @@ class CosineIndex:
         戻り値: [[(id, score), ...], ...]  （クエリごとに1リスト）
         スレッドセーフ: 検索中は一貫したスナップショットを使用
         """
+        if not isinstance(k, int) or isinstance(k, bool):
+            raise ValueError(f"CosineIndex.search: k must be an int, got {type(k).__name__}")
         if k < 1:
             raise ValueError(f"CosineIndex.search: k must be >= 1, got {k}")
 
@@ -317,6 +319,6 @@ class CosineIndex:
         out: List[List[Tuple[str, float]]] = []
         for row in sims:
             kk = min(k, len(ids_snapshot))
-            idx = np.argsort(-row)[:kk]
+            idx = np.argsort(-row, kind="stable")[:kk]
             out.append([(ids_snapshot[i], float(row[i])) for i in idx])
         return out
