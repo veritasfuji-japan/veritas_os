@@ -1,132 +1,105 @@
-PROPRIETARY LICENSE NOTICE FOR VERITAS OS REPOSITORY
-====================================================
+VERITAS Core Proprietary License (EULA)
+Version 1.0 - Effective 2026-02-22
 
-Copyright (c) 2025 Takeshi Fujishita. All Rights Reserved.
+Copyright (c) 2025 Takeshi Fujishita and VERITAS contributors.
+All rights reserved.
 
-This repository contains multiple software components, documentation, and
-related assets. Unless otherwise explicitly stated in a subdirectory-specific
-LICENSE file, all contents of this repository are provided on an
-“ALL RIGHTS RESERVED” basis.
+IMPORTANT: This repository is a multi-license repository. The default license
+for all files is this proprietary EULA unless another directory-specific
+LICENSE file explicitly applies.
 
-By accessing, cloning, or downloading this repository, you acknowledge and
-agree to the following terms.
+1. Definitions
 
+"Core" means proprietary VERITAS software and assets, including but not limited
+to decision logic, Planner, Kernel, FUJI Gate, TrustLog, core pipelines,
+internal policy engines, and any source files not covered by an explicit open
+license in this repository.
 
-1. SCOPE
---------
+"Evaluation Use" means non-production internal testing for technical
+assessment, security review, or compatibility review.
 
-1.1. Core Code
+"Commercial Use" means any direct or indirect revenue-generating or
+production/business use, including SaaS, internal production systems, or
+customer-facing operations.
 
-Unless a different license is clearly indicated in a specific directory
-or file, all source code under (including but not limited to):
+"Managed Service" means hosting, operating, or providing all or a substantial
+portion of Core functionality as a service for third parties.
 
-    - veritas_os/
-    - scripts/
-    - tools/          (unless otherwise noted)
-    - config/         (unless otherwise noted)
-    - tests/          (unless otherwise noted)
+2. License Grant
 
-is proprietary software and is NOT licensed for public use, copying,
-modification, distribution, or sublicensing without the prior written
-permission of the copyright holder.
+Subject to your compliance with this EULA, Licensor grants you a limited,
+non-exclusive, non-transferable, revocable license to:
+(a) access and use Core for Evaluation Use; and
+(b) make reasonable internal copies strictly for Evaluation Use.
 
-Such code is provided for review, evaluation, and archival purposes only,
-unless a separate written agreement grants you additional rights.
+No right is granted for Commercial Use except under a separate written
+commercial agreement with Licensor.
 
+3. Restrictions
 
-1.2. Open-Source / Publicly Licensed Components
+You must not, and must not permit others to:
 
-Certain parts of this repository (for example, documentation,
-research papers, or example scripts) MAY be released under open-source
-licenses such as the Apache License, Version 2.0.
+(a) use Core for Commercial Use without a separate written agreement;
+(b) offer Core, or substantially similar functionality, as a Managed Service;
+(c) circumvent, disable, or bypass license keys, metering, access controls,
+    usage limitations, or other technical protection mechanisms;
+(d) remove, alter, or obscure copyright, attribution, trademark, patent,
+    or proprietary notices;
+(e) redistribute, sublicense, sell, lease, or transfer Core;
+(f) reverse engineer, decompile, or disassemble Core except where mandatory
+    law expressly prohibits such restriction;
+(g) create or distribute derivative works of Core except as expressly
+    authorized in writing by Licensor;
+(h) use Core to build, train, validate, or benchmark a competing product or
+    service that reproduces Core decision logic.
 
-These components are explicitly marked by a LICENSE file placed inside
-the corresponding subdirectory, for example:
+4. Ownership
 
-    - docs/LICENSE
-    - examples/LICENSE
-    - other-subdir/LICENSE
+Core is licensed, not sold. Licensor and its licensors retain all right,
+title, and interest in and to Core, including all intellectual property rights.
 
-If a subdirectory contains its own LICENSE file, the terms in that file
-govern ONLY the contents of that subdirectory, and do NOT automatically
-apply to the entire repository.
+5. Open Components in this Repository
 
+Certain directories are provided under separate open licenses (for example MIT)
+that apply only to those directories. Those licenses do not apply to Core.
+See README.md and directory LICENSE files for scope.
 
-2. RIGHTS RESERVED
-------------------
+6. Compliance and Audit Cooperation
 
-2.1. Default Rule
+Upon reasonable written request, you will provide information sufficient to
+confirm compliance with this EULA for material uses of Core.
 
-Except where a different license is explicitly provided in a
-subdirectory-specific LICENSE file, the following applies:
+7. Term and Termination
 
-    - You may NOT copy, modify, merge, publish, distribute, sublicense,
-      or sell copies of the proprietary parts of this software.
-    - You may NOT use the proprietary code to create derivative works
-      without explicit written permission.
-    - You may NOT remove or alter any copyright, trademark, or other
-      proprietary notices.
+This EULA continues until terminated. It terminates automatically if you
+breach any term. Upon termination, you must stop all use and destroy copies of
+Core in your control, except where retention is required by law.
 
-Any use beyond what is permitted by applicable law (such as fair use or
-mandatory statutory rights) requires prior written consent from the
-copyright holder.
+8. Disclaimer of Warranties
 
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, CORE IS PROVIDED "AS IS" AND "AS
+AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT.
 
-2.2. No Implied License
+9. Limitation of Liability
 
-The presence of publicly viewable source code in this repository does NOT
-imply any grant of license or rights. No license is granted by estoppel,
-implication, or otherwise, except as expressly set forth in:
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, LICENSOR WILL NOT BE LIABLE FOR ANY
+INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES,
+OR ANY LOSS OF PROFITS, REVENUE, DATA, GOODWILL, OR BUSINESS INTERRUPTION,
+ARISING FROM OR RELATED TO CORE OR THIS EULA. LICENSOR'S AGGREGATE LIABILITY
+WILL NOT EXCEED USD 100.
 
-    - this top-level LICENSE, and
-    - any subdirectory-specific LICENSE files.
+10. Governing Law
 
+This EULA is governed by applicable law designated by Licensor's principal
+place of business, excluding conflict of law principles.
 
-3. OPEN-SOURCE LICENSE REFERENCES
----------------------------------
+11. Commercial Licensing Contact
 
-Where Apache License Version 2.0 or another open-source license is used,
-the full license text is provided in the relevant subdirectory LICENSE file
-(e.g., `docs/LICENSE`, `veritas_os/templates/LICENSE`, `examples/LICENSE`).
+For commercial licensing, OEM, or partnership inquiries:
+licensing@veritasfuji.example (placeholder)
 
-For the avoidance of doubt:
+12. Entire Agreement
 
-    - The existence of an Apache-2.0 LICENSE in `docs/` means that the
-      documentation in `docs/` is licensed under Apache-2.0.
-    - The existence of an Apache-2.0 LICENSE in `veritas_os/templates/`
-      means that template assets in `veritas_os/templates/` are licensed
-      under Apache-2.0.
-    - It does NOT mean that `veritas_os/` or other core code is licensed
-      under Apache-2.0, unless explicitly and clearly stated.
-
-
-4. NO WARRANTY
---------------
-
-UNLESS OTHERWISE REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING,
-THE SOFTWARE AND OTHER CONTENTS OF THIS REPOSITORY ARE PROVIDED "AS IS",
-WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-PURPOSE, AND NON-INFRINGEMENT.
-
-IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY
-CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE OR RELATED
-CONTENTS.
-
-
-5. CONTACT
-----------
-
-For licensing inquiries, commercial use, or any request to obtain a
-separate license to the proprietary components of this repository,
-please contact:
-
-    Takeshi Fujishita
-    (Contact information to be provided separately.)
-
-------------------------------------------------------------
-If you are unsure whether a specific file or directory is open-source
-or proprietary, please assume it is proprietary and contact the author.
-------------------------------------------------------------
+This EULA and any executed commercial agreement constitute the entire agreement
+for Core licensing in this repository.

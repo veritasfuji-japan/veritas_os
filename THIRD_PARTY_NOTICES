@@ -1,0 +1,21 @@
+THIRD-PARTY NOTICES (Initial Template)
+
+This file is an initial notice template for third-party software
+licenses used by VERITAS components.
+
+Important:
+- Dependency-specific notices may be generated and expanded in future releases.
+- Package manager lockfiles and dependency metadata should be consulted for
+  authoritative dependency listings.
+
+Potential sources of third-party license obligations in this repository include:
+- Python dependencies listed in requirements and lock/manifests
+- JavaScript/TypeScript dependencies in package.json and pnpm lockfiles
+- Container base images and OS packages referenced by Dockerfile
+
+Maintainers should update this file before each release with:
+- dependency name
+- version
+- license
+- copyright notice
+- source URL (if required)

@@ -3,7 +3,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
@@ -321,10 +321,50 @@ make test PYTHON_VERSION=3.11
 
 ## License
 
-**All Rights Reserved (Proprietary).**
-This repository is **not** open-source. Usage, modification, and distribution
-are restricted unless explicitly permitted in a subdirectory-specific LICENSE
-file. See [`LICENSE`](LICENSE) for full terms.
+This repository is a **multi-license repository** with clear directory scope.
+
+> 日本語補助: このリポジトリは「Coreはプロプライエタリ」「Interfaceはオープン」の二層ライセンスです。
+
+### License matrix (scope by directory)
+
+| Scope | License | Commercial use | Redistribution | Notes |
+|---|---|---|---|---|
+| Default (entire repo unless overridden) | VERITAS Core Proprietary EULA (`/LICENSE`) | Contract required | Not permitted without written permission | Includes Core decision logic and pipeline |
+| `spec/` | MIT (`/spec/LICENSE`) | Permitted | Permitted | Open interface artifacts |
+| `sdk/` | MIT (`/sdk/LICENSE`) | Permitted | Permitted | SDK interface layer |
+| `cli/` | MIT (`/cli/LICENSE`) | Permitted | Permitted | CLI interface layer |
+| `policies/examples/` | MIT (`/policies/examples/LICENSE`) | Permitted | Permitted | Policy templates/examples |
+
+### Core abuse-prevention restrictions (high level)
+
+Under the Core Proprietary EULA, you may not:
+
+- provide Core (or substantially similar functionality) as a competing managed service;
+- bypass license keys, metering, or other technical protection controls;
+- remove copyright, attribution, proprietary notice, or trademark markings;
+- redistribute Core or use Core for commercial production use without a commercial agreement.
+
+See [`LICENSE`](LICENSE), [`TRADEMARKS`](TRADEMARKS), and [`NOTICE`](NOTICE).
+
+### Transition note for existing users
+
+This PR formalizes existing intent into a clearer two-tier structure:
+
+- Core remains proprietary by default.
+- Interface assets are explicitly open-licensed by directory.
+- No Core logic (Planner/Kernel/FUJI/TrustLog pipeline internals) is open-sourced by this change.
+
+### Roadmap: phased move from mono-repo licensing (Plan B) to multi-repo split (Plan A)
+
+Phase 1 (this PR):
+- Directory-scoped licensing in this mono-repo (Core proprietary + interface MIT)
+
+Phase 2 (next PRs):
+- `veritas-spec` (OpenAPI/schema)
+- `veritas-sdk-python`, `veritas-sdk-js`
+- `veritas-cli`
+- `veritas-policy-templates`
+- Keep `veritas_os` focused on proprietary Core only
 
 For academic use, please cite the Zenodo DOI.
 

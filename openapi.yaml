@@ -189,6 +189,7 @@ security:
 paths:
   /health:
     get:
+      security: []
       summary: Health check
       responses:
         "200":
@@ -210,8 +211,7 @@ paths:
                 options:
                   type: array
                   items:
-                    $ref: '#/components/schemas/Option'  # options の 
-items スキーマ
+                    $ref: '#/components/schemas/Option'  # options の items スキーマ
                 min_evidence:
                   type: integer
                   default: 2
@@ -271,19 +271,20 @@ items スキーマ
           description: OK
 
   /v1/memory/get:
-    get:
+    post:
       summary: Retrieve memory by key
-      parameters:
-        - in: query
-          name: user_id
-          required: true
-          schema:
-            type: string
-        - in: query
-          name: key
-          required: true
-          schema:
-            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, key]
+              properties:
+                user_id:
+                  type: string
+                key:
+                  type: string
       responses:
         "200":
           description: value
@@ -295,7 +296,7 @@ items スキーマ
                   value:
                     type: string
 
-  /v1/logs/trust/{request_id}:
+  /v1/trust/{request_id}:
     get:
       summary: Get immutable trust log
       parameters:
@@ -311,4 +312,3 @@ items スキーマ
             application/json:
               schema:
                 $ref: '#/components/schemas/TrustLog'
-
