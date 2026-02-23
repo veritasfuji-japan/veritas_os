@@ -128,6 +128,137 @@ TELOS_THRESHOLD_MAX = 0.75         # テロス閾値の上限
 HIGH_RISK_THRESHOLD = 0.90         # 高リスク判定閾値
 BASE_TELOS_THRESHOLD = 0.55        # 基本テロススコア閾値
 
+
+def _resolve_uncertainty(payload: Any) -> Optional[float]:
+    """Resolve uncertainty score from a dict-like payload.
+
+    Priority:
+    1) ``uncertainty`` (0..1)
+    2) ``confidence`` converted as ``1 - confidence``
+    3) ``score`` converted as ``1 - score``
+    """
+    if not isinstance(payload, dict):
+        return None
+
+    raw_uncertainty = payload.get("uncertainty")
+    if raw_uncertainty is not None:
+        try:
+            return _clip01(float(raw_uncertainty))
+        except Exception:
+            pass
+
+    raw_confidence = payload.get("confidence")
+    if raw_confidence is not None:
+        try:
+            return _clip01(1.0 - float(raw_confidence))
+        except Exception:
+            pass
+
+    raw_score = payload.get("score")
+    if raw_score is not None:
+        try:
+            return _clip01(1.0 - float(raw_score))
+        except Exception:
+            pass
+
+    return None
+
+
+def _estimate_tokens(payload: Any) -> int:
+    """Estimate token count from serialized payload size.
+
+    Security note:
+        This estimator uses in-memory serialization only and does not call
+        external services, avoiding accidental data exfiltration.
+    """
+    if payload is None:
+        return 0
+    try:
+        text = json.dumps(payload, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(payload)
+    return max(0, int(len(text) / 4))
+
+
+def _build_cost_benefit_analytics(
+    *,
+    baseline_uncertainty: float,
+    chosen: Dict[str, Any],
+    critique: Dict[str, Any],
+    debate_result: Dict[str, Any],
+    fuji_dict: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build cost-benefit analytics for Critique/Debate/FUJI stages."""
+    current_uncertainty = _clip01(baseline_uncertainty)
+    steps: List[Dict[str, Any]] = []
+
+    debate_uncertainty = _resolve_uncertainty(debate_result.get("chosen") if isinstance(debate_result, dict) else None)
+    if debate_uncertainty is None:
+        debate_uncertainty = current_uncertainty
+    debate_reduction = max(0.0, current_uncertainty - debate_uncertainty)
+    steps.append(
+        {
+            "stage": "debate",
+            "token_cost": _estimate_tokens(debate_result),
+            "uncertainty_before": round(current_uncertainty, 4),
+            "uncertainty_after": round(_clip01(debate_uncertainty), 4),
+            "uncertainty_reduction": round(debate_reduction, 4),
+        }
+    )
+    current_uncertainty = _clip01(debate_uncertainty)
+
+    critique_penalty = 0.0
+    if isinstance(critique, dict):
+        findings = critique.get("findings")
+        if isinstance(findings, list):
+            critique_penalty = min(0.2, 0.02 * len(findings))
+        if critique.get("ok") is False:
+            critique_penalty = min(0.25, critique_penalty + 0.05)
+    critique_uncertainty = _clip01(current_uncertainty + critique_penalty)
+    critique_reduction = max(0.0, current_uncertainty - critique_uncertainty)
+    steps.append(
+        {
+            "stage": "critique",
+            "token_cost": _estimate_tokens(critique),
+            "uncertainty_before": round(current_uncertainty, 4),
+            "uncertainty_after": round(critique_uncertainty, 4),
+            "uncertainty_reduction": round(critique_reduction, 4),
+        }
+    )
+    current_uncertainty = critique_uncertainty
+
+    fuji_risk = _clip01(_safe_float((fuji_dict or {}).get("risk"), default=current_uncertainty))
+    fuji_reduction = max(0.0, current_uncertainty - fuji_risk)
+    steps.append(
+        {
+            "stage": "fuji_gate",
+            "token_cost": _estimate_tokens(fuji_dict),
+            "uncertainty_before": round(current_uncertainty, 4),
+            "uncertainty_after": round(fuji_risk, 4),
+            "uncertainty_reduction": round(fuji_reduction, 4),
+        }
+    )
+
+    final_uncertainty = _resolve_uncertainty(chosen)
+    if final_uncertainty is None:
+        final_uncertainty = fuji_risk
+    final_uncertainty = _clip01(final_uncertainty)
+
+    total_token_cost = sum(int(step.get("token_cost", 0) or 0) for step in steps)
+    total_reduction = max(0.0, _clip01(baseline_uncertainty) - final_uncertainty)
+    reduction_pct = 0.0
+    if baseline_uncertainty > 0:
+        reduction_pct = (total_reduction / baseline_uncertainty) * 100.0
+
+    return {
+        "baseline_uncertainty": round(_clip01(baseline_uncertainty), 4),
+        "final_uncertainty": round(final_uncertainty, 4),
+        "total_uncertainty_reduction": round(total_reduction, 4),
+        "total_uncertainty_reduction_pct": round(max(0.0, reduction_pct), 2),
+        "total_token_cost": int(total_token_cost),
+        "steps": steps,
+    }
+
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
 
 
@@ -737,6 +868,14 @@ async def run_decide_pipeline(
                 "llm": 0,
                 "gate": 0,
                 "persist": 0,
+            },
+            "cost_benefit": {
+                "baseline_uncertainty": 0.5,
+                "final_uncertainty": 0.5,
+                "total_uncertainty_reduction": 0.0,
+                "total_uncertainty_reduction_pct": 0.0,
+                "total_token_cost": 0,
+                "steps": [],
             },
         },
         "fast_mode": False,
@@ -1526,6 +1665,13 @@ async def run_decide_pipeline(
             _warn(f"[DebateOS] risk_delta heuristic skipped: {e}")
 
     # =========================================================
+    # Cost-benefit analytics baseline (pre-critique, pre-fuji)
+    # =========================================================
+    baseline_uncertainty = _resolve_uncertainty(chosen)
+    if baseline_uncertainty is None:
+        baseline_uncertainty = 0.5
+
+    # =========================================================
     # ISSUE-2: Critique required (post-debate, pre-FUJI)
     # =========================================================
     try:
@@ -1789,6 +1935,18 @@ async def run_decide_pipeline(
             "telos_threshold": round(float(telos_threshold), 3),
         }
     )
+
+    # Cost-benefit analytics (Critique / Debate / FUJI)
+    try:
+        response_extras["metrics"]["cost_benefit"] = _build_cost_benefit_analytics(
+            baseline_uncertainty=float(baseline_uncertainty),
+            chosen=chosen if isinstance(chosen, dict) else {},
+            critique=critique if isinstance(critique, dict) else {},
+            debate_result=debate_result if isinstance(debate_result, dict) else {},
+            fuji_dict=fuji_dict if isinstance(fuji_dict, dict) else {},
+        )
+    except Exception as e:
+        _warn(f"[cost_benefit] fallback: {e}")
 
     _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
 

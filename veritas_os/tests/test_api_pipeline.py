@@ -506,6 +506,15 @@ async def test_run_decide_pipeline_happy_path(patched_pipeline):
     assert "mem_hits" in metrics
     assert "value_ema" in metrics
     assert "effective_risk" in metrics
+    assert "cost_benefit" in metrics
+
+    cost_benefit = metrics.get("cost_benefit") or {}
+    assert isinstance(cost_benefit, dict)
+    assert "total_token_cost" in cost_benefit
+    assert "total_uncertainty_reduction_pct" in cost_benefit
+    assert len(cost_benefit.get("steps", [])) == 3
+    stages = [step.get("stage") for step in cost_benefit.get("steps", [])]
+    assert stages == ["debate", "critique", "fuji_gate"]
 
     # ★ Memory evidence が evidence に混ざること（仕様として担保）
     assert any(
@@ -1038,7 +1047,6 @@ async def test_run_decide_pipeline_trustlog_and_shadow_exception_swallowed(monke
     assert isinstance(metrics, dict)
     assert "effective_risk" in metrics
     assert "gate" in payload
-
 
 
 
