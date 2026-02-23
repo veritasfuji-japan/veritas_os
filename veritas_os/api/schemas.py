@@ -323,11 +323,23 @@ class DecideRequest(BaseModel):
 
     @model_validator(mode="after")
     def _unify_options(self) -> "DecideRequest":
-        """Unify compatibility fields and record coercion observability events."""
+        """Unify compatibility fields and record coercion/deprecation events.
+
+        The API keeps accepting both ``alternatives`` and legacy ``options`` to
+        preserve backward compatibility. Internally, ``alternatives`` is treated
+        as canonical and ``options`` is synchronized to the canonical value so
+        downstream components see a stable shape.
+        """
         events: List[str] = []
 
         if "raw" in self.context:
             events.append("coercion.context_non_mapping")
+
+        if "options" in self.model_fields_set:
+            events.append("deprecation.options_field_used")
+            logger.warning(
+                "DecideRequest received deprecated field 'options'; prefer 'alternatives'",
+            )
 
         # alternatives 優先。無ければ options を採用
         alts = list(self.alternatives or [])
@@ -341,6 +353,17 @@ class DecideRequest(BaseModel):
         if alts and (not opts):
             self.options = list(alts)
             events.append("coercion.alternatives_to_options")
+
+        if alts and opts:
+            canonical_alts = [alt.model_dump() for alt in alts]
+            canonical_opts = [opt.model_dump() for opt in opts]
+            if canonical_alts != canonical_opts:
+                self.options = list(alts)
+                events.append("coercion.options_overridden_by_alternatives")
+                logger.warning(
+                    "DecideRequest received conflicting alternatives/options;"
+                    " options were normalized to alternatives",
+                )
 
         # ここで型を AltItem に確定（field_validator で済んでいる想定だが保険）
         self.alternatives = [x if isinstance(x, AltItem) else _altin_to_altitem(x) for x in (self.alternatives or [])]
@@ -572,7 +595,12 @@ class DecideResponse(BaseModel):
 
     @model_validator(mode="after")
     def _unify_and_sanitize(self) -> "DecideResponse":
-        """Normalize response payload and expose coercion metadata for audits."""
+        """Normalize response payload and expose coercion metadata for audits.
+
+        ``alternatives`` is the canonical response contract. Legacy ``options``
+        remains available for compatibility, but is kept synchronized so that
+        clients can migrate without semantic drift.
+        """
         events: List[str] = []
 
         # alternatives があって options が空ならミラー（互換）
@@ -584,6 +612,17 @@ class DecideResponse(BaseModel):
         if self.options and not self.alternatives:
             self.alternatives = list(self.options)
             events.append("coercion.options_to_alternatives")
+
+        if self.alternatives and self.options:
+            canonical_alts = [alt.model_dump() for alt in self.alternatives]
+            canonical_opts = [opt.model_dump() for opt in self.options]
+            if canonical_alts != canonical_opts:
+                self.options = list(self.alternatives)
+                events.append("coercion.response_options_overridden_by_alternatives")
+                logger.warning(
+                    "DecideResponse had conflicting alternatives/options;"
+                    " options were normalized to alternatives",
+                )
 
         # alternatives/options を “必ず Alt” に寄せ切る
         fixed_alts: List[Alt] = []

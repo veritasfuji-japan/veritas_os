@@ -261,3 +261,35 @@ Phase 1（観測強化）として、`veritas_os/api/schemas.py` に以下を反
   Gateway/ASGI 側で明示設定が必要。
 - ⚠️ **運用継続課題**: coercion イベントの集計ダッシュボード化（endpoint 別、クライアント別）は
   本書の提案どおり別途実装が必要。
+
+
+## 10. 実装反映メモ（2026-02-24 追記）
+
+Phase 2 準備（契約明文化に向けた互換運用）として、`alternatives` を正準フィールドに固定するための
+追加観測を `veritas_os/api/schemas.py` に反映。
+
+1. **deprecated フィールド使用の明示化（request）**
+   - `options` が入力に含まれる場合、`deprecation.options_field_used` を付与。
+   - warning ログで `alternatives` 利用を案内。
+
+2. **競合入力の正準化（request）**
+   - `alternatives` と `options` が同時指定かつ不一致の場合、
+     `alternatives` を正として `options` を上書き。
+   - `coercion.options_overridden_by_alternatives` を付与し、
+     黙示補正を監査可能にした。
+
+3. **競合出力の正準化（response）**
+   - `alternatives` と `options` が不一致の場合、`options` を `alternatives` に同期。
+   - `coercion.response_options_overridden_by_alternatives` を付与し、
+     `meta["x_coerced_fields"]` から追跡可能。
+
+4. **回帰防止テスト追加**
+   - `veritas_os/tests/test_schemas_extra_v2.py` に request/response の競合ケースを追加。
+   - 期待イベント付与と正準化結果（`options` が `alternatives` に一致）を検証。
+
+### セキュリティ警告（継続）
+
+- ⚠️ 本更新は **可観測性と契約一貫性の改善**であり、`extra="allow"` ポリシー自体は変更していない。
+  したがって未知キー受理に伴うログ汚染・情報混入リスクは継続。
+- ⚠️ HTTP body サイズ上限は引き続き Gateway/ASGI 側での明示設定が必要。
+

@@ -351,3 +351,26 @@ class TestSchemaCoercionObservability:
         )
         assert "coercion.trust_log_promotion_failed" in resp.coercion_events
         assert "coercion.trust_log_promotion_failed" in resp.meta.get("x_coerced_fields", [])
+
+    def test_request_conflicting_options_are_overridden_by_alternatives(self):
+        req = schemas.DecideRequest(
+            query="test",
+            alternatives=[{"id": "a", "title": "A"}],
+            options=[{"id": "b", "title": "B"}],
+        )
+        assert "deprecation.options_field_used" in req.coercion_events
+        assert "coercion.options_overridden_by_alternatives" in req.coercion_events
+        assert req.options[0].id == "a"
+
+    def test_response_conflicting_options_are_overridden_by_alternatives(self):
+        resp = schemas.DecideResponse(
+            request_id="r1",
+            alternatives=[{"id": "a", "title": "A"}],
+            options=[{"id": "b", "title": "B"}],
+        )
+        assert "coercion.response_options_overridden_by_alternatives" in resp.coercion_events
+        assert resp.options[0].id == "a"
+        assert "coercion.response_options_overridden_by_alternatives" in resp.meta.get(
+            "x_coerced_fields",
+            [],
+        )
