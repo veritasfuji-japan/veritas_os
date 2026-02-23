@@ -144,3 +144,49 @@ def test_call_tool_unknown():
     assert "unknown tool" in out["error"]
     assert "totally_unknown_tool" in out["error"]
 
+
+def test_call_tool_normalizes_kind_and_clamps_max_results(monkeypatch):
+    """kind の正規化と max_results の上限制御を確認する。"""
+    calls: List[Dict[str, Any]] = []
+
+    def fake_web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
+        calls.append({"query": query, "max_results": max_results})
+        return {"ok": True, "results": ["normalized"]}
+
+    monkeypatch.setattr(tools, "web_search", fake_web_search, raising=False)
+
+    out = call_tool("  WEB_SEARCH  ", query="veritas", max_results=999)
+
+    assert out == {"ok": True, "results": ["normalized"]}
+    assert len(calls) == 1
+    assert calls[0]["query"] == "veritas"
+    assert calls[0]["max_results"] == 100
+
+
+def test_call_tool_clamps_invalid_max_categories(monkeypatch):
+    """llm_safety の max_categories が不正値でも安全に正規化される。"""
+    calls: List[Dict[str, Any]] = []
+
+    def fake_llm_safety_run(
+        text: str,
+        context: Dict[str, Any],
+        alternatives: list,
+        max_categories: int = 5,
+    ) -> Dict[str, Any]:
+        calls.append(
+            {
+                "text": text,
+                "context": context,
+                "alternatives": alternatives,
+                "max_categories": max_categories,
+            }
+        )
+        return {"ok": True}
+
+    monkeypatch.setattr(tools, "llm_safety_run", fake_llm_safety_run, raising=False)
+
+    out = call_tool("llm_safety", query="fallback", max_categories="oops")
+
+    assert out == {"ok": True}
+    assert len(calls) == 1
+    assert calls[0]["max_categories"] == 5
