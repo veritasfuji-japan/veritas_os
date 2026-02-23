@@ -153,6 +153,7 @@ WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
 WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
 WEBSEARCH_RETRY_MAX_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0)
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
+WEBSEARCH_TIMEOUT_SECONDS = _safe_int("VERITAS_WEBSEARCH_TIMEOUT", 15)
 WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower().rstrip(".")
     for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")
@@ -552,6 +553,15 @@ def _sanitize_max_results(max_results: Any, *, default: int = 5) -> int:
     return min(max(result, 1), 100)
 
 
+def _sanitize_timeout_seconds(timeout_seconds: Any, *, default: int = 15) -> int:
+    """HTTP timeout(秒)を安全な範囲に丸める。"""
+    try:
+        timeout = int(timeout_seconds)
+    except (TypeError, ValueError):
+        timeout = default
+    return min(max(timeout, 1), 60)
+
+
 def _build_meta(
     *,
     raw_count: int,
@@ -717,11 +727,13 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             "num": num_to_fetch,
         }
 
+        timeout_seconds = _sanitize_timeout_seconds(WEBSEARCH_TIMEOUT_SECONDS)
+
         resp = _post_with_retry(
             websearch_url,
             headers=headers,
             payload=payload,
-            timeout=15,
+            timeout=timeout_seconds,
         )
         try:
             data: Dict[str, Any] = resp.json()
