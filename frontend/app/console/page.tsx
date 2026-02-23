@@ -154,6 +154,13 @@ interface CostBenefitAnalytics {
   inferred: boolean;
 }
 
+interface PipelineStepView {
+  name: string;
+  summary: string;
+  status: "complete" | "idle";
+  detail: string;
+}
+
 /**
  * Parse unknown numeric input into finite number when available.
  */
@@ -350,6 +357,100 @@ function CostBenefitPanel({ result }: { result: DecideResponse }): JSX.Element {
           </p>
         </div>
       </div>
+    </section>
+  );
+}
+
+/**
+ * Converts backend response to expandable UI steps for a chat-style timeline.
+ */
+function buildPipelineStepViews(result: DecideResponse): PipelineStepView[] {
+  const gate = (result.gate ?? {}) as Record<string, unknown>;
+  const gateStatus = typeof gate.decision_status === "string" ? gate.decision_status : "unknown";
+  const plan = Array.isArray(result.plan) ? result.plan : [];
+
+  const planSteps = plan
+    .map((step) => {
+      const asMap = (step ?? {}) as Record<string, unknown>;
+      const title = typeof asMap.title === "string" ? asMap.title : null;
+      const objective = typeof asMap.objective === "string" ? asMap.objective : null;
+      if (!title && !objective) {
+        return null;
+      }
+      const label = title ?? objective ?? "Untitled step";
+      return {
+        name: label,
+        summary: "Planner generated step",
+        status: "complete" as const,
+        detail: renderValue(asMap),
+      };
+    })
+    .filter((step): step is PipelineStepView => step !== null);
+
+  if (planSteps.length > 0) {
+    return planSteps;
+  }
+
+  const evidenceCount = toArray(result.evidence).length;
+  const critiqueCount = toArray(result.critique).length;
+  const debateCount = toArray(result.debate).length;
+
+  return [
+    {
+      name: "Evidence",
+      summary: `${evidenceCount} items collected`,
+      status: evidenceCount > 0 ? "complete" : "idle",
+      detail: renderValue(result.evidence),
+    },
+    {
+      name: "Critique",
+      summary: `${critiqueCount} checks generated`,
+      status: critiqueCount > 0 ? "complete" : "idle",
+      detail: renderValue(result.critique),
+    },
+    {
+      name: "Debate",
+      summary: `${debateCount} arguments compared`,
+      status: debateCount > 0 ? "complete" : "idle",
+      detail: renderValue(result.debate),
+    },
+    {
+      name: "FUJI Gate",
+      summary: `Decision ${gateStatus}`,
+      status: gateStatus !== "unknown" ? "complete" : "idle",
+      detail: renderValue(result.gate),
+    },
+  ];
+}
+
+function FujiGateStatusPanel({ result }: { result: DecideResponse | null }): JSX.Element {
+  if (!result) {
+    return (
+      <section className="rounded-md border border-border bg-background/60 p-3" aria-label="fuji gate status">
+        <h3 className="text-sm font-semibold text-foreground">FUJI Gate Status</h3>
+        <p className="mt-2 text-xs text-muted-foreground">No evaluation yet.</p>
+      </section>
+    );
+  }
+
+  const gate = (result.gate ?? {}) as Record<string, unknown>;
+  const status = typeof gate.decision_status === "string" ? gate.decision_status : "unknown";
+  const risk = toFiniteNumber(gate.risk);
+  const statusTone =
+    status === "allow"
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
+      : status === "modify"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+        : "border-red-500/40 bg-red-500/10 text-red-200";
+
+  return (
+    <section className="rounded-md border border-border bg-background/60 p-3" aria-label="fuji gate status">
+      <h3 className="text-sm font-semibold text-foreground">FUJI Gate Status</h3>
+      <p className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${statusTone}`}>
+        {status.toUpperCase()}
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">Risk score: {risk !== null ? risk.toFixed(3) : "n/a"}</p>
+      <p className="mt-1 text-xs text-muted-foreground">Rejection reason: {result.rejection_reason ?? "none"}</p>
     </section>
   );
 }
@@ -618,6 +719,29 @@ export default function DecisionConsolePage(): JSX.Element {
       </Card>
 
       <PipelineVisualizer />
+
+      <FujiGateStatusPanel result={result} />
+
+      {result ? (
+        <Card title="Step Expansion" className="bg-background/75">
+          <div className="space-y-2">
+            {buildPipelineStepViews(result).map((step) => (
+              <details
+                key={`${step.name}-${step.summary}`}
+                className="rounded-md border border-border bg-background/60 p-2"
+              >
+                <summary className="cursor-pointer text-sm font-medium text-foreground">
+                  {step.name} · {step.summary}
+                  <span className="ml-2 text-[11px] uppercase text-muted-foreground">{step.status}</span>
+                </summary>
+                <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background/70 p-2 text-xs text-foreground">
+                  {step.detail}
+                </pre>
+              </details>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       {governanceDriftAlert ? (
         <div className="fixed bottom-4 left-4 z-40 flex flex-col gap-2">

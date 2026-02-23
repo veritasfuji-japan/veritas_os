@@ -13,7 +13,8 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
     await expect(page.getByText("Pipeline Visualizer")).toBeVisible();
     await expect(page.getByText("Evidence")).toBeVisible();
-    await expect(page.getByText("FUJI")).toBeVisible();
+    // Scope to <li> so strict mode won't match the separate "FUJI Gate Status" heading
+    await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
     // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
     await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
 
