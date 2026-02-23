@@ -193,4 +193,57 @@ describe("DecisionConsolePage", () => {
       expect(screen.getAllByText("17.0%").length).toBeGreaterThan(1);
     });
   });
+
+  it("renders FUJI Gate status and expandable steps", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        error: null,
+        request_id: "req-004",
+        version: "1.0",
+        decision_status: "modify",
+        rejection_reason: "needs redaction",
+        chosen: { id: "a4" },
+        alternatives: [{ id: "a4" }],
+        options: [{ id: "a4" }],
+        fuji: { decision_status: "modify" },
+        gate: { decision_status: "modify", risk: 0.65 },
+        evidence: [{ source: "doc", snippet: "s", confidence: 0.9 }],
+        critique: [{ issue: "x" }],
+        debate: [{ stance: "pro" }],
+        telos_score: 0.7,
+        values: { utility: 0.7 },
+        plan: [
+          { title: "Mask PII", objective: "Remove personal identifiers" },
+        ],
+        planner: null,
+        persona: {},
+        memory_citations: [],
+        memory_used_count: 0,
+        trust_log: null,
+        extras: {},
+      }),
+    } as Response);
+
+    render(<DecisionConsolePage />);
+
+    fireEvent.change(screen.getByPlaceholderText("API key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+      target: { value: "step expansion" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("FUJI Gate Status")).toBeInTheDocument();
+      expect(screen.getByText("MODIFY")).toBeInTheDocument();
+      expect(screen.getByText("Step Expansion")).toBeInTheDocument();
+      expect(screen.getByText("Mask PII · Planner generated step", { exact: false })).toBeInTheDocument();
+    });
+  });
+
 });
