@@ -18,11 +18,11 @@ describe("DecisionConsolePage", () => {
   it("shows 401 message when api key is missing", async () => {
     render(<DecisionConsolePage />);
 
-    fireEvent.change(screen.getByPlaceholderText("意思決定したい問いを入力"), {
+    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "Test" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "実行" }));
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     expect(await screen.findByText(/401: APIキー不足/)).toBeInTheDocument();
   });
@@ -63,15 +63,18 @@ describe("DecisionConsolePage", () => {
     fireEvent.change(screen.getByPlaceholderText("API key"), {
       target: { value: "test-key" },
     });
-    fireEvent.change(screen.getByPlaceholderText("意思決定したい問いを入力"), {
+    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "A/B test" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "実行" }));
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
       expect(screen.getByText("decision_status / chosen")).toBeInTheDocument();
       expect(screen.getByText("memory_citations / memory_used_count")).toBeInTheDocument();
+      expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
+      expect(screen.getByText("user")).toBeInTheDocument();
+      expect(screen.getByText("assistant")).toBeInTheDocument();
     });
   });
 });
