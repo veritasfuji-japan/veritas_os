@@ -31,6 +31,78 @@ function shortHash(value: string | undefined): string {
 
 type VerificationStatus = "idle" | "running" | "pass" | "fail";
 
+interface ReportPeriod {
+  startDate: string;
+  endDate: string;
+}
+
+interface StageSummary {
+  stage: string;
+  count: number;
+  passCount: number;
+}
+
+interface RegulatoryReport {
+  generatedAt: string;
+  period: ReportPeriod;
+  totalEntries: number;
+  totalDecisionIds: number;
+  pipelineStageSummary: StageSummary[];
+  fujiGate: {
+    totalEvaluations: number;
+    rejected: number;
+    rejectionRate: number;
+  };
+  trustLogIntegrity: {
+    checkedLinks: number;
+    mismatchLinks: number;
+    chainIntact: boolean;
+  };
+}
+
+/**
+ * Returns true if a log item is inside a date range (inclusive).
+ */
+function isWithinPeriod(item: TrustLogItem, startDate: string, endDate: string): boolean {
+  if (!item.created_at) {
+    return false;
+  }
+
+  const createdAt = new Date(item.created_at);
+  const start = startDate ? new Date(`${startDate}T00:00:00.000Z`) : null;
+  const end = endDate ? new Date(`${endDate}T23:59:59.999Z`) : null;
+
+  if (Number.isNaN(createdAt.getTime())) {
+    return false;
+  }
+
+  if (start && createdAt < start) {
+    return false;
+  }
+
+  if (end && createdAt > end) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Heuristically detects whether a trust log entry indicates a gate rejection.
+ */
+function isRejectedEntry(item: TrustLogItem): boolean {
+  const status = String(item.status ?? item.result ?? item.verdict ?? "").toLowerCase();
+  return ["deny", "denied", "reject", "rejected", "blocked"].includes(status);
+}
+
+/**
+ * Heuristically detects whether a trust log entry indicates a successful pass.
+ */
+function isPassedEntry(item: TrustLogItem): boolean {
+  const status = String(item.status ?? item.result ?? item.verdict ?? "").toLowerCase();
+  return ["pass", "passed", "allow", "allowed", "approved", "ok"].includes(status);
+}
+
 export default function TrustLogExplorerPage(): JSX.Element {
   const { t } = useI18n();
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
@@ -48,6 +120,10 @@ export default function TrustLogExplorerPage(): JSX.Element {
   const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("idle");
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
   const [animationStep, setAnimationStep] = useState(0);
+  const [reportStartDate, setReportStartDate] = useState("");
+  const [reportEndDate, setReportEndDate] = useState("");
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [latestReport, setLatestReport] = useState<RegulatoryReport | null>(null);
 
   const stageOptions = useMemo(() => {
     const stages = new Set<string>();
@@ -146,6 +222,155 @@ export default function TrustLogExplorerPage(): JSX.Element {
           : t("ハッシュ不一致: 改ざんの可能性があります。", "Hash mismatch: potential tampering detected."),
       );
     }, 1400);
+  };
+
+  const createRegulatoryReport = (): RegulatoryReport | null => {
+    setReportError(null);
+    const startDate = reportStartDate.trim();
+    const endDate = reportEndDate.trim();
+
+    if (!startDate || !endDate) {
+      setReportError(t("期間を指定してください。", "Please select both start and end dates."));
+      return null;
+    }
+
+    if (startDate > endDate) {
+      setReportError(t("開始日は終了日以前にしてください。", "Start date must be before end date."));
+      return null;
+    }
+
+    const periodItems = items.filter((item) => isWithinPeriod(item, startDate, endDate));
+    if (periodItems.length === 0) {
+      setReportError(t("指定期間にデータがありません。", "No logs found for the selected period."));
+      return null;
+    }
+
+    const stageMap = new Map<string, { count: number; passCount: number }>();
+    for (const item of periodItems) {
+      const stage = item.stage ?? "UNKNOWN";
+      const current = stageMap.get(stage) ?? { count: 0, passCount: 0 };
+      current.count += 1;
+      if (isPassedEntry(item)) {
+        current.passCount += 1;
+      }
+      stageMap.set(stage, current);
+    }
+
+    const fujiItems = periodItems.filter((item) => String(item.stage ?? "").toLowerCase().includes("fuji"));
+    const fujiRejected = fujiItems.filter((item) => isRejectedEntry(item)).length;
+    const sortedItems = [...periodItems].sort((a, b) => {
+      const aTime = new Date(a.created_at ?? "").getTime();
+      const bTime = new Date(b.created_at ?? "").getTime();
+      return bTime - aTime;
+    });
+
+    let checkedLinks = 0;
+    let mismatchLinks = 0;
+    for (let index = 0; index < sortedItems.length - 1; index += 1) {
+      const current = sortedItems[index];
+      const previous = sortedItems[index + 1];
+      if (!current?.sha256_prev || !previous?.sha256) {
+        continue;
+      }
+      checkedLinks += 1;
+      if (current.sha256_prev !== previous.sha256) {
+        mismatchLinks += 1;
+      }
+    }
+
+    const decisionIdsInPeriod = new Set(
+      periodItems
+        .map((item) => item.request_id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0),
+    );
+
+    const report: RegulatoryReport = {
+      generatedAt: new Date().toISOString(),
+      period: {
+        startDate,
+        endDate,
+      },
+      totalEntries: periodItems.length,
+      totalDecisionIds: decisionIdsInPeriod.size,
+      pipelineStageSummary: Array.from(stageMap.entries())
+        .map(([stage, value]) => ({
+          stage,
+          count: value.count,
+          passCount: value.passCount,
+        }))
+        .sort((a, b) => b.count - a.count),
+      fujiGate: {
+        totalEvaluations: fujiItems.length,
+        rejected: fujiRejected,
+        rejectionRate: fujiItems.length === 0 ? 0 : fujiRejected / fujiItems.length,
+      },
+      trustLogIntegrity: {
+        checkedLinks,
+        mismatchLinks,
+        chainIntact: mismatchLinks === 0,
+      },
+    };
+
+    setLatestReport(report);
+    return report;
+  };
+
+  const downloadJsonReport = (): void => {
+    const report = createRegulatoryReport();
+    if (!report) {
+      return;
+    }
+
+    const reportBlob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const objectUrl = URL.createObjectURL(reportBlob);
+    const anchor = document.createElement("a");
+    anchor.href = objectUrl;
+    anchor.download = `regulatory-report-${report.period.startDate}-to-${report.period.endDate}.json`;
+    anchor.click();
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const generatePdfReport = (): void => {
+    const report = createRegulatoryReport();
+    if (!report) {
+      return;
+    }
+
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+    if (!printWindow) {
+      setReportError(t("PDFウィンドウを開けませんでした。", "Failed to open PDF print window."));
+      return;
+    }
+
+    const rows = report.pipelineStageSummary
+      .map((row) => `<tr><td>${row.stage}</td><td>${row.count}</td><td>${row.passCount}</td></tr>`)
+      .join("");
+
+    printWindow.document.write(`
+      <html>
+        <head><title>Regulatory Report</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+          <h1>Regulatory Report Generator</h1>
+          <p>Generated At: ${report.generatedAt}</p>
+          <p>Period: ${report.period.startDate} to ${report.period.endDate}</p>
+          <h2>Decision Pipeline Throughput</h2>
+          <table border="1" cellspacing="0" cellpadding="6">
+            <thead><tr><th>Stage</th><th>Count</th><th>Pass Count</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <h2>FUJI Gate Rejection Rate</h2>
+          <p>${report.fujiGate.rejected} / ${report.fujiGate.totalEvaluations} (${(report.fujiGate.rejectionRate * 100).toFixed(1)}%)</p>
+          <h2>TrustLog Integrity Proof</h2>
+          <p>Checked Links: ${report.trustLogIntegrity.checkedLinks}</p>
+          <p>Mismatches: ${report.trustLogIntegrity.mismatchLinks}</p>
+          <p>Chain Intact: ${String(report.trustLogIntegrity.chainIntact)}</p>
+          <p style="margin-top: 20px; font-size: 12px; color: #8a8a8a;">Security note: Reports may contain sensitive audit metadata. Handle under your compliance policy.</p>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
   };
 
   const loadLogs = async (nextCursor: string | null, replace: boolean): Promise<void> => {
@@ -365,6 +590,69 @@ export default function TrustLogExplorerPage(): JSX.Element {
               {verificationMessage}
             </p>
           ) : null}
+        </div>
+      </Card>
+
+      <Card title={t("第三者監査用エクスポート", "Regulatory Report Generator")} className="bg-background/75">
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-muted-foreground">
+            {t(
+              "指定期間の決定パイプライン通過データ、FUJI Gate拒絶率、TrustLog整合性証明をPDF/JSONで出力します。",
+              "Generate PDF/JSON with pipeline throughput, FUJI gate rejection rate, and TrustLog integrity proof for a selected period.",
+            )}
+          </p>
+
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="space-y-1 text-xs">
+              <span className="font-medium">{t("開始日", "Start date")}</span>
+              <input
+                type="date"
+                className="w-full rounded-md border border-border bg-background px-2 py-2"
+                value={reportStartDate}
+                onChange={(event) => setReportStartDate(event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs">
+              <span className="font-medium">{t("終了日", "End date")}</span>
+              <input
+                type="date"
+                className="w-full rounded-md border border-border bg-background px-2 py-2"
+                value={reportEndDate}
+                onChange={(event) => setReportEndDate(event.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" onClick={downloadJsonReport}>
+              {t("JSON生成", "Generate JSON")}
+            </button>
+            <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" onClick={generatePdfReport}>
+              {t("PDF生成", "Generate PDF")}
+            </button>
+          </div>
+
+          {reportError ? <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">{reportError}</p> : null}
+
+          {latestReport ? (
+            <div className="rounded-md border border-border bg-background/60 p-3 text-xs">
+              <p>entries: {latestReport.totalEntries} / decision_ids: {latestReport.totalDecisionIds}</p>
+              <p>
+                FUJI rejection: {latestReport.fujiGate.rejected}/{latestReport.fujiGate.totalEvaluations}
+                {` (${(latestReport.fujiGate.rejectionRate * 100).toFixed(1)}%)`}
+              </p>
+              <p>
+                chain links: {latestReport.trustLogIntegrity.checkedLinks} / mismatches: {latestReport.trustLogIntegrity.mismatchLinks}
+              </p>
+            </div>
+          ) : null}
+
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
+            {t(
+              "セキュリティ警告: 出力レポートに監査メタデータが含まれる可能性があります。共有前にPII・機密情報の取り扱いポリシーを確認してください。",
+              "Security warning: Exported reports may include sensitive audit metadata. Confirm your PII and confidential-data handling policy before sharing.",
+            )}
+          </p>
         </div>
       </Card>
     </div>
