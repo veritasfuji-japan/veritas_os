@@ -355,6 +355,56 @@ def test_search_uses_topk_and_min_sim_and_kinds(memory_env):
 # ---------------------------------------------------------
 
 
+
+
+def test_search_normalizes_min_sim_invalid_or_out_of_range(memory_env):
+    """search は min_sim を有限な [0,1] に正規化する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    base_items = [
+        {"id": "high", "text": "high score", "tags": [], "meta": {}, "ts": 1.0},
+        {"id": "low", "text": "low score", "tags": [], "meta": {}, "ts": 2.0},
+    ]
+    with open(files["episodic"], "w", encoding="utf-8") as f:
+        for it in base_items:
+            json.dump(it, f, ensure_ascii=False)
+            f.write("\n")
+
+    ms = store.MemoryStore(dim=4)
+    idx_ep = ms.idx["episodic"]
+    idx_ep._search_result = [[("high", 0.9), ("low", 0.1)]]
+
+    # 文字列などの不正値はデフォルト 0.25 扱いになる
+    res_invalid = ms.search("query", kinds=["episodic"], min_sim="invalid")
+    assert [item["id"] for item in res_invalid["episodic"]] == ["high"]
+
+    # 負値は 0.0 に clamp されるので low も残る
+    res_negative = ms.search("query", kinds=["episodic"], min_sim=-5)
+    assert [item["id"] for item in res_negative["episodic"]] == ["high", "low"]
+
+    # 1.0 超は 1.0 に clamp されるので全件除外される
+    res_large = ms.search("query", kinds=["episodic"], min_sim=2.0)
+    assert res_large["episodic"] == []
+
+
+def test_search_normalizes_min_sim_non_finite(memory_env):
+    """search は NaN/inf の min_sim を安全な既定値にフォールバックする。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    with open(files["episodic"], "w", encoding="utf-8") as f:
+        json.dump({"id": "high", "text": "high score", "tags": [], "meta": {}, "ts": 1.0}, f, ensure_ascii=False)
+        f.write("\n")
+
+    ms = store.MemoryStore(dim=4)
+    idx_ep = ms.idx["episodic"]
+    idx_ep._search_result = [[("high", 0.9)]]
+
+    res_nan = ms.search("query", kinds=["episodic"], min_sim=float("nan"))
+    assert [item["id"] for item in res_nan["episodic"]] == ["high"]
+
+    res_inf = ms.search("query", kinds=["episodic"], min_sim=float("inf"))
+    assert [item["id"] for item in res_inf["episodic"]] == ["high"]
+
 def test_search_handles_index_error_gracefully(memory_env, monkeypatch):
     """
     idx.search が例外を投げても:

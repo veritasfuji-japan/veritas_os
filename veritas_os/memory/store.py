@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import logging
+import math
 import os
 import threading
 import time
@@ -290,6 +291,8 @@ class MemoryStore:
             except (ValueError, TypeError):
                 pass
 
+        min_sim = self._normalize_min_sim(min_sim)
+
         query = (query or "").strip()
         if not query:
             return {}
@@ -367,7 +370,7 @@ class MemoryStore:
 
             hits: List[Dict[str, Any]] = []
             for _id, score in pairs:
-                if float(score) < float(min_sim):
+                if float(score) < min_sim:
                     continue
                 it = table.get(_id)
                 if not it:
@@ -387,3 +390,15 @@ class MemoryStore:
             "ts": time.time(),
             }
         return self.put("episodic", item)
+
+    @staticmethod
+    def _normalize_min_sim(value: Any) -> float:
+        """Clamp min_sim to a finite [0.0, 1.0] value with a safe default."""
+        default = 0.25
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return default
+        if not math.isfinite(parsed):
+            return default
+        return max(0.0, min(parsed, 1.0))
