@@ -1,6 +1,7 @@
 # veritas_os/api/schemas.py
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Optional, Literal, Union, Iterable, Mapping
 from uuid import uuid4
 
@@ -23,6 +24,8 @@ MAX_SNIPPET_LENGTH = 50000  # Max characters for evidence snippets
 MAX_DESCRIPTION_LENGTH = 20000  # Max characters for descriptions
 MAX_TITLE_LENGTH = 1000  # Max characters for titles
 MAX_LIST_ITEMS = 100  # Max items in lists (alternatives, evidence, etc.)
+
+logger = logging.getLogger(__name__)
 
 # =========================
 # Helpers (robust coercion)
@@ -287,6 +290,7 @@ class DecideRequest(BaseModel):
     min_evidence: int = Field(default=1, ge=0, le=100)
     memory_auto_put: bool = True
     persona_evolve: bool = True
+    coercion_events: List[str] = Field(default_factory=list, exclude=True)
 
     @field_validator("context", mode="before")
     @classmethod
@@ -319,20 +323,39 @@ class DecideRequest(BaseModel):
 
     @model_validator(mode="after")
     def _unify_options(self) -> "DecideRequest":
+        events: List[str] = []
+
+        if "raw" in self.context:
+            events.append("coercion.context_non_mapping")
+
         # alternatives 優先。無ければ options を採用
         alts = list(self.alternatives or [])
         opts = list(self.options or [])
         if (not alts) and opts:
             self.alternatives = opts
             alts = opts
+            events.append("coercion.options_to_alternatives")
 
         # 互換で options も同値に揃える（クライアント期待がある場合）
         if alts and (not opts):
             self.options = list(alts)
+            events.append("coercion.alternatives_to_options")
 
         # ここで型を AltItem に確定（field_validator で済んでいる想定だが保険）
         self.alternatives = [x if isinstance(x, AltItem) else _altin_to_altitem(x) for x in (self.alternatives or [])]
         self.options = [x if isinstance(x, AltItem) else _altin_to_altitem(x) for x in (self.options or [])]
+
+        extras = getattr(self, "__pydantic_extra__", None)
+        if isinstance(extras, dict) and extras:
+            events.append("coercion.request_extra_keys_allowed")
+            logger.warning(
+                "DecideRequest accepted %d extra keys: %s",
+                len(extras),
+                sorted(extras.keys()),
+            )
+
+        if events:
+            self.coercion_events = sorted(set(events))
         return self
 
 
@@ -425,6 +448,7 @@ class DecideResponse(BaseModel):
 
     # persist 用 meta
     meta: Dict[str, Any] = Field(default_factory=dict)
+    coercion_events: List[str] = Field(default_factory=list, exclude=True)
 
     # 監査用 TrustLog（入ってくる形が dict/TrustLog どちらでも OK にしたい）
     trust_log: Optional[Union[TrustLog, Dict[str, Any]]] = None
@@ -547,13 +571,17 @@ class DecideResponse(BaseModel):
 
     @model_validator(mode="after")
     def _unify_and_sanitize(self) -> "DecideResponse":
+        events: List[str] = []
+
         # alternatives があって options が空ならミラー（互換）
         if self.alternatives and not self.options:
             self.options = list(self.alternatives)
+            events.append("coercion.alternatives_to_options")
 
         # options があって alternatives が空なら寄せる（逆互換も強化）
         if self.options and not self.alternatives:
             self.alternatives = list(self.options)
+            events.append("coercion.options_to_alternatives")
 
         # alternatives/options を “必ず Alt” に寄せ切る
         fixed_alts: List[Alt] = []
@@ -610,7 +638,23 @@ class DecideResponse(BaseModel):
                     self.trust_log = TrustLog.model_validate(dict(self.trust_log))
                 except Exception:
                     # 壊れてても残す（監査上、消すよりマシ）
+                    logger.warning("DecideResponse trust_log promotion failed; preserving raw mapping")
+                    events.append("coercion.trust_log_promotion_failed")
                     self.trust_log = dict(self.trust_log)
+
+        extras = getattr(self, "__pydantic_extra__", None)
+        if isinstance(extras, dict) and extras:
+            events.append("coercion.response_extra_keys_allowed")
+            logger.warning(
+                "DecideResponse accepted %d extra keys: %s",
+                len(extras),
+                sorted(extras.keys()),
+            )
+
+        if events:
+            unique_events = sorted(set(events))
+            self.coercion_events = unique_events
+            self.meta.setdefault("x_coerced_fields", unique_events)
 
         return self
 
@@ -646,4 +690,3 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=500)
     memory_auto_put: bool = True
     persona_evolve: bool = True
-
