@@ -369,23 +369,25 @@ function buildPipelineStepViews(result: DecideResponse): PipelineStepView[] {
   const gateStatus = typeof gate.decision_status === "string" ? gate.decision_status : "unknown";
   const plan = Array.isArray(result.plan) ? result.plan : [];
 
-  const planSteps = plan
-    .map((step) => {
-      const asMap = (step ?? {}) as Record<string, unknown>;
-      const title = typeof asMap.title === "string" ? asMap.title : null;
-      const objective = typeof asMap.objective === "string" ? asMap.objective : null;
-      if (!title && !objective) {
-        return null;
-      }
-      const label = title ?? objective ?? "Untitled step";
-      return {
-        name: label,
-        summary: "Planner generated step",
-        status: "complete" as const,
-        detail: renderValue(asMap),
-      };
-    })
-    .filter((step): step is PipelineStepView => step !== null);
+  const planSteps = plan.reduce<PipelineStepView[]>((acc, step) => {
+    const asMap = (step ?? {}) as Record<string, unknown>;
+    const title = typeof asMap.title === "string" ? asMap.title : null;
+    const objective = typeof asMap.objective === "string" ? asMap.objective : null;
+
+    if (!title && !objective) {
+      return acc;
+    }
+
+    const label = title ?? objective ?? "Untitled step";
+    acc.push({
+      name: label,
+      summary: "Planner generated step",
+      status: "complete",
+      detail: renderValue(asMap),
+    });
+
+    return acc;
+  }, []);
 
   if (planSteps.length > 0) {
     return planSteps;
