@@ -89,6 +89,13 @@ def test_sanitize_max_results_clamps_values() -> None:
     assert web_search_mod._sanitize_max_results("abc") == 5
 
 
+def test_sanitize_timeout_seconds_clamps_values() -> None:
+    assert web_search_mod._sanitize_timeout_seconds(0) == 1
+    assert web_search_mod._sanitize_timeout_seconds(120) == 60
+    assert web_search_mod._sanitize_timeout_seconds("7") == 7
+    assert web_search_mod._sanitize_timeout_seconds("abc") == 15
+
+
 def test_normalize_result_item_rejects_unsafe_scheme() -> None:
     """危険なスキームは正規化段階で除外する。"""
     item = {
