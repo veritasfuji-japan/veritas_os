@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { Button, Card } from "@veritas/design-system";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
 
@@ -86,6 +86,26 @@ interface SectionProps {
   value: unknown;
 }
 
+interface ChatMessage {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+}
+
+/**
+ * Builds a human-readable assistant message from decide API payload.
+ */
+function toAssistantMessage(payload: DecideResponse): string {
+  const decision = payload.decision_status ?? "unknown";
+  const chosen = payload.chosen ? renderValue(payload.chosen) : "なし";
+  const rejection = payload.rejection_reason ?? "なし";
+  return [
+    `判定: ${decision}`,
+    `採択案: ${chosen}`,
+    `拒否理由: ${rejection}`,
+  ].join("\n");
+}
+
 function ResultSection({ title, value }: SectionProps): JSX.Element {
   const titleId = useId();
   return (
@@ -105,6 +125,7 @@ export default function DecisionConsolePage(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DecideResponse | null>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const runDecision = async (nextQuery?: string): Promise<void> => {
     const queryToUse = (nextQuery ?? query).trim();
@@ -115,6 +136,11 @@ export default function DecisionConsolePage(): JSX.Element {
       setError("query を入力してください。");
       return;
     }
+
+    setChatMessages((prev) => [
+      ...prev,
+      { id: Date.now(), role: "user", content: queryToUse },
+    ]);
 
     if (!apiKey.trim()) {
       setError("401: APIキー不足（X-API-Key が必要です）。");
@@ -138,19 +164,36 @@ export default function DecisionConsolePage(): JSX.Element {
 
       if (response.status === 401) {
         setError("401: APIキー不足、または無効です。");
+        setChatMessages((prev) => [
+          ...prev,
+          { id: Date.now() + 1, role: "assistant", content: "401 エラー: APIキー不足、または無効です。" },
+        ]);
         setResult(null);
         return;
       }
 
       if (response.status === 503) {
         setError("503: service_unavailable（バックエンド処理を実行できません）。");
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "assistant",
+            content: "503 エラー: service_unavailable（バックエンド処理を実行できません）。",
+          },
+        ]);
         setResult(null);
         return;
       }
 
       if (!response.ok) {
         const bodyText = await response.text();
-        setError(`HTTP ${response.status}: ${bodyText || "unknown error"}`);
+        const nextError = `HTTP ${response.status}: ${bodyText || "unknown error"}`;
+        setError(nextError);
+        setChatMessages((prev) => [
+          ...prev,
+          { id: Date.now() + 1, role: "assistant", content: nextError },
+        ]);
         setResult(null);
         return;
       }
@@ -158,18 +201,40 @@ export default function DecisionConsolePage(): JSX.Element {
       const payload: unknown = await response.json();
       if (!isDecideResponse(payload)) {
         setError("schema不一致: レスポンスがオブジェクトではありません。");
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "assistant",
+            content: "schema不一致: レスポンスがオブジェクトではありません。",
+          },
+        ]);
         setResult(null);
         return;
       }
 
       setResult(payload);
+      setChatMessages((prev) => [
+        ...prev,
+        { id: Date.now() + 1, role: "assistant", content: toAssistantMessage(payload) },
+      ]);
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content: "ネットワークエラー: バックエンドへ接続できません。",
+        },
+      ]);
       setResult(null);
     } finally {
       setLoading(false);
     }
   };
+
+  const hasMessages = useMemo(() => chatMessages.length > 0, [chatMessages]);
 
   return (
     <div className="space-y-6">
@@ -182,7 +247,30 @@ export default function DecisionConsolePage(): JSX.Element {
         </p>
       </Card>
 
-      <Card title="Request" className="bg-background/75">
+      <Card title="Chat" className="bg-background/75">
+        <div className="mb-4 rounded-md border border-border bg-background/60 p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">チャット履歴</p>
+          {hasMessages ? (
+            <ul className="space-y-2" aria-label="chat messages">
+              {chatMessages.map((message) => (
+                <li
+                  key={message.id}
+                  className={`max-w-[90%] whitespace-pre-wrap rounded-md px-3 py-2 text-sm ${
+                    message.role === "user"
+                      ? "ml-auto bg-primary/20 text-foreground"
+                      : "mr-auto border border-border bg-background text-foreground"
+                  }`}
+                >
+                  <p className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">{message.role}</p>
+                  {message.content}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">まだメッセージはありません。</p>
+          )}
+        </div>
+
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -213,12 +301,12 @@ export default function DecisionConsolePage(): JSX.Element {
           </label>
 
           <label className="block space-y-1 text-xs">
-            <span className="font-medium">query</span>
+            <span className="font-medium">message</span>
             <textarea
               className="min-h-28 w-full rounded-md border border-border bg-background px-2 py-2"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="意思決定したい問いを入力"
+              placeholder="メッセージを入力"
             />
           </label>
 
@@ -240,7 +328,7 @@ export default function DecisionConsolePage(): JSX.Element {
           </div>
 
           <Button type="submit" disabled={loading}>
-            {loading ? "実行中..." : "実行"}
+            {loading ? "送信中..." : "送信"}
           </Button>
 
           {error ? (
