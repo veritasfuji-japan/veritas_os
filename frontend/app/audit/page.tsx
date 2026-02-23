@@ -330,6 +330,9 @@ export default function TrustLogExplorerPage(): JSX.Element {
     URL.revokeObjectURL(objectUrl);
   };
 
+  /**
+   * Builds a printable report using DOM APIs only to avoid HTML injection risks.
+   */
   const generatePdfReport = (): void => {
     const report = createRegulatoryReport();
     if (!report) {
@@ -342,32 +345,91 @@ export default function TrustLogExplorerPage(): JSX.Element {
       return;
     }
 
-    const rows = report.pipelineStageSummary
-      .map((row) => `<tr><td>${row.stage}</td><td>${row.count}</td><td>${row.passCount}</td></tr>`)
-      .join("");
+    const documentTitle = printWindow.document.createElement("title");
+    documentTitle.textContent = "Regulatory Report";
+    printWindow.document.head.appendChild(documentTitle);
 
-    printWindow.document.write(`
-      <html>
-        <head><title>Regulatory Report</title></head>
-        <body style="font-family: Arial, sans-serif; padding: 20px;">
-          <h1>Regulatory Report Generator</h1>
-          <p>Generated At: ${report.generatedAt}</p>
-          <p>Period: ${report.period.startDate} to ${report.period.endDate}</p>
-          <h2>Decision Pipeline Throughput</h2>
-          <table border="1" cellspacing="0" cellpadding="6">
-            <thead><tr><th>Stage</th><th>Count</th><th>Pass Count</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-          <h2>FUJI Gate Rejection Rate</h2>
-          <p>${report.fujiGate.rejected} / ${report.fujiGate.totalEvaluations} (${(report.fujiGate.rejectionRate * 100).toFixed(1)}%)</p>
-          <h2>TrustLog Integrity Proof</h2>
-          <p>Checked Links: ${report.trustLogIntegrity.checkedLinks}</p>
-          <p>Mismatches: ${report.trustLogIntegrity.mismatchLinks}</p>
-          <p>Chain Intact: ${String(report.trustLogIntegrity.chainIntact)}</p>
-          <p style="margin-top: 20px; font-size: 12px; color: #8a8a8a;">Security note: Reports may contain sensitive audit metadata. Handle under your compliance policy.</p>
-        </body>
-      </html>
-    `);
+    const container = printWindow.document.createElement("main");
+    container.style.fontFamily = "Arial, sans-serif";
+    container.style.padding = "20px";
+
+    const title = printWindow.document.createElement("h1");
+    title.textContent = "Regulatory Report Generator";
+    container.appendChild(title);
+
+    const generatedAt = printWindow.document.createElement("p");
+    generatedAt.textContent = `Generated At: ${report.generatedAt}`;
+    container.appendChild(generatedAt);
+
+    const period = printWindow.document.createElement("p");
+    period.textContent = `Period: ${report.period.startDate} to ${report.period.endDate}`;
+    container.appendChild(period);
+
+    const pipelineTitle = printWindow.document.createElement("h2");
+    pipelineTitle.textContent = "Decision Pipeline Throughput";
+    container.appendChild(pipelineTitle);
+
+    const table = printWindow.document.createElement("table");
+    table.setAttribute("border", "1");
+    table.setAttribute("cellspacing", "0");
+    table.setAttribute("cellpadding", "6");
+
+    const tableHead = printWindow.document.createElement("thead");
+    const headerRow = printWindow.document.createElement("tr");
+    ["Stage", "Count", "Pass Count"].forEach((headerLabel) => {
+      const cell = printWindow.document.createElement("th");
+      cell.textContent = headerLabel;
+      headerRow.appendChild(cell);
+    });
+    tableHead.appendChild(headerRow);
+
+    const tableBody = printWindow.document.createElement("tbody");
+    report.pipelineStageSummary.forEach((row) => {
+      const tableRow = printWindow.document.createElement("tr");
+      [row.stage, String(row.count), String(row.passCount)].forEach((value) => {
+        const cell = printWindow.document.createElement("td");
+        cell.textContent = value;
+        tableRow.appendChild(cell);
+      });
+      tableBody.appendChild(tableRow);
+    });
+
+    table.appendChild(tableHead);
+    table.appendChild(tableBody);
+    container.appendChild(table);
+
+    const fujiTitle = printWindow.document.createElement("h2");
+    fujiTitle.textContent = "FUJI Gate Rejection Rate";
+    container.appendChild(fujiTitle);
+
+    const fujiParagraph = printWindow.document.createElement("p");
+    fujiParagraph.textContent = `${report.fujiGate.rejected} / ${report.fujiGate.totalEvaluations} (${(report.fujiGate.rejectionRate * 100).toFixed(1)}%)`;
+    container.appendChild(fujiParagraph);
+
+    const integrityTitle = printWindow.document.createElement("h2");
+    integrityTitle.textContent = "TrustLog Integrity Proof";
+    container.appendChild(integrityTitle);
+
+    const checkedLinks = printWindow.document.createElement("p");
+    checkedLinks.textContent = `Checked Links: ${report.trustLogIntegrity.checkedLinks}`;
+    container.appendChild(checkedLinks);
+
+    const mismatches = printWindow.document.createElement("p");
+    mismatches.textContent = `Mismatches: ${report.trustLogIntegrity.mismatchLinks}`;
+    container.appendChild(mismatches);
+
+    const chainIntact = printWindow.document.createElement("p");
+    chainIntact.textContent = `Chain Intact: ${String(report.trustLogIntegrity.chainIntact)}`;
+    container.appendChild(chainIntact);
+
+    const securityNote = printWindow.document.createElement("p");
+    securityNote.style.marginTop = "20px";
+    securityNote.style.fontSize = "12px";
+    securityNote.style.color = "#8a8a8a";
+    securityNote.textContent = "Security note: Reports may contain sensitive audit metadata. Handle under your compliance policy.";
+    container.appendChild(securityNote);
+
+    printWindow.document.body.appendChild(container);
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();

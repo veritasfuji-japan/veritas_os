@@ -193,4 +193,68 @@ describe("TrustLogExplorerPage", () => {
     URL.revokeObjectURL = originalRevokeObjectURL;
     clickMock.mockRestore();
   });
+
+
+  it("generates printable report without using HTML string injection", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            request_id: "req-safe-1",
+            stage: "fuji",
+            status: "allow",
+            created_at: "2026-02-12T10:00:00Z",
+            sha256: "cccccccccccccccccccccccccccccccc",
+            sha256_prev: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          },
+          {
+            request_id: "req-safe-2",
+            stage: "planner",
+            status: "approved",
+            created_at: "2026-02-11T10:00:00Z",
+            sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            sha256_prev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    const printDocument = document.implementation.createHTMLDocument("report");
+    const printMock = vi.fn();
+    const focusMock = vi.fn();
+    vi.spyOn(window, "open").mockReturnValue({
+      document: printDocument,
+      focus: focusMock,
+      print: printMock,
+    } as unknown as Window);
+
+    render(<TrustLogExplorerPage />);
+
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/表示件数: 2/)).toBeInTheDocument();
+    });
+
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    fireEvent.change(dateInputs[0], { target: { value: "2026-02-10" } });
+    fireEvent.change(dateInputs[1], { target: { value: "2026-02-12" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "PDF生成" }));
+
+    await waitFor(() => {
+      expect(printMock).toHaveBeenCalledTimes(1);
+    });
+    expect(focusMock).toHaveBeenCalledTimes(1);
+    expect(printDocument.body.textContent).toContain("Regulatory Report Generator");
+  });
+
 });
