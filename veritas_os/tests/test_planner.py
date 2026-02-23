@@ -268,6 +268,17 @@ def test_safe_json_extract_step_object_attempt_limit(caplog):
     assert any("extraction attempt limit reached" in rec.message for rec in caplog.records)
 
 
+def test_safe_parse_limits_fenced_block_scan_attempts(caplog):
+    block = "```json\n{\"steps\": [}\n```"
+    raw = "\n".join([block] * (planner_core._MAX_FENCED_BLOCK_SCAN_ATTEMPTS + 10))
+
+    with caplog.at_level("WARNING"):
+        obj = planner_core._safe_parse(raw)
+
+    assert obj["steps"] == []
+    assert any("fenced JSON scan limit reached" in rec.message for rec in caplog.records)
+
+
 # -------------------------------
 # _fallback_plan / _infer_veritas_stage / _fallback_plan_for_stage
 # -------------------------------
