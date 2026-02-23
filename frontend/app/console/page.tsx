@@ -93,6 +93,139 @@ interface ChatMessage {
   content: string;
 }
 
+interface StepAnalytics {
+  name: string;
+  executed: boolean;
+  uncertaintyBefore: number | null;
+  uncertaintyAfter: number | null;
+  tokenCost: number | null;
+  inferred: boolean;
+}
+
+interface CostBenefitAnalytics {
+  steps: StepAnalytics[];
+  totalTokenCost: number;
+  uncertaintyReduction: number | null;
+  inferred: boolean;
+}
+
+/**
+ * Parse unknown numeric input into finite number when available.
+ */
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Estimate a baseline uncertainty from known response fields.
+ */
+function inferBaseUncertainty(result: DecideResponse): number {
+  const chosen = result.chosen ?? {};
+  const uncertainty = toFiniteNumber((chosen as Record<string, unknown>).uncertainty);
+  if (uncertainty !== null) {
+    return Math.min(1, Math.max(0, uncertainty));
+  }
+
+  const confidence = toFiniteNumber((chosen as Record<string, unknown>).confidence);
+  if (confidence !== null) {
+    return Math.min(1, Math.max(0, 1 - confidence));
+  }
+
+  const risk = toFiniteNumber((result.gate as Record<string, unknown>).risk);
+  if (risk !== null) {
+    return Math.min(1, Math.max(0.1, risk));
+  }
+
+  return 0.6;
+}
+
+/**
+ * Build cost-benefit analytics from backend payload, falling back to inferred values.
+ */
+function buildCostBenefitAnalytics(result: DecideResponse): CostBenefitAnalytics {
+  const extras = (result.extras ?? {}) as Record<string, unknown>;
+  const rawAnalytics = extras.cost_benefit_analytics;
+
+  if (rawAnalytics && typeof rawAnalytics === "object") {
+    const asMap = rawAnalytics as Record<string, unknown>;
+    const rawSteps = Array.isArray(asMap.steps) ? asMap.steps : [];
+    const steps: StepAnalytics[] = rawSteps.map((step) => {
+      const item = (step ?? {}) as Record<string, unknown>;
+      return {
+        name: typeof item.name === "string" ? item.name : "Unknown",
+        executed: item.executed !== false,
+        uncertaintyBefore: toFiniteNumber(item.uncertainty_before),
+        uncertaintyAfter: toFiniteNumber(item.uncertainty_after),
+        tokenCost: toFiniteNumber(item.token_cost),
+        inferred: false,
+      };
+    });
+
+    const totalTokenCost = toFiniteNumber(asMap.total_token_cost) ?? 0;
+    const uncertaintyReduction = toFiniteNumber(asMap.uncertainty_reduction);
+    return {
+      steps,
+      totalTokenCost,
+      uncertaintyReduction,
+      inferred: false,
+    };
+  }
+
+  const baseline = inferBaseUncertainty(result);
+  const evidenceCount = toArray(result.evidence).length;
+  const critiqueCount = toArray(result.critique).length;
+  const debateCount = toArray(result.debate).length;
+  const hasGate = Boolean((result.gate as Record<string, unknown>).decision_status);
+
+  const tokenByStage = {
+    Evidence: evidenceCount > 0 ? 180 : 0,
+    Critique: critiqueCount > 0 ? 220 : 0,
+    Debate: debateCount > 0 ? 420 : 0,
+    "FUJI Gate": hasGate ? 120 : 0,
+  };
+  const reductionByStage = {
+    Evidence: evidenceCount > 0 ? 0.08 : 0,
+    Critique: critiqueCount > 0 ? 0.06 : 0,
+    Debate: debateCount > 0 ? 0.12 : 0,
+    "FUJI Gate": hasGate ? 0.1 : 0,
+  };
+
+  const orderedStages = ["Evidence", "Critique", "Debate", "FUJI Gate"] as const;
+  let current = baseline;
+  const steps: StepAnalytics[] = orderedStages.map((name) => {
+    const before = current;
+    const reduction = reductionByStage[name];
+    current = Math.max(0.03, before - reduction);
+    const executed = tokenByStage[name] > 0;
+    return {
+      name,
+      executed,
+      uncertaintyBefore: executed ? before : null,
+      uncertaintyAfter: executed ? current : null,
+      tokenCost: executed ? tokenByStage[name] : null,
+      inferred: true,
+    };
+  });
+
+  return {
+    steps,
+    totalTokenCost: steps.reduce((acc, step) => acc + (step.tokenCost ?? 0), 0),
+    uncertaintyReduction: Math.max(0, baseline - current),
+    inferred: true,
+  };
+}
+
 /**
  * Builds a human-readable assistant message from decide API payload.
  */
@@ -115,6 +248,63 @@ function ResultSection({ title, value }: SectionProps): JSX.Element {
       <pre className="overflow-x-auto rounded-md border border-border bg-background/70 p-3 text-xs text-foreground">
         {renderValue(value)}
       </pre>
+    </section>
+  );
+}
+
+function CostBenefitPanel({ result }: { result: DecideResponse }): JSX.Element {
+  const analytics = useMemo(() => buildCostBenefitAnalytics(result), [result]);
+
+  return (
+    <section className="space-y-3 rounded-md border border-border bg-background/60 p-3" aria-label="cost-benefit analytics">
+      <h3 className="text-sm font-semibold text-foreground">Cost-Benefit Analytics</h3>
+      <p className="text-xs text-muted-foreground">
+        Uncertainty reduction and token spend per heavy pipeline step.
+      </p>
+      {analytics.inferred ? (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">
+          推定表示: バックエンドの cost_benefit_analytics が未提供のため、レスポンス内容から概算しています。
+        </p>
+      ) : null}
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-left text-xs text-foreground">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th className="px-2 py-1">Step</th>
+              <th className="px-2 py-1">Executed</th>
+              <th className="px-2 py-1">Δ Uncertainty</th>
+              <th className="px-2 py-1">Token Cost</th>
+            </tr>
+          </thead>
+          <tbody>
+            {analytics.steps.map((step) => {
+              const delta = step.uncertaintyBefore !== null && step.uncertaintyAfter !== null
+                ? step.uncertaintyBefore - step.uncertaintyAfter
+                : null;
+              return (
+                <tr key={step.name} className="border-b border-border/50">
+                  <td className="px-2 py-1 font-medium">{step.name}</td>
+                  <td className="px-2 py-1">{step.executed ? "Yes" : "No"}</td>
+                  <td className="px-2 py-1">{delta !== null ? `${(delta * 100).toFixed(1)}%` : "-"}</td>
+                  <td className="px-2 py-1">{step.tokenCost !== null ? step.tokenCost.toLocaleString() : "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="rounded-md border border-border bg-background/80 p-2">
+          <p className="text-[11px] text-muted-foreground">Total Token Cost</p>
+          <p className="text-sm font-semibold text-foreground">{analytics.totalTokenCost.toLocaleString()}</p>
+        </div>
+        <div className="rounded-md border border-border bg-background/80 p-2">
+          <p className="text-[11px] text-muted-foreground">Uncertainty Reduction</p>
+          <p className="text-sm font-semibold text-foreground">
+            {analytics.uncertaintyReduction !== null ? `${(analytics.uncertaintyReduction * 100).toFixed(1)}%` : "-"}
+          </p>
+        </div>
+      </div>
     </section>
   );
 }
@@ -364,6 +554,7 @@ export default function DecisionConsolePage(): JSX.Element {
                 debate: toArray(result.debate),
               }}
             />
+            <CostBenefitPanel result={result} />
             <ResultSection
               title="telos_score/values"
               value={{ telos_score: result.telos_score, values: result.values }}

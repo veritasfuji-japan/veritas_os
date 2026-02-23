@@ -72,9 +72,74 @@ describe("DecisionConsolePage", () => {
     await waitFor(() => {
       expect(screen.getByText("decision_status / chosen")).toBeInTheDocument();
       expect(screen.getByText("memory_citations / memory_used_count")).toBeInTheDocument();
+      expect(screen.getByText("Cost-Benefit Analytics")).toBeInTheDocument();
+      expect(screen.getByText("Total Token Cost")).toBeInTheDocument();
       expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
       expect(screen.getByText("user")).toBeInTheDocument();
       expect(screen.getByText("assistant")).toBeInTheDocument();
+    });
+  });
+
+  it("uses backend provided cost_benefit_analytics when available", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        error: null,
+        request_id: "req-002",
+        version: "1.0",
+        decision_status: "allow",
+        rejection_reason: null,
+        chosen: { id: "a2", uncertainty: 0.45 },
+        alternatives: [{ id: "a2" }],
+        options: [{ id: "a2" }],
+        fuji: { decision_status: "allow" },
+        gate: { decision_status: "allow", risk: 0.4 },
+        evidence: [{ source: "doc" }],
+        critique: [{ issue: "x" }],
+        debate: [{ stance: "pro" }],
+        telos_score: 0.8,
+        values: { utility: 0.7 },
+        plan: null,
+        planner: null,
+        persona: {},
+        memory_citations: [],
+        memory_used_count: 0,
+        trust_log: null,
+        extras: {
+          cost_benefit_analytics: {
+            steps: [
+              {
+                name: "Debate",
+                executed: true,
+                uncertainty_before: 0.45,
+                uncertainty_after: 0.28,
+                token_cost: 520,
+              },
+            ],
+            total_token_cost: 520,
+            uncertainty_reduction: 0.17,
+          },
+        },
+      }),
+    } as Response);
+
+    render(<DecisionConsolePage />);
+
+    fireEvent.change(screen.getByPlaceholderText("API key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+      target: { value: "A/B test" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Debate").length).toBeGreaterThan(1);
+      expect(screen.getAllByText("520").length).toBeGreaterThan(1);
+      expect(screen.getAllByText("17.0%").length).toBeGreaterThan(1);
     });
   });
 });
