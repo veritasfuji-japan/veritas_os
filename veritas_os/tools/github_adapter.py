@@ -141,13 +141,31 @@ def _normalize_repo_item(item: dict) -> dict:
             stars = 0
 
     html_url = _sanitize_html_url(item.get("html_url"))
+    full_name = _sanitize_text_field(item.get("full_name"), max_len=256)
+    description = _sanitize_text_field(item.get("description"), max_len=1024)
 
     return {
-        "full_name": str(item.get("full_name") or ""),
+        "full_name": full_name,
         "html_url": html_url,
-        "description": str(item.get("description") or ""),
+        "description": description,
         "stars": stars,
     }
+
+
+def _sanitize_text_field(raw_value: object, *, max_len: int) -> str:
+    """Return a bounded string with ASCII control characters removed.
+
+    Security policy:
+        GitHub metadata is external input and may contain control characters
+        (e.g. terminal escape fragments). This sanitizer strips such bytes,
+        collapses whitespace, and enforces a maximum length before values are
+        returned to callers or logs.
+    """
+    value = _RE_CONTROL_CHARS.sub(" ", str(raw_value or ""))
+    value = " ".join(value.split())
+    if len(value) > max_len:
+        return value[:max_len]
+    return value
 
 
 def _sanitize_html_url(raw_url: object) -> str:
