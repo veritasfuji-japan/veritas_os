@@ -44,6 +44,11 @@ export function LiveEventStream(): JSX.Element {
 
   const streamUrl = useMemo(() => buildEventUrl(apiBase, apiKey), [apiBase, apiKey]);
   const hasInvalidApiBase = apiBase.trim().length > 0 && streamUrl === null;
+  const streamStatus = hasInvalidApiBase
+    ? "🔴 invalid url"
+    : connected
+      ? "🟢 connected"
+      : "🟡 reconnecting";
 
   useEffect(() => {
     if (!streamUrl) {
@@ -58,6 +63,10 @@ export function LiveEventStream(): JSX.Element {
       if (!mounted) {
         return;
       }
+      if (reconnectRef.current) {
+        clearTimeout(reconnectRef.current);
+      }
+
       source = new EventSource(streamUrl);
 
       source.onopen = () => {
@@ -108,13 +117,15 @@ export function LiveEventStream(): JSX.Element {
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
             placeholder="X-API-Key"
+            type="password"
+            autoComplete="off"
             className="rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground"
           />
         </label>
       </div>
 
       <p className="mb-2 text-xs text-muted-foreground">
-        Status: {connected ? "🟢 connected" : "🟡 reconnecting"}
+        Status: <span aria-live="polite">{streamStatus}</span>
       </p>
       {hasInvalidApiBase ? (
         <p className="mb-2 text-xs text-destructive">有効な API Base URL を入力してください。</p>
@@ -124,6 +135,16 @@ export function LiveEventStream(): JSX.Element {
           Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.
         </p>
       ) : null}
+
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => setEvents([])}
+          className="rounded-md border border-border/80 bg-background px-3 py-1 text-xs text-foreground hover:border-primary/70"
+        >
+          Clear events
+        </button>
+      </div>
 
       <div className="max-h-72 space-y-2 overflow-auto pr-1">
         {events.length === 0 ? (
