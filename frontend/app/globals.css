@@ -8,7 +8,8 @@
 
 body {
   background:
-    radial-gradient(circle at top, hsl(var(--ds-color-primary) / 0.18), transparent 56%),
+    radial-gradient(circle at 8% 0%, hsl(var(--ds-color-primary) / 0.22), transparent 38%),
+    radial-gradient(circle at 85% 12%, hsl(var(--ds-color-primary) / 0.1), transparent 42%),
     hsl(var(--ds-color-background));
   color: hsl(var(--ds-color-foreground));
   font-family: var(--ds-font-sans);
@@ -23,6 +24,14 @@ body {
     grid-template-columns: 280px 1fr;
     grid-template-rows: auto 1fr;
   }
+}
+
+::selection {
+  background: hsl(var(--ds-color-primary) / 0.2);
+}
+
+a {
+  color: inherit;
 }
 
 code,
