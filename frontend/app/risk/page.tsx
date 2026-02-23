@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@veritas/design-system";
+import { useI18n } from "../../components/i18n-provider";
 import { useEffect, useMemo, useState } from "react";
 
 interface RiskPoint {
@@ -55,6 +56,7 @@ function toChartCoordinate(value: number): number {
 }
 
 export default function RiskIntelligencePage(): JSX.Element {
+  const { t, language } = useI18n();
   const [points, setPoints] = useState<RiskPoint[]>(() => createInitialPoints(Date.now()));
   const [now, setNow] = useState<number>(Date.now());
 
@@ -91,8 +93,7 @@ export default function RiskIntelligencePage(): JSX.Element {
     <div className="space-y-6">
       <Card title="Risk Intelligence" className="border-border/70 bg-surface/85 p-1 shadow-sm">
         <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-          過去24時間の全リクエストを不確実性（横軸）と潜在的リスク（縦軸）でリアルタイム可視化します。
-          危険なクラスタリングを検知するとアラートを表示し、予防的な統治判断を支援します。
+          {t("過去24時間の全リクエストを不確実性（横軸）と潜在的リスク（縦軸）でリアルタイム可視化します。危険なクラスタリングを検知するとアラートを表示し、予防的な統治判断を支援します。", "Visualize all requests from the last 24 hours in real time by uncertainty (x-axis) and potential risk (y-axis). When dangerous clustering is detected, alerts support proactive governance decisions.")}
         </p>
       </Card>
 
@@ -118,7 +119,7 @@ export default function RiskIntelligencePage(): JSX.Element {
               </span>
             </div>
             <span className="text-xs text-muted-foreground" aria-live="polite">
-              Last update: {new Date(now).toLocaleTimeString("ja-JP", { hour12: false })}
+              Last update: {new Date(now).toLocaleTimeString(language === "ja" ? "ja-JP" : "en-US", { hour12: false })}
             </span>
           </div>
 
