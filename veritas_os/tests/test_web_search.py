@@ -119,6 +119,16 @@ def test_normalize_result_item_rejects_url_without_hostname() -> None:
     assert web_search_mod._normalize_result_item(item) is None
 
 
+def test_normalize_result_item_rejects_missing_url() -> None:
+    """URL が無い検索結果は後続処理を不安定にするため除外する。"""
+    item = {
+        "title": "title only",
+        "snippet": "snippet only",
+    }
+
+    assert web_search_mod._normalize_result_item(item) is None
+
+
 def test_normalize_result_item_truncates_long_fields(_bypass_ssrf) -> None:
     """検索結果の各フィールドは上限長で切り詰める。"""
     item = {

@@ -580,6 +580,7 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     """外部APIの検索結果1件を安全に正規化する。
 
     Security note:
+        - URL が空の検索結果は除外する。
         - URL は http/https スキームのみ許可する。
         - URL に hostname が無いものや userinfo を含むものは除外する。
         - localhost/private IP など内部向けURLは除外する。
@@ -589,16 +590,18 @@ def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
     raw_url = item.get("link") or item.get("url") or ""
     url = _normalize_str(raw_url, limit=2048).strip()
 
-    if url:
-        parsed_url = urlparse(url)
-        if parsed_url.scheme not in ("http", "https"):
-            return None
-        if not parsed_url.hostname:
-            return None
-        if parsed_url.username or parsed_url.password:
-            return None
-        if _is_private_or_local_host(parsed_url.hostname):
-            return None
+    if not url:
+        return None
+
+    parsed_url = urlparse(url)
+    if parsed_url.scheme not in ("http", "https"):
+        return None
+    if not parsed_url.hostname:
+        return None
+    if parsed_url.username or parsed_url.password:
+        return None
+    if _is_private_or_local_host(parsed_url.hostname):
+        return None
 
     title = _normalize_str(item.get("title") or "", limit=512)
     snippet = _normalize_str(item.get("snippet") or item.get("description") or "", limit=2048)
