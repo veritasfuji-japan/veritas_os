@@ -43,7 +43,7 @@ describe("DecisionConsolePage", () => {
         options: [{ id: "a1" }],
         fuji: { decision_status: "allow" },
         gate: { decision_status: "allow" },
-        evidence: [{ source: "doc" }],
+        evidence: [{ source: "doc", snippet: "s", confidence: 0.9 }],
         critique: [],
         debate: [],
         telos_score: 0.9,
@@ -80,6 +80,57 @@ describe("DecisionConsolePage", () => {
     });
   });
 
+
+
+  it("shows governance drift alert when threshold is exceeded", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        error: null,
+        request_id: "req-003",
+        version: "1.0",
+        decision_status: "modify",
+        rejection_reason: null,
+        chosen: { id: "a3" },
+        alternatives: [{ id: "a3" }],
+        options: [{ id: "a3" }],
+        fuji: { decision_status: "allow" },
+        gate: { decision_status: "modify", risk: 0.8 },
+        evidence: [{ source: "doc", snippet: "s", confidence: 0.9 }],
+        critique: [],
+        debate: [],
+        telos_score: 0.6,
+        values: { valuecore_drift: 12.5 },
+        plan: null,
+        planner: null,
+        persona: {},
+        memory_citations: [],
+        memory_used_count: 0,
+        trust_log: null,
+        extras: {},
+      }),
+    } as Response);
+
+    render(<DecisionConsolePage />);
+
+    fireEvent.change(screen.getByPlaceholderText("API key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+      target: { value: "governance drift" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "送信" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "1 Issue" })).toBeInTheDocument();
+      expect(screen.getByText("Drift Alert")).toBeInTheDocument();
+      expect(screen.getByText("ValueCoreの乖離が閾値を超えました。レビューを推奨します。")).toBeInTheDocument();
+    });
+  });
+
   it("uses backend provided cost_benefit_analytics when available", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({
       ok: true,
@@ -96,7 +147,7 @@ describe("DecisionConsolePage", () => {
         options: [{ id: "a2" }],
         fuji: { decision_status: "allow" },
         gate: { decision_status: "allow", risk: 0.4 },
-        evidence: [{ source: "doc" }],
+        evidence: [{ source: "doc", snippet: "s", confidence: 0.9 }],
         critique: [{ issue: "x" }],
         debate: [{ stance: "pro" }],
         telos_score: 0.8,

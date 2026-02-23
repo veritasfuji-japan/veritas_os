@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button, Card } from "@veritas/design-system";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
 import { useI18n } from "../../components/i18n-provider";
@@ -64,6 +64,43 @@ function toArray(value: unknown): unknown[] {
 }
 
 function PipelineVisualizer(): JSX.Element {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [stageStatuses, setStageStatuses] = useState<Record<string, "idle" | "pass" | "adjusted">>(
+    () => Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage, "idle"])) as Record<string, "idle" | "pass" | "adjusted">,
+  );
+
+  useEffect(() => {
+    let index = 0;
+    const intervalId = setInterval(() => {
+      setActiveIndex(index);
+      setStageStatuses((prev) => {
+        const next = { ...prev };
+        const currentStage = PIPELINE_STAGES[index];
+        if (currentStage) {
+          next[currentStage] = currentStage === "Critique" || currentStage === "Value" ? "adjusted" : "pass";
+        }
+        return next;
+      });
+
+      index += 1;
+      if (index >= PIPELINE_STAGES.length) {
+        index = 0;
+        setTimeout(() => {
+          setStageStatuses(
+            Object.fromEntries(PIPELINE_STAGES.map((stage) => [stage, "idle"])) as Record<
+              string,
+              "idle" | "pass" | "adjusted"
+            >,
+          );
+        }, 500);
+      }
+    }, 900);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, []);
+
   return (
     <section aria-label="pipeline visualizer" className="space-y-2">
       <h2 className="text-sm font-semibold text-foreground">Pipeline Visualizer</h2>
@@ -71,10 +108,18 @@ function PipelineVisualizer(): JSX.Element {
         {PIPELINE_STAGES.map((stage, index) => (
           <li
             key={stage}
-            className="rounded-md border border-primary/40 bg-primary/10 px-2 py-2 text-center text-foreground"
+            className={[
+              "rounded-md border px-2 py-2 text-center text-foreground transition-all duration-300",
+              activeIndex === index ? "animate-pulse border-primary/60 bg-primary/15" : "border-border bg-background/60",
+              stageStatuses[stage] === "pass" ? "border-emerald-500/50 bg-emerald-500/10" : "",
+              stageStatuses[stage] === "adjusted" ? "border-amber-500/50 bg-amber-500/10" : "",
+            ].join(" ")}
           >
             <span className="mr-1 text-muted-foreground">{index + 1}.</span>
             {stage}
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              {stageStatuses[stage] === "pass" ? "green" : stageStatuses[stage] === "adjusted" ? "yellow" : "idle"}
+            </p>
           </li>
         ))}
       </ol>
@@ -318,6 +363,49 @@ export default function DecisionConsolePage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DecideResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [showDriftAlert, setShowDriftAlert] = useState(false);
+  const driftAlertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const governanceDriftAlert = useMemo(() => {
+    if (!result) {
+      return null;
+    }
+
+    const values = (result.values ?? {}) as Record<string, unknown>;
+    const driftScore = toFiniteNumber(values.valuecore_drift) ?? toFiniteNumber(values.value_drift);
+    const gate = (result.gate ?? {}) as Record<string, unknown>;
+    const risk = toFiniteNumber(gate.risk);
+
+    if ((driftScore ?? 0) >= 10 || (risk ?? 0) >= 0.7) {
+      return {
+        title: "1 Issue",
+        description: "ValueCoreの乖離が閾値を超えました。レビューを推奨します。",
+      };
+    }
+
+    return null;
+  }, [result]);
+
+  useEffect(() => {
+    if (!governanceDriftAlert) {
+      setShowDriftAlert(false);
+      if (driftAlertTimerRef.current) {
+        clearTimeout(driftAlertTimerRef.current);
+      }
+      return;
+    }
+
+    setShowDriftAlert(true);
+    driftAlertTimerRef.current = setTimeout(() => {
+      setShowDriftAlert(false);
+    }, 8000);
+
+    return () => {
+      if (driftAlertTimerRef.current) {
+        clearTimeout(driftAlertTimerRef.current);
+      }
+    };
+  }, [governanceDriftAlert]);
 
   const runDecision = async (nextQuery?: string): Promise<void> => {
     const queryToUse = (nextQuery ?? query).trim();
@@ -530,6 +618,24 @@ export default function DecisionConsolePage(): JSX.Element {
       </Card>
 
       <PipelineVisualizer />
+
+      {governanceDriftAlert ? (
+        <div className="fixed bottom-4 left-4 z-40 flex flex-col gap-2">
+          <button
+            type="button"
+            className="w-fit rounded-full border border-amber-400/70 bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-200"
+            onClick={() => setShowDriftAlert((prev) => !prev)}
+          >
+            {governanceDriftAlert.title}
+          </button>
+          {showDriftAlert ? (
+            <aside role="alert" className="max-w-xs rounded-md border border-amber-400/60 bg-background/95 p-3 text-xs shadow-xl">
+              <p className="font-semibold text-amber-300">Drift Alert</p>
+              <p className="mt-1 text-foreground">{governanceDriftAlert.description}</p>
+            </aside>
+          ) : null}
+        </div>
+      ) : null}
 
       <Card title="Result" className="bg-background/75">
         {result ? (
