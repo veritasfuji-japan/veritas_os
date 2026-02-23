@@ -135,8 +135,8 @@ def _resolve_websearch_host_allowlist() -> set[str]:
         This resolver mirrors credential resolution so operators can update the
         allowlist without restarting the process.
     """
-    env_allowlist_raw = os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "")
-    if env_allowlist_raw.strip():
+    env_allowlist_raw = os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST")
+    if env_allowlist_raw is not None:
         return {
             host.strip().lower().rstrip(".")
             for host in env_allowlist_raw.split(",")

@@ -619,3 +619,20 @@ class TestWebSearchSsrfGuard:
 
         assert resp["ok"] is False
         assert resp["error"] == "WEBSEARCH_API unavailable"
+
+
+class TestWebSearchAllowlistResolution:
+    """Tests for runtime host allowlist resolution behavior."""
+
+    def test_empty_env_allowlist_overrides_module_default(self, monkeypatch):
+        monkeypatch.setattr(
+            web_search_mod,
+            "WEBSEARCH_HOST_ALLOWLIST",
+            {"api.allowed.example"},
+            raising=False,
+        )
+        monkeypatch.setenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "")
+
+        result = web_search_mod._resolve_websearch_host_allowlist()
+
+        assert result == set()
