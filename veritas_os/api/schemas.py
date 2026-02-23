@@ -323,6 +323,7 @@ class DecideRequest(BaseModel):
 
     @model_validator(mode="after")
     def _unify_options(self) -> "DecideRequest":
+        """Unify compatibility fields and record coercion observability events."""
         events: List[str] = []
 
         if "raw" in self.context:
@@ -571,6 +572,7 @@ class DecideResponse(BaseModel):
 
     @model_validator(mode="after")
     def _unify_and_sanitize(self) -> "DecideResponse":
+        """Normalize response payload and expose coercion metadata for audits."""
         events: List[str] = []
 
         # alternatives があって options が空ならミラー（互換）

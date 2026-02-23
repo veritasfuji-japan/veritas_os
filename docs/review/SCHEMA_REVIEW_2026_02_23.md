@@ -224,3 +224,40 @@
 ```
 
 `options` は互換のため受理されるが、新規実装では `alternatives` のみを利用する。
+
+---
+
+## 9. 実装反映メモ（2026-02-23 更新）
+
+Phase 1（観測強化）として、`veritas_os/api/schemas.py` に以下を反映済み。
+
+1. **coercion イベント可視化**
+   - `DecideRequest` / `DecideResponse` に `coercion_events` を追加。
+   - 代表イベント:
+     - `coercion.context_non_mapping`
+     - `coercion.options_to_alternatives`
+     - `coercion.alternatives_to_options`
+     - `coercion.request_extra_keys_allowed`
+     - `coercion.response_extra_keys_allowed`
+     - `coercion.trust_log_promotion_failed`
+
+2. **`extra="allow"` 受理時の警告ログ**
+   - request/response で未知キーを受け入れた際に warning を出力。
+   - 互換性を維持しつつ、仕様逸脱の早期発見をしやすくした。
+
+3. **レスポンス側の補正可視化**
+   - `DecideResponse.meta["x_coerced_fields"]` に coercion イベントを格納。
+   - FE/運用で「送信 payload と正規化結果の差分」を追跡可能。
+
+4. **`trust_log` 昇格失敗の監査シグナル**
+   - `dict -> TrustLog` 昇格に失敗した場合、raw を保持しつつ warning ログと
+     `coercion.trust_log_promotion_failed` を付与。
+
+### 未対応（継続課題）
+
+- ⚠️ **セキュリティ継続課題**: `extra="allow"` は依然として受理面積を広げるため、
+  Phase 3 の strict 化（warn → soft fail → forbid）が必要。
+- ⚠️ **セキュリティ継続課題**: HTTP body サイズ上限は API schema 外の責務であり、
+  Gateway/ASGI 側で明示設定が必要。
+- ⚠️ **運用継続課題**: coercion イベントの集計ダッシュボード化（endpoint 別、クライアント別）は
+  本書の提案どおり別途実装が必要。
