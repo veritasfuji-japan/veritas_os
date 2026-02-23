@@ -27,7 +27,6 @@ describe("TrustLogExplorerPage", () => {
 
     render(<TrustLogExplorerPage />);
 
-    // Set API key first (button is disabled without it)
     fireEvent.change(screen.getByLabelText("X-API-Key"), {
       target: { value: "test-key" },
     });
@@ -35,8 +34,6 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      // Stage names appear both in the timeline entries and the stage filter dropdown.
-      // Use getAllByText to handle the duplicate matches.
       expect(screen.getAllByText("value").length).toBeGreaterThanOrEqual(2);
       expect(screen.getAllByText("fuji").length).toBeGreaterThanOrEqual(2);
     });
@@ -70,4 +67,52 @@ describe("TrustLogExplorerPage", () => {
     });
   });
 
+  it("verifies hash chain and shows tamper-proof stamp", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            request_id: "req-100",
+            stage: "value_core",
+            created_at: "2026-02-12T00:00:00Z",
+            sha256: "cccccccccccccccccccccccccccccccc",
+            sha256_prev: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          },
+          {
+            request_id: "req-099",
+            stage: "planner",
+            created_at: "2026-02-11T00:00:00Z",
+            sha256: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            sha256_prev: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    render(<TrustLogExplorerPage />);
+
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/表示件数: 2/)).toBeInTheDocument();
+    });
+
+    const comboBoxes = screen.getAllByRole("combobox");
+    fireEvent.change(comboBoxes[1], {
+      target: { value: "req-100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "ハッシュチェーン検証" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("TAMPER-PROOF ✅")).toBeInTheDocument();
+    }, { timeout: 4000 });
+  });
 });
