@@ -392,7 +392,11 @@ def test_search_normalizes_min_sim_non_finite(memory_env):
     store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
 
     with open(files["episodic"], "w", encoding="utf-8") as f:
-        json.dump({"id": "high", "text": "high score", "tags": [], "meta": {}, "ts": 1.0}, f, ensure_ascii=False)
+        json.dump(
+            {"id": "high", "text": "high score", "tags": [], "meta": {}, "ts": 1.0},
+            f,
+            ensure_ascii=False,
+        )
         f.write("\n")
 
     ms = store.MemoryStore(dim=4)

@@ -382,7 +382,12 @@ class MemoryStore:
 
         return out
 
-    def put_episode(self, text: str, tags: Optional[List[str]] = None, meta: Optional[Dict[str, Any]] = None) -> str:
+    def put_episode(
+        self,
+        text: str,
+        tags: Optional[List[str]] = None,
+        meta: Optional[Dict[str, Any]] = None,
+    ) -> str:
         item = {
             "text": text,
             "tags": tags or ["episode"],
