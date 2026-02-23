@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 _MAX_JSON_EXTRACT_CHARS = 200_000
 _MAX_JSON_DECODE_ATTEMPTS = 512
 _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS = 512
+_MAX_FENCED_BLOCK_SCAN_ATTEMPTS = 128
 
 
 def _truncate_json_extract_input(raw: str) -> str:
@@ -491,19 +492,26 @@ def _safe_parse(raw: Any) -> Dict[str, Any]:
     if not s:
         return {"steps": []}
 
-    fence_matches = list(_FENCE_RE.finditer(s))
-    if fence_matches:
-        fallback_parsed: Optional[Dict[str, Any]] = None
-        for fence_match in fence_matches:
-            fenced = fence_match.group(1).strip()
-            parsed = _safe_json_extract_core(fenced)
-            if parsed.get("steps"):
-                return parsed
-            if fallback_parsed is None:
-                fallback_parsed = parsed
+    fallback_parsed: Optional[Dict[str, Any]] = None
+    fenced_attempts = 0
+    for fence_match in _FENCE_RE.finditer(s):
+        if fenced_attempts >= _MAX_FENCED_BLOCK_SCAN_ATTEMPTS:
+            logger.warning(
+                "planner fenced JSON scan limit reached (%d blocks)",
+                _MAX_FENCED_BLOCK_SCAN_ATTEMPTS,
+            )
+            break
 
-        if fallback_parsed is not None:
-            return fallback_parsed
+        fenced_attempts += 1
+        fenced = fence_match.group(1).strip()
+        parsed = _safe_json_extract_core(fenced)
+        if parsed.get("steps"):
+            return parsed
+        if fallback_parsed is None:
+            fallback_parsed = parsed
+
+    if fallback_parsed is not None:
+        return fallback_parsed
 
     return _safe_json_extract_core(s)
 
