@@ -2,35 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, type TrustLogItem } from "../../lib/api-validators";
 
 const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
 const PAGE_LIMIT = 50;
-
-interface TrustLogItem {
-  request_id?: string;
-  created_at?: string;
-  stage?: string;
-  sha256?: string;
-  sha256_prev?: string;
-  [key: string]: unknown;
-}
-
-interface TrustLogsResponse {
-  items: TrustLogItem[];
-  cursor: string;
-  next_cursor: string | null;
-  limit: number;
-  has_more: boolean;
-}
-
-interface RequestLogResponse {
-  request_id: string;
-  items: TrustLogItem[];
-  count: number;
-  chain_ok: boolean;
-  verification_result: string;
-}
 
 function toPrettyJson(value: unknown): string {
   try {
@@ -89,8 +65,12 @@ export default function TrustLogExplorerPage(): JSX.Element {
         return;
       }
 
-      const payload = (await response.json()) as TrustLogsResponse;
-      const nextItems = Array.isArray(payload.items) ? payload.items : [];
+      const payload: unknown = await response.json();
+      if (!isTrustLogsResponse(payload)) {
+        setError("レスポンス形式エラー: trust logs の形式が不正です。");
+        return;
+      }
+      const nextItems = payload.items;
       setItems((prev) => (replace ? nextItems : [...prev, ...nextItems]));
       setCursor(payload.next_cursor);
       setHasMore(Boolean(payload.has_more));
@@ -126,7 +106,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
         return;
       }
 
-      const payload = (await response.json()) as RequestLogResponse;
+      const payload: unknown = await response.json();
+      if (!isRequestLogResponse(payload)) {
+        setError("レスポンス形式エラー: request_id 応答の形式が不正です。");
+        return;
+      }
       setRequestResult(payload);
       if (payload.items.length > 0) {
         setSelected(payload.items[payload.items.length - 1]);

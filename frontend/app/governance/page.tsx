@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@veritas/design-system";
+import { isGovernancePolicyResponse } from "../../lib/api-validators";
 
 const DEFAULT_API_BASE =
   process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
@@ -278,6 +279,7 @@ export default function GovernanceControlPage(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const shouldAutoLoad = ENV_API_KEY.trim().length > 0;
 
   const hasChanges = useMemo(
     () => draft !== null && savedPolicy !== null && !deepEqual(savedPolicy, draft),
@@ -297,7 +299,11 @@ export default function GovernanceControlPage(): JSX.Element {
         setError(`HTTP ${res.status}: ポリシー取得に失敗しました。`);
         return;
       }
-      const body = (await res.json()) as { ok: boolean; policy: GovernancePolicy };
+      const body: unknown = await res.json();
+      if (!isGovernancePolicyResponse(body)) {
+        setError("レスポンス形式エラー: policy の形式が不正です。");
+        return;
+      }
       setSavedPolicy(body.policy);
       setDraft(structuredClone(body.policy));
     } catch {
@@ -326,7 +332,11 @@ export default function GovernanceControlPage(): JSX.Element {
         setError(`HTTP ${res.status}: ポリシー更新に失敗しました。`);
         return;
       }
-      const body = (await res.json()) as { ok: boolean; policy: GovernancePolicy };
+      const body: unknown = await res.json();
+      if (!isGovernancePolicyResponse(body)) {
+        setError("レスポンス形式エラー: policy の形式が不正です。");
+        return;
+      }
       setSavedPolicy(body.policy);
       setDraft(structuredClone(body.policy));
       setSuccess("ポリシーを更新しました。");
@@ -337,12 +347,17 @@ export default function GovernanceControlPage(): JSX.Element {
     }
   }, [apiBase, apiKey, draft]);
 
-  /* -- auto-load on mount if API key is pre-configured via env --
-     fetchPolicy is intentionally omitted from the dependency array: the
-     effect must run exactly once at mount, not on every apiBase/apiKey
-     change.  Manual re-fetches are done via the "ポリシーを読み込む" button. */
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (apiKey.trim()) void fetchPolicy(); }, []);
+  /* -- auto-load on mount if API key is pre-configured via env -- */
+  const didAutoLoadRef = useRef(false);
+
+  useEffect(() => {
+    if (didAutoLoadRef.current || !shouldAutoLoad) {
+      return;
+    }
+
+    didAutoLoadRef.current = true;
+    void fetchPolicy();
+  }, [fetchPolicy, shouldAutoLoad]);
 
   /* -- updater helpers -- */
   function updateFuji<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void {

@@ -204,4 +204,24 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByText("リセット"));
     expect(screen.getByText("変更はありません。")).toBeInTheDocument();
   });
+
+  it("shows validation error when policy response shape is invalid", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, policy: { updated_by: 123 } }),
+    } as Response);
+
+    render(<GovernanceControlPage />);
+
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.click(screen.getByText("ポリシーを読み込む"));
+
+    await waitFor(() => {
+      expect(screen.getByText("レスポンス形式エラー: policy の形式が不正です。")).toBeInTheDocument();
+    });
+  });
+
 });
