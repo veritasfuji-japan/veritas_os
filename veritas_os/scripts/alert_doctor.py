@@ -41,10 +41,15 @@ API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
 HEALTH_URL = f"{API_BASE}/health"
 MAX_HEAL_OUTPUT_CHARS = 400
 DEFAULT_HEAL_TIMEOUT_SEC = 60
+MAX_HEAL_TIMEOUT_SEC = 300
 
 
 def _resolve_heal_timeout_seconds() -> int:
-    """Return a safe timeout (seconds) for the self-heal subprocess."""
+    """Return a bounded timeout (seconds) for the self-heal subprocess.
+
+    The timeout is constrained to avoid accidental long-lived subprocesses
+    caused by malformed or extreme environment values.
+    """
     raw = os.getenv("VERITAS_HEAL_TIMEOUT_SEC", str(DEFAULT_HEAL_TIMEOUT_SEC))
     try:
         timeout_sec = int(raw)
@@ -52,6 +57,8 @@ def _resolve_heal_timeout_seconds() -> int:
         return DEFAULT_HEAL_TIMEOUT_SEC
     if timeout_sec <= 0:
         return DEFAULT_HEAL_TIMEOUT_SEC
+    if timeout_sec > MAX_HEAL_TIMEOUT_SEC:
+        return MAX_HEAL_TIMEOUT_SEC
     return timeout_sec
 
 
