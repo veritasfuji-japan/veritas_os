@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@veritas/design-system";
+import { useI18n } from "./i18n-provider";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
@@ -36,6 +37,7 @@ function buildEventUrl(apiBase: string, apiKey: string): string | null {
 }
 
 export function LiveEventStream(): JSX.Element {
+  const { t } = useI18n();
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
   const [apiKey, setApiKey] = useState(ENV_API_KEY);
   const [events, setEvents] = useState<StreamEvent[]>([]);
@@ -128,7 +130,7 @@ export function LiveEventStream(): JSX.Element {
         Status: <span aria-live="polite">{streamStatus}</span>
       </p>
       {hasInvalidApiBase ? (
-        <p className="mb-2 text-xs text-destructive">有効な API Base URL を入力してください。</p>
+        <p className="mb-2 text-xs text-destructive">{t("有効な API Base URL を入力してください。", "Enter a valid API Base URL.")}</p>
       ) : null}
       {apiKey.trim().length > 0 ? (
         <p className="mb-2 text-xs text-amber-600">
@@ -148,7 +150,7 @@ export function LiveEventStream(): JSX.Element {
 
       <div className="max-h-72 space-y-2 overflow-auto pr-1">
         {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">イベント待機中...</p>
+          <p className="text-sm text-muted-foreground">{t("イベント待機中...", "Waiting for events...")}</p>
         ) : (
           events.map((event) => (
             <article key={`${event.id}-${event.ts}`} className="rounded-md border border-border/60 bg-background/60 p-2">
