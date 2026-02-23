@@ -16,6 +16,7 @@ import subprocess
 import re
 import importlib.util
 import ipaddress
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
@@ -331,13 +332,28 @@ def check_backups() -> Dict[str, Any]:
 
 # ===== Slack 通知 =====
 def notify_slack(summary: str):
+    """notify_slack.py を安全な Python 実行ファイルで起動する。"""
     if not SLACK_NOTIFY.exists():
         return
+
+    python_executable = _resolve_python_executable()
     try:
         # notify_slack.py "<message>"
-        run(["python3", str(SLACK_NOTIFY), summary], timeout=10)
+        run([python_executable, str(SLACK_NOTIFY), summary], timeout=10)
     except Exception:
         pass
+
+
+def _resolve_python_executable() -> str:
+    """サブプロセス用 Python 実行ファイルを安全寄りに選択する。"""
+    candidate = (sys.executable or "").strip()
+    if candidate:
+        candidate_path = Path(candidate)
+        if candidate_path.is_absolute() and candidate_path.exists() and os.access(candidate_path, os.X_OK):
+            return str(candidate_path)
+
+    print("⚠️ SECURITY WARNING: sys.executable is invalid; falling back to python3 from PATH")
+    return "python3"
 
 # ===== main =====
 def main():

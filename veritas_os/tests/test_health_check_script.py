@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 
@@ -103,3 +104,44 @@ def test_paths_are_scoped_to_repo_scripts_directory() -> None:
     assert health_check.SCRIPTS_BASE == health_check.HERE
     assert health_check.LOGS_DIR == health_check.HERE / "logs"
     assert health_check.BACKUPS_DIR == health_check.HERE / "backups"
+
+
+def test_resolve_python_executable_prefers_valid_sys_executable(monkeypatch, tmp_path) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+
+    monkeypatch.setattr(health_check.sys, "executable", str(fake_python))
+
+    assert health_check._resolve_python_executable() == str(fake_python)
+
+
+def test_resolve_python_executable_falls_back_to_python3(monkeypatch) -> None:
+    monkeypatch.setattr(health_check.sys, "executable", "")
+
+    assert health_check._resolve_python_executable() == "python3"
+
+
+def test_notify_slack_uses_resolved_python_executable(monkeypatch, tmp_path) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+
+    slack_script = tmp_path / "notify_slack.py"
+    slack_script.write_text("print('ok')\n", encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_run(cmd: list[str], timeout: int = 8):
+        captured["cmd"] = cmd
+        captured["timeout"] = timeout
+        return 0, "", ""
+
+    monkeypatch.setattr(health_check, "SLACK_NOTIFY", slack_script)
+    monkeypatch.setattr(health_check.sys, "executable", str(fake_python))
+    monkeypatch.setattr(health_check, "run", fake_run)
+
+    health_check.notify_slack("summary message")
+
+    assert captured["cmd"] == [str(fake_python), str(slack_script), "summary message"]
+    assert captured["timeout"] == 10
