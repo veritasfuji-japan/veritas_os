@@ -175,6 +175,15 @@ def test_resolve_heal_timeout_seconds_fallbacks(monkeypatch):
         == alert_doctor.DEFAULT_HEAL_TIMEOUT_SEC
     )
 
+
+def test_resolve_heal_timeout_seconds_caps_large_value(monkeypatch):
+    """Large timeout env values should be capped to a safe upper bound."""
+    monkeypatch.setenv("VERITAS_HEAL_TIMEOUT_SEC", "9999")
+    assert (
+        alert_doctor._resolve_heal_timeout_seconds()
+        == alert_doctor.MAX_HEAL_TIMEOUT_SEC
+    )
+
     monkeypatch.setenv("VERITAS_HEAL_TIMEOUT_SEC", "0")
     assert (
         alert_doctor._resolve_heal_timeout_seconds()
