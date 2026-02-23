@@ -318,3 +318,36 @@ class TestOptionModelValidator:
         """If title exists, text doesn't override it."""
         opt = schemas.Option(title="title value", text="text value")
         assert opt.title == "title value"
+
+
+class TestSchemaCoercionObservability:
+    """Tests for coercion event tracking and metadata hints."""
+
+    def test_request_records_coercion_events_and_extra_keys(self):
+        req = schemas.DecideRequest(
+            query="test",
+            context="raw-context",
+            alternatives=[{"title": "A"}],
+            unexpected_flag=True,
+        )
+        assert "coercion.context_non_mapping" in req.coercion_events
+        assert "coercion.alternatives_to_options" in req.coercion_events
+        assert "coercion.request_extra_keys_allowed" in req.coercion_events
+
+    def test_response_records_coercion_events_in_meta(self):
+        resp = schemas.DecideResponse(
+            request_id="r1",
+            alternatives=[{"title": "A"}],
+            unexpected_response=True,
+        )
+        assert "coercion.alternatives_to_options" in resp.coercion_events
+        assert "coercion.response_extra_keys_allowed" in resp.coercion_events
+        assert "x_coerced_fields" in resp.meta
+
+    def test_trust_log_promotion_failure_is_exposed(self):
+        resp = schemas.DecideResponse(
+            request_id="r1",
+            trust_log={"created_at": "missing-request-id"},
+        )
+        assert "coercion.trust_log_promotion_failed" in resp.coercion_events
+        assert "coercion.trust_log_promotion_failed" in resp.meta.get("x_coerced_fields", [])
