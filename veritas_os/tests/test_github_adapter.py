@@ -219,6 +219,24 @@ def test_normalize_repo_item_drops_unsafe_html_url():
     assert result["html_url"] == ""
 
 
+def test_normalize_repo_item_sanitizes_control_chars_and_whitespace():
+    result = github_adapter._normalize_repo_item(
+        {
+            "full_name": " owner/\x00repo\n",
+            "html_url": "https://github.com/owner/repo",
+            "description": "line1\x1f\n  line2",
+            "stargazers_count": 1,
+        }
+    )
+
+    assert result["full_name"] == "owner/ repo"
+    assert result["description"] == "line1 line2"
+
+
+def test_sanitize_text_field_limits_length():
+    assert github_adapter._sanitize_text_field("x" * 10, max_len=5) == "xxxxx"
+
+
 def test_safe_float_non_finite_returns_default(monkeypatch):
     monkeypatch.setenv("VERITAS_GITHUB_RETRY_DELAY", "nan")
     assert github_adapter._safe_float("VERITAS_GITHUB_RETRY_DELAY", 1.5) == 1.5
