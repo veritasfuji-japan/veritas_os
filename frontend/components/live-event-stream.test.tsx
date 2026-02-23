@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LiveEventStream } from "./live-event-stream";
@@ -36,9 +36,11 @@ describe("LiveEventStream", () => {
     expect(MockEventSource.instances.length).toBe(1);
 
     const source = MockEventSource.instances[0];
-    source.onmessage?.({
-      data: JSON.stringify({ id: 1, type: "decide.completed", ts: "2026-01-01T00:00:00Z", payload: { ok: true } }),
-    } as MessageEvent<string>);
+    await act(async () => {
+      source.onmessage?.({
+        data: JSON.stringify({ id: 1, type: "decide.completed", ts: "2026-01-01T00:00:00Z", payload: { ok: true } }),
+      } as MessageEvent<string>);
+    });
 
     expect(await screen.findByText("decide.completed")).toBeInTheDocument();
     expect(screen.getByText(/"ok": true/)).toBeInTheDocument();

@@ -44,4 +44,30 @@ describe("TrustLogExplorerPage", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/表示件数: 2/)).toBeInTheDocument();
   });
+
+  it("shows validation error when trust logs response shape is invalid", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [{ request_id: 10 }],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    render(<TrustLogExplorerPage />);
+
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("レスポンス形式エラー: trust logs の形式が不正です。")).toBeInTheDocument();
+    });
+  });
+
 });
