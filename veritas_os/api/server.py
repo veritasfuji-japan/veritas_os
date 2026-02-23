@@ -32,7 +32,7 @@ from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
-from veritas_os.api.governance import get_policy, update_policy
+from veritas_os.api.governance import get_policy, get_value_drift, update_policy
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -1828,6 +1828,20 @@ def trust_feedback(body: dict):
 # ==============================
 # Governance Policy API
 # ==============================
+
+@app.get("/v1/governance/value-drift", dependencies=[Depends(require_api_key)])
+def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le=1.0)):
+    """Return ValueCore drift metrics against a Telos baseline."""
+    try:
+        result = get_value_drift(telos_baseline=telos_baseline)
+        return {"ok": True, "value_drift": result}
+    except Exception as e:
+        logger.error("governance_value_drift failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load value drift metrics"},
+        )
+
 
 @app.get("/v1/governance/policy", dependencies=[Depends(require_api_key)])
 def governance_get():

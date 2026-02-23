@@ -53,6 +53,19 @@ interface GovernancePolicy {
   updated_by: string;
 }
 
+interface ValueDriftPoint {
+  ema: number;
+  timestamp: string;
+}
+
+interface ValueDriftMetrics {
+  baseline: number;
+  latest_ema: number;
+  drift_percent: number;
+  history: ValueDriftPoint[];
+  status: "ok" | "no_data";
+}
+
 /* ---------- helpers ---------- */
 
 const FUJI_LABELS: Record<keyof FujiRules, string> = {
@@ -279,12 +292,37 @@ export default function GovernanceControlPage(): JSX.Element {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [valueDrift, setValueDrift] = useState<ValueDriftMetrics | null>(null);
   const shouldAutoLoad = ENV_API_KEY.trim().length > 0;
 
   const hasChanges = useMemo(
     () => draft !== null && savedPolicy !== null && !deepEqual(savedPolicy, draft),
     [savedPolicy, draft],
   );
+
+  /* -- fetch value drift -- */
+  const fetchValueDrift = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBase.replace(/\/$/, "")}/v1/governance/value-drift`, {
+        headers: { "X-API-Key": apiKey.trim() },
+      });
+      if (!res.ok) {
+        setValueDrift(null);
+        return;
+      }
+      const body: unknown = await res.json();
+      if (typeof body === "object" && body !== null && "value_drift" in body) {
+        const payload = (body as { value_drift?: ValueDriftMetrics }).value_drift;
+        if (payload) {
+          setValueDrift(payload);
+          return;
+        }
+      }
+      setValueDrift(null);
+    } catch {
+      setValueDrift(null);
+    }
+  }, [apiBase, apiKey]);
 
   /* -- fetch policy -- */
   const fetchPolicy = useCallback(async () => {
@@ -306,12 +344,13 @@ export default function GovernanceControlPage(): JSX.Element {
       }
       setSavedPolicy(body.policy);
       setDraft(structuredClone(body.policy));
+      void fetchValueDrift();
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
     } finally {
       setLoading(false);
     }
-  }, [apiBase, apiKey]);
+  }, [apiBase, apiKey, fetchValueDrift]);
 
   /* -- save policy -- */
   const savePolicy = useCallback(async () => {
@@ -576,6 +615,46 @@ export default function GovernanceControlPage(): JSX.Element {
                 onChange={(v) => updateLogRetention("max_log_size", v)}
               />
             </div>
+          </Card>
+
+          {/* ValueCore Drift */}
+          <Card title="Policy Drift (ValueCore監視)" className="bg-background/75">
+            <p className="mb-3 text-xs text-muted-foreground">
+              Value EMA と Telos 基準値の乖離率を表示します。
+            </p>
+            {valueDrift ? (
+              <div className="space-y-3 text-xs">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <div>
+                    <span className="text-muted-foreground">Baseline: </span>
+                    <span className="font-mono">{valueDrift.baseline.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Latest EMA: </span>
+                    <span className="font-mono">{valueDrift.latest_ema.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Drift: </span>
+                    <span className="font-mono">{valueDrift.drift_percent.toFixed(2)}%</span>
+                  </div>
+                </div>
+                {valueDrift.history.length > 0 ? (
+                  <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2">
+                    <ul className="space-y-1 font-mono">
+                      {valueDrift.history.slice(-20).map((point) => (
+                        <li key={`${point.timestamp}-${point.ema}`}>
+                          {point.timestamp}: {point.ema.toFixed(3)}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">履歴データがありません。</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">ドリフト情報を取得できませんでした。</p>
+            )}
           </Card>
 
           {/* Diff Preview */}
