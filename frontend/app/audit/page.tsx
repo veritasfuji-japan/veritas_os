@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
 import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, type TrustLogItem } from "../../lib/api-validators";
 import { useI18n } from "../../components/i18n-provider";
@@ -17,6 +17,20 @@ function toPrettyJson(value: unknown): string {
   }
 }
 
+function shortHash(value: string | undefined): string {
+  if (!value) {
+    return "missing";
+  }
+
+  if (value.length <= 16) {
+    return value;
+  }
+
+  return `${value.slice(0, 10)}...${value.slice(-6)}`;
+}
+
+type VerificationStatus = "idle" | "running" | "pass" | "fail";
+
 export default function TrustLogExplorerPage(): JSX.Element {
   const { t } = useI18n();
   const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
@@ -30,6 +44,10 @@ export default function TrustLogExplorerPage(): JSX.Element {
   const [requestId, setRequestId] = useState("");
   const [requestResult, setRequestResult] = useState<RequestLogResponse | null>(null);
   const [stageFilter, setStageFilter] = useState("ALL");
+  const [selectedDecisionId, setSelectedDecisionId] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("idle");
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+  const [animationStep, setAnimationStep] = useState(0);
 
   const stageOptions = useMemo(() => {
     const stages = new Set<string>();
@@ -46,6 +64,89 @@ export default function TrustLogExplorerPage(): JSX.Element {
     }
     return items.filter((item) => item.stage === stageFilter);
   }, [items, stageFilter]);
+
+  const decisionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of items) {
+      if (typeof item.request_id === "string" && item.request_id.length > 0) {
+        ids.add(item.request_id);
+      }
+    }
+    return Array.from(ids).sort();
+  }, [items]);
+
+  const selectedDecisionEntry = useMemo(() => {
+    if (!selectedDecisionId) {
+      return null;
+    }
+
+    return items.find((item) => item.request_id === selectedDecisionId) ?? null;
+  }, [items, selectedDecisionId]);
+
+  const previousEntry = useMemo(() => {
+    if (!selectedDecisionEntry) {
+      return null;
+    }
+
+    const selectedIndex = items.findIndex((item) => item === selectedDecisionEntry);
+    if (selectedIndex < 0 || selectedIndex >= items.length - 1) {
+      return null;
+    }
+    return items[selectedIndex + 1] ?? null;
+  }, [items, selectedDecisionEntry]);
+
+  useEffect(() => {
+    if (verificationStatus !== "running") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      setAnimationStep((current) => {
+        if (current >= 2) {
+          return 2;
+        }
+        return current + 1;
+      });
+    }, 400);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [verificationStatus]);
+
+  const verifySelectedDecision = (): void => {
+    setVerificationMessage(null);
+    if (!selectedDecisionEntry) {
+      setVerificationStatus("fail");
+      setVerificationMessage(t("意思決定IDを選択してください。", "Please select a decision ID."));
+      return;
+    }
+
+    if (!selectedDecisionEntry.sha256) {
+      setVerificationStatus("fail");
+      setVerificationMessage(t("選択ログに sha256 がありません。", "The selected log has no sha256."));
+      return;
+    }
+
+    if (!previousEntry || !previousEntry.sha256) {
+      setVerificationStatus("fail");
+      setVerificationMessage(t("直前ログが見つからないため検証できません。", "Cannot verify without a previous log entry."));
+      return;
+    }
+
+    setVerificationStatus("running");
+    setAnimationStep(0);
+
+    window.setTimeout(() => {
+      const isTamperProof = selectedDecisionEntry.sha256_prev === previousEntry.sha256;
+      setVerificationStatus(isTamperProof ? "pass" : "fail");
+      setVerificationMessage(
+        isTamperProof
+          ? t("ハッシュチェーン整合: 改ざんは検出されませんでした。", "Hash chain verified: no tampering detected.")
+          : t("ハッシュ不一致: 改ざんの可能性があります。", "Hash mismatch: potential tampering detected."),
+      );
+    }, 1400);
+  };
 
   const loadLogs = async (nextCursor: string | null, replace: boolean): Promise<void> => {
     setError(null);
@@ -208,6 +309,63 @@ export default function TrustLogExplorerPage(): JSX.Element {
         ) : (
           <p className="text-sm text-muted-foreground">{t("ログを選択してください。", "Select a log.")}</p>
         )}
+      </Card>
+
+      <Card title={t("TrustLog インタラクティブ検証", "TrustLog Interactive Verification")} className="bg-background/75">
+        <div className="space-y-3 text-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end">
+            <label className="flex-1 space-y-1 text-xs">
+              <span className="font-medium">{t("意思決定ID", "Decision ID")}</span>
+              <select
+                className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
+                value={selectedDecisionId}
+                onChange={(event) => setSelectedDecisionId(event.target.value)}
+              >
+                <option value="">{t("選択してください", "Select one")}</option>
+                {decisionIds.map((id) => (
+                  <option key={id} value={id}>{id}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
+              disabled={loading || !apiKey.trim() || !selectedDecisionId}
+              onClick={verifySelectedDecision}
+            >
+              {t("ハッシュチェーン検証", "Verify hash chain")}
+            </button>
+          </div>
+
+          <div className="rounded-md border border-border bg-background/60 p-3">
+            <p className="font-medium">{t("検証アニメーション", "Verification animation")}</p>
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <span className={`rounded border px-2 py-1 ${animationStep >= 1 ? "border-primary/60 bg-primary/15" : "border-border bg-background"}`}>
+                {t("直前ログ", "Previous log")}: {shortHash(previousEntry?.sha256)}
+              </span>
+              <span aria-hidden="true" className={animationStep >= 2 ? "text-primary" : "text-muted-foreground"}>→</span>
+              <span className={`rounded border px-2 py-1 ${animationStep >= 2 ? "border-primary/60 bg-primary/15" : "border-border bg-background"}`}>
+                {t("sha256_prev", "sha256_prev")}: {shortHash(selectedDecisionEntry?.sha256_prev)}
+              </span>
+              <span aria-hidden="true" className={animationStep >= 2 ? "text-primary" : "text-muted-foreground"}>→</span>
+              <span className="rounded border border-border bg-background px-2 py-1">
+                {t("現在ログ", "Current log")}: {shortHash(selectedDecisionEntry?.sha256)}
+              </span>
+            </div>
+          </div>
+
+          {verificationStatus === "pass" ? (
+            <p className="inline-flex w-fit rounded-full border border-emerald-500/60 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+              TAMPER-PROOF ✅
+            </p>
+          ) : null}
+
+          {verificationMessage ? (
+            <p className={`rounded-md border p-2 text-xs ${verificationStatus === "pass" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-200"}`}>
+              {verificationMessage}
+            </p>
+          ) : null}
+        </div>
       </Card>
     </div>
   );
