@@ -358,7 +358,7 @@ def test_search_uses_topk_and_min_sim_and_kinds(memory_env):
 
 
 def test_search_normalizes_min_sim_invalid_or_out_of_range(memory_env):
-    """search は min_sim を有限な [0,1] に正規化する。"""
+    """search は min_sim を有限な [-1,1] に正規化する。"""
     store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
 
     base_items = [
@@ -378,7 +378,7 @@ def test_search_normalizes_min_sim_invalid_or_out_of_range(memory_env):
     res_invalid = ms.search("query", kinds=["episodic"], min_sim="invalid")
     assert [item["id"] for item in res_invalid["episodic"]] == ["high"]
 
-    # 負値は 0.0 に clamp されるので low も残る
+    # -1.0 未満は -1.0 に clamp されるので low も残る
     res_negative = ms.search("query", kinds=["episodic"], min_sim=-5)
     assert [item["id"] for item in res_negative["episodic"]] == ["high", "low"]
 

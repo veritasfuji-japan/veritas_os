@@ -398,7 +398,7 @@ class MemoryStore:
 
     @staticmethod
     def _normalize_min_sim(value: Any) -> float:
-        """Clamp min_sim to a finite [0.0, 1.0] value with a safe default."""
+        """Clamp min_sim to a finite [-1.0, 1.0] value with a safe default."""
         default = 0.25
         try:
             parsed = float(value)
@@ -406,4 +406,4 @@ class MemoryStore:
             return default
         if not math.isfinite(parsed):
             return default
-        return max(0.0, min(parsed, 1.0))
+        return max(-1.0, min(parsed, 1.0))
