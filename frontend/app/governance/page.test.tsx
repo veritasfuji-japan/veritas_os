@@ -41,12 +41,30 @@ const MOCK_POLICY = {
   updated_by: "system",
 };
 
+const MOCK_VALUE_DRIFT = {
+  baseline: 0.5,
+  latest_ema: 0.6,
+  drift_percent: 20.0,
+  history: [
+    { ema: 0.5, timestamp: "t1" },
+    { ema: 0.6, timestamp: "t2" },
+  ],
+  status: "ok",
+};
+
 function mockFetchPolicy(): ReturnType<typeof vi.spyOn> {
-  return vi.spyOn(global, "fetch").mockResolvedValue({
-    ok: true,
-    status: 200,
-    json: async () => ({ ok: true, policy: MOCK_POLICY }),
-  } as Response);
+  return vi
+    .spyOn(global, "fetch")
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, policy: MOCK_POLICY }),
+    } as Response)
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, value_drift: MOCK_VALUE_DRIFT }),
+    } as Response);
 }
 
 describe("GovernanceControlPage", () => {
@@ -136,6 +154,11 @@ describe("GovernanceControlPage", () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ ok: true, value_drift: MOCK_VALUE_DRIFT }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({
           ok: true,
           policy: { ...MOCK_POLICY, fuji_rules: { ...MOCK_POLICY.fuji_rules, pii_check: false } },
@@ -163,8 +186,8 @@ describe("GovernanceControlPage", () => {
     });
 
     // PUT was called
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const putCall = fetchMock.mock.calls[1];
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const putCall = fetchMock.mock.calls[2];
     expect(putCall?.[1]?.method).toBe("PUT");
   });
 
@@ -221,6 +244,22 @@ describe("GovernanceControlPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("レスポンス形式エラー: policy の形式が不正です。")).toBeInTheDocument();
+    });
+  });
+
+
+  it("shows value drift card with drift metrics", async () => {
+    mockFetchPolicy();
+    render(<GovernanceControlPage />);
+
+    fireEvent.change(screen.getByLabelText("X-API-Key"), {
+      target: { value: "test-key" },
+    });
+    fireEvent.click(screen.getByText("ポリシーを読み込む"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Policy Drift (ValueCore監視)")).toBeInTheDocument();
+      expect(screen.getByText("20.00%")).toBeInTheDocument();
     });
   });
 

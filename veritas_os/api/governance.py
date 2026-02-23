@@ -13,7 +13,7 @@ import threading
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,13 @@ _DEFAULT_POLICY_PATH = Path(__file__).resolve().parent / "governance.json"
 
 # Thread-safe lock for file I/O
 _policy_lock = threading.Lock()
+
+_VALUE_HISTORY_PATHS = (
+    Path(__file__).resolve().parents[1] / ".veritas" / "value_stats.json",
+    Path(__file__).resolve().parents[2] / "data" / "value_stats.json",
+)
+
+DEFAULT_TELOS_BASELINE = 0.5
 
 
 # ---------- Pydantic schemas ----------
@@ -105,6 +112,54 @@ def _save(data: Dict[str, Any]) -> None:
             f.write("\n")
 
 
+def _coerce_metric_point(raw: Any, fallback_index: int) -> Dict[str, Any] | None:
+    """Normalize a raw history item into a metric point shape."""
+    if not isinstance(raw, dict):
+        return None
+
+    ema_raw = raw.get("ema")
+    if not isinstance(ema_raw, (int, float)):
+        return None
+
+    ema = max(0.0, min(1.0, float(ema_raw)))
+    ts = raw.get("timestamp") or raw.get("created_at") or raw.get("ts")
+    if not isinstance(ts, str):
+        ts = f"point-{fallback_index}"
+
+    return {"ema": ema, "timestamp": ts}
+
+
+def _load_value_history() -> List[Dict[str, Any]]:
+    """Load ValueEMA history from known paths, returning a normalized list."""
+    for path in _VALUE_HISTORY_PATHS:
+        if not path.exists():
+            continue
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+        except Exception as e:
+            logger.warning("Failed to load value history from %s: %s", path, e)
+            continue
+
+        raw_history: List[Any] = []
+        if isinstance(payload, dict) and isinstance(payload.get("history"), list):
+            raw_history = payload["history"]
+        elif isinstance(payload, list):
+            raw_history = payload
+
+        points = [
+            point
+            for i, item in enumerate(raw_history)
+            for point in [_coerce_metric_point(item, i)]
+            if point is not None
+        ]
+        if points:
+            return points
+
+    return []
+
+
 # ---------- public API ----------
 
 def get_policy() -> Dict[str, Any]:
@@ -143,3 +198,23 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
 
     _save(result)
     return result
+
+
+def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str, Any]:
+    """Build ValueCore drift metrics relative to the configured Telos baseline."""
+    baseline = max(0.0, min(1.0, float(telos_baseline)))
+    history = _load_value_history()
+    latest_ema = history[-1]["ema"] if history else baseline
+
+    if baseline <= 0:
+        drift_percent = 0.0
+    else:
+        drift_percent = ((latest_ema - baseline) / baseline) * 100.0
+
+    return {
+        "baseline": baseline,
+        "latest_ema": latest_ema,
+        "drift_percent": round(drift_percent, 2),
+        "history": history,
+        "status": "ok" if history else "no_data",
+    }

@@ -165,6 +165,24 @@ class TestGovernanceModule:
             result = gov_mod.update_policy({"fuji_rules": {"pii_check": False}})
         assert result["fuji_rules"]["pii_check"] is False
 
+    def test_get_value_drift_with_no_data(self, tmp_path):
+        """When no value history exists, endpoint helper returns no_data."""
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (tmp_path / "missing.json",)):
+            result = gov_mod.get_value_drift()
+        assert result["status"] == "no_data"
+        assert result["baseline"] == 0.5
+        assert result["latest_ema"] == 0.5
+
+    def test_get_value_drift_with_history(self, tmp_path):
+        """Value drift is calculated from the latest EMA and baseline."""
+        value_file = tmp_path / "value_stats.json"
+        value_file.write_text(json.dumps({"history": [{"ema": 0.4, "timestamp": "t1"}, {"ema": 0.6, "timestamp": "t2"}]}))
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (value_file,)):
+            result = gov_mod.get_value_drift(telos_baseline=0.5)
+        assert result["status"] == "ok"
+        assert result["latest_ema"] == 0.6
+        assert result["drift_percent"] == 20.0
+
     def test_update_overrides_version(self, tmp_path):
         """version scalar key is overridden by patch."""
         p = tmp_path / "gov.json"
@@ -177,6 +195,32 @@ class TestGovernanceModule:
 # ----------------------------------------------------------------
 # Server governance endpoint error paths
 # ----------------------------------------------------------------
+
+
+class TestGovernanceValueDriftEndpoint:
+    def test_get_value_drift_success(self, monkeypatch):
+        monkeypatch.setattr(srv, "get_value_drift", lambda telos_baseline=0.5: {
+            "baseline": telos_baseline,
+            "latest_ema": 0.55,
+            "drift_percent": 10.0,
+            "history": [{"ema": 0.55, "timestamp": "t1"}],
+            "status": "ok",
+        })
+        resp = client.get("/v1/governance/value-drift", headers=HEADERS)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["value_drift"]["status"] == "ok"
+
+    def test_get_value_drift_error(self, monkeypatch):
+        def boom(telos_baseline=0.5):
+            raise RuntimeError("unavailable")
+
+        monkeypatch.setattr(srv, "get_value_drift", boom)
+        resp = client.get("/v1/governance/value-drift", headers=HEADERS)
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
 
 class TestGovernanceServerErrors:
     def test_get_policy_internal_error(self, monkeypatch):
