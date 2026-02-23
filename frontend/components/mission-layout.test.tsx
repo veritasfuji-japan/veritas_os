@@ -21,5 +21,6 @@ describe("MissionLayout", () => {
     );
     expect(screen.getByText("Environment")).toBeInTheDocument();
     expect(screen.getByText("Latest Event")).toBeInTheDocument();
+    expect(screen.getByText("可読性を優先した運用ビュー")).toBeInTheDocument();
   });
 });
