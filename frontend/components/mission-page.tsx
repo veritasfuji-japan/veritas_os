@@ -1,4 +1,7 @@
+"use client";
+
 import { Card } from "@veritas/design-system";
+import { useI18n } from "./i18n";
 
 interface MissionPageProps {
   title: string;
@@ -7,6 +10,8 @@ interface MissionPageProps {
 }
 
 export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.Element {
+  const { t } = useI18n();
+
   return (
     <div className="space-y-6">
       <Card title={title} className="border-border/70 bg-surface/85 p-1 shadow-sm">
@@ -19,7 +24,7 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
             <div className="space-y-3">
               <div className="h-1.5 w-24 rounded-full bg-primary/65" />
               <div className="h-16 rounded-lg border border-dashed border-primary/40 bg-primary/5" />
-              <p className="text-xs text-muted-foreground">Widget {index + 1}: operational preview</p>
+              <p className="text-xs text-muted-foreground">{t("mission.widget", { index: index + 1 })}</p>
             </div>
           </Card>
         ))}

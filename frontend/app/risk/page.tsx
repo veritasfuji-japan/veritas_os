@@ -1,10 +1,15 @@
+"use client";
+
 import { MissionPage } from "../../components/mission-page";
+import { useI18n } from "../../components/i18n";
 
 export default function RiskIntelligencePage(): JSX.Element {
+  const { t } = useI18n();
+
   return (
     <MissionPage
       title="Risk Intelligence"
-      subtitle="先行指標とシナリオ推論により、未来リスクの予兆を可視化します。"
+      subtitle={t("page.risk.subtitle")}
       chips={["Predictive Radar", "Threat Horizon", "Impact Forecast"]}
     />
   );

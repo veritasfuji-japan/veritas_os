@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ThemeStyles, applyThemeClass } from "@veritas/design-system";
 import { MissionLayout } from "../components/mission-layout";
+import { I18nProvider } from "../components/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({
         <ThemeStyles />
       </head>
       <body>
-        <MissionLayout>{children}</MissionLayout>
+        <I18nProvider>
+          <MissionLayout>{children}</MissionLayout>
+        </I18nProvider>
       </body>
     </html>
   );

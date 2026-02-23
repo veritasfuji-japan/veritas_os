@@ -2,6 +2,15 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LiveEventStream } from "./live-event-stream";
+import { I18nProvider } from "./i18n";
+
+function renderWithI18n(): void {
+  render(
+    <I18nProvider>
+      <LiveEventStream />
+    </I18nProvider>
+  );
+}
 
 class MockEventSource {
   static instances: MockEventSource[] = [];
@@ -30,9 +39,9 @@ describe("LiveEventStream", () => {
   it("renders and prepends incoming SSE events", async () => {
     vi.stubGlobal("EventSource", MockEventSource);
 
-    render(<LiveEventStream />);
+    renderWithI18n();
 
-    expect(screen.getByText("Live Event Stream")).toBeInTheDocument();
+    expect(screen.getByText("ライブイベントストリーム")).toBeInTheDocument();
     expect(MockEventSource.instances.length).toBe(1);
 
     const source = MockEventSource.instances[0];
@@ -54,27 +63,27 @@ describe("LiveEventStream", () => {
   it("shows validation error and avoids connecting when API base URL is invalid", () => {
     vi.stubGlobal("EventSource", MockEventSource);
 
-    render(<LiveEventStream />);
+    renderWithI18n();
 
     fireEvent.change(screen.getByLabelText("API Base URL"), { target: { value: "not a url" } });
 
     expect(screen.getByText("有効な API Base URL を入力してください。")).toBeInTheDocument();
-    expect(screen.getByText("🔴 invalid url")).toBeInTheDocument();
+    expect(screen.getByText("🔴 URL不正")).toBeInTheDocument();
     expect(MockEventSource.instances.length).toBe(1);
   });
 
   it("shows a security warning when API key is configured", () => {
     vi.stubGlobal("EventSource", MockEventSource);
 
-    render(<LiveEventStream />);
+    renderWithI18n();
 
-    const apiKeyInput = screen.getByLabelText("API Key");
+    const apiKeyInput = screen.getByLabelText("APIキー");
     fireEvent.change(apiKeyInput, { target: { value: "secret-token" } });
 
     expect(apiKeyInput).toHaveAttribute("type", "password");
     expect(
       screen.getByText(
-        "Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.",
+        "セキュリティ注意: EventSource の互換性のため API キーはクエリ文字列で送信されます。共有ログで本番シークレットを使わないでください。",
       ),
     ).toBeInTheDocument();
   });
@@ -82,7 +91,7 @@ describe("LiveEventStream", () => {
   it("clears rendered events when clear button is pressed", async () => {
     vi.stubGlobal("EventSource", MockEventSource);
 
-    render(<LiveEventStream />);
+    renderWithI18n();
 
     const source = MockEventSource.instances[0];
     await act(async () => {
@@ -96,7 +105,7 @@ describe("LiveEventStream", () => {
       } as MessageEvent<string>);
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Clear events" }));
+    fireEvent.click(screen.getByRole("button", { name: "イベントをクリア" }));
 
     expect(screen.getByText("イベント待機中...")).toBeInTheDocument();
   });
