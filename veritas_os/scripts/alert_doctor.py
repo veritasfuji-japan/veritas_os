@@ -40,6 +40,19 @@ HEAL_SCRIPT = SCRIPTS_DIR / "heal.sh"  # プロジェクト内 heal.sh
 API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
 HEALTH_URL = f"{API_BASE}/health"
 MAX_HEAL_OUTPUT_CHARS = 400
+DEFAULT_HEAL_TIMEOUT_SEC = 60
+
+
+def _resolve_heal_timeout_seconds() -> int:
+    """Return a safe timeout (seconds) for the self-heal subprocess."""
+    raw = os.getenv("VERITAS_HEAL_TIMEOUT_SEC", str(DEFAULT_HEAL_TIMEOUT_SEC))
+    try:
+        timeout_sec = int(raw)
+    except ValueError:
+        return DEFAULT_HEAL_TIMEOUT_SEC
+    if timeout_sec <= 0:
+        return DEFAULT_HEAL_TIMEOUT_SEC
+    return timeout_sec
 
 
 def _validate_webhook_url(webhook_url: str) -> bool:
@@ -256,6 +269,7 @@ def run_heal():
             ["/bin/bash", str(HEAL_SCRIPT.resolve())],
             stderr=subprocess.STDOUT,
             text=True,
+            timeout=_resolve_heal_timeout_seconds(),
         ).strip()
         print(out)
 
@@ -273,6 +287,12 @@ def run_heal():
     except subprocess.CalledProcessError as e:
         safe_output = _safe_snippet((e.output or "").strip())
         return False, f"heal failed: rc={e.returncode}, out={safe_output}"
+    except subprocess.TimeoutExpired as e:
+        timed_out_output = e.output or ""
+        if isinstance(timed_out_output, bytes):
+            timed_out_output = timed_out_output.decode("utf-8", errors="ignore")
+        safe_output = _safe_snippet(timed_out_output.strip() or "timeout")
+        return False, f"heal timeout: {safe_output}"
     except (OSError, ValueError) as e:
         return False, f"heal exception: {e}"
 

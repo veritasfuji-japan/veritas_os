@@ -165,3 +165,44 @@ def test_validate_heal_script_path_rejects_group_writable_file(tmp_path):
         assert not alert_doctor._validate_heal_script_path(heal_script)
     finally:
         alert_doctor.SCRIPTS_DIR = original_scripts_dir
+
+
+def test_resolve_heal_timeout_seconds_fallbacks(monkeypatch):
+    """Invalid timeout env values should fall back to default timeout."""
+    monkeypatch.setenv("VERITAS_HEAL_TIMEOUT_SEC", "invalid")
+    assert (
+        alert_doctor._resolve_heal_timeout_seconds()
+        == alert_doctor.DEFAULT_HEAL_TIMEOUT_SEC
+    )
+
+    monkeypatch.setenv("VERITAS_HEAL_TIMEOUT_SEC", "0")
+    assert (
+        alert_doctor._resolve_heal_timeout_seconds()
+        == alert_doctor.DEFAULT_HEAL_TIMEOUT_SEC
+    )
+
+
+def test_run_heal_handles_timeout(monkeypatch, tmp_path):
+    """run_heal should return a safe timeout message when heal script stalls."""
+    heal_script = tmp_path / "heal.sh"
+    heal_script.write_text("#!/bin/bash\necho ok\n", encoding="utf-8")
+
+    monkeypatch.setattr(alert_doctor, "HEAL_SCRIPT", Path(heal_script))
+    monkeypatch.setattr(
+        alert_doctor,
+        "_validate_heal_script_path",
+        lambda *_args, **_kwargs: True,
+    )
+
+    def _raise(*_args, **_kwargs):
+        raise alert_doctor.subprocess.TimeoutExpired(
+            cmd=["/bin/bash", "heal.sh"],
+            timeout=1,
+            output=b"partial\noutput",
+        )
+
+    monkeypatch.setattr(alert_doctor.subprocess, "check_output", _raise)
+
+    ok, info = alert_doctor.run_heal()
+    assert ok is False
+    assert info == "heal timeout: partial output"
