@@ -58,7 +58,7 @@ WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()
 
 
 def _sanitize_websearch_url(url: str) -> str:
-    """Validate env-derived web search URL and drop unsafe schemes.
+    """Validate env-derived web search URL and enforce HTTPS-only endpoints.
 
     Security note:
         Runtime env overrides are useful for incident response, but they must
@@ -70,11 +70,11 @@ def _sanitize_websearch_url(url: str) -> str:
         return ""
 
     parsed = urlparse(candidate)
-    if parsed.scheme in ("http", "https"):
+    if parsed.scheme == "https":
         return candidate
 
     logging.getLogger(__name__).warning(
-        "VERITAS_WEBSEARCH_URL has unsafe scheme %r; URL will be ignored",
+        "VERITAS_WEBSEARCH_URL must use https (got scheme=%r); URL will be ignored",
         parsed.scheme,
     )
     return ""
