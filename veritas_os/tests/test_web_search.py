@@ -157,9 +157,18 @@ def test_normalize_result_item_truncates_long_fields(_bypass_ssrf) -> None:
 # -----------------------------
 
 
-def test_sanitize_websearch_url_rejects_unsafe_scheme() -> None:
-    """危険なスキームの URL は空文字へ正規化する。"""
+def test_sanitize_websearch_url_rejects_non_https_scheme() -> None:
+    """HTTPS 以外のスキーム URL は空文字へ正規化する。"""
     assert web_search_mod._sanitize_websearch_url("file:///etc/passwd") == ""
+    assert web_search_mod._sanitize_websearch_url("http://example.com/search") == ""
+
+
+def test_sanitize_websearch_url_accepts_https_scheme() -> None:
+    """HTTPS スキーム URL はそのまま利用する。"""
+    assert (
+        web_search_mod._sanitize_websearch_url("https://example.com/search")
+        == "https://example.com/search"
+    )
 
 
 def test_resolve_websearch_credentials_ignores_unsafe_runtime_url(monkeypatch) -> None:
