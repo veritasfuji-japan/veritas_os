@@ -1,0 +1,74 @@
+name: Security Gates
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: Dependency audit (Python + Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pip-audit
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Python dependency audit (pip-audit)
+        run: pip-audit -r veritas_os/requirements.txt
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.3'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Node dependency audit (production, blocking)
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Node dependency audit (full dependency tree, report-only)
+        run: |
+          set -euo pipefail
+          pnpm audit --audit-level=high || {
+            echo '::warning::Non-production dependency vulnerabilities detected by pnpm audit. Review and remediate in frontend toolchain updates.'
+          }
+
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ARGS: --no-banner --redact --verbose
