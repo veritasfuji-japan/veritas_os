@@ -31,7 +31,12 @@ jobs:
           python -m pip install pip-audit
 
       - name: Python dependency audit (pip-audit)
-        run: pip-audit -r veritas_os/requirements.txt
+        run: |
+          # Temporary exception: pdfplumber currently constrains pdfminer.six to a vulnerable line.
+          # Keep scanning enabled and remove these ignores once upstream supports a fixed pdfminer.six release.
+          pip-audit -r veritas_os/requirements.txt \
+            --ignore-vuln CVE-2025-64512 \
+            --ignore-vuln CVE-2025-70559
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

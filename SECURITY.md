@@ -55,6 +55,7 @@ The repository enforces automated gates to reduce the risk of introducing known 
 
 ### CI required checks
 - **Dependency audit (Python):** `pip-audit -r veritas_os/requirements.txt`
+  - Temporary policy exception: `CVE-2025-64512` and `CVE-2025-70559` are ignored while `pdfplumber` compatibility with fixed `pdfminer.six` is pending.
 - **Dependency audit (Node):** `pnpm audit --audit-level=high`
 - **Secret scan:** `gitleaks` on every `push` and `pull_request`
 
@@ -83,3 +84,4 @@ A nightly workflow generates CycloneDX SBOM files for Python and Node dependenci
 If hash drift is detected, the workflow emits warnings and uploads artifacts for review.
 
 > **Security warning:** Without these automated gates, known vulnerable packages and accidental secret exposures can bypass manual review and reach production.
+> **Security warning:** The temporary `pip-audit` ignore entries for `pdfminer.six` must be regularly reviewed and removed immediately when upstream-compatible fixed versions are available.
