@@ -3,7 +3,7 @@ PYTHON_FALLBACK ?= 3.12
 UV ?= uv
 TEST_ARGS ?=
 
-.PHONY: test test-cov
+.PHONY: test test-cov test-split
 
 test:
 	@command -v $(UV) >/dev/null 2>&1 || { echo "Error: uv is required. Install from https://docs.astral.sh/uv/."; exit 1; }
@@ -34,3 +34,14 @@ test-cov:
 	fi; \
 	echo "[veritas] Falling back to Python $(PYTHON_FALLBACK) (local or managed)"; \
 	UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest --with pytest-cov pytest --cov=veritas_os $(TEST_ARGS)
+
+
+test-split:
+	@command -v $(UV) >/dev/null 2>&1 || { echo "Error: uv is required. Install from https://docs.astral.sh/uv/."; exit 1; }
+	@set -e; \
+	for expr in "not (api or server or dashboard or governance or schemas or openapi or constants or telos or evolver)" \
+	            "api or server or dashboard or governance or schemas or openapi or constants or telos or evolver" \
+	            "memory or embedder or index_cosine"; do \
+		echo "[veritas] Running split tests: -k $$expr"; \
+		UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest pytest -q veritas_os/tests -k "$$expr" --durations=20; \
+	done

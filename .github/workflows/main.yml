@@ -68,6 +68,7 @@ jobs:
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
       COVERAGE_FAIL_UNDER: "85"
+      PYTEST_MARKEXPR: "not slow"
 
     steps:
       - name: Checkout
@@ -109,6 +110,8 @@ jobs:
             --cov-report=xml:coverage.xml \
             --cov-report=html:coverage-html \
             --cov-fail-under=${COVERAGE_FAIL_UNDER} \
+            -m "${PYTEST_MARKEXPR}" \
+            --durations=20 \
             --junitxml=test-reports/pytest.xml \
             --tb=short
 
@@ -133,6 +136,46 @@ jobs:
       - name: Fail job if tests failed
         if: steps.pytest.outcome == 'failure'
         run: exit 1
+
+
+  test-slow:
+    name: test-slow (py3.12)
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest
+
+      - name: Run slow tests (if any)
+        run: |
+          set -euxo pipefail
+          status=0
+          pytest -q veritas_os/tests -m slow --durations=20 --tb=short || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No slow tests were selected."
+            exit 0
+          fi
+          exit "$status"
 
   # ============================================================
   # Frontend: typecheck + lint + unit tests + a11y
