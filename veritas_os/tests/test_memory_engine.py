@@ -4,7 +4,7 @@ memory/engine.py インターフェイス層のテスト。
 
 目的:
 - Embedder / VectorIndex / MemoryStore が import できること
-- Embedder のデフォルト実装が NotImplementedError を投げること
+- Embedder が抽象基底クラスとして直接インスタンス化不可であること
 - VectorIndex / MemoryStore を継承したダミー実装が
   型的・インターフェイス的に問題なく動くこと
   （＝将来の実装差し替えに耐えられるプロトコルになっていること）
@@ -37,13 +37,10 @@ def test_engine_interfaces_exist():
 # ---------------------------------------------------------
 
 
-def test_embedder_default_raises_not_implemented():
-    """
-    Embedder は抽象インターフェイスとして NotImplementedError を投げる。
-    """
-    emb = mem_engine.Embedder()
-    with pytest.raises(NotImplementedError):
-        emb.embed(["hello", "world"])
+def test_embedder_is_abstract_and_cannot_be_instantiated():
+    """Embedder は抽象基底クラスとして直接インスタンス化できない。"""
+    with pytest.raises(TypeError):
+        mem_engine.Embedder()
 
 
 class DummyEmbedder(mem_engine.Embedder):
