@@ -8,6 +8,15 @@ from typing import Any, Dict, List
 from veritas_os.core import memory
 
 
+def _positive_int(value: str) -> int:
+    """argparse 用: 1 以上の整数のみ受け付ける。"""
+    parsed = int(value)
+    if parsed < 1:
+        msg = f"top-k must be >= 1: {value}"
+        raise argparse.ArgumentTypeError(msg)
+    return parsed
+
+
 def _flatten_hits(hits_raw: Any) -> List[Dict[str, Any]]:
     """
     memory.search の戻り値が list or dict どちらでも扱えるように、
@@ -36,13 +45,22 @@ def _flatten_hits(hits_raw: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _extract_preview_text(hit: Dict[str, Any], max_length: int = 200) -> str:
+    """hit から可読な短文プレビューを生成する。"""
+    text = hit.get("text") or (hit.get("value") or {}).get("text") or ""
+    preview = str(text).replace("\n", " ")
+    if len(preview) > max_length:
+        return preview[: max_length - 3] + "..."
+    return preview
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Search VERITAS MemoryOS from CLI"
     )
     parser.add_argument("query", help="検索クエリ")
     parser.add_argument("--user-id", default="fujishita")
-    parser.add_argument("-k", "--top-k", type=int, default=5)
+    parser.add_argument("-k", "--top-k", type=_positive_int, default=5)
     parser.add_argument(
         "--kinds",
         nargs="*",
@@ -73,25 +91,15 @@ def main() -> None:
                 raise ValueError
             s = float(score)
             print(f"#{i} score={s:.3f} kind={kind}")
-        except Exception:
+        except (TypeError, ValueError):
             print(f"#{i} kind={kind}")
 
         tags = h.get("tags")
         if tags:
             print("tags:", tags)
 
-        # text の取り出し（text or value.text）
-        text = (
-            h.get("text")
-            or (h.get("value") or {}).get("text")
-            or ""
-        )
-        text = str(text).replace("\n", " ")
-        if len(text) > 200:
-            text = text[:197] + "..."
-        print(text)
+        print(_extract_preview_text(h))
 
 
 if __name__ == "__main__":
     main()
-
