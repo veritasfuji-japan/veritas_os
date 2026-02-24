@@ -123,6 +123,61 @@ def _is_pickle_file_stale(path: Path, max_age_days: int = 90) -> bool:
         return True  # エラー時は古いとみなす（安全側に倒す）
 
 
+def _max_legacy_pickle_size_bytes(default: int = 10 * 1024 * 1024) -> int:
+    """Return max allowed legacy pickle size in bytes.
+
+    Security note:
+        Legacy pickle migration is a temporary compatibility path. A strict
+        file-size limit reduces memory exhaustion risk from oversized pickle
+        payloads. Invalid env values fail closed to the secure default.
+    """
+    raw = os.getenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", str(default)).strip()
+    try:
+        size = int(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "[SECURITY] Invalid VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES=%r; "
+            "using default=%d",
+            raw,
+            default,
+        )
+        return default
+    if size <= 0:
+        logger.warning(
+            "[SECURITY] Non-positive VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES=%r; "
+            "using default=%d",
+            raw,
+            default,
+        )
+        return default
+    return size
+
+
+def _safe_read_legacy_pickle_bytes(path: Path) -> bytes:
+    """Read legacy pickle bytes with strict size validation.
+
+    The function checks file metadata before allocating memory and raises
+    ``ValueError`` when the payload exceeds the configured size limit.
+    """
+    max_size = _max_legacy_pickle_size_bytes()
+    file_size = path.stat().st_size
+    if file_size > max_size:
+        raise ValueError(
+            "legacy pickle file is too large for secure migration "
+            f"({file_size} bytes > {max_size} bytes)"
+        )
+
+    with open(path, "rb") as f:
+        data = f.read(max_size + 1)
+
+    if len(data) > max_size:
+        raise ValueError(
+            "legacy pickle payload exceeds secure migration size limit "
+            f"({len(data)} bytes > {max_size} bytes)"
+        )
+    return data
+
+
 def _validate_pickle_data_structure(data: Any) -> bool:
     """
     ★ セキュリティ修正: デシリアライズ後のデータ構造を検証する。
@@ -391,8 +446,7 @@ class VectorMemory:
                 logger.info("[VectorMemory] Migrating from legacy pickle format...")
                 try:
                     # セキュリティ: RestrictedUnpickler を使用して安全にデシリアライズ
-                    with open(legacy_pkl_path, "rb") as f:
-                        raw_data = f.read()
+                    raw_data = _safe_read_legacy_pickle_bytes(legacy_pkl_path)
                     data = RestrictedUnpickler.loads(raw_data)
 
                     self.documents = data.get("documents", [])
@@ -2028,7 +2082,6 @@ def rebuild_vector_index():
         _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
         logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 
 

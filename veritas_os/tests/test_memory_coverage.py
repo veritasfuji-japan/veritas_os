@@ -77,6 +77,38 @@ class TestIsPickleFileStale:
         assert memory._is_pickle_file_stale(p) is True
 
 
+
+
+class TestLegacyPickleSizeLimit:
+    def test_max_pickle_size_default(self, monkeypatch):
+        monkeypatch.delenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", raising=False)
+        assert memory._max_legacy_pickle_size_bytes() == 10 * 1024 * 1024
+
+    def test_max_pickle_size_invalid_env_uses_default(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", "invalid")
+        assert memory._max_legacy_pickle_size_bytes() == 10 * 1024 * 1024
+
+    def test_max_pickle_size_non_positive_uses_default(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", "0")
+        assert memory._max_legacy_pickle_size_bytes() == 10 * 1024 * 1024
+
+    def test_safe_read_legacy_pickle_bytes_within_limit(self, tmp_path, monkeypatch):
+        p = tmp_path / "legacy.pkl"
+        payload = b"abcde"
+        p.write_bytes(payload)
+        monkeypatch.setenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", "5")
+
+        assert memory._safe_read_legacy_pickle_bytes(p) == payload
+
+    def test_safe_read_legacy_pickle_bytes_oversized_raises(self, tmp_path, monkeypatch):
+        p = tmp_path / "legacy.pkl"
+        p.write_bytes(b"012345")
+        monkeypatch.setenv("VERITAS_MEMORY_MAX_PICKLE_SIZE_BYTES", "5")
+
+        with pytest.raises(ValueError, match="too large"):
+            memory._safe_read_legacy_pickle_bytes(p)
+
+
 class TestValidatePickleDataStructure:
     def test_valid_structure_no_embeddings(self):
         data = {"documents": [{"id": "1"}], "embeddings": None}
