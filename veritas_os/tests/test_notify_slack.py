@@ -151,6 +151,26 @@ class NotifySlackTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         mock_post.assert_not_called()
 
+    def test_build_payload_strips_control_characters(self):
+        """Outgoing message should remove control chars before payload build."""
+        module = load_module()
+
+        payload = module.build_payload("hello\x00world\n\x07ok")
+
+        self.assertIn("hello", payload["text"])
+        self.assertIn("world", payload["text"])
+        self.assertNotIn("\x00", payload["text"])
+        self.assertNotIn("\x07", payload["text"])
+
+    def test_build_payload_truncates_oversized_message(self):
+        """Outgoing message should be bounded to avoid oversized payloads."""
+        module = load_module()
+        long_message = "a" * (module.MAX_MESSAGE_LENGTH + 100)
+
+        payload = module.build_payload(long_message)
+
+        self.assertEqual(payload["text"].count("a"), module.MAX_MESSAGE_LENGTH)
+
 
 if __name__ == "__main__":
     unittest.main()
