@@ -280,7 +280,11 @@ def _post_with_retry(
     Security note:
         Redirects are disabled so that a trusted WEBSEARCH endpoint cannot
         bounce requests to internal/private addresses (SSRF via redirect).
+        Environment-derived HTTP(S) proxy settings are explicitly disabled
+        to prevent accidental API-key forwarding via runtime proxy injection.
     """
+    request_proxies = {"http": None, "https": None}
+
     for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
         try:
             response = requests.post(
@@ -289,6 +293,7 @@ def _post_with_retry(
                 json=payload,
                 timeout=timeout,
                 allow_redirects=False,
+                proxies=request_proxies,
             )
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
