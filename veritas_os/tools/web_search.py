@@ -363,18 +363,28 @@ def _is_obviously_private_or_local_host(hostname: str) -> bool:
 
 
 @lru_cache(maxsize=256)
+def _resolve_host_infos(host: str) -> tuple[tuple[Any, ...], ...]:
+    """Resolve host addresses with LRU caching for successful lookups only.
+
+    The function intentionally propagates resolution errors so failed lookups
+    are not cached. This avoids long-lived false positives when DNS fails
+    transiently in CI/sandbox environments.
+    """
+    return tuple(socket.getaddrinfo(host, None))
+
+
 def _is_private_or_local_host(hostname: str) -> bool:
     """ホストが localhost / private / loopback / link-local かを判定する。
 
-    DNS 解決は外部 I/O であり繰り返すと遅延や負荷が大きくなるため、
-    直近の判定結果を LRU キャッシュする。
+    DNS 解決の成功結果だけを LRU キャッシュし、失敗はキャッシュしない。
+    これにより一時的な名前解決障害での過剰ブロックを緩和する。
     """
     host = _canonicalize_hostname(hostname)
     if _is_obviously_private_or_local_host(host):
         return True
 
     try:
-        infos = socket.getaddrinfo(host, None)
+        infos = _resolve_host_infos(host)
     except (socket.gaierror, OSError, UnicodeError):
         # DNS解決不能や不正なホスト名（IDNA変換エラー等）は
         # 誤設定かローカル向け名の可能性が高いため、保守的にブロックする。
@@ -396,6 +406,14 @@ def _is_private_or_local_host(hostname: str) -> bool:
         ):
             return True
     return False
+
+
+def _clear_private_host_cache() -> None:
+    """Clear DNS lookup cache used by SSRF host checks."""
+    _resolve_host_infos.cache_clear()
+
+
+_is_private_or_local_host.cache_clear = _clear_private_host_cache
 
 
 def _is_allowed_websearch_url(url: str) -> bool:
