@@ -114,6 +114,25 @@ def test_cosine_index_refuses_non_regular_file_path(tmp_path):
     assert idx.ids == []
 
 
+def test_cosine_index_refuses_path_under_symlink_directory(tmp_path):
+    """親ディレクトリがシンボリックリンクなら読み込みを拒否する。"""
+    real_dir = tmp_path / "real_dir"
+    real_dir.mkdir()
+    link_dir = tmp_path / "linked_dir"
+    link_dir.symlink_to(real_dir, target_is_directory=True)
+
+    p = link_dir / "index.npz"
+    vecs = np.array([[1.0, 0.0]], dtype=np.float32)
+    ids = np.array(["a"], dtype=str)
+    np.savez(p, vecs=vecs, ids=ids)
+
+    idx = CosineIndex(dim=2, path=p)
+
+    assert idx.size == 0
+    assert idx.vecs.shape == (0, 2)
+    assert idx.ids == []
+
+
 def test_cosine_index_legacy_npz_requires_opt_in(tmp_path, monkeypatch):
     """レガシーnpz(allow_pickleが必要)はopt-inしないと無視される。"""
     p = tmp_path / "legacy_index.npz"

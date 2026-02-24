@@ -82,7 +82,31 @@ def _is_safe_index_path(path: Path) -> bool:
     Security rationale:
         - Symlinks can redirect reads to unexpected files.
         - Non-regular files (directories/devices/FIFOs) can cause unsafe behavior.
+        - Symlinked parent directories can hide redirections even when the
+          final file itself is not a symlink.
     """
+
+    for parent in path.parents:
+        # Stop at filesystem root to avoid unnecessary checks.
+        if parent == parent.parent:
+            break
+        try:
+            if parent.is_symlink():
+                logger.warning(
+                    "[CosineIndex] Refusing to load from path under symlink "
+                    "directory for security: %s (via %s)",
+                    path,
+                    parent,
+                )
+                return False
+        except OSError as exc:
+            logger.warning(
+                "[CosineIndex] Failed to inspect parent path (%s): %s",
+                parent,
+                exc,
+            )
+            return False
+
     try:
         if path.is_symlink():
             logger.warning(
