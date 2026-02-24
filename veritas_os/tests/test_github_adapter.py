@@ -14,6 +14,10 @@ def test_prepare_query_basic_and_truncate():
     assert q_ctrl == "a b"
     assert truncated_ctrl is False
 
+    q_bidi, truncated_bidi = github_adapter._prepare_query("safe\u202Etext")
+    assert q_bidi == "safe text"
+    assert truncated_bidi is False
+
     # None でも落ちない
     q2, truncated2 = github_adapter._prepare_query(None)
     assert q2 == ""
@@ -231,6 +235,20 @@ def test_normalize_repo_item_sanitizes_control_chars_and_whitespace():
 
     assert result["full_name"] == "owner/ repo"
     assert result["description"] == "line1 line2"
+
+
+def test_normalize_repo_item_sanitizes_bidi_controls():
+    result = github_adapter._normalize_repo_item(
+        {
+            "full_name": "ow\u202Ener/repo",
+            "html_url": "https://github.com/owner/repo",
+            "description": "desc\u2066spoof\u2069",
+            "stargazers_count": 1,
+        }
+    )
+
+    assert result["full_name"] == "ow ner/repo"
+    assert result["description"] == "desc spoof"
 
 
 def test_sanitize_text_field_limits_length():
