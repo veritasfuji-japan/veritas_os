@@ -49,6 +49,20 @@ def _coerce_float(value: Any, default: float = 0.0) -> float:
     return parsed
 
 
+def _as_dict(value: Any) -> Dict[str, Any]:
+    """Return a dictionary value, or an empty dict for malformed payloads."""
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _as_list(value: Any) -> List[Any]:
+    """Return a list value, or an empty list for malformed payloads."""
+    if isinstance(value, list):
+        return value
+    return []
+
+
 # --------- VERITAS API 呼び出しヘルパー ---------
 
 async def call_veritas_decide(query: str) -> Dict[str, Any]:
@@ -75,10 +89,10 @@ async def call_veritas_decide(query: str) -> Dict[str, Any]:
 
 def format_main_answer(res: Dict[str, Any]) -> str:
     """① メインの回答エリア（人間が一番見るところ）"""
-    chosen = res.get("chosen") or {}
-    gate = res.get("gate") or {}
-    values = res.get("values") or {}
-    planner = res.get("planner") or res.get("plan") or {}
+    chosen = _as_dict(res.get("chosen"))
+    gate = _as_dict(res.get("gate"))
+    values = _as_dict(res.get("values"))
+    planner = _as_dict(res.get("planner") or res.get("plan"))
 
     title = chosen.get("title") or "決定された次の一手"
     desc = chosen.get("description") or ""
@@ -88,9 +102,11 @@ def format_main_answer(res: Dict[str, Any]) -> str:
     telos = _coerce_float(res.get("telos_score"), default=0.0)
 
     # Planner ステップ（上位5件）
-    steps = (planner.get("steps") or [])[:5]
+    steps = _as_list(planner.get("steps"))[:5]
     steps_md_lines: List[str] = []
     for i, st in enumerate(steps, 1):
+        if not isinstance(st, dict):
+            continue
         st_title = st.get("title") or st.get("name") or f"Step {i}"
         st_detail = st.get("detail") or st.get("description") or ""
         steps_md_lines.append(f"{i}. **{st_title}** - {st_detail}")
@@ -134,8 +150,8 @@ def format_main_answer(res: Dict[str, Any]) -> str:
 
 def format_metrics(res: Dict[str, Any]) -> str:
     """② メトリクス（latency等）"""
-    extras = res.get("extras") or {}
-    metrics = extras.get("metrics") or {}
+    extras = _as_dict(res.get("extras"))
+    metrics = _as_dict(extras.get("metrics"))
 
     latency = metrics.get("latency_ms")
     mem_evi_cnt = metrics.get("mem_evidence_count")
@@ -174,11 +190,11 @@ def format_metrics(res: Dict[str, Any]) -> str:
 
 def format_memory_and_evidence(res: Dict[str, Any]) -> str:
     """③ Memory / Evidence 一覧"""
-    extras = res.get("extras") or {}
-    mem_cites = extras.get("memory_citations") or res.get("memory_citations") or []
+    extras = _as_dict(res.get("extras"))
+    mem_cites = _as_list(extras.get("memory_citations") or res.get("memory_citations"))
     mem_used_count = extras.get("memory_used_count") or res.get("memory_used_count")
 
-    evidence = res.get("evidence") or []
+    evidence = _as_list(res.get("evidence"))
 
     # Memory 由来 evidence 抜粋
     mem_evi: List[Dict[str, Any]] = []
@@ -199,6 +215,8 @@ def format_memory_and_evidence(res: Dict[str, Any]) -> str:
     if mem_cites:
         lines.append("\n**Memory citations（id / kind / score）**")
         for c in mem_cites[:10]:
+            if not isinstance(c, dict):
+                continue
             cid = c.get("id")
             kind = c.get("kind")
             score = c.get("score")
@@ -239,14 +257,14 @@ def _is_agi_like_text(text: str) -> bool:
 
 def format_web_results(res: Dict[str, Any]) -> str:
     """④ Web Search / 外部ツール結果（AGI っぽいものだけ表示）"""
-    extras = res.get("extras") or {}
-    env_tools = extras.get("env_tools") or {}
+    extras = _as_dict(res.get("extras"))
+    env_tools = _as_dict(extras.get("env_tools"))
 
-    web = env_tools.get("web_search") or {}
+    web = _as_dict(env_tools.get("web_search"))
     ok = web.get("ok")
     error = (web.get("error") or "").lower()
-    meta = web.get("meta") or {}
-    results = web.get("results") or []
+    meta = _as_dict(web.get("meta"))
+    results = _as_list(web.get("results"))
 
     lines: List[str] = ["### 🌐 Web Search / 外部ツール結果"]
 
@@ -257,6 +275,8 @@ def format_web_results(res: Dict[str, Any]) -> str:
     # まず AGI っぽい結果だけ抽出
     agi_results: List[Dict[str, Any]] = []
     for r in results:
+        if not isinstance(r, dict):
+            continue
         title = r.get("title") or ""
         snip = r.get("snippet") or ""
         if _is_agi_like_text(title + " " + snip):

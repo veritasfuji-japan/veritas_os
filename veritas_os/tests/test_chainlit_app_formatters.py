@@ -100,3 +100,35 @@ def test_format_main_answer_handles_non_numeric_gate_values() -> None:
 
     assert "FUJIリスク: **0.000**" in result
     assert "Telosスコア: **0.000**" in result
+
+
+def test_format_web_results_handles_non_dict_tools_payload() -> None:
+    """Formatter should avoid crashes for malformed tool payload types."""
+    result = module.format_web_results(
+        {
+            "extras": {
+                "env_tools": {
+                    "web_search": "broken",
+                }
+            }
+        }
+    )
+
+    assert "検索エラー" in result
+
+
+def test_format_main_answer_ignores_non_dict_plan_steps() -> None:
+    """Formatter should skip invalid step items and keep valid planner steps."""
+    result = module.format_main_answer(
+        {
+            "chosen": {"title": "A"},
+            "gate": {"decision_status": "allow", "risk": 0.1},
+            "values": {"total": 1.0},
+            "planner": {
+                "steps": ["bad-step", {"title": "valid", "detail": "ok"}],
+            },
+        }
+    )
+
+    assert "bad-step" not in result
+    assert "valid" in result
