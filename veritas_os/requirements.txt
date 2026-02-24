@@ -6,7 +6,8 @@
 # to upgrade specific packages after testing.
 
 # --- API / Server ---
-fastapi==0.115.0
+# NOTE: Keep transitive deps resolved by direct package constraints to avoid resolver conflicts.
+fastapi==0.120.0
 uvicorn==0.30.3
 pydantic==2.8.2
 python-dotenv==1.0.1
@@ -28,7 +29,7 @@ matplotlib==3.9.2
 jinja2==3.1.6
 numpy==1.26.4
 pandas==2.2.3
-pdfplumber==0.11.4
+pdfplumber==0.11.8
 trio==0.26.2
 
 # --- System Tools (optional but stable) ---
