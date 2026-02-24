@@ -510,6 +510,33 @@ class TestPostWithRetry:
 
         assert calls["count"] == 1
 
+    def test_disables_env_proxy_usage(self, monkeypatch):
+        """HTTP requests should ignore env-derived proxy configuration."""
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_MAX_RETRIES", 1, raising=False)
+
+        recorded_kwargs = {}
+
+        class DummyResponse:
+            status_code = 200
+
+            def raise_for_status(self):
+                return None
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            recorded_kwargs.update(kwargs)
+            return DummyResponse()
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        web_search_mod._post_with_retry(
+            "https://example.com",
+            headers={"X-API-KEY": "dummy"},
+            payload={"q": "test"},
+            timeout=5,
+        )
+
+        assert recorded_kwargs.get("proxies") == {"http": None, "https": None}
+
 
 class TestIsAgiQueryExtended:
     """Extended tests for _is_agi_query."""
