@@ -8,6 +8,7 @@ Security considerations:
 
 import datetime
 import os
+import re
 import sys
 from urllib.parse import urlparse
 
@@ -15,12 +16,29 @@ import requests
 
 DEFAULT_TIMEOUT_SEC = 10
 ALLOWED_WEBHOOK_HOSTS = {"hooks.slack.com", "hooks.slack-gov.com"}
+MAX_MESSAGE_LENGTH = 3000
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _sanitize_message(message: str) -> str:
+    """Normalize outgoing message text for safe Slack delivery.
+
+    Security note:
+        Control characters can pollute logs/terminals and oversized payloads
+        can trigger downstream API errors. This helper strips control chars,
+        trims surrounding whitespace, and enforces a bounded message size.
+    """
+    text = _RE_CONTROL_CHARS.sub("", str(message or "")).strip()
+    if len(text) > MAX_MESSAGE_LENGTH:
+        return text[:MAX_MESSAGE_LENGTH]
+    return text
 
 
 def build_payload(message: str) -> dict[str, str]:
     """Build the Slack webhook payload for a user-facing notification."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return {"text": f"🧠 *VERITAS通知*\n>{message}\n🕒 {timestamp}"}
+    safe_message = _sanitize_message(message)
+    return {"text": f"🧠 *VERITAS通知*\n>{safe_message}\n🕒 {timestamp}"}
 
 
 def is_allowed_slack_webhook_url(webhook_url: str) -> bool:
