@@ -479,6 +479,38 @@ class TestClassifyWebsearchError:
         # Should handle gracefully
 
 
+class TestPostWithRetry:
+    """Tests for retry policy in _post_with_retry."""
+
+    def test_does_not_retry_on_non_retryable_http_error(self, monkeypatch):
+        """HTTP 4xx (except 429) should not be retried."""
+        monkeypatch.setattr(web_search_mod, "WEBSEARCH_MAX_RETRIES", 3, raising=False)
+
+        calls = {"count": 0}
+
+        class DummyResponse:
+            status_code = 400
+
+            def raise_for_status(self):
+                raise web_search_mod.requests.exceptions.HTTPError(response=self)
+
+        def fake_post(url, headers, json, timeout, **kwargs):
+            calls["count"] += 1
+            return DummyResponse()
+
+        monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+        with pytest.raises(web_search_mod.requests.exceptions.HTTPError):
+            web_search_mod._post_with_retry(
+                "https://example.com",
+                headers={},
+                payload={},
+                timeout=5,
+            )
+
+        assert calls["count"] == 1
+
+
 class TestIsAgiQueryExtended:
     """Extended tests for _is_agi_query."""
 
