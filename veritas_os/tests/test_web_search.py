@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 import importlib
+import socket
 
 import pytest
 
@@ -124,6 +125,33 @@ def test_normalize_result_item_rejects_url_without_hostname() -> None:
         "snippet": "x",
     }
     assert web_search_mod._normalize_result_item(item) is None
+
+
+def test_private_host_check_does_not_cache_dns_failure(monkeypatch) -> None:
+    """一時的な DNS 失敗はキャッシュせず、次回再解決を試みる。"""
+    web_search_mod._is_private_or_local_host.cache_clear()
+
+    call_count = {"count": 0}
+
+    def fake_getaddrinfo(_host: str, _port: object) -> list[tuple[Any, ...]]:
+        call_count["count"] += 1
+        if call_count["count"] == 1:
+            raise socket.gaierror("temporary failure")
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                ("93.184.216.34", 0),
+            ),
+        ]
+
+    monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
+
+    assert web_search_mod._is_private_or_local_host("example.com") is True
+    assert web_search_mod._is_private_or_local_host("example.com") is False
+    assert call_count["count"] == 2
 
 
 def test_normalize_result_item_rejects_missing_url() -> None:
