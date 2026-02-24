@@ -127,6 +127,32 @@ def test_normalize_result_item_rejects_url_without_hostname() -> None:
     assert web_search_mod._normalize_result_item(item) is None
 
 
+
+
+def test_private_host_check_blocks_carrier_grade_nat_literal() -> None:
+    """CGNAT (100.64.0.0/10) のIPリテラルは非グローバルとして遮断する。"""
+    web_search_mod._is_private_or_local_host.cache_clear()
+    assert web_search_mod._is_private_or_local_host("100.64.0.1") is True
+
+
+def test_private_host_check_blocks_carrier_grade_nat_dns_result(monkeypatch) -> None:
+    """DNS 解決先が CGNAT の場合も安全側で遮断する。"""
+    web_search_mod._is_private_or_local_host.cache_clear()
+
+    def fake_getaddrinfo(_host: str, _port: object) -> list[tuple[Any, ...]]:
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                ("100.64.0.10", 0),
+            ),
+        ]
+
+    monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
+
+    assert web_search_mod._is_private_or_local_host("public.example") is True
 def test_private_host_check_does_not_cache_dns_failure(monkeypatch) -> None:
     """一時的な DNS 失敗はキャッシュせず、次回再解決を試みる。"""
     web_search_mod._is_private_or_local_host.cache_clear()
