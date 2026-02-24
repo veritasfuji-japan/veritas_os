@@ -209,7 +209,45 @@ def _get_failed_auth_policy() -> tuple[int, int]:
     return max_failures, window_seconds
 
 
+def _get_failed_auth_tracking_capacity() -> int:
+    """Return max number of tracked failed-auth identifiers.
+
+    Security note:
+        Failed-auth tracking keyed by ``client:username`` can be abused with
+        many unique usernames to grow memory usage. A bounded capacity keeps
+        lockout controls effective while reducing memory-exhaustion risk.
+    """
+    raw_capacity = os.getenv("DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS", "10000")
+    raw_capacity = raw_capacity.strip()
+    default_capacity = 10_000
+    min_capacity = 100
+    max_capacity = 100_000
+
+    try:
+        parsed = int(raw_capacity)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS=%r; using default %s.",
+            raw_capacity,
+            default_capacity,
+        )
+        return default_capacity
+
+    if parsed < min_capacity or parsed > max_capacity:
+        logger.warning(
+            "DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS=%r is outside [%s, %s]; "
+            "using default %s.",
+            raw_capacity,
+            min_capacity,
+            max_capacity,
+            default_capacity,
+        )
+        return default_capacity
+    return parsed
+
+
 _FAILED_AUTH_MAX_FAILURES, _FAILED_AUTH_WINDOW_SECONDS = _get_failed_auth_policy()
+_FAILED_AUTH_MAX_TRACKED_IDENTIFIERS = _get_failed_auth_tracking_capacity()
 _FAILED_AUTH_ATTEMPTS: dict[str, list[float]] = {}
 _FAILED_AUTH_LOCK = threading.Lock()
 
@@ -245,6 +283,25 @@ def _record_failed_dashboard_auth(identifier: str, now: float | None = None) -> 
     """Store a failed dashboard authentication attempt for throttling."""
     current_time = now if now is not None else time.time()
     with _FAILED_AUTH_LOCK:
+        stale_keys = [
+            key
+            for key, timestamps in _FAILED_AUTH_ATTEMPTS.items()
+            if not _collect_recent_failures(
+                now=current_time,
+                failure_timestamps=timestamps,
+                window_seconds=_FAILED_AUTH_WINDOW_SECONDS,
+            )
+        ]
+        for stale_key in stale_keys:
+            _FAILED_AUTH_ATTEMPTS.pop(stale_key, None)
+
+        while len(_FAILED_AUTH_ATTEMPTS) >= _FAILED_AUTH_MAX_TRACKED_IDENTIFIERS:
+            oldest_key = min(
+                _FAILED_AUTH_ATTEMPTS,
+                key=lambda key: _FAILED_AUTH_ATTEMPTS[key][-1],
+            )
+            _FAILED_AUTH_ATTEMPTS.pop(oldest_key, None)
+
         history = _FAILED_AUTH_ATTEMPTS.get(identifier, [])
         recent = _collect_recent_failures(
             now=current_time,

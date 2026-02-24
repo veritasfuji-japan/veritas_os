@@ -191,6 +191,30 @@ def test_failed_auth_policy_uses_defaults_when_invalid(monkeypatch, caplog):
     assert "Invalid DASHBOARD_AUTH_WINDOW_SECONDS" in caplog.text
 
 
+def test_failed_auth_tracking_capacity_uses_default_when_invalid(monkeypatch, caplog):
+    """Invalid tracking capacity should fall back to secure default."""
+    monkeypatch.setenv("DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS", "invalid")
+    caplog.set_level("WARNING")
+
+    capacity = dashboard_server._get_failed_auth_tracking_capacity()
+
+    assert capacity == 10_000
+    assert "Invalid DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS" in caplog.text
+
+
+def test_failed_auth_tracking_capacity_uses_default_when_out_of_bounds(
+    monkeypatch, caplog
+):
+    """Out-of-range capacity should be rejected to avoid bad configurations."""
+    monkeypatch.setenv("DASHBOARD_AUTH_MAX_TRACKED_IDENTIFIERS", "99")
+    caplog.set_level("WARNING")
+
+    capacity = dashboard_server._get_failed_auth_tracking_capacity()
+
+    assert capacity == 10_000
+    assert "outside [100, 100000]" in caplog.text
+
+
 def test_failed_auth_tracking_counts_within_window(monkeypatch):
     """Failed auth entries should expire after the configured time window."""
     monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_MAX_FAILURES", 2)
@@ -203,6 +227,30 @@ def test_failed_auth_tracking_counts_within_window(monkeypatch):
 
     assert dashboard_server._is_dashboard_auth_locked(key, now=109.5) is True
     assert dashboard_server._is_dashboard_auth_locked(key, now=111.0) is False
+
+
+def test_record_failed_dashboard_auth_prunes_stale_and_limits_capacity(monkeypatch):
+    """Failed-auth tracker should prune stale entries and enforce capacity cap."""
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_WINDOW_SECONDS", 10)
+    monkeypatch.setattr(dashboard_server, "_FAILED_AUTH_MAX_TRACKED_IDENTIFIERS", 2)
+    monkeypatch.setattr(
+        dashboard_server,
+        "_FAILED_AUTH_ATTEMPTS",
+        {
+            "stale:user": [1.0],
+            "old:user": [95.0],
+            "new:user": [99.0],
+        },
+    )
+
+    dashboard_server._record_failed_dashboard_auth("target:user", now=100.0)
+
+    attempts = dashboard_server._FAILED_AUTH_ATTEMPTS
+    assert "stale:user" not in attempts
+    assert "old:user" not in attempts
+    assert "new:user" in attempts
+    assert "target:user" in attempts
+    assert len(attempts) == 2
 
 
 def test_verify_credentials_returns_429_after_repeated_failures(
