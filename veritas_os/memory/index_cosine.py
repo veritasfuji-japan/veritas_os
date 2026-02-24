@@ -126,7 +126,7 @@ class CosineIndex:
         Raises:
             ValueError: If ``dim`` is not a positive integer.
         """
-        if not isinstance(dim, int) or dim < 1:
+        if not isinstance(dim, int) or isinstance(dim, bool) or dim < 1:
             raise ValueError(f"CosineIndex.__init__: dim must be a positive int, got {dim!r}")
 
         self.dim = dim

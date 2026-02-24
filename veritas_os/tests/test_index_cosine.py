@@ -35,3 +35,11 @@ def test_cosine_index_load_keeps_finite_vectors(tmp_path: Path) -> None:
     assert idx.size == 2
     results = idx.search(np.array([1.0, 0.0], dtype=np.float32), k=1)
     assert results[0][0][0] == "x"
+
+
+def test_cosine_index_rejects_bool_dimension() -> None:
+    """`bool` is not a valid dimension even though it subclasses `int`."""
+    import pytest
+
+    with pytest.raises(ValueError, match="dim must be a positive int"):
+        CosineIndex(dim=True)
