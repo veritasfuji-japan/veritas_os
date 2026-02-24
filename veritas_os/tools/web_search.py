@@ -348,14 +348,7 @@ def _is_obviously_private_or_local_host(hostname: str) -> bool:
 
     try:
         ip = ipaddress.ip_address(host)
-        return (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        )
+        return not ip.is_global
     except ValueError:
         pass
 
@@ -396,14 +389,7 @@ def _is_private_or_local_host(hostname: str) -> bool:
             ip = ipaddress.ip_address(ip_text)
         except ValueError:
             continue
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_multicast
-            or ip.is_reserved
-            or ip.is_unspecified
-        ):
+        if not ip.is_global:
             return True
     return False
 
