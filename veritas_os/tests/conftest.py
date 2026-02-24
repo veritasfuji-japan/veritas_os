@@ -35,3 +35,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "asyncio: mark test as asynchronous and execute via asyncio.run",
     )
+    config.addinivalue_line(
+        "markers",
+        "slow: mark test as slow or external-I/O dependent",
+    )
