@@ -262,6 +262,18 @@ def test_sanitize_args_converts_tuple_to_list_for_json_safety():
     assert sanitized["events"][0]["Authorization"] == "***REDACTED***"
     assert sanitized["events"][1] == "ok"
 
+def test_sanitize_args_converts_set_to_sorted_list_for_json_safety():
+    args = {
+        "scopes": {"write", "read", "admin"},
+        "mixed": {("b", 2), ("a", 1)},
+    }
+
+    sanitized = tools._sanitize_args(args)
+
+    assert sanitized["scopes"] == ["admin", "read", "write"]
+    assert isinstance(sanitized["mixed"], list)
+    assert sanitized["mixed"] == [["a", 1], ["b", 2]]
+
 def test_get_tool_stats_empty_when_no_calls(clean_tools_state):
     stats = tools.get_tool_stats()
     assert stats["total_calls"] == 0

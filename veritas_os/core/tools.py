@@ -405,6 +405,10 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, tuple):
         # Keep the payload JSON-serializable for telemetry/log export.
         return [_sanitize_value(item) for item in value]
+    if isinstance(value, set):
+        # Sort by repr() for deterministic output across mixed value types.
+        sanitized_items = [_sanitize_value(item) for item in value]
+        return sorted(sanitized_items, key=repr)
     if isinstance(value, str) and len(value) > 200:
         return value[:200] + "..."
     return value
