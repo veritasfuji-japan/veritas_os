@@ -49,6 +49,7 @@ GITHUB_API_MAX_PER_PAGE = 100
 logger = logging.getLogger(__name__)
 
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+_RE_BIDI_CONTROL_CHARS = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
 _TRUSTED_GITHUB_HOSTS = {"github.com", "www.github.com"}
 _RE_REPO_PATH = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$")
 _RESERVED_GITHUB_PATH_ROOTS = {
@@ -123,6 +124,7 @@ def _prepare_query(raw: str, max_len: int = MAX_QUERY_LEN) -> tuple[str, bool]:
         raw = ""
     q = str(raw).replace("\n", " ").replace("\r", " ").strip()
     q = _RE_CONTROL_CHARS.sub(" ", q)
+    q = _RE_BIDI_CONTROL_CHARS.sub(" ", q)
     q = " ".join(q.split())
     truncated = False
     if len(q) > max_len:
@@ -158,10 +160,15 @@ def _sanitize_text_field(raw_value: object, *, max_len: int) -> str:
     Security policy:
         GitHub metadata is external input and may contain control characters
         (e.g. terminal escape fragments). This sanitizer strips such bytes,
-        collapses whitespace, and enforces a maximum length before values are
-        returned to callers or logs.
+        bidirectional override/isolate controls, collapses whitespace, and
+        enforces a maximum length before values are returned to callers or
+        logs.
+
+        Bidi control characters (U+202A..U+202E, U+2066..U+2069) are removed
+        to reduce visual-spoofing risk in UI and logs.
     """
     value = _RE_CONTROL_CHARS.sub(" ", str(raw_value or ""))
+    value = _RE_BIDI_CONTROL_CHARS.sub(" ", value)
     value = " ".join(value.split())
     if len(value) > max_len:
         return value[:max_len]
