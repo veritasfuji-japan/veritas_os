@@ -867,6 +867,31 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
                     ),
                 }
 
+        # Content-Length が無い/不正でも、実体サイズで上限を確認する。
+        # （中継プロキシ等で Content-Length が省略されるケースを想定）
+        response_body = getattr(resp, "content", b"")
+        if len(response_body) > max_response_bytes:
+            logger.warning(
+                "WEBSEARCH_API response too large body-bytes=%s limit=%s",
+                len(response_body),
+                max_response_bytes,
+            )
+            return {
+                "ok": False,
+                "results": [],
+                "error": "WEBSEARCH_API error: request failed",
+                "meta": _build_meta(
+                    raw_count=0,
+                    agi_filter_applied=False,
+                    agi_result_count=None,
+                    boosted_query=None,
+                    final_query=raw_query,
+                    anchor_applied=False,
+                    blacklist_applied=False,
+                    blocked_count=0,
+                ),
+            }
+
         try:
             data: Dict[str, Any] = resp.json()
         except ValueError as exc:
