@@ -262,6 +262,16 @@ def test_sanitize_websearch_url_accepts_https_scheme() -> None:
     )
 
 
+def test_sanitize_websearch_url_rejects_embedded_credentials() -> None:
+    """HTTPS でも userinfo を含む URL は拒否する。"""
+    assert web_search_mod._sanitize_websearch_url("https://user:pass@example.com/search") == ""
+
+
+def test_sanitize_websearch_url_rejects_missing_hostname() -> None:
+    """HTTPS でも hostname が無い URL は拒否する。"""
+    assert web_search_mod._sanitize_websearch_url("https:///search") == ""
+
+
 def test_resolve_websearch_credentials_ignores_unsafe_runtime_url(monkeypatch) -> None:
     """実行時 URL が危険なスキームならモジュール既定値へフォールバックする。"""
     monkeypatch.setattr(

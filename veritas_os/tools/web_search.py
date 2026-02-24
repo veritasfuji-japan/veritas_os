@@ -70,14 +70,28 @@ def _sanitize_websearch_url(url: str) -> str:
         return ""
 
     parsed = urlparse(candidate)
-    if parsed.scheme == "https":
-        return candidate
+    if parsed.scheme != "https":
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL must use https (got scheme=%r); URL will be ignored",
+            parsed.scheme,
+        )
+        return ""
 
-    logging.getLogger(__name__).warning(
-        "VERITAS_WEBSEARCH_URL must use https (got scheme=%r); URL will be ignored",
-        parsed.scheme,
-    )
-    return ""
+    # URL 埋め込み資格情報は漏えい・誤設定の原因になり得るため禁止。
+    if parsed.username or parsed.password:
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL must not include embedded credentials; URL will be ignored"
+        )
+        return ""
+
+    # 明示的なホスト名がないURLは requests 側で曖昧解釈される恐れがあるため拒否。
+    if not parsed.hostname:
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL must include a hostname; URL will be ignored"
+        )
+        return ""
+
+    return candidate
 
 
 # ★ SSRF対策: WEBSEARCH_URL のスキームを検証
