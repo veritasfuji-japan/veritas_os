@@ -116,6 +116,19 @@ def _safe_int_with_min(key: str, default: int, minimum: int) -> int:
     return max(value, minimum)
 
 
+def _safe_int_with_bounds(
+    key: str,
+    default: int,
+    minimum: int,
+    maximum: int,
+) -> int:
+    """環境変数を整数として読み取り、指定レンジに収めて返す。"""
+    if minimum > maximum:
+        raise ValueError("minimum must be less than or equal to maximum")
+    value = _safe_int(key, default)
+    return min(max(value, minimum), maximum)
+
+
 def _safe_float(key: str, default: float) -> float:
     """環境変数を有限な浮動小数として取得し、異常値は default に戻す。"""
     try:
@@ -153,7 +166,12 @@ WEBSEARCH_MAX_RETRIES = _safe_int_with_min(
 WEBSEARCH_RETRY_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_DELAY", 1.0)
 WEBSEARCH_RETRY_MAX_DELAY = _safe_float("VERITAS_WEBSEARCH_RETRY_MAX_DELAY", 8.0)
 WEBSEARCH_RETRY_JITTER = _safe_float("VERITAS_WEBSEARCH_RETRY_JITTER", 0.1)
-WEBSEARCH_TIMEOUT_SECONDS = _safe_int("VERITAS_WEBSEARCH_TIMEOUT", 15)
+WEBSEARCH_TIMEOUT_SECONDS = _safe_int_with_bounds(
+    "VERITAS_WEBSEARCH_TIMEOUT",
+    15,
+    1,
+    300,
+)
 WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower().rstrip(".")
     for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")

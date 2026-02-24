@@ -72,6 +72,33 @@ class TestSafeIntHelpers:
             == 3
         )
 
+    def test_safe_int_with_bounds_applies_lower_bound(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_WEBSEARCH_TIMEOUT", "0")
+        assert web_search_mod._safe_int_with_bounds(
+            "VERITAS_WEBSEARCH_TIMEOUT",
+            15,
+            1,
+            300,
+        ) == 1
+
+    def test_safe_int_with_bounds_applies_upper_bound(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_WEBSEARCH_TIMEOUT", "9999")
+        assert web_search_mod._safe_int_with_bounds(
+            "VERITAS_WEBSEARCH_TIMEOUT",
+            15,
+            1,
+            300,
+        ) == 300
+
+    def test_safe_int_with_bounds_raises_on_invalid_range(self):
+        with pytest.raises(ValueError):
+            web_search_mod._safe_int_with_bounds(
+                "VERITAS_WEBSEARCH_TIMEOUT",
+                15,
+                10,
+                9,
+            )
+
 
 class TestShouldEnforceVeritasAnchor:
     """Tests for _should_enforce_veritas_anchor function."""
