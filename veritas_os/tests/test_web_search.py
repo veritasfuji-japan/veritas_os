@@ -28,8 +28,14 @@ def _bypass_ssrf(monkeypatch):
 class DummyResponse:
     """requests.post をモックするための簡易レスポンス"""
 
-    def __init__(self, data: Dict[str, Any]):
+    def __init__(
+        self,
+        data: Dict[str, Any],
+        *,
+        headers: Dict[str, str] | None = None,
+    ):
         self._data = data
+        self.headers = headers or {"Content-Type": "application/json"}
 
     def raise_for_status(self) -> None:
         # エラーは発生させない
@@ -95,6 +101,13 @@ def test_sanitize_timeout_seconds_clamps_values() -> None:
     assert web_search_mod._sanitize_timeout_seconds(120) == 60
     assert web_search_mod._sanitize_timeout_seconds("7") == 7
     assert web_search_mod._sanitize_timeout_seconds("abc") == 15
+
+
+def test_sanitize_response_size_bytes_clamps_values() -> None:
+    assert web_search_mod._sanitize_response_size_bytes(100) == 1024
+    assert web_search_mod._sanitize_response_size_bytes(9_999_999) == 2_000_000
+    assert web_search_mod._sanitize_response_size_bytes("4096") == 4096
+    assert web_search_mod._sanitize_response_size_bytes("invalid") == 500_000
 
 
 def test_normalize_result_item_rejects_unsafe_scheme() -> None:
@@ -552,3 +565,52 @@ def test_web_search_handles_request_exception(monkeypatch, _bypass_ssrf) -> None
     assert resp["ok"] is False
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
+
+
+def test_web_search_rejects_non_json_content_type(monkeypatch, _bypass_ssrf) -> None:
+    """JSON 以外の Content-Type 応答は安全側で拒否する。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+    def fake_post(*_args: Any, **_kwargs: Any) -> DummyResponse:
+        return DummyResponse(
+            {"organic": []}, headers={"Content-Type": "text/html"},
+        )
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    response = web_search_mod.web_search("safe query", max_results=2)
+
+    assert response["ok"] is False
+    assert response["results"] == []
+    assert response["error"] == "WEBSEARCH_API error: request failed"
+
+
+def test_web_search_rejects_too_large_content_length(monkeypatch, _bypass_ssrf) -> None:
+    """過大な Content-Length 応答はパース前に拒否する。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_MAX_RESPONSE_BYTES", 2048, raising=False,
+    )
+
+    def fake_post(*_args: Any, **_kwargs: Any) -> DummyResponse:
+        return DummyResponse(
+            {"organic": []},
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": "999999",
+            },
+        )
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    response = web_search_mod.web_search("safe query", max_results=2)
+
+    assert response["ok"] is False
+    assert response["results"] == []
+    assert response["error"] == "WEBSEARCH_API error: request failed"

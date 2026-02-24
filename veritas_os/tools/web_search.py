@@ -172,6 +172,12 @@ WEBSEARCH_TIMEOUT_SECONDS = _safe_int_with_bounds(
     1,
     300,
 )
+WEBSEARCH_MAX_RESPONSE_BYTES = _safe_int_with_bounds(
+    "VERITAS_WEBSEARCH_MAX_RESPONSE_BYTES",
+    500_000,
+    1_024,
+    2_000_000,
+)
 WEBSEARCH_HOST_ALLOWLIST = {
     host.strip().lower().rstrip(".")
     for host in os.getenv("VERITAS_WEBSEARCH_HOST_ALLOWLIST", "").split(",")
@@ -591,6 +597,17 @@ def _sanitize_timeout_seconds(timeout_seconds: Any, *, default: int = 15) -> int
     return min(max(timeout, 1), 60)
 
 
+def _sanitize_response_size_bytes(
+    response_size_bytes: Any, *, default: int = 500_000,
+) -> int:
+    """HTTP レスポンス上限バイト数を安全な範囲に丸める。"""
+    try:
+        size_bytes = int(response_size_bytes)
+    except (TypeError, ValueError):
+        size_bytes = default
+    return min(max(size_bytes, 1_024), 2_000_000)
+
+
 def _build_meta(
     *,
     raw_count: int,
@@ -781,6 +798,61 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             payload=payload,
             timeout=timeout_seconds,
         )
+        max_response_bytes = _sanitize_response_size_bytes(WEBSEARCH_MAX_RESPONSE_BYTES)
+        response_headers = getattr(resp, "headers", {}) or {}
+        content_type = str(response_headers.get("Content-Type", "")).lower()
+        if content_type and "json" not in content_type:
+            logger.warning(
+                "WEBSEARCH_API invalid content-type=%s",
+                content_type,
+            )
+            return {
+                "ok": False,
+                "results": [],
+                "error": "WEBSEARCH_API error: request failed",
+                "meta": _build_meta(
+                    raw_count=0,
+                    agi_filter_applied=False,
+                    agi_result_count=None,
+                    boosted_query=None,
+                    final_query=raw_query,
+                    anchor_applied=False,
+                    blacklist_applied=False,
+                    blocked_count=0,
+                ),
+            }
+
+        content_length = response_headers.get("Content-Length")
+        if content_length is not None:
+            try:
+                content_length_value = int(content_length)
+            except (TypeError, ValueError):
+                content_length_value = None
+            if (
+                content_length_value is not None
+                and content_length_value > max_response_bytes
+            ):
+                logger.warning(
+                    "WEBSEARCH_API response too large content-length=%s limit=%s",
+                    content_length_value,
+                    max_response_bytes,
+                )
+                return {
+                    "ok": False,
+                    "results": [],
+                    "error": "WEBSEARCH_API error: request failed",
+                    "meta": _build_meta(
+                        raw_count=0,
+                        agi_filter_applied=False,
+                        agi_result_count=None,
+                        boosted_query=None,
+                        final_query=raw_query,
+                        anchor_applied=False,
+                        blacklist_applied=False,
+                        blocked_count=0,
+                    ),
+                }
+
         try:
             data: Dict[str, Any] = resp.json()
         except ValueError as exc:
