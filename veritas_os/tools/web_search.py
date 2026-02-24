@@ -680,6 +680,23 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
     # ★ クエリインジェクション対策: 制御文字を除去
     raw_query = _RE_CONTROL_CHARS.sub("", raw_query)
 
+    if not raw_query:
+        return {
+            "ok": False,
+            "results": [],
+            "error": "WEBSEARCH_API invalid query: empty",
+            "meta": _build_meta(
+                raw_count=0,
+                agi_filter_applied=False,
+                agi_result_count=None,
+                boosted_query=None,
+                final_query="",
+                anchor_applied=False,
+                blacklist_applied=False,
+                blocked_count=0,
+            ),
+        }
+
     unavailable_response = {
         "ok": False,
         "results": [],

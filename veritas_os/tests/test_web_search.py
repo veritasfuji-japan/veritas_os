@@ -153,6 +153,8 @@ def test_private_host_check_blocks_carrier_grade_nat_dns_result(monkeypatch) -> 
     monkeypatch.setattr(web_search_mod.socket, "getaddrinfo", fake_getaddrinfo)
 
     assert web_search_mod._is_private_or_local_host("public.example") is True
+
+
 def test_private_host_check_does_not_cache_dns_failure(monkeypatch) -> None:
     """一時的な DNS 失敗はキャッシュせず、次回再解決を試みる。"""
     web_search_mod._is_private_or_local_host.cache_clear()
@@ -204,6 +206,28 @@ def test_normalize_result_item_truncates_long_fields(_bypass_ssrf) -> None:
     assert len(normalized["title"]) == 512
     assert len(normalized["url"]) == 2048
     assert len(normalized["snippet"]) == 2048
+
+
+def test_web_search_rejects_empty_query_after_sanitization(monkeypatch) -> None:
+    """空クエリは外部 API を呼ばずにエラーとして返す。"""
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False)
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+    called = {"value": False}
+
+    def fake_post(*_args: Any, **_kwargs: Any) -> DummyResponse:
+        called["value"] = True
+        return DummyResponse({"organic": []})
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    result = web_search_mod.web_search("\x00\x1f\n\t")
+
+    assert result["ok"] is False
+    assert result["error"] == "WEBSEARCH_API invalid query: empty"
+    assert result["results"] == []
+    assert result["meta"]["final_query"] == ""
+    assert called["value"] is False
 
 
 # -----------------------------
