@@ -285,6 +285,13 @@ def _post_with_retry(
             response.raise_for_status()
             return response
         except requests.exceptions.RequestException as exc:
+            status_code = getattr(getattr(exc, "response", None), "status_code", None)
+            if (
+                isinstance(exc, requests.exceptions.HTTPError)
+                and status_code is not None
+                and not _should_retry_status(status_code)
+            ):
+                raise
             if attempt < WEBSEARCH_MAX_RETRIES:
                 delay = _compute_backoff(attempt)
                 logger.warning(
