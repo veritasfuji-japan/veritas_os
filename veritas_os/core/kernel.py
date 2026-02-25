@@ -174,7 +174,7 @@ def run_env_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         result.setdefault("ok", True)
         result.setdefault("results", [])
         return result
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, OSError) as e:
         error_message = f"env_tool error: {repr(e)[:200]}"
         return {
             "ok": False,
@@ -226,7 +226,7 @@ def _safe_load_persona() -> Dict[str, Any]:
         if isinstance(p, dict):
             return p
         return {}
-    except Exception:
+    except (AttributeError, TypeError, ValueError, RuntimeError):
         return {}
 
 
@@ -546,7 +546,7 @@ async def decide(
                 req_id=req_id,
                 telos_score=telos_score,
             )
-    except Exception:
+    except (TypeError, ValueError, RuntimeError):
         logger.warning("[Kernel] knowledge_qa detection/handling failed", exc_info=True)
 
     # ★ Pipeline から渡された evidence があればそれを使用
@@ -572,7 +572,7 @@ async def decide(
                 "summary": memory_summary,
                 "source": "MemoryOS.summarize_for_planner",
             }
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
             extras["memory"] = {
                 "error": f"memory summarize failed: {repr(e)[:80]}",
             }
@@ -583,7 +583,7 @@ async def decide(
         persona_bias: Dict[str, float] = adapt.clean_bias_weights(
             dict(persona.get("bias_weights") or {})
         )
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, OSError) as e:
         persona = {}
         persona_bias = {}
         logger.warning("[kernel] adapt.load_persona failed: %s", e)
@@ -606,7 +606,7 @@ async def decide(
                 "prediction": world_sim,
                 "source": "world.simulate()",
             }
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
             extras["world"] = {
                 "error": f"world.simulate failed: {repr(e)[:80]}",
             }
@@ -1091,7 +1091,7 @@ async def decide(
         latency_ms = int((time.time() - start_ts) * 1000)
         extras.setdefault("metrics", {})
         extras["metrics"]["latency_ms"] = latency_ms
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         pass
 
     # world_state.json 更新（Pipeline が行う場合はスキップ）

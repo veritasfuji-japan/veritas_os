@@ -396,6 +396,22 @@ class TestLoadPolicyFromStr:
         assert "version" in result
 
 
+def test_load_policy_propagates_unexpected_exception(monkeypatch, tmp_path):
+    """Unexpected exceptions (e.g. KeyboardInterrupt) should propagate."""
+    policy_path = tmp_path / "fuji_policy.yaml"
+    policy_path.write_text("version: test", encoding="utf-8")
+
+    class _BrokenYaml:
+        @staticmethod
+        def safe_load(_content):
+            raise KeyboardInterrupt("stop")
+
+    monkeypatch.setattr(fuji_mod, "yaml", _BrokenYaml)
+
+    with pytest.raises(KeyboardInterrupt):
+        fuji_mod._load_policy(policy_path)
+
+
 # =========================================================
 # fuji_core_decide
 # =========================================================

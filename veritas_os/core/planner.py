@@ -110,25 +110,25 @@ def _normalize_step(
 
     try:
         fallback_eta = float(default_eta_hours)
-    except Exception:
+    except (TypeError, ValueError):
         fallback_eta = 1.0
 
     eta_candidate = s.get("eta_hours", fallback_eta)
     try:
         eta_hours = float(eta_candidate)
-    except Exception:
+    except (TypeError, ValueError):
         eta_hours = fallback_eta
     s["eta_hours"] = max(0.0, eta_hours)
 
     try:
         fallback_risk = float(default_risk)
-    except Exception:
+    except (TypeError, ValueError):
         fallback_risk = 0.1
 
     risk_candidate = s.get("risk", fallback_risk)
     try:
         risk_value = float(risk_candidate)
-    except Exception:
+    except (TypeError, ValueError):
         risk_value = fallback_risk
     s["risk"] = min(1.0, max(0.0, risk_value))
 
@@ -591,7 +591,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
     try:
         obj = json.loads(cleaned)
         return _wrap_if_needed(obj)
-    except Exception:
+    except (TypeError, ValueError, json.JSONDecodeError):
         logger.debug("planner JSON parse attempt 1 (raw) failed")
 
     # 1.5) 先頭ノイズ付きの JSON を raw_decode で救済
@@ -616,7 +616,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         snippet = cleaned[start:end]
         obj = json.loads(snippet)
         return _wrap_if_needed(obj)
-    except Exception:
+    except (TypeError, ValueError, json.JSONDecodeError):
         logger.debug("planner JSON parse attempt 2 (brace extraction) failed")
 
     # 3) 末尾削り
@@ -635,7 +635,7 @@ def _safe_json_extract_core(raw: str) -> Dict[str, Any]:
         try:
             obj = json.loads(candidate)
             return _wrap_if_needed(obj)
-        except Exception:
+        except (TypeError, ValueError, json.JSONDecodeError):
             continue
 
     # 4) "steps":[{...},{...}] から dict だけ拾う（最後の保険）

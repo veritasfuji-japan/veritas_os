@@ -96,6 +96,19 @@ def test_normalize_step_uses_defaults_for_invalid_existing_values():
     assert normalized["risk"] == pytest.approx(0.3)
 
 
+def test_normalize_step_propagates_unexpected_default_conversion_error():
+    class _BadFloat:
+        def __float__(self):
+            raise OverflowError("unexpected")
+
+    with pytest.raises(OverflowError):
+        planner_core._normalize_step(
+            {"id": "s1"},
+            default_eta_hours=_BadFloat(),
+            default_risk=0.1,
+        )
+
+
 # -------------------------------
 # _is_simple_qa / _simple_qa_plan
 # -------------------------------
