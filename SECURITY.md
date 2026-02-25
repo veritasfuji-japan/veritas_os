@@ -55,12 +55,21 @@ The repository enforces automated gates to reduce the risk of introducing known 
 
 ### CI required checks
 - **Dependency audit (Python):** `pip-audit -r veritas_os/requirements.txt`
-- **Dependency audit (Node):** `pnpm audit --audit-level=high`
+- **Dependency audit (Node production, blocking):** `pnpm audit --audit-level=high --prod`
+- **Dependency audit (Node full tree, informational):** `pnpm audit --audit-level=high`
 - **Secret scan:** `gitleaks` on every `push` and `pull_request`
 
 These checks are configured as GitHub Actions workflows and should be treated as required status checks for merges into `main`.
 
 ### Developer local checks (pre-commit)
+
+
+### Node audit policy note
+The required CI gate blocks merges on vulnerabilities in **production Node dependencies**.
+Full-tree Node audit (including dev tooling such as linters) still runs on every CI execution and emits warnings for review.
+
+> This avoids false blockers from dev-tool transitive issues while still surfacing them for remediation planning.
+
 Install and enable local hooks:
 
 ```bash

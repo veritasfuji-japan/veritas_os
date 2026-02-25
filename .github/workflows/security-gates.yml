@@ -46,8 +46,18 @@ jobs:
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Node dependency audit (pnpm audit)
-        run: pnpm audit --audit-level=high
+      - name: Node dependency audit (production dependencies, blocking)
+        run: pnpm audit --audit-level=high --prod
+
+      - name: Node dependency audit (all dependencies, informational)
+        run: |
+          set +e
+          pnpm audit --audit-level=high
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::High vulnerabilities detected in non-production dependency tree (likely tooling)."
+          fi
+          exit 0
 
   secret-scan:
     name: Secret scan (gitleaks)
