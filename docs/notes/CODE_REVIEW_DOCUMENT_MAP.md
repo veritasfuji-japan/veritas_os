@@ -9,14 +9,16 @@
 
 ## 1. まず最初に見る文書（現行の正）
 
-1. `docs/review/CODE_REVIEW_STATUS.md`
+1. `docs/review/CODEX_START_HERE.md`
+   - レビュー着手用の1ページガイド（参照優先順 / 必須コマンド / 禁止事項 / PRテンプレート）
+2. `docs/review/CODE_REVIEW_STATUS.md`
    - 修正進捗の追跡（Fix/Deferred/Accepted）
    - 実装対応の最新状態を把握する基準
-2. `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
+3. `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
    - 実行可能な範囲での最新ランタイム確認結果
    - 環境依存で未実施の項目も明示
 
-> 運用上は、上記 2 ファイルを「一次情報」として扱います。
+> 運用上は、上記 3 ファイルを「一次情報」として扱います。
 
 ---
 
