@@ -1,7 +1,15 @@
+---
+title: VERITAS OS - Code Review Status Update
+doc_type: review_status
+latest: true
+lifecycle: active
+updated_at: 2026-02-25
+---
+
 # VERITAS OS - Code Review Status Update
 
-**Date**: 2026-02-08 (Updated)
-**Status**: Code review issues addressed and new issues identified
+**Date**: 2026-02-25 (Updated)
+**Status**: Single source of truth for review status (active)
 **PR**: copilot/review-all-code-improvements
 
 ---
@@ -10,6 +18,23 @@
 
 - 文書整理ガイド: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - 現行の一次情報: `docs/review/CODE_REVIEW_STATUS.md` + `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
+
+---
+
+## Consolidated Status Policy
+
+- この文書を**唯一のステータス一次情報**として運用する。
+- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md` は履歴アーカイブとして扱う。
+- 最新判定は本書に統合し、重複更新を禁止する。
+
+## Latest Assessment (Integrated)
+
+- **統合時点の全体完成度判定: 68%**
+- 根拠:
+  1. 指摘45件中27件対応（ベースライン60%）。
+  2. `ruff check veritas_os` 通過。
+  3. `test_code_review_fixes*.py` 系統の代表テスト通過（25件）。
+  4. Deferred項目（特に `pickle` 依存）が残るため上限評価を抑制。
 
 ---
 

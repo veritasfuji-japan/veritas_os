@@ -1,4 +1,17 @@
-# CODE REVIEW 2026-02-16（全体完成度評価）
+---
+title: CODE REVIEW 2026-02-16（全体完成度評価）
+doc_type: review_status_archive
+latest: false
+lifecycle: archived
+updated_at: 2026-02-25
+superseded_by: docs/review/CODE_REVIEW_STATUS.md
+---
+
+# CODE REVIEW 2026-02-16（全体完成度評価 / アーカイブ）
+
+> この文書は履歴アーカイブです。最新のステータス判定は
+> `docs/review/CODE_REVIEW_STATUS.md` を参照してください。
+
 
 ## 結論
 - **全体完成度: 68%**

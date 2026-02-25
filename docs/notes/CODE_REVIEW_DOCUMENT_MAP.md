@@ -1,6 +1,13 @@
+---
+title: コードレビュー文書マップ（整理版）
+doc_type: review_document_index
+latest: true
+updated_at: 2026-02-25
+---
+
 # コードレビュー文書マップ（整理版）
 
-最終更新: 2026-02-16
+最終更新: 2026-02-25
 
 この文書は、リポジトリ内に点在しているコードレビュー関連 Markdown の
 **参照順序**と**用途**を整理するためのインデックスです。
@@ -25,7 +32,7 @@
 ## 2. 参照目的別の読み分け
 
 ### A. 直近の包括レビューを読みたい
-- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md`（完成度パーセンテージ評価）
+- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md`（履歴アーカイブ。最新判定は `CODE_REVIEW_STATUS.md` に統合済み）
 - `docs/review/CODE_REVIEW_2026_02_11.md`
 - `docs/review/CODE_REVIEW_2026_02_10.md`
 
