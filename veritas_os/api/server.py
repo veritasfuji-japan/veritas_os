@@ -509,13 +509,64 @@ app.add_middleware(
 )
 
 
-# ★ C-3 修正: リクエストボディサイズ制限 (DoS対策)
-# デフォルト: 10MB。環境変数で設定可能。
-try:
-    MAX_REQUEST_BODY_SIZE = int(os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", 10 * 1024 * 1024))
-except ValueError:
-    MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
-    logger.warning("Invalid VERITAS_MAX_REQUEST_BODY_SIZE, using default 10MB")
+# ★ C-3 継続改善: リクエストボディサイズ制限 (DoS対策)
+# 運用プロファイルごとの推奨値を定義しつつ、環境変数で上書き可能にする。
+DEFAULT_MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
+PROFILE_MAX_REQUEST_BODY_SIZE = {
+    "dev": 10 * 1024 * 1024,
+    "development": 10 * 1024 * 1024,
+    "stg": 8 * 1024 * 1024,
+    "stage": 8 * 1024 * 1024,
+    "staging": 8 * 1024 * 1024,
+    "prod": 5 * 1024 * 1024,
+    "production": 5 * 1024 * 1024,
+}
+
+
+def _resolve_max_request_body_size() -> int:
+    """Resolve request size limit from profile + explicit env override.
+
+    Security notes:
+        - ``VERITAS_MAX_REQUEST_BODY_SIZE`` is always the highest-priority
+          explicit override.
+        - ``VERITAS_ENV`` profile defaults tighten production values to reduce
+          memory pressure and large-body DoS blast radius.
+        - Non-positive or non-integer values are rejected and fall back to a
+          safe default value.
+    """
+    profile = (os.getenv("VERITAS_ENV", "") or "").strip().lower()
+    profile_default = PROFILE_MAX_REQUEST_BODY_SIZE.get(
+        profile,
+        DEFAULT_MAX_REQUEST_BODY_SIZE,
+    )
+
+    raw_override = os.getenv("VERITAS_MAX_REQUEST_BODY_SIZE", "").strip()
+    if not raw_override:
+        return profile_default
+
+    try:
+        parsed = int(raw_override)
+    except ValueError:
+        logger.warning(
+            "Invalid VERITAS_MAX_REQUEST_BODY_SIZE=%r, using profile default=%s",
+            raw_override,
+            profile_default,
+        )
+        return profile_default
+
+    if parsed <= 0:
+        logger.warning(
+            "VERITAS_MAX_REQUEST_BODY_SIZE must be > 0, got %s. "
+            "Using profile default=%s",
+            parsed,
+            profile_default,
+        )
+        return profile_default
+
+    return parsed
+
+
+MAX_REQUEST_BODY_SIZE = _resolve_max_request_body_size()
 
 
 @app.middleware("http")

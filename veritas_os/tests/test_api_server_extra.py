@@ -1184,6 +1184,35 @@ def test_max_request_body_size_is_configurable():
     assert server.MAX_REQUEST_BODY_SIZE > 0
 
 
+def test_resolve_max_request_body_size_uses_profile_default_for_production(
+    monkeypatch,
+):
+    """Production profile should default to a tighter request size limit."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.delenv("VERITAS_MAX_REQUEST_BODY_SIZE", raising=False)
+
+    resolved = server._resolve_max_request_body_size()
+    assert resolved == 5 * 1024 * 1024
+
+
+def test_resolve_max_request_body_size_prefers_explicit_override(monkeypatch):
+    """Explicit size override must take precedence over profile defaults."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_MAX_REQUEST_BODY_SIZE", "2097152")
+
+    resolved = server._resolve_max_request_body_size()
+    assert resolved == 2 * 1024 * 1024
+
+
+def test_resolve_max_request_body_size_rejects_non_positive_override(monkeypatch):
+    """Invalid non-positive override should fall back to profile-safe default."""
+    monkeypatch.setenv("VERITAS_ENV", "staging")
+    monkeypatch.setenv("VERITAS_MAX_REQUEST_BODY_SIZE", "0")
+
+    resolved = server._resolve_max_request_body_size()
+    assert resolved == 8 * 1024 * 1024
+
+
 def test_events_requires_api_key_query_or_header(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
 
