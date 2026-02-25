@@ -2,8 +2,18 @@
 
 ## 結論
 
-前回の改善提案（C-1/C-2/C-3、M-13/M-14/M-15 など）に対して、主要項目は**概ね修正済み**です。  
+前回の改善提案（C-1/C-2/C-3、M-13/M-14/M-15 など）に対して、主要項目は**概ね修正済み**です。
 本再レビュー時点では、重大な新規欠陥（即時停止レベル）は確認していません。
+一方で、運用設定に依存するセキュリティ統制（TLS 終端、プロキシ制限、legacy 互換機能廃止）は、
+実装品質とは別軸で継続監視が必要です。
+
+## 再レビューの判定基準（明確化）
+
+本書では、各項目を次の基準で判定しています。
+
+- ✅ 改善済み: 指摘の根本原因に対する恒久対応が実装され、既存テストまたは追加テストで回帰が抑止されている。
+- ⚠️ 改善済み（限定）: 危険経路は抑制されたが、運用条件や隣接機能に依存する残余リスクがある。
+- ❗ 要継続対応: 一時回避はあるが、期限付き撤去や設計変更など追加アクションが必要。
 
 ## 再レビュー結果サマリー
 
@@ -20,37 +30,75 @@
 | M-15 | `web_search.max_results` 上限なし | ✅ 改善済み | 1〜100 にクランプするサニタイズ関数で制御。 |
 | M-16 | LLM Safety API JSON シリアライズ | ✅ 改善済み | `json.dumps(user_payload, ensure_ascii=False)` を使用。 |
 
+## 変更妥当性の評価（再発防止観点）
+
+1. **同時実行安全性**
+   - 書き込み系だけでなく読み取り系でも同一ロックに統一され、破損・不整合・見かけ上の欠損を抑止。
+2. **クラッシュ一貫性**
+   - `fsync` の順序（ファイル → rename → ディレクトリ）により、電源断時の中間状態を最小化。
+3. **入力境界防御**
+   - body サイズ上限、検索件数クランプにより、リソース枯渇系の攻撃面を縮小。
+4. **情報露出低減**
+   - `/status` の詳細情報をデバッグ条件に限定し、平常時の観測可能性を削減。
+5. **監査整合性**
+   - TrustLog チェーンの前件参照方法改善により、監査証跡の連続性を維持。
+
 ## 確認した主な実装ポイント
 
-- `dataset_writer` は `_dataset_lock`（`RLock`）で排他しつつ JSONL 追記。統計/検索でも同ロックを利用。  
-- `atomic_write_npz` は temp 保存後にファイル `fsync`、`os.replace`、親ディレクトリ `fsync` を実施。  
-- API サーバーは body size 制限ミドルウェアとセキュリティヘッダーミドルウェアを導入。  
-- `/status` はデバッグモード制御により、通常運用で内部エラー詳細を露出しない。  
-- Web 検索は `max_results` をクランプし、極端値でのリソース消費を抑止。  
+- `dataset_writer` は `_dataset_lock`（`RLock`）で排他しつつ JSONL 追記。統計/検索でも同ロックを利用。
+- `atomic_write_npz` は temp 保存後にファイル `fsync`、`os.replace`、親ディレクトリ `fsync` を実施。
+- API サーバーは body size 制限ミドルウェアとセキュリティヘッダーミドルウェアを導入。
+- `/status` はデバッグモード制御により、通常運用で内部エラー詳細を露出しない。
+- Web 検索は `max_results` をクランプし、極端値でのリソース消費を抑止。
 
 ## セキュリティ観点の警告（運用上の残課題）
 
 > 以下は「実装修正が不足」というより、**運用・設定・将来対応**として継続的に注意が必要な項目です。
 
-1. **HSTS は HTTPS 前提**  
+1. **HSTS は HTTPS 前提**
    開発環境の HTTP では実効しないため、本番では TLS 終端を必須にしてください。
 
-2. **Pickle 互換移行コードは残存**  
+2. **Pickle 互換移行コードは残存**
    制限付き実装でも攻撃面が 0 にはならないため、期限付きで完全廃止する方針を維持してください。
 
-3. **`Content-Length` 非依存の巨大ボディ対策**  
+3. **`Content-Length` 非依存の巨大ボディ対策**
    現在はヘッダー値チェック中心です。リバースプロキシ（nginx/caddy 等）側の body 上限と併用することで、回避耐性が上がります。
+
+4. **ログ/監査データの保護境界**
+   JSONL・監査ログが平文保管される構成では、ホスト侵害時に機微情報が二次流出する可能性があります。
+   保存先の暗号化、アクセス制御、保管期限（ローテーション＋削除）をセットで管理してください。
+
+5. **依存ライブラリ更新の遅延リスク**
+   API・シリアライズ・暗号関連依存が長期固定されると、既知脆弱性の取り込み遅延が発生します。
+   SBOM と定期脆弱性スキャン（例: weekly）を運用に組み込むことを推奨します。
+
+## 優先度付きフォローアップ計画
+
+| 優先度 | 期限目安 | 対応内容 | 完了条件 |
+|---|---|---|---|
+| P0 | 即時 | 本番 TLS 終端 + HSTS 有効性確認 | 外部スキャンで HTTPS 強制・HSTS header を確認 |
+| P1 | 1〜2 週間 | 逆プロキシで body 上限/timeout を実装 | `Content-Length` 欠落・chunked 大容量入力を遮断 |
+| P1 | 1〜2 週間 | `/status` 運用ポリシー明文化 | Runbook に debug 切替手順と監査手順を記載 |
+| P2 | 1 か月 | legacy pickle 完全廃止 | 互換コード削除 + データ移行完了 |
+| P2 | 1 か月 | 監査ログ保護（暗号化・保持期限） | 保護設定が IaC/運用手順に反映 |
 
 ## 追加提案（軽微）
 
-- セキュリティヘッダー群の適用対象（APIのみ/静的配信含む）を設計書に明記。  
-- body 上限値を運用プロファイル（dev/stg/prod）別に管理。  
+- セキュリティヘッダー群の適用対象（APIのみ/静的配信含む）を設計書に明記。
+- body 上限値を運用プロファイル（dev/stg/prod）別に管理。
 - legacy pickle 廃止日を README / 運用Runbookに明文化。
 
 ## 実行した検証
 
-- `pytest -q veritas_os/tests/test_dataset_writer.py veritas_os/tests/test_atomic_io.py veritas_os/tests/test_api_server_extra.py -q`  
+- `pytest -q veritas_os/tests/test_dataset_writer.py veritas_os/tests/test_atomic_io.py veritas_os/tests/test_api_server_extra.py -q`
   - すべて成功（外部依存ライブラリ由来の Warning のみ）。
-- `pytest -q veritas_os/tests/test_web_search_extra.py veritas_os/tests/test_logging_rotate.py veritas_os/tests/test_trust_log.py -q`  
+- `pytest -q veritas_os/tests/test_web_search_extra.py veritas_os/tests/test_logging_rotate.py veritas_os/tests/test_trust_log.py -q`
   - すべて成功。
 
+## 受け入れ判定
+
+- 現時点判定: **条件付き Accept**
+- 条件:
+  1. P0（TLS/HSTS）を最優先で完了すること。
+  2. P1（プロキシ制限・運用明文化）を次スプリントに計画化すること。
+  3. P2（legacy pickle 廃止）に期限とオーナーを設定すること。
