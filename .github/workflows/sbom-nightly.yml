@@ -1,0 +1,84 @@
+name: Nightly SBOM
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-sbom:
+    name: Generate and compare SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install SBOM tooling (Python)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install cyclonedx-bom
+
+      - name: Generate Python SBOM (CycloneDX)
+        run: cyclonedx-py requirements veritas_os/requirements.txt --output-file security/sbom/python.cdx.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '9.15.3'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Node SBOM (CycloneDX)
+        run: pnpm dlx @cyclonedx/cyclonedx-npm --output-file security/sbom/node.cdx.json --spec-version 1.5
+
+      - name: Generate SBOM hashes
+        run: |
+          sha256sum security/sbom/python.cdx.json > security/sbom/python.cdx.sha256
+          sha256sum security/sbom/node.cdx.json > security/sbom/node.cdx.sha256
+
+      - name: Compare with baseline hashes
+        run: |
+          set -euo pipefail
+          status=0
+
+          if [ -f security/sbom/baseline/python.cdx.sha256 ]; then
+            diff -u security/sbom/baseline/python.cdx.sha256 security/sbom/python.cdx.sha256 || status=1
+          else
+            echo "::warning::Missing baseline hash: security/sbom/baseline/python.cdx.sha256"
+          fi
+
+          if [ -f security/sbom/baseline/node.cdx.sha256 ]; then
+            diff -u security/sbom/baseline/node.cdx.sha256 security/sbom/node.cdx.sha256 || status=1
+          else
+            echo "::warning::Missing baseline hash: security/sbom/baseline/node.cdx.sha256"
+          fi
+
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::SBOM hash drift detected. Review dependency changes."
+          fi
+
+      - name: Upload SBOM artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-nightly
+          path: |
+            security/sbom/*.cdx.json
+            security/sbom/*.cdx.sha256
+          if-no-files-found: error
