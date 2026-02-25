@@ -178,50 +178,18 @@ jobs:
           exit "$status"
 
   # ============================================================
-  # Frontend: typecheck + lint + unit tests + a11y
+  # Frontend quality gates: lint/test/e2e を Python 側同様に matrix 化
   # ============================================================
-  frontend:
-    name: frontend
+  frontend-quality-gate:
+    name: frontend-${{ matrix.gate }}
+    needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: "9.15.3"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: TypeScript check
-        run: pnpm ui:typecheck
-
-      - name: Lint
-        run: pnpm ui:lint
-
-      - name: Unit tests (vitest + a11y)
-        run: pnpm ui:test
-
-      - name: Build
-        run: pnpm ui:build
-
-  # ============================================================
-  # Frontend E2E: Playwright smoke + a11y (axe)
-  # ============================================================
-  frontend-e2e:
-    name: frontend-e2e
-    needs: frontend
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: ["lint", "test", "e2e"]
 
     steps:
       - name: Checkout
@@ -241,23 +209,50 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
+        if: matrix.gate == 'e2e'
         working-directory: frontend
         run: npx playwright install --with-deps chromium
 
       - name: Build frontend
+        if: matrix.gate == 'e2e'
         run: pnpm ui:build
 
       - name: Verify build output
+        if: matrix.gate == 'e2e'
         run: test -f frontend/.next/BUILD_ID && echo "Build OK"
 
-      - name: Run E2E tests
+      - name: Run frontend quality gate (${{ matrix.gate }})
+        id: frontend_gate
+        continue-on-error: true
         working-directory: frontend
-        run: npx playwright test
+        run: |
+          set -euxo pipefail
+          case "${{ matrix.gate }}" in
+            lint)
+              pnpm lint
+              ;;
+            test)
+              pnpm test
+              ;;
+            e2e)
+              pnpm e2e
+              ;;
+            *)
+              echo "Unknown gate: ${{ matrix.gate }}" >&2
+              exit 1
+              ;;
+          esac
 
-      - name: Upload Playwright report
-        if: always()
+      - name: Upload Playwright artifacts on failure
+        if: always() && matrix.gate == 'e2e' && steps.frontend_gate.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
-          path: frontend/playwright-report
+          name: playwright-failure-artifacts
+          path: |
+            frontend/playwright-report
+            frontend/test-results
           if-no-files-found: warn
+
+      - name: Fail job if frontend quality gate failed
+        if: steps.frontend_gate.outcome == 'failure'
+        run: exit 1
