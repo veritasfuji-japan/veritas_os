@@ -6,7 +6,7 @@
 # to upgrade specific packages after testing.
 
 # --- API / Server ---
-fastapi==0.120.0
+fastapi==0.121.0
 uvicorn==0.30.3
 pydantic==2.8.2
 python-dotenv==1.0.1
