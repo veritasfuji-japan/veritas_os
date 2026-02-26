@@ -37,9 +37,7 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await page.goto("/governance");
     await expect(page.getByRole("heading", { name: "Governance Control" })).toBeVisible();
     await expect(page.getByRole("button", { name: "ポリシーを読み込む" })).toBeVisible();
-
-    // Connection inputs
-    await expect(page.getByLabel("X-API-Key")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connection" })).toBeVisible();
   });
 
   // 4. Navigation works across all pages
