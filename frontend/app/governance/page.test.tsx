@@ -79,9 +79,6 @@ describe("GovernanceControlPage", () => {
     render(<GovernanceControlPage />);
 
     // Enter API key and click load
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -96,10 +93,6 @@ describe("GovernanceControlPage", () => {
   it("shows FUJI rule toggles", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -111,10 +104,6 @@ describe("GovernanceControlPage", () => {
   it("shows diff preview when a toggle is changed", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -132,10 +121,6 @@ describe("GovernanceControlPage", () => {
   it("shows no-change message when policy is unchanged", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -166,10 +151,6 @@ describe("GovernanceControlPage", () => {
       } as Response);
 
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -194,10 +175,6 @@ describe("GovernanceControlPage", () => {
   it("shows policy meta section", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -209,10 +186,6 @@ describe("GovernanceControlPage", () => {
   it("resets draft to saved policy on reset button click", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -236,10 +209,6 @@ describe("GovernanceControlPage", () => {
     } as Response);
 
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
@@ -251,10 +220,6 @@ describe("GovernanceControlPage", () => {
   it("shows value drift card with drift metrics", async () => {
     mockFetchPolicy();
     render(<GovernanceControlPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {

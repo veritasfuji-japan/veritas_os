@@ -15,17 +15,6 @@ describe("DecisionConsolePage", () => {
     expect(screen.getByText("TrustLog")).toBeInTheDocument();
   });
 
-  it("shows 401 message when api key is missing", async () => {
-    render(<DecisionConsolePage />);
-
-    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
-      target: { value: "Test" },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "送信" }));
-
-    expect(await screen.findByText(/401: APIキー不足/)).toBeInTheDocument();
-  });
 
   it("renders structured sections from decide response", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({
@@ -59,10 +48,6 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-
-    fireEvent.change(screen.getByPlaceholderText("API key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "A/B test" },
     });
@@ -114,10 +99,6 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-
-    fireEvent.change(screen.getByPlaceholderText("API key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "governance drift" },
     });
@@ -177,10 +158,6 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-
-    fireEvent.change(screen.getByPlaceholderText("API key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "A/B test" },
     });
@@ -228,10 +205,6 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-
-    fireEvent.change(screen.getByPlaceholderText("API key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
       target: { value: "step expansion" },
     });

@@ -195,6 +195,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard against NEXT_PUBLIC_*KEY exposure
+        run: |
+          set -euo pipefail
+          if rg -n "NEXT_PUBLIC_[A-Z0-9_]*KEY" frontend --glob '!**/*.md'; then
+            echo "Detected forbidden NEXT_PUBLIC_*KEY usage in frontend source." >&2
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
