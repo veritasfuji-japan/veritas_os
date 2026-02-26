@@ -4,6 +4,13 @@ import { Card } from "@veritas/design-system";
 import { useI18n } from "./i18n-provider";
 import { useEffect, useRef, useState } from "react";
 
+interface StreamEvent {
+  id: string | number;
+  type: string;
+  ts: string;
+  payload: unknown;
+}
+
 /**
  * Parse and dispatch SSE payload chunks emitted by the backend stream.
  *
