@@ -801,7 +801,13 @@ class MemoryStore:
                 self._cache_loaded_at = 0.0
 
             return True
-        except (OSError, TimeoutError, TypeError, ValueError) as e:
+        except (
+            OSError,
+            TimeoutError,
+            TypeError,
+            ValueError,
+            RuntimeError,
+        ) as e:
             logger.error("[MemoryOS] save error: %s", e)
             return False
 
