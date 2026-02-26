@@ -115,3 +115,12 @@ def test_memory_sentence_transformers_flag_requires_dependency(monkeypatch):
 
     with pytest.raises(RuntimeError, match="VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"):
         memory_mod.VectorMemory(index_path=None)
+
+
+def test_fuji_yaml_capability_default_is_disabled(monkeypatch):
+    """Fuji YAML policy capability defaults to disabled when env var is unset."""
+    monkeypatch.delenv("VERITAS_CAP_FUJI_YAML_POLICY", raising=False)
+
+    config_mod, _ = _reload_config_and("veritas_os.core.fuji")
+
+    assert config_mod.capability_cfg.enable_fuji_yaml_policy is False

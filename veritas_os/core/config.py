@@ -238,7 +238,7 @@ class CapabilityConfig:
         default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_TRUST_LOG", True)
     )
     enable_fuji_yaml_policy: bool = field(
-        default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_YAML_POLICY", True)
+        default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_YAML_POLICY", False)
     )
     enable_memory_posix_file_lock: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_MEMORY_POSIX_FILE_LOCK", True)

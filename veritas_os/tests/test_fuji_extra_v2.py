@@ -407,6 +407,11 @@ def test_load_policy_propagates_unexpected_exception(monkeypatch, tmp_path):
             raise KeyboardInterrupt("stop")
 
     monkeypatch.setattr(fuji_mod, "yaml", _BrokenYaml)
+    monkeypatch.setattr(
+        fuji_mod.capability_cfg,
+        "enable_fuji_yaml_policy",
+        True,
+    )
 
     with pytest.raises(KeyboardInterrupt):
         fuji_mod._load_policy(policy_path)
