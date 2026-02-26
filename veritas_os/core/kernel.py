@@ -47,6 +47,69 @@ _doctor_active_proc: "subprocess.Popen | None" = None
 _doctor_lock = _threading.Lock()
 
 
+def _read_proc_self_status_seccomp() -> int | None:
+    """Read Linux seccomp mode from ``/proc/self/status``.
+
+    Returns:
+        ``0`` for disabled, ``1`` for strict mode, ``2`` for filter mode,
+        or ``None`` when the value cannot be determined.
+    """
+    from pathlib import Path
+
+    status_path = Path("/proc/self/status")
+    if not status_path.exists():
+        return None
+
+    try:
+        for line in status_path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("Seccomp:"):
+                _, value = line.split(":", 1)
+                return int(value.strip())
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _read_apparmor_profile() -> str | None:
+    """Read the current AppArmor profile label on Linux.
+
+    Returns:
+        The profile label string, or ``None`` when unavailable.
+    """
+    from pathlib import Path
+
+    current_path = Path("/proc/self/attr/current")
+    if not current_path.exists():
+        return None
+
+    try:
+        profile = current_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+    return profile or None
+
+
+def _is_doctor_confinement_profile_active() -> bool:
+    """Return whether process confinement is active for safe auto-doctor.
+
+    Security:
+        ``subprocess.Popen`` widens impact when operational settings are wrong.
+        Auto-starting doctor is therefore allowed only when at least one runtime
+        confinement profile (seccomp or AppArmor) is active.
+    """
+    seccomp_mode = _read_proc_self_status_seccomp()
+    if seccomp_mode is not None and seccomp_mode > 0:
+        return True
+
+    apparmor_profile = _read_apparmor_profile()
+    if not apparmor_profile:
+        return False
+
+    normalized = apparmor_profile.lower()
+    return normalized not in {"unconfined", "docker-default (enforce)"}
+
+
 def _is_safe_python_executable(executable_path: str | None) -> bool:
     """Validate that a Python executable path is safe to launch.
 
@@ -1136,81 +1199,90 @@ async def decide(
     # doctor 自動実行
     # ★ C-1 修正: レート制限付き（最低 _DOCTOR_MIN_INTERVAL_SEC 秒間隔）
     # ★ C-1b 修正: アクティブプロセス追跡で並行起動を防止
-    auto_doctor = ctx.get("auto_doctor", True)
+    auto_doctor = ctx.get("auto_doctor", False)
     if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
-        global _doctor_last_run, _doctor_active_proc
-        _should_run_doctor = False
-        with _doctor_lock:
-            # ★ C-1b: 既存プロセスがまだ実行中なら新規起動をスキップ
-            if _doctor_active_proc is not None:
-                if _doctor_active_proc.poll() is None:
-                    extras.setdefault("doctor", {})
-                    extras["doctor"]["skipped"] = "already_running"
-                    _should_run_doctor = False
-                else:
-                    _doctor_active_proc = None
-            if _doctor_active_proc is None:
-                now = time.time()
-                if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
-                    _doctor_last_run = now
-                    _should_run_doctor = True
-                else:
-                    extras.setdefault("doctor", {})
-                    extras["doctor"]["skipped"] = "rate_limited"
+        if not _is_doctor_confinement_profile_active():
+            extras.setdefault("doctor", {})
+            extras["doctor"]["skipped"] = "confinement_required"
+            extras["doctor"]["security_warning"] = (
+                "auto_doctor requires seccomp/AppArmor confinement"
+            )
+        else:
+            global _doctor_last_run, _doctor_active_proc
+            _should_run_doctor = False
+            with _doctor_lock:
+                # ★ C-1b: 既存プロセスがまだ実行中なら新規起動をスキップ
+                if _doctor_active_proc is not None:
+                    if _doctor_active_proc.poll() is None:
+                        extras.setdefault("doctor", {})
+                        extras["doctor"]["skipped"] = "already_running"
+                        _should_run_doctor = False
+                    else:
+                        _doctor_active_proc = None
+                if _doctor_active_proc is None:
+                    now = time.time()
+                    if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
+                        _doctor_last_run = now
+                        _should_run_doctor = True
+                    else:
+                        extras.setdefault("doctor", {})
+                        extras["doctor"]["skipped"] = "rate_limited"
 
-        if _should_run_doctor:
-            try:
-                import os
-                from pathlib import Path
-
-                python_executable = sys.executable
-                if not _is_safe_python_executable(python_executable):
-                    raise ValueError("Invalid Python executable path")
-
-                log_dir = Path(os.path.expanduser("~/.veritas/logs"))
-                log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-                doctor_log = log_dir / "doctor.log"
-                # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
-                fd = _open_doctor_log_fd(str(doctor_log))
+            if _should_run_doctor:
                 try:
-                    os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
-                    doctor_timeout = 300  # 5 minutes max
-                    proc = subprocess.Popen(
-                        [python_executable, "-m", "veritas_os.scripts.doctor"],
-                        stdout=fd,
-                        stderr=subprocess.STDOUT,
-                        shell=False,
-                    )
-                    # ★ C-1b: アクティブプロセスを追跡
-                    with _doctor_lock:
-                        _doctor_active_proc = proc
-                    # Reap the subprocess in a background thread to prevent zombies;
-                    # enforce a timeout to avoid indefinitely hanging processes.
-                    def _make_doctor_reaper(p: subprocess.Popen, t: int):
-                        """タイムアウト付きでdoctorプロセスを待機し、終了後にアクティブ追跡をクリアする。"""
-                        def _run():
-                            try:
-                                p.wait(timeout=t)
-                            except subprocess.TimeoutExpired:
-                                p.kill()
-                                p.wait()
-                            finally:
-                                with _doctor_lock:
-                                    global _doctor_active_proc
-                                    if _doctor_active_proc is p:
-                                        _doctor_active_proc = None
-                        return _run
+                    import os
+                    from pathlib import Path
 
-                    _threading.Thread(
-                        target=_make_doctor_reaper(proc, doctor_timeout),
-                        daemon=True,
-                    ).start()
-                finally:
-                    # Close our copy of the fd; the subprocess has its own copy.
-                    os.close(fd)
-            except Exception as e:
-                extras.setdefault("doctor", {})
-                extras["doctor"]["error"] = repr(e)
+                    python_executable = sys.executable
+                    if not _is_safe_python_executable(python_executable):
+                        raise ValueError("Invalid Python executable path")
+
+                    log_dir = Path(os.path.expanduser("~/.veritas/logs"))
+                    log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    doctor_log = log_dir / "doctor.log"
+                    # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
+                    fd = _open_doctor_log_fd(str(doctor_log))
+                    try:
+                        os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
+                        doctor_timeout = 300  # 5 minutes max
+                        proc = subprocess.Popen(
+                            [python_executable, "-m", "veritas_os.scripts.doctor"],
+                            stdout=fd,
+                            stderr=subprocess.STDOUT,
+                            shell=False,
+                        )
+                        # ★ C-1b: アクティブプロセスを追跡
+                        with _doctor_lock:
+                            _doctor_active_proc = proc
+                        # Reap the subprocess in a background thread to prevent zombies;
+                        # enforce a timeout to avoid indefinitely hanging processes.
+                        def _make_doctor_reaper(p: subprocess.Popen, t: int):
+                            """タイムアウト付きでdoctorプロセスを待機し、終了後にアクティブ追跡をクリアする。"""
+
+                            def _run():
+                                try:
+                                    p.wait(timeout=t)
+                                except subprocess.TimeoutExpired:
+                                    p.kill()
+                                    p.wait()
+                                finally:
+                                    with _doctor_lock:
+                                        global _doctor_active_proc
+                                        if _doctor_active_proc is p:
+                                            _doctor_active_proc = None
+
+                            return _run
+
+                        _threading.Thread(
+                            target=_make_doctor_reaper(proc, doctor_timeout),
+                            daemon=True,
+                        ).start()
+                    finally:
+                        # Close our copy of the fd; the subprocess has its own copy.
+                        os.close(fd)
+                except Exception as e:
+                    extras.setdefault("doctor", {})
+                    extras["doctor"]["error"] = repr(e)
 
     # experiments / curriculum
     if not ctx.get("_daily_plans_generated_by_pipeline"):
