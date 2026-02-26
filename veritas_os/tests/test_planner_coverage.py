@@ -403,7 +403,7 @@ def test_try_get_memory_snippet_query_fallback(monkeypatch):
 
 def test_try_get_memory_snippet_search_exception(monkeypatch):
     mock_mem = MagicMock()
-    mock_mem.search.side_effect = RuntimeError("fail")
+    mock_mem.search.side_effect = ValueError("fail")
     monkeypatch.setattr(planner_core, "mem", mock_mem)
     assert planner_core._try_get_memory_snippet("test", {}) is None
 
@@ -504,10 +504,10 @@ def test_plan_for_veritas_agi_llm_empty_steps(monkeypatch):
 def test_plan_for_veritas_agi_llm_exception(monkeypatch):
     monkeypatch.setattr(planner_core.world_model, "snapshot", lambda key: {"progress": 0.1})
     monkeypatch.setattr(planner_core, "mem", MagicMock(spec=[]))
-    monkeypatch.setattr(planner_core.llm_client, "chat", lambda **kw: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setattr(planner_core.llm_client, "chat", lambda **kw: (_ for _ in ()).throw(ValueError("fail")))
 
     def _chat_fail(**kw):
-        raise RuntimeError("LLM down")
+        raise ValueError("LLM down")
     monkeypatch.setattr(planner_core.llm_client, "chat", _chat_fail)
 
     result = planner_core.plan_for_veritas_agi(
@@ -554,7 +554,7 @@ def test_plan_for_veritas_agi_disallow_step1_all_step1(monkeypatch):
 
 def test_plan_for_veritas_agi_world_snapshot_fail(monkeypatch):
     def _snap_fail(key):
-        raise RuntimeError("snap fail")
+        raise ValueError("snap fail")
     monkeypatch.setattr(planner_core.world_model, "snapshot", _snap_fail)
     monkeypatch.setattr(planner_core, "mem", MagicMock(spec=[]))
     monkeypatch.setattr(planner_core.llm_client, "chat", lambda **kw: {
@@ -625,7 +625,7 @@ def test_generate_code_tasks_code_planner_path(monkeypatch):
 
 def test_generate_code_tasks_code_planner_fails(monkeypatch):
     def _fail(**kw):
-        raise RuntimeError("code planner fail")
+        raise ValueError("code planner fail")
     monkeypatch.setattr(planner_core.code_planner, "generate_code_change_plan", _fail)
     monkeypatch.setattr(planner_core.world_model, "get_state", lambda: None)
     result = planner_core.generate_code_tasks(bench={})

@@ -16,6 +16,9 @@ from .planner_normalization import normalize_float, normalize_int
 
 logger = logging.getLogger(__name__)
 
+_FALLBACK_SAFE_ERRORS = (ValueError, TypeError, KeyError, AttributeError)
+_MEMORY_LOOKUP_ERRORS = (AttributeError, TypeError, ValueError, OSError)
+
 # LLMの暴走出力によるJSON救出時の過剰CPU使用を抑えるための上限
 _MAX_JSON_EXTRACT_CHARS = 200_000
 _MAX_JSON_DECODE_ATTEMPTS = 512
@@ -294,7 +297,7 @@ def _simple_qa_plan(
 
     try:
         from_stage = _infer_veritas_stage(world_snap)
-    except Exception:
+    except _FALLBACK_SAFE_ERRORS:
         from_stage = "S1_bootstrap"
 
     return {
@@ -928,7 +931,7 @@ def _try_get_memory_snippet(query: str, ctx: Dict[str, Any]) -> Optional[str]:
             hits = mem.query(q, top_k=5)  # type: ignore[arg-type]
         else:
             return None
-    except Exception:
+    except _MEMORY_LOOKUP_ERRORS:
         return None
 
     try:
@@ -944,7 +947,7 @@ def _try_get_memory_snippet(query: str, ctx: Dict[str, Any]) -> Optional[str]:
                     lines.append(str(t).strip())
         out = "\n- " + "\n- ".join([ln for ln in lines if ln][:5])
         return out.strip() if out.strip() else None
-    except Exception:
+    except (TypeError, AttributeError):
         return None
 
 
@@ -961,14 +964,14 @@ def plan_for_veritas_agi(
     if _is_simple_qa(query, ctx):
         try:
             world_snap_simple: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
-        except Exception:
+        except (AttributeError, OSError, ValueError, TypeError):
             world_snap_simple = None
         return _simple_qa_plan(query=query, context=ctx, world_snap=world_snap_simple)
 
     # WorldModel snapshot
     try:
         world_snap: Dict[str, Any] | None = world_model.snapshot("veritas_agi")
-    except Exception:
+    except (AttributeError, OSError, ValueError, TypeError):
         world_snap = None
 
     stage = _infer_veritas_stage(world_snap)
@@ -981,7 +984,7 @@ def plan_for_veritas_agi(
     memory_text: Optional[str] = None
     try:
         memory_text = _try_get_memory_snippet(query, ctx)
-    except Exception:
+    except _MEMORY_LOOKUP_ERRORS:
         memory_text = None
 
     system_prompt = _build_system_prompt()
@@ -1053,12 +1056,12 @@ def plan_for_veritas_agi(
         logger.warning("PlannerOS: steps missing; fallback to stage plan")
         return _fallback_plan_for_stage(query, stage, world_snap)
 
-    except Exception as e:
+    except (ValueError, TypeError, KeyError, OSError) as e:
         logger.error("PlannerOS: ERROR in plan_for_veritas_agi: %r", e)
         # 例外時：まず stage_fallback。もしそれも失敗なら minimal fallback
         try:
             return _fallback_plan_for_stage(query, stage, world_snap)
-        except Exception:
+        except _FALLBACK_SAFE_ERRORS:
             return _fallback_plan(query, disallow_step1=disallow_step1)
 
 
@@ -1154,7 +1157,7 @@ def generate_code_tasks(
                 "tasks": tasks,
             }
 
-        except Exception:
+        except (AttributeError, TypeError, ValueError):
             # code_planner が落ちたら純ロジックへ
             pass
 
@@ -1169,7 +1172,7 @@ def generate_code_tasks(
     if world_state is None:
         try:
             world_state = world_model.get_state()
-        except Exception:
+        except (AttributeError, OSError, TypeError, ValueError):
             world_state = None
 
     dr = doctor_report or {}
@@ -1286,7 +1289,7 @@ def generate_code_tasks(
                 veritas.get("decision_count", 0),
                 field_name="decision_count",
             )
-    except Exception:
+    except (TypeError, ValueError, AttributeError):
         pass
 
     return {
