@@ -28,6 +28,15 @@ from .config import capability_cfg, emit_capability_manifest
 
 logger = logging.getLogger(__name__)
 
+
+def _is_explicitly_enabled(env_key: str) -> bool:
+    """Return True when the capability env var is explicitly set to a truthy value."""
+    value = os.getenv(env_key)
+    if value is None:
+        return False
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 # OS 判定
 IS_WIN = os.name == "nt"
 
@@ -382,10 +391,18 @@ class VectorMemory:
             self.model = SentenceTransformer(self.model_name)
             logger.info("[VectorMemory] Loaded model: %s", self.model_name)
         except ImportError as exc:
-            raise RuntimeError(
-                "sentence-transformers is required when "
-                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
-            ) from exc
+            if _is_explicitly_enabled("VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"):
+                raise RuntimeError(
+                    "sentence-transformers is required when "
+                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
+                ) from exc
+            logger.warning(
+                "[CONFIG_MISMATCH] sentence-transformers is unavailable while "
+                "the default capability is enabled; continuing with fallback "
+                "embedding mode. To enforce strict mode, set "
+                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 explicitly."
+            )
+            self.model = None
         except Exception as e:
             logger.error("[VectorMemory] Failed to load model: %s", e)
             self.model = None
