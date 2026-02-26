@@ -178,7 +178,7 @@ class CosineIndex:
                     self.ids = [str(i) for i in data["ids"].tolist()]
                 self._validate_loaded_index_or_reset()
                 return
-            except Exception as e:
+            except (OSError, ValueError, TypeError, KeyError) as e:
                 # ★ M-18 修正: エラーをログに記録（破損と不在を区別可能に）
                 logger.debug(
                     "[CosineIndex] Failed to load index (allow_pickle=False): %s: %s",
@@ -215,7 +215,7 @@ class CosineIndex:
                             self.path,
                         )
                         return
-                    except Exception as e:
+                    except (OSError, ValueError, TypeError, KeyError) as e:
                         # ★ M-18 修正: レガシー読み込みの失敗もログに記録
                         logger.warning(
                             "[CosineIndex] Failed to load legacy pickle file: %s: %s",
@@ -278,7 +278,7 @@ class CosineIndex:
                     vecs=self.vecs,
                     ids=np.array(self.ids, dtype=str),
                 )
-            except Exception as e:
+            except OSError as e:
                 logger.error("[CosineIndex] save failed: %s", e)
 
     # ---- 基本操作 ------------------------------------------------

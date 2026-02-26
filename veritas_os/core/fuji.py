@@ -86,7 +86,7 @@ try:
     DEFAULT_MIN_EVIDENCE = _fuji_cfg.default_min_evidence
     MAX_UNCERTAINTY = _fuji_cfg.max_uncertainty
     _ENV_POC_MODE = _fuji_cfg.poc_mode
-except Exception as _cfg_err:
+except (ImportError, ModuleNotFoundError, AttributeError, TypeError, ValueError) as _cfg_err:
     # フォールバック: config が壊れていてもfuji.pyは動作する
     _logger.warning("Failed to load fuji_cfg, using defaults: %s", _cfg_err)
     DEFAULT_MIN_EVIDENCE = 1
@@ -232,7 +232,7 @@ def _safe_nonneg_int(x: Any, default: int) -> int:
     try:
         v = int(x)
         return v if v >= 0 else default
-    except Exception:
+    except (TypeError, ValueError):
         return default
 
 
@@ -511,10 +511,14 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
     if path is None or not path.exists():
         return dict(_DEFAULT_POLICY)
 
+    yaml_error = getattr(yaml, "YAMLError", None) if yaml is not None else None
+    yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
+    handled_errors = (TypeError, ValueError, OSError) + yaml_errors
+
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-    except Exception:
+    except handled_errors:
         return dict(_DEFAULT_POLICY)
 
     if "version" not in data:
@@ -527,9 +531,13 @@ def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
     """文字列からポリシーをパースする（TOCTOU 回避用）。"""
     if yaml is None:
         return dict(_DEFAULT_POLICY)
+    yaml_error = getattr(yaml, "YAMLError", None) if yaml is not None else None
+    yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
+    handled_errors = (TypeError, ValueError) + yaml_errors
+
     try:
         data = yaml.safe_load(content) or {}
-    except Exception:
+    except handled_errors:
         return dict(_DEFAULT_POLICY)
     if "version" not in data:
         data["version"] = f"fuji_file_{path.name}"
@@ -665,7 +673,7 @@ def run_safety_head(
             raw=res,
         )
 
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, OSError) as e:
         fb = _fallback_safety_head(text)
         fb.categories.append("safety_head_error")
         fb.rationale += f" / safety_head error: {repr(e)[:120]}"
@@ -904,7 +912,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         pii_safe_cap = _fuji_cfg.pii_safe_risk_cap
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         pii_safe_cap = 0.40
 
     if safe_applied:
@@ -918,7 +926,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         low_ev_penalty = _fuji_cfg.low_evidence_risk_penalty
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         low_ev_penalty = 0.10
 
     low_ev = evidence_count < int(min_evidence)
@@ -937,7 +945,7 @@ def fuji_core_decide(
     # ★ リファクタリング: 設定値から取得
     try:
         telos_risk_scale = _fuji_cfg.telos_risk_scale_factor
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         telos_risk_scale = 0.10
 
     telos_clamped = max(0.0, min(1.0, telos_score))

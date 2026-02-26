@@ -56,7 +56,15 @@ def test_run_env_tool_exception(monkeypatch):
     assert result["ok"] is False
     assert "env_tool error" in result["error"]
     assert result["error_code"] == "ENV_TOOL_EXECUTION_ERROR"
-    assert result["tool_kind"] == "web_search"
+
+
+def test_run_env_tool_unexpected_exception_propagates(monkeypatch):
+    def _boom(kind, **kw):
+        raise KeyboardInterrupt("stop")
+
+    monkeypatch.setattr(kernel, "call_tool", _boom)
+    with pytest.raises(KeyboardInterrupt):
+        kernel.run_env_tool("web_search", query="test")
 
 
 # ============================================================

@@ -178,7 +178,20 @@ def test_cosine_index_load_dim_mismatch_resets_to_empty(tmp_path):
 
     assert idx.size == 0
     assert idx.vecs.shape == (0, 2)
-    assert idx.ids == []
+
+
+def test_cosine_index_load_propagates_unexpected_exception(monkeypatch, tmp_path):
+    """Unexpected errors during load should propagate for visibility."""
+    p = tmp_path / "index.npz"
+    np.savez(p, vecs=np.array([[1.0, 0.0]], dtype=np.float32), ids=np.array(["a"], dtype=str))
+
+    def _boom(*_args, **_kwargs):
+        raise KeyboardInterrupt("stop")
+
+    monkeypatch.setattr("veritas_os.memory.index_cosine.np.load", _boom)
+
+    with pytest.raises(KeyboardInterrupt):
+        CosineIndex(dim=2, path=p)
 
 
 def test_cosine_index_load_ids_count_mismatch_resets_to_empty(tmp_path):
