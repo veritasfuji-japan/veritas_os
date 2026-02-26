@@ -7,6 +7,32 @@ rather than implicit import success.
 from __future__ import annotations
 
 import importlib
+import sys
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_capability_modules_after_test():
+    """Restore env-driven capability modules after each test.
+
+    The capability tests intentionally reload modules with temporary env vars.
+    Without resetting module globals after each test, later test files can
+    observe stale capability states and fail nondeterministically.
+    """
+    yield
+
+    import veritas_os.core.config as config_mod
+
+    importlib.reload(config_mod)
+    for module_name in (
+        "veritas_os.core.kernel",
+        "veritas_os.core.fuji",
+        "veritas_os.core.memory",
+    ):
+        module = sys.modules.get(module_name)
+        if module is not None:
+            importlib.reload(module)
 
 
 def _reload_config_and(module_name: str):
