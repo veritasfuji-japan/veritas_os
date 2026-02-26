@@ -522,7 +522,7 @@ def _score_alternatives(
                         continue
                     if oid in score_map:
                         a["score"] = round(score_map[oid], 4)
-        except Exception:
+        except (TypeError, ValueError, RuntimeError):
             logger.warning("[Kernel] _score_alternatives strategy scoring failed", exc_info=True)
 
 
@@ -588,7 +588,7 @@ async def decide(
                 user_id=user_id,
             )
             ctx["_world_state_injected"] = True
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError) as e:
             ctx = ctx_raw
             logger.warning("world_model.inject_state_into_context failed: %s", e)
 
@@ -732,7 +732,7 @@ async def decide(
                         query=q_text,
                         max_results=3,
                     )
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError) as e:
             env_logs["error"] = f"run_env_tool failed: {repr(e)[:200]}"
 
     if env_logs:
@@ -814,7 +814,7 @@ async def decide(
                 alt["meta"] = t
                 alts.append(alt)
 
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError) as e:
             extras["code_change_plan_error"] = f"generate_code_tasks failed: {repr(e)[:120]}"
 
     # 通常モード → PlannerOS 呼び出し
@@ -963,7 +963,7 @@ async def decide(
                 extras.setdefault("memory", {})
                 extras["memory"]["evidence_count"] = memory_evidence_count
                 extras["memory"]["citations"] = mem_evs
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError) as e:
             extras.setdefault("memory", {})
             extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
 
@@ -981,7 +981,7 @@ async def decide(
             evidence=evidence,
             alternatives=alts,
         )
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError) as e:
         logger.error("FUJI gate evaluation failed, defaulting to deny: %s", repr(e))
         fuji_result = {
             "status": "deny",
@@ -1015,7 +1015,7 @@ async def decide(
         })
         extras.setdefault("affect", {})
         extras["affect"]["meta"] = affect_meta
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
         extras.setdefault("affect", {})
         extras["affect"]["meta_error"] = repr(e)
 
@@ -1046,7 +1046,7 @@ async def decide(
         else:
             extras.setdefault("affect", {})
             extras["affect"]["natural_error"] = "reason_core.generate_reason not available"
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
         extras.setdefault("affect", {})
         extras["affect"]["natural_error"] = repr(e)
 
@@ -1073,7 +1073,7 @@ async def decide(
                 if refl_tmpl:
                     extras.setdefault("affect", {})
                     extras["affect"]["reflection_template"] = refl_tmpl
-    except Exception as e:
+    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
         extras.setdefault("affect", {})
         extras["affect"]["reflection_template_error"] = repr(e)
 
@@ -1114,7 +1114,7 @@ async def decide(
                 "fuji_risk": fuji_risk,
             }
 
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
             extras.setdefault("agi_goals", {})
             extras["agi_goals"]["error"] = repr(e)
     else:
@@ -1161,7 +1161,7 @@ async def decide(
                     redacted_episode_record,
                 )
 
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
             extras.setdefault("memory_log", {})
             extras["memory_log"]["error"] = repr(e)
     else:
@@ -1190,7 +1190,7 @@ async def decide(
                 planner=extras.get("code_change_plan") or extras.get("planner"),
                 latency_ms=latency_ms,
             )
-        except Exception as e:
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
             extras.setdefault("world_state_update", {})
             extras["world_state_update"]["error"] = repr(e)
     else:
@@ -1280,7 +1280,13 @@ async def decide(
                     finally:
                         # Close our copy of the fd; the subprocess has its own copy.
                         os.close(fd)
-                except Exception as e:
+                except (
+                    TypeError,
+                    ValueError,
+                    OSError,
+                    RuntimeError,
+                    subprocess.SubprocessError,
+                ) as e:
                     extras.setdefault("doctor", {})
                     extras["doctor"]["error"] = repr(e)
 
@@ -1292,7 +1298,7 @@ async def decide(
 
             try:
                 world_state_full = world_model.get_state()
-            except Exception:
+            except (TypeError, ValueError, RuntimeError, OSError):
                 world_state_full = None
 
             value_ema_for_day = float(telos_score)
@@ -1311,7 +1317,14 @@ async def decide(
             extras["experiments"] = [e.to_dict() for e in todays_exps]
             extras["curriculum"] = [t.to_dict() for t in todays_tasks]
 
-        except Exception as e:
+        except (
+            TypeError,
+            ValueError,
+            RuntimeError,
+            ImportError,
+            OSError,
+            AttributeError,
+        ) as e:
             extras.setdefault("daily_plans", {})
             extras["daily_plans"]["error"] = repr(e)
     else:

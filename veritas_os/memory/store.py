@@ -324,7 +324,7 @@ class MemoryStore:
                 # インデックス検索のみロック内で実行
                 try:
                     raw = self.idx[kind].search(qv, k=k)
-                except Exception as e:
+                except (TypeError, ValueError, RuntimeError, OSError) as e:
                     logger.warning("[MemoryStore] index search error for %s: %s", kind, e)
                     out[kind] = []
                     continue
