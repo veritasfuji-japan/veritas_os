@@ -36,6 +36,10 @@ if not IS_WIN and capability_cfg.enable_memory_posix_file_lock:
 else:
     fcntl = None  # type: ignore
 
+# Backward-compatibility shim for tests/consumers that introspect this symbol.
+# Runtime pickle/joblib loading is intentionally decommissioned for security.
+joblib_load = None
+
 if capability_cfg.emit_manifest_on_import:
     emit_capability_manifest(
         component="memory",
