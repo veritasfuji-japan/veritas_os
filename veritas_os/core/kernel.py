@@ -842,7 +842,7 @@ async def decide(
                 alt["meta"] = st
                 alts.append(alt)
 
-        except (TypeError, ValueError, RuntimeError, AttributeError) as e:
+        except Exception as e:
             extras.setdefault("planner_error", {})
             extras["planner_error"]["detail"] = repr(e)
             if not alts:
@@ -903,7 +903,7 @@ async def decide(
 
             alts = _dedupe_alts(enriched_alts)
 
-        except (TypeError, ValueError, RuntimeError, AttributeError) as e:
+        except Exception as e:
             if alts:
                 chosen = max(alts, key=lambda d: _safe_float(d.get("score"), 1.0))
             else:
@@ -1015,7 +1015,7 @@ async def decide(
         })
         extras.setdefault("affect", {})
         extras["affect"]["meta"] = affect_meta
-    except (TypeError, ValueError, RuntimeError) as e:
+    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
         extras.setdefault("affect", {})
         extras["affect"]["meta_error"] = repr(e)
 
