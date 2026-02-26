@@ -19,21 +19,54 @@ interface StreamEvent {
  * Returns `null` when the base URL is malformed so that the caller can
  * surface validation feedback without crashing rendering.
  */
-function buildEventUrl(apiBase: string, apiKey: string): string | null {
+function buildEventUrl(apiBase: string): string | null {
   const base = apiBase.trim().replace(/\/$/, "");
   if (!base) {
     return null;
   }
 
   try {
-    const url = new URL(`${base}/v1/events`);
-    if (apiKey.trim()) {
-      url.searchParams.set("api_key", apiKey.trim());
-    }
-    return url.toString();
+    return new URL(`${base}/v1/events`).toString();
   } catch {
     return null;
   }
+}
+
+/**
+ * Parse and dispatch SSE payload chunks emitted by the backend stream.
+ *
+ * We only consume `data:` lines and ignore heartbeat/comments, then emit a
+ * complete event each time a blank line terminator is observed.
+ */
+function processSseChunk(
+  chunk: string,
+  carry: string,
+  onData: (payload: string) => void,
+): string {
+  let buffer = `${carry}${chunk}`;
+
+  while (true) {
+    const terminatorIndex = buffer.indexOf("\n\n");
+    if (terminatorIndex === -1) {
+      break;
+    }
+
+    const rawEvent = buffer.slice(0, terminatorIndex);
+    buffer = buffer.slice(terminatorIndex + 2);
+
+    const data = rawEvent
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n")
+      .trim();
+
+    if (data) {
+      onData(data);
+    }
+  }
+
+  return buffer;
 }
 
 export function LiveEventStream(): JSX.Element {
@@ -44,7 +77,7 @@ export function LiveEventStream(): JSX.Element {
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const streamUrl = useMemo(() => buildEventUrl(apiBase, apiKey), [apiBase, apiKey]);
+  const streamUrl = useMemo(() => buildEventUrl(apiBase), [apiBase]);
   const hasInvalidApiBase = apiBase.trim().length > 0 && streamUrl === null;
   const streamStatus = hasInvalidApiBase
     ? "🔴 invalid url"
@@ -58,10 +91,10 @@ export function LiveEventStream(): JSX.Element {
       return;
     }
 
-    let source: EventSource | null = null;
     let mounted = true;
+    let controller: AbortController | null = null;
 
-    const connect = (): void => {
+    const connect = async (): Promise<void> => {
       if (!mounted) {
         return;
       }
@@ -69,38 +102,59 @@ export function LiveEventStream(): JSX.Element {
         clearTimeout(reconnectRef.current);
       }
 
-      source = new EventSource(streamUrl);
+      controller?.abort();
+      controller = new AbortController();
 
-      source.onopen = () => {
-        setConnected(true);
-      };
+      try {
+        const response = await fetch(streamUrl, {
+          headers: apiKey.trim() ? { "X-API-Key": apiKey.trim() } : {},
+          signal: controller.signal,
+        });
 
-      source.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data) as StreamEvent;
-          setEvents((prev) => [parsed, ...prev].slice(0, 30));
-        } catch {
-          // no-op: ignore malformed event payload
+        if (!response.ok || !response.body) {
+          throw new Error(`stream connection failed: ${response.status}`);
         }
-      };
 
-      source.onerror = () => {
+        setConnected(true);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let carry = "";
+
+        while (mounted) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          carry = processSseChunk(decoder.decode(value, { stream: true }), carry, (payload) => {
+            try {
+              const parsed = JSON.parse(payload) as StreamEvent;
+              setEvents((prev) => [parsed, ...prev].slice(0, 30));
+            } catch {
+              // no-op: ignore malformed event payload
+            }
+          });
+        }
+      } catch {
+        // no-op: reconnection handled below
+      }
+
+      if (mounted) {
         setConnected(false);
-        source?.close();
         reconnectRef.current = setTimeout(connect, 1500);
-      };
+      }
     };
 
-    connect();
+    void connect();
 
     return () => {
       mounted = false;
-      source?.close();
+      controller?.abort();
       if (reconnectRef.current) {
         clearTimeout(reconnectRef.current);
       }
     };
-  }, [streamUrl]);
+  }, [apiKey, streamUrl]);
 
   return (
     <Card title="Live Event Stream" className="border-primary/40 bg-surface/80">
@@ -133,9 +187,7 @@ export function LiveEventStream(): JSX.Element {
         <p className="mb-2 text-xs text-destructive">{t("有効な API Base URL を入力してください。", "Enter a valid API Base URL.")}</p>
       ) : null}
       {apiKey.trim().length > 0 ? (
-        <p className="mb-2 text-xs text-amber-600">
-          Security note: API key is sent in the query string for EventSource compatibility. Avoid using production secrets in shared logs.
-        </p>
+        <p className="mb-2 text-xs text-emerald-700">Security note: API key is sent in the X-API-Key header.</p>
       ) : null}
 
       <div className="mb-3">
