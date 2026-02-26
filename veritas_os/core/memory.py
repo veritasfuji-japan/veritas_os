@@ -24,24 +24,34 @@ from contextlib import contextmanager
 import logging
 import base64
 
+from .config import capability_cfg, emit_capability_manifest
+
 logger = logging.getLogger(__name__)
 
 # OS 判定
 IS_WIN = os.name == "nt"
 
-if not IS_WIN:
-    try:
-        import fcntl  # type: ignore
-    except ImportError:
-        fcntl = None  # type: ignore
+if not IS_WIN and capability_cfg.enable_memory_posix_file_lock:
+    import fcntl  # type: ignore
 else:
     fcntl = None  # type: ignore
 
-# joblib
-try:
-    from joblib import load as joblib_load
-except ImportError:
+if capability_cfg.enable_memory_joblib_model:
+    try:
+        from joblib import load as joblib_load
+    except ImportError:
+        joblib_load = None
+else:
     joblib_load = None
+
+if capability_cfg.emit_manifest_on_import:
+    emit_capability_manifest(
+        component="memory",
+        manifest={
+            "posix_file_lock": bool(not IS_WIN and fcntl is not None),
+            "joblib_model": bool(joblib_load is not None),
+        },
+    )
 
 
 def _allow_legacy_pickle_migration() -> bool:

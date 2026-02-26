@@ -16,9 +16,26 @@ import sys
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Protocol, Union
 
 logger = logging.getLogger(__name__)
+
+
+class ReasonCapability(Protocol):
+    """Kernel-facing contract for Reason capability."""
+
+    def generate_reason(self, *args: Any, **kwargs: Any) -> Any:
+        ...
+
+    def generate_reflection_template(self, *args: Any, **kwargs: Any) -> Any:
+        ...
+
+
+class StrategyCapability(Protocol):
+    """Kernel-facing contract for Strategy capability."""
+
+    def score_options(self, *args: Any, **kwargs: Any) -> Any:
+        ...
 
 # ★ C-1 修正: doctor 自動起動のレート制限
 # 高頻度リクエストでプロセスが溜まるのを防止（最低 60 秒間隔）
@@ -116,12 +133,10 @@ from . import fuji as fuji_core
 from . import debate as debate_core
 from . import value_core
 from . import affect as affect_core  # ★ NEW: ReasonOS / AffectOS
-
-# ★ セキュリティ修正: reason_core のインポート（存在しない場合は None）
-try:
-    from . import reason as reason_core
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    reason_core = None  # type: ignore
+from . import reason as _reason_core
+from . import strategy as _strategy_core
+from .config import capability_cfg, emit_capability_manifest
+from .sanitize import mask_pii as _mask_pii
 
 # ★ QA処理を分離モジュールからインポート
 from .kernel_qa import (
@@ -133,17 +148,23 @@ from .kernel_qa import (
     AGI_BLOCK_KEYWORDS,
 )
 
-try:  # 任意: 戦略レイヤー（なければ無視）
-    from . import strategy as strategy_core  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    strategy_core = None  # type: ignore
+reason_core: ReasonCapability | None = (
+    _reason_core if capability_cfg.enable_kernel_reason else None
+)
+strategy_core: StrategyCapability | None = (
+    _strategy_core if capability_cfg.enable_kernel_strategy else None
+)
+_HAS_SANITIZE = bool(capability_cfg.enable_kernel_sanitize)
 
-try:
-    from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
-    _HAS_SANITIZE = True
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    _mask_pii = None  # type: ignore
-    _HAS_SANITIZE = False
+if capability_cfg.emit_manifest_on_import:
+    emit_capability_manifest(
+        component="kernel",
+        manifest={
+            "reason": reason_core is not None,
+            "strategy": strategy_core is not None,
+            "sanitize": _HAS_SANITIZE,
+        },
+    )
 
 from veritas_os.tools import call_tool
 
