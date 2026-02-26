@@ -215,6 +215,58 @@ class PipelineConfig:
 
 
 @dataclass
+class CapabilityConfig:
+    """Optional capability flags shared by core modules.
+
+    Optional integrations are controlled explicitly by feature flags instead of
+    import success/failure so that runtime behavior remains reproducible.
+    """
+
+    enable_kernel_reason: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_KERNEL_REASON", True)
+    )
+    enable_kernel_strategy: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_KERNEL_STRATEGY", True)
+    )
+    enable_kernel_sanitize: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_KERNEL_SANITIZE", True)
+    )
+    enable_fuji_tool_bridge: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_TOOL_BRIDGE", True)
+    )
+    enable_fuji_trust_log: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_TRUST_LOG", True)
+    )
+    enable_fuji_yaml_policy: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_FUJI_YAML_POLICY", True)
+    )
+    enable_memory_posix_file_lock: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_MEMORY_POSIX_FILE_LOCK", True)
+    )
+    enable_memory_joblib_model: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_MEMORY_JOBLIB_MODEL", True)
+    )
+    emit_manifest_on_import: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_EMIT_MANIFEST", True)
+    )
+
+
+def emit_capability_manifest(component: str, manifest: Dict[str, bool]) -> None:
+    """Emit a structured capability manifest to logs.
+
+    This output helps operators quickly detect disabled features and prevents
+    silent drift caused by environment-dependent optional imports.
+    """
+    disabled = sorted(name for name, enabled in manifest.items() if not enabled)
+    logging.getLogger(__name__).info(
+        "[CapabilityManifest] component=%s manifest=%s disabled=%s",
+        component,
+        manifest,
+        disabled,
+    )
+
+
+@dataclass
 class VeritasConfig:
     # ==== API ====
     api_key_str: str = field(
@@ -355,3 +407,4 @@ cfg = VeritasConfig()
 scoring_cfg = ScoringConfig()
 fuji_cfg = FujiConfig()
 pipeline_cfg = PipelineConfig()
+capability_cfg = CapabilityConfig()

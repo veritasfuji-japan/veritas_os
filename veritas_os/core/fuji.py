@@ -51,30 +51,30 @@ from .types import (
 )
 from .utils import _safe_float, _to_text
 from .fuji_codes import build_fuji_rejection
-
-# ---------------------------------------------------------
-# 依存モジュール（存在しない場合はフォールバック）
-# ---------------------------------------------------------
-try:
-    from veritas_os.tools import call_tool
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
-        raise RuntimeError(
-            f"env tool '{kind}' / veritas_os.tools.call_tool が利用できません"
-        )
-
-
-try:
-    from veritas_os.logging.trust_log import append_trust_event
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    def append_trust_event(event: Dict[str, Any]) -> None:
-        return
-
+from .config import capability_cfg, emit_capability_manifest
+from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
+from veritas_os.tools import call_tool as _call_tool
 
 try:
     import yaml  # ポリシーファイル用
 except (ImportError, ModuleNotFoundError):  # pragma: no cover
     yaml = None  # type: ignore
+
+
+def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
+    """Call external tool bridge only when explicitly enabled by capability flag."""
+    if not capability_cfg.enable_fuji_tool_bridge:
+        raise RuntimeError(
+            "fuji tool bridge is disabled by VERITAS_CAP_FUJI_TOOL_BRIDGE"
+        )
+    return _call_tool(kind, **kwargs)
+
+
+def append_trust_event(event: Dict[str, Any]) -> None:
+    """Append trust events only when explicitly enabled by capability flag."""
+    if not capability_cfg.enable_fuji_trust_log:
+        return
+    _append_trust_event(event)
 
 
 # =========================================================
@@ -183,6 +183,18 @@ _NON_ALNUM_RE = re.compile(r"[^\w\u3040-\u30ff\u4e00-\u9fff]+", re.UNICODE)
 
 # よく使われる同形異体文字（Cyrillic / Greek）の最小マップ。
 # すべてを網羅するものではないが、悪用されやすい文字を優先的に吸収する。
+if capability_cfg.emit_manifest_on_import:
+    emit_capability_manifest(
+        component="fuji",
+        manifest={
+            "tool_bridge": capability_cfg.enable_fuji_tool_bridge,
+            "trust_log": capability_cfg.enable_fuji_trust_log,
+            "yaml_policy": (
+                capability_cfg.enable_fuji_yaml_policy and yaml is not None
+            ),
+        },
+    )
+
 _CONFUSABLE_ASCII_MAP = str.maketrans(
     {
         "а": "a",  # Cyrillic
@@ -505,7 +517,7 @@ _DEFAULT_POLICY: Dict[str, Any] = {
 
 
 def _load_policy(path: Path | None) -> Dict[str, Any]:
-    if yaml is None:
+    if yaml is None or not capability_cfg.enable_fuji_yaml_policy:
         return dict(_DEFAULT_POLICY)
 
     if path is None or not path.exists():
@@ -529,7 +541,7 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
 
 def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
     """文字列からポリシーをパースする（TOCTOU 回避用）。"""
-    if yaml is None:
+    if yaml is None or not capability_cfg.enable_fuji_yaml_policy:
         return dict(_DEFAULT_POLICY)
     yaml_error = getattr(yaml, "YAMLError", None) if yaml is not None else None
     yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
