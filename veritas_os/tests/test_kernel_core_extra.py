@@ -1165,3 +1165,53 @@ def test_open_doctor_log_fd_rejects_directory_path(tmp_path):
     """_open_doctor_log_fd should fail for non-regular paths such as directories."""
     with pytest.raises(OSError):
         kernel._open_doctor_log_fd(str(tmp_path))
+
+
+def test_read_proc_self_status_seccomp_handles_missing_file(monkeypatch):
+    """_read_proc_self_status_seccomp returns None when status file is missing."""
+    from pathlib import Path
+
+    monkeypatch.setattr(Path, "exists", lambda self: False)
+    assert kernel._read_proc_self_status_seccomp() is None
+
+
+def test_is_doctor_confinement_profile_active_with_seccomp(monkeypatch):
+    """Seccomp active state should allow doctor confinement check to pass."""
+    monkeypatch.setattr(kernel, "_read_proc_self_status_seccomp", lambda: 2)
+    monkeypatch.setattr(kernel, "_read_apparmor_profile", lambda: None)
+    assert kernel._is_doctor_confinement_profile_active() is True
+
+
+def test_is_doctor_confinement_profile_active_rejects_unconfined(monkeypatch):
+    """Unconfined AppArmor profile should not satisfy confinement requirement."""
+    monkeypatch.setattr(kernel, "_read_proc_self_status_seccomp", lambda: 0)
+    monkeypatch.setattr(kernel, "_read_apparmor_profile", lambda: "unconfined")
+    assert kernel._is_doctor_confinement_profile_active() is False
+
+
+def test_auto_doctor_is_opt_in_by_default(monkeypatch):
+    """Doctor subprocess must not launch when context omits auto_doctor opt-in."""
+    launched = {"called": False}
+
+    def _forbid_launch(*_args, **_kwargs):
+        launched["called"] = True
+        raise AssertionError("subprocess.Popen should not be called")
+
+    monkeypatch.setattr(kernel.subprocess, "Popen", _forbid_launch)
+    monkeypatch.setattr(kernel, "_is_doctor_confinement_profile_active", lambda: True)
+
+    _call_decide_generic(
+        query="doctor opt-in default test",
+        base_context={
+            "user_id": "doctor-opt-in-default",
+            "env": {},
+            "pipeline": {},
+            "meta": {"from": "doctor-opt-in-test"},
+            "fast": True,
+            "_world_state_updated_by_pipeline": True,
+            "_episode_saved_by_pipeline": True,
+            "_daily_plans_generated_by_pipeline": True,
+        },
+    )
+
+    assert launched["called"] is False
