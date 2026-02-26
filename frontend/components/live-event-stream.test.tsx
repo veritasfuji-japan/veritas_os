@@ -41,27 +41,8 @@ describe("LiveEventStream", () => {
     expect(screen.getByText(/"ok": true/)).toBeInTheDocument();
   });
 
-  it("shows validation error and avoids connecting when API base URL is invalid", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        body: createReadableStream([]),
-      }),
-    );
 
-    render(<LiveEventStream />);
-
-    fireEvent.change(screen.getByLabelText("API Base URL"), { target: { value: "not a url" } });
-
-    expect(screen.getByText("有効な API Base URL を入力してください。")).toBeInTheDocument();
-    expect(screen.getByText("🔴 invalid url")).toBeInTheDocument();
-    await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  it("sends API key in the X-API-Key header", async () => {
+  it("calls internal proxy stream endpoint without exposing API key headers", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       body: createReadableStream([]),
@@ -70,17 +51,14 @@ describe("LiveEventStream", () => {
 
     render(<LiveEventStream />);
 
-    const apiKeyInput = screen.getByLabelText("API Key");
-    fireEvent.change(apiKeyInput, { target: { value: "secret-token" } });
-
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalled();
     });
 
     const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
-    expect(apiKeyInput).toHaveAttribute("type", "password");
-    expect(lastCall[1]?.headers).toEqual({ "X-API-Key": "secret-token" });
-    expect(screen.getByText("Security note: API key is sent in the X-API-Key header.")).toBeInTheDocument();
+    expect(lastCall[0]).toBe("/api/veritas/v1/events");
+    expect(lastCall[1]?.headers).toBeUndefined();
+    expect(screen.getByText("Security note: API key is injected server-side and never exposed to browser code.")).toBeInTheDocument();
   });
 
   it("clears rendered events when clear button is pressed", async () => {
