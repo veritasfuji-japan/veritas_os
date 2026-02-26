@@ -27,10 +27,6 @@ describe("TrustLogExplorerPage", () => {
 
     render(<TrustLogExplorerPage />);
 
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
-
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
@@ -55,10 +51,6 @@ describe("TrustLogExplorerPage", () => {
     } as Response);
 
     render(<TrustLogExplorerPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
 
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
@@ -95,10 +87,6 @@ describe("TrustLogExplorerPage", () => {
     } as Response);
 
     render(<TrustLogExplorerPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
@@ -164,10 +152,6 @@ describe("TrustLogExplorerPage", () => {
     const clickMock = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     render(<TrustLogExplorerPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
@@ -234,10 +218,6 @@ describe("TrustLogExplorerPage", () => {
     } as unknown as Window);
 
     render(<TrustLogExplorerPage />);
-
-    fireEvent.change(screen.getByLabelText("X-API-Key"), {
-      target: { value: "test-key" },
-    });
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
