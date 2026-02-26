@@ -6,6 +6,7 @@ rather than implicit import success.
 
 from __future__ import annotations
 
+import builtins
 import importlib
 import sys
 
@@ -78,3 +79,39 @@ def test_memory_joblib_flag_disables_loader(monkeypatch):
     _, memory_mod = _reload_config_and("veritas_os.core.memory")
 
     assert memory_mod.joblib_load is None
+
+
+def test_fuji_yaml_flag_requires_pyyaml(monkeypatch):
+    """Fuji raises a config mismatch when YAML capability is on but PyYAML is missing."""
+    monkeypatch.setenv("VERITAS_CAP_FUJI_YAML_POLICY", "1")
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "yaml":
+            raise ModuleNotFoundError("yaml missing for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(RuntimeError, match="VERITAS_CAP_FUJI_YAML_POLICY"):
+        _reload_config_and("veritas_os.core.fuji")
+
+
+def test_memory_sentence_transformers_flag_requires_dependency(monkeypatch):
+    """Memory raises a config mismatch when embedding capability is on and dependency is missing."""
+    monkeypatch.setenv("VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS", "1")
+
+    _, memory_mod = _reload_config_and("veritas_os.core.memory")
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sentence_transformers":
+            raise ModuleNotFoundError("sentence_transformers missing for test")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(RuntimeError, match="VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"):
+        memory_mod.VectorMemory(index_path=None)

@@ -246,6 +246,11 @@ class CapabilityConfig:
     enable_memory_joblib_model: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_MEMORY_JOBLIB_MODEL", True)
     )
+    enable_memory_sentence_transformers: bool = field(
+        default_factory=lambda: _parse_bool(
+            "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS", False
+        )
+    )
     emit_manifest_on_import: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_EMIT_MANIFEST", True)
     )
