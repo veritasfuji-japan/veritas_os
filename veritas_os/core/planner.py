@@ -12,6 +12,7 @@ from . import llm_client
 from . import world as world_model
 from . import memory as mem
 from . import code_planner  # ★ 追加
+from .planner_normalization import normalize_float, normalize_int
 
 logger = logging.getLogger(__name__)
 
@@ -108,29 +109,19 @@ def _normalize_step(
     """
     s: StepDict = dict(step)
 
-    try:
-        fallback_eta = float(default_eta_hours)
-    except (TypeError, ValueError):
-        fallback_eta = 1.0
+    eta_candidate = s.get("eta_hours", default_eta_hours)
+    s["eta_hours"] = normalize_float(
+        eta_candidate,
+        field_name="eta_hours",
+        default_override=default_eta_hours,
+    )
 
-    eta_candidate = s.get("eta_hours", fallback_eta)
-    try:
-        eta_hours = float(eta_candidate)
-    except (TypeError, ValueError):
-        eta_hours = fallback_eta
-    s["eta_hours"] = max(0.0, eta_hours)
-
-    try:
-        fallback_risk = float(default_risk)
-    except (TypeError, ValueError):
-        fallback_risk = 0.1
-
-    risk_candidate = s.get("risk", fallback_risk)
-    try:
-        risk_value = float(risk_candidate)
-    except (TypeError, ValueError):
-        risk_value = fallback_risk
-    s["risk"] = min(1.0, max(0.0, risk_value))
+    risk_candidate = s.get("risk", default_risk)
+    s["risk"] = normalize_float(
+        risk_candidate,
+        field_name="risk",
+        default_override=default_risk,
+    )
 
     deps = s.get("dependencies")
     if not isinstance(deps, list):
@@ -766,10 +757,10 @@ def _infer_veritas_stage(world_state: Optional[Dict[str, Any]]) -> str:
     if not world_state:
         return "S1_bootstrap"
 
-    try:
-        progress = float(world_state.get("progress") or 0.0)
-    except (TypeError, ValueError):
-        progress = 0.0
+    progress = normalize_float(
+        world_state.get("progress") or 0.0,
+        field_name="progress",
+    )
 
     if progress < 0.05:
         return "S1_bootstrap"
@@ -1287,8 +1278,14 @@ def generate_code_tasks(
     try:
         if world_state and isinstance(world_state, dict):
             veritas = (world_state.get("veritas") or {})
-            meta["progress"] = float(veritas.get("progress", 0.0))
-            meta["decision_count"] = int(veritas.get("decision_count", 0))
+            meta["progress"] = normalize_float(
+                veritas.get("progress", 0.0),
+                field_name="progress",
+            )
+            meta["decision_count"] = normalize_int(
+                veritas.get("decision_count", 0),
+                field_name="decision_count",
+            )
     except Exception:
         pass
 
