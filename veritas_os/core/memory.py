@@ -129,7 +129,7 @@ class VectorMemory:
                 "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 explicitly."
             )
             self.model = None
-        except Exception as e:
+        except (OSError, RuntimeError, ValueError, TypeError) as e:
             logger.error("[VectorMemory] Failed to load model: %s", e)
             self.model = None
 
@@ -182,7 +182,7 @@ class VectorMemory:
                 )
                 return
 
-        except Exception as e:
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as e:
             logger.error("[VectorMemory] Failed to load index: %s", e)
 
     def _save_index(self):
@@ -230,7 +230,7 @@ class VectorMemory:
             logger.info(
                 "[VectorMemory] Saved JSON index: %d documents", len(self.documents)
             )
-        except Exception as e:
+        except (OSError, TypeError, ValueError) as e:
             logger.error("[VectorMemory] Failed to save index: %s", e)
 
     def add(
@@ -455,11 +455,11 @@ memory_model_core = None
 try:
     # 通常インストール時
     from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
-except Exception:
+except (ImportError, ModuleNotFoundError):
     try:
         # パッケージとしてでなくローカルから叩く場合の保険
         from .models import memory_model as memory_model_core  # type: ignore
-    except Exception:
+    except (ImportError, ModuleNotFoundError):
         memory_model_core = None
 
 if memory_model_core is not None:
@@ -535,7 +535,7 @@ try:
         MEM_VEC = VectorMemory(index_path=VECTOR_INDEX_PATH)
         logger.info("[VectorMemory] Using built-in VectorMemory implementation")
 
-except Exception as e:
+except (OSError, TypeError, ValueError) as e:
     logger.error("[VectorMemory] Initialization failed: %s", e)
     MEM_VEC = None
 
@@ -770,7 +770,7 @@ class MemoryStore:
             except json.JSONDecodeError as e:
                 logger.error("[MemoryOS] JSON decode error: %s", e)
                 data = []
-            except Exception as e:
+            except (OSError, TimeoutError) as e:
                 logger.error("[MemoryOS] load error: %s", e)
                 data = []
 
@@ -801,7 +801,7 @@ class MemoryStore:
                 self._cache_loaded_at = 0.0
 
             return True
-        except Exception as e:
+        except (OSError, TimeoutError, TypeError, ValueError) as e:
             logger.error("[MemoryOS] save error: %s", e)
             return False
 
@@ -1176,7 +1176,7 @@ class _LazyMemoryStore:
             try:
                 self._obj = self._loader()
                 self._err = None
-            except Exception as exc:
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
                 self._err = exc
                 logger.error("[MemoryOS] lazy init failed: %s", exc)
                 raise
@@ -1262,7 +1262,7 @@ def add(
                     tags=tags or [],
                     meta=entry_meta,
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.warning("[MemoryOS.add] MEM_VEC.add error: %s", e)
 
     return record
@@ -1304,7 +1304,7 @@ def put(*args, **kwargs) -> bool:
                     success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
                     if success:
                         logger.debug("[MemoryOS] Added to vector index: %s", kind)
-                except Exception as e:
+                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                     logger.warning("[MemoryOS] MEM_VEC.add error (fallback to KVS): %s", e)
 
         # KVSにも保存
@@ -1465,10 +1465,10 @@ def search(
                 logger.info(
                     "[MemoryOS] MEM_VEC.search(old sig) no hits; fallback to KVS"
                 )
-            except Exception as e:
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.warning("[MemoryOS] MEM_VEC.search(old sig) error: %s", e)
 
-        except Exception as e:
+        except (AttributeError, ValueError, RuntimeError) as e:
             logger.warning("[MemoryOS] MEM_VEC.search error: %s", e)
 
     # ===========================
@@ -1588,7 +1588,7 @@ def distill_memory_for_user(
     # 1) memory.json から対象ユーザーのレコードを取得
     try:
         all_records = MEM.list_all(user_id=user_id)
-    except Exception as e:
+    except (OSError, RuntimeError, ValueError, TypeError) as e:
         logger.error("[MemoryDistill] list_all failed for user=%s: %s", user_id, e)
         return None
 
@@ -1652,7 +1652,7 @@ def distill_memory_for_user(
     except TypeError as e:
         logger.error("[MemoryDistill] LLM call TypeError: %s", e)
         return None
-    except Exception as e:
+    except (RuntimeError, ValueError, OSError) as e:
         logger.error("[MemoryDistill] LLM call failed: %s", e)
         return None
 
@@ -1667,7 +1667,7 @@ def distill_memory_for_user(
                     resp["choices"][0]["message"]["content"]
                     or ""
                 )
-            except Exception:
+            except (IndexError, KeyError, TypeError):
                 summary_text = ""
         if not summary_text:
             summary_text = (

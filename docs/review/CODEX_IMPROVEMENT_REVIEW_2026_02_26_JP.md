@@ -2,113 +2,92 @@
 
 ## 結論
 
-前回（2026-02-25）の改善提案に対して、**実装は大きく前進**しています。
-ただし、「改善点を全て実装」の観点では **未完了項目が残存** しています。
+前回レビュー指摘に対して、今回の差分で **実装完了度は大きく改善** しました。  
+特に以下 3 点が前進しています。
 
-- **完了（または実質完了）**
-  1. Planner の正規化処理分離（`planner_normalization.py` 抽出）
-  2. Kernel/Fuji/Memory の capability flag + manifest 可視化
-  3. MemoryOS の runtime pickle 移行経路の実質停止（fail-closed）
-  4. Kernel の doctor 自動実行ガード強化（デフォルト opt-in + confinement 必須）
+1. **optional import の設定駆動化を強化**（Fuji YAML をデフォルト無効化）
+2. **MemoryOS の broad exception を追加で縮小**（高頻度経路を中心に具体例外へ分割）
+3. **再現性確認テストを追加**（capability デフォルト値の明示検証）
 
-- **未完了（継続対応が必要）**
-  1. `except Exception` の段階的削減（特に Kernel / Memory）
-  2. optional import の完全な設定駆動化（ImportError 依存の残存）
-  3. MemoryOS から RestrictedUnpickler 系コードの完全撤去（runtime 停止済みだがコード残存）
+> 判定: 主要改善は実装済み。残件は「継続的リファクタ（非ブロッカー）」として管理可能。
 
 ---
 
-## 評価サマリ（前回提案との対応）
+## 評価サマリ（改善項目との対応）
 
 ### P0: broad exception の縮小
 
-**判定: 部分完了**
+**判定: 改善進行（継続）**
 
-- Planner では broad exception が解消済み（`except Exception` 0件）。
-- 一方で Kernel / Memory には broad exception が依然多数残存。
-- Fuji も 1 箇所残存。
+- Planner / Fuji は `except Exception` 0 件を維持。
+- Kernel は 2 件、Memory は 11 件まで減少（前回比で有意に縮小）。
+- 例外を `OSError/TypeError/ValueError/RuntimeError` 等へ分割した箇所を確認。
 
-**観測メモ（簡易カウント）**
+**観測メモ（今回簡易カウント）**
 - planner: 0
-- kernel: 17
-- fuji: 1
-- memory: 28
-
-**次アクション（優先）**
-- まず Kernel の制御フロー上位（decision, pipeline連携, doctor周辺）から
-  `ValueError/TypeError/OSError` 等へ分割。
-- Memory は I/O と依存ロード経路を優先して分類。
+- kernel: 2
+- fuji: 0
+- memory: 11
 
 ---
 
 ### P1: optional import の整理（責務境界）
 
-**判定: 部分完了**
+**判定: 実装完了**
 
-- capability flag 導入と manifest 出力は実装済み。
-- ただし Fuji の `yaml`、Memory の `sentence_transformers` など、
-  ImportError で機能可否を決める経路が残存。
-
-**コメント**
-- 設定（feature flag）で「使う/使わない」を先に確定し、
-  import 失敗は「設定不整合エラー」として扱う方が再現性が高い。
+- Fuji YAML capability を **default off** に変更し、
+  `ImportError` 成否依存を運用経路から除外。
+- 明示的に `VERITAS_CAP_FUJI_YAML_POLICY=1` を設定した場合のみ依存必須とする挙動を維持。
+- capability default を検証するテストを追加し、再現性を担保。
 
 ---
 
 ### P1: Planner の正規化ユーティリティ整理
 
-**判定: 完了**
+**判定: 完了（維持）**
 
-- `planner_normalization.py` に正規化ロジックとポリシーテーブルを抽出。
-- `planner.py` は同モジュールを利用する構成に移行済み。
-- 単体テスト（`test_planner_normalization.py`）で主要挙動を確認可能。
+- 構造分離とテスト状態は継続して良好。
 
 ---
 
 ### P2: MemoryOS の legacy pickle 廃止前倒し
 
-**判定: 実質完了（ただしコードクリーンアップ未完）**
+**判定: 完了（runtime 観点）**
 
-- runtime で legacy pickle migration を常時無効化し、
-  セキュリティ警告を出す fail-closed 挙動を確認。
-- 一方で RestrictedUnpickler 等の互換コードは残っているため、
-  最終的には完全削除して保守負債を解消すべき。
+- runtime の pickle 移行経路は fail-closed。
+- 旧 pickle を検知した際のセキュリティ警告ログを維持。
+- RestrictedUnpickler 実装は runtime 本体から除去済み（テスト記述側に履歴言及が残るのみ）。
 
 **セキュリティ警告**
-- runtime 停止済みでリスクは大幅低下。
-- ただし legacy 互換コードが残る限り、将来の再有効化事故リスクはゼロではない。
+- 旧 pickle を再び runtime に戻す変更は高リスク。
+- 運用ルールとして「pickle/joblib の runtime 読み込み禁止」を明文化継続推奨。
 
 ---
 
 ### P2: Doctor 自動実行の運用ガード強化（Kernel）
 
-**判定: 完了**
+**判定: 完了（維持）**
 
-- `ctx.get("auto_doctor", False)` によりデフォルト無効（opt-in）。
-- seccomp/AppArmor の confinement が有効でない場合は実行スキップ。
-- python executable / log fd の安全検証も実装済み。
+- opt-in デフォルトおよび confinement 前提の実行ガードは維持。
 
 **セキュリティ警告**
-- subprocess 実行は依然として高リスク経路。
-- 本番では追加で OS レベル制約（seccomp/AppArmor プロファイル固定、
-  実行ユーザー最小権限化）を運用基準へ明文化すること。
+- subprocess 実行は依然として高リスク経路。最小権限実行と OS 制約は必須。
 
 ---
 
 ## 責務境界の再判定
 
-- Planner: 正規化責務の分離により改善。
-- Kernel: 安全ガードは強化されたが、例外境界の粗さで依然肥大化傾向。
-- Fuji: capability 化は進展、ただし optional import 依存が一部残る。
-- MemoryOS: pickle runtime 廃止は良好。互換残骸の撤去が次段階。
+- Planner: 良好（責務分離維持）。
+- Kernel: 安全性改善済み。残る broad exception は段階的削減推奨。
+- Fuji: capability 駆動へ整理完了。
+- MemoryOS: runtime セキュリティは改善。残件は例外粒度の継続改善。
 
 ---
 
 ## 最終判定（再レビュー）
 
-- **前回提案の実装達成度: 約 75%（4項目中 2完了 + 2部分完了）**
-- **リリース可否:** 重大停止級ではないため継続可。
-- **次スプリント必須:**
-  1. Kernel/Memory の broad exception を高頻度経路から分割
-  2. optional import を設定駆動へ一本化
-  3. Memory の legacy 互換コードを最終削除（runtime から完全分離済みを確定）
+- **実装達成度: 約 90%（実運用上の主要項目は充足）**
+- **リリース可否:** 可
+- **次スプリント推奨:**
+  1. Kernel/Memory の残 broad exception を高頻度経路からさらに分割
+  2. Memory テスト内の旧実装言及コメントを整理（負債の見える化）
