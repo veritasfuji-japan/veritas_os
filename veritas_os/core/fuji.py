@@ -1182,7 +1182,7 @@ def fuji_gate(
             },
         }
         append_trust_event(event)
-    except Exception as e:  # pragma: no cover
+    except (TypeError, ValueError, OSError, RuntimeError) as e:  # pragma: no cover
         reasons.append(f"trustlog_error:{repr(e)[:80]}")
 
     checks: List[Dict[str, Any]] = [
