@@ -27,6 +27,8 @@ DATA_DIRS = [
 # ▼ モデルの保存先もリポジトリ内 core/models に統一
 MODEL_PATH = VERITAS_DIR / "core" / "models"
 MODEL_PATH.mkdir(parents=True, exist_ok=True)
+MODEL_ONNX_FILE = MODEL_PATH / "memory_model.onnx"
+MODEL_METADATA_FILE = MODEL_PATH / "memory_model.metadata.json"
 
 
 def _iter_dataset_files(data_dir: Path, patterns: list[str]) -> Iterable[Path]:
@@ -113,8 +115,13 @@ def load_decision_data() -> list[tuple[str, str]]:
 
 
 def train_memory_model(data: list[tuple[str, str]]) -> None:
-    """Train and persist the MemoryOS classifier from labeled records."""
-    import joblib
+    """Train MemoryOS classifier and export runtime-safe artifacts.
+
+    Security warning:
+        Runtime loading of pickle/joblib artifacts has been removed because it
+        keeps a deserialization attack surface. This trainer therefore attempts
+        ONNX export and always writes JSON metadata for auditability.
+    """
     import numpy as np
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.linear_model import LogisticRegression
@@ -175,8 +182,42 @@ def train_memory_model(data: list[tuple[str, str]]) -> None:
     )
     clf.fit(x_matrix, y)
 
-    joblib.dump((vec, clf), MODEL_PATH / "memory_model.pkl")
-    print(f"✅ model saved → {MODEL_PATH}/memory_model.pkl")
+    metadata = {
+        "format": "onnx",
+        "classes": list(classes),
+        "ngram_range": [1, 2],
+        "max_features": 4000,
+        "records": len(balanced),
+    }
+    MODEL_METADATA_FILE.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    try:
+        from skl2onnx import to_onnx
+        from skl2onnx.common.data_types import StringTensorType
+        from sklearn.pipeline import Pipeline
+
+        pipeline = Pipeline(
+            [
+                ("vectorizer", vec),
+                ("classifier", clf),
+            ]
+        )
+        onnx_model = to_onnx(
+            pipeline,
+            initial_types=[("text", StringTensorType([None, 1]))],
+            target_opset=17,
+        )
+        MODEL_ONNX_FILE.write_bytes(onnx_model.SerializeToString())
+        print(f"✅ model saved → {MODEL_ONNX_FILE}")
+    except Exception as exc:
+        print(
+            "⚠️ ONNX export skipped (install skl2onnx for runtime model): "
+            f"{exc}"
+        )
+    print(f"✅ model metadata saved → {MODEL_METADATA_FILE}")
 
 
 if __name__ == "__main__":
