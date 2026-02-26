@@ -36,49 +36,29 @@ if not IS_WIN and capability_cfg.enable_memory_posix_file_lock:
 else:
     fcntl = None  # type: ignore
 
-if capability_cfg.enable_memory_joblib_model:
-    try:
-        from joblib import load as joblib_load
-    except ImportError:
-        joblib_load = None
-else:
-    joblib_load = None
-
 if capability_cfg.emit_manifest_on_import:
     emit_capability_manifest(
         component="memory",
         manifest={
             "posix_file_lock": bool(not IS_WIN and fcntl is not None),
-            "joblib_model": bool(joblib_load is not None),
+            "joblib_model": False,
         },
     )
 
 
 def _allow_legacy_pickle_migration() -> bool:
+    """Always disable runtime pickle migration.
+
+    Security warning:
+        Runtime pickle deserialization was permanently removed ahead of the
+        previous deprecation plan. This closes a high-risk attack surface where
+        an environment variable could re-enable unsafe deserialization.
     """
-    レガシーpickle移行を許可するか判定する。
-
-    ★ 重要: Pickle は本質的に安全ではありません。
-    この機能は廃止予定です。新しいデータは JSON 形式で保存されます。
-    """
-    value = os.getenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "").strip().lower()
-    if value not in {"1", "true", "yes", "y", "on"}:
-        return False
-
-    if _legacy_pickle_migration_sunset_passed():
-        logger.error(
-            "[SECURITY] Legacy pickle migration is disabled because the "
-            "deprecation sunset date has passed. "
-            "Please migrate using a trusted offline workflow."
-        )
-        return False
-
     logger.warning(
-        "[SECURITY] Legacy pickle migration is enabled. "
-        "This feature is DEPRECATED and will be removed in a future version. "
-        "Please ensure all data is migrated to JSON format."
+        "[SECURITY] Legacy pickle migration is permanently disabled in runtime. "
+        "Use an offline one-shot migration workflow to convert .pkl assets."
     )
-    return True
+    return False
 
 
 def _legacy_pickle_migration_sunset_passed() -> bool:
@@ -105,7 +85,8 @@ def _legacy_pickle_migration_sunset_passed() -> bool:
         )
         return True
 
-    return datetime.now(timezone.utc).date() > sunset_date
+    decommission_date = datetime.strptime("2026-03-31", "%Y-%m-%d").date()
+    return datetime.now(timezone.utc).date() > min(sunset_date, decommission_date)
 
 
 def _should_delete_pickle_after_migration() -> bool:
@@ -396,13 +377,13 @@ class VectorMemory:
             self.model = None
 
     def _load_index(self):
-        """永続化されたインデックスをロード（JSON形式、旧pickle形式からの移行は明示的許可時のみ）"""
+        """永続化されたインデックスをロード（JSON形式のみ）。"""
         if not self.index_path:
             return
 
         # JSON形式のパス（.json拡張子）
         json_path = self.index_path.with_suffix(".json")
-        legacy_pkl_path = self.index_path  # 旧pickle形式
+        legacy_pkl_path = self.index_path
 
         try:
             import numpy as np
@@ -435,63 +416,14 @@ class VectorMemory:
                 )
                 return
 
-            # 2) 旧pickle形式からのマイグレーション
+            # 2) 旧pickle形式は runtime では読み込まない
             if legacy_pkl_path.exists() and legacy_pkl_path.suffix == ".pkl":
-                if not _allow_legacy_pickle_migration():
-                    logger.warning(
-                        "[VectorMemory] Legacy pickle migration disabled. "
-                        "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to enable."
-                    )
-                    return
-
-                # ★ セキュリティ修正: 古すぎるpickleファイルは移行を拒否
-                if _is_pickle_file_stale(legacy_pkl_path):
-                    logger.error(
-                        "[VectorMemory] Legacy pickle file is too old (>90 days). "
-                        "Manual migration required for security reasons. "
-                        "Please delete the pickle file or contact support."
-                    )
-                    return
-
-                logger.info("[VectorMemory] Migrating from legacy pickle format...")
-                try:
-                    # セキュリティ: RestrictedUnpickler を使用して安全にデシリアライズ
-                    raw_data = _safe_read_legacy_pickle_bytes(legacy_pkl_path)
-                    data = RestrictedUnpickler.loads(raw_data)
-
-                    self.documents = data.get("documents", [])
-                    self.embeddings = data.get("embeddings")
-
-                    logger.info(
-                        f"[VectorMemory] Loaded legacy pickle: {len(self.documents)} documents"
-                    )
-
-                    # 新形式で保存（マイグレーション）
-                    self.index_path = json_path  # 新しいパスに更新
-                    self._save_index()
-
-                    # ★ セキュリティ修正: 移行後は旧pickleファイルを削除（デフォルト）
-                    if _should_delete_pickle_after_migration():
-                        try:
-                            legacy_pkl_path.unlink()
-                            logger.info(
-                                f"[VectorMemory] Deleted legacy pickle file: {legacy_pkl_path}"
-                            )
-                        except Exception as del_e:
-                            logger.warning(
-                                f"[VectorMemory] Failed to delete pickle file: {del_e}. "
-                                "Please manually remove for security."
-                            )
-                    else:
-                        # バックアップとしてリネーム（VERITAS_MEMORY_KEEP_PICKLE_BACKUP=1の場合のみ）
-                        backup_path = legacy_pkl_path.with_suffix(".pkl.bak")
-                        legacy_pkl_path.rename(backup_path)
-                        logger.info(
-                            "[VectorMemory] Migrated to JSON. Backup: %s", backup_path
-                        )
-                    return
-                except Exception as e:
-                    logger.warning("[VectorMemory] Pickle migration failed: %s", e)
+                logger.error(
+                    "[SECURITY] Legacy pickle index detected at %s. "
+                    "Runtime migration has been removed; use offline migration.",
+                    legacy_pkl_path,
+                )
+                return
 
         except Exception as e:
             logger.error("[VectorMemory] Failed to load index: %s", e)
@@ -793,34 +725,27 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "core" / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.pkl"
-VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.pkl"
+MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.onnx"
+VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.json"
 
 logger.info("[MemoryModel] module loaded from: %s", __file__)
 
-# memory_model.pkl のロード（分類器用）
-# ★ セキュリティ修正: joblib.load()は内部でpickleを使用するため、
-#   レガシーpickle移行と同じセキュリティポリシーを適用する。
-#   明示的にVERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1が設定されている場合のみロード。
-if joblib_load and MEMORY_MODEL_PATH.exists():
-    if _allow_legacy_pickle_migration():
-        try:
-            MODEL = joblib_load(MEMORY_MODEL_PATH)
-            logger.info("[MemoryModel] loaded: %s", MEMORY_MODEL_PATH)
-        except Exception as e:
-            MODEL = None
-            logger.warning("[MemoryModel] load skipped: %s", e, exc_info=True)
-    else:
-        MODEL = None
-        logger.info(
-            "[MemoryModel] load skipped: pickle migration not enabled. "
-            "Set VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION=1 to load memory_model.pkl"
-        )
-else:
-    MODEL = None
-    logger.info(
-        "[MemoryModel] load skipped: model file missing or joblib not available"
+MODEL = None
+legacy_model_path = MODELS_DIR / "memory_model.pkl"
+if legacy_model_path.exists():
+    logger.error(
+        "[SECURITY] Legacy model pickle detected at %s. "
+        "Runtime loading has been removed; export to ONNX for deployment.",
+        legacy_model_path,
     )
+elif MEMORY_MODEL_PATH.exists():
+    logger.info(
+        "[MemoryModel] ONNX model detected at %s but runtime loader is not "
+        "enabled in this module.",
+        MEMORY_MODEL_PATH,
+    )
+else:
+    logger.info("[MemoryModel] model file not found: %s", MEMORY_MODEL_PATH)
 
 # VectorMemory インスタンスの初期化
 # ★ 修正 (H-10): MEM_VEC へのアクセスをスレッドセーフにするためのロック
@@ -893,7 +818,7 @@ def predict_gate_label(text: str) -> Dict[str, float]:
         except Exception as e:
             logger.error("[MemoryModel] MEM_CLF.predict_proba error: %s", e)
 
-    # 2) MODEL (memory_model.pkl) に predict_proba があれば使う
+    # 2) MODEL (runtime optional model) に predict_proba があれば使う
     if MODEL is not None and hasattr(MODEL, "predict_proba"):
         try:
             probs = MODEL.predict_proba([text])[0]
@@ -2092,6 +2017,5 @@ def rebuild_vector_index():
         _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
         logger.info("[MemoryOS] Vector index rebuild complete")
-
 
 

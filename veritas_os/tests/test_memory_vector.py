@@ -261,12 +261,7 @@ def test_legacy_pickle_migration_disabled_by_default(tmp_path: Path, monkeypatch
 
 
 def test_legacy_pickle_migration_opt_in(tmp_path: Path, monkeypatch):
-    """オプトイン時でも _reconstruct がブロックされるため移行は安全に失敗する。
-
-    numpy 配列を含む pickle は _reconstruct を使用するため、
-    セキュリティ強化により RestrictedUnpickler がこれを拒否する。
-    移行は graceful に失敗し、ドキュメントは空のまま残る。
-    """
+    """オプトイン指定しても runtime での移行は常に拒否される。"""
     import numpy as np
 
     idx_path = tmp_path / "legacy_index.pkl"
@@ -279,10 +274,9 @@ def test_legacy_pickle_migration_opt_in(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "1")
 
     vm = _new_vector_memory(index_path=idx_path, dim=4)
-    # _reconstruct blocked → migration gracefully fails
+    # runtime decommissioned: pickle migration is always disabled
     assert len(vm.documents) == 0
     assert not idx_path.with_suffix(".json").exists()
-
 
 
 

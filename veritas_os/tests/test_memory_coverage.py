@@ -28,9 +28,13 @@ class TestAllowLegacyPickleMigration:
         assert memory._allow_legacy_pickle_migration() is False
 
     @pytest.mark.parametrize("val", ["1", "true", "yes", "y", "on", "TRUE", " Yes "])
-    def test_truthy_values(self, monkeypatch, val):
+    def test_truthy_values_still_false_after_runtime_decommission(
+        self,
+        monkeypatch,
+        val,
+    ):
         monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", val)
-        assert memory._allow_legacy_pickle_migration() is True
+        assert memory._allow_legacy_pickle_migration() is False
 
     def test_falsy_value(self, monkeypatch):
         monkeypatch.setenv("VERITAS_MEMORY_ALLOW_PICKLE_MIGRATION", "no")
