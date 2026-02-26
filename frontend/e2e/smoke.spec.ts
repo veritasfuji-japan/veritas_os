@@ -27,7 +27,7 @@ test.describe("Smoke: 3-minute demo flow", () => {
   test("Audit page renders TrustLog explorer", async ({ page }) => {
     await page.goto("/audit");
     await expect(page.getByRole("heading", { name: "TrustLog Explorer" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "request_id 検索" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /request_id (検索|Search)/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
     await expect(page.getByPlaceholder("request_id")).toBeVisible();
   });
@@ -36,10 +36,7 @@ test.describe("Smoke: 3-minute demo flow", () => {
   test("Governance page renders controls", async ({ page }) => {
     await page.goto("/governance");
     await expect(page.getByRole("heading", { name: "Governance Control" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "ポリシーを読み込む" })).toBeVisible();
-
-    // Connection inputs
-    await expect(page.getByLabel("X-API-Key")).toBeVisible();
+    await expect(page.getByRole("button", { name: /(ポリシーを読み込む|Load policy)/ })).toBeVisible();
   });
 
   // 4. Navigation works across all pages

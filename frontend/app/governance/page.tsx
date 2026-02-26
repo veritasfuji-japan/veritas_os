@@ -1,12 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
 import { isGovernancePolicyResponse } from "../../lib/api-validators";
 
-const DEFAULT_API_BASE =
-  process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
-const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
 
 /* ---------- types ---------- */
 
@@ -283,8 +280,6 @@ function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
 /* ---------- main page ---------- */
 
 export default function GovernanceControlPage(): JSX.Element {
-  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
-  const [apiKey, setApiKey] = useState(ENV_API_KEY);
 
   const [savedPolicy, setSavedPolicy] = useState<GovernancePolicy | null>(null);
   const [draft, setDraft] = useState<GovernancePolicy | null>(null);
@@ -293,7 +288,6 @@ export default function GovernanceControlPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [valueDrift, setValueDrift] = useState<ValueDriftMetrics | null>(null);
-  const shouldAutoLoad = ENV_API_KEY.trim().length > 0;
 
   const hasChanges = useMemo(
     () => draft !== null && savedPolicy !== null && !deepEqual(savedPolicy, draft),
@@ -303,9 +297,7 @@ export default function GovernanceControlPage(): JSX.Element {
   /* -- fetch value drift -- */
   const fetchValueDrift = useCallback(async () => {
     try {
-      const res = await fetch(`${apiBase.replace(/\/$/, "")}/v1/governance/value-drift`, {
-        headers: { "X-API-Key": apiKey.trim() },
-      });
+      const res = await fetch("/api/veritas/v1/governance/value-drift");
       if (!res.ok) {
         setValueDrift(null);
         return;
@@ -322,7 +314,7 @@ export default function GovernanceControlPage(): JSX.Element {
     } catch {
       setValueDrift(null);
     }
-  }, [apiBase, apiKey]);
+  }, []);
 
   /* -- fetch policy -- */
   const fetchPolicy = useCallback(async () => {
@@ -330,9 +322,7 @@ export default function GovernanceControlPage(): JSX.Element {
     setSuccess(null);
     setLoading(true);
     try {
-      const res = await fetch(`${apiBase.replace(/\/$/, "")}/v1/governance/policy`, {
-        headers: { "X-API-Key": apiKey.trim() },
-      });
+      const res = await fetch("/api/veritas/v1/governance/policy");
       if (!res.ok) {
         setError(`HTTP ${res.status}: ポリシー取得に失敗しました。`);
         return;
@@ -350,7 +340,7 @@ export default function GovernanceControlPage(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [apiBase, apiKey, fetchValueDrift]);
+  }, [fetchValueDrift]);
 
   /* -- save policy -- */
   const savePolicy = useCallback(async () => {
@@ -359,12 +349,11 @@ export default function GovernanceControlPage(): JSX.Element {
     setSuccess(null);
     setSaving(true);
     try {
-      const res = await fetch(`${apiBase.replace(/\/$/, "")}/v1/governance/policy`, {
+      const res = await fetch("/api/veritas/v1/governance/policy", {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "X-API-Key": apiKey.trim(),
-        },
+                  },
         body: JSON.stringify(draft),
       });
       if (!res.ok) {
@@ -384,19 +373,7 @@ export default function GovernanceControlPage(): JSX.Element {
     } finally {
       setSaving(false);
     }
-  }, [apiBase, apiKey, draft]);
-
-  /* -- auto-load on mount if API key is pre-configured via env -- */
-  const didAutoLoadRef = useRef(false);
-
-  useEffect(() => {
-    if (didAutoLoadRef.current || !shouldAutoLoad) {
-      return;
-    }
-
-    didAutoLoadRef.current = true;
-    void fetchPolicy();
-  }, [fetchPolicy, shouldAutoLoad]);
+  }, [draft]);
 
   /* -- updater helpers -- */
   function updateFuji<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void {
@@ -436,31 +413,11 @@ export default function GovernanceControlPage(): JSX.Element {
 
       {/* Connection */}
       <Card title="Connection" className="bg-background/75">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-xs">
-            <span className="font-medium">API Base URL</span>
-            <input
-              className="w-full rounded-md border border-border bg-background px-2 py-2"
-              value={apiBase}
-              onChange={(e) => setApiBase(e.target.value)}
-            />
-          </label>
-          <label className="space-y-1 text-xs">
-            <span className="font-medium">X-API-Key</span>
-            <input
-              className="w-full rounded-md border border-border bg-background px-2 py-2"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              type="password"
-              autoComplete="off"
-            />
-          </label>
-        </div>
         <div className="mt-3">
           <button
             type="button"
             className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
-            disabled={loading || !apiKey.trim()}
+            disabled={loading}
             onClick={() => void fetchPolicy()}
           >
             {loading ? "読み込み中..." : "ポリシーを読み込む"}
@@ -706,7 +663,7 @@ export default function GovernanceControlPage(): JSX.Element {
       ) : (
         <Card title="Status" className="bg-background/75">
           <p className="text-sm text-muted-foreground">
-            ポリシーを読み込むには、APIキーを設定して「ポリシーを読み込む」をクリックしてください。
+            「ポリシーを読み込む」をクリックして最新設定を取得してください。
           </p>
         </Card>
       )}

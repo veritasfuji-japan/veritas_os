@@ -5,8 +5,6 @@ import { Card } from "@veritas/design-system";
 import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, type TrustLogItem } from "../../lib/api-validators";
 import { useI18n } from "../../components/i18n-provider";
 
-const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
-const ENV_API_KEY = process.env.NEXT_PUBLIC_VERITAS_API_KEY ?? "";
 const PAGE_LIMIT = 50;
 
 function toPrettyJson(value: unknown): string {
@@ -105,8 +103,6 @@ function isPassedEntry(item: TrustLogItem): boolean {
 
 export default function TrustLogExplorerPage(): JSX.Element {
   const { t } = useI18n();
-  const [apiBase, setApiBase] = useState(DEFAULT_API_BASE);
-  const [apiKey, setApiKey] = useState(ENV_API_KEY);
   const [cursor, setCursor] = useState<string | null>(null);
   const [items, setItems] = useState<TrustLogItem[]>([]);
   const [selected, setSelected] = useState<TrustLogItem | null>(null);
@@ -444,11 +440,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         params.set("cursor", nextCursor);
       }
 
-      const response = await fetch(`${apiBase.replace(/\/$/, "")}/v1/trust/logs?${params.toString()}`, {
-        headers: {
-          "X-API-Key": apiKey.trim(),
-        },
-      });
+      const response = await fetch(`/api/veritas/v1/trust/logs?${params.toString()}`);
 
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("trust logs取得に失敗しました。", "Failed to fetch trust logs.")}`);
@@ -485,11 +477,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase.replace(/\/$/, "")}/v1/trust/${encodeURIComponent(value)}`, {
-        headers: {
-          "X-API-Key": apiKey.trim(),
-        },
-      });
+      const response = await fetch(`/api/veritas/v1/trust/${encodeURIComponent(value)}`);
 
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("request_id 検索に失敗しました。", "Failed to search request_id.")}`);
@@ -524,23 +512,12 @@ export default function TrustLogExplorerPage(): JSX.Element {
       </Card>
 
       <Card title="Connection" className="bg-background/75">
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-xs">
-            <span className="font-medium">API Base URL</span>
-            <input className="w-full rounded-md border border-border bg-background px-2 py-2" value={apiBase} onChange={(event) => setApiBase(event.target.value)} />
-          </label>
-          <label className="space-y-1 text-xs">
-            <span className="font-medium">X-API-Key</span>
-            <input className="w-full rounded-md border border-border bg-background px-2 py-2" value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" />
-          </label>
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading || !apiKey.trim()} onClick={() => void loadLogs(null, true)}>
-            {t("最新ログを読み込み", "Load latest logs")}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading} onClick={() => void loadLogs(null, true)}>
+            {loading ? t("読み込み中...", "Loading...") : t("最新ログを読み込み", "Load latest logs")}
           </button>
-          <button type="button" className="rounded-md border border-border px-3 py-2 text-sm" disabled={loading || !hasMore || !cursor || !apiKey.trim()} onClick={() => void loadLogs(cursor, false)}>
-            {t("さらに読み込む", "Load more")}
+          <button type="button" className="rounded-md border border-border px-3 py-2 text-sm" disabled={loading || !hasMore || !cursor} onClick={() => void loadLogs(cursor, false)}>
+            {t("追加読み込み", "Load more")}
           </button>
         </div>
       </Card>
@@ -548,7 +525,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
       <Card title={t("request_id 検索", "request_id Search")} className="bg-background/75">
         <div className="flex flex-col gap-2 md:flex-row">
           <input aria-label="request_id" className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm" placeholder="request_id" value={requestId} onChange={(event) => setRequestId(event.target.value)} />
-          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading || !apiKey.trim()} onClick={() => void searchByRequestId()}>
+          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading} onClick={() => void searchByRequestId()}>
             {t("検索", "Search")}
           </button>
         </div>
@@ -617,7 +594,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
             <button
               type="button"
               className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
-              disabled={loading || !apiKey.trim() || !selectedDecisionId}
+              disabled={loading || !selectedDecisionId}
               onClick={verifySelectedDecision}
             >
               {t("ハッシュチェーン検証", "Verify hash chain")}
