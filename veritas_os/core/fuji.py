@@ -55,9 +55,15 @@ from .config import capability_cfg, emit_capability_manifest
 from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
 from veritas_os.tools import call_tool as _call_tool
 
-try:
-    import yaml  # ポリシーファイル用
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
+if capability_cfg.enable_fuji_yaml_policy:
+    try:
+        import yaml  # ポリシーファイル用
+    except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover
+        raise RuntimeError(
+            "YAML policy is enabled by VERITAS_CAP_FUJI_YAML_POLICY=1, "
+            "but PyYAML is not installed"
+        ) from exc
+else:  # pragma: no cover - explicit capability-off path
     yaml = None  # type: ignore
 
 
@@ -189,9 +195,7 @@ if capability_cfg.emit_manifest_on_import:
         manifest={
             "tool_bridge": capability_cfg.enable_fuji_tool_bridge,
             "trust_log": capability_cfg.enable_fuji_trust_log,
-            "yaml_policy": (
-                capability_cfg.enable_fuji_yaml_policy and yaml is not None
-            ),
+            "yaml_policy": capability_cfg.enable_fuji_yaml_policy,
         },
     )
 
@@ -517,13 +521,13 @@ _DEFAULT_POLICY: Dict[str, Any] = {
 
 
 def _load_policy(path: Path | None) -> Dict[str, Any]:
-    if yaml is None or not capability_cfg.enable_fuji_yaml_policy:
+    if not capability_cfg.enable_fuji_yaml_policy:
         return dict(_DEFAULT_POLICY)
 
     if path is None or not path.exists():
         return dict(_DEFAULT_POLICY)
 
-    yaml_error = getattr(yaml, "YAMLError", None) if yaml is not None else None
+    yaml_error = getattr(yaml, "YAMLError", None)
     yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
     handled_errors = (TypeError, ValueError, OSError) + yaml_errors
 
@@ -541,9 +545,9 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
 
 def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
     """文字列からポリシーをパースする（TOCTOU 回避用）。"""
-    if yaml is None or not capability_cfg.enable_fuji_yaml_policy:
+    if not capability_cfg.enable_fuji_yaml_policy:
         return dict(_DEFAULT_POLICY)
-    yaml_error = getattr(yaml, "YAMLError", None) if yaml is not None else None
+    yaml_error = getattr(yaml, "YAMLError", None)
     yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
     handled_errors = (TypeError, ValueError) + yaml_errors
 

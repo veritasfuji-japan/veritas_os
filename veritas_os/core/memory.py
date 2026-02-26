@@ -46,6 +46,9 @@ if capability_cfg.emit_manifest_on_import:
         manifest={
             "posix_file_lock": bool(not IS_WIN and fcntl is not None),
             "joblib_model": False,
+            "sentence_transformers": (
+                capability_cfg.enable_memory_sentence_transformers
+            ),
         },
     )
 
@@ -365,17 +368,24 @@ class VectorMemory:
 
     def _load_model(self):
         """埋め込みモデルをロード"""
+        if not capability_cfg.enable_memory_sentence_transformers:
+            logger.info(
+                "[VectorMemory] sentence-transformers disabled by "
+                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
+            )
+            self.model = None
+            return
+
         try:
             from sentence_transformers import SentenceTransformer
 
             self.model = SentenceTransformer(self.model_name)
             logger.info("[VectorMemory] Loaded model: %s", self.model_name)
-        except ImportError:
-            logger.warning(
-                "[VectorMemory] sentence-transformers not available. "
-                "Install with: pip install sentence-transformers"
-            )
-            self.model = None
+        except ImportError as exc:
+            raise RuntimeError(
+                "sentence-transformers is required when "
+                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
+            ) from exc
         except Exception as e:
             logger.error("[VectorMemory] Failed to load model: %s", e)
             self.model = None
