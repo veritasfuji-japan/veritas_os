@@ -5,6 +5,16 @@ import { useI18n } from "./i18n-provider";
 import { useEffect, useRef, useState } from "react";
 
 /**
+ * Normalized stream event shape emitted by the Veritas SSE endpoint.
+ */
+interface StreamEvent {
+  id: string | number;
+  type: string;
+  ts: string;
+  payload: unknown;
+}
+
+/**
  * Parse and dispatch SSE payload chunks emitted by the backend stream.
  *
  * We only consume `data:` lines and ignore heartbeat/comments, then emit a
