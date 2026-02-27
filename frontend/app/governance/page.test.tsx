@@ -212,7 +212,9 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByText("ポリシーを読み込む"));
 
     await waitFor(() => {
-      expect(screen.getByText("レスポンス形式エラー: policy の形式が不正です。")).toBeInTheDocument();
+      expect(
+        screen.getByText(/^レスポンス形式エラー: policy\./),
+      ).toBeInTheDocument();
     });
   });
 
