@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
 import { toAssistantMessage } from "../analytics/utils";
 import { type ChatMessage } from "../types";
@@ -20,6 +20,9 @@ interface UseDecideResult {
 
 /**
  * Encapsulates decide API communication and user-facing error handling.
+ *
+ * Uses AbortController and a monotonic request id to prevent stale responses
+ * from overwriting the newest UI state during rapid submissions or unmount.
  */
 export function useDecide({
   t,
@@ -30,6 +33,15 @@ export function useDecide({
 }: UseDecideParams): UseDecideResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const requestSequenceRef = useRef(0);
+  const latestRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      activeControllerRef.current?.abort();
+    };
+  }, []);
 
   const runDecision = async (nextQuery?: string): Promise<void> => {
     const queryToUse = (nextQuery ?? query).trim();
@@ -42,11 +54,19 @@ export function useDecide({
     }
 
     setChatMessages((prev) => [...prev, { id: Date.now(), role: "user", content: queryToUse }]);
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+    const requestId = requestSequenceRef.current + 1;
+    requestSequenceRef.current = requestId;
+    latestRequestIdRef.current = requestId;
+    const isLatestRequest = (): boolean => latestRequestIdRef.current === requestId;
     setLoading(true);
 
     try {
       const response = await fetch("/api/veritas/v1/decide", {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
         },
@@ -55,6 +75,10 @@ export function useDecide({
           context: {},
         }),
       });
+
+      if (!isLatestRequest()) {
+        return;
+      }
 
       if (response.status === 401) {
         const authError = t("401: APIキー不足、または無効です。", "401: Missing or invalid API key.");
@@ -118,7 +142,13 @@ export function useDecide({
         ...prev,
         { id: Date.now() + 1, role: "assistant", content: toAssistantMessage(payload, t) },
       ]);
-    } catch {
+    } catch (caught: unknown) {
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        return;
+      }
+      if (!isLatestRequest()) {
+        return;
+      }
       const networkError = t(
         "ネットワークエラー: バックエンドへ接続できません。",
         "Network error: cannot reach backend.",
@@ -127,7 +157,9 @@ export function useDecide({
       setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: networkError }]);
       setResult(null);
     } finally {
-      setLoading(false);
+      if (isLatestRequest()) {
+        setLoading(false);
+      }
     }
   };
 
