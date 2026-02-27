@@ -46,6 +46,26 @@ export interface GovernancePolicyResponse {
   policy: GovernancePolicy;
 }
 
+export interface GovernanceValidationIssue {
+  category: "format" | "semantic";
+  path: string;
+  message: string;
+}
+
+interface GovernanceValidationSuccess {
+  ok: true;
+  data: GovernancePolicyResponse;
+}
+
+interface GovernanceValidationFailure {
+  ok: false;
+  issues: GovernanceValidationIssue[];
+}
+
+export type GovernanceValidationResult = GovernanceValidationSuccess | GovernanceValidationFailure;
+
+const AUDIT_LEVELS = new Set(["none", "minimal", "standard", "full", "strict"]);
+
 export interface TrustLogItem {
   request_id?: string;
   created_at?: string;
@@ -87,12 +107,25 @@ function hasStringField(obj: Record<string, unknown>, key: string): boolean {
   return typeof obj[key] === "string";
 }
 
-function isFujiRules(value: unknown): value is FujiRules {
-  if (!isRecord(value)) {
+function isIso8601WithOffset(value: string): boolean {
+  const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+  if (!isoPattern.test(value)) {
     return false;
   }
 
-  return [
+  return !Number.isNaN(Date.parse(value));
+}
+
+function issue(category: "format" | "semantic", path: string, message: string): GovernanceValidationIssue {
+  return { category, path, message };
+}
+
+function validateFujiRules(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
+  if (!isRecord(value)) {
+    return [issue("format", pathPrefix, "object である必要があります。")];
+  }
+
+  const keys = [
     "pii_check",
     "self_harm_block",
     "illicit_block",
@@ -101,67 +134,222 @@ function isFujiRules(value: unknown): value is FujiRules {
     "keyword_hard_block",
     "keyword_soft_flag",
     "llm_safety_head",
-  ].every((key) => hasBooleanField(value, key));
+  ];
+
+  return keys
+    .filter((key) => !hasBooleanField(value, key))
+    .map((key) => issue("format", `${pathPrefix}.${key}`, "boolean である必要があります。"));
 }
 
-function isRiskThresholds(value: unknown): value is RiskThresholds {
-  if (!isRecord(value)) {
-    return false;
+function validateThresholdValue(
+  obj: Record<string, unknown>,
+  key: keyof RiskThresholds,
+  pathPrefix: string,
+): GovernanceValidationIssue[] {
+  const path = `${pathPrefix}.${key}`;
+  if (!hasNumberField(obj, key)) {
+    return [issue("format", path, "number である必要があります。")];
   }
 
-  return ["allow_upper", "warn_upper", "human_review_upper", "deny_upper"].every((key) => hasNumberField(value, key));
+  const num = obj[key] as number;
+  if (num < 0 || num > 1) {
+    return [issue("semantic", path, "0 以上 1 以下である必要があります。")];
+  }
+
+  return [];
 }
 
-function isAutoStop(value: unknown): value is AutoStop {
+function validateRiskThresholds(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
   if (!isRecord(value)) {
-    return false;
+    return [issue("format", pathPrefix, "object である必要があります。")];
   }
 
-  return (
-    hasBooleanField(value, "enabled")
-    && hasNumberField(value, "max_risk_score")
-    && hasNumberField(value, "max_consecutive_rejects")
-    && hasNumberField(value, "max_requests_per_minute")
-  );
+  const issues = [
+    ...validateThresholdValue(value, "allow_upper", pathPrefix),
+    ...validateThresholdValue(value, "warn_upper", pathPrefix),
+    ...validateThresholdValue(value, "human_review_upper", pathPrefix),
+    ...validateThresholdValue(value, "deny_upper", pathPrefix),
+  ];
+
+  const hasAllThresholds = ["allow_upper", "warn_upper", "human_review_upper", "deny_upper"].every((key) => hasNumberField(value, key));
+  if (!hasAllThresholds) {
+    return issues;
+  }
+
+  const allowUpper = value.allow_upper as number;
+  const warnUpper = value.warn_upper as number;
+  const humanReviewUpper = value.human_review_upper as number;
+  const denyUpper = value.deny_upper as number;
+
+  if (allowUpper > warnUpper) {
+    issues.push(issue("semantic", `${pathPrefix}.warn_upper`, "allow_upper <= warn_upper を満たしてください。"));
+  }
+
+  if (warnUpper > humanReviewUpper) {
+    issues.push(issue("semantic", `${pathPrefix}.human_review_upper`, "warn_upper <= human_review_upper を満たしてください。"));
+  }
+
+  if (humanReviewUpper > denyUpper) {
+    issues.push(issue("semantic", `${pathPrefix}.deny_upper`, "human_review_upper <= deny_upper を満たしてください。"));
+  }
+
+  return issues;
 }
 
-function isLogRetention(value: unknown): value is LogRetention {
+function validateAutoStop(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
   if (!isRecord(value)) {
-    return false;
+    return [issue("format", pathPrefix, "object である必要があります。")];
   }
 
-  return (
-    hasNumberField(value, "retention_days")
-    && hasStringField(value, "audit_level")
-    && Array.isArray(value.include_fields)
-    && value.include_fields.every((field) => typeof field === "string")
-    && hasBooleanField(value, "redact_before_log")
-    && hasNumberField(value, "max_log_size")
-  );
+  const issues: GovernanceValidationIssue[] = [];
+
+  if (!hasBooleanField(value, "enabled")) {
+    issues.push(issue("format", `${pathPrefix}.enabled`, "boolean である必要があります。"));
+  }
+
+  if (!hasNumberField(value, "max_risk_score")) {
+    issues.push(issue("format", `${pathPrefix}.max_risk_score`, "number である必要があります。"));
+  } else {
+    const score = value.max_risk_score as number;
+    if (score < 0 || score > 1) {
+      issues.push(issue("semantic", `${pathPrefix}.max_risk_score`, "0 以上 1 以下である必要があります。"));
+    }
+  }
+
+  if (!hasNumberField(value, "max_consecutive_rejects")) {
+    issues.push(issue("format", `${pathPrefix}.max_consecutive_rejects`, "number である必要があります。"));
+  } else {
+    const maxConsecutiveRejects = value.max_consecutive_rejects as number;
+    if (!Number.isInteger(maxConsecutiveRejects) || maxConsecutiveRejects < 0) {
+      issues.push(issue("semantic", `${pathPrefix}.max_consecutive_rejects`, "0 以上の整数である必要があります。"));
+    }
+  }
+
+  if (!hasNumberField(value, "max_requests_per_minute")) {
+    issues.push(issue("format", `${pathPrefix}.max_requests_per_minute`, "number である必要があります。"));
+  } else {
+    const maxRequestsPerMinute = value.max_requests_per_minute as number;
+    if (!Number.isInteger(maxRequestsPerMinute) || maxRequestsPerMinute <= 0) {
+      issues.push(issue("semantic", `${pathPrefix}.max_requests_per_minute`, "1 以上の整数である必要があります。"));
+    }
+  }
+
+  return issues;
+}
+
+function validateLogRetention(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
+  if (!isRecord(value)) {
+    return [issue("format", pathPrefix, "object である必要があります。")];
+  }
+
+  const issues: GovernanceValidationIssue[] = [];
+
+  if (!hasNumberField(value, "retention_days")) {
+    issues.push(issue("format", `${pathPrefix}.retention_days`, "number である必要があります。"));
+  } else {
+    const retentionDays = value.retention_days as number;
+    if (!Number.isInteger(retentionDays) || retentionDays <= 0) {
+      issues.push(issue("semantic", `${pathPrefix}.retention_days`, "1 以上の整数である必要があります。"));
+    }
+  }
+
+  if (!hasStringField(value, "audit_level")) {
+    issues.push(issue("format", `${pathPrefix}.audit_level`, "string である必要があります。"));
+  } else if (!AUDIT_LEVELS.has(value.audit_level as string)) {
+    issues.push(issue("semantic", `${pathPrefix}.audit_level`, "許可された監査レベルではありません。"));
+  }
+
+  if (!Array.isArray(value.include_fields) || !value.include_fields.every((field) => typeof field === "string")) {
+    issues.push(issue("format", `${pathPrefix}.include_fields`, "string の配列である必要があります。"));
+  }
+
+  if (!hasBooleanField(value, "redact_before_log")) {
+    issues.push(issue("format", `${pathPrefix}.redact_before_log`, "boolean である必要があります。"));
+  }
+
+  if (!hasNumberField(value, "max_log_size")) {
+    issues.push(issue("format", `${pathPrefix}.max_log_size`, "number である必要があります。"));
+  } else {
+    const maxLogSize = value.max_log_size as number;
+    if (!Number.isInteger(maxLogSize) || maxLogSize <= 0) {
+      issues.push(issue("semantic", `${pathPrefix}.max_log_size`, "1 以上の整数である必要があります。"));
+    }
+  }
+
+  return issues;
+}
+
+function validateGovernancePolicy(value: unknown, pathPrefix: string): GovernanceValidationIssue[] {
+  if (!isRecord(value)) {
+    return [issue("format", pathPrefix, "object である必要があります。")];
+  }
+
+  const issues: GovernanceValidationIssue[] = [];
+
+  if (!hasStringField(value, "version")) {
+    issues.push(issue("format", `${pathPrefix}.version`, "string である必要があります。"));
+  }
+
+  issues.push(...validateFujiRules(value.fuji_rules, `${pathPrefix}.fuji_rules`));
+  issues.push(...validateRiskThresholds(value.risk_thresholds, `${pathPrefix}.risk_thresholds`));
+  issues.push(...validateAutoStop(value.auto_stop, `${pathPrefix}.auto_stop`));
+  issues.push(...validateLogRetention(value.log_retention, `${pathPrefix}.log_retention`));
+
+  if (!hasStringField(value, "updated_at")) {
+    issues.push(issue("format", `${pathPrefix}.updated_at`, "string である必要があります。"));
+  } else if (!isIso8601WithOffset(value.updated_at as string)) {
+    issues.push(issue("semantic", `${pathPrefix}.updated_at`, "ISO 8601 形式である必要があります。"));
+  }
+
+  if (!hasStringField(value, "updated_by")) {
+    issues.push(issue("format", `${pathPrefix}.updated_by`, "string である必要があります。"));
+  }
+
+  return issues;
+}
+
+/**
+ * Validate governance API payloads and classify failures into format vs semantic issues
+ * so the UI can present actionable error messages to operators.
+ */
+export function validateGovernancePolicyResponse(value: unknown): GovernanceValidationResult {
+  if (!isRecord(value)) {
+    return {
+      ok: false,
+      issues: [issue("format", "policy_response", "object である必要があります。")],
+    };
+  }
+
+  const issues: GovernanceValidationIssue[] = [];
+
+  if (!hasBooleanField(value, "ok")) {
+    issues.push(issue("format", "ok", "boolean である必要があります。"));
+  }
+
+  issues.push(...validateGovernancePolicy(value.policy, "policy"));
+
+  if (issues.length > 0) {
+    return {
+      ok: false,
+      issues,
+    };
+  }
+
+  return {
+    ok: true,
+    data: {
+      ok: value.ok as boolean,
+      policy: value.policy as GovernancePolicy,
+    },
+  };
 }
 
 export function isGovernancePolicy(value: unknown): value is GovernancePolicy {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    hasStringField(value, "version")
-    && isFujiRules(value.fuji_rules)
-    && isRiskThresholds(value.risk_thresholds)
-    && isAutoStop(value.auto_stop)
-    && isLogRetention(value.log_retention)
-    && hasStringField(value, "updated_at")
-    && hasStringField(value, "updated_by")
-  );
+  return validateGovernancePolicy(value, "policy").length === 0;
 }
 
 export function isGovernancePolicyResponse(value: unknown): value is GovernancePolicyResponse {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return typeof value.ok === "boolean" && isGovernancePolicy(value.policy);
+  return validateGovernancePolicyResponse(value).ok;
 }
 
 export function isTrustLogItem(value: unknown): value is TrustLogItem {
