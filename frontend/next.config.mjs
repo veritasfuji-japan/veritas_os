@@ -1,4 +1,4 @@
-const cspReportOnly = [
+const cspEnforced = [
   "default-src 'self'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
@@ -13,14 +13,34 @@ const cspReportOnly = [
   "block-all-mixed-content"
 ].join('; ');
 
+const cspReportOnly = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "object-src 'none'",
+  "script-src 'self' 'nonce-__VERITAS_NONCE__'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "form-action 'self'",
+  "upgrade-insecure-requests",
+  "block-all-mixed-content"
+].join('; ');
+
 /**
  * Returns baseline security headers for all routes.
  *
- * CSP is introduced in report-only mode first so we can audit violations
- * before switching to enforce mode.
+ * CSP is enforced with a compatibility policy to avoid breaking Next.js
+ * runtime behavior, while a strict nonce-based CSP runs in Report-Only mode
+ * to monitor violations before full enforcement.
  */
 function getSecurityHeaders() {
   return [
+    {
+      key: 'Content-Security-Policy',
+      value: cspEnforced
+    },
     {
       key: 'Content-Security-Policy-Report-Only',
       value: cspReportOnly
