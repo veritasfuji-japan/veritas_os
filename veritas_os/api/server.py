@@ -724,6 +724,40 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
     return True
 
 
+def _derive_api_user_id(x_api_key: Optional[str]) -> str:
+    """Derive a stable internal user identifier from the authenticated API key.
+
+    Security:
+        Memory endpoints must not trust caller-supplied ``user_id`` values, because
+        that allows cross-user writes/reads when one shared API key is used by
+        multiple clients. This helper binds memory tenancy to the API key itself.
+
+    Args:
+        x_api_key: Raw ``X-API-Key`` header value (already authenticated).
+
+    Returns:
+        A deterministic internal user ID string.
+    """
+    key = x_api_key.strip() if isinstance(x_api_key, str) else ""
+    if not key:
+        return "anon"
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return f"api_{digest[:16]}"
+
+
+def _resolve_memory_user_id(body_user_id: Any, x_api_key: Optional[str]) -> str:
+    """Resolve memory tenant user_id while preventing caller-controlled spoofing."""
+    resolved = _derive_api_user_id(x_api_key)
+    requested = str(body_user_id or "").strip()
+    if requested and requested != resolved:
+        logger.warning(
+            "Memory user_id override blocked: requested=%s resolved=%s",
+            redact(requested),
+            resolved,
+        )
+    return resolved
+
+
 def require_api_key_header_or_query(
     x_api_key: Optional[str] = Security(api_key_scheme),
     api_key: Optional[str] = Query(default=None),
@@ -1618,14 +1652,14 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
 
 
 @app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_put(body: dict):
+def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", _memory_store_state.err)
         return {"ok": False, "error": "memory store unavailable"}
 
     try:
-        user_id = body.get("user_id", "anon")
+        user_id = _resolve_memory_user_id(body.get("user_id"), x_api_key)
         key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
         value = body.get("value") or {}
 
@@ -1711,7 +1745,7 @@ def memory_put(body: dict):
 
 
 @app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_search(payload: dict):
+def memory_search(payload: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
@@ -1729,13 +1763,49 @@ def memory_search(payload: dict):
             min_sim = max(0.0, min(float(payload.get("min_sim", 0.25)), 1.0))
         except (ValueError, TypeError):
             min_sim = 0.25
-        user_id = payload.get("user_id")
+        user_id = _resolve_memory_user_id(payload.get("user_id"), x_api_key)
 
-        # ★ セキュリティ修正: user_id 必須化（未指定時は全ユーザーのメモリが返る問題を修正）
-        if not user_id:
-            return {"ok": False, "error": "user_id is required", "hits": [], "count": 0}
+        # Validate kinds against allow-list to prevent backend-specific injection.
+        if kinds is None:
+            validated_kinds = None
+        elif isinstance(kinds, str):
+            kinds_list = [kinds]
+            invalid_kinds = [k for k in kinds_list if k not in VALID_MEMORY_KINDS]
+            if invalid_kinds:
+                return {
+                    "ok": False,
+                    "error": f"invalid kinds: {invalid_kinds}",
+                    "hits": [],
+                    "count": 0,
+                }
+            validated_kinds = kinds_list
+        elif isinstance(kinds, list):
+            kinds_list = [str(k).strip().lower() for k in kinds]
+            invalid_kinds = [k for k in kinds_list if k not in VALID_MEMORY_KINDS]
+            if invalid_kinds:
+                return {
+                    "ok": False,
+                    "error": f"invalid kinds: {invalid_kinds}",
+                    "hits": [],
+                    "count": 0,
+                }
+            validated_kinds = kinds_list
+        else:
+            return {
+                "ok": False,
+                "error": "kinds must be a string or list of strings",
+                "hits": [],
+                "count": 0,
+            }
 
-        raw_hits = _store_search(store, query=q, k=k, kinds=kinds, min_sim=min_sim, user_id=user_id)
+        raw_hits = _store_search(
+            store,
+            query=q,
+            k=k,
+            kinds=validated_kinds,
+            min_sim=min_sim,
+            user_id=user_id,
+        )
 
         # ★ Bug fix: MemoryStore.search() returns Dict[str, List[Dict]], not a flat list.
         # Flatten the dict-of-lists into a single list before filtering.
@@ -1768,16 +1838,16 @@ def memory_search(payload: dict):
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_get(body: dict):
+def memory_get(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         # Do not expose internal error details to clients
         return {"ok": False, "error": "memory store unavailable", "value": None}
 
     try:
-        uid = body.get("user_id")
+        uid = _resolve_memory_user_id(body.get("user_id"), x_api_key)
         key = body.get("key")
-        if not uid or not key:
+        if not key:
             return {"ok": False, "error": "user_id and key are required", "value": None}
         # ★ セキュリティ修正: user_id/key フィールドのサイズ制限（DoS対策）
         uid = str(uid)[:500]

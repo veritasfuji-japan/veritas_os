@@ -861,6 +861,7 @@ def test_memory_put_respects_kind_for_vector_store(monkeypatch):
     assert calls["kind"] == "skills"
     assert calls["item"]["text"] == "hello"
     assert calls["item"]["meta"]["kind"] == "skills"
+    assert calls["item"]["meta"]["user_id"] == "anon"
 
 
 def test_memory_search_filters_by_user(monkeypatch):
@@ -891,7 +892,9 @@ def test_memory_search_filters_by_user(monkeypatch):
 
     monkeypatch.setattr(server.MEMORY_STORE, "search", fake_search)
 
-    # user_id 指定あり → meta.user_id 一致分だけ
+    scoped_user = server._derive_api_user_id("test-api-key")
+
+    # user_id 指定あり（不一致）でも APIキー由来 user_id に強制される
     r = client.post(
         "/v1/memory/search",
         json={"query": "q", "user_id": "userX"},
@@ -900,10 +903,9 @@ def test_memory_search_filters_by_user(monkeypatch):
     assert r.status_code == 200
     data = r.json()
     assert data["ok"] is True
-    assert data["count"] == 1
-    assert data["hits"][0]["meta"]["user_id"] == "userX"
+    assert data["count"] == 0
 
-    # user_id なし → セキュリティ修正: user_id は必須
+    # user_id なしでも APIキー由来 user_id で検索される
     r2 = client.post(
         "/v1/memory/search",
         json={"query": "q"},
@@ -911,9 +913,32 @@ def test_memory_search_filters_by_user(monkeypatch):
     )
     assert r2.status_code == 200
     data2 = r2.json()
-    assert data2["ok"] is False
+    assert data2["ok"] is True
     assert data2["count"] == 0
-    assert "user_id" in data2["error"]
+
+    # APIキー由来 user_id のデータは取得できる
+    monkeypatch.setattr(
+        server.MEMORY_STORE,
+        "search",
+        lambda query, k, kinds, min_sim: [
+            {
+                "text": "match",
+                "score": 0.95,
+                "tags": ["t"],
+                "meta": {"user_id": scoped_user},
+            }
+        ],
+    )
+    r3 = client.post(
+        "/v1/memory/search",
+        json={"query": "q", "user_id": "another"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r3.status_code == 200
+    data3 = r3.json()
+    assert data3["ok"] is True
+    assert data3["count"] == 1
+    assert data3["hits"][0]["meta"]["user_id"] == scoped_user
 
 
 # -------------------------------------------------
