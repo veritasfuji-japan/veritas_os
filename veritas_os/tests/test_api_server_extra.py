@@ -281,6 +281,55 @@ def test_require_api_key_success(monkeypatch):
     assert ok is True
 
 
+def test_require_api_key_auth_failure_rate_limit(monkeypatch):
+    """認証失敗が連続した場合、IP単位で429になること。"""
+    monkeypatch.setenv("VERITAS_API_KEY", "expected-key")
+    server._auth_fail_bucket.clear()  # type: ignore[attr-defined]
+
+    for _ in range(server._AUTH_FAIL_RATE_LIMIT):  # type: ignore[attr-defined]
+        with pytest.raises(HTTPException) as exc:
+            server.require_api_key(
+                x_api_key="wrong-key",
+                x_forwarded_for="203.0.113.10",  # type: ignore[arg-type]
+            )
+        assert exc.value.status_code == 401
+
+    with pytest.raises(HTTPException) as exc:
+        server.require_api_key(
+            x_api_key="wrong-key",
+            x_forwarded_for="203.0.113.10",  # type: ignore[arg-type]
+        )
+    assert exc.value.status_code == 429
+    assert "Too many auth failures" in exc.value.detail
+
+
+def test_require_api_key_auth_failure_isolated_by_ip(monkeypatch):
+    """失敗回数はIPごとに分離され、別IPは直ちにブロックされないこと。"""
+    monkeypatch.setenv("VERITAS_API_KEY", "expected-key")
+    server._auth_fail_bucket.clear()  # type: ignore[attr-defined]
+
+    for _ in range(server._AUTH_FAIL_RATE_LIMIT):  # type: ignore[attr-defined]
+        with pytest.raises(HTTPException):
+            server.require_api_key(
+                x_api_key="wrong-key",
+                x_forwarded_for="198.51.100.20",  # type: ignore[arg-type]
+            )
+
+    with pytest.raises(HTTPException) as blocked:
+        server.require_api_key(
+            x_api_key="wrong-key",
+            x_forwarded_for="198.51.100.20",  # type: ignore[arg-type]
+        )
+    assert blocked.value.status_code == 429
+
+    with pytest.raises(HTTPException) as other_ip:
+        server.require_api_key(
+            x_api_key="wrong-key",
+            x_forwarded_for="198.51.100.21",  # type: ignore[arg-type]
+        )
+    assert other_ip.value.status_code == 401
+
+
 def test_enforce_rate_limit_missing_key():
     """
     enforce_rate_limit: APIキー無し → 401
