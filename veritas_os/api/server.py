@@ -33,6 +33,10 @@ from fastapi.security.api_key import APIKeyHeader
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.governance import get_policy, get_value_drift, update_policy
+from veritas_os.compliance.report_engine import (
+    generate_eu_ai_act_report,
+    generate_internal_governance_report,
+)
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -1982,4 +1986,42 @@ def governance_put(body: dict):
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to update governance policy"},
+        )
+
+
+@app.get("/v1/report/eu_ai_act/{decision_id}", dependencies=[Depends(require_api_key)])
+def report_eu_ai_act(decision_id: str):
+    """Generate an enterprise-ready EU AI Act compliance report."""
+    try:
+        result = generate_eu_ai_act_report(decision_id)
+        if not result.get("ok"):
+            return JSONResponse(status_code=404, content=result)
+        return result
+    except Exception as e:
+        logger.error("report_eu_ai_act failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to generate EU AI Act report"},
+        )
+
+
+@app.get("/v1/report/governance", dependencies=[Depends(require_api_key)])
+def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="to")):
+    """Generate internal governance report for the requested date range."""
+    try:
+        result = generate_internal_governance_report((from_, to))
+        return result
+    except ValueError:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Invalid date format. Use ISO-8601 (e.g. 2026-01-01T00:00:00Z)",
+            },
+        )
+    except Exception as e:
+        logger.error("report_governance failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to generate governance report"},
         )
