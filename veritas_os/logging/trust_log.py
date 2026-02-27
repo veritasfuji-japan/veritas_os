@@ -25,6 +25,7 @@ from typing import Any, Dict, Iterable, List, Optional
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
+from veritas_os.audit.trustlog_signed import append_signed_decision
 
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii
@@ -308,6 +309,16 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             items = items[-MAX_JSON_ITEMS:]
 
         _save_json(items)
+
+        # Signed TrustLog (append-only JSONL) is best-effort and must not
+        # break the existing decision pipeline.
+        try:
+            append_signed_decision(entry)
+        except Exception:
+            logger.warning(
+                "append_signed_decision failed; continuing with legacy trust log",
+                exc_info=True,
+            )
 
         return entry
 
