@@ -1,9 +1,11 @@
+import { type LocaleKey } from "../../../locales/ja";
 import { Button, Card } from "@veritas/design-system";
 import { DANGER_PRESETS } from "../constants";
 import { type ChatMessage } from "../types";
 
 interface ChatPanelProps {
   t: (ja: string, en: string) => string;
+  tk: (key: LocaleKey) => string;
   chatMessages: ChatMessage[];
   query: string;
   loading: boolean;
@@ -14,6 +16,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   t,
+  tk,
   chatMessages,
   query,
   loading,
@@ -24,7 +27,7 @@ export function ChatPanel({
   return (
     <Card title="Chat" className="bg-background/75">
       <div className="mb-4 rounded-md border border-border bg-background/60 p-3">
-        <p className="mb-2 text-xs font-medium text-muted-foreground">{t("チャット履歴", "Chat history")}</p>
+        <p className="mb-2 text-xs font-medium text-muted-foreground">{tk("chatHistory")}</p>
         {chatMessages.length > 0 ? (
           <ul className="space-y-2" aria-label="chat messages">
             {chatMessages.map((message) => (
@@ -42,7 +45,7 @@ export function ChatPanel({
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground">{t("まだメッセージはありません。", "No messages yet.")}</p>
+          <p className="text-sm text-muted-foreground">{tk("noMessagesYet")}</p>
         )}
       </div>
 
@@ -59,13 +62,13 @@ export function ChatPanel({
             className="min-h-28 w-full rounded-md border border-border bg-background px-2 py-2"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={t("メッセージを入力", "Enter a message")}
+            placeholder={tk("messagePlaceholder")}
           />
         </label>
 
         <div className="space-y-2">
           <p className="text-xs font-medium">
-            {t("危険プリセット（安全拒否確認用）", "Danger presets (for safety rejection checks)")}
+            {tk("dangerPresets")}
           </p>
           <div className="flex flex-wrap gap-2">
             {DANGER_PRESETS.map((preset) => (
@@ -83,7 +86,7 @@ export function ChatPanel({
         </div>
 
         <Button type="submit" disabled={loading}>
-          {loading ? t("送信中...", "Sending...") : t("送信", "Send")}
+          {loading ? tk("sending") : tk("send")}
         </Button>
 
         {error ? (

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
 import { toAssistantMessage } from "../analytics/utils";
 import { type ChatMessage } from "../types";
+import { type LocaleKey } from "../../../locales/ja";
 
 interface UseDecideParams {
   t: (ja: string, en: string) => string;
+  tk: (key: LocaleKey) => string;
   query: string;
   setQuery: (query: string) => void;
   setResult: (result: DecideResponse | null) => void;
@@ -26,6 +28,7 @@ interface UseDecideResult {
  */
 export function useDecide({
   t,
+  tk,
   query,
   setQuery,
   setResult,
@@ -49,7 +52,7 @@ export function useDecide({
     setError(null);
 
     if (!queryToUse) {
-      setError(t("query を入力してください。", "Please enter query."));
+      setError(tk("queryRequired"));
       return;
     }
 
@@ -81,14 +84,14 @@ export function useDecide({
       }
 
       if (response.status === 401) {
-        const authError = t("401: APIキー不足、または無効です。", "401: Missing or invalid API key.");
+        const authError = tk("authError");
         setError(authError);
         setChatMessages((prev) => [
           ...prev,
           {
             id: Date.now() + 1,
             role: "assistant",
-            content: t("401 エラー: APIキー不足、または無効です。", "401 error: Missing or invalid API key."),
+            content: tk("authErrorAssistant"),
           },
         ]);
         setResult(null);
@@ -96,20 +99,14 @@ export function useDecide({
       }
 
       if (response.status === 503) {
-        const unavailable = t(
-          "503: service_unavailable（バックエンド処理を実行できません）。",
-          "503: service_unavailable (backend execution unavailable).",
-        );
+        const unavailable = tk("serviceUnavailable");
         setError(unavailable);
         setChatMessages((prev) => [
           ...prev,
           {
             id: Date.now() + 1,
             role: "assistant",
-            content: t(
-              "503 エラー: service_unavailable（バックエンド処理を実行できません）。",
-              "503 error: service_unavailable (backend execution unavailable).",
-            ),
+            content: tk("serviceUnavailableAssistant"),
           },
         ]);
         setResult(null);
@@ -127,10 +124,7 @@ export function useDecide({
 
       const payload: unknown = await response.json();
       if (!isDecideResponse(payload)) {
-        const schemaError = t(
-          "schema不一致: レスポンスがオブジェクトではありません。",
-          "Schema mismatch: response is not an object.",
-        );
+        const schemaError = tk("schemaMismatch");
         setError(schemaError);
         setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: schemaError }]);
         setResult(null);
@@ -149,10 +143,7 @@ export function useDecide({
       if (!isLatestRequest()) {
         return;
       }
-      const networkError = t(
-        "ネットワークエラー: バックエンドへ接続できません。",
-        "Network error: cannot reach backend.",
-      );
+      const networkError = tk("networkError");
       setError(networkError);
       setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: networkError }]);
       setResult(null);
