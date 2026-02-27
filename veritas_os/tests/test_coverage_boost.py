@@ -551,7 +551,14 @@ class TestServerMemoryEndpoints:
         assert "tags" in resp.json()["error"]
 
     def test_memory_put_success(self, monkeypatch):
-        store = SimpleNamespace(put=lambda kind, item: "new-id")
+        captured = {}
+
+        def _put(kind, item):
+            captured["kind"] = kind
+            captured["item"] = item
+            return "new-id"
+
+        store = SimpleNamespace(put=_put)
         monkeypatch.setattr(server, "get_memory_store", lambda: store)
         resp = _client.post("/v1/memory/put", headers=_AUTH, json={
             "text": "hello", "user_id": "u1", "tags": ["t1"], "kind": "semantic",
@@ -559,6 +566,10 @@ class TestServerMemoryEndpoints:
         body = resp.json()
         assert body["ok"] is True
         assert body["vector"]["saved"] is True
+        assert (
+            captured["item"]["meta"]["user_id"]
+            == server._derive_api_user_id(_TEST_KEY)
+        )
 
     def test_memory_put_invalid_kind_defaults_to_semantic(self, monkeypatch):
         store = SimpleNamespace(put=lambda kind, item: "id1")
@@ -576,15 +587,19 @@ class TestServerMemoryEndpoints:
         })
         assert resp.json()["ok"] is False
 
-    def test_memory_search_missing_user_id(self, monkeypatch):
+    def test_memory_search_without_user_id_uses_api_scoped_user(self, monkeypatch):
         store = SimpleNamespace(search=lambda **kw: {})
         monkeypatch.setattr(server, "get_memory_store", lambda: store)
         resp = _client.post("/v1/memory/search", headers=_AUTH, json={"query": "test"})
-        assert resp.json()["ok"] is False
-        assert "user_id" in resp.json()["error"]
+        assert resp.json()["ok"] is True
 
     def test_memory_search_with_dict_results(self, monkeypatch):
-        hits = {"semantic": [{"id": "1", "text": "hi", "score": 0.9, "meta": {"user_id": "u1"}}]}
+        scoped_user = server._derive_api_user_id(_TEST_KEY)
+        hits = {
+            "semantic": [
+                {"id": "1", "text": "hi", "score": 0.9, "meta": {"user_id": scoped_user}}
+            ]
+        }
         store = SimpleNamespace(search=lambda **kw: hits)
         monkeypatch.setattr(server, "get_memory_store", lambda: store)
         resp = _client.post("/v1/memory/search", headers=_AUTH, json={
@@ -596,8 +611,9 @@ class TestServerMemoryEndpoints:
 
     def test_memory_search_filters_by_user_id(self, monkeypatch):
         """Hits from other users should be filtered out."""
+        scoped_user = server._derive_api_user_id(_TEST_KEY)
         hits = {"semantic": [
-            {"id": "1", "text": "hi", "score": 0.9, "meta": {"user_id": "u1"}},
+            {"id": "1", "text": "hi", "score": 0.9, "meta": {"user_id": scoped_user}},
             {"id": "2", "text": "hi", "score": 0.8, "meta": {"user_id": "other"}},
         ]}
         store = SimpleNamespace(search=lambda **kw: hits)
@@ -624,6 +640,18 @@ class TestServerMemoryEndpoints:
         })
         body = resp.json()
         assert body["ok"] is True
+
+    def test_memory_search_rejects_invalid_kinds(self, monkeypatch):
+        store = SimpleNamespace(search=lambda **kw: {})
+        monkeypatch.setattr(server, "get_memory_store", lambda: store)
+        resp = _client.post(
+            "/v1/memory/search",
+            headers=_AUTH,
+            json={"query": "test", "kinds": ["semantic", "bad-kind"]},
+        )
+        body = resp.json()
+        assert body["ok"] is False
+        assert "invalid kinds" in body["error"]
 
     def test_memory_get_store_unavailable(self, monkeypatch):
         monkeypatch.setattr(server, "get_memory_store", lambda: None)
