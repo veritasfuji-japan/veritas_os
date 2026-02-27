@@ -12,12 +12,20 @@ describe('next.config headers', () => {
 
     const headerMap = new Map(routes?.[0].headers.map((item) => [item.key, item.value]));
 
-    expect(headerMap.get('Content-Security-Policy')).toContain("default-src 'self'");
     const cspHeader = headerMap.get('Content-Security-Policy') ?? '';
-    const scriptDirective = cspHeader.split(';').find((directive) => directive.trim().startsWith('script-src')) ?? '';
+    const cspReportOnlyHeader = headerMap.get('Content-Security-Policy-Report-Only') ?? '';
+    const scriptDirective = cspHeader
+      .split(';')
+      .find((directive) => directive.trim().startsWith('script-src')) ?? '';
+    const reportOnlyScriptDirective = cspReportOnlyHeader
+      .split(';')
+      .find((directive) => directive.trim().startsWith('script-src')) ?? '';
 
-    expect(scriptDirective).not.toContain("'unsafe-inline'");
-    expect(headerMap.get('Content-Security-Policy')).toContain("'nonce-__VERITAS_NONCE__'");
+    expect(cspHeader).toContain("default-src 'self'");
+    expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(cspReportOnlyHeader).toContain("default-src 'self'");
+    expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
+    expect(reportOnlyScriptDirective).toContain("'nonce-__VERITAS_NONCE__'");
     expect(headerMap.get('X-Frame-Options')).toBe('DENY');
     expect(headerMap.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
     expect(headerMap.get('Permissions-Policy')).toContain('camera=()');
