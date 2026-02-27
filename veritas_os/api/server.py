@@ -646,6 +646,13 @@ async def add_security_headers(request: Request, call_next):
 # （この変数は直接使用せず、レガシーテスト互換のためだけに存在）
 API_KEY_DEFAULT = ""  # ★ セキュリティ修正: 起動時にキーを保持しない
 
+# 認証失敗レート制限（IPベース）
+_AUTH_FAIL_RATE_LIMIT = 10
+_AUTH_FAIL_WINDOW = 60.0
+_AUTH_FAIL_BUCKET_MAX = 10000
+_auth_fail_bucket: Dict[str, Tuple[int, float]] = {}
+_auth_fail_lock = threading.Lock()
+
 # 起動時に一度だけ警告を出力（テスト互換性のため）
 if not os.getenv("VERITAS_API_KEY"):
     logger.warning("VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
@@ -708,7 +715,69 @@ def _get_expected_api_key() -> str:
     return key
 
 
-def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
+def _resolve_client_ip(
+    request: Optional[Request],
+    x_forwarded_for: Any,
+) -> str:
+    """Resolve client IP for auth-failure throttling.
+
+    Security:
+        Prefer ``X-Forwarded-For`` when present so that reverse-proxy
+        deployments still apply per-client limits. A trusted proxy setup is
+        assumed; otherwise this value may be spoofed and should not be used for
+        authorization.
+    """
+    forwarded_raw = x_forwarded_for if isinstance(x_forwarded_for, str) else ""
+    forwarded = forwarded_raw.split(",", maxsplit=1)[0].strip()
+    if forwarded:
+        return forwarded
+
+    if request is not None and request.client is not None and request.client.host:
+        return request.client.host.strip() or "unknown"
+
+    return "unknown"
+
+
+def _cleanup_auth_fail_bucket_unsafe(now: float) -> None:
+    """Internal helper: cleanup auth-failure buckets (lock required)."""
+    expired_keys = [
+        key
+        for key, (_, start) in _auth_fail_bucket.items()
+        if now - start > (_AUTH_FAIL_WINDOW * 4)
+    ]
+    for key in expired_keys:
+        _auth_fail_bucket.pop(key, None)
+
+    if len(_auth_fail_bucket) > _AUTH_FAIL_BUCKET_MAX:
+        overflow = len(_auth_fail_bucket) - _AUTH_FAIL_BUCKET_MAX
+        for key in list(_auth_fail_bucket.keys())[:overflow]:
+            _auth_fail_bucket.pop(key, None)
+
+
+def _enforce_auth_failure_rate_limit(client_ip: str) -> None:
+    """Rate-limit repeated authentication failures by client IP."""
+    key = client_ip.strip() or "unknown"
+    now = time.time()
+
+    with _auth_fail_lock:
+        _cleanup_auth_fail_bucket_unsafe(now)
+        count, start = _auth_fail_bucket.get(key, (0, now))
+
+        if now - start > _AUTH_FAIL_WINDOW:
+            _auth_fail_bucket[key] = (1, now)
+            return
+
+        if count + 1 > _AUTH_FAIL_RATE_LIMIT:
+            raise HTTPException(status_code=429, detail="Too many auth failures")
+
+        _auth_fail_bucket[key] = (count + 1, start)
+
+
+def require_api_key(
+    request: Request = None,  # type: ignore[assignment]
+    x_api_key: Optional[str] = Security(api_key_scheme),
+    x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
+):
     """
     テスト契約:
     - サーバ側の API Key が未設定なら 500
@@ -717,9 +786,13 @@ def require_api_key(x_api_key: Optional[str] = Security(api_key_scheme)):
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
         raise HTTPException(status_code=500, detail="Server API key not configured")
+
+    client_ip = _resolve_client_ip(request=request, x_forwarded_for=x_forwarded_for)
     if not x_api_key:
+        _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(x_api_key.strip(), expected):
+        _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
