@@ -75,3 +75,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ARGS: --no-banner --redact --verbose
+
+  next-public-secret-guard:
+    name: Guard NEXT_PUBLIC secret-like variables
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Block NEXT_PUBLIC_*KEY style exposures
+        run: python scripts/security/check_next_public_key_exposure.py
