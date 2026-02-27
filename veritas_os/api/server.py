@@ -1649,6 +1649,44 @@ def _store_search(store: Any, *, query: str, k: int, kinds: Any, min_sim: float,
         return fn(query)
 
 
+def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[str]]:
+    """Validate and normalize memory search kinds against allow-list.
+
+    Returns:
+        A tuple of (validated_kinds, error_message).
+        - validated_kinds is None when no filter is requested.
+        - error_message is set when input should be rejected.
+    """
+    if kinds is None:
+        return None, None
+
+    raw_kinds: list[Any]
+    if isinstance(kinds, str):
+        raw_kinds = [kinds]
+    elif isinstance(kinds, list):
+        raw_kinds = kinds
+    else:
+        return None, "kinds must be a string or list of strings"
+
+    normalized_kinds: list[str] = []
+    invalid_kinds: list[str] = []
+
+    for raw_kind in raw_kinds:
+        if not isinstance(raw_kind, str):
+            return None, "kinds must be a string or list of strings"
+        normalized_kind = raw_kind.strip().lower()
+        if normalized_kind not in VALID_MEMORY_KINDS:
+            invalid_kinds.append(normalized_kind)
+            continue
+        if normalized_kind not in normalized_kinds:
+            normalized_kinds.append(normalized_kind)
+
+    if invalid_kinds:
+        return None, f"invalid kinds: {invalid_kinds}"
+
+    return normalized_kinds, None
+
+
 @app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
@@ -1764,34 +1802,11 @@ def memory_search(payload: dict, x_api_key: Optional[str] = Header(default=None,
         user_id = _resolve_memory_user_id(payload.get("user_id"), x_api_key)
 
         # Validate kinds against allow-list to prevent backend-specific injection.
-        if kinds is None:
-            validated_kinds = None
-        elif isinstance(kinds, str):
-            kinds_list = [kinds]
-            invalid_kinds = [k for k in kinds_list if k not in VALID_MEMORY_KINDS]
-            if invalid_kinds:
-                return {
-                    "ok": False,
-                    "error": f"invalid kinds: {invalid_kinds}",
-                    "hits": [],
-                    "count": 0,
-                }
-            validated_kinds = kinds_list
-        elif isinstance(kinds, list):
-            kinds_list = [str(k).strip().lower() for k in kinds]
-            invalid_kinds = [k for k in kinds_list if k not in VALID_MEMORY_KINDS]
-            if invalid_kinds:
-                return {
-                    "ok": False,
-                    "error": f"invalid kinds: {invalid_kinds}",
-                    "hits": [],
-                    "count": 0,
-                }
-            validated_kinds = kinds_list
-        else:
+        validated_kinds, kinds_error = _validate_memory_kinds(kinds)
+        if kinds_error:
             return {
                 "ok": False,
-                "error": "kinds must be a string or list of strings",
+                "error": kinds_error,
                 "hits": [],
                 "count": 0,
             }
