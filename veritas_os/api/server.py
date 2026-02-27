@@ -33,6 +33,10 @@ from fastapi.security.api_key import APIKeyHeader
 # ---- API層（ここは基本 "安定" 前提）----
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.governance import get_policy, get_value_drift, update_policy
+from veritas_os.compliance.report_engine import (
+    generate_eu_ai_act_report,
+    generate_internal_governance_report,
+)
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -44,6 +48,10 @@ from veritas_os.api.constants import (
 from veritas_os.logging.trust_log import (
     get_trust_log_page,
     get_trust_logs_by_request,
+)
+from veritas_os.audit.trustlog_signed import (
+    export_signed_trustlog,
+    verify_trustlog_chain,
 )
 
 
@@ -1404,6 +1412,49 @@ async def decide(req: DecideRequest, request: Request):
         )
 
 
+@app.post(
+    "/v1/decision/replay/{decision_id}",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+async def replay_decision_endpoint(decision_id: str, request: Request):
+    """Replay a persisted decision deterministically and return diff report."""
+    p = get_decision_pipeline()
+    if p is None or not hasattr(p, "replay_decision"):
+        return JSONResponse(
+            status_code=503,
+            content={
+                "match": False,
+                "diff": {"error": DECIDE_GENERIC_ERROR},
+                "replay_time_ms": 0,
+            },
+        )
+
+    mock_external_apis = True
+    try:
+        qv = request.query_params.get("mock_external_apis")
+        if qv is not None:
+            mock_external_apis = str(qv).strip().lower() not in {"0", "false", "no", "off"}
+    except Exception:
+        mock_external_apis = True
+
+    try:
+        result = await p.replay_decision(
+            decision_id=decision_id,
+            mock_external_apis=mock_external_apis,
+        )
+    except Exception as e:
+        logger.error("decision replay failed: %s", _errstr(e))
+        return JSONResponse(
+            status_code=500,
+            content={
+                "match": False,
+                "diff": {"error": "replay_failed"},
+                "replay_time_ms": 0,
+            },
+        )
+    return result
+
+
 # ==============================
 # FUJI quick validate
 # ==============================
@@ -1876,6 +1927,18 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "internal error in trust_feedback"}
 
 
+@app.get("/v1/trustlog/verify", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trustlog_verify() -> Dict[str, Any]:
+    """Verify signed append-only TrustLog integrity and signatures."""
+    return verify_trustlog_chain()
+
+
+@app.get("/v1/trustlog/export", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trustlog_export() -> Dict[str, Any]:
+    """Export signed append-only TrustLog entries for external audit."""
+    return export_signed_trustlog()
+
+
 # ==============================
 # Governance Policy API
 # ==============================
@@ -1923,4 +1986,42 @@ def governance_put(body: dict):
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to update governance policy"},
+        )
+
+
+@app.get("/v1/report/eu_ai_act/{decision_id}", dependencies=[Depends(require_api_key)])
+def report_eu_ai_act(decision_id: str):
+    """Generate an enterprise-ready EU AI Act compliance report."""
+    try:
+        result = generate_eu_ai_act_report(decision_id)
+        if not result.get("ok"):
+            return JSONResponse(status_code=404, content=result)
+        return result
+    except Exception as e:
+        logger.error("report_eu_ai_act failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to generate EU AI Act report"},
+        )
+
+
+@app.get("/v1/report/governance", dependencies=[Depends(require_api_key)])
+def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="to")):
+    """Generate internal governance report for the requested date range."""
+    try:
+        result = generate_internal_governance_report((from_, to))
+        return result
+    except ValueError:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Invalid date format. Use ISO-8601 (e.g. 2026-01-01T00:00:00Z)",
+            },
+        )
+    except Exception as e:
+        logger.error("report_governance failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to generate governance report"},
         )

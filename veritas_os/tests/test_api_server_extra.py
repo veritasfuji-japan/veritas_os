@@ -86,6 +86,32 @@ def test_health_and_status_and_metrics(monkeypatch):
     assert "server_time" in data
 
 
+def test_replay_decision_endpoint(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", _TEST_API_KEY)
+
+    class DummyPipeline:
+        async def replay_decision(self, decision_id: str, mock_external_apis: bool = True):
+            return {
+                "match": True,
+                "diff": {"changed": False, "decision_id": decision_id},
+                "replay_time_ms": 12,
+            }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+
+    response = client.post(
+        "/v1/decision/replay/dec-1?mock_external_apis=true",
+        headers=_AUTH_HEADERS,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["match"] is True
+    assert body["diff"]["changed"] is False
+    assert body["replay_time_ms"] == 12
+
+
 # -------------------------------------------------
 # Health / Status / Metrics (ファイル有りパス)
 # -------------------------------------------------

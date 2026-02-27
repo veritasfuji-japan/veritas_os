@@ -28,6 +28,7 @@ import inspect
 import json
 import logging
 import os
+import random
 import re
 import secrets
 import time
@@ -389,6 +390,147 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 
 
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
+REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
+
+
+def _sanitize_for_diff(value: Any) -> Any:
+    """Normalize payload for deterministic diffing by removing volatile fields."""
+    if isinstance(value, dict):
+        volatile = {
+            "created_at",
+            "latency_ms",
+            "stage_latency",
+            "replay_time_ms",
+            "ts",
+        }
+        return {
+            str(k): _sanitize_for_diff(v)
+            for k, v in value.items()
+            if str(k) not in volatile
+        }
+    if isinstance(value, list):
+        return [_sanitize_for_diff(v) for v in value]
+    return value
+
+
+def _build_replay_diff(original: Dict[str, Any], replayed: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a concise structural diff report for audit-friendly replay checks."""
+    orig_norm = _sanitize_for_diff(original)
+    replay_norm = _sanitize_for_diff(replayed)
+    if orig_norm == replay_norm:
+        return {"changed": False, "summary": "no_diff", "keys": []}
+
+    keys = sorted(set(orig_norm.keys()) | set(replay_norm.keys()))
+    changed_keys = [
+        key for key in keys if orig_norm.get(key) != replay_norm.get(key)
+    ]
+    return {
+        "changed": True,
+        "summary": f"changed_keys={len(changed_keys)}",
+        "keys": changed_keys,
+        "original": orig_norm,
+        "replayed": replay_norm,
+    }
+
+
+def _load_persisted_decision(decision_id: str) -> Optional[Dict[str, Any]]:
+    """Load persisted decision snapshot by decision_id/request_id from LOG_DIR."""
+    log_dir = Path(LOG_DIR)
+    if not log_dir.exists():
+        return None
+    candidates = sorted(log_dir.glob("decide_*.json"), reverse=True)
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        rid = str(payload.get("request_id") or "")
+        did = str(payload.get("decision_id") or "")
+        if decision_id in {rid, did}:
+            return payload
+    return None
+
+
+class _ReplayRequest:
+    """Minimal Request-like object accepted by run_decide_pipeline during replay."""
+
+    def __init__(self) -> None:
+        self.query_params: Dict[str, Any] = {}
+
+
+async def replay_decision(
+    decision_id: str,
+    *,
+    mock_external_apis: bool = True,
+) -> Dict[str, Any]:
+    """Replay a persisted decision deterministically and generate an audit diff report."""
+    started_at = time.time()
+    snapshot = _load_persisted_decision(decision_id)
+    if snapshot is None:
+        return {
+            "match": False,
+            "diff": {"error": "decision_not_found", "decision_id": decision_id},
+            "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
+        }
+
+    replay_meta = snapshot.get("deterministic_replay") or {}
+    req_body = replay_meta.get("request_body") or {}
+    if not isinstance(req_body, dict):
+        req_body = {}
+
+    req_body.setdefault("query", snapshot.get("query") or "")
+    ctx = req_body.setdefault("context", {})
+    if not isinstance(ctx, dict):
+        ctx = {}
+        req_body["context"] = ctx
+
+    req_body["request_id"] = str(snapshot.get("request_id") or decision_id)
+    req_body["seed"] = replay_meta.get("seed", req_body.get("seed", 0))
+    req_body["temperature"] = replay_meta.get(
+        "temperature", req_body.get("temperature", 0)
+    )
+    ctx["_replay_mode"] = True
+    ctx["_mock_external_apis"] = bool(mock_external_apis)
+
+    if hasattr(DecideRequest, "model_validate"):
+        replay_req = DecideRequest.model_validate(req_body)
+    else:
+        replay_req = req_body
+
+    replay_output = await run_decide_pipeline(replay_req, _ReplayRequest())
+    original_output = replay_meta.get("final_output") or {}
+    if not isinstance(original_output, dict):
+        original_output = {}
+    diff = _build_replay_diff(original_output, replay_output)
+    match = not bool(diff.get("changed"))
+
+    report = {
+        "decision_id": str(snapshot.get("request_id") or decision_id),
+        "match": match,
+        "diff": diff,
+        "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
+        "created_at": utc_now_iso_z(),
+    }
+
+    try:
+        REPLAY_REPORT_DIR.mkdir(parents=True, exist_ok=True)
+        report_path = REPLAY_REPORT_DIR / f"replay_{report['decision_id']}_{int(time.time() * 1000)}.json"
+        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
+            _atomic_write_json(report_path, report, indent=2)
+        else:
+            report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        report["report_path"] = str(report_path)
+    except Exception as e:
+        report.setdefault("diff", {})
+        report["diff"]["report_save_error"] = repr(e)
+
+    return {
+        "match": report["match"],
+        "diff": report["diff"],
+        "replay_time_ms": report["replay_time_ms"],
+    }
 
 
 # =========================================================
@@ -748,6 +890,11 @@ async def run_decide_pipeline(
     if not isinstance(context, dict):
         context = {}
 
+    replay_mode = bool(context.get("_replay_mode", False))
+    mock_external_apis = bool(context.get("_mock_external_apis", replay_mode))
+    if replay_mode:
+        body["temperature"] = body.get("temperature", 0)
+
     raw_query = body.get("query") or context.get("query") or ""
     if not isinstance(raw_query, str):
         raw_query = str(raw_query)
@@ -816,7 +963,21 @@ async def run_decide_pipeline(
     }
 
     # ---------- Request id / min evidence ----------
-    request_id = body.get("request_id") or secrets.token_hex(16)
+    if replay_mode:
+        request_id = str(
+            body.get("request_id")
+            or context.get("request_id")
+            or secrets.token_hex(16)
+        )
+    else:
+        request_id = body.get("request_id") or secrets.token_hex(16)
+
+    seed_raw = body.get("seed")
+    try:
+        seed = int(seed_raw) if seed_raw is not None else 0
+    except Exception:
+        seed = 0
+    random.seed(seed)
     try:
         min_ev = int(body.get("min_evidence") or 1)
     except Exception:
@@ -1003,7 +1164,7 @@ async def run_decide_pipeline(
     should_run_web = bool(query and want_web and (not fast_mode or web_explicit or is_veritas_query))
 
     web_stage_started_at = time.time()
-    if should_run_web:
+    if should_run_web and not mock_external_apis:
         ws = None
         ws_final_query = query  # ★ evidence に残す最終query（アンカー後が来る想定）
 
@@ -1117,6 +1278,16 @@ async def run_decide_pipeline(
                     evidence.append(ev_fallback)
                     web_evidence_added = 1
 
+    elif should_run_web and mock_external_apis:
+        response_extras["web_search"] = {
+            "ok": True,
+            "results": [],
+            "mocked": True,
+            "meta": {"reason": "replay_mock_external_apis"},
+        }
+        response_extras.setdefault("env_tools", {})
+        if isinstance(response_extras["env_tools"], dict):
+            response_extras["env_tools"]["web_search_mocked"] = True
     else:
         if want_web and "web_search" not in response_extras:
             response_extras["web_search"] = {
@@ -2229,5 +2400,43 @@ async def run_decide_pipeline(
                 extras2["veritas_agi"] = agi_info
     except Exception as e:
         _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
+
+    payload_for_replay = dict(payload)
+    payload_for_replay.pop("deterministic_replay", None)
+
+    replay_snapshot = {
+        "input_prompt": query,
+        "evidence_snapshot": (
+            payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
+        ),
+        "policy_snapshot": {
+            "min_evidence": min_ev,
+            "fast_mode": fast_mode,
+            "mock_external_apis": mock_external_apis,
+        },
+        "model_version": os.getenv("VERITAS_MODEL_NAME", "gpt-5-thinking"),
+        "temperature": body.get("temperature", 0),
+        "seed": seed,
+        "tool_calls": {
+            "memory_search": bool(query and memory_store is not None),
+            "web_search": bool(should_run_web and not mock_external_apis),
+            "web_search_mocked": bool(should_run_web and mock_external_apis),
+        },
+        "stage_outputs": {
+            "planner": response_extras.get("planner"),
+            "retrieval": retrieved,
+            "web": response_extras.get("web_search"),
+            "kernel_raw": raw,
+            "fuji": fuji_dict,
+            "gate": payload.get("gate"),
+            "values": payload.get("values"),
+            "reason": payload.get("reason"),
+        },
+        "request_body": body,
+        "final_output": payload_for_replay,
+    }
+    payload["deterministic_replay"] = replay_snapshot
+    if isinstance(payload.get("meta"), dict):
+        payload["meta"]["replay_ready"] = True
 
     return payload
