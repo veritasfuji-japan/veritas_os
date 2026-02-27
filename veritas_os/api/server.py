@@ -45,6 +45,10 @@ from veritas_os.logging.trust_log import (
     get_trust_log_page,
     get_trust_logs_by_request,
 )
+from veritas_os.audit.trustlog_signed import (
+    export_signed_trustlog,
+    verify_trustlog_chain,
+)
 
 
 # ---- アトミック I/O（信頼性向上）----
@@ -1874,6 +1878,18 @@ def trust_feedback(body: dict):
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
         return {"status": "error", "detail": "internal error in trust_feedback"}
+
+
+@app.get("/v1/trustlog/verify", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trustlog_verify() -> Dict[str, Any]:
+    """Verify signed append-only TrustLog integrity and signatures."""
+    return verify_trustlog_chain()
+
+
+@app.get("/v1/trustlog/export", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trustlog_export() -> Dict[str, Any]:
+    """Export signed append-only TrustLog entries for external audit."""
+    return export_signed_trustlog()
 
 
 # ==============================
