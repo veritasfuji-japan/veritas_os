@@ -653,6 +653,38 @@ class TestServerMemoryEndpoints:
         assert body["ok"] is False
         assert "invalid kinds" in body["error"]
 
+    def test_memory_search_normalizes_and_deduplicates_kinds(self, monkeypatch):
+        captured = {}
+
+        def fake_search(**kwargs):
+            captured.update(kwargs)
+            return {}
+
+        store = SimpleNamespace(search=fake_search)
+        monkeypatch.setattr(server, "get_memory_store", lambda: store)
+        resp = _client.post(
+            "/v1/memory/search",
+            headers=_AUTH,
+            json={"query": "test", "kinds": [" Semantic ", "semantic", "DOC"]},
+        )
+
+        body = resp.json()
+        assert body["ok"] is True
+        assert captured["kinds"] == ["semantic", "doc"]
+
+    def test_memory_search_rejects_non_string_kind_item(self, monkeypatch):
+        store = SimpleNamespace(search=lambda **kw: {})
+        monkeypatch.setattr(server, "get_memory_store", lambda: store)
+        resp = _client.post(
+            "/v1/memory/search",
+            headers=_AUTH,
+            json={"query": "test", "kinds": ["semantic", 123]},
+        )
+
+        body = resp.json()
+        assert body["ok"] is False
+        assert "kinds must be" in body["error"]
+
     def test_memory_get_store_unavailable(self, monkeypatch):
         monkeypatch.setattr(server, "get_memory_store", lambda: None)
         resp = _client.post("/v1/memory/get", headers=_AUTH, json={
