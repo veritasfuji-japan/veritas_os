@@ -14,7 +14,7 @@ import { StepExpansionPanel } from "../../features/console/components/step-expan
 import { useConsoleState } from "../../features/console/state/useConsoleState";
 
 export default function DecisionConsolePage(): JSX.Element {
-  const { t } = useI18n();
+  const { t, tk } = useI18n();
   const {
     query,
     setQuery,
@@ -29,6 +29,7 @@ export default function DecisionConsolePage(): JSX.Element {
 
   const { loading, error, runDecision } = useDecide({
     t,
+    tk,
     query,
     setQuery,
     setResult,
@@ -39,15 +40,13 @@ export default function DecisionConsolePage(): JSX.Element {
     <div className="space-y-6">
       <Card title="Decision Console" className="border-primary/50 bg-surface/85">
         <p className="mb-3 text-sm text-muted-foreground">
-          {t(
-            "POST /v1/decide を直接実行し、意思決定パイプラインを可視化します。",
-            "Run POST /v1/decide directly and visualize the decision pipeline.",
-          )}
+          {tk("consoleDescription")}
         </p>
       </Card>
 
       <ChatPanel
         t={t}
+        tk={tk}
         chatMessages={chatMessages}
         query={query}
         loading={loading}
@@ -112,7 +111,7 @@ export default function DecisionConsolePage(): JSX.Element {
             </details>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{t("まだ結果はありません。", "No results yet.")}</p>
+          <p className="text-sm text-muted-foreground">{tk("noResultsYet")}</p>
         )}
       </Card>
     </div>

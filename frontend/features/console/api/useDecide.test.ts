@@ -87,6 +87,7 @@ describe("useDecide", () => {
     const { result } = renderHook(() =>
       useDecide({
         t: (_ja, en) => en,
+        tk: () => "",
         query: "q",
         setQuery,
         setResult,
@@ -125,6 +126,7 @@ describe("useDecide", () => {
     const { result } = renderHook(() =>
       useDecide({
         t: (_ja, en) => en,
+        tk: () => "",
         query: "q",
         setQuery,
         setResult,
