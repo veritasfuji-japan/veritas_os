@@ -4,6 +4,7 @@ import {
   isGovernancePolicyResponse,
   isRequestLogResponse,
   isTrustLogsResponse,
+  validateGovernancePolicyResponse,
 } from "./api-validators";
 
 const validGovernanceResponse = {
@@ -59,6 +60,66 @@ describe("api validators", () => {
         },
       }),
     ).toBe(false);
+  });
+
+  it("classifies malformed governance response issues as semantic errors when values are invalid", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        updated_at: "12-02-2026",
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues[0].category).toBe("semantic");
+    expect(validation.issues[0].path).toBe("policy.updated_at");
+  });
+
+  it("classifies threshold ordering violations as semantic errors", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        risk_thresholds: {
+          allow_upper: 0.8,
+          warn_upper: 0.6,
+          human_review_upper: 0.85,
+          deny_upper: 1,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.category === "semantic")).toBe(true);
+  });
+
+  it("rejects unsupported audit_level enum values", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        log_retention: {
+          ...validGovernanceResponse.policy.log_retention,
+          audit_level: "verbose",
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues[0].path).toBe("policy.log_retention.audit_level");
   });
 
   it("accepts valid trust logs response", () => {

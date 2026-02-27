@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
-import { isGovernancePolicyResponse } from "../../lib/api-validators";
+import { validateGovernancePolicyResponse } from "../../lib/api-validators";
 
 
 /* ---------- types ---------- */
@@ -328,12 +328,19 @@ export default function GovernanceControlPage(): JSX.Element {
         return;
       }
       const body: unknown = await res.json();
-      if (!isGovernancePolicyResponse(body)) {
-        setError("レスポンス形式エラー: policy の形式が不正です。");
+      const validation = validateGovernancePolicyResponse(body);
+      if (!validation.ok) {
+        const semanticIssue = validation.issues.find((issue) => issue.category === "semantic");
+        if (semanticIssue) {
+          setError(`レスポンス意味エラー: ${semanticIssue.path} ${semanticIssue.message}`);
+        } else {
+          const formatIssue = validation.issues[0];
+          setError(`レスポンス形式エラー: ${formatIssue.path} ${formatIssue.message}`);
+        }
         return;
       }
-      setSavedPolicy(body.policy);
-      setDraft(structuredClone(body.policy));
+      setSavedPolicy(validation.data.policy);
+      setDraft(structuredClone(validation.data.policy));
       void fetchValueDrift();
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
@@ -361,12 +368,19 @@ export default function GovernanceControlPage(): JSX.Element {
         return;
       }
       const body: unknown = await res.json();
-      if (!isGovernancePolicyResponse(body)) {
-        setError("レスポンス形式エラー: policy の形式が不正です。");
+      const validation = validateGovernancePolicyResponse(body);
+      if (!validation.ok) {
+        const semanticIssue = validation.issues.find((issue) => issue.category === "semantic");
+        if (semanticIssue) {
+          setError(`レスポンス意味エラー: ${semanticIssue.path} ${semanticIssue.message}`);
+        } else {
+          const formatIssue = validation.issues[0];
+          setError(`レスポンス形式エラー: ${formatIssue.path} ${formatIssue.message}`);
+        }
         return;
       }
-      setSavedPolicy(body.policy);
-      setDraft(structuredClone(body.policy));
+      setSavedPolicy(validation.data.policy);
+      setDraft(structuredClone(validation.data.policy));
       setSuccess("ポリシーを更新しました。");
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
