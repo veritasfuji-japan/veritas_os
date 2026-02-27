@@ -1,9 +1,9 @@
-const cspReportOnly = [
+const csp = [
   "default-src 'self'",
   "base-uri 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  "script-src 'self' 'unsafe-inline'",
+  "script-src 'self' 'nonce-__VERITAS_NONCE__'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
@@ -16,14 +16,14 @@ const cspReportOnly = [
 /**
  * Returns baseline security headers for all routes.
  *
- * CSP is introduced in report-only mode first so we can audit violations
- * before switching to enforce mode.
+ * CSP is enforced. Script execution is restricted to self plus nonce-based
+ * scripts to prevent inline script injection.
  */
 function getSecurityHeaders() {
   return [
     {
-      key: 'Content-Security-Policy-Report-Only',
-      value: cspReportOnly
+      key: 'Content-Security-Policy',
+      value: csp
     },
     {
       key: 'X-Frame-Options',
