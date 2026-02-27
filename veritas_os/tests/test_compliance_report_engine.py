@@ -1,17 +1,22 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
-
-os.environ.setdefault("VERITAS_API_KEY", "test-governance-key")
 
 from veritas_os.api import server as srv
 from veritas_os.compliance import report_engine
 
 HEADERS = {"X-API-Key": "test-governance-key"}
+
+
+@pytest.fixture(autouse=True)
+def _set_test_api_key(monkeypatch):
+    """Ensure API key protected endpoints are testable in isolated runs."""
+    monkeypatch.setenv("VERITAS_API_KEY", "test-governance-key")
+    monkeypatch.setattr(srv, "API_KEY_DEFAULT", "test-governance-key")
 
 
 def _write_decision(path: Path, request_id: str, risk: float = 0.2) -> None:
