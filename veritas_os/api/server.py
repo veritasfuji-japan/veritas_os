@@ -738,11 +738,9 @@ def _derive_api_user_id(x_api_key: Optional[str]) -> str:
     Returns:
         A deterministic internal user ID string.
     """
-    key = x_api_key.strip() if isinstance(x_api_key, str) else ""
-    if not key:
-        return "anon"
-    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return f"api_{digest[:16]}"
+    if isinstance(x_api_key, str) and x_api_key.strip():
+        return "api_authenticated"
+    return "anon"
 
 
 def _resolve_memory_user_id(body_user_id: Any, x_api_key: Optional[str]) -> str:
