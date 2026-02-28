@@ -77,6 +77,10 @@ SCORE_THRESHOLDS = {
     "warning_threshold": 0.6,
 }
 
+MAX_OPTION_STRING_LENGTH = 10000
+MAX_OPTIONS = 100
+MAX_OPTIONS_PAYLOAD_BYTES = 1_000_000
+
 
 # ============================
 #  Prompt
@@ -371,19 +375,16 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
 
-    # Security constraints
-    MAX_STRING_LENGTH = 10000  # Maximum length for any string field
-    MAX_OPTIONS = 100  # Maximum number of options to prevent resource exhaustion
-
-    def _truncate_string(value: Any, max_len: int = MAX_STRING_LENGTH) -> Optional[str]:
+    def _truncate_string(value: Any, max_len: int = MAX_OPTION_STRING_LENGTH) -> Optional[str]:
         """Safely truncate string values to prevent resource exhaustion.
 
-        If *max_len* is non-positive, falls back to ``MAX_STRING_LENGTH``.
+        If *max_len* is non-positive, falls back to
+        ``MAX_OPTION_STRING_LENGTH``.
         """
         if value is None:
             return None
         if max_len <= 0:
-            max_len = MAX_STRING_LENGTH
+            max_len = MAX_OPTION_STRING_LENGTH
         if not isinstance(value, str):
             return str(value)[:max_len]
         return value[:max_len]
@@ -398,7 +399,7 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
             if val is not None and not isinstance(val, str):
                 return False
             # Check string length limits
-            if isinstance(val, str) and len(val) > MAX_STRING_LENGTH:
+            if isinstance(val, str) and len(val) > MAX_OPTION_STRING_LENGTH:
                 return False
         for key in ("score", "score_raw"):
             if key in opt:
@@ -408,15 +409,46 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
                     return False
         return True
 
+    def _estimate_option_payload_size(opt: Dict[str, Any]) -> int:
+        """Estimate payload bytes for a single option.
+
+        The estimate only counts values to bound resource usage and avoid
+        constructing a massive intermediate JSON string.
+        """
+        payload_chars = 0
+        for value in opt.values():
+            if value is None:
+                continue
+            if isinstance(value, str):
+                payload_chars += len(value)
+            else:
+                payload_chars += len(str(value))
+        return payload_chars
+
     def _sanitize_options(options: List[Any]) -> List[Dict[str, Any]]:
-        """Filter and sanitize options list to prevent malicious data."""
+        """Filter and sanitize options list to prevent malicious data.
+
+        A hard upper bound is applied to the cumulative option payload so a
+        single debate response cannot consume excessive memory.
+        """
         sanitized = []
+        cumulative_payload_size = 0
         for opt in options[:MAX_OPTIONS]:  # Limit number of options
             if _validate_option(opt):
                 # Truncate string fields for safety
                 for key in ("id", "title", "summary", "verdict", "safety_view", "critic_view", "architect_view"):
                     if key in opt and opt[key] is not None:
                         opt[key] = _truncate_string(opt[key])
+
+                option_size = _estimate_option_payload_size(opt)
+                if cumulative_payload_size + option_size > MAX_OPTIONS_PAYLOAD_BYTES:
+                    logger.warning(
+                        "DebateOS: Truncated options due to payload limit (%d bytes)",
+                        MAX_OPTIONS_PAYLOAD_BYTES,
+                    )
+                    break
+
+                cumulative_payload_size += option_size
                 sanitized.append(opt)
             else:
                 logger.warning("DebateOS: Skipping invalid option structure: %r", type(opt))
@@ -843,5 +875,4 @@ def run_debate(
     except Exception as e:
         logger.error("DebateOS: LLM call or parse failed: %r", e)
         return _fallback_debate(base_options)
-
 
