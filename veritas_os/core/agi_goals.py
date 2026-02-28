@@ -14,6 +14,7 @@ AGI ゴール管理モジュール: auto_adjust_goals
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict
 
 from .utils import _safe_float, _clip01
@@ -135,6 +136,9 @@ def auto_adjust_goals(
 
     ※ 本格的な RL ではなく「RL 風のヒューリスティック」だが、
        少なくとも progress / risk / telos に応じてゴール重みが変動する。
+
+    正規化時は、合計値が 0 または非有限値になるケースをガードし、
+    ZeroDivisionError や NaN 伝播を防ぐ。
     """
     if not bias_weights:
         return bias_weights
@@ -224,11 +228,12 @@ def auto_adjust_goals(
 
     # ---- 正規化（合計1.0 に揃える） ----
     total = sum(new_ws.values())
-    if total <= 0:
+    if total <= 0 or not math.isfinite(total):
         # すべて 0 になってしまった場合は、元に近い形でリセット
         n = len(new_ws) or 1
         return {k: 1.0 / n for k in new_ws.keys()}
 
-    normalized = {k: v / total for k, v in new_ws.items()}
+    safe_total = max(total, 1e-8)
+    normalized = {k: v / safe_total for k, v in new_ws.items()}
 
     return normalized
