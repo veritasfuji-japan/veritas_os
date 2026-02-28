@@ -203,6 +203,22 @@ class TestIsBlockedResult:
             is True
         )
 
+    def test_hostname_matching_rejects_suffix_attack(self):
+        assert (
+            web_search_mod._is_hostname_exact_or_subdomain(
+                "evilveritas.com", "veritas.com"
+            )
+            is False
+        )
+
+    def test_hostname_matching_requires_dot_boundary(self):
+        assert (
+            web_search_mod._is_hostname_exact_or_subdomain(
+                "veritas.com.evil.org", "veritas.com"
+            )
+            is False
+        )
+
     def test_allows_clean_result(self):
         assert (
             web_search_mod._is_blocked_result(

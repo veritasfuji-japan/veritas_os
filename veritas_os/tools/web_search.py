@@ -581,9 +581,8 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
 
     for site in BLACKLIST_SITES:
         site_host = _extract_hostname(site).replace("www.", "")
-        if host and site_host:
-            if host == site_host or host.endswith(f".{site_host}"):
-                return True
+        if _is_hostname_exact_or_subdomain(host, site_host):
+            return True
 
     # bureauveritas.* wildcard block（ドメイン抽出が雑でも防ぐ）
     if host:
@@ -591,11 +590,27 @@ def _is_blocked_result(title: str, snippet: str, url: str) -> bool:
             return True
 
     # veritas.com domain block（ホスト名を優先的にチェック）
-    if host:
-        if host == "veritas.com" or host.endswith(".veritas.com"):
-            return True
+    if _is_hostname_exact_or_subdomain(host, "veritas.com"):
+        return True
 
     return False
+
+
+def _is_hostname_exact_or_subdomain(hostname: str, domain: str) -> bool:
+    """Return True when hostname is the same domain or a child subdomain.
+
+    This helper prevents suffix-matching mistakes such as treating
+    ``evilveritas.com`` as ``veritas.com``. Only exact matches or dot-bounded
+    subdomains (e.g., ``www.veritas.com``) are accepted.
+    """
+    normalized_host = _canonicalize_hostname(hostname)
+    normalized_domain = _canonicalize_hostname(domain)
+    if not normalized_host or not normalized_domain:
+        return False
+    return (
+        normalized_host == normalized_domain
+        or normalized_host.endswith(f".{normalized_domain}")
+    )
 
 
 def _sanitize_max_results(max_results: Any, *, default: int = 5) -> int:
