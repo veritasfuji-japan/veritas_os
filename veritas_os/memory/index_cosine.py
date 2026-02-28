@@ -1,5 +1,4 @@
 # veritas/memory/index_cosine.py
-import os
 import threading
 import logging
 
@@ -10,41 +9,6 @@ from typing import Any, Iterable, List, Optional, Tuple
 from veritas_os.core.atomic_io import atomic_write_npz
 
 logger = logging.getLogger(__name__)
-
-
-class PickleSecurityWarning(UserWarning):
-    """
-    Custom warning category for pickle-related security risks.
-    Allows filtering of security warnings separately from other UserWarnings.
-    """
-    pass
-
-
-def _allow_legacy_pickle_npz() -> bool:
-    """
-    Allow loading legacy npz files that require pickle.
-
-    ⚠️ SECURITY WARNING: Pickle deserialization can execute arbitrary code.
-    This feature is DEPRECATED and should only be enabled temporarily
-    during one-time migration of legacy data files.
-
-    To enable (NOT recommended for production):
-        export VERITAS_MEMORY_ALLOW_LEGACY_NPZ=1
-
-    After migration, disable immediately and regenerate index files.
-    """
-    import warnings
-    value = os.getenv("VERITAS_MEMORY_ALLOW_LEGACY_NPZ", "").strip().lower()
-    if value in {"1", "true", "yes", "y", "on"}:
-        warnings.warn(
-            "VERITAS_MEMORY_ALLOW_LEGACY_NPZ is enabled. This is a security risk. "
-            "Pickle deserialization can execute arbitrary code. "
-            "Disable after migrating legacy data files.",
-            PickleSecurityWarning,
-            stacklevel=2,
-        )
-        return True
-    return False
 
 
 def _validate_finite_array(name: str, values: np.ndarray) -> None:
@@ -185,42 +149,11 @@ class CosineIndex:
                     self.path, e,
                 )
 
-            if _allow_legacy_pickle_npz():
-                # ★ セキュリティ: ファイルサイズ制限（メモリ枯渇防止）
-                _MAX_LEGACY_NPZ_BYTES = 512 * 1024 * 1024  # 512 MB
-                try:
-                    file_size = self.path.stat().st_size
-                except OSError:
-                    file_size = 0
-                if file_size > _MAX_LEGACY_NPZ_BYTES:
-                    logger.warning(
-                        "[CosineIndex] Legacy pickle file too large (%d bytes, limit=%d): %s",
-                        file_size, _MAX_LEGACY_NPZ_BYTES, self.path,
-                    )
-                else:
-                    logger.warning(
-                        "[CosineIndex] Loading legacy pickle-based npz file: %s. "
-                        "This is a security risk. Re-save the index to migrate.",
-                        self.path,
-                    )
-                    try:
-                        with np.load(self.path, allow_pickle=True) as data:
-                            self.vecs = data["vecs"].astype(np.float32)
-                            self.ids = [str(i) for i in data["ids"].tolist()]
-                        self._validate_loaded_index_or_reset()
-                        # Immediately re-save without pickle to migrate
-                        self.save()
-                        logger.info(
-                            "[CosineIndex] Migrated legacy pickle file to safe format: %s",
-                            self.path,
-                        )
-                        return
-                    except (OSError, ValueError, TypeError, KeyError) as e:
-                        # ★ M-18 修正: レガシー読み込みの失敗もログに記録
-                        logger.warning(
-                            "[CosineIndex] Failed to load legacy pickle file: %s: %s",
-                            self.path, e,
-                        )
+            logger.warning(
+                "[CosineIndex] Refusing to load potentially legacy pickle-based index file: %s. "
+                "Legacy pickle deserialization is disabled for security.",
+                self.path,
+            )
 
             # 壊れていたら諦めて空からスタート
             self.vecs = np.zeros((0, self.dim), dtype=np.float32)

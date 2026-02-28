@@ -133,38 +133,18 @@ def test_cosine_index_refuses_path_under_symlink_directory(tmp_path):
     assert idx.ids == []
 
 
-def test_cosine_index_legacy_npz_requires_opt_in(tmp_path, monkeypatch):
-    """レガシーnpz(allow_pickleが必要)はopt-inしないと無視される。"""
+def test_cosine_index_legacy_npz_is_always_rejected(tmp_path):
+    """レガシーnpz(allow_pickleが必要)は常に拒否して空インデックスへフォールバック。"""
     p = tmp_path / "legacy_index.npz"
     vecs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
     ids = np.array(["a", "b"], dtype=object)
     np.savez(p, vecs=vecs, ids=ids)
 
-    monkeypatch.delenv("VERITAS_MEMORY_ALLOW_LEGACY_NPZ", raising=False)
     idx = CosineIndex(dim=2, path=p)
 
     assert idx.size == 0
     assert idx.vecs.shape == (0, 2)
     assert idx.ids == []
-
-
-def test_cosine_index_legacy_npz_migrates_on_opt_in(tmp_path, monkeypatch):
-    """opt-in時はレガシーnpzをロードし安全形式へ保存し直す。"""
-    p = tmp_path / "legacy_index.npz"
-    vecs = np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
-    ids = np.array(["a", "b"], dtype=object)
-    np.savez(p, vecs=vecs, ids=ids)
-
-    monkeypatch.setenv("VERITAS_MEMORY_ALLOW_LEGACY_NPZ", "1")
-    idx = CosineIndex(dim=2, path=p)
-
-    assert idx.size == 2
-    assert idx.ids == ["a", "b"]
-
-    monkeypatch.delenv("VERITAS_MEMORY_ALLOW_LEGACY_NPZ", raising=False)
-    idx_reloaded = CosineIndex(dim=2, path=p)
-    assert idx_reloaded.size == 2
-    assert idx_reloaded.ids == ["a", "b"]
 
 
 def test_cosine_index_load_dim_mismatch_resets_to_empty(tmp_path):
