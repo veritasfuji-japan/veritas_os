@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -206,6 +207,39 @@ def test_resolve_dashboard_password_uses_explicit_value(monkeypatch):
 
     assert password == "configured-secret"
     assert auto_generated is False
+
+
+def test_get_ephemeral_password_file_path_uses_env_override(monkeypatch):
+    """Configured file path should be used for shared ephemeral password."""
+    custom_path = "/tmp/custom-dashboard-password"
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", custom_path)
+
+    assert dashboard_server._get_ephemeral_password_file_path() == Path(custom_path)
+
+
+def test_load_or_create_shared_ephemeral_password_reuses_existing(monkeypatch, tmp_path):
+    """Existing shared password should be reused to avoid worker divergence."""
+    password_file = tmp_path / "dashboard_password"
+    password_file.write_text("existing-password", encoding="utf-8")
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+
+    assert dashboard_server._load_or_create_shared_ephemeral_password() == (
+        "existing-password"
+    )
+
+
+def test_load_or_create_shared_ephemeral_password_creates_new(monkeypatch, tmp_path):
+    """Missing shared password file should be created with owner-only mode."""
+    password_file = tmp_path / "dashboard_password"
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+
+    generated = dashboard_server._load_or_create_shared_ephemeral_password()
+
+    assert isinstance(generated, str)
+    assert len(generated) > 10
+    assert password_file.read_text(encoding="utf-8") == generated
+    mode = os.stat(password_file).st_mode & 0o777
+    assert mode == 0o600
 
 
 

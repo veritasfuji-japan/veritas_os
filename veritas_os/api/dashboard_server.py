@@ -27,6 +27,7 @@ import os
 import secrets
 import threading
 import time
+import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -116,10 +117,60 @@ def _resolve_dashboard_password() -> tuple[str, bool]:
         )
 
     logger.warning(
-        "DASHBOARD_PASSWORD is not set; using an ephemeral auto-generated "
-        "password for this process."
+        "DASHBOARD_PASSWORD is not set; using a shared ephemeral "
+        "auto-generated password."
     )
-    return secrets.token_urlsafe(24), True
+    return _load_or_create_shared_ephemeral_password(), True
+
+
+def _get_ephemeral_password_file_path() -> Path:
+    """Return file path used to share ephemeral dashboard password.
+
+    Security note:
+        The file is process-external state that makes auto-generated
+        credentials deterministic across multi-worker deployments.
+    """
+    configured_path = os.getenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", "").strip()
+    if configured_path:
+        return Path(configured_path)
+    return Path(tempfile.gettempdir()) / "veritas_dashboard_ephemeral_password"
+
+
+def _load_or_create_shared_ephemeral_password() -> str:
+    """Load or atomically create a shared ephemeral password.
+
+    This prevents per-worker random password divergence when several server
+    workers start simultaneously.
+    """
+    password_file = _get_ephemeral_password_file_path()
+    password_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if password_file.exists():
+        existing_password = password_file.read_text(encoding="utf-8").strip()
+        if existing_password:
+            return existing_password
+
+    generated_password = secrets.token_urlsafe(24)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+
+    try:
+        fd = os.open(str(password_file), flags, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as password_handle:
+            password_handle.write(generated_password)
+        return generated_password
+    except FileExistsError:
+        raced_password = password_file.read_text(encoding="utf-8").strip()
+        if raced_password:
+            return raced_password
+    except OSError as exc:
+        logger.warning(
+            "Failed to persist shared ephemeral dashboard password at %s: %s. "
+            "Falling back to process-local password.",
+            password_file,
+            exc,
+        )
+
+    return generated_password
 
 
 DASHBOARD_PASSWORD, _password_auto_generated = _resolve_dashboard_password()
