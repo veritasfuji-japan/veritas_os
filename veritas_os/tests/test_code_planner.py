@@ -146,6 +146,25 @@ def test_find_latest_bench_log(tmp_path: Path, monkeypatch):
     assert latest == f2
 
 
+def test_find_latest_bench_log_skips_symlink(tmp_path: Path, monkeypatch):
+    logs_dir = tmp_path / "logs"
+    logs_dir.mkdir()
+    monkeypatch.setattr(code_planner, "BENCH_LOG_DIR", logs_dir)
+
+    real_file = logs_dir / "real.json"
+    real_file.write_text('{"bench": "bench_x"}', encoding="utf-8")
+
+    symlink_file = logs_dir / "symlink.json"
+    symlink_file.symlink_to(real_file)
+
+    import os
+
+    os.utime(real_file, (1_000, 1_000))
+
+    latest = code_planner._find_latest_bench_log("bench_x")
+    assert latest == real_file
+
+
 # =========================
 # CodeChangePlan / dataclass 系
 # =========================
