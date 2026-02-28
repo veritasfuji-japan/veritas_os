@@ -71,6 +71,10 @@ def _find_latest_bench_log(bench_id: str) -> Optional[Path]:
 
     candidates: List[Tuple[float, Path]] = []
     for p in BENCH_LOG_DIR.glob("*.json"):
+        if p.is_symlink():
+            logger.warning("[code_planner] Skipping symlink path: %s", p)
+            continue
+
         # ★ セキュリティ: シンボリックリンク経由のパストラバーサルを防止
         try:
             resolved_p = p.resolve()
@@ -446,4 +450,3 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     main_cli(bench_id=args.bench_id)
-
