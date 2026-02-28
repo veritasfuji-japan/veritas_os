@@ -318,6 +318,25 @@ def _clear_failed_dashboard_auth(identifier: str) -> None:
         _FAILED_AUTH_ATTEMPTS.pop(identifier, None)
 
 
+def _get_request_client_host(request: Request) -> str:
+    """Return a stable client host string for auth throttling keys.
+
+    When running behind some reverse proxies or in certain test scopes,
+    ``request.client`` may be ``None``. In that case, this function attempts a
+    conservative fallback using ``X-Forwarded-For`` and otherwise returns
+    ``"unknown"``.
+    """
+    if request.client and request.client.host:
+        return request.client.host
+
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    forwarded_host = forwarded_for.split(",", maxsplit=1)[0].strip()
+    if forwarded_host:
+        return forwarded_host
+
+    return "unknown"
+
+
 def verify_credentials(
     request: Request,
     credentials: HTTPBasicCredentials = Depends(security),  # noqa: B008
@@ -334,7 +353,7 @@ def verify_credentials(
     Raises:
         HTTPException: If authentication fails
     """
-    client_host = request.client.host if request.client else "unknown"
+    client_host = _get_request_client_host(request)
     throttle_key = f"{client_host}:{credentials.username}"
 
     if _is_dashboard_auth_locked(throttle_key):

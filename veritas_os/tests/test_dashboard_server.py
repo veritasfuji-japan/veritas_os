@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from veritas_os.api import dashboard_server
 
@@ -81,6 +82,61 @@ def client(monkeypatch, tmp_path) -> TestClient:
 # =====================================================================
 
 
+
+
+def test_get_request_client_host_uses_request_client_when_available():
+    """Client host should come from request.client when available."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "http_version": "1.1",
+            "query_string": b"",
+        }
+    )
+
+    assert dashboard_server._get_request_client_host(request) == "127.0.0.1"
+
+
+def test_get_request_client_host_uses_x_forwarded_for_when_client_missing():
+    """Missing request.client should fall back to first X-Forwarded-For entry."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [(b"x-forwarded-for", b"203.0.113.10, 10.0.0.1")],
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "http_version": "1.1",
+            "query_string": b"",
+        }
+    )
+
+    assert dashboard_server._get_request_client_host(request) == "203.0.113.10"
+
+
+def test_get_request_client_host_returns_unknown_without_client_or_headers():
+    """Missing client and forwarding header should return 'unknown'."""
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/",
+            "headers": [],
+            "server": ("testserver", 80),
+            "scheme": "http",
+            "http_version": "1.1",
+            "query_string": b"",
+        }
+    )
+
+    assert dashboard_server._get_request_client_host(request) == "unknown"
 
 
 
