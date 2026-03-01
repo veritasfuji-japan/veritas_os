@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-import subprocess
+import subprocess  # nosec B404 - subprocess use is required and hardened below
 import sys
 import time
 import uuid
@@ -1246,7 +1246,7 @@ async def decide(
                     try:
                         os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
                         doctor_timeout = 300  # 5 minutes max
-                        proc = subprocess.Popen(
+                        proc = subprocess.Popen(  # nosec B603 - fixed argv list, shell disabled
                             [python_executable, "-m", "veritas_os.scripts.doctor"],
                             stdout=fd,
                             stderr=subprocess.STDOUT,

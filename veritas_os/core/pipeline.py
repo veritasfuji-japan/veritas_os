@@ -28,7 +28,7 @@ import inspect
 import json
 import logging
 import os
-import random
+import random  # nosec B311 - deterministic test seeding only
 import re
 import secrets
 import time

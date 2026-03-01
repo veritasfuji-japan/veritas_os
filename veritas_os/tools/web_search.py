@@ -42,7 +42,7 @@ from __future__ import annotations
 import logging
 import math
 import os
-import random
+import random  # nosec B311 - jitter for retry backoff, not security-sensitive
 import re
 import time
 import ipaddress
@@ -260,7 +260,7 @@ def _compute_backoff(attempt: int) -> float:
     jitter = max(WEBSEARCH_RETRY_JITTER, 0.0)
     delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
     if jitter:
-        delay += random.uniform(0, delay * jitter)
+        delay += random.uniform(0, delay * jitter)  # nosec B311 - non-cryptographic retry jitter
     return delay
 
 
