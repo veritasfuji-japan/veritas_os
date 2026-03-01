@@ -174,6 +174,27 @@ def test_format_request_gemini_combines_text():
     assert "Q2" in text
 
 
+def test_format_request_gemini_many_extra_messages_keeps_order():
+    extra = [
+        {"role": "assistant", "content": f"A{i}"} for i in range(5)
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.GOOGLE,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gemini-pro",
+        temperature=0.5,
+        max_tokens=256,
+        extra_messages=extra,
+    )
+
+    text = payload["contents"][0]["parts"][0]["text"]
+    assert "[assistant]\nA0" in text
+    assert "[assistant]\nA4" in text
+    assert text.index("A0") < text.index("A1") < text.index("A2") < text.index("A3") < text.index("A4")
+
+
 def test_format_request_ollama_with_extra_messages():
     extra = [
         {"role": "assistant", "content": "A1"},

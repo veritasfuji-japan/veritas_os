@@ -295,11 +295,13 @@ def _format_request(
     if provider == LLMProvider.GOOGLE.value:
         # Gemini generateContent:
         # system + user + extra を 1 テキストにまとめる簡易実装
-        extra_text = ""
+        extra_parts: List[str] = []
         for m in extra_messages:
             role = m["role"]
             content = m["content"]
-            extra_text += f"\n\n[{role}]\n{content}"
+            extra_parts.append(f"\n\n[{role}]\n{content}")
+
+        extra_text = "".join(extra_parts)
 
         full_text = f"{system_prompt}\n\n{user_prompt}{extra_text}"
 
