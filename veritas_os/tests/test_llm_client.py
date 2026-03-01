@@ -484,7 +484,7 @@ def test_chat_openrouter_success(monkeypatch):
         system_prompt="SYS",
         user_prompt="USER",
         provider=LLMProvider.OPENROUTER.value,
-        model="some-model",
+        model="openai/gpt-4o-mini",
     )
 
     assert res["text"] == "hi from openrouter"
@@ -727,6 +727,47 @@ def test_chat_local_shortcut(monkeypatch):
     assert called["model"] == "llama3"
     assert res["model"] == "llama3"
 
+
+
+def test_validate_model_name_rejects_control_chars():
+    with pytest.raises(LLMError):
+        llm_client._validate_model_name(
+            provider=LLMProvider.OPENAI.value,
+            model="gpt-4.1-mini\x00",
+        )
+
+
+def test_validate_model_name_rejects_disallowed_prefix_for_openai():
+    with pytest.raises(LLMError):
+        llm_client._validate_model_name(
+            provider=LLMProvider.OPENAI.value,
+            model="claude-3-sonnet",
+        )
+
+
+def test_validate_model_name_accepts_ollama_custom_model():
+    validated = llm_client._validate_model_name(
+        provider=LLMProvider.OLLAMA.value,
+        model="my-local/model:latest",
+    )
+
+    assert validated == "my-local/model:latest"
+
+
+def test_chat_rejects_invalid_openai_model_before_http(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    post_mock = MagicMock()
+    monkeypatch.setattr(llm_client.requests, "post", post_mock)
+
+    with pytest.raises(LLMError):
+        llm_client.chat(
+            system_prompt="SYS",
+            user_prompt="USER",
+            provider=LLMProvider.OPENAI.value,
+            model="../gpt-4.1-mini",
+        )
+
+    post_mock.assert_not_called()
 
 
 def test_env_parsing_safe_helpers_return_default_for_invalid_values(monkeypatch):
