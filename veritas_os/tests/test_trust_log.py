@@ -201,6 +201,28 @@ def test_get_last_hash_skips_trailing_partial_json_line(temp_log_env):
     assert trust_log.get_last_hash() == "d" * 64
 
 
+def test_get_last_hash_recovers_from_rotated_log_when_marker_missing(temp_log_env):
+    rotated = temp_log_env["jsonl"].with_name("trust_log_old.jsonl")
+    entries = [
+        {"sha256": "e" * 64},
+        {"sha256": "f" * 64},
+    ]
+    with open(rotated, "w", encoding="utf-8") as f:
+        for entry in entries:
+            f.write(json.dumps(entry) + "\n")
+
+    assert trust_log.get_last_hash() == "f" * 64
+
+
+def test_get_last_hash_recovers_from_rotated_log_when_active_empty(temp_log_env):
+    temp_log_env["jsonl"].write_text("", encoding="utf-8")
+
+    rotated = temp_log_env["jsonl"].with_name("trust_log_old.jsonl")
+    rotated.write_text(json.dumps({"sha256": "1" * 64}) + "\n", encoding="utf-8")
+
+    assert trust_log.get_last_hash() == "1" * 64
+
+
 def test_extract_last_sha256_from_lines_ignores_invalid_entries():
     valid_hash = "a" * 64
     lines = [
