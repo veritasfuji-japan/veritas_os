@@ -80,6 +80,14 @@ class GovernancePolicy(BaseModel):
     updated_by: str = "system"
 
 
+_NESTED_POLICY_MODELS = {
+    "fuji_rules": FujiRules,
+    "risk_thresholds": RiskThresholds,
+    "auto_stop": AutoStop,
+    "log_retention": LogRetention,
+}
+
+
 # ---------- storage helpers ----------
 
 def _policy_path() -> Path:
@@ -175,12 +183,26 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     """
     current = _load()
 
-    # Deep-merge: only update keys that are present in patch
-    for key in ("fuji_rules", "risk_thresholds", "auto_stop", "log_retention"):
-        if key in patch and isinstance(patch[key], dict):
-            if key not in current or not isinstance(current[key], dict):
-                current[key] = {}
-            current[key].update(patch[key])
+    # Validate and deep-merge nested patches immediately.
+    # This prevents silently skipping non-dict payloads and validates each
+    # section before it is written into the in-memory aggregate state.
+    for key, model_cls in _NESTED_POLICY_MODELS.items():
+        if key not in patch:
+            continue
+
+        section_patch = patch[key]
+        if not isinstance(section_patch, dict):
+            raise ValueError(f"{key} must be an object")
+
+        section_current = current.get(key, {})
+        if not isinstance(section_current, dict):
+            section_current = {}
+
+        merged_section = deepcopy(section_current)
+        merged_section.update(section_patch)
+
+        validated_section = model_cls.model_validate(merged_section)
+        current[key] = validated_section.model_dump()
 
     # Scalar overrides
     for key in ("version",):
