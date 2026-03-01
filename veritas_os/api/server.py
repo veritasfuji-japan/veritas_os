@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import heapq
 import hmac
 import importlib
 import json
@@ -1977,12 +1978,30 @@ def memory_get(body: dict, x_api_key: Optional[str] = Header(default=None, alias
 # metrics for Doctor
 # ==============================
 
+
+def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> Tuple[list[Path], int]:
+    """Return latest decide files while keeping memory usage bounded."""
+    total_count = 0
+    min_heap: list[tuple[str, Path]] = []
+    for file_path in shadow_dir.glob("decide_*.json"):
+        total_count += 1
+        item = (file_path.name, file_path)
+        if len(min_heap) < limit:
+            heapq.heappush(min_heap, item)
+            continue
+        if item[0] > min_heap[0][0]:
+            heapq.heapreplace(min_heap, item)
+
+    newest = sorted((path for _, path in min_heap), key=lambda file_path: file_path.name)
+    return newest, total_count
+
+
 @app.get("/v1/metrics", dependencies=[Depends(require_api_key)])
-def metrics():
+def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     shadow_dir = _effective_shadow_dir()
     _, _, log_jsonl = _effective_log_paths()
 
-    files = sorted(shadow_dir.glob("decide_*.json"))
+    files, total_decide_files = _collect_recent_decide_files(shadow_dir, decide_file_limit)
     last_at = None
     if files:
         try:
@@ -2001,7 +2020,9 @@ def metrics():
         logger.warning("read trust_log.jsonl failed: %s", _errstr(e))
 
     result = {
-        "decide_files": len(files),
+        "decide_files": total_decide_files,
+        "decide_files_returned": len(files),
+        "decide_files_truncated": total_decide_files > len(files),
         "trust_jsonl_lines": lines,
         "last_decide_at": last_at,
         "server_time": utc_now_iso_z(),

@@ -153,6 +153,35 @@ def test_metrics_counts_shadow_and_log(tmp_path, monkeypatch):
     assert "server_time" in data
 
 
+def test_metrics_applies_decide_file_limit(tmp_path, monkeypatch):
+    """/v1/metrics が decide_file_limit を適用し、切り詰め状態を返す。"""
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    shadow_dir = tmp_path / "shadow_metrics_limit"
+    shadow_dir.mkdir()
+    log_jsonl = tmp_path / "trust_log_metrics_limit.jsonl"
+    log_jsonl.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(server, "SHADOW_DIR", shadow_dir)
+    monkeypatch.setattr(server, "LOG_JSONL", log_jsonl)
+
+    for idx in range(3):
+        file_name = f"decide_20250101_00000{idx}_000.json"
+        created_at = f"2025-01-01T00:00:0{idx}Z"
+        (shadow_dir / file_name).write_text(
+            json.dumps({"created_at": created_at}),
+            encoding="utf-8",
+        )
+
+    response = client.get("/v1/metrics?decide_file_limit=2", headers=_AUTH_HEADERS)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["decide_files"] == 3
+    assert data["decide_files_returned"] == 2
+    assert data["decide_files_truncated"] is True
+    assert data["last_decide_at"] == "2025-01-01T00:00:02Z"
+
+
 # -------------------------------------------------
 # APIキーまわり (require_api_key / enforce_rate_limit)
 # -------------------------------------------------
