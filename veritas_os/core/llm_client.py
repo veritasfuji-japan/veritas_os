@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from veritas_os.core import affect as affect_core
+from veritas_os.core.utils import _redact_text
 
 log = logging.getLogger(__name__)
 
@@ -92,6 +93,21 @@ LLM_RETRY_DELAY = _env_float("LLM_RETRY_DELAY", 2.0)
 
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
 LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
+
+
+def _redact_response_preview(response_text: Optional[str], limit: int = 200) -> str:
+    """Redact sensitive data from API response text before logging.
+
+    Args:
+        response_text: Raw HTTP response text.
+        limit: Maximum characters preserved for preview logging.
+
+    Returns:
+        Redacted and truncated response preview string.
+    """
+    if not response_text:
+        return ""
+    return _redact_text(response_text[:limit])
 
 
 # =========================
@@ -473,8 +489,8 @@ def chat(
 
             # その他エラー（4xx）
             if resp.status_code >= 400:
-                # ★ セキュリティ: APIレスポンス本文はログに記録し、例外には含めない（情報漏洩防止）
-                body = resp.text[:200] if resp.text else ""
+                # ★ セキュリティ: APIレスポンス本文はredaction後に限定ログ（情報漏洩防止）
+                body = _redact_response_preview(resp.text)
                 log.warning("LLM API error (provider=%s, status=%s): %s", provider, resp.status_code, body)
                 raise LLMError(f"API error (status={resp.status_code})")
 
