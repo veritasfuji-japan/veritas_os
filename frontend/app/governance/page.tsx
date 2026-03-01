@@ -389,26 +389,51 @@ export default function GovernanceControlPage(): JSX.Element {
     }
   }, [draft]);
 
+  const handleFetchPolicy = useCallback((): void => {
+    void fetchPolicy();
+  }, [fetchPolicy]);
+
+  const handleSavePolicy = useCallback((): void => {
+    void savePolicy();
+  }, [savePolicy]);
+
   /* -- updater helpers -- */
-  function updateFuji<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void {
-    if (!draft) return;
-    setDraft({ ...draft, fuji_rules: { ...draft.fuji_rules, [key]: value } });
-  }
+  const updateFuji = useCallback(<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, fuji_rules: { ...prev.fuji_rules, [key]: value } };
+    });
+  }, []);
 
-  function updateRisk<K extends keyof RiskThresholds>(key: K, value: RiskThresholds[K]): void {
-    if (!draft) return;
-    setDraft({ ...draft, risk_thresholds: { ...draft.risk_thresholds, [key]: value } });
-  }
+  const updateRisk = useCallback(<K extends keyof RiskThresholds>(
+    key: K,
+    value: RiskThresholds[K],
+  ): void => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, risk_thresholds: { ...prev.risk_thresholds, [key]: value } };
+    });
+  }, []);
 
-  function updateAutoStop<K extends keyof AutoStop>(key: K, value: AutoStop[K]): void {
-    if (!draft) return;
-    setDraft({ ...draft, auto_stop: { ...draft.auto_stop, [key]: value } });
-  }
+  const updateAutoStop = useCallback(<K extends keyof AutoStop>(
+    key: K,
+    value: AutoStop[K],
+  ): void => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, auto_stop: { ...prev.auto_stop, [key]: value } };
+    });
+  }, []);
 
-  function updateLogRetention<K extends keyof LogRetention>(key: K, value: LogRetention[K]): void {
-    if (!draft) return;
-    setDraft({ ...draft, log_retention: { ...draft.log_retention, [key]: value } });
-  }
+  const updateLogRetention = useCallback(<K extends keyof LogRetention>(
+    key: K,
+    value: LogRetention[K],
+  ): void => {
+    setDraft((prev) => {
+      if (!prev) return prev;
+      return { ...prev, log_retention: { ...prev.log_retention, [key]: value } };
+    });
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -432,7 +457,7 @@ export default function GovernanceControlPage(): JSX.Element {
             type="button"
             className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
             disabled={loading}
-            onClick={() => void fetchPolicy()}
+            onClick={handleFetchPolicy}
           >
             {loading ? "読み込み中..." : "ポリシーを読み込む"}
           </button>
@@ -639,7 +664,7 @@ export default function GovernanceControlPage(): JSX.Element {
               type="button"
               className="rounded-md border border-primary/60 bg-primary/20 px-4 py-2 text-sm font-semibold disabled:opacity-40"
               disabled={saving || !hasChanges}
-              onClick={() => void savePolicy()}
+              onClick={handleSavePolicy}
             >
               {saving ? "保存中..." : "ポリシーを保存"}
             </button>
