@@ -569,6 +569,41 @@ def test_chat_http_error_raises(monkeypatch):
     assert "500" in str(exc.value)
 
 
+def test_redact_response_preview_masks_pii_and_limits_text():
+    text = "mail=test.user@example.com phone=090-1234-5678 " + ("x" * 300)
+
+    preview = llm_client._redact_response_preview(text, limit=80)
+
+    assert len(preview) <= 80
+    assert "test.user@example.com" not in preview
+    assert "090-1234-5678" not in preview
+    assert "mail=" not in preview
+
+
+def test_chat_4xx_logs_redacted_preview(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fake_post(url, headers, json, timeout):
+        return _DummyResponse(
+            status_code=400,
+            data={"error": "bad request"},
+            text="contact=alice@example.com phone=03-1234-5678",
+        )
+
+    warning_mock = MagicMock()
+    monkeypatch.setattr(llm_client.requests, "post", fake_post)
+    monkeypatch.setattr(llm_client.log, "warning", warning_mock)
+
+    with pytest.raises(LLMError) as exc:
+        llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+
+    assert "API error (status=400)" in str(exc.value)
+    assert warning_mock.call_count >= 1
+    warning_messages = "\n".join(str(call) for call in warning_mock.call_args_list)
+    assert "alice@example.com" not in warning_messages
+    assert "03-1234-5678" not in warning_messages
+
+
 def test_chat_request_exception_retries_and_fails(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
 
