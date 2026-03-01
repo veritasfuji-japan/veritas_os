@@ -80,6 +80,7 @@ SCORE_THRESHOLDS = {
 MAX_OPTION_STRING_LENGTH = 10000
 MAX_OPTIONS = 100
 MAX_OPTIONS_PAYLOAD_BYTES = 1_000_000
+MAX_JSON_NESTED_DEPTH = 100
 
 
 # ============================
@@ -495,7 +496,12 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
             continue
 
     # "options":[{...},{...}] から完成objだけ拾う（最後の保険）
-    def _extract_objects_from_array(text: str, key: str, max_objects: int = 50) -> List[Dict[str, Any]]:
+    def _extract_objects_from_array(
+        text: str,
+        key: str,
+        max_objects: int = 50,
+        max_depth: int = MAX_JSON_NESTED_DEPTH,
+    ) -> List[Dict[str, Any]]:
         idx = text.find(f'"{key}"')
         if idx == -1:
             return []
@@ -527,8 +533,15 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
                     if depth == 0:
                         buf_start = i
                     depth += 1
+                    if depth > max_depth:
+                        logger.warning(
+                            "DebateOS: options JSON nesting depth exceeded limit (%d)",
+                            max_depth,
+                        )
+                        break
                 elif ch == "}":
-                    depth -= 1
+                    if depth > 0:
+                        depth -= 1
                     if depth == 0 and buf_start is not None:
                         s = text[buf_start : i + 1]
                         try:
@@ -875,4 +888,3 @@ def run_debate(
     except Exception as e:
         logger.error("DebateOS: LLM call or parse failed: %r", e)
         return _fallback_debate(base_options)
-

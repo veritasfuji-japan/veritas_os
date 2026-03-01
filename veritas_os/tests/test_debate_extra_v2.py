@@ -237,3 +237,18 @@ class TestValidateOption:
         result = debate._safe_json_extract_like(raw)
         # Should be filtered out
         assert len(result.get("options", [])) == 0
+
+
+class TestSafeJsonExtractDepthLimit:
+    """Tests for recursive parsing depth limits in options array rescue path."""
+
+    def test_extract_objects_depth_limit_blocks_excessive_nesting(self, caplog):
+        """Excessive object nesting should stop extraction and return safe default."""
+        deep_object = "{" * 101 + '"id":"1","title":"Deep"' + "}" * 101
+        raw = '{"invalid":, "options": [' + deep_object + "]}"
+
+        with caplog.at_level("WARNING"):
+            result = debate._safe_json_extract_like(raw)
+
+        assert result == {"options": [], "chosen_id": None}
+        assert "nesting depth exceeded limit" in caplog.text
