@@ -69,6 +69,15 @@ def test_detect_simple_qa_mixed_language_and_spacing():
     assert kernel._detect_simple_qa("what day is it today??") == "weekday"
     assert kernel._detect_simple_qa("What is the date today?") == "date"
 
+
+
+def test_detect_qa_query_length_guard():
+    """過剰に長いクエリはQA検出をスキップすることを確認。"""
+    long_query = "a" * 10001
+
+    assert kernel._detect_simple_qa(long_query) is None
+    assert kernel._detect_knowledge_qa(long_query) is False
+
 def test_detect_knowledge_qa_patterns():
     # 「〜とは？」系
     assert kernel._detect_knowledge_qa("東京とは？") is True
