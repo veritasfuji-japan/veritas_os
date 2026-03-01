@@ -94,6 +94,57 @@ LLM_RETRY_DELAY = _env_float("LLM_RETRY_DELAY", 2.0)
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
 LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
 
+# Provider-level allowlist for remote model identifiers.
+# NOTE: Ollama intentionally supports local custom models and therefore uses
+# character-level validation only.
+_MODEL_ALLOWLIST_PREFIXES: Dict[str, tuple[str, ...]] = {
+    LLMProvider.OPENAI.value: ("gpt-", "o", "text-embedding-"),
+    LLMProvider.ANTHROPIC.value: ("claude-",),
+    LLMProvider.GOOGLE.value: ("gemini-"),
+    LLMProvider.OPENROUTER.value: ("openai/", "anthropic/", "google/", "meta-llama/", "mistralai/"),
+}
+
+
+def _validate_model_name(provider: str, model: str) -> str:
+    """Validate and normalize model names for safe outbound requests.
+
+    Security:
+        - Blocks control characters including null bytes.
+        - Blocks path traversal payloads and URL fragments.
+        - Enforces provider-specific allowlist prefixes for remote providers.
+
+    Returns:
+        The stripped model name when valid.
+
+    Raises:
+        LLMError: If the model name is unsafe or disallowed.
+    """
+    normalized_model = (model or "").strip()
+    if not normalized_model:
+        raise LLMError("Model name must not be empty")
+
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in normalized_model):
+        raise LLMError("Invalid model name: contains control characters")
+
+    if any(token in normalized_model for token in ("..", "\\", "?", "#", "%00")):
+        raise LLMError("Invalid model name: contains disallowed path/url tokens")
+
+    if provider == LLMProvider.GOOGLE.value:
+        # Gemini model id is concatenated in URL path.
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", normalized_model):
+            raise LLMError("Invalid model name for Gemini")
+    else:
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._:/-]*", normalized_model):
+            raise LLMError("Invalid model name format")
+
+    allowed_prefixes = _MODEL_ALLOWLIST_PREFIXES.get(provider)
+    if allowed_prefixes and not normalized_model.startswith(allowed_prefixes):
+        raise LLMError(
+            f"Model '{normalized_model}' is not allowed for provider '{provider}'"
+        )
+
+    return normalized_model
+
 
 def _redact_response_preview(response_text: Optional[str], limit: int = 200) -> str:
     """Redact sensitive data from API response text before logging.
@@ -418,7 +469,7 @@ def chat(
             }
     """
     provider = provider or LLM_PROVIDER
-    model = model or LLM_MODEL
+    model = _validate_model_name(provider=provider, model=model or LLM_MODEL)
 
     # ★ Affect 注入（必要な時だけ効く）
     system_prompt = _inject_affect_into_system_prompt(
@@ -441,9 +492,6 @@ def chat(
 
     # Gemini は endpoint + model + :generateContent の形式（認証はヘッダー経由）
     if provider == LLMProvider.GOOGLE.value:
-        # ★ セキュリティ: モデル名のバリデーション（パストラバーサル/SSRF防止）
-        if not re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._-]*', model) or '..' in model or '/' in model:
-            raise LLMError("Invalid model name for Gemini: contains disallowed characters")
         endpoint = f"{endpoint}/{model}:generateContent"
 
     last_error: Optional[Exception] = None
