@@ -127,6 +127,27 @@ class TestSafeJsonExtractLike:
         result = debate_mod._safe_json_extract_like(raw)
         assert "options" in result
 
+    def test_limits_total_options_payload_size(self):
+        """Oversized options payload should be truncated by cumulative size."""
+        option_summary = "x" * (debate_mod.MAX_OPTION_STRING_LENGTH - 10)
+        raw_options = [
+            {
+                "id": str(i),
+                "summary": option_summary,
+                "verdict": "採用推奨",
+                "safety_view": "safe",
+                "architect_view": "a" * 800,
+            }
+            for i in range(1, debate_mod.MAX_OPTIONS + 1)
+        ]
+        raw = {"options": raw_options}
+
+        result = debate_mod._safe_json_extract_like(
+            debate_mod.json.dumps(raw, ensure_ascii=False)
+        )
+
+        assert 0 < len(result["options"]) < len(raw_options)
+
 
 class TestSelectBestCandidate:
     """Tests for _select_best_candidate function."""
