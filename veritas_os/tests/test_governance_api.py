@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-
-os.environ["VERITAS_API_KEY"] = "test-governance-key"
 
 from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
