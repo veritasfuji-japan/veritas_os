@@ -1,3 +1,19 @@
 {
-  "extends": ["next/core-web-vitals", "next/typescript"]
+  "extends": [
+    "next/core-web-vitals",
+    "next/typescript",
+    "plugin:jsx-a11y/recommended",
+    "plugin:security/recommended"
+  ],
+  "plugins": ["jsx-a11y", "security"],
+  "rules": {
+    "react/jsx-boolean-value": ["warn", "never"],
+    "react/self-closing-comp": "warn",
+    "react/no-array-index-key": "warn",
+    "react-hooks/exhaustive-deps": "warn",
+    "jsx-a11y/alt-text": "error",
+    "jsx-a11y/anchor-is-valid": "warn",
+    "security/detect-object-injection": "off",
+    "security/detect-unsafe-regex": "warn"
+  }
 }
