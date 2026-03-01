@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -334,3 +335,44 @@ def test_pipeline_config_defaults():
 def test_data_dir_defaults_to_log_dir():
     cfg = VeritasConfig(api_secret="test_secret_value")
     assert cfg.data_dir == cfg.log_dir
+
+
+# ============================================================
+# API secret startup validation
+# ============================================================
+
+
+def test_validate_api_secret_non_empty_raises_for_empty():
+    cfg = VeritasConfig(api_secret="")
+    with pytest.raises(ValueError, match="VERITAS_API_SECRET"):
+        cfg.validate_api_secret_non_empty()
+
+
+def test_validate_api_secret_non_empty_accepts_real_secret():
+    cfg = VeritasConfig(api_secret="real_secret_123")
+    cfg.validate_api_secret_non_empty()
+
+
+def test_should_enforce_api_secret_validation_default_without_pytest(monkeypatch):
+    monkeypatch.delenv("VERITAS_ENFORCE_API_SECRET", raising=False)
+    monkeypatch.delenv("VERITAS_ENFORCE_API_SECRET_IN_TESTS", raising=False)
+    original_modules = sys.modules
+    monkeypatch.setattr(sys, "modules", {"builtins": original_modules.get("builtins")})
+    assert VeritasConfig.should_enforce_api_secret_validation() is True
+
+
+def test_should_enforce_api_secret_validation_skips_under_pytest(monkeypatch):
+    monkeypatch.delenv("VERITAS_ENFORCE_API_SECRET", raising=False)
+    monkeypatch.delenv("VERITAS_ENFORCE_API_SECRET_IN_TESTS", raising=False)
+    assert VeritasConfig.should_enforce_api_secret_validation() is False
+
+
+def test_should_enforce_api_secret_validation_forced_in_tests(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_API_SECRET_IN_TESTS", "1")
+    assert VeritasConfig.should_enforce_api_secret_validation() is True
+
+
+def test_should_enforce_api_secret_validation_disabled(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_API_SECRET", "0")
+    monkeypatch.setenv("VERITAS_ENFORCE_API_SECRET_IN_TESTS", "1")
+    assert VeritasConfig.should_enforce_api_secret_validation() is False

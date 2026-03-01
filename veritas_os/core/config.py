@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Any
@@ -367,6 +368,39 @@ class VeritasConfig:
         if self.kv_path is None:
             self.kv_path = self.log_dir / "kv.sqlite3"
 
+    def validate_api_secret_non_empty(self) -> None:
+        """Validate that ``VERITAS_API_SECRET`` is configured securely.
+
+        Raises:
+            ValueError: When the configured secret is empty or placeholder.
+        """
+        if self.api_secret_configured:
+            return
+
+        raise ValueError(
+            "VERITAS_API_SECRET is empty or placeholder. "
+            "Refusing to start without a configured API secret."
+        )
+
+    @staticmethod
+    def should_enforce_api_secret_validation() -> bool:
+        """Return whether startup should fail on missing API secret.
+
+        Enforcement is enabled by default, but is automatically relaxed under
+        pytest to preserve unit test isolation unless explicitly overridden.
+        """
+        enforce = _parse_bool("VERITAS_ENFORCE_API_SECRET", True)
+        if not enforce:
+            return False
+
+        if _parse_bool("VERITAS_ENFORCE_API_SECRET_IN_TESTS", False):
+            return True
+
+        if "pytest" in sys.modules:
+            return False
+
+        return True
+
     def ensure_dirs(self) -> None:
         """必要なディレクトリを作成する（初回呼び出し時のみ実行）"""
         with self._dirs_lock:
@@ -407,6 +441,8 @@ class VeritasConfig:
 
 
 cfg = VeritasConfig()
+if cfg.should_enforce_api_secret_validation():
+    cfg.validate_api_secret_non_empty()
 
 # サブ設定インスタンス（各モジュールからインポート可能）
 scoring_cfg = ScoringConfig()
