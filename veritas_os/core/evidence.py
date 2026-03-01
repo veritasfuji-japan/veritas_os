@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 # Evidence は dict ベースで扱う（テスト側が e["snippet"] アクセスを前提にしている）
 Evidence = Dict[str, Any]
@@ -62,12 +62,12 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
     ctx = context or {}
 
     q = (query or "").strip()
-    goals = ctx.get("goals") or []
+    goals = _normalize_goals(ctx.get("goals"))
     stakes_raw = ctx.get("stakes")
     constraints = ctx.get("constraints") or []
 
     # --- 疲労 / 健康まわりのヒューリスティクス ---------------------------
-    if ("疲れ" in q) or any(g in ("健康", "回復") for g in goals):
+    if ("疲れ" in q) or any(goal in ("健康", "回復") for goal in goals):
         ev.append(
             _mk(
                 source="local",
@@ -156,6 +156,33 @@ def collect_local(intent: str, query: str, context: Dict[str, Any]) -> List[Evid
 
     # 付けすぎてもノイズになるので 4 件まで
     return ev[:4]
+
+
+def _normalize_goals(raw_goals: Any) -> List[str]:
+    """Return a safe goal string list from arbitrary inputs.
+
+    `context["goals"]` may be `None`, a scalar value, or an iterable with
+    non-string elements. This helper guarantees a list of non-empty strings
+    and prevents TypeError in `collect_local`.
+    """
+    if raw_goals is None:
+        return []
+
+    if isinstance(raw_goals, str):
+        items: Iterable[Any] = [raw_goals]
+    elif isinstance(raw_goals, Iterable):
+        items = raw_goals
+    else:
+        items = [raw_goals]
+
+    goals: List[str] = []
+    for item in items:
+        if item is None:
+            continue
+        goal = str(item).strip()
+        if goal:
+            goals.append(goal)
+    return goals
 # --- 追加: step1 の low_evidence 対策 ----------------------------
 
 def step1_minimum_evidence(context: Dict[str, Any]) -> List[Evidence]:
@@ -207,6 +234,5 @@ def step1_minimum_evidence(context: Dict[str, Any]) -> List[Evidence]:
             tags=["issues", "quality"],
         ),
     ]
-
 
 

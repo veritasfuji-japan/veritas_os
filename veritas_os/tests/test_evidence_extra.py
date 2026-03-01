@@ -140,6 +140,25 @@ class TestCollectLocal:
         )
         assert not any(e["kind"] == "stakes" for e in result)
 
+    def test_goals_none_is_safe(self):
+        """None goals should not raise and should use fallback evidence."""
+        result = ev_mod.collect_local(
+            intent="test",
+            query="test query",
+            context={"goals": None},
+        )
+        assert len(result) >= 1
+        assert not any(e["kind"] == "fatigue" for e in result)
+
+    def test_goals_scalar_is_safe(self):
+        """Scalar goals should be normalized without TypeError."""
+        result = ev_mod.collect_local(
+            intent="test",
+            query="test query",
+            context={"goals": 123},
+        )
+        assert len(result) >= 1
+
 
 class TestStep1MinimumEvidence:
     """Tests for step1_minimum_evidence function."""
