@@ -471,6 +471,61 @@ def test_web_search_retries_on_timeout(monkeypatch, _bypass_ssrf) -> None:
     assert resp["results"][0]["title"] == "Result 1"
 
 
+def test_post_with_retry_blocks_dns_rebinding_mismatch(monkeypatch) -> None:
+    """DNS再解決結果が事前検証と不一致なら送信前に遮断する。"""
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_MAX_RETRIES", 1, raising=False)
+
+    called = {"value": False}
+
+    def fake_post(*_args: Any, **_kwargs: Any) -> DummyResponse:
+        called["value"] = True
+        return DummyResponse({"organic": []})
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    with pytest.raises(ValueError, match="DNS result changed"):
+        web_search_mod._post_with_retry(
+            "https://example.com/search",
+            headers={"X-API-KEY": "k"},
+            payload={"q": "test", "num": 1},
+            timeout=5,
+            expected_ips={"93.184.216.34"},
+        )
+
+    assert called["value"] is False
+
+
+def test_web_search_returns_unavailable_on_preflight_dns_guard(monkeypatch) -> None:
+    """事前DNS検証で遮断されたURLはunavailableを返す。"""
+    monkeypatch.setattr(
+        web_search_mod,
+        "WEBSEARCH_URL",
+        "https://example.com/serper",
+        raising=False,
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+    monkeypatch.setattr(web_search_mod, "_is_allowed_websearch_url", lambda _url: True)
+    monkeypatch.setattr(
+        web_search_mod,
+        "_extract_public_ips_for_url",
+        lambda _url: (_ for _ in ()).throw(ValueError("boom")),
+    )
+
+    called = {"value": False}
+
+    def fake_post(*_args: Any, **_kwargs: Any) -> DummyResponse:
+        called["value"] = True
+        return DummyResponse({"organic": []})
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    resp = web_search_mod.web_search("normal query", max_results=1)
+
+    assert resp["ok"] is False
+    assert resp["error"] == "WEBSEARCH_API unavailable"
+    assert called["value"] is False
+
+
 def test_web_search_agi_query_filters_and_trims(monkeypatch, _bypass_ssrf) -> None:
     """AGI クエリではブースト + フィルタがかかる"""
     monkeypatch.setattr(
@@ -651,4 +706,3 @@ def test_web_search_rejects_too_large_response_body_without_content_length(monke
     assert response["ok"] is False
     assert response["results"] == []
     assert response["error"] == "WEBSEARCH_API error: request failed"
-

@@ -274,6 +274,7 @@ def _post_with_retry(
     headers: Dict[str, Any],
     payload: Dict[str, Any],
     timeout: int,
+    expected_ips: Optional[set[str]] = None,
 ) -> requests.Response:
     """外部API呼び出しを再試行しつつ実行する。
 
@@ -287,6 +288,9 @@ def _post_with_retry(
 
     for attempt in range(1, WEBSEARCH_MAX_RETRIES + 1):
         try:
+            if expected_ips is not None:
+                _validate_rebinding_guard(url, expected_ips)
+
             response = requests.post(
                 url,
                 headers=headers,
@@ -424,6 +428,63 @@ def _is_private_or_local_host(hostname: str) -> bool:
         if not ip.is_global:
             return True
     return False
+
+
+def _resolve_public_ips_uncached(hostname: str) -> set[str]:
+    """Resolve hostname without cache and require globally routable IPs.
+
+    This request-time lookup narrows DNS rebinding / TOCTOU windows between
+    endpoint validation and the outbound web-search request.
+
+    Args:
+        hostname: Endpoint hostname to resolve.
+
+    Returns:
+        Set of resolved global IP literals.
+
+    Raises:
+        ValueError: Hostname is empty, invalid, unresolvable, or non-global.
+    """
+    host = _canonicalize_hostname(hostname)
+    if _is_obviously_private_or_local_host(host):
+        raise ValueError("host is private or local")
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except (socket.gaierror, OSError, UnicodeError) as exc:
+        raise ValueError("host is not resolvable") from exc
+
+    resolved_ips: set[str] = set()
+    for info in infos:
+        ip_text = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_text)
+        except ValueError as exc:
+            raise ValueError("host resolved to invalid IP") from exc
+        if not ip.is_global:
+            raise ValueError("host resolved to non-global IP")
+        resolved_ips.add(str(ip))
+
+    if not resolved_ips:
+        raise ValueError("host resolved to no valid IPs")
+
+    return resolved_ips
+
+
+def _extract_public_ips_for_url(url: str) -> set[str]:
+    """Extract URL host and resolve it to global IPs without cache."""
+    parsed = urlparse((url or "").strip())
+    host = _canonicalize_hostname(parsed.hostname or "")
+    if not host:
+        raise ValueError("url has no hostname")
+    return _resolve_public_ips_uncached(host)
+
+
+def _validate_rebinding_guard(url: str, expected_ips: set[str]) -> None:
+    """Ensure request-time DNS answers match preflight-resolved IPs."""
+    current_ips = _extract_public_ips_for_url(url)
+    if current_ips != expected_ips:
+        raise ValueError("websearch endpoint DNS result changed during request")
 
 
 def _clear_private_host_cache() -> None:
@@ -773,6 +834,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
         logger.warning("WEBSEARCH_URL blocked by SSRF guard: %s", websearch_url)
         return unavailable_response
 
+    try:
+        resolved_websearch_ips = _extract_public_ips_for_url(websearch_url)
+    except ValueError:
+        logger.warning("WEBSEARCH_URL blocked by DNS rebinding guard: %s", websearch_url)
+        return unavailable_response
+
     # max_results の下限・上限を守る（極端値対策）
     # ★ M-15 修正: 上限を追加してリソース枯渇を防止
     mr = _sanitize_max_results(max_results)
@@ -831,6 +898,7 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             headers=headers,
             payload=payload,
             timeout=timeout_seconds,
+            expected_ips=resolved_websearch_ips,
         )
         max_response_bytes = _sanitize_response_size_bytes(WEBSEARCH_MAX_RESPONSE_BYTES)
         response_headers = getattr(resp, "headers", {}) or {}
