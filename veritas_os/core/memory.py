@@ -102,36 +102,44 @@ class VectorMemory:
             self._load_index()
 
     def _load_model(self):
-        """埋め込みモデルをロード"""
-        if not capability_cfg.enable_memory_sentence_transformers:
-            logger.info(
-                "[VectorMemory] sentence-transformers disabled by "
-                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
-            )
-            self.model = None
+        """埋め込みモデルをスレッドセーフに一度だけロードする。"""
+        if self.model is not None:
             return
 
-        try:
-            from sentence_transformers import SentenceTransformer
+        with self._lock:
+            if self.model is not None:
+                return
 
-            self.model = SentenceTransformer(self.model_name)
-            logger.info("[VectorMemory] Loaded model: %s", self.model_name)
-        except ImportError as exc:
-            if _is_explicitly_enabled("VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"):
-                raise RuntimeError(
-                    "sentence-transformers is required when "
-                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
-                ) from exc
-            logger.warning(
-                "[CONFIG_MISMATCH] sentence-transformers is unavailable while "
-                "the default capability is enabled; continuing with fallback "
-                "embedding mode. To enforce strict mode, set "
-                "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 explicitly."
-            )
-            self.model = None
-        except (OSError, RuntimeError, ValueError, TypeError) as e:
-            logger.error("[VectorMemory] Failed to load model: %s", e)
-            self.model = None
+            if not capability_cfg.enable_memory_sentence_transformers:
+                logger.info(
+                    "[VectorMemory] sentence-transformers disabled by "
+                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
+                )
+                return
+
+            try:
+                from sentence_transformers import SentenceTransformer
+
+                self.model = SentenceTransformer(self.model_name)
+                logger.info("[VectorMemory] Loaded model: %s", self.model_name)
+            except ImportError as exc:
+                if _is_explicitly_enabled(
+                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
+                ):
+                    raise RuntimeError(
+                        "sentence-transformers is required when "
+                        "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
+                    ) from exc
+                logger.warning(
+                    "[CONFIG_MISMATCH] sentence-transformers is unavailable while "
+                    "the default capability is enabled; continuing with fallback "
+                    "embedding mode. To enforce strict mode, set "
+                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 explicitly."
+                )
+                self.model = None
+            except (OSError, RuntimeError, ValueError, TypeError) as e:
+                logger.error("[VectorMemory] Failed to load model: %s", e)
+                self.model = None
 
     def _load_index(self):
         """永続化されたインデックスをロード（JSON形式のみ）。"""
