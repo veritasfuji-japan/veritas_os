@@ -2,7 +2,7 @@
 
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 interface RiskPoint {
   id: string;
@@ -54,6 +54,75 @@ function createStreamPoint(now: number): RiskPoint {
 function toChartCoordinate(value: number): number {
   return Math.round(value * 100);
 }
+
+interface RiskScatterCanvasProps {
+  points: RiskPoint[];
+}
+
+/**
+ * Draws request points on canvas to avoid React-driven SVG node reconciliation on every stream tick.
+ */
+const RiskScatterCanvas = memo(function RiskScatterCanvas({ points }: RiskScatterCanvasProps): JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const getContext = canvas.getContext.bind(canvas) as typeof canvas.getContext;
+    let context: CanvasRenderingContext2D | null = null;
+    try {
+      context = getContext("2d");
+    } catch {
+      return;
+    }
+    if (!context) {
+      return;
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const nextWidth = Math.max(1, Math.floor(width * dpr));
+    const nextHeight = Math.max(1, Math.floor(height * dpr));
+
+    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+      canvas.width = nextWidth;
+      canvas.height = nextHeight;
+    }
+
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.clearRect(0, 0, width, height);
+
+    points.forEach((point) => {
+      const x = (toChartCoordinate(point.uncertainty) / 100) * width;
+      const y = (1 - toChartCoordinate(point.risk) / 100) * height;
+      const critical = point.uncertainty >= ALERT_CLUSTER_THRESHOLD
+        && point.risk >= ALERT_CLUSTER_THRESHOLD;
+
+      context.beginPath();
+      context.arc(x, y, critical ? 4.4 : 3, 0, Math.PI * 2);
+      context.fillStyle = critical
+        ? "hsl(var(--destructive))"
+        : "hsl(var(--primary) / 0.82)";
+      context.globalAlpha = critical ? 0.95 : 0.72;
+      context.fill();
+    });
+
+    context.globalAlpha = 1;
+  }, [points]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 h-full w-full"
+      aria-label="Scatter plot of request uncertainty and risk from the last 24 hours"
+      role="img"
+    />
+  );
+});
 
 export default function RiskIntelligencePage(): JSX.Element {
   const { t, language } = useI18n();
@@ -125,12 +194,7 @@ export default function RiskIntelligencePage(): JSX.Element {
 
           <div className="rounded-xl border border-border/70 bg-surface/40 p-4">
             <div className="relative mx-auto h-[360px] w-full max-w-5xl">
-              <svg
-                viewBox="0 0 100 100"
-                className="h-full w-full"
-                role="img"
-                aria-label="Scatter plot of request uncertainty and risk from the last 24 hours"
-              >
+              <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden="true">
                 <defs>
                   <linearGradient id="riskGradient" x1="0" y1="100" x2="100" y2="0">
                     <stop offset="0%" stopColor="hsl(var(--primary) / 0.18)" />
@@ -150,25 +214,8 @@ export default function RiskIntelligencePage(): JSX.Element {
 
                 <line x1="82" y1="0" x2="82" y2="100" stroke="hsl(var(--destructive) / 0.6)" strokeDasharray="1 1" strokeWidth="0.4" />
                 <line x1="0" y1="18" x2="100" y2="18" stroke="hsl(var(--destructive) / 0.6)" strokeDasharray="1 1" strokeWidth="0.4" />
-
-                {points.map((point) => {
-                  const x = toChartCoordinate(point.uncertainty);
-                  const y = 100 - toChartCoordinate(point.risk);
-                  const critical = point.uncertainty >= ALERT_CLUSTER_THRESHOLD
-                    && point.risk >= ALERT_CLUSTER_THRESHOLD;
-
-                  return (
-                    <circle
-                      key={point.id}
-                      cx={x}
-                      cy={y}
-                      r={critical ? 1.2 : 0.8}
-                      fill={critical ? "hsl(var(--destructive))" : "hsl(var(--primary) / 0.82)"}
-                      opacity={critical ? 0.95 : 0.72}
-                    />
-                  );
-                })}
               </svg>
+              <RiskScatterCanvas points={points} />
 
               <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
                 Uncertainty →
