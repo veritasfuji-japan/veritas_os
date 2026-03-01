@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
@@ -9,8 +10,14 @@ from datetime import datetime, timezone
 # 超簡易なインメモリ保存（とりあえず動かす用）
 # ★ メモリリーク防止: ユーザー数の上限を設ける
 _MAX_USERS = 1000
-_USER_TASKS: Dict[str, List["CurriculumTask"]] = {}
+_USER_TASKS: "OrderedDict[str, List[CurriculumTask]]" = OrderedDict()
 _USER_TASKS_LOCK = threading.Lock()
+
+
+def _touch_user_cache(user_id: str) -> None:
+    """Mark cached tasks for `user_id` as recently used in the LRU map."""
+    if user_id in _USER_TASKS:
+        _USER_TASKS.move_to_end(user_id)
 
 
 @dataclass
@@ -47,6 +54,7 @@ def load_tasks(user_id: str) -> List[CurriculumTask]:
     """
     with _USER_TASKS_LOCK:
         tasks = _USER_TASKS.get(user_id, [])
+        _touch_user_cache(user_id)
     today = _today_str()
     return [t for t in tasks if t.id.startswith(today)]
 
@@ -185,13 +193,12 @@ def generate_daily_curriculum(
         )
     )
 
-    # ★ メモリリーク防止: ユーザー数上限を超えたら最古のエントリを削除
-    # Python 3.7+ では dict は挿入順を保持するため、next(iter(...)) は FIFO
+    # ★ メモリリーク防止: ユーザー数上限を超えたらLRUでエントリを削除
     with _USER_TASKS_LOCK:
         if len(_USER_TASKS) >= _MAX_USERS and user_id not in _USER_TASKS:
-            oldest_key = next(iter(_USER_TASKS))
-            del _USER_TASKS[oldest_key]
+            _USER_TASKS.popitem(last=False)
         _USER_TASKS[user_id] = tasks
+        _touch_user_cache(user_id)
     return tasks
 
 
@@ -212,4 +219,3 @@ def plan_today(
         world_state=world_state,
         value_ema=value_ema,
     )
-
