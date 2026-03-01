@@ -127,14 +127,17 @@ def rotate_if_needed() -> Path:
     # Using trust_log.stem ensures only the file suffix is removed, not all occurrences
     rotated = trust_log.parent / (trust_log.stem + "_old.jsonl")
     # ★ セキュリティ修正: シンボリックリンク攻撃を防止
-    if rotated.is_symlink() or trust_log.is_symlink():
+    if trust_log.is_symlink():
         raise RuntimeError("Refusing to rotate: symlink detected on log paths")
     # ★ セキュリティ: 解決済みパスがログディレクトリ内にあることを確認
     resolved_parent = trust_log.parent.resolve()
-    if trust_log.resolve().parent != resolved_parent or rotated.resolve().parent != resolved_parent:
+    if trust_log.resolve().parent != resolved_parent:
         raise RuntimeError("Refusing to rotate: resolved path outside log directory")
-    rotated.unlink(missing_ok=True)
-    trust_log.rename(rotated)
+
+    # 既存の rotated が通常ファイル/シンボリックリンクであっても、
+    # os.replace() は名前エントリをアトミックに置換するため
+    # is_symlink()->unlink() の TOCTOU 競合を避けられる。
+    os.replace(trust_log, rotated)
 
     return trust_log
 
