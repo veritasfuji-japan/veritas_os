@@ -160,19 +160,22 @@ def apply_style(prompt: str, style: Any) -> str:
 
 
 def apply_style_to_messages(messages: List[ChatMessage], style: Any) -> List[ChatMessage]:
-    """Chat messages 先頭に system 規範を差し込む。"""
+    """Chat messages 先頭に system 規範を差し込む。
+
+    入力 ``messages`` 自体は変更せず、新しいリストを返す。
+    """
     instr = style_instructions(style).strip()
     if not instr:
         return list(messages or [])
 
-    msgs = list(messages or [])
-    if msgs and msgs[0].get("role") == "system":
-        prev = msgs[0].get("content", "")
+    source_messages = list(messages or [])
+    if source_messages and source_messages[0].get("role") == "system":
+        prev = source_messages[0].get("content", "")
         merged = f"{instr}\n\n{prev}".strip() if prev else instr
-        msgs[0] = {**msgs[0], "content": merged}
-        return msgs
+        merged_first = {**source_messages[0], "content": merged}
+        return [merged_first, *source_messages[1:]]
 
-    return [{"role": "system", "content": instr}, *msgs]
+    return [{"role": "system", "content": instr}, *source_messages]
 
 
 def as_dict(state: AffectState) -> Dict[str, str]:
@@ -213,5 +216,4 @@ __all__ = [
     "generate_reason",
     "generate_reflection_template",
 ]
-
 
