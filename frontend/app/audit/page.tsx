@@ -6,6 +6,24 @@ import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, typ
 import { useI18n } from "../../components/i18n-provider";
 
 const PAGE_LIMIT = 50;
+const FETCH_TIMEOUT_MS = 15_000;
+
+/**
+ * Fetches an endpoint with an explicit timeout budget.
+ */
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
 
 function toPrettyJson(value: unknown): string {
   try {
@@ -440,7 +458,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         params.set("cursor", nextCursor);
       }
 
-      const response = await fetch(`/api/veritas/v1/trust/logs?${params.toString()}`);
+      const response = await fetchWithTimeout(`/api/veritas/v1/trust/logs?${params.toString()}`);
 
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("trust logs取得に失敗しました。", "Failed to fetch trust logs.")}`);
@@ -459,7 +477,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
       if (replace && nextItems.length > 0) {
         setSelected(nextItems[0]);
       }
-    } catch {
+    } catch (caught: unknown) {
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        setError(t("タイムアウト: trust logs 取得が時間内に完了しませんでした。", "Timeout: trust logs request did not complete in time."));
+        return;
+      }
       setError(t("ネットワークエラー: trust logs 取得に失敗しました。", "Network error: failed to fetch trust logs."));
     } finally {
       setLoading(false);
@@ -477,7 +499,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/veritas/v1/trust/${encodeURIComponent(value)}`);
+      const response = await fetchWithTimeout(`/api/veritas/v1/trust/${encodeURIComponent(value)}`);
 
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("request_id 検索に失敗しました。", "Failed to search request_id.")}`);
@@ -493,7 +515,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
       if (payload.items.length > 0) {
         setSelected(payload.items[payload.items.length - 1]);
       }
-    } catch {
+    } catch (caught: unknown) {
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        setError(t("タイムアウト: request_id 検索が時間内に完了しませんでした。", "Timeout: request_id search did not complete in time."));
+        return;
+      }
       setError(t("ネットワークエラー: request_id 検索に失敗しました。", "Network error: failed to search request_id."));
     } finally {
       setLoading(false);
