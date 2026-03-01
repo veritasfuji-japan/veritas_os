@@ -7,6 +7,7 @@ import logging
 import os
 from collections import Counter
 from pathlib import Path
+from threading import RLock
 from typing import Any, Dict, List
 
 from .config import cfg  # VERITAS の設定オブジェクト
@@ -14,6 +15,12 @@ from .atomic_io import atomic_write_json
 from .utils import _safe_float
 
 logger = logging.getLogger(__name__)
+
+
+# persona.json の read-modify-write 競合を防ぐ再入可能ロック。
+# decide() 系の処理では update_persona_bias_from_history() と save_persona() を
+# 連続で呼ぶため、同一スレッド内のネストを許可する RLock を使用する。
+PERSONA_UPDATE_LOCK = RLock()
 
 
 # ==== NEW: プロジェクト内に保存するパス ============================
@@ -275,16 +282,21 @@ def fuzzy_bias_lookup(bias_weights: Dict[str, float], title: str) -> float:
 def update_persona_bias_from_history(window: int = 50) -> Dict[str, Any]:
     """
     trust_log 履歴 → バイアス計算 → persona.json に反映して返す。
-    """
-    persona = load_persona()
-    recent = read_recent_decisions(TRUST_JSONL, window=window)
-    bias = compute_bias_from_history(recent)
-    if not bias:
-        return persona
 
-    persona = merge_bias_to_persona(persona, bias, alpha=0.25)
-    save_persona(persona)
-    return persona
+    Notes:
+        この read-modify-write は並行 decide() 呼び出しで競合しやすいため、
+        ``PERSONA_UPDATE_LOCK`` で直列化する。
+    """
+    with PERSONA_UPDATE_LOCK:
+        persona = load_persona()
+        recent = read_recent_decisions(TRUST_JSONL, window=window)
+        bias = compute_bias_from_history(recent)
+        if not bias:
+            return persona
+
+        persona = merge_bias_to_persona(persona, bias, alpha=0.25)
+        save_persona(persona)
+        return persona
 
 
 __all__ = [
@@ -297,5 +309,4 @@ __all__ = [
     "fuzzy_bias_lookup",
     "update_persona_bias_from_history",
 ]
-
 

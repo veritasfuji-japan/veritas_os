@@ -558,34 +558,35 @@ def update_persona_and_goals(
         from . import agi_goals
         from . import world as world_model
 
-        persona2 = adapt.update_persona_bias_from_history(window=pipeline_cfg.persona_update_window)
+        with adapt.PERSONA_UPDATE_LOCK:
+            persona2 = adapt.update_persona_bias_from_history(window=pipeline_cfg.persona_update_window)
 
-        b = dict(persona2.get("bias_weights") or {})
-        key = (chosen.get("title") or "").strip().lower() or f"@id:{chosen.get('id')}"
-        if key:
-            b[key] = b.get(key, 0.0) + pipeline_cfg.persona_bias_increment
+            b = dict(persona2.get("bias_weights") or {})
+            key = (chosen.get("title") or "").strip().lower() or f"@id:{chosen.get('id')}"
+            if key:
+                b[key] = b.get(key, 0.0) + pipeline_cfg.persona_bias_increment
 
-        s = sum(b.values()) or 1.0
-        b = {kk: vv / s for kk, vv in b.items()}
-        b = adapt.clean_bias_weights(b)
+            s = sum(b.values()) or 1.0
+            b = {kk: vv / s for kk, vv in b.items()}
+            b = adapt.clean_bias_weights(b)
 
-        world_snap: Dict[str, Any] = {}
-        world_sim = context.get("_world_sim_result")
-        if isinstance(world_sim, dict):
-            world_snap = dict(world_sim)
+            world_snap: Dict[str, Any] = {}
+            world_sim = context.get("_world_sim_result")
+            if isinstance(world_sim, dict):
+                world_snap = dict(world_sim)
 
-        value_ema = float(telos_score)
-        fuji_risk = float(fuji_result.get("risk", 0.05))
+            value_ema = float(telos_score)
+            fuji_risk = float(fuji_result.get("risk", 0.05))
 
-        new_bias = agi_goals.auto_adjust_goals(
-            bias_weights=b,
-            world_snap=world_snap,
-            value_ema=value_ema,
-            fuji_risk=fuji_risk,
-        )
+            new_bias = agi_goals.auto_adjust_goals(
+                bias_weights=b,
+                world_snap=world_snap,
+                value_ema=value_ema,
+                fuji_risk=fuji_risk,
+            )
 
-        persona2["bias_weights"] = new_bias
-        adapt.save_persona(persona2)
+            persona2["bias_weights"] = new_bias
+            adapt.save_persona(persona2)
 
         result["updated"] = True
         result["last_auto_adjust"] = {

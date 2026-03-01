@@ -314,3 +314,38 @@ def test_update_persona_bias_from_history_merges_and_persists(monkeypatch, tmp_p
     assert bw["refactor core"] == 1.0
     assert bw["add feature"] == 0.5
 
+
+
+def test_update_persona_bias_from_history_uses_lock(monkeypatch):
+    class DummyLock:
+        def __init__(self) -> None:
+            self.entered = 0
+
+        def __enter__(self) -> None:
+            self.entered += 1
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    dummy_lock = DummyLock()
+
+    monkeypatch.setattr(adapt, "PERSONA_UPDATE_LOCK", dummy_lock)
+    monkeypatch.setattr(
+        adapt,
+        "load_persona",
+        lambda: {"name": "P", "bias_weights": {}},
+    )
+    monkeypatch.setattr(
+        adapt,
+        "read_recent_decisions",
+        lambda _path, window=50: [{"id": "1", "title": "Refactor"}],
+    )
+
+    saved: List[Dict[str, Any]] = []
+    monkeypatch.setattr(adapt, "save_persona", lambda persona: saved.append(persona))
+
+    updated = adapt.update_persona_bias_from_history(window=3)
+
+    assert dummy_lock.entered == 1
+    assert saved
+    assert "refactor" in updated["bias_weights"]
