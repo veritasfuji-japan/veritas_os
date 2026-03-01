@@ -139,6 +139,47 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
     return fallback_sha
 
 
+def _recover_last_hash_from_rotated_log() -> str | None:
+    """Recover the previous chain hash from a rotated JSONL log.
+
+    Recovery is used only when the active log is empty/missing and the
+    rotation marker file is unavailable. This protects hash-chain continuity
+    after a marker loss event.
+    """
+    rotated_log = LOG_JSONL.parent / f"{LOG_JSONL.stem}_old{LOG_JSONL.suffix}"
+    if not rotated_log.exists() or rotated_log.stat().st_size == 0:
+        return None
+
+    try:
+        file_size = rotated_log.stat().st_size
+        with open(rotated_log, "rb") as f:
+            start = max(0, file_size - 65536)
+            while True:
+                f.seek(start)
+                raw = f.read(file_size - start)
+                chunk = raw.decode("utf-8", errors="replace")
+                lines = chunk.splitlines()
+                if not lines:
+                    return None
+
+                if "\n" not in chunk and start > 0:
+                    start = max(0, start - 65536)
+                    continue
+
+                sha = _extract_last_sha256_from_lines(lines)
+                if sha is not None:
+                    logger.warning(
+                        "Recovered trust log chain hash from rotated file because marker is missing"
+                    )
+                    return sha
+                if start == 0:
+                    return None
+                start = max(0, start - 65536)
+    except Exception:
+        logger.warning("Failed to recover last hash from rotated trust log", exc_info=True)
+    return None
+
+
 def get_last_hash() -> str | None:
     """直近の trust_log.jsonl から最後の SHA-256 値を取得。
 
@@ -156,11 +197,23 @@ def get_last_hash() -> str | None:
         try:
             if not LOG_JSONL.exists():
                 # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
-                return load_last_hash_marker(LOG_JSONL)
+                marker_hash = load_last_hash_marker(LOG_JSONL)
+                if marker_hash:
+                    return marker_hash
+                logger.warning(
+                    "trust log marker is missing while active log does not exist; attempting rotated-log recovery"
+                )
+                return _recover_last_hash_from_rotated_log()
             file_size = LOG_JSONL.stat().st_size
             if file_size == 0:
                 # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
-                return load_last_hash_marker(LOG_JSONL)
+                marker_hash = load_last_hash_marker(LOG_JSONL)
+                if marker_hash:
+                    return marker_hash
+                logger.warning(
+                    "trust log marker is missing while active log is empty; attempting rotated-log recovery"
+                )
+                return _recover_last_hash_from_rotated_log()
             with open(LOG_JSONL, "rb") as f:
                 start = max(0, file_size - 65536)
                 while True:
