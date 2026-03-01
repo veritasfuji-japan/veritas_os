@@ -59,6 +59,33 @@ describe("TrustLogExplorerPage", () => {
     });
   });
 
+  it("shows timeout error when trust logs request is aborted", async () => {
+    vi.spyOn(global, "fetch").mockRejectedValueOnce(new DOMException("Aborted", "AbortError"));
+
+    render(<TrustLogExplorerPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("タイムアウト: trust logs 取得が時間内に完了しませんでした。")).toBeInTheDocument();
+    });
+  });
+
+  it("shows timeout error when request_id search is aborted", async () => {
+    vi.spyOn(global, "fetch").mockRejectedValueOnce(new DOMException("Aborted", "AbortError"));
+
+    render(<TrustLogExplorerPage />);
+
+    fireEvent.change(screen.getByLabelText("request_id"), {
+      target: { value: "req-timeout" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "検索" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("タイムアウト: request_id 検索が時間内に完了しませんでした。")).toBeInTheDocument();
+    });
+  });
+
   it("verifies hash chain and shows tamper-proof stamp", async () => {
     vi.spyOn(global, "fetch").mockResolvedValueOnce({
       ok: true,

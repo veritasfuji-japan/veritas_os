@@ -20,6 +20,8 @@ interface UseDecideResult {
   runDecision: (nextQuery?: string) => Promise<void>;
 }
 
+const DECIDE_TIMEOUT_MS = 20_000;
+
 /**
  * Encapsulates decide API communication and user-facing error handling.
  *
@@ -65,6 +67,7 @@ export function useDecide({
     latestRequestIdRef.current = requestId;
     const isLatestRequest = (): boolean => latestRequestIdRef.current === requestId;
     setLoading(true);
+    const timeoutId = window.setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
 
     try {
       const response = await fetch("/api/veritas/v1/decide", {
@@ -138,6 +141,15 @@ export function useDecide({
       ]);
     } catch (caught: unknown) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
+        if (isLatestRequest()) {
+          const timeoutError = t(
+            "タイムアウト: 意思決定リクエストが時間内に完了しませんでした。",
+            "Timeout: decision request did not complete in time.",
+          );
+          setError(timeoutError);
+          setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: timeoutError }]);
+          setResult(null);
+        }
         return;
       }
       if (!isLatestRequest()) {
@@ -148,6 +160,7 @@ export function useDecide({
       setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: networkError }]);
       setResult(null);
     } finally {
+      window.clearTimeout(timeoutId);
       if (isLatestRequest()) {
         setLoading(false);
       }
