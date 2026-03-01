@@ -118,6 +118,20 @@ class TestApplyStyleToMessages:
         assert "You are helpful" in result[0]["content"]
         assert "STYLE=neutral" in result[0]["content"]
 
+
+    def test_existing_system_input_is_not_mutated(self):
+        """Original input list should remain unchanged when merging system."""
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hello"},
+        ]
+
+        original_first = dict(messages[0])
+        result = affect_mod.apply_style_to_messages(messages, "neutral")
+
+        assert messages[0] == original_first
+        assert result[0] is not messages[0]
+
     def test_empty_messages(self):
         """Empty messages should get system message added."""
         result = affect_mod.apply_style_to_messages([], "warm")
