@@ -282,3 +282,46 @@ def test_legacy_pickle_migration_opt_in(tmp_path: Path, monkeypatch):
 
 
 
+
+
+def test_load_model_is_thread_safe(monkeypatch):
+    """_load_model が同時実行されてもモデル初期化は一度だけ実行される。"""
+    import sys
+    import threading
+    import time
+    import types
+
+    init_calls = {"count": 0}
+
+    class SlowSentenceTransformer:
+        def __init__(self, model_name):
+            init_calls["count"] += 1
+            time.sleep(0.05)
+            self.model_name = model_name
+
+    monkeypatch.setattr(
+        memory.capability_cfg,
+        "enable_memory_sentence_transformers",
+        False,
+    )
+    vm = memory.VectorMemory()
+
+    fake_module = types.ModuleType("sentence_transformers")
+    fake_module.SentenceTransformer = SlowSentenceTransformer
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake_module)
+    monkeypatch.setattr(
+        memory.capability_cfg,
+        "enable_memory_sentence_transformers",
+        True,
+    )
+
+    vm.model = None
+
+    threads = [threading.Thread(target=vm._load_model) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert init_calls["count"] == 1
+    assert isinstance(vm.model, SlowSentenceTransformer)
