@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 os.environ["VERITAS_API_KEY"] = "test-governance-key"
 
@@ -190,6 +191,17 @@ class TestGovernanceModule:
         with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", p):
             result = gov_mod.update_policy({"version": "custom_v9"})
         assert result["version"] == "custom_v9"
+
+    def test_update_policy_rejects_non_object_nested_patch(self):
+        """Nested governance sections must be provided as objects."""
+        with pytest.raises(ValueError, match="fuji_rules must be an object"):
+            gov_mod.update_policy({"fuji_rules": True})
+
+    def test_update_policy_validates_merged_nested_patch(self):
+        """Merged nested section is validated before assignment and save."""
+        with pytest.raises(ValidationError):
+            gov_mod.update_policy({"risk_thresholds": {"allow_upper": 1.5}})
+
 
 
 # ----------------------------------------------------------------
