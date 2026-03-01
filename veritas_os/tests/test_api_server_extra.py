@@ -1342,3 +1342,21 @@ def test_decide_failure_publishes_sse_event(monkeypatch):
     item = subscriber.get(timeout=0.5)
     assert item["type"] == "decide.completed"
     assert item["payload"]["ok"] is False
+
+
+def test_resolve_cors_settings_rejects_wildcard_credentials():
+    """Wildcard origins must never enable credentialed CORS responses."""
+    origins, allow_credentials = server._resolve_cors_settings(["*"])
+
+    assert origins == ["*"]
+    assert allow_credentials is False
+
+
+def test_resolve_cors_settings_allows_explicit_origins_only():
+    """Explicit origin list enables credentials and strips invalid entries."""
+    origins, allow_credentials = server._resolve_cors_settings(
+        ["https://example.com", "", None, " https://app.example.com "],
+    )
+
+    assert origins == ["https://example.com", "https://app.example.com"]
+    assert allow_credentials is True

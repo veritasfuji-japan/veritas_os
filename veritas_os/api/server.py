@@ -507,11 +507,39 @@ app = FastAPI(title="VERITAS Public API", version="1.0.3")
 
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 # 空の場合に True にすると、ブラウザの CORS チェックを意図せずバイパスするリスクがある
-_cors_origins = getattr(cfg, "cors_allow_origins", [])
+def _resolve_cors_settings(origins: Any) -> tuple[list[str], bool]:
+    """Resolve safe CORS settings from config values.
+
+    Security hardening:
+        - ``"*"`` + ``allow_credentials=True`` is forbidden by the CORS spec
+          intent and can create credential leakage risk in permissive browser
+          deployments.
+        - Any non-string entries are ignored to avoid accidental misconfig.
+    """
+    if not isinstance(origins, (list, tuple, set)):
+        return [], False
+
+    normalized_origins = [str(origin).strip() for origin in origins if isinstance(origin, str) and origin.strip()]
+    if not normalized_origins:
+        return [], False
+
+    if "*" in normalized_origins:
+        logger.warning(
+            "Insecure CORS config detected: wildcard origin with credentials is disallowed. "
+            "Falling back to allow_credentials=False.",
+        )
+        return ["*"], False
+
+    return normalized_origins, True
+
+
+_cors_origins, _cors_allow_credentials = _resolve_cors_settings(
+    getattr(cfg, "cors_allow_origins", []),
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
-    allow_credentials=bool(_cors_origins),
+    allow_credentials=_cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "OPTIONS"],
     allow_headers=["X-API-Key", "X-Timestamp", "X-Nonce", "X-Signature", "Content-Type", "Authorization"],
 )
