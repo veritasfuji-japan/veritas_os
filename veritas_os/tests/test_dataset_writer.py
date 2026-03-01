@@ -470,6 +470,63 @@ class TestGetDatasetStats:
             assert stats["status_counts"] == {}
             assert stats["avg_score"] == 0.0
 
+    def test_statistics_ignore_invalid_json_lines(self):
+        """不正なJSON行を無視して統計集計を継続することを確認"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "dataset.jsonl"
+
+            valid_record = build_dataset_record(
+                create_dummy_request(),
+                create_dummy_response(status="allow", memory_used=True),
+                create_dummy_meta(),
+            )
+            append_dataset_record(valid_record, path=path, validate=True)
+
+            with path.open("a", encoding="utf-8") as f:
+                f.write("{invalid json line}\n")
+
+            append_dataset_record(
+                build_dataset_record(
+                    create_dummy_request(),
+                    create_dummy_response(status="modify", memory_used=False),
+                    create_dummy_meta(),
+                ),
+                path=path,
+                validate=True,
+            )
+
+            stats = get_dataset_stats(path=path)
+
+            assert stats["total_records"] == 2
+            assert stats["status_counts"]["allow"] == 1
+            assert stats["status_counts"]["modify"] == 1
+            assert stats["memory_usage"]["used"] == 1
+            assert stats["memory_usage"]["unused"] == 1
+
+    def test_statistics_return_file_too_large_error(self, monkeypatch):
+        """サイズ上限を超える場合に file_too_large を返すことを確認"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "dataset.jsonl"
+            append_dataset_record(
+                build_dataset_record(
+                    create_dummy_request(),
+                    create_dummy_response(),
+                    create_dummy_meta(),
+                ),
+                path=path,
+                validate=True,
+            )
+
+            monkeypatch.setattr(
+                "veritas_os.logging.dataset_writer.MAX_DATASET_STATS_SIZE",
+                1,
+            )
+
+            stats = get_dataset_stats(path=path)
+
+            assert stats["total_records"] == -1
+            assert stats["error"] == "file_too_large"
+
 
 # =========================
 # 検索機能テスト

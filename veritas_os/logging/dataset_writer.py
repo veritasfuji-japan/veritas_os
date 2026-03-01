@@ -268,7 +268,10 @@ def append_dataset_record(
 
 def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
     """
-    データセット統計を取得
+    データセット統計を取得。
+
+    M-4 対応として、JSONL 全行をメモリへ保持せずストリーミング集計する。
+    これにより、統計算出時のピークメモリ使用量を定数オーダーに抑制する。
 
     Returns:
         {
@@ -304,7 +307,14 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
     except OSError:
         pass
 
-    records: List[Dict[str, Any]] = []
+    total_records = 0
+    status_counts: Dict[str, int] = {}
+    memory_used_count = 0
+    score_sum = 0.0
+    score_count = 0
+    min_ts: Optional[int] = None
+    max_ts: Optional[int] = None
+
     with _dataset_lock:
         with path.open(encoding="utf-8") as f:
             for line in f:
@@ -312,11 +322,38 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
                 if not line:
                     continue
                 try:
-                    records.append(json.loads(line))
+                    rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
 
-    if not records:
+                total_records += 1
+
+                # status
+                status = rec.get("labels", {}).get("status", "unknown")
+                status_counts[status] = status_counts.get(status, 0) + 1
+
+                # memory
+                if rec.get("labels", {}).get("memory_used", False):
+                    memory_used_count += 1
+
+                # score
+                raw_score = (
+                    rec.get("response", {})
+                    .get("chosen", {})
+                    .get("score")
+                )
+                score_sum += _f2(raw_score, 0.0)
+                score_count += 1
+
+                # timestamp
+                ts = rec.get("ts")
+                if isinstance(ts, int) and ts > 0:
+                    if min_ts is None or ts < min_ts:
+                        min_ts = ts
+                    if max_ts is None or ts > max_ts:
+                        max_ts = ts
+
+    if total_records == 0:
         return {
             "total_records": 0,
             "status_counts": {},
@@ -325,50 +362,23 @@ def get_dataset_stats(path: Path = DATASET_JSONL) -> Dict[str, Any]:
             "date_range": None,
         }
 
-    status_counts: Dict[str, int] = {}
-    memory_used_count = 0
-    scores: List[float] = []
-    timestamps: List[int] = []
-
-    for rec in records:
-        # status
-        status = rec.get("labels", {}).get("status", "unknown")
-        status_counts[status] = status_counts.get(status, 0) + 1
-
-        # memory
-        if rec.get("labels", {}).get("memory_used", False):
-            memory_used_count += 1
-
-        # score
-        raw_score = (
-            rec.get("response", {})
-            .get("chosen", {})
-            .get("score")
-        )
-        scores.append(_f2(raw_score, 0.0))
-
-        # timestamp
-        ts = rec.get("ts")
-        if isinstance(ts, int) and ts > 0:
-            timestamps.append(ts)
-
     date_range = None
-    if timestamps:
-        start_ts = min(timestamps) / 1000.0
-        end_ts = max(timestamps) / 1000.0
+    if min_ts is not None and max_ts is not None:
+        start_ts = min_ts / 1000.0
+        end_ts = max_ts / 1000.0
         date_range = {
             "start": datetime.fromtimestamp(start_ts, tz=timezone.utc).isoformat(),
             "end": datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat(),
         }
 
     return {
-        "total_records": len(records),
+        "total_records": total_records,
         "status_counts": status_counts,
         "memory_usage": {
             "used": memory_used_count,
-            "unused": len(records) - memory_used_count,
+            "unused": total_records - memory_used_count,
         },
-        "avg_score": sum(scores) / len(scores) if scores else 0.0,
+        "avg_score": score_sum / score_count if score_count else 0.0,
         "date_range": date_range,
     }
 
