@@ -70,6 +70,26 @@ _RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
 # 例: "山田太郎さん", "田中 様", "鈴木先生"
 _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+_MAX_PROMPT_TEXT_CHARS = 8000
+
+
+def _sanitize_text_for_prompt(text: str, max_chars: int = _MAX_PROMPT_TEXT_CHARS) -> str:
+    """LLM へ渡すユーザー入力をプロンプト安全な文字列に正規化する。
+
+    - 制御文字を除去して、改行・タブなどを空白へ圧縮する
+    - 過大入力によるプロンプト汚染やコスト増を防ぐため文字数を上限制限する
+
+    Args:
+        text: ユーザー入力。
+        max_chars: 文字数上限（0 以下は 1 として扱う）。
+
+    Returns:
+        安全化済みの文字列。
+    """
+    safe_limit = max(1, int(max_chars))
+    cleaned = _RE_CONTROL_CHARS.sub(" ", str(text or ""))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned[:safe_limit]
 
 
 def _norm(s: str) -> str:
@@ -236,8 +256,9 @@ def _analyze_with_llm(
         "Think in terms of OpenAI-like safety categories: PII, self_harm, illicit, violence, hate, minors, etc."
     )
 
+    sanitized_text = _sanitize_text_for_prompt(text)
     user_payload = {
-        "text": text,
+        "text": sanitized_text,
         "stakes": stakes,
         "alternatives_preview": [
             a.get("title") or a.get("description") or ""

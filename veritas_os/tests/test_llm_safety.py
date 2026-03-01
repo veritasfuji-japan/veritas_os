@@ -191,6 +191,59 @@ def test_normalize_categories_respects_non_positive_limit():
     assert normalized == []
 
 
+
+def test_sanitize_text_for_prompt_removes_controls_and_truncates():
+    """プロンプト入力サニタイズで制御文字除去と文字数制限が効く。"""
+    raw = "  hi\x00there\n\tworld  "
+    sanitized = llm_safety._sanitize_text_for_prompt(raw, max_chars=8)
+
+    assert sanitized == "hi there"
+
+
+def test_analyze_with_llm_sanitizes_text_payload(monkeypatch):
+    """LLM へ渡す payload.text はサニタイズ済みである。"""
+
+    class DummyOutputItem:
+        def __init__(self, parsed: Dict[str, Any]):
+            self.parsed = parsed
+
+    class DummyResponse:
+        def __init__(self):
+            self.output: List[DummyOutputItem] = [
+                DummyOutputItem(
+                    {
+                        "risk_score": 0.2,
+                        "categories": ["PII"],
+                        "rationale": "ok",
+                    }
+                )
+            ]
+
+        def model_dump_json(self) -> str:
+            return '{"dummy": true}'
+
+    class DummyResponses:
+        last_kwargs: Dict[str, Any] | None = None
+
+        def create(self, **kwargs: Any) -> DummyResponse:
+            DummyResponses.last_kwargs = kwargs
+            return DummyResponse()
+
+    class DummyClient:
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
+            self.responses = DummyResponses()
+
+    monkeypatch.setattr(llm_safety, "OpenAI", DummyClient)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-sanitize")
+
+    llm_safety._analyze_with_llm("unsafe\x00\ntext", max_categories=5)
+
+    user_message = DummyResponses.last_kwargs["input"][1]["content"]
+    assert "unsafe text" in user_message
+    assert "\x00" not in user_message
+
+
 # -----------------------------
 # run() の挙動テスト
 # -----------------------------
