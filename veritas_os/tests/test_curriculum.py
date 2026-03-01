@@ -234,3 +234,24 @@ def test_plan_today_generates_once_and_reuses():
     assert len(curriculum._USER_TASKS[user_id]) == 3  # type: ignore[attr-defined]
 
 
+def test_generate_daily_curriculum_evicts_least_recently_used_user():
+    """ユーザー上限到達時はLRU順で古いユーザーを退避させる。"""
+    _reset_user_tasks()
+
+    original_max_users = curriculum._MAX_USERS  # type: ignore[attr-defined]
+    curriculum._MAX_USERS = 2  # type: ignore[attr-defined]
+    try:
+        curriculum.generate_daily_curriculum("user_a")
+        curriculum.generate_daily_curriculum("user_b")
+
+        # user_a を参照して最新化する
+        assert curriculum.load_tasks("user_a")
+
+        curriculum.generate_daily_curriculum("user_c")
+
+        assert "user_a" in curriculum._USER_TASKS  # type: ignore[attr-defined]
+        assert "user_b" not in curriculum._USER_TASKS  # type: ignore[attr-defined]
+        assert "user_c" in curriculum._USER_TASKS  # type: ignore[attr-defined]
+    finally:
+        curriculum._MAX_USERS = original_max_users  # type: ignore[attr-defined]
+
