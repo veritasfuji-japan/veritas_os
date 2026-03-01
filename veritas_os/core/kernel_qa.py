@@ -69,6 +69,10 @@ AGI_BLOCK_KEYWORDS = [
     "プロトagi", "proto-agi",
 ]
 
+# 正規表現評価前に許容するクエリ長の上限。
+# 極端に長い入力によるCPU/メモリ負荷を抑止する。
+MAX_QA_QUERY_LENGTH = 10_000
+
 
 def detect_simple_qa(q: str) -> str | None:
     """
@@ -81,6 +85,9 @@ def detect_simple_qa(q: str) -> str | None:
         検出されたQA種別（"time", "weekday", "date"）または None
     """
     q = (q or "").strip()
+    if len(q) > MAX_QA_QUERY_LENGTH:
+        return None
+
     ql = q.lower()
 
     # AGI関連クエリはブロック
@@ -271,6 +278,8 @@ def detect_knowledge_qa(q: str) -> bool:
         知識QAとして処理すべきかどうか
     """
     q = (q or "").strip()
+    if len(q) > MAX_QA_QUERY_LENGTH:
+        return False
 
     if len(q) < 4:
         return False
