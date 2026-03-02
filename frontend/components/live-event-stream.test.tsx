@@ -17,6 +17,7 @@ function createReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
 
 describe("LiveEventStream", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -59,6 +60,26 @@ describe("LiveEventStream", () => {
     expect(lastCall[0]).toBe("/api/veritas/v1/events");
     expect(lastCall[1]?.headers).toBeUndefined();
     expect(screen.getByText("Security note: API key is injected server-side and never exposed to browser code.")).toBeInTheDocument();
+  });
+
+  it("uses exponential backoff with jitter for reconnect attempts", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+
+    const fetchMock = vi.fn().mockRejectedValueOnce(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<LiveEventStream />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(timeoutSpy).toHaveBeenLastCalledWith(expect.any(Function), 1000);
+
+    vi.useRealTimers();
   });
 
   it("clears rendered events when clear button is pressed", async () => {
