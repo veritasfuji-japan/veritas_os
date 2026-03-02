@@ -76,7 +76,7 @@ describe("TrustLogExplorerPage", () => {
 
     render(<TrustLogExplorerPage />);
 
-    fireEvent.change(screen.getByLabelText("request_id"), {
+    fireEvent.change(screen.getByLabelText("リクエストIDで検索"), {
       target: { value: "req-timeout" },
     });
     fireEvent.click(screen.getByRole("button", { name: "検索" }));
