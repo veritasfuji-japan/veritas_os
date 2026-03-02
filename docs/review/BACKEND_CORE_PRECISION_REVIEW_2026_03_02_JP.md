@@ -68,3 +68,45 @@
 2. `Planner` のフォールバック監視情報追加（責務: Planner）。
 3. `MemoryOS` の保存先パス監査ログ＋本番時バリデーション（責務: MemoryOS）。
 
+
+---
+
+## 7. 再精密レビュー追記（2026-03-02 / Codex）
+
+### 7.1 対象ファイル（追加読解）
+
+- `veritas_os/core/planner.py`
+- `veritas_os/core/kernel.py`
+- `veritas_os/core/fuji.py`
+- `veritas_os/core/memory.py`
+- `veritas_os/memory/store.py`
+
+### 7.2 追加所見（責務境界内）
+
+- **Planner**
+  - 以前の懸念だったフォールバック理由の不可視化は、`planner_fallback_reason` 付与と warning ログで改善済み。
+  - JSON 抽出や decode 試行回数に上限が入り、LLM 出力起因の CPU 逼迫リスクは抑制されている。
+- **Kernel**
+  - doctor 自動起動は `shell=False` / 実行ファイル検証 / ログFD安全オープン（`O_NOFOLLOW` 利用可能時）で強化済み。
+  - レート制限とアクティブプロセス追跡で高頻度起動時の資源圧迫を抑制できる。
+- **Fuji**
+  - ポリシーロード失敗時の warning/error ログ、および strict deny モード (`VERITAS_FUJI_STRICT_POLICY_LOAD`) が実装済み。
+  - 以前の「サイレント既定値フォールバック」問題は是正方向。
+- **MemoryOS**
+  - `VERITAS_MEMORY_DIR` 監査ログ・本番 allowlist・`mkdir(0o700)` が入り、保存先設定リスクは低減。
+  - pickle runtime ロード廃止方針は維持されており、任意コード実行面の回避として妥当。
+
+### 7.3 セキュリティ警告（運用上の残余リスク）
+
+1. **[Warning] 本番で allowlist 未設定時の運用劣化リスク**
+   - `VERITAS_ENV=production` かつ `VERITAS_MEMORY_DIR_ALLOWLIST` 未設定の場合、既定パスへフォールバックする。
+   - 安全側ではあるが、意図した永続先が使われず監査・バックアップ運用にギャップを作る可能性があるため、デプロイ時に必ず allowlist を明示設定すること。
+
+2. **[Warning] Fuji YAML 無効時のポリシー更新反映漏れリスク**
+   - capability 設定や依存不足により YAML policy が無効化されると built-in policy で動作する。
+   - strict 運用が必要な環境では `VERITAS_CAP_FUJI_YAML_POLICY=1` と依存関係整備をセットで必須化すべき。
+
+### 7.4 結論
+
+- Planner / Kernel / Fuji / MemoryOS の責務を越える変更なしで、主要な過去指摘は概ね改善済み。
+- 現時点の優先課題は「コード欠陥」よりも「本番設定の明示化（allowlist / strict policy）」である。
