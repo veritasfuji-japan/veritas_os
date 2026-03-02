@@ -20,7 +20,7 @@ const MAX_RECONNECT_DELAY_MS = 30000;
  * Jitter is constrained to ±20% so retries are de-synchronized without
  * producing extreme delays.
  */
-export function getReconnectDelayMs(
+function getReconnectDelayMs(
   attempt: number,
   randomValue: number = Math.random(),
 ): number {

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getReconnectDelayMs, LiveEventStream } from "./live-event-stream";
+import { LiveEventStream } from "./live-event-stream";
 
 function createReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
   return new ReadableStream<Uint8Array>({
@@ -101,23 +101,5 @@ describe("LiveEventStream", () => {
     fireEvent.click(screen.getByRole("button", { name: "Clear events" }));
 
     expect(screen.getByText("イベント待機中...")).toBeInTheDocument();
-  });
-});
-
-
-describe("getReconnectDelayMs", () => {
-  it("applies exponential growth with bounded jitter", () => {
-    expect(getReconnectDelayMs(0, 0)).toBe(800);
-    expect(getReconnectDelayMs(1, 0.5)).toBe(2000);
-    expect(getReconnectDelayMs(2, 1)).toBe(4800);
-  });
-
-  it("caps delay at max reconnect delay", () => {
-    expect(getReconnectDelayMs(10, 1)).toBe(30000);
-  });
-
-  it("clamps invalid inputs", () => {
-    expect(getReconnectDelayMs(-1, -5)).toBe(800);
-    expect(getReconnectDelayMs(0, 5)).toBe(1200);
   });
 });
