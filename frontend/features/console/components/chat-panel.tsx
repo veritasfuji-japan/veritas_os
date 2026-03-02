@@ -1,6 +1,6 @@
 import { type LocaleKey } from "../../../locales/ja";
 import { Button, Card } from "@veritas/design-system";
-import { DANGER_PRESETS } from "../constants";
+import { DANGER_PRESETS, isDangerPresetsEnabled } from "../constants";
 import { type ChatMessage } from "../types";
 
 interface ChatPanelProps {
@@ -24,6 +24,8 @@ export function ChatPanel({
   setQuery,
   runDecision,
 }: ChatPanelProps): JSX.Element {
+  const showDangerPresets = isDangerPresetsEnabled();
+
   return (
     <Card title="Chat" className="bg-background/75">
       <div className="mb-4 rounded-md border border-border bg-background/60 p-3">
@@ -66,24 +68,24 @@ export function ChatPanel({
           />
         </label>
 
-        <div className="space-y-2">
-          <p className="text-xs font-medium">
-            {tk("dangerPresets")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {DANGER_PRESETS.map((preset) => (
-              <button
-                key={preset.ja}
-                type="button"
-                className="rounded-md border border-red-500/50 bg-red-500/10 px-2 py-1 text-xs text-red-300"
-                onClick={() => void runDecision(t(preset.ja, preset.en))}
-                disabled={loading}
-              >
-                {t(preset.ja, preset.en).slice(0, 24)}...
-              </button>
-            ))}
+        {showDangerPresets ? (
+          <div className="space-y-2">
+            <p className="text-xs font-medium">{tk("dangerPresets")}</p>
+            <div className="flex flex-wrap gap-2">
+              {DANGER_PRESETS.map((preset) => (
+                <button
+                  key={preset.ja}
+                  type="button"
+                  className="rounded-md border border-red-500/50 bg-red-500/10 px-2 py-1 text-xs text-red-300"
+                  onClick={() => void runDecision(t(preset.ja, preset.en))}
+                  disabled={loading}
+                >
+                  {t(preset.ja, preset.en).slice(0, 24)}...
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <Button type="submit" disabled={loading}>
           {loading ? tk("sending") : tk("send")}
