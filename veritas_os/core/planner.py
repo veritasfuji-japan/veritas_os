@@ -1104,6 +1104,7 @@ def generate_code_tasks(
     """
     bench = bench or {}
     bench_id = bench.get("bench_id") or "agi_veritas_self_hosting"
+    planner_fallback_reason: Optional[str] = None
 
     # ---- (0) bench直読みがあるなら code_planner を使わない（重要） ----
     bench_changes = bench.get("changes")
@@ -1157,9 +1158,15 @@ def generate_code_tasks(
                 "tasks": tasks,
             }
 
-        except (AttributeError, TypeError, ValueError):
-            # code_planner が落ちたら純ロジックへ
-            pass
+        except (AttributeError, TypeError, ValueError) as exc:
+            planner_fallback_reason = (
+                f"{type(exc).__name__}: code_planner.generate_code_change_plan failed"
+            )
+            logger.warning(
+                "generate_code_tasks: fallback to inline planner logic (%s)",
+                planner_fallback_reason,
+                exc_info=True,
+            )
 
     # ---- (B) bench直読みの純ロジック経路 ----
     world_snap = bench.get("world_snapshot") or {}
@@ -1276,6 +1283,7 @@ def generate_code_tasks(
         "doctor_issue_count": len(dr_issues),
         "source": "planner.generate_code_tasks",
         "prefer_inline_bench": bool(prefer_inline),
+        "planner_fallback_reason": planner_fallback_reason,
     }
 
     try:
