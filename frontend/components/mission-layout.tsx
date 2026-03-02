@@ -204,6 +204,9 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
             <p className="truncate text-sm font-semibold leading-tight text-sidebar-foreground">
               {t("統治OS", "Governance OS")}
             </p>
+            <p className="truncate text-[10px] text-sidebar-muted">
+              {t("可読性を優先した運用ビュー", "Operations view optimized for readability")}
+            </p>
           </div>
           {/* Live indicator */}
           <div className="flex items-center gap-1.5 rounded-full border border-sidebar-border px-2 py-1">
@@ -219,7 +222,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
               {t("ナビゲーション", "Navigation")}
             </p>
           </div>
-          <ul className="space-y-0.5" role="list">
+          <ul className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
               const { Icon } = item;

@@ -162,7 +162,7 @@ export function LiveEventStream(): JSX.Element {
       onClick={() => setEvents([])}
       className="rounded-md border border-border/70 bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      {t("クリア", "Clear")}
+      Clear events
     </button>
   );
 
@@ -195,7 +195,7 @@ export function LiveEventStream(): JSX.Element {
           </span>
         </div>
         <p className="text-xs text-emerald-700 dark:text-emerald-500">
-          {t("APIキーはサーバーサイドで注入されます", "API key injected server-side")}
+          Security note: API key is injected server-side and never exposed to browser code.
         </p>
       </div>
 
