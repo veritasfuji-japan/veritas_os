@@ -237,6 +237,14 @@ def test_extract_last_sha256_from_lines_ignores_invalid_entries():
     assert trust_log._extract_last_sha256_from_lines(lines) == valid_hash
 
 
+
+
+def test_extract_last_sha256_from_lines_accepts_uppercase_hex():
+    uppercase_hash = "A" * 64
+    lines = [json.dumps({"sha256": uppercase_hash})]
+
+    assert trust_log._extract_last_sha256_from_lines(lines) == uppercase_hash
+
 def test_extract_last_sha256_from_lines_falls_back_to_non_hex_sha256():
     lines = [
         json.dumps({"sha256": "g" * 64}),
