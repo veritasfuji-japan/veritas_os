@@ -89,7 +89,7 @@ Pipeline mental model:
 
 ```text
 Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
-````
+```
 
 Bundled subsystems:
 
@@ -171,18 +171,6 @@ Example payload:
   }
 }
 ```
-
----
-
-## Operational Security Deep Dive
-
-- **Never use placeholder or short secrets**: `VERITAS_API_SECRET` should be a long,
-  random value (32+ chars recommended). Placeholder or short secrets can effectively
-  disable or weaken HMAC protection.
-- **CORS safety**: avoid wildcard origins (`*`) when `allow_credentials` is enabled.
-  Configure explicit trusted origins only.
-- **Legacy pickle migration is risky**: if you enable legacy pickle migration for
-  MemoryOS, treat it as a short-lived migration path and disable it afterward.
 
 ---
 
