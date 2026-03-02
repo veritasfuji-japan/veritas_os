@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@veritas/design-system";
 import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, type TrustLogItem } from "../../lib/api-validators";
 import { useI18n } from "../../components/i18n-provider";
@@ -138,6 +138,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportError, setReportError] = useState<string | null>(null);
   const [latestReport, setLatestReport] = useState<RegulatoryReport | null>(null);
+  const requestSearchNonceRef = useRef(0);
 
   const stageOptions = useMemo(() => {
     const stages = new Set<string>();
@@ -490,6 +491,8 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
   const searchByRequestId = async (): Promise<void> => {
     const value = requestId.trim();
+    requestSearchNonceRef.current += 1;
+    const requestNonce = requestSearchNonceRef.current;
     setRequestResult(null);
     setError(null);
     if (!value) {
@@ -507,6 +510,9 @@ export default function TrustLogExplorerPage(): JSX.Element {
       }
 
       const payload: unknown = await response.json();
+      if (requestNonce !== requestSearchNonceRef.current) {
+        return;
+      }
       if (!isRequestLogResponse(payload)) {
         setError(t("レスポンス形式エラー: request_id 応答の形式が不正です。", "Response format error: request_id payload is invalid."));
         return;
@@ -516,13 +522,18 @@ export default function TrustLogExplorerPage(): JSX.Element {
         setSelected(payload.items[payload.items.length - 1]);
       }
     } catch (caught: unknown) {
+      if (requestNonce !== requestSearchNonceRef.current) {
+        return;
+      }
       if (caught instanceof DOMException && caught.name === "AbortError") {
         setError(t("タイムアウト: request_id 検索が時間内に完了しませんでした。", "Timeout: request_id search did not complete in time."));
         return;
       }
       setError(t("ネットワークエラー: request_id 検索に失敗しました。", "Network error: failed to search request_id."));
     } finally {
-      setLoading(false);
+      if (requestNonce === requestSearchNonceRef.current) {
+        setLoading(false);
+      }
     }
   };
 
