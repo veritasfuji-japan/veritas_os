@@ -561,7 +561,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
       <Card title={t("request_id 検索", "request_id Search")} className="bg-background/75">
         <div className="flex flex-col gap-2 md:flex-row">
-          <input aria-label="request_id" className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm" placeholder="request_id" value={requestId} onChange={(event) => setRequestId(event.target.value)} />
+          <input aria-label={t("リクエストIDで検索", "Search by request ID")} className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm" placeholder="request_id" value={requestId} onChange={(event) => setRequestId(event.target.value)} />
           <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading} onClick={() => void searchByRequestId()}>
             {t("検索", "Search")}
           </button>
