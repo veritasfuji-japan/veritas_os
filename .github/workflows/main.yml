@@ -40,6 +40,9 @@ jobs:
       - name: Ruff check (lint)
         run: ruff check veritas_os/
 
+      - name: Responsibility boundary check
+        run: python scripts/architecture/check_responsibility_boundaries.py
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \
