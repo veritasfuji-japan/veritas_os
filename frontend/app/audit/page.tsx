@@ -539,48 +539,116 @@ export default function TrustLogExplorerPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <Card title="TrustLog Explorer" className="border-primary/50 bg-surface/85">
-        <p className="text-sm text-muted-foreground">
-          {t(
-            "/v1/trust/logs と /v1/trust/{request_id} を使って、監査証跡を時系列に確認します。",
-            "Use /v1/trust/logs and /v1/trust/{request_id} to review audit evidence in chronological order.",
-          )}
-        </p>
+      <Card
+        title="TrustLog Explorer"
+        description={t(
+          "/v1/trust/logs と /v1/trust/{request_id} を使って、監査証跡を時系列に確認します。",
+          "Use /v1/trust/logs and /v1/trust/{request_id} to review audit evidence in chronological order.",
+        )}
+        variant="glass"
+        accent="info"
+        className="border-info/20"
+      >
+        <div />
       </Card>
 
-      <Card title="Connection" className="bg-background/75">
+      <Card title={t("接続・読み込み", "Connection")} titleSize="sm" variant="elevated">
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading} onClick={() => void loadLogs(null, true)}>
+          <button
+            type="button"
+            className={[
+              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "disabled:pointer-events-none disabled:opacity-50",
+              "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 active:scale-[0.98]",
+            ].join(" ")}
+            disabled={loading}
+            onClick={() => void loadLogs(null, true)}
+          >
+            {loading && (
+              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
             {loading ? t("読み込み中...", "Loading...") : t("最新ログを読み込み", "Load latest logs")}
           </button>
-          <button type="button" className="rounded-md border border-border px-3 py-2 text-sm" disabled={loading || !hasMore || !cursor} onClick={() => void loadLogs(cursor, false)}>
+          <button
+            type="button"
+            className={[
+              "rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors",
+              "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "disabled:pointer-events-none disabled:opacity-40",
+            ].join(" ")}
+            disabled={loading || !hasMore || !cursor}
+            onClick={() => void loadLogs(cursor, false)}
+          >
             {t("追加読み込み", "Load more")}
           </button>
         </div>
       </Card>
 
-      <Card title={t("request_id 検索", "request_id Search")} className="bg-background/75">
+      <Card title={t("request_id 検索", "request_id Search")} titleSize="sm" variant="elevated">
         <div className="flex flex-col gap-2 md:flex-row">
-          <input aria-label={t("リクエストIDで検索", "Search by request ID")} className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm" placeholder="request_id" value={requestId} onChange={(event) => setRequestId(event.target.value)} />
-          <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" disabled={loading} onClick={() => void searchByRequestId()}>
+          <input
+            aria-label={t("リクエストIDで検索", "Search by request ID")}
+            className="w-full rounded-lg border border-border bg-background/80 px-3 py-2 text-sm font-mono transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            placeholder="request_id"
+            value={requestId}
+            onChange={(event) => setRequestId(event.target.value)}
+          />
+          <button
+            type="button"
+            className={[
+              "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
+              "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              "disabled:pointer-events-none disabled:opacity-50",
+            ].join(" ")}
+            disabled={loading}
+            onClick={() => void searchByRequestId()}
+          >
             {t("検索", "Search")}
           </button>
         </div>
-        {requestResult ? <p className="mt-2 text-xs text-muted-foreground">count: {requestResult.count} / chain_ok: {String(requestResult.chain_ok)} / verification_result: {requestResult.verification_result}</p> : null}
+        {requestResult ? (
+          <div className="mt-3 flex flex-wrap gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+            <span className="text-xs text-muted-foreground">
+              count: <span className="font-mono font-semibold text-foreground">{requestResult.count}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              chain_ok: <span className={`font-mono font-semibold ${requestResult.chain_ok ? "text-success" : "text-danger"}`}>{String(requestResult.chain_ok)}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              result: <span className="font-mono font-semibold text-foreground">{requestResult.verification_result}</span>
+            </span>
+          </div>
+        ) : null}
       </Card>
 
-      {error ? <p className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">{error}</p> : null}
+      {error ? (
+        <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
+          <span className="mt-0.5 shrink-0 text-danger" aria-hidden="true">⚠</span>
+          <p className="text-sm text-danger">{error}</p>
+        </div>
+      ) : null}
 
-      <Card title="Timeline" className="bg-background/75">
-        <div className="mb-3 flex items-center gap-2 text-xs">
-          <label htmlFor="stage-filter" className="font-medium">{t("ステージフィルタ", "Stage filter")}</label>
-          <select id="stage-filter" className="rounded-md border border-border bg-background px-2 py-1" value={stageFilter} onChange={(event) => setStageFilter(event.target.value)}>
+      <Card title="Timeline" titleSize="md" variant="elevated">
+        <div className="mb-3 flex items-center gap-3">
+          <label htmlFor="stage-filter" className="text-xs font-medium text-foreground">{t("ステージ", "Stage")}</label>
+          <select
+            id="stage-filter"
+            className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+            value={stageFilter}
+            onChange={(event) => setStageFilter(event.target.value)}
+          >
             {stageOptions.map((stage) => (<option key={stage} value={stage}>{stage}</option>))}
           </select>
-          <span className="text-muted-foreground">{t("表示件数", "Visible")}: {filteredItems.length}</span>
+          <span className="ml-auto rounded-full border border-border/50 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+            {filteredItems.length} {t("件", "items")}
+          </span>
         </div>
 
-        <ol className="max-h-[520px] space-y-2 overflow-y-auto border-l border-border pl-4">
+        <ol className="max-h-[520px] space-y-1.5 overflow-y-auto pl-1">
           {filteredItems.map((item, index) => {
             const id = `${item.request_id ?? "unknown"}-${index}`;
             const isSelected = selected === item;
@@ -588,12 +656,21 @@ export default function TrustLogExplorerPage(): JSX.Element {
               <li key={id}>
                 <button
                   type="button"
-                  className={`w-full rounded-md border px-3 py-2 text-left text-xs ${isSelected ? "border-primary/60 bg-primary/15" : "border-border bg-background/60"}`}
+                  className={[
+                    "w-full rounded-lg border px-3.5 py-2.5 text-left text-xs transition-all",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                    isSelected
+                      ? "border-primary/40 bg-primary/10 shadow-xs"
+                      : "border-border/50 bg-background/60 hover:border-border hover:bg-background/80",
+                  ].join(" ")}
                   onClick={() => setSelected(item)}
                 >
-                  <p className="font-semibold">{item.stage ?? "UNKNOWN"}</p>
-                  <p className="text-muted-foreground">{item.created_at ?? "no timestamp"}</p>
-                  <p className="truncate text-muted-foreground">request_id: {item.request_id ?? "unknown"}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isSelected ? "bg-primary" : "bg-muted-foreground/40"}`} aria-hidden="true" />
+                    <p className="font-semibold text-foreground">{item.stage ?? "UNKNOWN"}</p>
+                  </div>
+                  <p className="mt-0.5 font-mono text-muted-foreground">{item.created_at ?? "no timestamp"}</p>
+                  <p className="truncate font-mono text-muted-foreground">id: {item.request_id ?? "unknown"}</p>
                 </button>
               </li>
             );
@@ -601,24 +678,24 @@ export default function TrustLogExplorerPage(): JSX.Element {
         </ol>
       </Card>
 
-      <Card title="Selected JSON" className="bg-background/75">
+      <Card title="Selected JSON" titleSize="md" variant="elevated">
         {selected ? (
           <details open>
-            <summary className="cursor-pointer text-sm font-semibold">{t("JSON 展開", "Expand JSON")}</summary>
-            <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background/70 p-3 text-xs">{toPrettyJson(selected)}</pre>
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">{t("JSON 展開", "Expand JSON")}</summary>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-border/50 bg-muted/30 p-3 text-xs leading-relaxed">{toPrettyJson(selected)}</pre>
           </details>
         ) : (
           <p className="text-sm text-muted-foreground">{t("ログを選択してください。", "Select a log.")}</p>
         )}
       </Card>
 
-      <Card title={t("TrustLog インタラクティブ検証", "TrustLog Interactive Verification")} className="bg-background/75">
+      <Card title={t("TrustLog インタラクティブ検証", "TrustLog Interactive Verification")} titleSize="md" variant="elevated" accent="success">
         <div className="space-y-3 text-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end">
             <label className="flex-1 space-y-1 text-xs">
               <span className="font-medium">{t("意思決定ID", "Decision ID")}</span>
               <select
-                className="w-full rounded-md border border-border bg-background px-2 py-2 text-sm"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 value={selectedDecisionId}
                 onChange={(event) => setSelectedDecisionId(event.target.value)}
               >
@@ -630,7 +707,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
             </label>
             <button
               type="button"
-              className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
+              className={[
+                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
+                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                "disabled:pointer-events-none disabled:opacity-50",
+              ].join(" ")}
               disabled={loading || !selectedDecisionId}
               onClick={verifySelectedDecision}
             >
@@ -638,61 +719,76 @@ export default function TrustLogExplorerPage(): JSX.Element {
             </button>
           </div>
 
-          <div className="rounded-md border border-border bg-background/60 p-3">
-            <p className="font-medium">{t("検証アニメーション", "Verification animation")}</p>
-            <div className="mt-2 flex items-center gap-2 text-xs">
-              <span className={`rounded border px-2 py-1 ${animationStep >= 1 ? "border-primary/60 bg-primary/15" : "border-border bg-background"}`}>
-                {t("直前ログ", "Previous log")}: {shortHash(previousEntry?.sha256)}
+          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("チェーン検証フロー", "Chain Verification Flow")}</p>
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={[
+                "rounded-lg border px-3 py-1.5 font-mono transition-all",
+                animationStep >= 1 ? "border-primary/50 bg-primary/12 text-primary shadow-xs" : "border-border bg-background text-muted-foreground",
+              ].join(" ")}>
+                {t("直前ログ", "Previous")}: {shortHash(previousEntry?.sha256)}
               </span>
-              <span aria-hidden="true" className={animationStep >= 2 ? "text-primary" : "text-muted-foreground"}>→</span>
-              <span className={`rounded border px-2 py-1 ${animationStep >= 2 ? "border-primary/60 bg-primary/15" : "border-border bg-background"}`}>
-                {t("sha256_prev", "sha256_prev")}: {shortHash(selectedDecisionEntry?.sha256_prev)}
+              <span aria-hidden="true" className={`font-bold transition-colors ${animationStep >= 2 ? "text-primary" : "text-border"}`}>→</span>
+              <span className={[
+                "rounded-lg border px-3 py-1.5 font-mono transition-all",
+                animationStep >= 2 ? "border-primary/50 bg-primary/12 text-primary shadow-xs" : "border-border bg-background text-muted-foreground",
+              ].join(" ")}>
+                sha256_prev: {shortHash(selectedDecisionEntry?.sha256_prev)}
               </span>
-              <span aria-hidden="true" className={animationStep >= 2 ? "text-primary" : "text-muted-foreground"}>→</span>
-              <span className="rounded border border-border bg-background px-2 py-1">
-                {t("現在ログ", "Current log")}: {shortHash(selectedDecisionEntry?.sha256)}
+              <span aria-hidden="true" className={`font-bold transition-colors ${animationStep >= 2 ? "text-primary" : "text-border"}`}>→</span>
+              <span className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono text-muted-foreground">
+                {t("現在", "Current")}: {shortHash(selectedDecisionEntry?.sha256)}
               </span>
             </div>
           </div>
 
           {verificationStatus === "pass" ? (
-            <p className="inline-flex w-fit rounded-full border border-emerald-500/60 bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
-              TAMPER-PROOF ✅
-            </p>
+            <div className="inline-flex items-center gap-2 rounded-full border border-success/40 bg-success/10 px-4 py-1.5">
+              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
+              <span className="text-xs font-semibold text-success">TAMPER-PROOF</span>
+            </div>
           ) : null}
 
           {verificationMessage ? (
-            <p className={`rounded-md border p-2 text-xs ${verificationStatus === "pass" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-200"}`}>
+            <div className={[
+              "flex items-start gap-3 rounded-xl border px-4 py-3 text-xs",
+              verificationStatus === "pass"
+                ? "border-success/30 bg-success/8 text-success"
+                : "border-warning/30 bg-warning/8 text-warning",
+            ].join(" ")}>
+              <span aria-hidden="true">{verificationStatus === "pass" ? "✓" : "⚠"}</span>
               {verificationMessage}
-            </p>
+            </div>
           ) : null}
         </div>
       </Card>
 
-      <Card title={t("第三者監査用エクスポート", "Regulatory Report Generator")} className="bg-background/75">
-        <div className="space-y-3 text-sm">
-          <p className="text-xs text-muted-foreground">
-            {t(
-              "指定期間の決定パイプライン通過データ、FUJI Gate拒絶率、TrustLog整合性証明をPDF/JSONで出力します。",
-              "Generate PDF/JSON with pipeline throughput, FUJI gate rejection rate, and TrustLog integrity proof for a selected period.",
-            )}
-          </p>
-
-          <div className="grid gap-2 md:grid-cols-2">
-            <label className="space-y-1 text-xs">
-              <span className="font-medium">{t("開始日", "Start date")}</span>
+      <Card
+        title={t("第三者監査用エクスポート", "Regulatory Report Generator")}
+        titleSize="md"
+        variant="elevated"
+        accent="warning"
+        description={t(
+          "指定期間の決定パイプライン通過データ、FUJI Gate拒絶率、TrustLog整合性証明をPDF/JSONで出力します。",
+          "Generate PDF/JSON with pipeline throughput, FUJI gate rejection rate, and TrustLog integrity proof for a selected period.",
+        )}
+      >
+        <div className="space-y-4 text-sm">
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1.5 text-xs">
+              <span className="font-medium text-foreground/80">{t("開始日", "Start date")}</span>
               <input
                 type="date"
-                className="w-full rounded-md border border-border bg-background px-2 py-2"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 value={reportStartDate}
                 onChange={(event) => setReportStartDate(event.target.value)}
               />
             </label>
-            <label className="space-y-1 text-xs">
-              <span className="font-medium">{t("終了日", "End date")}</span>
+            <label className="space-y-1.5 text-xs">
+              <span className="font-medium text-foreground/80">{t("終了日", "End date")}</span>
               <input
                 type="date"
-                className="w-full rounded-md border border-border bg-background px-2 py-2"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 value={reportEndDate}
                 onChange={(event) => setReportEndDate(event.target.value)}
               />
@@ -700,35 +796,68 @@ export default function TrustLogExplorerPage(): JSX.Element {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" onClick={downloadJsonReport}>
+            <button
+              type="button"
+              className={[
+                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
+                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              ].join(" ")}
+              onClick={downloadJsonReport}
+            >
               {t("JSON生成", "Generate JSON")}
             </button>
-            <button type="button" className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm" onClick={generatePdfReport}>
+            <button
+              type="button"
+              className={[
+                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
+                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+              ].join(" ")}
+              onClick={generatePdfReport}
+            >
               {t("PDF生成", "Generate PDF")}
             </button>
           </div>
 
-          {reportError ? <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-200">{reportError}</p> : null}
-
-          {latestReport ? (
-            <div className="rounded-md border border-border bg-background/60 p-3 text-xs">
-              <p>entries: {latestReport.totalEntries} / decision_ids: {latestReport.totalDecisionIds}</p>
-              <p>
-                FUJI rejection: {latestReport.fujiGate.rejected}/{latestReport.fujiGate.totalEvaluations}
-                {` (${(latestReport.fujiGate.rejectionRate * 100).toFixed(1)}%)`}
-              </p>
-              <p>
-                chain links: {latestReport.trustLogIntegrity.checkedLinks} / mismatches: {latestReport.trustLogIntegrity.mismatchLinks}
-              </p>
+          {reportError ? (
+            <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/8 px-4 py-3">
+              <span className="shrink-0 text-warning" aria-hidden="true">⚠</span>
+              <p className="text-xs text-warning">{reportError}</p>
             </div>
           ) : null}
 
-          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-100">
-            {t(
-              "セキュリティ警告: 出力レポートに監査メタデータが含まれる可能性があります。共有前にPII・機密情報の取り扱いポリシーを確認してください。",
-              "Security warning: Exported reports may include sensitive audit metadata. Confirm your PII and confidential-data handling policy before sharing.",
-            )}
-          </p>
+          {latestReport ? (
+            <div className="grid gap-2 rounded-xl border border-border/50 bg-muted/20 p-4 text-xs md:grid-cols-3">
+              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Entries</p>
+                <p className="font-mono text-lg font-bold text-foreground">{latestReport.totalEntries}</p>
+                <p className="text-muted-foreground">{latestReport.totalDecisionIds} decision IDs</p>
+              </div>
+              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">FUJI Rejection</p>
+                <p className="font-mono text-lg font-bold text-foreground">
+                  {(latestReport.fujiGate.rejectionRate * 100).toFixed(1)}%
+                </p>
+                <p className="text-muted-foreground">{latestReport.fujiGate.rejected}/{latestReport.fujiGate.totalEvaluations}</p>
+              </div>
+              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chain Integrity</p>
+                <p className={`font-mono text-base font-bold ${latestReport.trustLogIntegrity.mismatchLinks === 0 ? "text-success" : "text-danger"}`}>
+                  {latestReport.trustLogIntegrity.mismatchLinks === 0 ? "INTACT" : "MISMATCH"}
+                </p>
+                <p className="text-muted-foreground">{latestReport.trustLogIntegrity.checkedLinks} links checked</p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/6 px-4 py-3">
+            <span className="mt-0.5 shrink-0 text-warning" aria-hidden="true">⚠</span>
+            <p className="text-xs text-warning/90">
+              {t(
+                "セキュリティ警告: 出力レポートに監査メタデータが含まれる可能性があります。共有前にPII・機密情報の取り扱いポリシーを確認してください。",
+                "Security warning: Exported reports may include sensitive audit metadata. Confirm your PII and confidential-data handling policy before sharing.",
+              )}
+            </p>
+          </div>
         </div>
       </Card>
     </div>
