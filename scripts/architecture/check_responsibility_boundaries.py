@@ -59,20 +59,19 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
 
 
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
-    """Check one rule and return violation messages."""
+    """Check one rule and return violation messages, one per forbidden import found."""
     path = core_dir / f"{rule.source_module}.py"
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    try:
+        source = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return [f"Boundary check error: '{rule.source_module}' not found at {path}"]
+    tree = ast.parse(source, filename=str(path))
     imported = _collect_imported_names(tree)
-    violations = sorted(imported & set(rule.forbidden_imports))
+    violations = sorted(imported & rule.forbidden_imports)
 
-    if not violations:
-        return []
-    joined = ", ".join(violations)
     return [
-        (
-            f"Boundary violation: '{rule.source_module}' imports forbidden core module(s): "
-            f"{joined} ({path})"
-        )
+        f"Boundary violation: '{rule.source_module}' imports forbidden module '{v}' ({path})"
+        for v in violations
     ]
 
 
