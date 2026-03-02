@@ -38,7 +38,7 @@ except Exception as _import_err:  # pragma: no cover
 
 logger = logging.getLogger(__name__)
 
-_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+_SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 
 # trust_log の JSON/JSONL は LOG_DIR 直下に置く
 LOG_JSON = LOG_DIR / "trust_log.json"
