@@ -70,8 +70,12 @@ def _contains_security_sensitive_parts(parts: Iterable[str]) -> bool:
         "sanitize",
         "llm_safety",
     }
-    lowered = {part.lower() for part in parts}
-    return any(token in lowered for token in sensitive_tokens)
+    normalized_parts = [part.lower().replace("_", "-") for part in parts]
+    return any(
+        token in part
+        for part in normalized_parts
+        for token in sensitive_tokens
+    )
 
 
 def infer_impact(file_path: str) -> ImpactRow:
