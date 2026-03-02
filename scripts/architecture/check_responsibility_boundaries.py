@@ -84,6 +84,12 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
             for alias in node.names:
                 imported.add(_normalize_module_name(alias.name))
         elif isinstance(node, ast.ImportFrom):
+            # Include imported symbols to detect patterns like:
+            #   from veritas_os.core import kernel
+            # This is a forbidden dependency equivalent to
+            #   import veritas_os.core.kernel
+            for alias in node.names:
+                imported.add(_normalize_module_name(alias.name))
             if node.module:
                 imported.add(_normalize_module_name(node.module))
             else:
