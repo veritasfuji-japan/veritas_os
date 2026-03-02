@@ -284,18 +284,29 @@ def test_parse_response_various_providers(provider, data, expected):
 
 
 def test_parse_response_anthropic_invalid_raises():
-    with pytest.raises(LLMError):
+    with pytest.raises(LLMError, match=r"^LLM_PARSE_ERROR: provider=anthropic cause=IndexError$"):
         _parse_response(LLMProvider.ANTHROPIC, {"content": []})
 
 
 def test_parse_response_gemini_invalid_raises():
-    with pytest.raises(LLMError):
+    with pytest.raises(LLMError, match=r"^LLM_PARSE_ERROR: provider=google cause=IndexError$"):
         _parse_response(LLMProvider.GOOGLE, {"candidates": []})
 
 
 def test_parse_response_ollama_invalid_raises():
-    with pytest.raises(LLMError):
+    with pytest.raises(
+        LLMError,
+        match=r"^LLM_PARSE_ERROR: provider=ollama cause=UnexpectedResponseShape$",
+    ):
         _parse_response(LLMProvider.OLLAMA, {})
+
+
+def test_parse_response_openai_like_invalid_raises_structured_message():
+    with pytest.raises(
+        LLMError,
+        match=r"^LLM_PARSE_ERROR: provider=openai_like cause=KeyError$",
+    ):
+        _parse_response(LLMProvider.OPENAI, {})
 
 
 # ------------------------------------------------------------
