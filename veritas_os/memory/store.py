@@ -13,16 +13,69 @@ from veritas_os.core.atomic_io import atomic_append_line
 
 logger = logging.getLogger(__name__)
 
-# ★ M-3 修正: メモリディレクトリを環境変数で設定可能にする
-# VERITAS_MEMORY_DIR が設定されていればそちらを使用、未設定ならプロジェクト内のデフォルト
-_env_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
-if _env_memory_dir:
-    HOME_MEMORY = Path(_env_memory_dir)
-else:
-    BASE_DIR = Path(__file__).resolve().parents[2]      # veritas_clean_test2
-    VERITAS_DIR = BASE_DIR / "veritas_os"
-    HOME_MEMORY = VERITAS_DIR / "memory"               # ← プロジェクト内メモリ
-HOME_MEMORY.mkdir(parents=True, exist_ok=True)
+def _default_memory_dir() -> Path:
+    """Return the project-local memory directory path."""
+    base_dir = Path(__file__).resolve().parents[2]
+    veritas_dir = base_dir / "veritas_os"
+    return veritas_dir / "memory"
+
+
+def _resolve_memory_dir() -> Path:
+    """Resolve and validate memory directory from environment settings.
+
+    Security hardening:
+    - Always logs the resolved directory path for operational auditability.
+    - In production, `VERITAS_MEMORY_DIR` must match an allowlisted prefix
+      from `VERITAS_MEMORY_DIR_ALLOWLIST` (comma-separated), otherwise the
+      configuration is rejected and the safe project-local default is used.
+    """
+    default_path = _default_memory_dir()
+    env_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
+    profile = (os.getenv("VERITAS_ENV", "") or "").strip().lower()
+    is_production = profile == "production"
+
+    if not env_memory_dir:
+        resolved_default = default_path.resolve(strict=False)
+        logger.info("[MemoryStore] memory directory resolved to %s", resolved_default)
+        return default_path
+
+    candidate = Path(env_memory_dir)
+    resolved_candidate = candidate.resolve(strict=False)
+
+    if is_production:
+        raw_allowlist = os.getenv("VERITAS_MEMORY_DIR_ALLOWLIST", "")
+        allow_prefixes = [
+            Path(raw_prefix.strip()).resolve(strict=False)
+            for raw_prefix in raw_allowlist.split(",")
+            if raw_prefix.strip()
+        ]
+        if not allow_prefixes:
+            logger.warning(
+                "[MemoryStore] VERITAS_MEMORY_DIR ignored in production because "
+                "VERITAS_MEMORY_DIR_ALLOWLIST is empty; using default path=%s",
+                default_path.resolve(strict=False),
+            )
+            return default_path
+
+        if not any(
+            resolved_candidate == prefix or prefix in resolved_candidate.parents
+            for prefix in allow_prefixes
+        ):
+            logger.warning(
+                "[MemoryStore] VERITAS_MEMORY_DIR=%s rejected in production; "
+                "allowed_prefixes=%s. Falling back to default path=%s",
+                resolved_candidate,
+                [str(prefix) for prefix in allow_prefixes],
+                default_path.resolve(strict=False),
+            )
+            return default_path
+
+    logger.info("[MemoryStore] memory directory resolved to %s", resolved_candidate)
+    return candidate
+
+
+HOME_MEMORY = _resolve_memory_dir()
+HOME_MEMORY.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 BASE = HOME_MEMORY
 
