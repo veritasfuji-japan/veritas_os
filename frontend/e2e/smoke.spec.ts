@@ -18,9 +18,13 @@ test.describe("Smoke: 3-minute demo flow", () => {
     // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
     await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
 
-    // Danger presets are visible
     const presetButtons = page.locator("button").filter({ hasText: "..." });
-    await expect(presetButtons.first()).toBeVisible();
+    const hasDangerPresets = process.env.NEXT_PUBLIC_ENABLE_DANGER_PRESETS === "true";
+    if (hasDangerPresets) {
+      await expect(presetButtons.first()).toBeVisible();
+    } else {
+      await expect(presetButtons).toHaveCount(0);
+    }
   });
 
   // 2. /audit — TrustLog explorer renders
