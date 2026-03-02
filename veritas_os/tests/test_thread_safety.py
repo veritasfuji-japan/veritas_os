@@ -27,6 +27,7 @@ class TestCosineIndexThreadSafety:
         pytest.importorskip("numpy")
         import numpy as np
 
+        seed_base = 12345
         idx = CosineIndex(dim=4, path=tmp_path / "test.npz")
         errors: List[Exception] = []
         results: List[str] = []
@@ -34,8 +35,9 @@ class TestCosineIndexThreadSafety:
 
         def add_items(thread_id: int, count: int):
             try:
+                rng = np.random.default_rng(seed_base + thread_id)
                 for i in range(count):
-                    vec = np.random.rand(1, 4).astype(np.float32)
+                    vec = rng.random((1, 4), dtype=np.float32)
                     item_id = f"t{thread_id}_i{i}"
                     idx.add(vec, [item_id])
                     with lock:
@@ -70,10 +72,12 @@ class TestCosineIndexThreadSafety:
         pytest.importorskip("numpy")
         import numpy as np
 
+        seed_base = 67890
         idx = CosineIndex(dim=4, path=tmp_path / "test.npz")
 
         # Pre-populate with some data
-        initial_vecs = np.random.rand(10, 4).astype(np.float32)
+        initial_rng = np.random.default_rng(seed_base)
+        initial_vecs = initial_rng.random((10, 4), dtype=np.float32)
         idx.add(initial_vecs, [f"init_{i}" for i in range(10)])
 
         errors: List[Exception] = []
@@ -82,18 +86,20 @@ class TestCosineIndexThreadSafety:
 
         def add_items():
             try:
+                add_rng = np.random.default_rng(seed_base + 1)
                 for i in range(20):
-                    vec = np.random.rand(1, 4).astype(np.float32)
+                    vec = add_rng.random((1, 4), dtype=np.float32)
                     idx.add(vec, [f"add_{i}"])
                     time.sleep(0.001)  # Small delay to interleave
             except Exception as e:
                 with lock:
                     errors.append(e)
 
-        def search_items():
+        def search_items(thread_id: int):
             try:
+                search_rng = np.random.default_rng(seed_base + 100 + thread_id)
                 for _ in range(30):
-                    qv = np.random.rand(1, 4).astype(np.float32)
+                    qv = search_rng.random((1, 4), dtype=np.float32)
                     results = idx.search(qv, k=5)
                     # Should always return valid results
                     assert len(results) == 1
@@ -107,7 +113,10 @@ class TestCosineIndexThreadSafety:
 
         # Run add and search concurrently
         add_thread = threading.Thread(target=add_items)
-        search_threads = [threading.Thread(target=search_items) for _ in range(3)]
+        search_threads = [
+            threading.Thread(target=search_items, args=(thread_id,))
+            for thread_id in range(3)
+        ]
 
         add_thread.start()
         for t in search_threads:
