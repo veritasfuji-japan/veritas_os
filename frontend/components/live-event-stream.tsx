@@ -11,6 +11,30 @@ interface StreamEvent {
   payload: unknown;
 }
 
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30000;
+
+/**
+ * Compute a reconnect delay using exponential backoff and bounded jitter.
+ *
+ * Jitter is constrained to ±20% so retries are de-synchronized without
+ * producing extreme delays.
+ */
+function getReconnectDelayMs(
+  attempt: number,
+  randomValue: number = Math.random(),
+): number {
+  const boundedAttempt = Math.max(0, attempt);
+  const exponentialDelay = Math.min(
+    BASE_RECONNECT_DELAY_MS * (2 ** boundedAttempt),
+    MAX_RECONNECT_DELAY_MS,
+  );
+  const boundedRandom = Math.min(1, Math.max(0, randomValue));
+  const jitterFactor = 0.8 + (boundedRandom * 0.4);
+  const jitteredDelay = Math.round(exponentialDelay * jitterFactor);
+  return Math.min(MAX_RECONNECT_DELAY_MS, jitteredDelay);
+}
+
 /**
  * Parse and dispatch SSE payload chunks emitted by the backend stream.
  *
@@ -53,6 +77,7 @@ export function LiveEventStream(): JSX.Element {
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
 
   const streamUrl = "/api/veritas/v1/events";
   const streamStatus = connected ? "🟢 connected" : "🟡 reconnecting";
@@ -82,6 +107,7 @@ export function LiveEventStream(): JSX.Element {
         }
 
         setConnected(true);
+        reconnectAttemptRef.current = 0;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let carry = "";
@@ -92,14 +118,18 @@ export function LiveEventStream(): JSX.Element {
             break;
           }
 
-          carry = processSseChunk(decoder.decode(value, { stream: true }), carry, (payload) => {
-            try {
-              const parsed = JSON.parse(payload) as StreamEvent;
-              setEvents((prev) => [parsed, ...prev].slice(0, 30));
-            } catch {
-              // no-op: ignore malformed event payload
-            }
-          });
+          carry = processSseChunk(
+            decoder.decode(value, { stream: true }),
+            carry,
+            (payload) => {
+              try {
+                const parsed = JSON.parse(payload) as StreamEvent;
+                setEvents((prev) => [parsed, ...prev].slice(0, 30));
+              } catch {
+                // no-op: ignore malformed event payload
+              }
+            },
+          );
         }
       } catch {
         // no-op: reconnection handled below
@@ -107,7 +137,9 @@ export function LiveEventStream(): JSX.Element {
 
       if (mounted) {
         setConnected(false);
-        reconnectRef.current = setTimeout(connect, 1500);
+        const delayMs = getReconnectDelayMs(reconnectAttemptRef.current);
+        reconnectAttemptRef.current += 1;
+        reconnectRef.current = setTimeout(connect, delayMs);
       }
     };
 
