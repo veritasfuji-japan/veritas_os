@@ -12,20 +12,8 @@ describe('next.config headers', () => {
 
     const headerMap = new Map(routes?.[0].headers.map((item) => [item.key, item.value]));
 
-    const cspHeader = headerMap.get('Content-Security-Policy') ?? '';
-    const cspReportOnlyHeader = headerMap.get('Content-Security-Policy-Report-Only') ?? '';
-    const scriptDirective = cspHeader
-      .split(';')
-      .find((directive) => directive.trim().startsWith('script-src')) ?? '';
-    const reportOnlyScriptDirective = cspReportOnlyHeader
-      .split(';')
-      .find((directive) => directive.trim().startsWith('script-src')) ?? '';
-
-    expect(cspHeader).toContain("default-src 'self'");
-    expect(scriptDirective).toContain("'unsafe-inline'");
-    expect(cspReportOnlyHeader).toContain("default-src 'self'");
-    expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
-    expect(reportOnlyScriptDirective).toContain("'nonce-__VERITAS_NONCE__'");
+    expect(headerMap.has('Content-Security-Policy')).toBe(false);
+    expect(headerMap.has('Content-Security-Policy-Report-Only')).toBe(false);
     expect(headerMap.get('X-Frame-Options')).toBe('DENY');
     expect(headerMap.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
     expect(headerMap.get('Permissions-Policy')).toContain('camera=()');
