@@ -161,6 +161,19 @@ def _redact_response_preview(response_text: Optional[str], limit: int = 200) -> 
     return _redact_text(response_text[:limit])
 
 
+def _format_llm_error(code: str, detail: str) -> str:
+    """Create a structured, consistent LLM error message.
+
+    Args:
+        code: Machine-readable error code.
+        detail: Human-readable detail message.
+
+    Returns:
+        Formatted error string following a single convention.
+    """
+    return f"{code}: {detail}"
+
+
 # =========================
 # Affect 注入
 # =========================
@@ -360,14 +373,24 @@ def _parse_response(provider: str, data: Dict[str, Any]) -> str:
         try:
             return data["content"][0]["text"]
         except (KeyError, IndexError, TypeError) as e:
-            raise LLMError(f"Anthropic response parse error: {type(e).__name__}") from e
+            raise LLMError(
+                _format_llm_error(
+                    "LLM_PARSE_ERROR",
+                    f"provider=anthropic cause={type(e).__name__}",
+                )
+            ) from e
 
     if provider == LLMProvider.GOOGLE.value:
         # Gemini: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
         try:
             return data["candidates"][0]["content"]["parts"][0]["text"]
         except (KeyError, IndexError, TypeError) as e:
-            raise LLMError(f"Gemini response parse error: {type(e).__name__}") from e
+            raise LLMError(
+                _format_llm_error(
+                    "LLM_PARSE_ERROR",
+                    f"provider=google cause={type(e).__name__}",
+                )
+            ) from e
 
     if provider == LLMProvider.OLLAMA.value:
         # Ollama chat: {"message":{"role":"assistant","content":"..."}}
@@ -376,13 +399,23 @@ def _parse_response(provider: str, data: Dict[str, Any]) -> str:
             return data["message"].get("content", "")
         if "choices" in data and data["choices"]:
             return data["choices"][0]["message"]["content"]
-        raise LLMError("Ollama response format not recognized")
+        raise LLMError(
+            _format_llm_error(
+                "LLM_PARSE_ERROR",
+                "provider=ollama cause=UnexpectedResponseShape",
+            )
+        )
 
     # OpenAI / OpenRouter 互換
     try:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:
-        raise LLMError(f"OpenAI-like response parse error: {type(e).__name__}") from e
+        raise LLMError(
+            _format_llm_error(
+                "LLM_PARSE_ERROR",
+                f"provider=openai_like cause={type(e).__name__}",
+            )
+        ) from e
 
 
 def _get_headers(provider: str) -> Dict[str, str]:
