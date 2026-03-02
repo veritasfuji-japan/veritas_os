@@ -21,6 +21,15 @@ class BoundaryRule:
     forbidden_imports: frozenset[str]
 
 
+@dataclass(frozen=True)
+class ViolationDetail:
+    """Structured details for a single responsibility-boundary violation."""
+
+    source_module: str
+    forbidden_module: str
+    path: Path
+
+
 DEFAULT_RULES: tuple[BoundaryRule, ...] = (
     BoundaryRule(
         source_module="planner",
@@ -35,6 +44,31 @@ DEFAULT_RULES: tuple[BoundaryRule, ...] = (
         forbidden_imports=frozenset({"kernel", "planner", "fuji"}),
     ),
 )
+
+
+ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
+    "planner": (
+        "veritas_os.core.memory",
+        "veritas_os.core.world_model",
+        "veritas_os.core.strategy",
+    ),
+    "kernel": (
+        "veritas_os.core.planner",
+        "veritas_os.core.fuji",
+        "veritas_os.core.memory",
+    ),
+    "fuji": (
+        "veritas_os.core.fuji_codes",
+        "veritas_os.core.sanitize",
+    ),
+    "memory": (
+        "veritas_os.utils.atomic_io",
+        "veritas_os.core.memory_vector",
+    ),
+}
+
+
+REMEDIATION_LINK = "docs/review/SYSTEM_SCORECARD_2026_03_02.md#実装方針責務境界を越えない範囲"
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -75,6 +109,60 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     ]
 
 
+def _collect_violations(
+    core_dir: Path,
+    rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+) -> list[ViolationDetail]:
+    """Collect structured violation details for remediation guidance output."""
+    violation_details: list[ViolationDetail] = []
+    for rule in rules:
+        path = core_dir / f"{rule.source_module}.py"
+        try:
+            source = path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        tree = ast.parse(source, filename=str(path))
+        imported = _collect_imported_names(tree)
+        violations = sorted(imported & rule.forbidden_imports)
+        for forbidden_module in violations:
+            violation_details.append(
+                ViolationDetail(
+                    source_module=rule.source_module,
+                    forbidden_module=forbidden_module,
+                    path=path,
+                )
+            )
+    return violation_details
+
+
+def build_remediation_guide(
+    violations: Iterable[ViolationDetail],
+    remediation_link: str = REMEDIATION_LINK,
+) -> str:
+    """Build a CI-friendly remediation guide for boundary violations."""
+    rows: list[str] = []
+    for violation in violations:
+        alternatives = ", ".join(ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",)))
+        rows.append(
+            " | ".join(
+                (
+                    f"{violation.source_module} -> {violation.forbidden_module}",
+                    alternatives,
+                    remediation_link,
+                )
+            )
+        )
+
+    if not rows:
+        return ""
+
+    header = (
+        "\n=== Responsibility Boundary Remediation Guide ===\n"
+        "禁止依存 | 代替実装先（許可依存） | 修正例リンク\n"
+    )
+    return header + "\n".join(rows)
+
+
 def check_boundaries(core_dir: Path, rules: Iterable[BoundaryRule] = DEFAULT_RULES) -> list[str]:
     """Run all boundary rules and return all violation messages."""
     issues: list[str] = []
@@ -102,8 +190,12 @@ def main() -> int:
     issues = check_boundaries(core_dir=args.core_dir)
 
     if issues:
+        violations = _collect_violations(core_dir=args.core_dir)
         for issue in issues:
             print(issue)
+        remediation_guide = build_remediation_guide(violations)
+        if remediation_guide:
+            print(remediation_guide)
         return 1
 
     print("Responsibility boundary check passed.")
