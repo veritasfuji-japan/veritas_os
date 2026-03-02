@@ -105,6 +105,16 @@ def test_sanitize_timeout_seconds_clamps_values() -> None:
     assert web_search_mod._sanitize_timeout_seconds("abc") == 15
 
 
+def test_sanitize_timeout_seconds_respects_configurable_max(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_WEBSEARCH_TIMEOUT_MAX", "45")
+    reloaded = importlib.reload(web_search_mod)
+    try:
+        assert reloaded._sanitize_timeout_seconds(120) == 45
+    finally:
+        monkeypatch.delenv("VERITAS_WEBSEARCH_TIMEOUT_MAX", raising=False)
+        importlib.reload(reloaded)
+
+
 def test_sanitize_response_size_bytes_clamps_values() -> None:
     assert web_search_mod._sanitize_response_size_bytes(100) == 1024
     assert web_search_mod._sanitize_response_size_bytes(9_999_999) == 2_000_000

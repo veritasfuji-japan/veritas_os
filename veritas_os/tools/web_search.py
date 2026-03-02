@@ -186,6 +186,18 @@ WEBSEARCH_TIMEOUT_SECONDS = _safe_int_with_bounds(
     1,
     300,
 )
+WEBSEARCH_TIMEOUT_DEFAULT_SECONDS = _safe_int_with_bounds(
+    "VERITAS_WEBSEARCH_TIMEOUT_DEFAULT",
+    15,
+    1,
+    60,
+)
+WEBSEARCH_TIMEOUT_MAX_SECONDS = _safe_int_with_bounds(
+    "VERITAS_WEBSEARCH_TIMEOUT_MAX",
+    60,
+    1,
+    300,
+)
 WEBSEARCH_MAX_RESPONSE_BYTES = _safe_int_with_bounds(
     "VERITAS_WEBSEARCH_MAX_RESPONSE_BYTES",
     500_000,
@@ -683,13 +695,21 @@ def _sanitize_max_results(max_results: Any, *, default: int = 5) -> int:
     return min(max(result, 1), 100)
 
 
-def _sanitize_timeout_seconds(timeout_seconds: Any, *, default: int = 15) -> int:
-    """HTTP timeout(秒)を安全な範囲に丸める。"""
+def _sanitize_timeout_seconds(
+    timeout_seconds: Any,
+    *,
+    default: int = WEBSEARCH_TIMEOUT_DEFAULT_SECONDS,
+) -> int:
+    """HTTP timeout(秒)を安全な範囲に丸める。
+
+    L-6 対応として、デフォルト値と上限値はモジュール定数で一元化し、
+    マジックナンバーの散在を防ぐ。
+    """
     try:
         timeout = int(timeout_seconds)
     except (TypeError, ValueError):
         timeout = default
-    return min(max(timeout, 1), 60)
+    return min(max(timeout, 1), WEBSEARCH_TIMEOUT_MAX_SECONDS)
 
 
 def _sanitize_response_size_bytes(
