@@ -70,10 +70,9 @@ def _contains_security_sensitive_parts(parts: Iterable[str]) -> bool:
         "sanitize",
         "llm_safety",
     }
-    normalized_parts = [part.lower().replace("_", "-") for part in parts]
     return any(
-        token in part
-        for part in normalized_parts
+        token in part.lower().replace("-", "_")
+        for part in parts
         for token in sensitive_tokens
     )
 
