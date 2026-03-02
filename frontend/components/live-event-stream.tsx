@@ -11,6 +11,19 @@ interface StreamEvent {
   payload: unknown;
 }
 
+const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_RECONNECT_DELAY_MS = 30000;
+
+function getReconnectDelayMs(attempt: number): number {
+  const boundedAttempt = Math.max(0, attempt);
+  const exponentialDelay = Math.min(
+    BASE_RECONNECT_DELAY_MS * (2 ** boundedAttempt),
+    MAX_RECONNECT_DELAY_MS,
+  );
+  const jitterFactor = 0.8 + (Math.random() * 0.4);
+  return Math.round(exponentialDelay * jitterFactor);
+}
+
 /**
  * Parse and dispatch SSE payload chunks emitted by the backend stream.
  *
@@ -53,6 +66,7 @@ export function LiveEventStream(): JSX.Element {
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
 
   const streamUrl = "/api/veritas/v1/events";
   const streamStatus = connected ? "🟢 connected" : "🟡 reconnecting";
@@ -82,6 +96,7 @@ export function LiveEventStream(): JSX.Element {
         }
 
         setConnected(true);
+        reconnectAttemptRef.current = 0;
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let carry = "";
@@ -107,7 +122,9 @@ export function LiveEventStream(): JSX.Element {
 
       if (mounted) {
         setConnected(false);
-        reconnectRef.current = setTimeout(connect, 1500);
+        const delayMs = getReconnectDelayMs(reconnectAttemptRef.current);
+        reconnectAttemptRef.current += 1;
+        reconnectRef.current = setTimeout(connect, delayMs);
       }
     };
 
