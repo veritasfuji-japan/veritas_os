@@ -546,6 +546,18 @@ app.add_middleware(
 )
 
 
+@app.on_event("startup")
+async def _startup_nonce_cleanup_scheduler() -> None:
+    """Start background nonce cleanup under FastAPI lifecycle management."""
+    _start_nonce_cleanup_scheduler()
+
+
+@app.on_event("shutdown")
+async def _shutdown_nonce_cleanup_scheduler() -> None:
+    """Stop background nonce cleanup timer when app is shutting down."""
+    _stop_nonce_cleanup_scheduler()
+
+
 # ★ C-3 継続改善: リクエストボディサイズ制限 (DoS対策)
 # 運用プロファイルごとの推奨値を定義しつつ、環境変数で上書き可能にする。
 DEFAULT_MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
@@ -862,17 +874,42 @@ def require_api_key_header_or_query(
     x_api_key: Optional[str] = Security(api_key_scheme),
     api_key: Optional[str] = Query(default=None),
 ):
-    """Authenticate by header (preferred) or query parameter for SSE clients."""
+    """Authenticate SSE requests with header-first policy.
+
+    Security:
+        Query-string API keys are disabled by default because they can leak via
+        access logs, browser history, and monitoring URLs. To preserve migration
+        flexibility, operators may temporarily enable query auth with the
+        ``VERITAS_ALLOW_SSE_QUERY_API_KEY=1`` feature flag.
+    """
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
-    candidate = (x_api_key or api_key or "").strip()
+    header_candidate = (x_api_key or "").strip()
+    query_candidate = (api_key or "").strip()
+
+    candidate = header_candidate
+    if not candidate and query_candidate:
+        if not _allow_sse_query_api_key():
+            raise HTTPException(status_code=401, detail="Query API key is disabled; use X-API-Key header")
+        logger.warning(
+            "SSE auth accepted query api_key due to VERITAS_ALLOW_SSE_QUERY_API_KEY=1. "
+            "This mode increases credential exposure risk.",
+        )
+        candidate = query_candidate
+
     if not candidate:
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(candidate, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
+
+
+def _allow_sse_query_api_key() -> bool:
+    """Return True when SSE query-string API key auth is explicitly enabled."""
+    raw = (os.getenv("VERITAS_ALLOW_SSE_QUERY_API_KEY") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 # ---- HMAC signature / replay (optional) ----
@@ -949,22 +986,44 @@ def _cleanup_nonces() -> None:
 
 # ★ M-11 修正: 定期的なノンスクリーンアップ（60秒ごと）
 _nonce_cleanup_timer: threading.Timer | None = None
+_nonce_cleanup_timer_lock = threading.Lock()
 
 
 def _schedule_nonce_cleanup() -> None:
-    """バックグラウンドでノンスストアを定期クリーンアップする"""
+    """バックグラウンドでノンスストアを定期クリーンアップする。"""
     global _nonce_cleanup_timer
     try:
         _cleanup_nonces()
     except Exception as e:
         logger.warning("nonce cleanup failed: %s", e)
-    _nonce_cleanup_timer = threading.Timer(60.0, _schedule_nonce_cleanup)
-    _nonce_cleanup_timer.daemon = True
-    _nonce_cleanup_timer.start()
+    with _nonce_cleanup_timer_lock:
+        if _nonce_cleanup_timer is None:
+            return
+        next_timer = threading.Timer(60.0, _schedule_nonce_cleanup)
+        next_timer.daemon = True
+        _nonce_cleanup_timer = next_timer
+        next_timer.start()
 
 
-# 初回スケジュール
-_schedule_nonce_cleanup()
+def _start_nonce_cleanup_scheduler() -> None:
+    """Start nonce cleanup timer once per process lifecycle."""
+    global _nonce_cleanup_timer
+    with _nonce_cleanup_timer_lock:
+        if _nonce_cleanup_timer is not None:
+            return
+        _nonce_cleanup_timer = threading.Timer(60.0, _schedule_nonce_cleanup)
+        _nonce_cleanup_timer.daemon = True
+        _nonce_cleanup_timer.start()
+
+
+def _stop_nonce_cleanup_scheduler() -> None:
+    """Stop nonce cleanup timer if running."""
+    global _nonce_cleanup_timer
+    with _nonce_cleanup_timer_lock:
+        timer = _nonce_cleanup_timer
+        _nonce_cleanup_timer = None
+    if timer is not None:
+        timer.cancel()
 
 
 def _check_and_register_nonce(nonce: str) -> bool:
