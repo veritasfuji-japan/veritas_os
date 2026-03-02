@@ -181,7 +181,7 @@ export default function RiskIntelligencePage(): JSX.Element {
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("ステータス", "Status")}</p>
               <p className={`mt-0.5 font-semibold ${clusterStats.alert ? "text-danger" : "text-success"}`}>
-                {clusterStats.alert ? t("警報", "Alert") : t("正常", "Normal")}
+                {clusterStats.alert ? "Cluster Alert" : "Normal"}
               </p>
             </div>
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
