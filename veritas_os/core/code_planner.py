@@ -263,9 +263,6 @@ def generate_code_change_plan(
     tests: List[TestSuggestion] = []
 
     progress = _safe_float(world_snap.get("progress"), 0.0)
-    _decision_count = int(world_snap.get("decision_count") or 0)  # noqa: F841
-    _last_risk = _safe_float(world_snap.get("last_risk"), 0.3)  # noqa: F841
-
     # --- ターゲット選定（どのモジュールを触るか） ---
 
     # 1) world_model 関連 (進捗・hint・snapshot周り)
