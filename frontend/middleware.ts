@@ -10,9 +10,29 @@ export function generateNonce(): string {
 }
 
 /**
- * Builds a strict CSP policy string bound to a nonce.
+ * Builds a compatibility CSP policy for current Next.js runtime behavior.
  */
-export function buildCspWithNonce(nonce: string): string {
+export function buildCspEnforced(): string {
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "frame-ancestors 'none'",
+    "object-src 'none'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "form-action 'self'",
+    'upgrade-insecure-requests',
+    'block-all-mixed-content'
+  ].join('; ');
+}
+
+/**
+ * Builds a strict report-only CSP policy string bound to a nonce.
+ */
+export function buildCspReportOnly(nonce: string): string {
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -34,12 +54,13 @@ export function buildCspWithNonce(nonce: string): string {
  */
 export function middleware(_request: NextRequest): NextResponse {
   const nonce = generateNonce();
-  const csp = buildCspWithNonce(nonce);
+  const cspEnforced = buildCspEnforced();
+  const cspReportOnly = buildCspReportOnly(nonce);
   const response = NextResponse.next();
 
   response.headers.set('x-veritas-nonce', nonce);
-  response.headers.set('Content-Security-Policy', csp);
-  response.headers.set('Content-Security-Policy-Report-Only', csp);
+  response.headers.set('Content-Security-Policy', cspEnforced);
+  response.headers.set('Content-Security-Policy-Report-Only', cspReportOnly);
 
   return response;
 }

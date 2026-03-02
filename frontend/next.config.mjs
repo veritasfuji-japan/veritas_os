@@ -2,7 +2,8 @@
  * Returns baseline non-CSP security headers for all routes.
  *
  * CSP headers are generated dynamically in middleware so a per-request nonce
- * can be attached to both enforced and Report-Only policies.
+ * can be attached to the strict Report-Only policy while enforced CSP remains
+ * compatibility-focused.
  */
 function getSecurityHeaders() {
   return [
