@@ -317,6 +317,17 @@ def _log_decide_failure(message: str, err: Optional[Exception | str]) -> None:
     logger.error("decide failed: %s (%s)", message, err_detail)
 
 
+def _classify_decide_failure(err: BaseException) -> str:
+    """Classify decide failure causes for safe-side operational diagnostics."""
+    if isinstance(err, TimeoutError):
+        return "timeout"
+    if isinstance(err, PermissionError):
+        return "permission_denied"
+    if isinstance(err, (ValueError, TypeError, KeyError)):
+        return "invalid_input"
+    return "internal"
+
+
 def get_cfg() -> Any:
     """
     cfg は “無い/壊れてる” 可能性があるので必ずフォールバックを返す。
@@ -1548,14 +1559,23 @@ async def decide(req: DecideRequest, request: Request):
     try:
         payload = await p.run_decide_pipeline(req=req, request=request)
     except Exception as e:
+        failure_category = _classify_decide_failure(e)
         _log_decide_failure("decision_pipeline execution failed", e)
-        _publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
+        _publish_event(
+            "decide.completed",
+            {
+                "ok": False,
+                "error": DECIDE_GENERIC_ERROR,
+                "failure_category": failure_category,
+            },
+        )
         return JSONResponse(
             status_code=503,
             content={
                 "ok": False,
                 "error": DECIDE_GENERIC_ERROR,
                 "detail": DECIDE_GENERIC_ERROR,
+                "failure_category": failure_category,
                 "trust_log": None,  # ★互換
             },
         )

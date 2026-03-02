@@ -520,6 +520,40 @@ def test_generate_code_tasks_creates_tasks_from_bench_and_doctor(monkeypatch):
     assert meta["decision_count"] == 42
     assert meta["doctor_issue_count"] == 1
     assert meta["source"] == "planner.generate_code_tasks"
+    assert meta["planner_fallback_reason"] is None
+
+
+def test_generate_code_tasks_logs_fallback_reason_when_code_planner_fails(
+    monkeypatch,
+    caplog,
+):
+    class DummyError(ValueError):
+        """Test-only error to simulate planner integration failure."""
+
+    def raise_integration_error(**_kwargs):
+        raise DummyError("bad plan")
+
+    monkeypatch.setattr(
+        planner_core.code_planner,
+        "generate_code_change_plan",
+        raise_integration_error,
+    )
+
+    with caplog.at_level("WARNING"):
+        result = planner_core.generate_code_tasks(
+            bench={"bench_id": "fallback_test"},
+            world_state={"veritas": {"progress": 0.1, "decision_count": 1}},
+            doctor_report={},
+        )
+
+    assert result["tasks"] == []
+    meta = result["meta"]
+    assert meta["bench_id"] == "fallback_test"
+    assert "DummyError" in (meta["planner_fallback_reason"] or "")
+    assert any(
+        "fallback to inline planner logic" in record.message
+        for record in caplog.records
+    )
 
 
 # -------------------------------

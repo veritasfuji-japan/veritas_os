@@ -432,6 +432,70 @@ def test_search_handles_index_error_gracefully(memory_env, monkeypatch):
     assert res["episodic"] == []
 
 
+def test_resolve_memory_dir_logs_default_path(memory_env, monkeypatch, caplog, tmp_path):
+    """環境変数未指定時は既定パスを監査ログに出して返す。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    monkeypatch.delenv("VERITAS_MEMORY_DIR", raising=False)
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+
+    caplog.set_level("INFO")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == default_dir
+    assert str(default_dir.resolve(strict=False)) in caplog.text
+
+
+def test_resolve_memory_dir_rejects_non_allowlisted_path_in_production(
+    memory_env,
+    monkeypatch,
+    caplog,
+    tmp_path,
+):
+    """production では allowlist 外の VERITAS_MEMORY_DIR を拒否する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    allowed_root = tmp_path / "allowed"
+    denied_dir = tmp_path / "denied" / "memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(denied_dir))
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_ALLOWLIST", str(allowed_root))
+
+    caplog.set_level("WARNING")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == default_dir
+    assert "rejected in production" in caplog.text
+
+
+def test_resolve_memory_dir_accepts_allowlisted_path_in_production(
+    memory_env,
+    monkeypatch,
+    caplog,
+    tmp_path,
+):
+    """production でも allowlist 配下の VERITAS_MEMORY_DIR は許可される。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    allowed_root = tmp_path / "allowed"
+    allowed_dir = allowed_root / "memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(allowed_dir))
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_ALLOWLIST", str(allowed_root))
+
+    caplog.set_level("INFO")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == allowed_dir
+    assert str(allowed_dir.resolve(strict=False)) in caplog.text
+
+
 # ---------------------------------------------------------
 # put_episode: kind="episodic" で put に委譲
 # ---------------------------------------------------------

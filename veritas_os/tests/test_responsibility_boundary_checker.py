@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from scripts.architecture.check_responsibility_boundaries import (
+    REMEDIATION_LINK,
+    ViolationDetail,
+    build_remediation_guide,
     BoundaryRule,
     check_boundaries,
 )
@@ -61,3 +64,43 @@ def test_check_boundaries_supports_custom_rules(tmp_path: Path) -> None:
     assert len(issues) == 1
     assert "kernel" in issues[0]
     assert "memory" in issues[0]
+
+
+def test_check_boundaries_detects_from_core_import_pattern(tmp_path: Path) -> None:
+    """Checker should catch `from veritas_os.core import <forbidden>` imports."""
+    _write_module(tmp_path / "planner.py", "from veritas_os.core import kernel\n")
+    _write_module(tmp_path / "kernel.py", "# kernel module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+
+    issues = check_boundaries(core_dir=tmp_path)
+
+    assert len(issues) == 1
+    assert "planner" in issues[0]
+    assert "kernel" in issues[0]
+
+
+def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> None:
+    """Remediation guide should include forbidden dependency, alternatives, and link."""
+    violations = [
+        ViolationDetail(
+            source_module="planner",
+            forbidden_module="kernel",
+            path=tmp_path / "planner.py",
+        ),
+    ]
+
+    guide = build_remediation_guide(violations)
+
+    assert "禁止依存" in guide
+    assert "代替実装先（許可依存）" in guide
+    assert "planner -> kernel" in guide
+    assert "veritas_os.core.memory" in guide
+    assert REMEDIATION_LINK in guide
+
+
+def test_build_remediation_guide_returns_empty_for_no_violations() -> None:
+    """No remediation guide should be emitted when violations are absent."""
+    guide = build_remediation_guide([])
+
+    assert guide == ""
