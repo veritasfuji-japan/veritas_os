@@ -942,6 +942,46 @@ class TestServerMiscCoverage:
         result = server.require_api_key_header_or_query(x_api_key=_TEST_KEY, api_key=None)
         assert result is True
 
+    def test_allow_sse_query_api_key_flag_values(self, monkeypatch):
+        """Feature flag should accept common truthy values only."""
+        monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "yes")
+        assert server._allow_sse_query_api_key() is True
+
+        monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "0")
+        assert server._allow_sse_query_api_key() is False
+
+    def test_nonce_cleanup_scheduler_start_stop(self, monkeypatch):
+        """Nonce cleanup scheduler should be singleton and stoppable."""
+
+        class _FakeTimer:
+            def __init__(self, interval, callback):
+                self.interval = interval
+                self.callback = callback
+                self.daemon = False
+                self.started = False
+                self.canceled = False
+
+            def start(self):
+                self.started = True
+
+            def cancel(self):
+                self.canceled = True
+
+        monkeypatch.setattr(server.threading, "Timer", _FakeTimer)
+        server._stop_nonce_cleanup_scheduler()
+
+        server._start_nonce_cleanup_scheduler()
+        first_timer = server._nonce_cleanup_timer
+        assert first_timer is not None
+        assert first_timer.started is True
+
+        server._start_nonce_cleanup_scheduler()
+        assert server._nonce_cleanup_timer is first_timer
+
+        server._stop_nonce_cleanup_scheduler()
+        assert first_timer.canceled is True
+        assert server._nonce_cleanup_timer is None
+
     def test_verify_signature_bad_utf8(self, monkeypatch):
         """Non-UTF-8 body raises 400."""
         monkeypatch.setattr(server, "API_SECRET", b"secret-for-test-1234567890abcdef")

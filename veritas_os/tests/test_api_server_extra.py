@@ -1342,11 +1342,24 @@ def test_resolve_max_request_body_size_rejects_non_positive_override(monkeypatch
     assert resolved == 8 * 1024 * 1024
 
 
-def test_events_requires_api_key_query_or_header(monkeypatch):
+def test_events_requires_api_key_header_only_by_default(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.delenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", raising=False)
 
     no_auth = client.get("/v1/events")
     assert no_auth.status_code == 401
+
+    with pytest.raises(HTTPException) as exc:
+        server.require_api_key_header_or_query(
+            x_api_key=None,
+            api_key=_TEST_API_KEY,
+        )
+    assert exc.value.status_code == 401
+
+
+def test_events_accepts_query_api_key_only_when_flag_enabled(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "1")
 
     assert server.require_api_key_header_or_query(
         x_api_key=None,
