@@ -534,13 +534,66 @@ _DEFAULT_POLICY: Dict[str, Any] = {
     },
 }
 
+_STRICT_DENY_POLICY: Dict[str, Any] = {
+    "version": "fuji_v2_strict_deny",
+    "base_thresholds": {
+        "default": 0.0,
+        "high_stakes": 0.0,
+        "low_stakes": 0.0,
+    },
+    "categories": {},
+    "actions": {
+        "deny": {"risk_upper": 1.0},
+    },
+}
+
+
+def _strict_policy_load_enabled() -> bool:
+    """Return True when strict policy-load mode is enabled via env var."""
+    raw = os.getenv("VERITAS_FUJI_STRICT_POLICY_LOAD", "0")
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _fallback_policy(*, path: Path | None, reason: str, exc: Exception | None = None) -> Dict[str, Any]:
+    """Return fallback policy and emit an operation-visible warning/error log."""
+    path_label = str(path) if path is not None else "<none>"
+    strict_mode = _strict_policy_load_enabled()
+
+    if exc is None:
+        _logger.warning(
+            "FUJI policy fallback triggered: reason=%s path=%s strict=%s",
+            reason,
+            path_label,
+            strict_mode,
+        )
+    else:
+        _logger.warning(
+            "FUJI policy fallback triggered: reason=%s path=%s exc_type=%s strict=%s",
+            reason,
+            path_label,
+            type(exc).__name__,
+            strict_mode,
+            exc_info=True,
+        )
+
+    if strict_mode:
+        _logger.error(
+            "FUJI strict policy-load mode active. Deny policy is enforced due to policy load failure. "
+            "path=%s reason=%s",
+            path_label,
+            reason,
+        )
+        return dict(_STRICT_DENY_POLICY)
+
+    return dict(_DEFAULT_POLICY)
+
 
 def _load_policy(path: Path | None) -> Dict[str, Any]:
     if not capability_cfg.enable_fuji_yaml_policy or yaml is None:
         return dict(_DEFAULT_POLICY)
 
     if path is None or not path.exists():
-        return dict(_DEFAULT_POLICY)
+        return _fallback_policy(path=path, reason="missing_policy_file")
 
     yaml_error = getattr(yaml, "YAMLError", None)
     yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
@@ -549,8 +602,8 @@ def _load_policy(path: Path | None) -> Dict[str, Any]:
     try:
         with path.open("r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
-    except handled_errors:
-        return dict(_DEFAULT_POLICY)
+    except handled_errors as exc:
+        return _fallback_policy(path=path, reason="yaml_load_error", exc=exc)
 
     if "version" not in data:
         data["version"] = f"fuji_file_{path.name}"
@@ -568,8 +621,8 @@ def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
 
     try:
         data = yaml.safe_load(content) or {}
-    except handled_errors:
-        return dict(_DEFAULT_POLICY)
+    except handled_errors as exc:
+        return _fallback_policy(path=path, reason="yaml_parse_error", exc=exc)
     if "version" not in data:
         data["version"] = f"fuji_file_{path.name}"
     return data

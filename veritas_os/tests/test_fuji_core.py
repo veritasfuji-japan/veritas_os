@@ -105,6 +105,60 @@ def test_reload_policy_respects_env(tmp_path, monkeypatch):
     assert pol.get("version") != "fuji_test_v1"
 
 
+def test_load_policy_logs_warning_on_yaml_error(tmp_path, monkeypatch, caplog):
+    """YAML ロード失敗時に warning ログを残し、既定ポリシーへフォールバックする。"""
+    caplog.set_level("WARNING", logger=fuji.__name__)
+
+    class DummyYaml:
+        class YAMLError(Exception):
+            pass
+
+        @staticmethod
+        def safe_load(_content):
+            raise DummyYaml.YAMLError("invalid yaml")
+
+    policy_file = tmp_path / "invalid.yaml"
+    policy_file.write_text("invalid: [", encoding="utf-8")
+    monkeypatch.setattr(fuji, "yaml", DummyYaml)
+    monkeypatch.setattr(
+        fuji.capability_cfg, "enable_fuji_yaml_policy", True
+    )
+    monkeypatch.setenv("VERITAS_FUJI_STRICT_POLICY_LOAD", "0")
+
+    policy = fuji._load_policy(policy_file)  # type: ignore[attr-defined]
+
+    assert policy["version"] == fuji._DEFAULT_POLICY["version"]  # type: ignore[attr-defined]
+    assert "FUJI policy fallback triggered" in caplog.text
+    assert "exc_type=YAMLError" in caplog.text
+
+
+def test_load_policy_strict_mode_enforces_deny_policy(tmp_path, monkeypatch, caplog):
+    """strict_policy_load 有効時はポリシー障害で deny 側へ倒す。"""
+    caplog.set_level("WARNING", logger=fuji.__name__)
+
+    class DummyYaml:
+        class YAMLError(Exception):
+            pass
+
+        @staticmethod
+        def safe_load(_content):
+            raise DummyYaml.YAMLError("invalid yaml")
+
+    policy_file = tmp_path / "invalid.yaml"
+    policy_file.write_text("invalid: [", encoding="utf-8")
+    monkeypatch.setattr(fuji, "yaml", DummyYaml)
+    monkeypatch.setattr(
+        fuji.capability_cfg, "enable_fuji_yaml_policy", True
+    )
+    monkeypatch.setenv("VERITAS_FUJI_STRICT_POLICY_LOAD", "1")
+
+    policy = fuji._load_policy(policy_file)  # type: ignore[attr-defined]
+
+    assert policy["version"] == "fuji_v2_strict_deny"
+    assert policy["actions"] == {"deny": {"risk_upper": 1.0}}
+    assert "strict policy-load mode active" in caplog.text.lower()
+
+
 # ---------------------------------------------------------
 # fallback_safety_head
 # ---------------------------------------------------------
