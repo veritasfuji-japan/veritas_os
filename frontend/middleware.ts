@@ -12,6 +12,9 @@ export function generateNonce(): string {
 
 /**
  * Returns whether enforced CSP should require script nonce tokens.
+ *
+ * Nonce enforcement is an explicit rollout flag. Keep compatibility mode
+ * until runtime validation confirms all inline script dependencies are removed.
  */
 export function shouldEnforceNonceCsp(): boolean {
   return process.env[ENFORCE_NONCE_ENV] === 'true';
