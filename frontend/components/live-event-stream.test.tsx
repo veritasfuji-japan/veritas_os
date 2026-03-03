@@ -95,6 +95,38 @@ describe("LiveEventStream", () => {
     vi.useRealTimers();
   });
 
+  it("pauses retries and shows re-auth guidance after 401/403", async () => {
+    vi.useFakeTimers();
+    const timeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      body: null,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(timeoutSpy).toHaveBeenLastCalledWith(expect.any(Function), 60000);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "認証エラー (401/403) を検知しました。再認証後に再接続してください。",
+    );
+    expect(screen.getByText(/17:40/)).toBeInTheDocument();
+
+    vi.useRealTimers();
+  });
+
   it("clears rendered events when clear button is pressed", async () => {
     vi.stubGlobal(
       "fetch",
@@ -136,7 +168,13 @@ describe("LiveEventStream", () => {
       </I18nProvider>,
     );
 
-    const untranslatedKeys = ["clearEvents", "liveEventStreamTitle", "streamSecurityNote"];
+    const untranslatedKeys = [
+      "clearEvents",
+      "liveEventStreamTitle",
+      "streamSecurityNote",
+      "streamAuthRecoveryHint",
+      "streamAuthRetryPausedUntil",
+    ];
     for (const key of untranslatedKeys) {
       expect(screen.queryByText(key)).not.toBeInTheDocument();
     }

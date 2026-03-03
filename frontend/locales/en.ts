@@ -19,4 +19,6 @@ export const en: Record<LocaleKey, string> = {
   liveEventStreamTitle: "Live Event Stream",
   clearEvents: "Clear events",
   streamSecurityNote: "Security note: API key is injected server-side and never exposed to browser code.",
+  streamAuthRecoveryHint: "Detected authentication error (401/403). Please re-authenticate, then reconnect.",
+  streamAuthRetryPausedUntil: "Retry paused temporarily (scheduled resume):",
 };

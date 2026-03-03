@@ -17,6 +17,8 @@ export const ja = {
   liveEventStreamTitle: "ライブイベントストリーム",
   clearEvents: "イベントをクリア",
   streamSecurityNote: "セキュリティ注記: APIキーはサーバー側で注入され、ブラウザーコードには公開されません。",
+  streamAuthRecoveryHint: "認証エラー (401/403) を検知しました。再認証後に再接続してください。",
+  streamAuthRetryPausedUntil: "再試行を一時停止中（再開予定）:",
 } as const;
 
 export type LocaleKey = keyof typeof ja;
