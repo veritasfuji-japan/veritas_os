@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   buildCspEnforced,
@@ -9,6 +9,9 @@ import {
 } from './middleware';
 
 describe('middleware CSP', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
   it('generates a nonce string', () => {
     const nonce = generateNonce();
 
@@ -49,6 +52,12 @@ describe('middleware CSP', () => {
 
   it('defaults nonce enforcement flag to false', () => {
     expect(shouldEnforceNonceCsp()).toBe(false);
+  });
+
+  it('enables nonce enforcement only when explicitly opted in', () => {
+    vi.stubEnv('VERITAS_CSP_ENFORCE_NONCE', 'true');
+
+    expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
   it('sets CSP headers and forwards nonce to the Next.js request', () => {
