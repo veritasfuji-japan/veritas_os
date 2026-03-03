@@ -550,6 +550,17 @@ async def test_run_decide_pipeline_prepares_kernel_context(patched_pipeline, mon
         }
 
     monkeypatch.setattr(pipeline.veritas_core, "decide", capture_decide, raising=False)
+    if getattr(pipeline, "kernel", None) is not None:
+        monkeypatch.setattr(pipeline.kernel, "decide", capture_decide, raising=False)
+
+    original_lazy_import = pipeline._lazy_import
+
+    def _patched_lazy_import(module_name: str, attr: str | None = None):
+        if module_name in {"veritas_os.core.kernel", "veritas_os.core"} and attr in {None, "kernel"}:
+            return type("_DummyKernel", (), {"decide": capture_decide})
+        return original_lazy_import(module_name, attr)
+
+    monkeypatch.setattr(pipeline, "_lazy_import", _patched_lazy_import, raising=False)
 
     body = {
         "query": "VERITAS AGI planner context propagation",

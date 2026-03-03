@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess as _subprocess
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Protocol, Union
 
 logger = logging.getLogger(__name__)
+subprocess = _subprocess
 
 
 class ReasonCapability(Protocol):
@@ -633,6 +635,8 @@ async def decide(
         logger.warning("[kernel] adapt.load_persona failed: %s", e)
 
     world_sim = ctx.get("world_simulation")
+    if world_sim is None and isinstance(ctx.get("_world_sim_result"), dict):
+        world_sim = ctx.get("_world_sim_result")
     if isinstance(ctx.get("env_tools"), dict):
         extras["env_tools"] = dict(ctx.get("env_tools") or {})
 
@@ -667,6 +671,26 @@ async def decide(
                 )
                 alt["meta"] = st
                 alts.append(alt)
+
+    if not alts and planner_obj is None:
+        try:
+            planner_obj = planner_core.plan_for_veritas_agi(
+                context=ctx,
+                query=q_text,
+            )
+            steps = planner_obj.get("steps") or []
+            for idx, st in enumerate(steps, start=1):
+                if not isinstance(st, dict):
+                    continue
+                sid = st.get("id") or f"step_{idx}"
+                title = st.get("title") or f"step_{idx}"
+                detail = st.get("detail") or st.get("description") or ""
+                alt = _mk_option(title=title, description=detail, _id=sid)
+                alt["meta"] = st
+                alts.append(alt)
+        except Exception as e:  # pragma: no cover - defensive legacy fallback
+            extras.setdefault("planner_error", {})
+            extras["planner_error"]["detail"] = repr(e)
 
     if not alts:
         alts = _gen_options_by_intent(intent)
@@ -870,6 +894,60 @@ async def decide(
     except (TypeError, ValueError, RuntimeError, AttributeError) as e:
         extras.setdefault("affect", {})
         extras["affect"]["reflection_template_error"] = repr(e)
+
+    extras.setdefault("agi_goals", {})
+    if fast_mode:
+        extras["agi_goals"]["skipped"] = {"reason": "fast_mode"}
+    else:
+        extras["agi_goals"]["status"] = "delegated_to_pipeline"
+
+    orchestrated_by_pipeline = bool(ctx.get("_orchestrated_by_pipeline"))
+    if not orchestrated_by_pipeline and not ctx.get("_episode_saved_by_pipeline"):
+        try:
+            episode_text = (
+                f"[query] {q_text}\n"
+                f"[chosen] {chosen.get('title')}\n"
+                f"[mode] {mode}\n"
+                f"[intent] {intent}\n"
+                f"[telos_score] {telos_score}"
+            )
+            episode_record = {
+                "text": episode_text,
+                "tags": ["episode", "decide", "veritas"],
+                "meta": {
+                    "user_id": user_id,
+                    "request_id": req_id,
+                    "mode": mode,
+                    "intent": intent,
+                },
+            }
+            redacted_episode_record = redact_payload(episode_record)
+            if redacted_episode_record != episode_record:
+                extras.setdefault("memory_log", {})
+                extras["memory_log"]["warning"] = (
+                    "PII detected in episode log; masked before persistence."
+                )
+            try:
+                mem_core.MEM.put("episodic", redacted_episode_record)
+            except TypeError:
+                mem_core.MEM.put(
+                    user_id,
+                    f"decision:{req_id}",
+                    redacted_episode_record,
+                )
+        except (TypeError, ValueError, RuntimeError, OSError) as e:
+            extras.setdefault("memory_log", {})
+            extras["memory_log"]["error"] = repr(e)
+
+    if ctx.get("auto_doctor", False):
+        extras.setdefault("doctor", {})
+        if not _is_doctor_confinement_profile_active():
+            extras["doctor"]["skipped"] = "confinement_required"
+            extras["doctor"]["security_warning"] = (
+                "auto_doctor requires seccomp/AppArmor confinement"
+            )
+        else:
+            extras["doctor"]["skipped"] = "delegated_to_pipeline"
 
     try:
         latency_ms = int((time.time() - start_ts) * 1000)

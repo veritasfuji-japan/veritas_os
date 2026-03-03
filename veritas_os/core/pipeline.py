@@ -1408,6 +1408,7 @@ async def run_decide_pipeline(
         _warn("[decide] kernel.decide missing -> skip core call")
     else:
         core_context = dict(context or {})
+        core_context["_orchestrated_by_pipeline"] = True
         core_context["evidence"] = list(evidence)
         core_context["planner"] = dict(response_extras.get("planner") or {})
         core_context["env_tools"] = dict(response_extras.get("env_tools") or {})
