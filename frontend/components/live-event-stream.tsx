@@ -13,6 +13,7 @@ interface StreamEvent {
 
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
+const AUTH_RETRY_PAUSE_MS = 60000;
 
 function getReconnectDelayMs(attempt: number): number {
   const boundedAttempt = Math.max(0, attempt);
@@ -83,8 +84,10 @@ export function LiveEventStream(): JSX.Element {
   const { t, tk } = useI18n();
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const authPauseRef = useRef(false);
 
   const streamUrl = "/api/veritas/v1/events";
 
@@ -109,9 +112,18 @@ export function LiveEventStream(): JSX.Element {
         });
 
         if (!response.ok || !response.body) {
+          if (response.status === 401 || response.status === 403) {
+            const recoveryAt = Date.now() + AUTH_RETRY_PAUSE_MS;
+            authPauseRef.current = true;
+            setAuthRecoveryAt(recoveryAt);
+            reconnectRef.current = setTimeout(connect, AUTH_RETRY_PAUSE_MS);
+            return;
+          }
           throw new Error(`stream connection failed: ${response.status}`);
         }
 
+        authPauseRef.current = false;
+        setAuthRecoveryAt(null);
         setConnected(true);
         reconnectAttemptRef.current = 0;
         const reader = response.body.getReader();
@@ -139,6 +151,9 @@ export function LiveEventStream(): JSX.Element {
 
       if (mounted) {
         setConnected(false);
+        if (authPauseRef.current) {
+          return;
+        }
         const delayMs = getReconnectDelayMs(reconnectAttemptRef.current);
         reconnectAttemptRef.current += 1;
         reconnectRef.current = setTimeout(connect, delayMs);
@@ -198,6 +213,20 @@ export function LiveEventStream(): JSX.Element {
           {tk("streamSecurityNote")}
         </p>
       </div>
+
+      {authRecoveryAt !== null ? (
+        <div
+          className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+          role="alert"
+        >
+          <p>{tk("streamAuthRecoveryHint")}</p>
+          <p className="mt-1 text-[11px] text-warning/90">
+            {tk("streamAuthRetryPausedUntil")}
+            {" "}
+            {new Date(authRecoveryAt).toLocaleTimeString()}
+          </p>
+        </div>
+      ) : null}
 
       {/* Event list */}
       <div
