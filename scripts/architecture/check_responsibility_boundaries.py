@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -28,6 +29,17 @@ class ViolationDetail:
     source_module: str
     forbidden_module: str
     path: Path
+
+
+@dataclass(frozen=True)
+class BoundaryIssue:
+    """Machine-readable issue produced by the boundary checker."""
+
+    code: str
+    message: str
+    path: Path
+    source_module: str
+    forbidden_module: str | None = None
 
 
 DEFAULT_RULES: tuple[BoundaryRule, ...] = (
@@ -115,6 +127,75 @@ def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     ]
 
 
+def _parse_imported_names(path: Path) -> set[str]:
+    """Parse a module and return imported names from its AST."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    return _collect_imported_names(tree)
+
+
+def collect_boundary_issues(
+    core_dir: Path,
+    rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+) -> list[BoundaryIssue]:
+    """Collect machine-classifiable boundary checker issues."""
+    issues: list[BoundaryIssue] = []
+    for rule in rules:
+        path = core_dir / f"{rule.source_module}.py"
+        try:
+            imported = _parse_imported_names(path)
+        except FileNotFoundError:
+            issues.append(
+                BoundaryIssue(
+                    code="input_invalid",
+                    message=f"Boundary check error: '{rule.source_module}' not found at {path}",
+                    path=path,
+                    source_module=rule.source_module,
+                )
+            )
+            continue
+        except PermissionError:
+            issues.append(
+                BoundaryIssue(
+                    code="permission_denied",
+                    message=f"Boundary check error: permission denied for {path}",
+                    path=path,
+                    source_module=rule.source_module,
+                )
+            )
+            continue
+        except SyntaxError as exc:
+            issues.append(
+                BoundaryIssue(
+                    code="input_invalid",
+                    message=(
+                        "Boundary check error: invalid Python syntax in "
+                        f"{path} at line {exc.lineno}"
+                    ),
+                    path=path,
+                    source_module=rule.source_module,
+                )
+            )
+            continue
+
+        violations = sorted(imported & rule.forbidden_imports)
+        for forbidden_module in violations:
+            issues.append(
+                BoundaryIssue(
+                    code="boundary_violation",
+                    message=(
+                        "Boundary violation: "
+                        f"'{rule.source_module}' imports forbidden module "
+                        f"'{forbidden_module}' ({path})"
+                    ),
+                    path=path,
+                    source_module=rule.source_module,
+                    forbidden_module=forbidden_module,
+                )
+            )
+    return issues
+
+
 def _collect_violations(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
@@ -171,10 +252,38 @@ def build_remediation_guide(
 
 def check_boundaries(core_dir: Path, rules: Iterable[BoundaryRule] = DEFAULT_RULES) -> list[str]:
     """Run all boundary rules and return all violation messages."""
-    issues: list[str] = []
-    for rule in rules:
-        issues.extend(_check_rule(core_dir=core_dir, rule=rule))
-    return issues
+    return [issue.message for issue in collect_boundary_issues(core_dir=core_dir, rules=rules)]
+
+
+def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
+    """Build JSON report for CI log parsing and alert classification."""
+    issue_list = list(issues)
+    counts: dict[str, int] = {
+        "boundary_violation": 0,
+        "input_invalid": 0,
+        "permission_denied": 0,
+    }
+    for issue in issue_list:
+        if issue.code in counts:
+            counts[issue.code] += 1
+        else:
+            counts[issue.code] = counts.get(issue.code, 0) + 1
+
+    payload = {
+        "status": "failed" if issue_list else "passed",
+        "summary": counts,
+        "issues": [
+            {
+                "code": issue.code,
+                "source_module": issue.source_module,
+                "forbidden_module": issue.forbidden_module,
+                "path": str(issue.path),
+                "message": issue.message,
+            }
+            for issue in issue_list
+        ],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -186,6 +295,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=Path("veritas_os/core"),
         help="Path to the core module directory (default: veritas_os/core).",
     )
+    parser.add_argument(
+        "--report-format",
+        choices=("text", "json"),
+        default="text",
+        help="Output format for CI logs (default: text).",
+    )
     return parser
 
 
@@ -193,18 +308,25 @@ def main() -> int:
     """CLI entrypoint for CI execution."""
     parser = _build_parser()
     args = parser.parse_args()
-    issues = check_boundaries(core_dir=args.core_dir)
+    structured_issues = collect_boundary_issues(core_dir=args.core_dir)
+    issues = [issue.message for issue in structured_issues]
 
     if issues:
         violations = _collect_violations(core_dir=args.core_dir)
-        for issue in issues:
-            print(issue)
-        remediation_guide = build_remediation_guide(violations)
-        if remediation_guide:
-            print(remediation_guide)
+        if args.report_format == "json":
+            print(build_machine_report(structured_issues))
+        else:
+            for issue in issues:
+                print(issue)
+            remediation_guide = build_remediation_guide(violations)
+            if remediation_guide:
+                print(remediation_guide)
         return 1
 
-    print("Responsibility boundary check passed.")
+    if args.report_format == "json":
+        print(build_machine_report(structured_issues))
+    else:
+        print("Responsibility boundary check passed.")
     return 0
 
 
