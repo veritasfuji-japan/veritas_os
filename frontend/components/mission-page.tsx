@@ -26,10 +26,10 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
           {chips.map((chip) => (
             <span
               key={chip}
+              aria-hidden="true"
               className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/8 px-3 py-1 text-xs font-medium text-primary"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
-              {chip}
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" />
             </span>
           ))}
         </div>
