@@ -105,6 +105,42 @@ describe("useDecide", () => {
     expect(setResult).toHaveBeenCalledWith(secondPayload);
   });
 
+
+
+  it("sanitizes non-ok error response and does not expose body text", async () => {
+    const sensitiveBody = '{"debug":"stack trace"}';
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(sensitiveBody, {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setQuery = vi.fn();
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: () => "",
+        query: "q",
+        setQuery,
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("question");
+    });
+
+    expect(result.current.error).toBe("HTTP 500: Request failed. Please try again later.");
+    expect(result.current.error).not.toContain("stack trace");
+    expect(setResult).toHaveBeenCalledWith(null);
+  });
   it("ignores stale completion and only applies latest result", async () => {
     const first = createDeferred<Response>();
     const second = createDeferred<Response>();
