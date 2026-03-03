@@ -16,4 +16,7 @@ export const en: Record<LocaleKey, string> = {
   dangerPresets: "Danger presets (for safety rejection checks)",
   sending: "Sending...",
   send: "Send",
+  liveEventStreamTitle: "Live Event Stream",
+  clearEvents: "Clear events",
+  streamSecurityNote: "Security note: API key is injected server-side and never exposed to browser code.",
 };
