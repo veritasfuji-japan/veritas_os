@@ -14,6 +14,9 @@ export const ja = {
   dangerPresets: "危険プリセット（安全拒否確認用）",
   sending: "送信中...",
   send: "送信",
+  liveEventStreamTitle: "ライブイベントストリーム",
+  clearEvents: "イベントをクリア",
+  streamSecurityNote: "セキュリティ注記: APIキーはサーバー側で注入され、ブラウザーコードには公開されません。",
 } as const;
 
 export type LocaleKey = keyof typeof ja;
