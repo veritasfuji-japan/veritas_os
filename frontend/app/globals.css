@@ -2,40 +2,111 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
+/* ─── Base resets & design tokens ─── */
+*, *::before, *::after {
   border-color: hsl(var(--ds-color-border));
+  box-sizing: border-box;
+}
+
+html {
+  font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  background:
-    radial-gradient(circle at 8% 0%, hsl(var(--ds-color-primary) / 0.22), transparent 38%),
-    radial-gradient(circle at 85% 12%, hsl(var(--ds-color-primary) / 0.1), transparent 42%),
-    hsl(var(--ds-color-background));
+  background-color: hsl(var(--ds-color-background));
   color: hsl(var(--ds-color-foreground));
   font-family: var(--ds-font-sans);
   min-height: 100vh;
   display: grid;
   grid-template-columns: 1fr;
   grid-template-rows: auto auto 1fr;
+  /* Subtle noise texture overlay for depth */
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% -10%, hsl(var(--ds-color-primary) / 0.07), transparent),
+    radial-gradient(ellipse 50% 40% at 80% 110%, hsl(var(--ds-color-primary) / 0.05), transparent);
 }
 
 @media (min-width: 1024px) {
   body {
-    grid-template-columns: 280px 1fr;
+    grid-template-columns: 272px 1fr;
     grid-template-rows: auto 1fr;
   }
 }
 
-::selection {
-  background: hsl(var(--ds-color-primary) / 0.2);
+/* ─── Custom scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--ds-color-border));
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--ds-color-muted-foreground) / 0.5);
 }
 
+/* ─── Selection ─── */
+::selection {
+  background: hsl(var(--ds-color-primary) / 0.18);
+  color: hsl(var(--ds-color-foreground));
+}
+
+/* ─── Typography ─── */
 a {
   color: inherit;
+  text-decoration: none;
 }
 
 code,
 pre,
 .font-audit {
   font-family: var(--ds-font-mono);
+  font-size: 0.8125rem;
+  font-feature-settings: "zero" 1, "ss01" 1;
+}
+
+/* ─── Focus management ─── */
+:focus-visible {
+  outline: 2px solid hsl(var(--ds-color-focus-ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Status indicator animations ─── */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.status-dot-live {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* ─── Sidebar layout ─── */
+aside[aria-label="Sidebar"] {
+  background: hsl(var(--ds-color-sidebar));
+  border-color: hsl(var(--ds-color-sidebar-border));
+}
+
+/* ─── Prose-level improvements ─── */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.01em;
+}
+
+/* ─── Reduced-motion support ─── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

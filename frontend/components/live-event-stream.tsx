@@ -61,6 +61,24 @@ function processSseChunk(
   return buffer;
 }
 
+/** Maps event type prefixes to a colour-class pair */
+function getEventTypeStyle(type: string): { dot: string; label: string } {
+  const lower = type.toLowerCase();
+  if (lower.includes("error") || lower.includes("fail") || lower.includes("deny")) {
+    return { dot: "bg-danger", label: "text-danger" };
+  }
+  if (lower.includes("warn") || lower.includes("alert") || lower.includes("drift")) {
+    return { dot: "bg-warning", label: "text-warning" };
+  }
+  if (lower.includes("success") || lower.includes("pass") || lower.includes("allow")) {
+    return { dot: "bg-success", label: "text-success" };
+  }
+  if (lower.includes("policy") || lower.includes("sync") || lower.includes("update")) {
+    return { dot: "bg-violet-500", label: "text-violet-400" };
+  }
+  return { dot: "bg-primary", label: "text-primary" };
+}
+
 export function LiveEventStream(): JSX.Element {
   const { t } = useI18n();
   const [events, setEvents] = useState<StreamEvent[]>([]);
@@ -69,7 +87,6 @@ export function LiveEventStream(): JSX.Element {
   const reconnectAttemptRef = useRef(0);
 
   const streamUrl = "/api/veritas/v1/events";
-  const streamStatus = connected ? "🟢 connected" : "🟡 reconnecting";
 
   useEffect(() => {
     let mounted = true;
@@ -139,38 +156,80 @@ export function LiveEventStream(): JSX.Element {
     };
   }, [streamUrl]);
 
-  return (
-    <Card title="Live Event Stream" className="border-primary/40 bg-surface/80">
-      <p className="mb-2 text-xs text-muted-foreground">
-        Status: <span aria-live="polite">{streamStatus}</span>
-      </p>
-      <p className="mb-2 text-xs text-emerald-700">Security note: API key is injected server-side and never exposed to browser code.</p>
+  const clearAction = (
+    <button
+      type="button"
+      onClick={() => setEvents([])}
+      className="rounded-md border border-border/70 bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      Clear events
+    </button>
+  );
 
-      <div className="mb-3">
-        <button
-          type="button"
-          onClick={() => setEvents([])}
-          className="rounded-md border border-border/80 bg-background px-3 py-1 text-xs text-foreground hover:border-primary/70"
-        >
-          Clear events
-        </button>
+  return (
+    <Card
+      title="Live Event Stream"
+      titleSize="md"
+      variant="glass"
+      actions={clearAction}
+      className="border-primary/20"
+    >
+      {/* Connection status */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className={[
+              "h-2 w-2 rounded-full",
+              connected ? "bg-emerald-500 status-dot-live" : "bg-amber-500",
+            ].join(" ")}
+            aria-hidden="true"
+          />
+          <span
+            aria-live="polite"
+            className={[
+              "text-xs font-medium",
+              connected ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
+            ].join(" ")}
+          >
+            {connected ? t("接続済み", "Connected") : t("再接続中...", "Reconnecting...")}
+          </span>
+        </div>
+        <p className="text-xs text-emerald-700 dark:text-emerald-500">
+          Security note: API key is injected server-side and never exposed to browser code.
+        </p>
       </div>
 
-      <div className="max-h-72 space-y-2 overflow-auto pr-1">
+      {/* Event list */}
+      <div
+        className="max-h-72 space-y-1.5 overflow-auto pr-0.5"
+        aria-label={t("ライブイベントフィード", "Live event feed")}
+      >
         {events.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("イベント待機中...", "Waiting for events...")}</p>
+          <div className="flex flex-col items-center gap-2 py-8 text-center">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/30 status-dot-live" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">{t("イベント待機中...", "Waiting for events...")}</p>
+          </div>
         ) : (
-          events.map((event) => (
-            <article key={`${event.id}-${event.ts}`} className="rounded-md border border-border/60 bg-background/60 p-2">
-              <div className="mb-1 flex items-center justify-between text-xs">
-                <span className="font-semibold text-primary">{event.type}</span>
-                <span className="text-muted-foreground">{event.ts}</span>
-              </div>
-              <pre className="overflow-auto text-xs text-foreground">
-                {JSON.stringify(event.payload, null, 2)}
-              </pre>
-            </article>
-          ))
+          events.map((event) => {
+            const style = getEventTypeStyle(event.type);
+            return (
+              <article
+                key={`${event.id}-${event.ts}`}
+                className="animate-fade-in rounded-lg border border-border/50 bg-background/60 px-3 py-2 shadow-xs transition-colors"
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} aria-hidden="true" />
+                    <span className={`text-xs font-semibold ${style.label}`}>{event.type}</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-muted-foreground">{event.ts}</span>
+                </div>
+                <pre className="overflow-auto text-[11px] leading-relaxed text-foreground/80">
+                  {JSON.stringify(event.payload, null, 2)}
+                </pre>
+              </article>
+            );
+          })
         )}
       </div>
     </Card>

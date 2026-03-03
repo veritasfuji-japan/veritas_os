@@ -115,22 +115,31 @@ interface ToggleRowProps {
  */
 function ToggleRow({ label, checked, onChange }: ToggleRowProps): JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2 text-sm">
-      <span>{label}</span>
+    <div className={[
+      "flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-sm transition-colors",
+      checked
+        ? "border-primary/30 bg-primary/5"
+        : "border-border bg-background/60 hover:border-border/80",
+    ].join(" ")}>
+      <span className="font-medium text-foreground/90">{label}</span>
       <button
         type="button"
         role="switch"
         aria-checked={checked}
         aria-label={label}
         onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
-          checked ? "bg-primary" : "bg-border"
-        }`}
+        className={[
+          "relative inline-flex h-5.5 w-10 flex-shrink-0 items-center rounded-full",
+          "transition-all duration-200 ease-out",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          checked ? "bg-primary shadow-[0_0_0_1px_hsl(var(--ds-color-primary)_/_0.3)]" : "bg-muted",
+        ].join(" ")}
       >
         <span
-          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
-            checked ? "translate-x-[1.125rem]" : "translate-x-0.5"
-          }`}
+          className={[
+            "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200",
+            checked ? "translate-x-5" : "translate-x-0.5",
+          ].join(" ")}
         />
       </button>
     </div>
@@ -148,10 +157,12 @@ interface SliderRowProps {
 
 function SliderRow({ label, value, min, max, step, onChange }: SliderRowProps): JSX.Element {
   return (
-    <label className="block space-y-1">
+    <label className="block space-y-2 rounded-lg border border-border/60 bg-background/40 px-3.5 py-2.5">
       <span className="flex items-center justify-between text-xs">
-        <span>{label}</span>
-        <span className="font-mono font-semibold">{value}</span>
+        <span className="font-medium text-foreground/80">{label}</span>
+        <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
+          {value.toFixed(2)}
+        </span>
       </span>
       <input
         type="range"
@@ -161,7 +172,7 @@ function SliderRow({ label, value, min, max, step, onChange }: SliderRowProps): 
         step={step}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-primary"
+        className="w-full cursor-pointer accent-primary"
       />
     </label>
   );
@@ -177,8 +188,8 @@ interface NumberRowProps {
 
 function NumberRow({ label, value, min, max, onChange }: NumberRowProps): JSX.Element {
   return (
-    <label className="flex items-center justify-between gap-3 text-xs">
-      <span>{label}</span>
+    <label className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 px-3.5 py-2.5 text-xs">
+      <span className="font-medium text-foreground/80">{label}</span>
       <input
         type="number"
         aria-label={label}
@@ -192,7 +203,7 @@ function NumberRow({ label, value, min, max, onChange }: NumberRowProps): JSX.El
             onChange(n);
           }
         }}
-        className="w-24 rounded-md border border-border bg-background px-2 py-1 text-right"
+        className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right font-mono text-xs font-semibold transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
       />
     </label>
   );
@@ -444,45 +455,58 @@ export default function GovernanceControlPage(): JSX.Element {
       </div>
 
       {/* Header */}
-      <Card title="Governance Control" className="border-primary/50 bg-surface/85">
-        <p className="text-sm text-muted-foreground">
-          FUJIルール・リスク閾値・自動停止条件・ログ保持を統制し、ポリシーを即時反映します。
-        </p>
+      <Card
+        title="Governance Control"
+        description="FUJIルール・リスク閾値・自動停止条件・ログ保持を統制し、ポリシーを即時反映します。"
+        variant="glass"
+        accent="primary"
+        className="border-primary/20"
+      >
+        <div />
       </Card>
 
       {/* Connection */}
-      <Card title="Connection" className="bg-background/75">
-        <div className="mt-3">
-          <button
-            type="button"
-            className="rounded-md border border-primary/60 bg-primary/20 px-3 py-2 text-sm"
-            disabled={loading}
-            onClick={handleFetchPolicy}
-          >
-            {loading ? "読み込み中..." : "ポリシーを読み込む"}
-          </button>
-        </div>
+      <Card title="接続 / Connection" titleSize="sm" variant="default">
+        <button
+          type="button"
+          className={[
+            "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+            loading
+              ? "border-border bg-muted/50 text-muted-foreground"
+              : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 active:scale-[0.98]",
+          ].join(" ")}
+          disabled={loading}
+          onClick={handleFetchPolicy}
+        >
+          {loading && (
+            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
+          {loading ? "読み込み中..." : "ポリシーを読み込む"}
+        </button>
       </Card>
 
       {error ? (
-        <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">
-          {error}
-        </p>
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
+          <span className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true">⚠</span>
+          <p className="text-sm text-danger">{error}</p>
+        </div>
       ) : null}
 
       {success ? (
-        <p role="status" className="rounded-md border border-green-500/40 bg-green-500/10 p-2 text-sm text-green-300">
-          {success}
-        </p>
+        <div role="status" className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/8 px-4 py-3">
+          <span className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true">✓</span>
+          <p className="text-sm text-success">{success}</p>
+        </div>
       ) : null}
 
       {draft ? (
         <>
           {/* FUJI Rules */}
-          <Card title="FUJI Rules" className="bg-background/75">
-            <p className="mb-3 text-xs text-muted-foreground">
-              各安全ルールの有効/無効を切り替えます。
-            </p>
+          <Card title="FUJI Rules" titleSize="md" variant="elevated" accent="danger" description="各安全ルールの有効/無効を切り替えます。">
             <div className="grid gap-2 md:grid-cols-2">
               {(Object.keys(FUJI_LABELS) as (keyof FujiRules)[]).map((key) => (
                 <ToggleRow
@@ -496,10 +520,7 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
 
           {/* Risk Thresholds */}
-          <Card title="Risk Thresholds (リスク閾値)" className="bg-background/75">
-            <p className="mb-3 text-xs text-muted-foreground">
-              リスクスコアに応じたアクション境界を設定します (0.0 - 1.0)。
-            </p>
+          <Card title="Risk Thresholds (リスク閾値)" titleSize="md" variant="elevated" accent="warning" description="リスクスコアに応じたアクション境界を設定します (0.0 - 1.0)。">
             <div className="space-y-3">
               <SliderRow
                 label="Allow Upper (許可上限)"
@@ -537,10 +558,7 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
 
           {/* Auto-Stop */}
-          <Card title="Auto-Stop Conditions (自動停止条件)" className="bg-background/75">
-            <p className="mb-3 text-xs text-muted-foreground">
-              危険な状態を検知した場合の自動停止ルールを設定します。
-            </p>
+          <Card title="Auto-Stop Conditions (自動停止条件)" titleSize="md" variant="elevated" accent="danger" description="危険な状態を検知した場合の自動停止ルールを設定します。">
             <div className="space-y-3">
               <ToggleRow
                 label="自動停止を有効化"
@@ -573,10 +591,7 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
 
           {/* Log Retention */}
-          <Card title="Log Retention / Audit (ログ保持・監査)" className="bg-background/75">
-            <p className="mb-3 text-xs text-muted-foreground">
-              監査ログの保持期間と強度を設定します。
-            </p>
+          <Card title="Log Retention / Audit (ログ保持・監査)" titleSize="md" variant="elevated" accent="info" description="監査ログの保持期間と強度を設定します。">
             <div className="space-y-3">
               <NumberRow
                 label="保持期間 (日数)"
@@ -591,7 +606,7 @@ export default function GovernanceControlPage(): JSX.Element {
                   aria-label="監査レベル"
                   value={draft.log_retention.audit_level}
                   onChange={(e) => updateLogRetention("audit_level", e.target.value)}
-                  className="rounded-md border border-border bg-background px-2 py-1"
+                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
                 >
                   <option value="none">none</option>
                   <option value="summary">summary</option>
@@ -614,10 +629,7 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
 
           {/* ValueCore Drift */}
-          <Card title="Policy Drift (ValueCore監視)" className="bg-background/75">
-            <p className="mb-3 text-xs text-muted-foreground">
-              Value EMA と Telos 基準値の乖離率を表示します。
-            </p>
+          <Card title="Policy Drift (ValueCore監視)" titleSize="md" variant="elevated" accent="primary" description="Value EMA と Telos 基準値の乖離率を表示します。">
             {valueDrift ? (
               <div className="space-y-3 text-xs">
                 <div className="grid gap-2 md:grid-cols-3">
@@ -654,35 +666,53 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
 
           {/* Diff Preview */}
-          <Card title="Diff Preview (変更差分)" className="bg-background/75">
+          <Card title="Diff Preview (変更差分)" titleSize="md" variant="elevated">
             <DiffPreview before={savedPolicy} after={draft} />
           </Card>
 
           {/* Save */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-surface/50 px-4 py-3">
             <button
               type="button"
-              className="rounded-md border border-primary/60 bg-primary/20 px-4 py-2 text-sm font-semibold disabled:opacity-40"
+              className={[
+                "inline-flex items-center gap-2 rounded-lg border px-5 py-2 text-sm font-semibold transition-all",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                "disabled:pointer-events-none disabled:opacity-40",
+                "border-primary/40 bg-primary/10 text-primary hover:bg-primary/18 active:scale-[0.98]",
+              ].join(" ")}
               disabled={saving || !hasChanges}
               onClick={handleSavePolicy}
             >
+              {saving && (
+                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
               {saving ? "保存中..." : "ポリシーを保存"}
             </button>
             <button
               type="button"
-              className="rounded-md border border-border px-4 py-2 text-sm disabled:opacity-40"
+              className={[
+                "rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors",
+                "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                "disabled:pointer-events-none disabled:opacity-40",
+              ].join(" ")}
               disabled={!hasChanges}
               onClick={() => setDraft(savedPolicy ? structuredClone(savedPolicy) : null)}
             >
               リセット
             </button>
             {hasChanges ? (
-              <span className="text-xs text-yellow-400">未保存の変更があります</span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-warning">
+                <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />
+                未保存の変更があります
+              </span>
             ) : null}
           </div>
 
           {/* Meta */}
-          <Card title="Policy Meta" className="bg-background/75">
+          <Card title="Policy Meta" titleSize="sm" variant="ghost" className="border-border/40">
             <div className="grid gap-2 text-xs md:grid-cols-3">
               <div>
                 <span className="text-muted-foreground">Version: </span>
@@ -700,10 +730,13 @@ export default function GovernanceControlPage(): JSX.Element {
           </Card>
         </>
       ) : (
-        <Card title="Status" className="bg-background/75">
-          <p className="text-sm text-muted-foreground">
-            「ポリシーを読み込む」をクリックして最新設定を取得してください。
-          </p>
+        <Card title="Status" titleSize="sm" variant="glass" className="border-border/40">
+          <div className="flex items-center gap-3 py-2">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" aria-hidden="true" />
+            <p className="text-sm text-muted-foreground">
+              「ポリシーを読み込む」をクリックして最新設定を取得してください。
+            </p>
+          </div>
         </Card>
       )}
     </div>

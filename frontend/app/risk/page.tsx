@@ -160,46 +160,65 @@ export default function RiskIntelligencePage(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <Card title="Risk Intelligence" className="border-border/70 bg-surface/85 p-1 shadow-sm">
-        <p className="max-w-4xl text-sm leading-relaxed text-muted-foreground">
-          {t("過去24時間の全リクエストを不確実性（横軸）と潜在的リスク（縦軸）でリアルタイム可視化します。危険なクラスタリングを検知するとアラートを表示し、予防的な統治判断を支援します。", "Visualize all requests from the last 24 hours in real time by uncertainty (x-axis) and potential risk (y-axis). When dangerous clustering is detected, alerts support proactive governance decisions.")}
-        </p>
+      <Card
+        title="Risk Intelligence"
+        description={t("過去24時間の全リクエストを不確実性（横軸）と潜在的リスク（縦軸）でリアルタイム可視化します。危険なクラスタリングを検知するとアラートを表示し、予防的な統治判断を支援します。", "Visualize all requests from the last 24 hours in real time by uncertainty (x-axis) and potential risk (y-axis). When dangerous clustering is detected, alerts support proactive governance decisions.")}
+        variant="glass"
+        accent="danger"
+        className="border-danger/15"
+      >
+        <div />
       </Card>
 
       <Card
         title="Real-time Risk Heatmap"
-        className="border-border/70 bg-background/80 shadow-sm"
+        titleSize="md"
+        variant="elevated"
       >
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                  clusterStats.alert
-                    ? "bg-destructive/15 text-destructive"
-                    : "bg-primary/15 text-primary"
-                }`}
-              >
+        <div className="space-y-5">
+          {/* Stats row */}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("ステータス", "Status")}</p>
+              <p className={`mt-0.5 font-semibold ${clusterStats.alert ? "text-danger" : "text-success"}`}>
                 {clusterStats.alert ? "Cluster Alert" : "Normal"}
-              </span>
-              <span className="text-muted-foreground">
-                High-Risk Cluster: {clusterStats.count} / {points.length} (
-                {(clusterStats.ratio * 100).toFixed(1)}%)
-              </span>
+              </p>
             </div>
-            <span className="text-xs text-muted-foreground" aria-live="polite">
-              Last update: {new Date(now).toLocaleTimeString(language === "ja" ? "ja-JP" : "en-US", { hour12: false })}
-            </span>
+            <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("高リスク", "High-risk")}</p>
+              <p className="mt-0.5 font-mono font-semibold text-foreground">{clusterStats.count} / {points.length}</p>
+            </div>
+            <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("クラスタ率", "Cluster rate")}</p>
+              <p className="mt-0.5 font-mono font-semibold text-foreground">{(clusterStats.ratio * 100).toFixed(1)}%</p>
+            </div>
+            <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("最終更新", "Updated")}</p>
+              <p className="mt-0.5 font-mono text-[11px] font-semibold text-foreground" aria-live="polite">
+                {new Date(now).toLocaleTimeString(language === "ja" ? "ja-JP" : "en-US", { hour12: false })}
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-xl border border-border/70 bg-surface/40 p-4">
-            <div className="relative mx-auto h-[360px] w-full max-w-5xl">
+          {/* Alert banner */}
+          {clusterStats.alert && (
+            <div className="flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-danger status-dot-live" aria-hidden="true" />
+              <p className="text-sm font-medium text-danger">
+                {t("危険なクラスタリングを検知しました。即時の統治判断が推奨されます。", "Dangerous clustering detected. Immediate governance action recommended.")}
+              </p>
+            </div>
+          )}
+
+          {/* Heatmap canvas */}
+          <div className="rounded-xl border border-border/50 bg-muted/10 p-5">
+            <div className="relative mx-auto h-[380px] w-full max-w-5xl">
               <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden="true">
                 <defs>
                   <linearGradient id="riskGradient" x1="0" y1="100" x2="100" y2="0">
-                    <stop offset="0%" stopColor="hsl(var(--primary) / 0.18)" />
-                    <stop offset="55%" stopColor="hsl(var(--warning) / 0.2)" />
-                    <stop offset="100%" stopColor="hsl(var(--destructive) / 0.28)" />
+                    <stop offset="0%" stopColor="hsl(var(--ds-color-primary) / 0.12)" />
+                    <stop offset="50%" stopColor="hsl(var(--ds-color-warning) / 0.18)" />
+                    <stop offset="100%" stopColor="hsl(var(--ds-color-danger) / 0.25)" />
                   </linearGradient>
                 </defs>
 
@@ -207,22 +226,37 @@ export default function RiskIntelligencePage(): JSX.Element {
 
                 {[20, 40, 60, 80].map((line) => (
                   <g key={line}>
-                    <line x1={line} y1={0} x2={line} y2={100} stroke="hsl(var(--border) / 0.6)" strokeWidth="0.3" />
-                    <line x1={0} y1={line} x2={100} y2={line} stroke="hsl(var(--border) / 0.6)" strokeWidth="0.3" />
+                    <line x1={line} y1={0} x2={line} y2={100} stroke="hsl(var(--ds-color-border) / 0.5)" strokeWidth="0.25" />
+                    <line x1={0} y1={line} x2={100} y2={line} stroke="hsl(var(--ds-color-border) / 0.5)" strokeWidth="0.25" />
                   </g>
                 ))}
 
-                <line x1="82" y1="0" x2="82" y2="100" stroke="hsl(var(--destructive) / 0.6)" strokeDasharray="1 1" strokeWidth="0.4" />
-                <line x1="0" y1="18" x2="100" y2="18" stroke="hsl(var(--destructive) / 0.6)" strokeDasharray="1 1" strokeWidth="0.4" />
+                <line x1="82" y1="0" x2="82" y2="100" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
+                <line x1="0" y1="18" x2="100" y2="18" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
               </svg>
               <RiskScatterCanvas points={points} />
 
-              <span className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-xs text-muted-foreground">
-                Uncertainty →
+              <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground">
+                {t("不確実性 →", "Uncertainty →")}
               </span>
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-8 -rotate-90 text-xs text-muted-foreground">
-                Risk →
+              <span className="absolute left-0 top-1/2 -translate-x-10 -translate-y-1/2 -rotate-90 text-xs font-medium text-muted-foreground">
+                {t("リスク →", "Risk →")}
               </span>
+            </div>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-primary/80" aria-hidden="true" />
+              {t("通常リクエスト", "Normal requests")}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-danger" aria-hidden="true" />
+              {t("高リスク (U≥0.82, R≥0.82)", "High-risk (U≥0.82, R≥0.82)")}
+            </div>
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-[10px]">{t("ウィンドウ: 24時間", "Window: 24h")}</span>
             </div>
           </div>
         </div>

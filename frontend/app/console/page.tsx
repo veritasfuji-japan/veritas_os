@@ -38,10 +38,14 @@ export default function DecisionConsolePage(): JSX.Element {
 
   return (
     <div className="space-y-6">
-      <Card title="Decision Console" className="border-primary/50 bg-surface/85">
-        <p className="mb-3 text-sm text-muted-foreground">
-          {tk("consoleDescription")}
-        </p>
+      <Card
+        title="Decision Console"
+        description={tk("consoleDescription")}
+        variant="glass"
+        accent="primary"
+        className="border-primary/20"
+      >
+        <div />
       </Card>
 
       <ChatPanel
@@ -67,7 +71,7 @@ export default function DecisionConsolePage(): JSX.Element {
         setShowAlert={setShowDriftAlert}
       />
 
-      <Card title="Result" className="bg-background/75">
+      <Card title="Result" titleSize="md" variant="elevated" accent={result ? "success" : undefined}>
         {result ? (
           <div className="space-y-4">
             <ResultSection
@@ -104,14 +108,17 @@ export default function DecisionConsolePage(): JSX.Element {
             />
             <ResultSection title="trust_log" value={result.trust_log ?? null} />
             <details>
-              <summary className="cursor-pointer text-sm font-semibold">extras</summary>
-              <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background/70 p-3 text-xs text-foreground">
+              <summary className="cursor-pointer text-sm font-semibold text-foreground">extras</summary>
+              <pre className="mt-3 overflow-x-auto rounded-lg border border-border/50 bg-muted/30 p-3 text-xs leading-relaxed text-foreground">
                 {renderValue(result.extras ?? {})}
               </pre>
             </details>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">{tk("noResultsYet")}</p>
+          <div className="flex items-center gap-3 py-2 text-muted-foreground">
+            <span className="h-2 w-2 rounded-full bg-muted-foreground/30 status-dot-live" aria-hidden="true" />
+            <p className="text-sm">{tk("noResultsYet")}</p>
+          </div>
         )}
       </Card>
     </div>
