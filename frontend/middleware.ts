@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const NONCE_BYTES = 16;
+const ENFORCE_NONCE_ENV = 'VERITAS_CSP_ENFORCE_NONCE';
 
 /**
  * Generates a CSP nonce for the current response.
@@ -10,17 +11,30 @@ export function generateNonce(): string {
 }
 
 /**
- * Builds an enforced nonce-based CSP policy string.
- *
- * This policy intentionally excludes `unsafe-inline` for scripts.
+ * Returns whether enforced CSP should require script nonce tokens.
  */
-export function buildCspEnforced(nonce: string): string {
+export function shouldEnforceNonceCsp(): boolean {
+  return process.env[ENFORCE_NONCE_ENV] === 'true';
+}
+
+/**
+ * Builds an enforced CSP policy string.
+ *
+ * Compatibility mode keeps `unsafe-inline` for scripts to avoid blocking
+ * framework inline bootstrap scripts. Strict mode switches to nonce-based
+ * script execution and is intended for phased rollout after runtime validation.
+ */
+export function buildCspEnforced(nonce: string, enforceNonce: boolean): string {
+  const scriptDirective = enforceNonce
+    ? `script-src 'self' 'nonce-${nonce}'`
+    : "script-src 'self' 'unsafe-inline'";
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    scriptDirective,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
@@ -55,11 +69,11 @@ export function buildCspReportOnly(nonce: string): string {
  * Attaches nonce-based CSP headers for every request.
  *
  * The nonce is also forwarded through `x-nonce` request header so Next.js can
- * attach it to framework inline scripts during rendering.
+ * annotate nonce-aware script tags where supported.
  */
 export function middleware(request: NextRequest): NextResponse {
   const nonce = generateNonce();
-  const cspEnforced = buildCspEnforced(nonce);
+  const cspEnforced = buildCspEnforced(nonce, shouldEnforceNonceCsp());
   const cspReportOnly = buildCspReportOnly(nonce);
 
   const requestHeaders = new Headers(request.headers);
