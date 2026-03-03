@@ -222,13 +222,13 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
               {t("ナビゲーション", "Navigation")}
             </p>
           </div>
-          <ul className="space-y-0.5">
+          <div className="space-y-0.5">
             {NAV_ITEMS.map((item) => {
               const isActive = pathname === item.href;
               const { Icon } = item;
 
               return (
-                <li key={item.href}>
+                <div key={item.href}>
                   <Link
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
@@ -284,10 +284,10 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
                       <IconChevronRight className="h-3.5 w-3.5 shrink-0 text-sidebar-muted opacity-0 transition-opacity group-hover:opacity-100" />
                     )}
                   </Link>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </div>
         </nav>
 
         {/* Sidebar footer ── */}
