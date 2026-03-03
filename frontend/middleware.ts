@@ -10,15 +10,15 @@ export function generateNonce(): string {
 }
 
 /**
- * Builds a compatibility CSP policy for current Next.js runtime behavior.
+ * Builds an enforced nonce-based CSP policy string.
  */
-export function buildCspEnforced(): string {
+export function buildCspEnforced(nonce: string): string {
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "script-src 'self' 'unsafe-inline'",
+    `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
@@ -54,7 +54,7 @@ export function buildCspReportOnly(nonce: string): string {
  */
 export function middleware(_request: NextRequest): NextResponse {
   const nonce = generateNonce();
-  const cspEnforced = buildCspEnforced();
+  const cspEnforced = buildCspEnforced(nonce);
   const cspReportOnly = buildCspReportOnly(nonce);
   const response = NextResponse.next();
 
