@@ -1407,10 +1407,16 @@ async def run_decide_pipeline(
             response_extras["env_tools"]["kernel_missing"] = True
         _warn("[decide] kernel.decide missing -> skip core call")
     else:
+        core_context = dict(context or {})
+        core_context["evidence"] = list(evidence)
+        core_context["planner"] = dict(response_extras.get("planner") or {})
+        core_context["env_tools"] = dict(response_extras.get("env_tools") or {})
+        if isinstance(response_extras.get("world_simulation"), dict):
+            core_context["world_simulation"] = dict(response_extras["world_simulation"])
         try:
             raw0 = await call_core_decide(
                 core_fn=core_decide,  # type: ignore[arg-type]
-                context=context,
+                context=core_context,
                 query=query,
                 alternatives=input_alts,   # ★ core に渡すのは input_alts
                 min_evidence=min_ev,
@@ -1498,7 +1504,7 @@ async def run_decide_pipeline(
                 input_signature=input_signature,
             )
 
-            current_context = dict(context or {})
+            current_context = dict(core_context)
             current_context["healing"] = {
                 "attempt": attempt_no,
                 "action": decision.action.value,

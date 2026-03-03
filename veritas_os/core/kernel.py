@@ -1,21 +1,19 @@
 
 # veritas_os/core/kernel.py (v2-compatible)
 # -*- coding: utf-8 -*-
-"""
-VERITAS kernel.py v2-compatible - 後方互換性を維持した二重実行解消版
+"""Core decision logic for VERITAS Kernel.
 
-★ 重要: 既存の decide() シグネチャは変更しない
-★ context 内のフラグで二重実行をスキップ判定
+This module keeps ``decide()`` backward compatible while limiting its
+responsibility to *decision computation* (alternative scoring, debate,
+FUJI gating, and rationale generation). Pipeline orchestration, side effects,
+and persistence are handled in ``core/pipeline.py``.
 """
 from __future__ import annotations
 
 import logging
 import re
-import subprocess  # nosec B404 - subprocess use is required and hardened below
-import sys
 import time
 import uuid
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Protocol, Union
 
 logger = logging.getLogger(__name__)
@@ -37,14 +35,7 @@ class StrategyCapability(Protocol):
     def score_options(self, *args: Any, **kwargs: Any) -> Any:
         ...
 
-# ★ C-1 修正: doctor 自動起動のレート制限
-# 高頻度リクエストでプロセスが溜まるのを防止（最低 60 秒間隔）
-# ★ C-1b 修正: アクティブプロセス追跡で並行起動を防止
 import threading as _threading
-_DOCTOR_MIN_INTERVAL_SEC = 60.0
-_doctor_last_run: float = 0.0
-_doctor_active_proc: "subprocess.Popen | None" = None
-_doctor_lock = _threading.Lock()
 
 
 def _read_proc_self_status_seccomp() -> int | None:
@@ -562,35 +553,18 @@ async def decide(
     alternatives: List[Dict[str, Any]] | None,
     min_evidence: int = 1,
 ) -> Dict[str, Any]:
-    """
-    VERITAS kernel.decide v2-compatible:
-    
-    ★ シグネチャは元のまま維持（後方互換性）
-    ★ context 内のフラグで二重実行をスキップ判定
+    """Return a decision payload from prepared inputs.
+
+    Notes:
+        - ``pipeline.py`` is the only orchestrator and must prepare context,
+          evidence, planner output, and side-effectful operations.
+        - This function stays focused on deterministic-ish decision logic.
     """
     start_ts = time.time()
 
     # ---- context を安全に固める ----
-    ctx_raw: Dict[str, Any] = dict(context or {})
-    user_id = ctx_raw.get("user_id") or "cli"
-
-    # スキップ理由を記録
-    skip_reasons: Dict[str, str] = {}
-
-    # ★ WorldModel 注入: pipeline が既に実行済みならスキップ
-    if ctx_raw.get("_world_state_injected"):
-        ctx = ctx_raw
-        skip_reasons["world_model_inject"] = "already_injected_by_pipeline"
-    else:
-        try:
-            ctx = world_model.inject_state_into_context(
-                context=ctx_raw,
-                user_id=user_id,
-            )
-            ctx["_world_state_injected"] = True
-        except (TypeError, ValueError, RuntimeError) as e:
-            ctx = ctx_raw
-            logger.warning("world_model.inject_state_into_context failed: %s", e)
+    ctx: Dict[str, Any] = dict(context or {})
+    user_id = ctx.get("user_id") or "cli"
 
     fast_mode = bool(ctx.get("fast") or ctx.get("mode") == "fast")
 
@@ -633,33 +607,19 @@ async def decide(
     except (TypeError, ValueError, RuntimeError):
         logger.warning("[Kernel] knowledge_qa detection/handling failed", exc_info=True)
 
-    # ★ Pipeline から渡された evidence があればそれを使用
-    pipeline_evidence = ctx.get("_pipeline_evidence")
-    if pipeline_evidence and isinstance(pipeline_evidence, list):
-        evidence.extend(pipeline_evidence)
-        memory_evidence_count = len(pipeline_evidence)
-        extras["memory"] = {
-            "source": "pipeline_provided",
-            "evidence_count": memory_evidence_count,
-        }
-        skip_reasons["memory_search"] = "provided_by_pipeline"
-    else:
-        # MemoryOS 要約を取得
-        try:
-            memory_summary = mem_core.summarize_for_planner(
-                user_id=user_id,
-                query=q_text,
-                limit=8,
-            )
-            ctx["memory_summary"] = memory_summary
-            extras["memory"] = {
-                "summary": memory_summary,
-                "source": "MemoryOS.summarize_for_planner",
-            }
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras["memory"] = {
-                "error": f"memory summarize failed: {repr(e)[:80]}",
-            }
+    prepared_evidence = ctx.get("evidence")
+    if not isinstance(prepared_evidence, list):
+        prepared_evidence = ctx.get("_pipeline_evidence")
+    legacy_skip_reasons: Dict[str, str] = {}
+    if isinstance(prepared_evidence, list):
+        evidence.extend(prepared_evidence)
+    memory_evidence_count = len(evidence)
+    if isinstance(ctx.get("_pipeline_evidence"), list):
+        legacy_skip_reasons["memory_search"] = "provided_by_pipeline"
+    extras["memory"] = {
+        "source": "pipeline_provided" if legacy_skip_reasons else "context_prepared",
+        "evidence_count": memory_evidence_count,
+    }
 
     # Persona
     try:
@@ -672,91 +632,26 @@ async def decide(
         persona_bias = {}
         logger.warning("[kernel] adapt.load_persona failed: %s", e)
 
-    # WorldModel simulate
-    world_sim = None
-    if ctx.get("_world_sim_done"):
-        world_sim = ctx.get("_world_sim_result")
-        skip_reasons["world_simulate"] = "already_done_by_pipeline"
-    elif fast_mode:
-        skip_reasons["world_simulate"] = "fast_mode"
-    else:
-        try:
-            world_sim = world_model.simulate(
-                user_id=user_id,
-                query=q_text,
-                chosen=None,
-            )
-            extras["world"] = {
-                "prediction": world_sim,
-                "source": "world.simulate()",
-            }
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras["world"] = {
-                "error": f"world.simulate failed: {repr(e)[:80]}",
-            }
-
-    # ★ env tools: pipeline から渡されていればスキップ
-    env_logs: Dict[str, Any] = {}
-    pipeline_env = ctx.get("_pipeline_env_tools")
-    if pipeline_env and isinstance(pipeline_env, dict):
-        env_logs = pipeline_env
-        skip_reasons["env_tools"] = "provided_by_pipeline"
-    elif fast_mode:
-        env_logs["skipped"] = {"reason": "fast_mode"}
-        skip_reasons["env_tools"] = "fast_mode"
-    else:
-        try:
-            ql = q_text.lower()
-
-            if ctx.get("use_env_tools"):
-                env_logs["web_search"] = run_env_tool(
-                    "web_search",
-                    query=q_text,
-                    max_results=3,
-                )
-                env_logs["github_search"] = run_env_tool(
-                    "github_search",
-                    query=q_text,
-                    max_results=3,
-                )
-            else:
-                if "github" in ql:
-                    env_logs["github_search"] = run_env_tool(
-                        "github_search",
-                        query=q_text,
-                        max_results=3,
-                    )
-                if any(k in ql for k in ["agi", "論文", "paper", "research"]):
-                    env_logs["web_search"] = run_env_tool(
-                        "web_search",
-                        query=q_text,
-                        max_results=3,
-                    )
-        except (TypeError, ValueError, RuntimeError) as e:
-            env_logs["error"] = f"run_env_tool failed: {repr(e)[:200]}"
-
-    if env_logs:
-        extras["env_tools"] = env_logs
+    world_sim = ctx.get("world_simulation")
+    if isinstance(ctx.get("env_tools"), dict):
+        extras["env_tools"] = dict(ctx.get("env_tools") or {})
 
     # intent
     intent = _detect_intent(q_text)
 
     # =======================================================
-    # ★ Planner: pipeline から渡されていればスキップ
+    # Planner output is accepted from context; kernel does not orchestrate it.
     # =======================================================
 
     alts: List[Dict[str, Any]] = list(alternatives or [])
     alts = _filter_alts_by_intent(intent, q_text, alts)
 
-    planner_obj: Dict[str, Any] | None = None
-
-    # ★ Pipeline から planner_result が渡されていれば使用
-    pipeline_planner = ctx.get("_pipeline_planner")
-    if pipeline_planner and isinstance(pipeline_planner, dict):
-        planner_obj = pipeline_planner
-        skip_reasons["planner"] = "provided_by_pipeline"
-        
-        steps = pipeline_planner.get("steps") or []
+    planner_obj = ctx.get("planner") if isinstance(ctx.get("planner"), dict) else None
+    if planner_obj is None and isinstance(ctx.get("_pipeline_planner"), dict):
+        planner_obj = ctx.get("_pipeline_planner")
+        legacy_skip_reasons["planner"] = "provided_by_pipeline"
+    if planner_obj is not None:
+        steps = planner_obj.get("steps") or []
         if steps and not alts:
             for idx, st in enumerate(steps, start=1):
                 if not isinstance(st, dict):
@@ -773,80 +668,8 @@ async def decide(
                 alt["meta"] = st
                 alts.append(alt)
 
-    # code_change_plan モード
-    elif intent == "plan" and mode == "code_change_plan":
-        bench_payload = ctx.get("bench_payload") or ctx.get("bench") or {}
-        world_state_for_tasks = ctx.get("world_state")
-        doctor_report = ctx.get("doctor_report")
-
-        try:
-            code_plan = planner_core.generate_code_tasks(
-                bench=bench_payload,
-                world_state=world_state_for_tasks,
-                doctor_report=doctor_report,
-            )
-            extras["code_change_plan"] = code_plan
-            planner_obj = {"mode": "code_change_plan", "plan": code_plan}
-
-            tasks = code_plan.get("tasks") or []
-            alts = []
-            for t in tasks:
-                if not isinstance(t, dict):
-                    continue
-                tid = t.get("id") or uuid.uuid4().hex
-                priority = (t.get("priority") or "medium").upper()
-                title = t.get("title") or "コード変更タスク"
-                kind = t.get("kind") or "code_change"
-                module = t.get("module") or "unknown"
-                path = t.get("path") or ""
-
-                desc_parts = [f"kind={kind}", f"module={module}"]
-                if path:
-                    desc_parts.append(f"path={path}")
-                if t.get("detail"):
-                    desc_parts.append(f"detail={t['detail']}")
-
-                alt = _mk_option(
-                    title=f"[{priority}] {title}",
-                    description=" / ".join(desc_parts),
-                    _id=tid,
-                )
-                alt["meta"] = t
-                alts.append(alt)
-
-        except (TypeError, ValueError, RuntimeError) as e:
-            extras["code_change_plan_error"] = f"generate_code_tasks failed: {repr(e)[:120]}"
-
-    # 通常モード → PlannerOS 呼び出し
-    if not alts and planner_obj is None:
-        try:
-            planner_obj = planner_core.plan_for_veritas_agi(
-                context=ctx,
-                query=q_text,
-            )
-            steps = planner_obj.get("steps") or []
-
-            alts = []
-            for idx, st in enumerate(steps, start=1):
-                if not isinstance(st, dict):
-                    continue
-                sid = st.get("id") or f"step_{idx}"
-                title = st.get("title") or f"step_{idx}"
-                detail = st.get("detail") or st.get("description") or ""
-
-                alt = _mk_option(
-                    title=title,
-                    description=detail,
-                    _id=sid,
-                )
-                alt["meta"] = st
-                alts.append(alt)
-
-        except Exception as e:
-            extras.setdefault("planner_error", {})
-            extras["planner_error"]["detail"] = repr(e)
-            if not alts:
-                alts = _gen_options_by_intent(intent)
+    if not alts:
+        alts = _gen_options_by_intent(intent)
 
     if planner_obj is not None:
         extras["planner"] = planner_obj
@@ -937,35 +760,6 @@ async def decide(
         "snippet": f"query='{q_text}' evaluated with {len(alts)} alternatives (mode={mode})",
         "confidence": 0.8,
     })
-
-    # MemoryOS から episodic evidence（pipeline 未提供時のみ）
-    if not pipeline_evidence:
-        try:
-            decision_snapshot = {
-                "request_id": req_id,
-                "query": q_text,
-                "context": ctx,
-                "chosen": chosen,
-                "alternatives": alts,
-                "evidence": evidence,
-                "extras": extras,
-                "telos_score": telos_score,
-            }
-
-            mem_evs = mem_core.get_evidence_for_decision(
-                decision_snapshot,
-                user_id=user_id,
-                top_k=max(min_evidence, 5),
-            )
-            if mem_evs:
-                evidence.extend(mem_evs)
-                memory_evidence_count = len(mem_evs)
-                extras.setdefault("memory", {})
-                extras["memory"]["evidence_count"] = memory_evidence_count
-                extras["memory"]["citations"] = mem_evs
-        except (TypeError, ValueError, RuntimeError) as e:
-            extras.setdefault("memory", {})
-            extras["memory"]["evidence_error"] = f"get_evidence_for_decision failed: {repr(e)[:80]}"
 
     # FUJI Gate
     try:
@@ -1077,101 +871,6 @@ async def decide(
         extras.setdefault("affect", {})
         extras["affect"]["reflection_template_error"] = repr(e)
 
-    # 学習＋AGIゴール自己調整
-    if not fast_mode and not ctx.get("_agi_goals_adjusted_by_pipeline"):
-        try:
-            with adapt.PERSONA_UPDATE_LOCK:
-                persona2 = adapt.update_persona_bias_from_history(window=50)
-
-                b = dict(persona2.get("bias_weights") or {})
-                key = (chosen.get("title") or "").strip().lower() or f"@id:{chosen.get('id')}"
-                if key:
-                    b[key] = b.get(key, 0.0) + 0.05
-
-                s = sum(b.values()) or 1.0
-                b = {kk: vv / s for kk, vv in b.items()}
-                b = adapt.clean_bias_weights(b)
-
-                world_snap: Dict[str, Any] = {}
-                if isinstance(world_sim, dict):
-                    world_snap = dict(world_sim)
-
-                value_ema = float(telos_score)
-                fuji_risk = float(fuji_result.get("risk", 0.05))
-
-                new_bias = agi_goals.auto_adjust_goals(
-                    bias_weights=b,
-                    world_snap=world_snap,
-                    value_ema=value_ema,
-                    fuji_risk=fuji_risk,
-                )
-
-                persona2["bias_weights"] = new_bias
-                adapt.save_persona(persona2)
-
-            extras.setdefault("agi_goals", {})
-            extras["agi_goals"]["last_auto_adjust"] = {
-                "value_ema": value_ema,
-                "fuji_risk": fuji_risk,
-            }
-
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras.setdefault("agi_goals", {})
-            extras["agi_goals"]["error"] = repr(e)
-    else:
-        extras.setdefault("agi_goals", {})
-        extras["agi_goals"]["skipped"] = {"reason": "fast_mode or pipeline"}
-
-    # Decision ログを MemoryOS に保存（pipeline で保存済みならスキップ）
-    if not ctx.get("_episode_saved_by_pipeline"):
-        try:
-            episode_text = (
-                f"[query] {q_text}\n"
-                f"[chosen] {chosen.get('title')}\n"
-                f"[mode] {mode}\n"
-                f"[intent] {intent}\n"
-                f"[telos_score] {telos_score}"
-            )
-
-            episode_record = {
-                "text": episode_text,
-                "tags": ["episode", "decide", "veritas"],
-                "meta": {
-                    "user_id": user_id,
-                    "request_id": req_id,
-                    "mode": mode,
-                    "intent": intent,
-                },
-            }
-            redacted_episode_record = redact_payload(episode_record)
-            if redacted_episode_record != episode_record:
-                logger.warning(
-                    "PII detected in kernel.decide episode log; masked before persistence."
-                )
-                extras.setdefault("memory_log", {})
-                extras["memory_log"]["warning"] = (
-                    "PII detected in episode log; masked before persistence."
-                )
-
-            try:
-                mem_core.MEM.put("episodic", redacted_episode_record)
-            except TypeError:
-                mem_core.MEM.put(
-                    user_id,
-                    f"decision:{req_id}",
-                    redacted_episode_record,
-                )
-
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras.setdefault("memory_log", {})
-            extras["memory_log"]["error"] = repr(e)
-    else:
-        skip_reasons["episode_save"] = "already_saved_by_pipeline"
-
-    # =======================================================
-    # metrics / world_state / doctor
-    # =======================================================
-    latency_ms: int | None = None
     try:
         latency_ms = int((time.time() - start_ts) * 1000)
         extras.setdefault("metrics", {})
@@ -1179,161 +878,23 @@ async def decide(
     except (TypeError, ValueError, OverflowError):
         pass
 
-    # world_state.json 更新（Pipeline が行う場合はスキップ）
-    if not ctx.get("_world_state_updated_by_pipeline"):
-        try:
-            world_model.update_from_decision(
-                user_id=user_id,
-                query=q_text,
-                chosen=chosen,
-                gate=fuji_result,
-                values={"total": telos_score},
-                planner=extras.get("code_change_plan") or extras.get("planner"),
-                latency_ms=latency_ms,
-            )
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras.setdefault("world_state_update", {})
-            extras["world_state_update"]["error"] = repr(e)
-    else:
-        skip_reasons["world_state_update"] = "already_done_by_pipeline"
+    legacy_flag_map = {
+        "_world_state_injected": ("world_model_inject", "already_injected_by_pipeline"),
+        "_episode_saved_by_pipeline": ("episode_save", "already_saved_by_pipeline"),
+        "_world_state_updated_by_pipeline": ("world_state_update", "already_done_by_pipeline"),
+        "_daily_plans_generated_by_pipeline": ("daily_plans", "already_generated_by_pipeline"),
+    }
+    for flag, reason_tuple in legacy_flag_map.items():
+        if ctx.get(flag):
+            key, value = reason_tuple
+            legacy_skip_reasons[key] = value
+    if isinstance(ctx.get("_pipeline_env_tools"), dict):
+        legacy_skip_reasons["env_tools"] = "provided_by_pipeline"
+    elif fast_mode:
+        legacy_skip_reasons["env_tools"] = "fast_mode"
 
-    # doctor 自動実行
-    # ★ C-1 修正: レート制限付き（最低 _DOCTOR_MIN_INTERVAL_SEC 秒間隔）
-    # ★ C-1b 修正: アクティブプロセス追跡で並行起動を防止
-    auto_doctor = ctx.get("auto_doctor", False)
-    if auto_doctor and not ctx.get("_doctor_triggered_by_pipeline"):
-        if not _is_doctor_confinement_profile_active():
-            extras.setdefault("doctor", {})
-            extras["doctor"]["skipped"] = "confinement_required"
-            extras["doctor"]["security_warning"] = (
-                "auto_doctor requires seccomp/AppArmor confinement"
-            )
-        else:
-            global _doctor_last_run, _doctor_active_proc
-            _should_run_doctor = False
-            with _doctor_lock:
-                # ★ C-1b: 既存プロセスがまだ実行中なら新規起動をスキップ
-                if _doctor_active_proc is not None:
-                    if _doctor_active_proc.poll() is None:
-                        extras.setdefault("doctor", {})
-                        extras["doctor"]["skipped"] = "already_running"
-                        _should_run_doctor = False
-                    else:
-                        _doctor_active_proc = None
-                if _doctor_active_proc is None:
-                    now = time.time()
-                    if now - _doctor_last_run >= _DOCTOR_MIN_INTERVAL_SEC:
-                        _doctor_last_run = now
-                        _should_run_doctor = True
-                    else:
-                        extras.setdefault("doctor", {})
-                        extras["doctor"]["skipped"] = "rate_limited"
-
-            if _should_run_doctor:
-                try:
-                    import os
-                    from pathlib import Path
-
-                    python_executable = sys.executable
-                    if not _is_safe_python_executable(python_executable):
-                        raise ValueError("Invalid Python executable path")
-
-                    log_dir = Path(os.path.expanduser("~/.veritas/logs"))
-                    log_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-                    doctor_log = log_dir / "doctor.log"
-                    # ★ セキュリティ修正: ログファイルを制限的なパーミッション (0o600) で開く
-                    fd = _open_doctor_log_fd(str(doctor_log))
-                    try:
-                        os.write(fd, f"\n--- Doctor started at {datetime.now(timezone.utc).isoformat()} ---\n".encode("utf-8"))
-                        doctor_timeout = 300  # 5 minutes max
-                        proc = subprocess.Popen(  # nosec B603 - fixed argv list, shell disabled
-                            [python_executable, "-m", "veritas_os.scripts.doctor"],
-                            stdout=fd,
-                            stderr=subprocess.STDOUT,
-                            shell=False,
-                        )
-                        # ★ C-1b: アクティブプロセスを追跡
-                        with _doctor_lock:
-                            _doctor_active_proc = proc
-                        # Reap the subprocess in a background thread to prevent zombies;
-                        # enforce a timeout to avoid indefinitely hanging processes.
-                        def _make_doctor_reaper(p: subprocess.Popen, t: int):
-                            """タイムアウト付きでdoctorプロセスを待機し、終了後にアクティブ追跡をクリアする。"""
-
-                            def _run():
-                                try:
-                                    p.wait(timeout=t)
-                                except subprocess.TimeoutExpired:
-                                    p.kill()
-                                    p.wait()
-                                finally:
-                                    with _doctor_lock:
-                                        global _doctor_active_proc
-                                        if _doctor_active_proc is p:
-                                            _doctor_active_proc = None
-
-                            return _run
-
-                        _threading.Thread(
-                            target=_make_doctor_reaper(proc, doctor_timeout),
-                            daemon=True,
-                        ).start()
-                    finally:
-                        # Close our copy of the fd; the subprocess has its own copy.
-                        os.close(fd)
-                except (
-                    TypeError,
-                    ValueError,
-                    OSError,
-                    RuntimeError,
-                    subprocess.SubprocessError,
-                ) as e:
-                    extras.setdefault("doctor", {})
-                    extras["doctor"]["error"] = repr(e)
-
-    # experiments / curriculum
-    if not ctx.get("_daily_plans_generated_by_pipeline"):
-        try:
-            from . import experiments as experiment_core
-            from . import curriculum as curriculum_core
-
-            try:
-                world_state_full = world_model.get_state()
-            except (TypeError, ValueError, RuntimeError, OSError):
-                world_state_full = None
-
-            value_ema_for_day = float(telos_score)
-
-            todays_exps = experiment_core.propose_experiments_for_today(
-                user_id=user_id,
-                world_state=world_state_full,
-                value_ema=value_ema_for_day,
-            )
-            todays_tasks = curriculum_core.plan_today(
-                user_id=user_id,
-                world_state=world_state_full,
-                value_ema=value_ema_for_day,
-            )
-
-            extras["experiments"] = [e.to_dict() for e in todays_exps]
-            extras["curriculum"] = [t.to_dict() for t in todays_tasks]
-
-        except (
-            TypeError,
-            ValueError,
-            RuntimeError,
-            ImportError,
-            OSError,
-            AttributeError,
-        ) as e:
-            extras.setdefault("daily_plans", {})
-            extras["daily_plans"]["error"] = repr(e)
-    else:
-        skip_reasons["daily_plans"] = "already_generated_by_pipeline"
-
-    # スキップ理由を extras に記録
-    if skip_reasons:
-        extras["_skip_reasons"] = skip_reasons
+    if legacy_skip_reasons:
+        extras["_skip_reasons"] = legacy_skip_reasons
 
     # =======================================================
     # レスポンス構築（旧 DecideResponse 互換 shape に寄せる）
