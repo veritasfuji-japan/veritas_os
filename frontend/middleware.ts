@@ -11,6 +11,8 @@ export function generateNonce(): string {
 
 /**
  * Builds an enforced nonce-based CSP policy string.
+ *
+ * This policy intentionally excludes `unsafe-inline` for scripts.
  */
 export function buildCspEnforced(nonce: string): string {
   return [
@@ -51,12 +53,23 @@ export function buildCspReportOnly(nonce: string): string {
 
 /**
  * Attaches nonce-based CSP headers for every request.
+ *
+ * The nonce is also forwarded through `x-nonce` request header so Next.js can
+ * attach it to framework inline scripts during rendering.
  */
-export function middleware(_request: NextRequest): NextResponse {
+export function middleware(request: NextRequest): NextResponse {
   const nonce = generateNonce();
   const cspEnforced = buildCspEnforced(nonce);
   const cspReportOnly = buildCspReportOnly(nonce);
-  const response = NextResponse.next();
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders
+    }
+  });
 
   response.headers.set('x-veritas-nonce', nonce);
   response.headers.set('Content-Security-Policy', cspEnforced);

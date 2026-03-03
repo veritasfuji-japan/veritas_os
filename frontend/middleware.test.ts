@@ -36,11 +36,13 @@ describe('middleware CSP', () => {
     expect(scriptDirective).not.toContain("'unsafe-inline'");
   });
 
-  it('sets nonce-based enforced CSP and nonce-based report-only CSP headers', () => {
-    const response = middleware({} as never);
+  it('sets nonce-based CSP headers and forwards nonce to the Next.js request', () => {
+    const response = middleware({ headers: new Headers() } as never);
     const csp = response.headers.get('Content-Security-Policy') ?? '';
     const cspReportOnly = response.headers.get('Content-Security-Policy-Report-Only') ?? '';
     const nonce = response.headers.get('x-veritas-nonce') ?? '';
+    const forwardedNonce = response.headers.get('x-middleware-request-x-nonce') ?? '';
+
     const scriptDirective = csp
       .split(';')
       .find((directive) => directive.trim().startsWith('script-src'));
@@ -53,5 +55,6 @@ describe('middleware CSP', () => {
     expect(scriptDirective).not.toContain("'unsafe-inline'");
     expect(reportOnlyScriptDirective).toContain(`'nonce-${nonce}'`);
     expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
+    expect(forwardedNonce).toBe(nonce);
   });
 });
