@@ -12,9 +12,12 @@ export function generateNonce(): string {
 
 /**
  * Returns whether enforced CSP should require script nonce tokens.
+ *
+ * Strict nonce enforcement is enabled by default and can be temporarily
+ * disabled via ``VERITAS_CSP_ENFORCE_NONCE=false`` during emergency rollback.
  */
 export function shouldEnforceNonceCsp(): boolean {
-  return process.env[ENFORCE_NONCE_ENV] === 'true';
+  return process.env[ENFORCE_NONCE_ENV] !== 'false';
 }
 
 /**

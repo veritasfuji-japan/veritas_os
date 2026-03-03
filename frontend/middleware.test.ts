@@ -47,8 +47,8 @@ describe('middleware CSP', () => {
     expect(scriptDirective).not.toContain("'unsafe-inline'");
   });
 
-  it('defaults nonce enforcement flag to false', () => {
-    expect(shouldEnforceNonceCsp()).toBe(false);
+  it('defaults nonce enforcement flag to true', () => {
+    expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
   it('sets CSP headers and forwards nonce to the Next.js request', () => {
@@ -66,7 +66,8 @@ describe('middleware CSP', () => {
       .find((directive) => directive.trim().startsWith('script-src'));
 
     expect(nonce).not.toBe('');
-    expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(scriptDirective).toContain(`'nonce-${nonce}'`);
+    expect(scriptDirective).not.toContain("'unsafe-inline'");
     expect(reportOnlyScriptDirective).toContain(`'nonce-${nonce}'`);
     expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
     expect(forwardedNonce).toBe(nonce);
