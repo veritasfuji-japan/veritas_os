@@ -41,7 +41,7 @@ jobs:
         run: ruff check veritas_os/
 
       - name: Responsibility boundary check
-        run: python scripts/architecture/check_responsibility_boundaries.py
+        run: python scripts/architecture/check_responsibility_boundaries.py --report-format json
 
       - name: Bandit security scan
         run: |
