@@ -732,6 +732,29 @@ def test_decide_pipeline_execution_failure_classifies_invalid_input(monkeypatch)
     assert data["detail"] == server.DECIDE_GENERIC_ERROR
 
 
+def test_decide_pipeline_execution_failure_classifies_permission_denied(monkeypatch):
+    """/v1/decide failures should expose permission_denied category safely."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            raise PermissionError("operation is not permitted")
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 503
+    data = response.json()
+    assert data["error"] == server.DECIDE_GENERIC_ERROR
+    assert data["failure_category"] == "permission_denied"
+    assert data["detail"] == server.DECIDE_GENERIC_ERROR
+
+
 def test_fuji_validate_uses_validate_action(monkeypatch):
     """
     fuji_core.validate_action がある場合、その経路が使われる
