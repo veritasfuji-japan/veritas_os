@@ -3,7 +3,49 @@ PYTHON_FALLBACK ?= 3.12
 UV ?= uv
 TEST_ARGS ?=
 
-.PHONY: test test-cov test-split
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split
+
+# ── Setup & Development ──────────────────────────────────────────────────
+
+setup:
+	@bash setup.sh
+
+dev:
+	@if [ ! -f .env ]; then echo "[veritas] .env not found. Run 'make setup' first."; exit 1; fi
+	@if [ ! -x .venv/bin/python ]; then echo "[veritas] .venv not found. Run 'make setup' first."; exit 1; fi
+	@echo "[veritas] Starting backend on http://localhost:8000 ..."
+	@set -a && . ./.env && set +a && \
+	.venv/bin/uvicorn veritas_os.api.server:app --reload --host 0.0.0.0 --port 8000
+
+dev-frontend:
+	@echo "[veritas] Starting frontend on http://localhost:3000 ..."
+	pnpm ui:dev
+
+dev-all:
+	@echo "[veritas] Starting backend + frontend ..."
+	@$(MAKE) dev &
+	@$(MAKE) dev-frontend &
+	@wait
+
+up:
+	docker compose up --build
+
+down:
+	docker compose down
+
+logs:
+	docker compose logs -f
+
+health:
+	@curl -sf http://localhost:8000/health | python3 -m json.tool 2>/dev/null \
+		&& echo "[veritas] Backend OK" \
+		|| echo "[veritas] Backend not responding"
+
+clean-venv:
+	rm -rf .venv
+	@echo "[veritas] .venv removed."
+
+# ── Tests ────────────────────────────────────────────────────────────────
 
 test:
 	@command -v $(UV) >/dev/null 2>&1 || { echo "Error: uv is required. Install from https://docs.astral.sh/uv/."; exit 1; }
