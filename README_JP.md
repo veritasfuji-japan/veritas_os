@@ -172,14 +172,6 @@ python -m uvicorn veritas_os.api.server:app --reload --port 8000
 
 ---
 
-## Operational Security Deep Dive
-
-- **プレースホルダ/短いシークレットは使用しない**: `VERITAS_API_SECRET` は長くランダムな値（推奨32文字以上）を設定してください。短い値や既知値はHMAC保護を実質的に弱体化します。
-- **CORS安全性**: `allow_credentials` が有効な場合、ワイルドカードオリジン（`*`）は避け、信頼済みオリジンを明示してください。
-- **Legacy pickle移行は高リスク**: MemoryOS で旧pickle移行を有効化する場合、短期移行用途に限定し、完了後は無効化してください。
-
----
-
 ## Docker（GHCR）
 
 最新イメージ取得:
