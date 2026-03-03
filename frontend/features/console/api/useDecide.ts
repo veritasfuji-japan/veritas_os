@@ -117,8 +117,10 @@ export function useDecide({
       }
 
       if (!response.ok) {
-        const bodyText = await response.text();
-        const nextError = `HTTP ${response.status}: ${bodyText || "unknown error"}`;
+        const nextError = t(
+          `HTTP ${response.status}: リクエストに失敗しました。時間をおいて再試行してください。`,
+          `HTTP ${response.status}: Request failed. Please try again later.`,
+        );
         setError(nextError);
         setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: nextError }]);
         setResult(null);
