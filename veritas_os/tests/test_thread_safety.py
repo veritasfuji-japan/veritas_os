@@ -10,17 +10,18 @@ from unittest import mock
 
 import pytest
 
-from veritas_os.memory.index_cosine import CosineIndex
+from veritas_os.memory.index_cosine import CosineIndex, _RWLock
 
 
 class TestCosineIndexThreadSafety:
     """Tests for CosineIndex thread safety."""
 
     def test_has_lock(self):
-        """Test that CosineIndex has a lock."""
+        """Test that CosineIndex has a RWLock for concurrent read / exclusive write."""
         idx = CosineIndex(dim=4)
         assert hasattr(idx, "_lock")
-        assert isinstance(idx._lock, type(threading.RLock()))
+        # RLock → _RWLock に変更済み（複数読み取り並行 / 書き込み排他）
+        assert isinstance(idx._lock, _RWLock)
 
     def test_concurrent_add_no_corruption(self, tmp_path: Path):
         """Test that concurrent adds don't corrupt the index."""

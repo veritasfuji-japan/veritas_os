@@ -18,10 +18,21 @@ def _bypass_ssrf(monkeypatch):
     CI / sandbox environments often cannot resolve external hostnames
     (e.g. example.com).  Tests that mock ``requests.post`` never make
     real HTTP calls, so the DNS-based guard is irrelevant.
+
+    2点をパッチする:
+    1. _is_private_or_local_host: SSRF プリフライトチェック
+    2. _extract_public_ips_for_url: DNS rebinding ガード（DNS解決失敗でValueError）
     """
     web_search_mod._is_private_or_local_host.cache_clear()
     monkeypatch.setattr(
         web_search_mod, "_is_private_or_local_host", lambda _host: False,
+    )
+    # DNS rebinding ガードもバイパス（サンドボックスでは外部DNS解決が失敗するため）
+    monkeypatch.setattr(
+        web_search_mod, "_extract_public_ips_for_url", lambda _url: {"203.0.113.1"},
+    )
+    monkeypatch.setattr(
+        web_search_mod, "_validate_rebinding_guard", lambda _url, _ips: None,
     )
 
 
@@ -491,6 +502,11 @@ def test_post_with_retry_blocks_dns_rebinding_mismatch(monkeypatch) -> None:
         called["value"] = True
         return DummyResponse({"organic": []})
 
+    # サンドボックスでは外部DNS解決が失敗するため、再解決結果を別IPに固定
+    # (expected_ips={"93.184.216.34"} と不一致になり "DNS result changed" を発生させる)
+    monkeypatch.setattr(
+        web_search_mod, "_extract_public_ips_for_url", lambda _url: {"198.51.100.1"},
+    )
     monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
 
     with pytest.raises(ValueError, match="DNS result changed"):

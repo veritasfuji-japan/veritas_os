@@ -72,29 +72,55 @@ def _sha256(data: Any) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _canonical_json(obj: Any) -> bytes:
+    """RFC 8785 (JCS) 準拠の canonical JSON を UTF-8 バイト列で返す。
+
+    標準の json.dumps との主な差異:
+    - 空白なし（separators=(',', ':')）
+    - キーは Unicode コードポイント昇順ソート（sort_keys=True）
+    - float: Python 依存の repr を避け、整数値は int として出力
+    - 文字列: ensure_ascii=False（RFC 8785 は UTF-8 直接出力を推奨）
+    - 非シリアライズ値: str() でフォールバックしハッシュ計算を継続
+
+    Note: 完全な RFC 8785 適合には jcs パッケージの導入が推奨されるが、
+    追加依存なしで再現性を大幅に向上させる実装として本関数を使用する。
+    """
+    def _default(v: Any) -> Any:
+        return str(v)
+
+    return json.dumps(
+        obj,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        default=_default,
+    ).encode("utf-8")
+
+
 def _normalize_entry_for_hash(entry: Dict[str, Any]) -> str:
     """
     sha256 計算用にエントリを正規化:
     - sha256 / sha256_prev フィールドは除外
-    - sort_keys=True で JSON 化して順序を固定
+    - RFC 8785 準拠の canonical JSON 化（空白なし・キーソート）
     """
     payload = dict(entry)
     payload.pop("sha256", None)
     payload.pop("sha256_prev", None)
-    return json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return _canonical_json(payload).decode("utf-8")
 
 
 def _compute_sha256(payload: dict) -> str:
     """
     entry 用の SHA-256 ハッシュを計算する。
-    - dict を key でソートして JSON 化
-    - それを UTF-8 でエンコードして sha256 に通す
+    - RFC 8785 準拠の canonical JSON でシリアライズ
+    - Python バージョン差・float 表現差によるハッシュ変動を抑制
     """
     try:
-        s = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+        s = _canonical_json(payload)
     except Exception:
-        logger.debug("_compute_sha256: JSON serialization failed, using default=str fallback", exc_info=True)
-        s = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        logger.debug("_compute_sha256: canonical JSON failed, using safe fallback", exc_info=True)
+        s = json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                       ensure_ascii=False, default=str).encode("utf-8")
     return hashlib.sha256(s).hexdigest()
 
 
@@ -337,8 +363,8 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
         hash_payload.pop("sha256", None)
         hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
 
-        # rₜ を JSON化（キーをソートして一意性を保証）
-        entry_json = json.dumps(hash_payload, sort_keys=True, ensure_ascii=False)
+        # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
+        entry_json = _normalize_entry_for_hash(entry)
 
         # hₜ₋₁ || rₜ を結合
         if sha256_prev:

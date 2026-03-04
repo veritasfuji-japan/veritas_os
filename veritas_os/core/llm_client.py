@@ -29,7 +29,7 @@ import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import requests
+import httpx
 
 from veritas_os.core import affect as affect_core
 from veritas_os.core.utils import _redact_text
@@ -533,11 +533,11 @@ def chat(
 
     for attempt in range(1, LLM_MAX_RETRIES + 1):
         try:
-            resp = requests.post(
+            resp = httpx.post(
                 endpoint,
                 headers=headers,
                 json=payload,
-                timeout=(LLM_CONNECT_TIMEOUT, LLM_TIMEOUT),
+                timeout=httpx.Timeout(LLM_TIMEOUT, connect=LLM_CONNECT_TIMEOUT),
             )
 
             # レート制限
@@ -623,7 +623,7 @@ def chat(
                 "raw": data,
             }
 
-        except requests.exceptions.RequestException as e:
+        except httpx.RequestError as e:
             last_error = e
             wait_time = LLM_RETRY_DELAY * (2 ** (attempt - 1))
             log.warning(

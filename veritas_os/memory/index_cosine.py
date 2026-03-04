@@ -1,6 +1,8 @@
 # veritas/memory/index_cosine.py
 import threading
 import logging
+from contextlib import contextmanager
+from typing import Generator
 
 import numpy as np
 from pathlib import Path
@@ -9,6 +11,49 @@ from typing import Any, Iterable, List, Optional, Tuple
 from veritas_os.core.atomic_io import atomic_write_npz
 
 logger = logging.getLogger(__name__)
+
+
+class _RWLock:
+    """シンプルな Read-Write Lock。
+
+    - 複数スレッドの同時読み取り（read）を許可。
+    - 書き込み（write）は排他的で、進行中の読み取りが完了するまで待機する。
+    - 書き込み待機中は新規読み取りをブロックして書き込みスタベーションを防ぐ。
+    """
+
+    def __init__(self) -> None:
+        self._read_count = 0
+        self._write_waiting = 0
+        self._cond = threading.Condition(threading.Lock())
+
+    @contextmanager
+    def read(self) -> Generator[None, None, None]:
+        with self._cond:
+            # 書き込み待機中は新規読み取りを待たせる（書き込みスタベーション防止）
+            while self._write_waiting > 0:
+                self._cond.wait()
+            self._read_count += 1
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._read_count -= 1
+                if self._read_count == 0:
+                    self._cond.notify_all()
+
+    @contextmanager
+    def write(self) -> Generator[None, None, None]:
+        with self._cond:
+            self._write_waiting += 1
+            # 全ての読み取りが完了するまで待機
+            while self._read_count > 0:
+                self._cond.wait()
+            self._write_waiting -= 1
+        try:
+            yield
+        finally:
+            with self._cond:
+                self._cond.notify_all()
 
 
 def _validate_finite_array(name: str, values: np.ndarray) -> None:
@@ -119,7 +164,7 @@ class CosineIndex:
 
         self.dim = dim
         self.path = Path(path) if path is not None else None
-        self._lock = threading.RLock()  # リエントラントロック
+        self._lock = _RWLock()  # 複数読み取り並行 / 書き込み排他
 
         self.vecs = np.zeros((0, dim), dtype=np.float32)  # (N, D)
         self.ids: List[str] = []                          # len=N
@@ -130,7 +175,7 @@ class CosineIndex:
 
     # ---- 永続化 -------------------------------------------------
     def _load(self) -> None:
-        with self._lock:
+        with self._lock.write():
             if not _is_safe_index_path(self.path):
                 self.vecs = np.zeros((0, self.dim), dtype=np.float32)
                 self.ids = []
@@ -204,7 +249,7 @@ class CosineIndex:
     def save(self) -> None:
         if self.path is None:
             return
-        with self._lock:
+        with self._lock.write():
             try:
                 atomic_write_npz(
                     self.path,
@@ -217,7 +262,7 @@ class CosineIndex:
     # ---- 基本操作 ------------------------------------------------
     @property
     def size(self) -> int:
-        with self._lock:
+        with self._lock.read():
             return len(self.ids)
 
     def add(self, vecs: Any, ids: Iterable[str]) -> None:
@@ -232,7 +277,7 @@ class CosineIndex:
         if len(ids) != vecs.shape[0]:
             raise ValueError(f"CosineIndex.add: len(ids)={len(ids)} != vecs.shape[0]={vecs.shape[0]}")
 
-        with self._lock:
+        with self._lock.write():
             if self.vecs.size == 0:
                 self.vecs = vecs
             else:
@@ -246,7 +291,7 @@ class CosineIndex:
         qv: (D,) or (Q, D)
         k: 取得する上位件数（1以上）
         戻り値: [[(id, score), ...], ...]  （クエリごとに1リスト）
-        スレッドセーフ: 検索中は一貫したスナップショットを使用
+        スレッドセーフ: 複数スレッドの同時読み取り（RWLock）に対応
         """
         if not isinstance(k, int) or isinstance(k, bool):
             raise ValueError(f"CosineIndex.search: k must be an int, got {type(k).__name__}")
@@ -258,8 +303,8 @@ class CosineIndex:
         if q.shape[1] != self.dim:
             raise ValueError(f"CosineIndex.search: dim mismatch {q.shape[1]} != {self.dim}")
 
-        with self._lock:
-            # ロック内でスナップショットを取得
+        with self._lock.read():
+            # 読み取りロック内でスナップショットを取得（複数スレッド並行可）
             if len(self.ids) == 0:
                 return [[] for _ in range(q.shape[0])]
 

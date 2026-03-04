@@ -1,17 +1,37 @@
-FROM python:3.11-slim
+# ============================================================
+# Stage 1: builder — 依存ライブラリのインストールのみ
+# テストファイル・docs・.git はここで除外され本番イメージに含まれない
+# ============================================================
+FROM python:3.11-slim AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-WORKDIR /app
+WORKDIR /build
 
 COPY ./veritas_os/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+    && pip install --no-cache-dir --target /build/deps -r /tmp/requirements.txt
 
-COPY . .
+# ============================================================
+# Stage 2: runtime — ランタイムに必要なファイルのみをコピー
+# ============================================================
+FROM python:3.11-slim AS runtime
 
-# ★ M-5 修正: 非特権ユーザーで実行（セキュリティ強化）
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app/deps
+
+WORKDIR /app
+
+# ビルドステージからインストール済みパッケージのみコピー（ビルドツール類を除外）
+COPY --from=builder /build/deps /app/deps
+
+# アプリケーションコードのみコピー（docs・tests・.git を除外）
+COPY veritas_os/ ./veritas_os/
+COPY packages/ ./packages/
+
+# 非特権ユーザーで実行
 RUN adduser --disabled-password --gecos "" appuser \
     && chown -R appuser:appuser /app
 USER appuser
