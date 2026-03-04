@@ -628,8 +628,71 @@ def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
     return data
 
 
+def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
+    """YAML ポリシーからランタイム用コンパイル済みパターンを再構築する。
+
+    ポリシーロード時・リロード時に呼び出すことで、
+    モジュールトップレベルのハードコード変数をポリシー定義で上書きする。
+
+    - _PROMPT_INJECTION_PATTERNS: プロンプトインジェクション検出パターン
+    - _CONFUSABLE_ASCII_MAP: Unicode 同形異体文字の正規化マップ
+    - _RE_PHONE / _RE_EMAIL / _RE_ADDRJP / _RE_NAMEJP: PII 検出パターン
+
+    パースエラーや不正値は警告ログを出して無視し、既存のハードコード値を維持する。
+    """
+    global _PROMPT_INJECTION_PATTERNS, _CONFUSABLE_ASCII_MAP
+    global _RE_PHONE, _RE_EMAIL, _RE_ADDRJP, _RE_NAMEJP
+
+    # ---- プロンプトインジェクションパターン ----
+    pi_section = policy.get("prompt_injection") or {}
+    raw_patterns = pi_section.get("patterns") or []
+    if raw_patterns:
+        built: List[tuple[re.Pattern[str], float, str]] = []
+        for item in raw_patterns:
+            if not isinstance(item, dict):
+                continue
+            try:
+                compiled = re.compile(item["pattern"], re.IGNORECASE)
+                weight = float(item.get("weight", 0.4))
+                label = str(item.get("label", "unknown"))
+                built.append((compiled, weight, label))
+            except (re.error, KeyError, TypeError, ValueError) as exc:
+                _logger.warning("[FUJI] prompt_injection pattern skipped: %r – %s", item, exc)
+        if built:
+            _PROMPT_INJECTION_PATTERNS = built
+
+    # ---- Unicode 同形異体文字マップ ----
+    confusables = (policy.get("unicode_normalization") or {}).get("confusables") or {}
+    if confusables and isinstance(confusables, dict):
+        try:
+            _CONFUSABLE_ASCII_MAP = str.maketrans(confusables)
+        except (TypeError, ValueError) as exc:
+            _logger.warning("[FUJI] unicode_normalization.confusables invalid: %s", exc)
+
+    # ---- PII 正規表現パターン ----
+    pii_pats = (policy.get("pii") or {}).get("patterns") or {}
+    if not isinstance(pii_pats, dict):
+        return
+
+    _re_map = {
+        "phone":         "_RE_PHONE",
+        "email":         "_RE_EMAIL",
+        "address_jp":    "_RE_ADDRJP",
+        "person_name_jp": "_RE_NAMEJP",
+    }
+    for key, var_name in _re_map.items():
+        pattern_str = pii_pats.get(key)
+        if pattern_str and isinstance(pattern_str, str):
+            try:
+                globals()[var_name] = re.compile(pattern_str)
+            except re.error as exc:
+                _logger.warning("[FUJI] pii.patterns.%s invalid regex: %s", key, exc)
+
+
 _POLICY_PATH = _policy_path()
 POLICY: Dict[str, Any] = _load_policy(_POLICY_PATH)
+# ★ YAML からランタイムパターンを初期構築（ハードコードフォールバックを上書き）
+_build_runtime_patterns_from_policy(POLICY)
 try:
     _POLICY_MTIME: float = _POLICY_PATH.stat().st_mtime
 except OSError:
@@ -645,6 +708,8 @@ def reload_policy() -> Dict[str, Any]:
     with _policy_reload_lock:
         path = _policy_path()
         POLICY = _load_policy(path)
+        # ★ リロード後もランタイムパターンを再構築する
+        _build_runtime_patterns_from_policy(POLICY)
         try:
             _POLICY_MTIME = path.stat().st_mtime
         except OSError:
@@ -786,9 +851,16 @@ def _apply_policy(
     """
     base = policy.get("base_thresholds") or {}
 
-    if stakes >= 0.7:
+    # Stakes thresholds: read from policy overrides, fall back to 0.7/0.3
+    overrides = policy.get("overrides") or {}
+    high_stakes_cfg = overrides.get("high_stakes") or {}
+    low_stakes_cfg = overrides.get("low_stakes") or {}
+    high_stakes_gte = _safe_float(high_stakes_cfg.get("when_stakes_gte"), 0.7)
+    low_stakes_lte = _safe_float(low_stakes_cfg.get("when_stakes_lte"), 0.3)
+
+    if stakes >= high_stakes_gte:
         base_thr = _safe_float(base.get("high_stakes", base.get("default", 0.5)), 0.5)
-    elif stakes <= 0.3:
+    elif stakes <= low_stakes_lte:
         base_thr = _safe_float(base.get("low_stakes", base.get("default", 0.5)), 0.5)
     else:
         base_thr = _safe_float(base.get("default", 0.5), 0.5)
@@ -817,7 +889,15 @@ def _apply_policy(
                     }
                 )
 
-    precedence = {"deny": 3, "human_review": 2, "warn": 1, "allow": 0}
+    # Action precedence: read from YAML policy, fall back to hardcoded defaults
+    _default_precedence = {"deny": 3, "human_review": 2, "warn": 1, "allow": 0}
+    raw_prec = policy.get("action_precedence") or {}
+    precedence: Dict[str, int] = {}
+    for _act, _default_val in _default_precedence.items():
+        try:
+            precedence[_act] = int(raw_prec.get(_act, _default_val))
+        except (TypeError, ValueError):
+            precedence[_act] = _default_val
     final_action = "allow"
 
     if violation_details:
@@ -912,7 +992,11 @@ def fuji_core_decide(
     injection_signals = list(injection.get("signals") or [])
     if injection_score > 0.0:
         categories.append("prompt_injection")
-        risk = min(1.0, risk + (0.15 * injection_score))
+        # injection_weight: YAML risk_adjustments > hardcoded default 0.15
+        _inj_weight = _safe_float(
+            (policy.get("risk_adjustments") or {}).get("injection_weight"), 0.15
+        )
+        risk = min(1.0, risk + (_inj_weight * injection_score))
         base_reasons.append(f"prompt_injection_score={injection_score:.2f}")
         if injection_signals:
             base_reasons.append(
@@ -985,7 +1069,11 @@ def fuji_core_decide(
         if is_name_like_only:
             if any(str(c).upper() == "PII" for c in categories):
                 categories = [c for c in categories if str(c).upper() != "PII"]
-            risk = min(float(risk), 0.20)
+            # name_like_only_cap: YAML risk_adjustments > hardcoded default 0.20
+            _name_like_cap = _safe_float(
+                (policy.get("risk_adjustments") or {}).get("name_like_only_cap"), 0.20
+            )
+            risk = min(float(risk), _name_like_cap)
             base_reasons.append("fallback_pii_ignored(name_like_only)")
             guidance = (
                 "heuristic_fallback の name_like 検出は日本語テキストで誤検出が多いため、"
@@ -993,11 +1081,13 @@ def fuji_core_decide(
             )
 
     # --- 既に PII セーフ化済みの場合の緩和 ---
-    # ★ リファクタリング: 設定値から取得
+    # ★ リファクタリング: env config > YAML risk_adjustments > hardcoded default
     try:
         pii_safe_cap = _fuji_cfg.pii_safe_risk_cap
     except (AttributeError, TypeError, ValueError):
-        pii_safe_cap = 0.40
+        pii_safe_cap = _safe_float(
+            (policy.get("risk_adjustments") or {}).get("pii_safe_cap"), 0.40
+        )
 
     if safe_applied:
         filtered = [c for c in categories if str(c).lower() not in ("pii", "pii_exposure")]
@@ -1007,11 +1097,13 @@ def fuji_core_decide(
             base_reasons.append("pii_safe_applied")
 
     # --- evidence 不足ペナルティ（テスト要件：guidance に文言を入れる） ---
-    # ★ リファクタリング: 設定値から取得
+    # ★ リファクタリング: env config > YAML risk_adjustments > hardcoded default
     try:
         low_ev_penalty = _fuji_cfg.low_evidence_risk_penalty
     except (AttributeError, TypeError, ValueError):
-        low_ev_penalty = 0.10
+        low_ev_penalty = _safe_float(
+            (policy.get("risk_adjustments") or {}).get("low_evidence_penalty"), 0.10
+        )
 
     low_ev = evidence_count < int(min_evidence)
     if low_ev:
@@ -1026,11 +1118,13 @@ def fuji_core_decide(
             guidance = (guidance + ("\n\n" if guidance else "") + add_msg)
 
     # --- telos_score による軽いスケーリング ---
-    # ★ リファクタリング: 設定値から取得
+    # ★ リファクタリング: env config > YAML risk_adjustments > hardcoded default
     try:
         telos_risk_scale = _fuji_cfg.telos_risk_scale_factor
     except (AttributeError, TypeError, ValueError):
-        telos_risk_scale = 0.10
+        telos_risk_scale = _safe_float(
+            (policy.get("risk_adjustments") or {}).get("telos_scale_factor"), 0.10
+        )
 
     telos_clamped = max(0.0, min(1.0, telos_score))
     risk *= (1.0 + telos_risk_scale * telos_clamped)
