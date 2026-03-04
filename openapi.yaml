@@ -37,21 +37,26 @@ components:
           type: string
           enum: ["short", "mid", "long"]
         preferences:
-          type: object
+          type: array
+          items:
+            type: string
+          description: "返答スタイル等の好み設定リスト"
+        response_style:
+          type: string
+          enum: ["logic", "emotional", "business", "expert", "casual"]
         tools_allowed:
           type: array
           items:
             type: string
         telos_weights:
           type: object
-          properties:
-            W_Transcendence:
-              type: number
-            W_Struggle:
-              type: number
+          additionalProperties:
+            type: number
         affect_hint:
-          type: string
-          enum: ["calm", "focused", "empathetic", "concise"]
+          type: object
+          additionalProperties:
+            type: string
+          description: "感情ヒント（key-value形式）"
 
     Option:
       type: object
@@ -105,7 +110,7 @@ components:
       properties:
         status:
           type: string
-          enum: ["allow", "modify", "block", "abstain"]
+          enum: ["allow", "modify", "rejected", "block", "abstain"]
         reasons:
           type: array
           items:
@@ -147,6 +152,13 @@ components:
     DecideResponse:
       type: object
       properties:
+        ok:
+          type: boolean
+          description: "レスポンス成否フラグ"
+        error:
+          type: string
+          nullable: true
+          description: "エラー詳細（ok=falseの場合に設定）"
         request_id:
           type: string
         chosen:

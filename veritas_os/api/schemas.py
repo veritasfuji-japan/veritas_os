@@ -223,6 +223,9 @@ class TrustLog(BaseModel):
     # 実運用の落下を避けるため、デフォルトを持たせる（必須思想なら外してOK）
     approver: str = "system"
 
+    # FUJI Gateの判定結果（openapi.yaml で required として定義）
+    fuji: Optional[Dict[str, Any]] = None
+
     sha256_prev: Optional[str] = None
 
 
@@ -432,6 +435,10 @@ class DecideResponse(BaseModel):
     - alternatives/options のミラー互換
     """
     model_config = ConfigDict(extra="allow")
+
+    # レスポンス成否フラグ（サーバーが常に付与）
+    ok: bool = True
+    error: Optional[str] = None
 
     request_id: str = ""
     chosen: Dict[str, Any] = Field(default_factory=dict)

@@ -127,7 +127,7 @@ FujiInternalStatus = Literal["allow", "allow_with_warning", "needs_human_review"
 FujiDecisionStatus = Literal["allow", "hold", "deny"]
 
 # v1互換ステータス
-FujiV1Status = Literal["allow", "rejected", "modify"]
+FujiV1Status = Literal["allow", "modify", "rejected", "block", "abstain"]
 
 
 class FujiViolation(TypedDict, total=False):

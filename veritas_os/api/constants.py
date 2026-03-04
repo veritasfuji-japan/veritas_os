@@ -8,7 +8,7 @@ Also maintains backward compatibility with string constants.
 
 - 想定用途: FUJI safety gate の status フィールド
 - OpenAPI / FujiDecision.status:
-    enum: ["allow", "modify", "block", "abstain"]
+    enum: ["allow", "modify", "rejected", "block", "abstain"]
 """
 
 from __future__ import annotations
