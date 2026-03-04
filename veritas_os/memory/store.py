@@ -128,6 +128,9 @@ class MemoryStore:
         }
         # True のときは「その kind の JSONL 全件がキャッシュ済み」を示す
         self._cache_complete: Dict[str, bool] = {kind: False for kind in FILES}
+        # ★ JSONL オフセットインデックス（kind -> id -> byte_offset）
+        # _load_payloads_for_ids() の O(N) 全件スキャンを O(1) seek に改善
+        self._offset_index: Dict[str, Dict[str, int]] = {kind: {} for kind in FILES}
         # ★ 各 kind ごとに index ファイルパスを渡す
         self.idx = {
             k: CosineIndex(dim, INDEX[k])
@@ -162,11 +165,18 @@ class MemoryStore:
 
             ids, texts = [], []
             with open(path, encoding="utf-8") as f:
-                for line in f:
+                while True:
+                    offset = f.tell()
+                    line = f.readline()
+                    if not line:
+                        break
                     try:
                         j = json.loads(line)
-                        ids.append(j["id"])
-                        self._payload_cache[kind][j["id"]] = j
+                        item_id = j["id"]
+                        ids.append(item_id)
+                        self._payload_cache[kind][item_id] = j
+                        # ★ オフセットを記録（後の seek で O(1) アクセス可能に）
+                        self._offset_index[kind][item_id] = offset
                         texts.append(
                             j.get("text")
                             or j.get("summary")
@@ -211,11 +221,21 @@ class MemoryStore:
         vec = self.emb.embed([j["text"]])
 
         with self._lock:
+            # 書き込み前のファイルサイズ = 次エントリの byte offset
+            try:
+                offset = FILES[kind].stat().st_size if FILES[kind].exists() else 0
+            except OSError:
+                offset = -1  # 取得失敗時はオフセット記録しない
+
             # JSONL へ追記（atomic append with fsync）
             atomic_append_line(FILES[kind], json.dumps(j, ensure_ascii=False))
 
             # payload KV キャッシュ更新
             self._payload_cache[kind][j["id"]] = j
+
+            # ★ オフセットインデックス更新
+            if offset >= 0:
+                self._offset_index[kind][j["id"]] = offset
 
             # index へ追加（.npz も自動で更新）
             self.idx[kind].add(vec, [j["id"]])
@@ -283,12 +303,15 @@ class MemoryStore:
         }
 
     def _load_payloads_for_ids(self, kind: str, ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        """JSONL を逐次走査し、指定 id の payload だけを読み込む。"""
+        """指定 id の payload を JSONL から読み込む。
+
+        オフセットインデックスが存在する id は O(1) seek で直接取得。
+        インデックス未登録の id のみ従来の線形スキャンにフォールバックする。
+        """
         found: Dict[str, Dict[str, Any]] = {}
         if not ids:
             return found
 
-        wanted = set(ids)
         path = FILES[kind]
 
         try:
@@ -300,18 +323,38 @@ class MemoryStore:
         except OSError:
             return found
 
+        offset_map = self._offset_index.get(kind, {})
+
+        # オフセット既知の id は seek で直接読む（O(1) per id）
+        ids_with_offset = [(item_id, offset_map[item_id]) for item_id in ids if item_id in offset_map]
+        ids_without_offset = [item_id for item_id in ids if item_id not in offset_map]
+
         try:
             with open(path, encoding="utf-8") as f:
-                for line in f:
+                for item_id, offset in ids_with_offset:
                     try:
+                        f.seek(offset)
+                        line = f.readline()
                         item = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    _id = item.get("id")
-                    if _id in wanted:
-                        found[_id] = item
-                        if len(found) >= len(wanted):
-                            break
+                        if item.get("id") == item_id:
+                            found[item_id] = item
+                    except (json.JSONDecodeError, OSError):
+                        ids_without_offset.append(item_id)  # フォールバック対象に追加
+
+                # オフセット未登録分のみ線形スキャン
+                if ids_without_offset:
+                    wanted = set(ids_without_offset)
+                    f.seek(0)
+                    for line in f:
+                        try:
+                            item = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        _id = item.get("id")
+                        if _id in wanted:
+                            found[_id] = item
+                            if len(found) >= len(ids):
+                                break
         except (OSError, IOError) as e:
             logger.warning("[MemoryStore] Failed targeted payload load from %s: %s", path, e)
 
