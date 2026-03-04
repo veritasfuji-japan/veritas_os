@@ -61,6 +61,7 @@ export interface TrustLog {
   critics: string[];
   checks: string[];
   approver: string;
+  fuji?: Record<string, unknown> | null;
   sha256_prev?: string | null;
   [key: string]: unknown;
 }
