@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 const NONCE_BYTES = 16;
+const ENFORCE_NONCE_ENV = 'VERITAS_CSP_ENFORCE_NONCE';
 
 /**
  * Generates a CSP nonce for the current response.
@@ -10,15 +11,33 @@ export function generateNonce(): string {
 }
 
 /**
- * Builds a compatibility CSP policy for current Next.js runtime behavior.
+ * Returns whether enforced CSP should require script nonce tokens.
+ *
+ * Nonce enforcement is an explicit rollout flag. Keep compatibility mode
+ * until runtime validation confirms all inline script dependencies are removed.
  */
-export function buildCspEnforced(): string {
+export function shouldEnforceNonceCsp(): boolean {
+  return process.env[ENFORCE_NONCE_ENV] === 'true';
+}
+
+/**
+ * Builds an enforced CSP policy string.
+ *
+ * Compatibility mode keeps `unsafe-inline` for scripts to avoid blocking
+ * framework inline bootstrap scripts. Strict mode switches to nonce-based
+ * script execution and is intended for phased rollout after runtime validation.
+ */
+export function buildCspEnforced(nonce: string, enforceNonce: boolean): string {
+  const scriptDirective = enforceNonce
+    ? `script-src 'self' 'nonce-${nonce}'`
+    : "script-src 'self' 'unsafe-inline'";
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    "script-src 'self' 'unsafe-inline'",
+    scriptDirective,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
@@ -51,12 +70,23 @@ export function buildCspReportOnly(nonce: string): string {
 
 /**
  * Attaches nonce-based CSP headers for every request.
+ *
+ * The nonce is also forwarded through `x-nonce` request header so Next.js can
+ * annotate nonce-aware script tags where supported.
  */
-export function middleware(_request: NextRequest): NextResponse {
+export function middleware(request: NextRequest): NextResponse {
   const nonce = generateNonce();
-  const cspEnforced = buildCspEnforced();
+  const cspEnforced = buildCspEnforced(nonce, shouldEnforceNonceCsp());
   const cspReportOnly = buildCspReportOnly(nonce);
-  const response = NextResponse.next();
+
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders
+    }
+  });
 
   response.headers.set('x-veritas-nonce', nonce);
   response.headers.set('Content-Security-Policy', cspEnforced);

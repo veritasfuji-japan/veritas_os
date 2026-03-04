@@ -529,6 +529,53 @@ async def test_run_decide_pipeline_happy_path(patched_pipeline):
 
 
 @pytest.mark.anyio
+async def test_run_decide_pipeline_prepares_kernel_context(patched_pipeline, monkeypatch):
+    """Pipeline prepares context for kernel-only decision execution."""
+    pipeline = patched_pipeline
+    captured: Dict[str, Any] = {}
+
+    def capture_decide(*args, **kwargs):
+        captured["context"] = kwargs.get("context") or {}
+        alternatives = kwargs.get("alternatives") or []
+        chosen = alternatives[0] if alternatives else {"id": "fallback", "title": "fallback"}
+        return {
+            "evidence": [{"source": "core", "snippet": "ok", "confidence": 0.8}],
+            "critique": [],
+            "debate": [],
+            "telos_score": 0.6,
+            "fuji": {"status": "allow", "risk": 0.2, "reasons": [], "violations": []},
+            "alternatives": alternatives,
+            "extras": {},
+            "chosen": chosen,
+        }
+
+    monkeypatch.setattr(pipeline.veritas_core, "decide", capture_decide, raising=False)
+    if getattr(pipeline, "kernel", None) is not None:
+        monkeypatch.setattr(pipeline.kernel, "decide", capture_decide, raising=False)
+
+    original_lazy_import = pipeline._lazy_import
+
+    def _patched_lazy_import(module_name: str, attr: str | None = None):
+        if module_name in {"veritas_os.core.kernel", "veritas_os.core"} and attr in {None, "kernel"}:
+            return type("_DummyKernel", (), {"decide": capture_decide})
+        return original_lazy_import(module_name, attr)
+
+    monkeypatch.setattr(pipeline, "_lazy_import", _patched_lazy_import, raising=False)
+
+    body = {
+        "query": "VERITAS AGI planner context propagation",
+        "context": {"user_id": "u-context"},
+    }
+
+    await pipeline.run_decide_pipeline(DummyReqModel(body), DummyRequest())
+
+    ctx = captured["context"]
+    assert isinstance(ctx.get("evidence"), list)
+    assert isinstance(ctx.get("planner"), dict)
+    assert isinstance(ctx.get("env_tools"), dict)
+
+
+@pytest.mark.anyio
 async def test_run_decide_pipeline_veritas_query_uses_web_and_plan(patched_pipeline):
     """VERITAS / AGI / 論文系クエリで PlannerOS + WebSearch 経路を踏むケース。"""
     pipeline = patched_pipeline

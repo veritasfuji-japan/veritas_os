@@ -13,6 +13,7 @@ interface StreamEvent {
 
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
+const AUTH_RETRY_PAUSE_MS = 60000;
 
 function getReconnectDelayMs(attempt: number): number {
   const boundedAttempt = Math.max(0, attempt);
@@ -80,11 +81,13 @@ function getEventTypeStyle(type: string): { dot: string; label: string } {
 }
 
 export function LiveEventStream(): JSX.Element {
-  const { t } = useI18n();
+  const { t, tk } = useI18n();
   const [events, setEvents] = useState<StreamEvent[]>([]);
   const [connected, setConnected] = useState(false);
+  const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
+  const authPauseRef = useRef(false);
 
   const streamUrl = "/api/veritas/v1/events";
 
@@ -109,9 +112,18 @@ export function LiveEventStream(): JSX.Element {
         });
 
         if (!response.ok || !response.body) {
+          if (response.status === 401 || response.status === 403) {
+            const recoveryAt = Date.now() + AUTH_RETRY_PAUSE_MS;
+            authPauseRef.current = true;
+            setAuthRecoveryAt(recoveryAt);
+            reconnectRef.current = setTimeout(connect, AUTH_RETRY_PAUSE_MS);
+            return;
+          }
           throw new Error(`stream connection failed: ${response.status}`);
         }
 
+        authPauseRef.current = false;
+        setAuthRecoveryAt(null);
         setConnected(true);
         reconnectAttemptRef.current = 0;
         const reader = response.body.getReader();
@@ -139,6 +151,9 @@ export function LiveEventStream(): JSX.Element {
 
       if (mounted) {
         setConnected(false);
+        if (authPauseRef.current) {
+          return;
+        }
         const delayMs = getReconnectDelayMs(reconnectAttemptRef.current);
         reconnectAttemptRef.current += 1;
         reconnectRef.current = setTimeout(connect, delayMs);
@@ -162,13 +177,13 @@ export function LiveEventStream(): JSX.Element {
       onClick={() => setEvents([])}
       className="rounded-md border border-border/70 bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      Clear events
+      {tk("clearEvents")}
     </button>
   );
 
   return (
     <Card
-      title="Live Event Stream"
+      title={tk("liveEventStreamTitle")}
       titleSize="md"
       variant="glass"
       actions={clearAction}
@@ -195,9 +210,23 @@ export function LiveEventStream(): JSX.Element {
           </span>
         </div>
         <p className="text-xs text-emerald-700 dark:text-emerald-500">
-          Security note: API key is injected server-side and never exposed to browser code.
+          {tk("streamSecurityNote")}
         </p>
       </div>
+
+      {authRecoveryAt !== null ? (
+        <div
+          className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
+          role="alert"
+        >
+          <p>{tk("streamAuthRecoveryHint")}</p>
+          <p className="mt-1 text-[11px] text-warning/90">
+            {tk("streamAuthRetryPausedUntil")}
+            {" "}
+            {new Date(authRecoveryAt).toLocaleTimeString()}
+          </p>
+        </div>
+      ) : null}
 
       {/* Event list */}
       <div

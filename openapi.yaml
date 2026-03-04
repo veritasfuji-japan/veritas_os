@@ -238,6 +238,37 @@ paths:
               schema:
                 $ref: '#/components/schemas/DecideResponse'
 
+
+  /v1/replay/{decision_id}:
+    post:
+      summary: Replay a persisted decision and store replay report
+      parameters:
+        - in: path
+          name: decision_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Replay execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  decision_id:
+                    type: string
+                  replay_path:
+                    type: string
+                  match:
+                    type: boolean
+                  diff_summary:
+                    type: string
+                  replay_time_ms:
+                    type: integer
+
   /v1/fuji/validate:
     post:
       summary: Safety/ethics validation for a candidate action
