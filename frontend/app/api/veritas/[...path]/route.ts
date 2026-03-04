@@ -3,13 +3,30 @@ import { NextRequest, NextResponse } from "next/server";
 const API_BASE = process.env.VERITAS_API_BASE_URL ?? process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
+/** Max request body size for proxied requests (1MB). */
+const MAX_PROXY_BODY_BYTES = 1 * 1024 * 1024;
+
+/**
+ * Reject path segments that could cause path traversal or URL manipulation.
+ * Blocks "..", empty segments, and segments with encoded slashes or null bytes.
+ */
+function hasUnsafeSegment(pathSegments: string[]): boolean {
+  return pathSegments.some(
+    (seg) => seg === ".." || seg === "." || seg === "" || /[%\x00/\\]/.test(seg),
+  );
+}
+
 function buildTargetUrl(pathSegments: string[], searchParams: URLSearchParams): URL {
   const baseUrl = API_BASE.replace(/\/$/, "");
-  const joinedPath = pathSegments.join("/");
-  return new URL(`${baseUrl}/${joinedPath}?${searchParams.toString()}`);
+  const safePath = pathSegments.map(encodeURIComponent).join("/");
+  return new URL(`${baseUrl}/${safePath}?${searchParams.toString()}`);
 }
 
 function isAllowedPath(pathSegments: string[], method: string): boolean {
+  if (hasUnsafeSegment(pathSegments)) {
+    return false;
+  }
+
   const path = pathSegments.join("/");
 
   if (path === "v1/decide" && method === "POST") {
@@ -64,10 +81,18 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   }
 
   const hasBody = !["GET", "HEAD"].includes(request.method);
+  let body: string | undefined;
+  if (hasBody) {
+    body = await request.text();
+    if (body.length > MAX_PROXY_BODY_BYTES) {
+      return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
+    }
+  }
+
   const upstreamResponse = await fetch(targetUrl, {
     method: request.method,
     headers: upstreamHeaders,
-    body: hasBody ? await request.text() : undefined,
+    body,
     cache: "no-store",
   });
 
