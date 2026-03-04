@@ -111,9 +111,50 @@ All protected endpoints require `X-API-Key`.
 | GET    | `/health`             | Health check                      |
 | POST   | `/v1/decide`          | Full decision loop                |
 | POST   | `/v1/fuji/validate`   | Validate a single action via FUJI |
+| POST   | `/v1/replay/{decision_id}` | Re-run a stored decision and persist replay report |
 | POST   | `/v1/memory/put`      | Persist memory                    |
 | GET    | `/v1/memory/get`      | Retrieve memory                   |
 | GET    | `/v1/logs/trust/{id}` | TrustLog entry by ID              |
+
+---
+
+
+## Replay
+
+`POST /v1/replay/{decision_id}` re-executes a stored decision using the original recorded inputs and writes a replay artifact to `REPLAY_REPORT_DIR` (`audit/replay_reports` by default) as:
+
+- `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json`
+
+When `VERITAS_REPLAY_STRICT=1`, replay enforces deterministic settings (`temperature=0`, fixed seed, and mocked external retrieval side effects).
+
+```bash
+BODY='{"strict":true}'
+TS=$(date +%s)
+NONCE="replay-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+SIG=$(python - <<'PY'
+import hashlib
+import hmac
+import os
+
+secret=os.environ["VERITAS_API_SECRET"].encode("utf-8")
+ts=os.environ["TS"]
+nonce=os.environ["NONCE"]
+body=os.environ["BODY"]
+payload=f"{ts}\n{nonce}\n{body}"
+print(hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest())
+PY
+)
+
+curl -X POST "http://127.0.0.1:8000/v1/replay/DECISION_ID" \
+  -H "X-API-Key: ${VERITAS_API_KEY}" \
+  -H "X-VERITAS-TIMESTAMP: ${TS}" \
+  -H "X-VERITAS-NONCE: ${NONCE}" \
+  -H "X-VERITAS-SIGNATURE: ${SIG}" \
+  -H "Content-Type: application/json" \
+  -d "${BODY}"
+```
+
+EU AI Act report generation already reads `replay_{decision_id}_*.json`, so invoking the Replay API updates replay verification data consumed by compliance reporting automatically.
 
 ---
 
