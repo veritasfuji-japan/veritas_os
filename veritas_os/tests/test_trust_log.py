@@ -71,9 +71,9 @@ def test_compute_sha256_and_calc_sha256_consistent():
     assert re.fullmatch(r"[0-9a-f]{64}", h1)
     assert re.fullmatch(r"[0-9a-f]{64}", h2)
 
-    # 実際のアルゴリズム通りに計算したものと一致するか
+    # RFC 8785 canonical JSON（空白なし・キーソート）で計算したものと一致するか
     expected = hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     assert h2 == expected
 
@@ -92,8 +92,9 @@ def test_compute_sha256_handles_unserializable_objects():
 def test_calc_sha256_matches_manual_hash():
     payload = {"x": "y"}
     h = trust_log.calc_sha256(payload)
+    # RFC 8785 canonical JSON（空白なし・キーソート）
     expected = hashlib.sha256(
-        json.dumps(payload, sort_keys=True).encode("utf-8")
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     assert h == expected
 
@@ -263,12 +264,13 @@ def _recompute_chain_hash(prev_hash: str | None, entry: Dict[str, Any]) -> str:
     """
     trust_log.append_trust_log の実装通りに、
     渡された entry から期待される sha256 を再計算するヘルパ。
+    RFC 8785 canonical JSON（空白なし・キーソート）を使用。
     """
     # entry から sha256, sha256_prev を除外 → r_t
     payload = dict(entry)
     payload.pop("sha256", None)
     payload.pop("sha256_prev", None)
-    entry_json = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    entry_json = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     if prev_hash:
         combined = prev_hash + entry_json

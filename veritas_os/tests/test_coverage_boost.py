@@ -1177,14 +1177,14 @@ class TestVerifyTrustLog:
     def test_verify_max_entries(self, monkeypatch, tmp_path):
         """Cover line 546: max_entries limits verification."""
         f = tmp_path / "trust_log.jsonl"
-        # Create valid chain entries
+        # RFC 8785 canonical JSON（空白なし・キーソート）でエントリを生成
         entries = []
         prev_hash = None
         for i in range(5):
             entry = {"request_id": f"r{i}", "sha256_prev": prev_hash}
             entry_json = json.dumps(
                 {k: v for k, v in entry.items() if k not in ("sha256", "sha256_prev")},
-                sort_keys=True, ensure_ascii=False,
+                sort_keys=True, separators=(",", ":"), ensure_ascii=False,
             )
             combined = (prev_hash or "") + entry_json
             import hashlib
@@ -1264,20 +1264,23 @@ class TestServerLazyImport:
 
 class TestTrustLogVerifyChain:
     def test_verify_sha256_prev_mismatch(self, monkeypatch, tmp_path):
-        """Cover line 572: sha256_prev mismatch detected."""
+        """Cover sha256_prev mismatch detection in verify_trust_log."""
         import hashlib as _hl
         f = tmp_path / "trust_log.jsonl"
+
+        # RFC 8785 canonical JSON（空白なし・キーソート）を使用してエントリを生成
+        # verify_trust_log が _normalize_entry_for_hash() で使うフォーマットと一致させる
+        def canonical(d):
+            return json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
         # First entry (valid)
         e1 = {"request_id": "r1"}
-        e1_json = json.dumps(e1, sort_keys=True, ensure_ascii=False)
+        e1_json = canonical(e1)
         e1["sha256"] = _hl.sha256(e1_json.encode()).hexdigest()
         e1["sha256_prev"] = None
-        # Second entry (broken chain)
+        # Second entry (broken chain: sha256_prev は実際の e1["sha256"] と異なる "WRONG_HASH")
         e2 = {"request_id": "r2", "sha256_prev": "WRONG_HASH"}
-        e2_json = json.dumps(
-            {k: v for k, v in e2.items() if k not in ("sha256", "sha256_prev")},
-            sort_keys=True, ensure_ascii=False,
-        )
+        e2_json = canonical({k: v for k, v in e2.items() if k not in ("sha256", "sha256_prev")})
         e2["sha256"] = _hl.sha256(("WRONG_HASH" + e2_json).encode()).hexdigest()
         f.write_text(json.dumps(e1) + "\n" + json.dumps(e2) + "\n")
         monkeypatch.setattr(tl_mod, "LOG_JSONL", f)

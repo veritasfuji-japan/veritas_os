@@ -363,8 +363,8 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
         hash_payload.pop("sha256", None)
         hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
 
-        # rₜ を JSON化（キーをソートして一意性を保証）
-        entry_json = json.dumps(hash_payload, sort_keys=True, ensure_ascii=False)
+        # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
+        entry_json = _normalize_entry_for_hash(entry)
 
         # hₜ₋₁ || rₜ を結合
         if sha256_prev:

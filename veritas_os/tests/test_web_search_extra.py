@@ -28,6 +28,12 @@ def _bypass_ssrf(monkeypatch):
     monkeypatch.setattr(
         web_search_mod, "_is_private_or_local_host", lambda _host: False,
     )
+    monkeypatch.setattr(
+        web_search_mod, "_extract_public_ips_for_url", lambda _url: {"203.0.113.1"},
+    )
+    monkeypatch.setattr(
+        web_search_mod, "_validate_rebinding_guard", lambda _url, _ips: None,
+    )
 
 
 class TestNormalizeStr:
