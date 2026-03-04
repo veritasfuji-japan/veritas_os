@@ -1540,6 +1540,64 @@ def test_run_startup_config_validation_warns_only_in_staging(monkeypatch, caplog
     assert "startup config validation failed" in caplog.text
 
 
+def test_app_lifespan_runs_startup_and_shutdown_once(monkeypatch):
+    """Lifespan should run startup before yield and shutdown after exit."""
+    call_order: list[str] = []
+
+    def _fake_validate() -> None:
+        call_order.append("validate")
+
+    def _fake_start_scheduler() -> None:
+        call_order.append("start")
+
+    def _fake_stop_scheduler() -> None:
+        call_order.append("stop")
+
+    monkeypatch.setattr(server, "_run_startup_config_validation", _fake_validate)
+    monkeypatch.setattr(server, "_start_nonce_cleanup_scheduler", _fake_start_scheduler)
+    monkeypatch.setattr(server, "_stop_nonce_cleanup_scheduler", _fake_stop_scheduler)
+
+    async def _exercise_lifespan() -> None:
+        async with server._app_lifespan(server.app):
+            call_order.append("inside")
+
+    asyncio.run(_exercise_lifespan())
+
+    assert call_order == ["validate", "start", "inside", "stop"]
+
+
+def test_app_lifespan_skips_scheduler_when_startup_validation_fails(monkeypatch):
+    """Lifespan must fail fast and avoid scheduler start on startup errors."""
+    call_order: list[str] = []
+
+    def _raise_validation_error() -> None:
+        call_order.append("validate")
+        raise RuntimeError("startup invalid")
+
+    def _fake_start_scheduler() -> None:
+        call_order.append("start")
+
+    def _fake_stop_scheduler() -> None:
+        call_order.append("stop")
+
+    monkeypatch.setattr(
+        server,
+        "_run_startup_config_validation",
+        _raise_validation_error,
+    )
+    monkeypatch.setattr(server, "_start_nonce_cleanup_scheduler", _fake_start_scheduler)
+    monkeypatch.setattr(server, "_stop_nonce_cleanup_scheduler", _fake_stop_scheduler)
+
+    async def _exercise_lifespan() -> None:
+        async with server._app_lifespan(server.app):
+            raise AssertionError("unreachable")
+
+    with pytest.raises(RuntimeError, match="startup invalid"):
+        asyncio.run(_exercise_lifespan())
+
+    assert call_order == ["validate"]
+
+
 def test_events_requires_api_key_header_only_by_default(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.delenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", raising=False)
