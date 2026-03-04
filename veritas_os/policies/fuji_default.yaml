@@ -212,3 +212,87 @@ audit:
     - "categories"          # Safety Head のカテゴリ＆スコア
   redact_before_log: true    # TrustLog に書く前に PII をマスクするか
   max_log_size: 10000        # 1 レコードあたりの最大文字数（オーバー分は truncate）
+# ============================================================
+# 9. プロンプトインジェクション検出パターン
+#    _PROMPT_INJECTION_PATTERNS のハードコードをここで管理する
+# ============================================================
+prompt_injection:
+  # スコアがこの値以上ならインジェクションフラグを立てる
+  score_threshold: 0.4
+  patterns:
+    - pattern: "(ignore|disregard|override).{0,40}(system|previous|developer|safety|policy)"
+      weight: 0.4
+      label: "override_instructions"
+    - pattern: "(reveal|show|leak).{0,40}(system prompt|developer message|policy)"
+      weight: 0.4
+      label: "reveal_system"
+    - pattern: "\\b(jailbreak|dan|prompt injection)\\b"
+      weight: 0.5
+      label: "jailbreak_keyword"
+    - pattern: "(bypass|disable).{0,30}(safety|guard|policy|filter)"
+      weight: 0.5
+      label: "bypass_safety"
+    - pattern: "(act as|roleplay).{0,30}(system|developer|root)"
+      weight: 0.2
+      label: "role_override"
+
+# ============================================================
+# 10. Unicode 正規化（同形異体文字マップ）
+#     _CONFUSABLE_ASCII_MAP のハードコードをここで管理する
+# ============================================================
+unicode_normalization:
+  # キー: 混同可能な文字、値: 変換先の ASCII 文字
+  confusables:
+    "а": "a"   # Cyrillic small a
+    "е": "e"   # Cyrillic small ie
+    "і": "i"   # Cyrillic small i
+    "о": "o"   # Cyrillic small o
+    "р": "p"   # Cyrillic small er
+    "с": "c"   # Cyrillic small es
+    "у": "y"   # Cyrillic small u
+    "х": "x"   # Cyrillic small ha
+    "Α": "a"   # Greek capital alpha
+    "Β": "b"   # Greek capital beta
+    "Ε": "e"   # Greek capital epsilon
+    "Ι": "i"   # Greek capital iota
+    "Κ": "k"   # Greek capital kappa
+    "Μ": "m"   # Greek capital mu
+    "Ν": "n"   # Greek capital nu
+    "Ο": "o"   # Greek capital omicron
+    "Ρ": "p"   # Greek capital rho
+    "Τ": "t"   # Greek capital tau
+    "Χ": "x"   # Greek capital chi
+
+# ============================================================
+# 11. PII 正規表現パターン
+#     _RE_PHONE / _RE_EMAIL / _RE_ADDRJP / _RE_NAMEJP のハードコードをここで管理する
+# ============================================================
+# ※ pii.redact_kinds（セクション5）で有効/無効を制御し、
+#    こちらのパターンはその正規表現本体を外部化する
+pii:
+  patterns:
+    phone: '(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})'
+    email: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    address_jp: '(東京都|道府県|市|区|町|村).{0,20}\d'
+    person_name_jp: '[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)'
+
+# ============================================================
+# 12. リスク計算調整値
+#     fuji_core_decide() 内のハードコード数値をここで管理する
+# ============================================================
+risk_adjustments:
+  injection_weight: 0.15       # injection_score に掛ける重み（fuji.py line 915）
+  pii_safe_cap: 0.40           # PII セーフ適用時のリスク上限
+  name_like_only_cap: 0.20     # name_like 単独検出時のリスク上限
+  low_evidence_penalty: 0.10   # エビデンス不足ペナルティ
+  telos_scale_factor: 0.10     # telos_score によるリスクスケール係数
+
+# ============================================================
+# 13. アクション優先度
+#     _apply_policy() 内の precedence ディクトをここで管理する
+# ============================================================
+action_precedence:
+  deny: 3
+  human_review: 2
+  warn: 1
+  allow: 0
