@@ -1495,6 +1495,51 @@ def test_resolve_max_request_body_size_rejects_non_positive_override(monkeypatch
     assert resolved == 8 * 1024 * 1024
 
 
+def test_should_fail_fast_startup_for_production_profiles():
+    """Production-like profiles must fail fast during startup validation."""
+    assert server._should_fail_fast_startup("production") is True
+    assert server._should_fail_fast_startup("prod") is True
+    assert server._should_fail_fast_startup("staging") is False
+
+
+def test_run_startup_config_validation_raises_in_production(monkeypatch):
+    """Startup validation errors should stop boot in production profile."""
+
+    def _raise_validation_error():
+        raise RuntimeError("config invalid")
+
+    monkeypatch.setattr(
+        server,
+        "validate_startup_config",
+        _raise_validation_error,
+        raising=False,
+    )
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    with pytest.raises(RuntimeError, match="config invalid"):
+        server._run_startup_config_validation()
+
+
+def test_run_startup_config_validation_warns_only_in_staging(monkeypatch, caplog):
+    """Non-production profiles should keep warning-only startup behavior."""
+
+    def _raise_validation_error():
+        raise RuntimeError("staging config invalid")
+
+    monkeypatch.setattr(
+        server,
+        "validate_startup_config",
+        _raise_validation_error,
+        raising=False,
+    )
+    monkeypatch.setenv("VERITAS_ENV", "staging")
+
+    with caplog.at_level("WARNING"):
+        server._run_startup_config_validation()
+
+    assert "startup config validation failed" in caplog.text
+
+
 def test_events_requires_api_key_header_only_by_default(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.delenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", raising=False)

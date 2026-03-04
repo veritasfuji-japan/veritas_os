@@ -14,6 +14,7 @@ import re
 import secrets
 import threading
 import time
+from contextlib import asynccontextmanager
 from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
@@ -507,7 +508,50 @@ def get_memory_store() -> Optional[Any]:
 
 cfg = get_cfg()
 
-app = FastAPI(title="VERITAS Public API", version="1.0.3")
+def _should_fail_fast_startup(profile: Optional[str] = None) -> bool:
+    """Return whether startup validation failures should stop app boot.
+
+    Production profiles must fail fast to avoid running with insecure or
+    incomplete runtime configuration.
+    """
+    resolved_profile = (
+        profile if profile is not None else os.getenv("VERITAS_ENV", "")
+    )
+    normalized_profile = resolved_profile.strip().lower()
+    return normalized_profile in {"prod", "production"}
+
+
+def _run_startup_config_validation() -> None:
+    """Validate startup configuration with environment-specific strictness."""
+    try:
+        validator = globals().get("validate_startup_config")
+        if validator is None:
+            from veritas_os.core.config import validate_startup_config as validator
+
+        validator()
+    except Exception:
+        fail_fast = _should_fail_fast_startup()
+        logger.warning(
+            "startup config validation failed (fail_fast=%s)",
+            fail_fast,
+            exc_info=True,
+        )
+        if fail_fast:
+            raise
+
+
+@asynccontextmanager
+async def _app_lifespan(_: FastAPI):
+    """Manage startup/shutdown actions using FastAPI lifespan API."""
+    _run_startup_config_validation()
+    _start_nonce_cleanup_scheduler()
+    try:
+        yield
+    finally:
+        _stop_nonce_cleanup_scheduler()
+
+
+app = FastAPI(title="VERITAS Public API", version="1.0.3", lifespan=_app_lifespan)
 
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 # 空の場合に True にすると、ブラウザの CORS チェックを意図せずバイパスするリスクがある
@@ -557,33 +601,6 @@ app.add_middleware(
         "Authorization",
     ],
 )
-
-
-@app.on_event("startup")
-async def _startup_validate_config() -> None:
-    """Validate critical configuration at server startup, not at import time.
-
-    This prevents import-time side effects and ensures validation errors
-    surface clearly during the startup lifecycle.
-    """
-    try:
-        from veritas_os.core.config import validate_startup_config
-        validate_startup_config()
-    except Exception:
-        logger.warning("startup config validation failed", exc_info=True)
-
-
-@app.on_event("startup")
-async def _startup_nonce_cleanup_scheduler() -> None:
-    """Start background nonce cleanup under FastAPI lifecycle management."""
-    _start_nonce_cleanup_scheduler()
-
-
-@app.on_event("shutdown")
-async def _shutdown_nonce_cleanup_scheduler() -> None:
-    """Stop background nonce cleanup timer when app is shutting down."""
-    _stop_nonce_cleanup_scheduler()
-
 
 # ★ C-3 継続改善: リクエストボディサイズ制限 (DoS対策)
 # 運用プロファイルごとの推奨値を定義しつつ、環境変数で上書き可能にする。
