@@ -35,6 +35,7 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **決定論的・安全ゲ
 - [なぜVERITASか](#なぜveritasか)
 - [できること](#できること)
 - [API概要](#api概要)
+- [Replay](#replay)
 - [Quickstart](#quickstart)
 - [セキュリティ注意（重要）](#セキュリティ注意重要)
 - [Docker（GHCR）](#dockerghcr)
@@ -110,9 +111,49 @@ Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI 
 | GET    | `/health`             | ヘルスチェック |
 | POST   | `/v1/decide`          | フル意思決定ループ |
 | POST   | `/v1/fuji/validate`   | 単一アクションをFUJIで評価 |
+| POST   | `/v1/replay/{decision_id}` | 保存済み意思決定を再実行し、Replayレポートを永続化 |
 | POST   | `/v1/memory/put`      | 記憶を保存 |
 | GET    | `/v1/memory/get`      | 記憶を取得 |
 | GET    | `/v1/logs/trust/{id}` | TrustLogエントリをIDで取得 |
+
+---
+
+## Replay
+
+`POST /v1/replay/{decision_id}` は、保存済み意思決定を元の記録入力で再実行し、`REPLAY_REPORT_DIR`（既定: `audit/replay_reports`）に以下形式でReplay成果物を出力します。
+
+- `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json`
+
+`VERITAS_REPLAY_STRICT=1` の場合、Replayは決定論設定（`temperature=0`、固定seed、外部取得の副作用モック）を強制します。
+
+```bash
+BODY='{"strict":true}'
+TS=$(date +%s)
+NONCE="replay-$(uuidgen | tr '[:upper:]' '[:lower:]')"
+SIG=$(python - <<'PY'
+import hashlib
+import hmac
+import os
+
+secret=os.environ["VERITAS_API_SECRET"].encode("utf-8")
+ts=os.environ["TS"]
+nonce=os.environ["NONCE"]
+body=os.environ["BODY"]
+payload=f"{ts}\n{nonce}\n{body}"
+print(hmac.new(secret, payload.encode("utf-8"), hashlib.sha256).hexdigest())
+PY
+)
+
+curl -X POST "http://127.0.0.1:8000/v1/replay/DECISION_ID" \
+  -H "X-API-Key: ${VERITAS_API_KEY}" \
+  -H "X-VERITAS-TIMESTAMP: ${TS}" \
+  -H "X-VERITAS-NONCE: ${NONCE}" \
+  -H "X-VERITAS-SIGNATURE: ${SIG}" \
+  -H "Content-Type: application/json" \
+  -d "${BODY}"
+```
+
+EU AI Actレポート生成は `replay_{decision_id}_*.json` を既に参照しているため、Replay APIの実行により、コンプライアンスレポートが利用するReplay検証データも自動更新されます。
 
 ---
 
