@@ -38,6 +38,7 @@ from veritas_os.compliance.report_engine import (
     generate_eu_ai_act_report,
     generate_internal_governance_report,
 )
+from veritas_os.replay.replay_engine import run_replay
 from veritas_os.api.constants import (
     DECISION_ALLOW,
     DECISION_REJECTED,
@@ -553,7 +554,17 @@ app.add_middleware(
     allow_origins=_cors_origins,
     allow_credentials=_cors_allow_credentials,
     allow_methods=["GET", "POST", "PUT", "OPTIONS"],
-    allow_headers=["X-API-Key", "X-Timestamp", "X-Nonce", "X-Signature", "Content-Type", "Authorization"],
+    allow_headers=[
+        "X-API-Key",
+        "X-Timestamp",
+        "X-Nonce",
+        "X-Signature",
+        "X-VERITAS-TIMESTAMP",
+        "X-VERITAS-NONCE",
+        "X-VERITAS-SIGNATURE",
+        "Content-Type",
+        "Authorization",
+    ],
 )
 
 
@@ -1069,6 +1080,9 @@ async def verify_signature(
     x_timestamp: Optional[str] = Header(default=None, alias="X-Timestamp"),
     x_nonce: Optional[str] = Header(default=None, alias="X-Nonce"),
     x_signature: Optional[str] = Header(default=None, alias="X-Signature"),
+    x_veritas_timestamp: Optional[str] = Header(default=None, alias="X-VERITAS-TIMESTAMP"),
+    x_veritas_nonce: Optional[str] = Header(default=None, alias="X-VERITAS-NONCE"),
+    x_veritas_signature: Optional[str] = Header(default=None, alias="X-VERITAS-SIGNATURE"),
 ):
     """
     HMAC 認証を使う場合のみ dependencies に入れて使う想定。
@@ -1078,15 +1092,19 @@ async def verify_signature(
     api_secret = _get_api_secret()
     if not api_secret:
         raise HTTPException(status_code=500, detail="Server secret missing")
-    if not (x_api_key and x_timestamp and x_nonce and x_signature):
+    timestamp = x_veritas_timestamp or x_timestamp
+    nonce = x_veritas_nonce or x_nonce
+    signature = x_veritas_signature or x_signature
+
+    if not (x_api_key and timestamp and nonce and signature):
         raise HTTPException(status_code=401, detail="Missing auth headers")
     try:
-        ts = int(x_timestamp)
+        ts = int(timestamp)
     except (ValueError, TypeError):
         raise HTTPException(status_code=401, detail="Invalid timestamp") from None
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
         raise HTTPException(status_code=401, detail="Timestamp out of range")
-    if not _check_and_register_nonce(x_nonce):
+    if not _check_and_register_nonce(nonce):
         raise HTTPException(status_code=401, detail="Replay detected")
 
     body_bytes = await request.body()
@@ -1094,9 +1112,9 @@ async def verify_signature(
         body = body_bytes.decode("utf-8") if body_bytes else ""
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="Request body is not valid UTF-8") from None
-    payload = f"{ts}\n{x_nonce}\n{body}"
+    payload = f"{ts}\n{nonce}\n{body}"
     mac = hmac.new(api_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
-    if not hmac.compare_digest(mac, (x_signature or "").lower()):
+    if not hmac.compare_digest(mac, signature.lower()):
         raise HTTPException(status_code=401, detail="Invalid signature")
     return True
 
@@ -1623,6 +1641,36 @@ async def decide(req: DecideRequest, request: Request):
             status_code=200,
             content=content,
         )
+
+
+@app.post(
+    "/v1/replay/{decision_id}",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit), Depends(verify_signature)],
+)
+async def replay_endpoint(decision_id: str):
+    """Replay one persisted decision and write replay report JSON."""
+    try:
+        result = await run_replay(decision_id=decision_id)
+    except ValueError as e:
+        return JSONResponse(
+            status_code=404,
+            content={"ok": False, "decision_id": decision_id, "error": str(e)},
+        )
+    except Exception as e:
+        logger.error("replay endpoint failed: %s", _errstr(e))
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "decision_id": decision_id, "error": "replay_failed"},
+        )
+
+    return {
+        "ok": True,
+        "decision_id": result.decision_id,
+        "replay_path": result.replay_path,
+        "match": result.match,
+        "diff_summary": result.diff_summary,
+        "replay_time_ms": result.replay_time_ms,
+    }
 
 
 @app.post(

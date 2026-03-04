@@ -6,6 +6,7 @@ import json
 import os
 import time
 import hmac
+import hashlib
 
 # ★ テスト用APIキーを設定（認証付きエンドポイントのテスト用）
 # server import 前に設定して、起動時の警告を抑制
@@ -85,6 +86,50 @@ def test_health_and_status_and_metrics(monkeypatch):
     assert "last_decide_at" in data
     assert "server_time" in data
 
+
+
+
+def test_replay_api_endpoint_with_hmac_headers(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_API_SECRET", "a" * 32)
+    monkeypatch.setattr(server, "API_SECRET", b"")
+
+    async def _fake_run_replay(decision_id: str, strict=None):
+        return server.SimpleNamespace(
+            decision_id=decision_id,
+            replay_path="/tmp/replay.json",
+            match=True,
+            diff_summary="no_diff",
+            replay_time_ms=9,
+        )
+
+    monkeypatch.setattr(server, "run_replay", _fake_run_replay)
+
+    body = json.dumps({"strict": True}, separators=(",", ":"))
+    ts = str(int(time.time()))
+    nonce = "nonce-replay-endpoint"
+    payload = f"{ts}\n{nonce}\n{body}"
+    signature = hmac.new(("a" * 32).encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    response = client.post(
+        "/v1/replay/dec-9",
+        headers={
+            "X-API-Key": _TEST_API_KEY,
+            "X-VERITAS-TIMESTAMP": ts,
+            "X-VERITAS-NONCE": nonce,
+            "X-VERITAS-SIGNATURE": signature,
+            "Content-Type": "application/json",
+        },
+        data=body,
+    )
+
+    assert response.status_code == 200
+    payload_json = response.json()
+    assert payload_json["ok"] is True
+    assert payload_json["decision_id"] == "dec-9"
+    assert payload_json["match"] is True
+    assert payload_json["replay_time_ms"] == 9
 
 def test_replay_decision_endpoint(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
