@@ -1092,11 +1092,22 @@ async def verify_signature(
     api_secret = _get_api_secret()
     if not api_secret:
         raise HTTPException(status_code=500, detail="Server secret missing")
-    timestamp = x_veritas_timestamp or x_timestamp
-    nonce = x_veritas_nonce or x_nonce
-    signature = x_veritas_signature or x_signature
 
-    if not (x_api_key and timestamp and nonce and signature):
+    def _header_or_none(value: Any) -> Optional[str]:
+        """Normalize dependency-injected Header defaults for direct unit test calls."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            trimmed = value.strip()
+            return trimmed if trimmed else None
+        return None
+
+    timestamp = _header_or_none(x_veritas_timestamp) or _header_or_none(x_timestamp)
+    nonce = _header_or_none(x_veritas_nonce) or _header_or_none(x_nonce)
+    signature = _header_or_none(x_veritas_signature) or _header_or_none(x_signature)
+    api_key = _header_or_none(x_api_key)
+
+    if not (api_key and timestamp and nonce and signature):
         raise HTTPException(status_code=401, detail="Missing auth headers")
     try:
         ts = int(timestamp)
@@ -1651,10 +1662,10 @@ async def replay_endpoint(decision_id: str):
     """Replay one persisted decision and write replay report JSON."""
     try:
         result = await run_replay(decision_id=decision_id)
-    except ValueError as e:
+    except ValueError:
         return JSONResponse(
             status_code=404,
-            content={"ok": False, "decision_id": decision_id, "error": str(e)},
+            content={"ok": False, "decision_id": decision_id, "error": "decision_not_found"},
         )
     except Exception as e:
         logger.error("replay endpoint failed: %s", _errstr(e))

@@ -131,6 +131,44 @@ def test_replay_api_endpoint_with_hmac_headers(monkeypatch):
     assert payload_json["match"] is True
     assert payload_json["replay_time_ms"] == 9
 
+
+
+def test_replay_api_endpoint_not_found_hides_exception(monkeypatch):
+    """Replay not-found errors must not expose internal exception details."""
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setattr(server, "API_KEY_DEFAULT", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_API_SECRET", "b" * 32)
+    monkeypatch.setattr(server, "API_SECRET", b"")
+
+    async def _fake_run_replay(decision_id: str, strict=None):
+        raise ValueError(f"decision_not_found: {decision_id}")
+
+    monkeypatch.setattr(server, "run_replay", _fake_run_replay)
+
+    body = "{}"
+    ts = str(int(time.time()))
+    nonce = "nonce-replay-not-found"
+    payload = f"{ts}\n{nonce}\n{body}"
+    signature = hmac.new(("b" * 32).encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    response = client.post(
+        "/v1/replay/dec-missing",
+        headers={
+            "X-API-Key": _TEST_API_KEY,
+            "X-VERITAS-TIMESTAMP": ts,
+            "X-VERITAS-NONCE": nonce,
+            "X-VERITAS-SIGNATURE": signature,
+            "Content-Type": "application/json",
+        },
+        data=body,
+    )
+
+    assert response.status_code == 404
+    payload_json = response.json()
+    assert payload_json["ok"] is False
+    assert payload_json["error"] == "decision_not_found"
+    assert payload_json["decision_id"] == "dec-missing"
+
 def test_replay_decision_endpoint(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.setattr(server, "API_KEY_DEFAULT", _TEST_API_KEY)
