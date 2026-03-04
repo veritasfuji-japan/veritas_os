@@ -78,7 +78,7 @@ except Exception as _sanitize_import_err:
 
 # ============================================================
 # ISSUE-4 方針:
-# - import時に “重い/脆い” モジュールを確定importしない
+# - import時に "重い/脆い" モジュールを確定importしない
 # - /health は必ず 200
 # - /v1/decide は依存が壊れてたら 503 で返す（落ちない）
 # ============================================================
@@ -190,7 +190,7 @@ def _memory_get_stub(*args: Any, **kwargs: Any):
     return None
 
 
-# place-holders that are always present (so monkeypatch.setattr won’t fail)
+# place-holders that are always present (so monkeypatch.setattr won't fail)
 fuji_core: Any = SimpleNamespace(
     __veritas_placeholder__=True,
     validate_action=_fuji_validate_stub,
@@ -331,15 +331,14 @@ def _classify_decide_failure(err: BaseException) -> str:
 
 def get_cfg() -> Any:
     """
-    cfg は “無い/壊れてる” 可能性があるので必ずフォールバックを返す。
+    cfg は "無い/壊れてる" 可能性があるので必ずフォールバックを返す。
     CORS設定など起動に関わるため、ここで絶対に例外を外へ出さない。
+
+    Note: ロック外の事前チェック (double-checked locking) は Python の
+    メモリモデルではスレッドセーフが保証されないため、常にロックを取得する。
     """
     global _cfg_state
-    if _cfg_state.obj is not None:
-        return _cfg_state.obj
-
     with _cfg_state.lock:
-        # ダブルチェック（ロック取得後に再確認）
         if _cfg_state.obj is not None:
             return _cfg_state.obj
         if _cfg_state.attempted and _cfg_state.err is not None:
@@ -368,8 +367,6 @@ def get_decision_pipeline() -> Optional[Any]:
     /v1/decide 呼び出し時に 503 へ変換する。
     """
     global _pipeline_state
-    if _pipeline_state.obj is not None:
-        return _pipeline_state.obj
     with _pipeline_state.lock:
         if _pipeline_state.obj is not None:
             return _pipeline_state.obj
@@ -407,8 +404,6 @@ def get_fuji_core() -> Optional[Any]:
     if getattr(fuji_core, "validate", None) is not _fuji_validate_stub:
         return fuji_core
 
-    if _fuji_state.obj is not None:
-        return _fuji_state.obj
     with _fuji_state.lock:
         if _fuji_state.obj is not None:
             return _fuji_state.obj
@@ -443,8 +438,6 @@ def get_value_core() -> Optional[Any]:
         if hasattr(value_core, "append_trust_log"):
             return value_core
 
-    if _value_core_state.obj is not None:
-        return _value_core_state.obj
     with _value_core_state.lock:
         if _value_core_state.obj is not None:
             return _value_core_state.obj
@@ -481,8 +474,6 @@ def get_memory_store() -> Optional[Any]:
         if any(hasattr(MEMORY_STORE, a) for a in ("search", "get", "put", "put_episode", "recent", "add_usage")):
             return MEMORY_STORE
 
-    if _memory_store_state.obj is not None:
-        return _memory_store_state.obj
     with _memory_store_state.lock:
         if _memory_store_state.obj is not None:
             return _memory_store_state.obj
@@ -566,6 +557,20 @@ app.add_middleware(
         "Authorization",
     ],
 )
+
+
+@app.on_event("startup")
+async def _startup_validate_config() -> None:
+    """Validate critical configuration at server startup, not at import time.
+
+    This prevents import-time side effects and ensures validation errors
+    surface clearly during the startup lifecycle.
+    """
+    try:
+        from veritas_os.core.config import validate_startup_config
+        validate_startup_config()
+    except Exception:
+        logger.warning("startup config validation failed", exc_info=True)
 
 
 @app.on_event("startup")
@@ -1233,7 +1238,7 @@ def _gen_request_id(seed: str = "") -> str:
 
 def _coerce_alt_list(v: Any) -> list:
     """
-    alternatives/options の壊れ入力を “list[dict]” に寄せる。
+    alternatives/options の壊れ入力を "list[dict]" に寄せる。
     DecideResponse 側でも extra allow だが、最低限 id/title を補う。
     """
     if v is None:
@@ -1266,7 +1271,7 @@ def _coerce_alt_list(v: Any) -> list:
 
 def _coerce_decide_payload(payload: Any, *, seed: str = "") -> Dict[str, Any]:
     """
-    response_model を “効かせつつ” server を落とさないための最終整形。
+    response_model を "効かせつつ" server を落とさないための最終整形。
     - payload が dict じゃない → dict に包む
     - DecideResponse の必須キー request_id を補う
     - alternatives/options を補う（互換）
@@ -1611,7 +1616,7 @@ async def decide(req: DecideRequest, request: Request):
 
     # ★ response_model を効かせつつ壊れpayloadでも落ちないように最終整形
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
-    # DecideResponse 側に “落ちない” バリデータがある前提で model_validate
+    # DecideResponse 側に "落ちない" バリデータがある前提で model_validate
     try:
         _publish_event(
             "decide.completed",

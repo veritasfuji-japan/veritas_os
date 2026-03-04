@@ -441,8 +441,23 @@ class VeritasConfig:
 
 
 cfg = VeritasConfig()
-if cfg.should_enforce_api_secret_validation():
-    cfg.validate_api_secret_non_empty()
+
+# NOTE: API secret validation は server startup 時に明示的に呼び出す。
+# インポート時の副作用を排除し、テスト環境でのバイパスリスクを防止する。
+# → veritas_os/api/server.py の _startup_validate_config() を参照。
+
+
+def validate_startup_config() -> None:
+    """サーバ起動時に呼び出す設定検証。
+
+    インポート時ではなく起動時に実行することで:
+    - テスト環境での意図しないバイパスを防止
+    - 検証失敗時のエラーメッセージが明確になる
+    - モジュールインポートの副作用を排除
+    """
+    if cfg.should_enforce_api_secret_validation():
+        cfg.validate_api_secret_non_empty()
+
 
 # サブ設定インスタンス（各モジュールからインポート可能）
 scoring_cfg = ScoringConfig()
