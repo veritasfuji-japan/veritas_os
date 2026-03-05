@@ -86,7 +86,11 @@ RE_PHONE_FREE = re.compile(
 )
 
 # --- 郵便番号（日本）---
-RE_ZIP_JP = re.compile(r'\b\d{3}-?\d{4}\b')
+# ハイフン付き形式（NNN-NNNN）を基本パターンとする。
+# ハイフンなしの7桁数字はバージョン番号・日付等との偽陽性が多いため、
+# コンテキストキーワードがある場合のみ追加で検出する。
+RE_ZIP_JP = re.compile(r'\b\d{3}-\d{4}\b')
+RE_ZIP_JP_NO_HYPHEN = re.compile(r'(?<!\d)\d{7}(?!\d)')
 
 # --- 住所（日本）---
 # 都道府県
@@ -174,6 +178,8 @@ RE_BANK_ACCOUNT_JP = re.compile(
 
 # --- パスポート番号（日本）---
 # 英字2文字 + 数字7桁
+# 注: このパターン単体は広範に一致するため（バージョン文字列・製品コード等）、
+# `_is_likely_passport` によるコンテキスト検証を必須とする。
 RE_PASSPORT_JP = re.compile(
     r'\b[A-Z]{2}\d{7}\b'
 )
@@ -288,6 +294,42 @@ def _is_likely_phone(match: str, context: str = "") -> bool:
     return False
 
 
+def _is_likely_passport(match: str, context: str = "") -> bool:
+    """パスポート番号の偽陽性を減らすコンテキスト検証。
+
+    `RE_PASSPORT_JP` は `[A-Z]{2}\\d{7}` という汎用的なパターンのため、
+    バージョン文字列（例: ``TV1234567``）や製品コード等と広く一致する。
+    前後のコンテキストにパスポート関連のキーワードがある場合のみ受理する。
+    """
+    passport_keywords = [
+        'パスポート', '旅券', 'passport', 'pp no', 'pp.no', 'pp番号',
+        'travel document', '渡航書',
+    ]
+    context_lower = context.lower()
+    return any(kw in context_lower for kw in passport_keywords)
+
+
+def _is_likely_zip(match: str, context: str = "") -> bool:
+    """郵便番号の偽陽性を減らすコンテキスト検証。
+
+    ハイフン付きパターン（`NNN-NNNN`）はそれ自体で郵便番号らしさが高いため
+    デフォルト true を返す。ハイフンなしの7桁数字はコンテキストが必要。
+    """
+    # ハイフンが含まれるならば高確度
+    if '-' in match:
+        # 〒記号が直前にあれば確実
+        if '〒' in context:
+            return True
+        # 日付パターン（YYYYMMDD: 8桁なので通常は一致しないが念のため）を除外
+        if re.match(r'^(19|20)\d{5}$', match.replace('-', '')):
+            return False
+        return True
+    # ハイフンなし: コンテキストにキーワードが必要
+    zip_keywords = ['〒', '郵便番号', 'postal', 'zip', 'zipcode', '郵便', '住所']
+    context_lower = context.lower()
+    return any(kw in context_lower for kw in zip_keywords)
+
+
 def _is_likely_ip(match: str) -> bool:
     """
     IPアドレスの偽陽性を減らす
@@ -372,7 +414,12 @@ class PIIDetector:
             ("bank_account_jp", RE_BANK_ACCOUNT_JP, "口座番号", None, 0.90),
 
             # 住所・郵便番号
-            ("zip_jp", RE_ZIP_JP, "郵便番号", None, 0.85),
+            # zip_jp: ハイフン付きパターンはコンテキストで追加絞り込み
+            ("zip_jp", RE_ZIP_JP, "郵便番号",
+             lambda m, ctx: _is_likely_zip(m, ctx), 0.85),
+            # zip_jp_no_hyphen: ハイフンなし7桁はコンテキスト必須
+            ("zip_jp_no_hyphen", RE_ZIP_JP_NO_HYPHEN, "郵便番号",
+             lambda m, ctx: _is_likely_zip(m, ctx), 0.65),
             ("address_jp", RE_ADDRESS_JP, "住所", None, 0.80),
 
             # 個人名
@@ -384,8 +431,9 @@ class PIIDetector:
             ("ipv4", RE_IPV4, "IPアドレス", lambda m, _: _is_likely_ip(m), 0.75),
             ("ipv6", RE_IPV6, "IPアドレス", lambda m, _: _is_likely_ipv6(m), 0.80),
 
-            # パスポート
-            ("passport_jp", RE_PASSPORT_JP, "パスポート番号", None, 0.70),
+            # パスポート: コンテキストキーワードがある場合のみ受理（偽陽性対策）
+            ("passport_jp", RE_PASSPORT_JP, "パスポート番号",
+             lambda m, ctx: _is_likely_passport(m, ctx), 0.70),
         ]
 
         # パターンソートキャッシュ用ロック（スレッドセーフな遅延初期化のため）
@@ -689,6 +737,7 @@ class PIIDetector:
             "phone_intl": "電話",
             "phone_free": "電話",
             "zip_jp": "郵便番号",
+            "zip_jp_no_hyphen": "郵便番号",
             "address_jp": "住所",
             "name_jp_honorific": "個人名",
             "name_kana_honorific": "個人名",
