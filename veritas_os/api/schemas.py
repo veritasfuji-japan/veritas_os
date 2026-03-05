@@ -58,6 +58,7 @@ def _as_list(v: Any) -> List[Any]:
         try:
             return list(v)
         except Exception:
+            logger.debug("_as_list: failed to coerce iterable, wrapping as [v]")
             return [v]
     return [v]
 
@@ -176,7 +177,7 @@ class EvidenceItem(BaseModel):
         # confidence
         try:
             self.confidence = float(self.confidence if self.confidence is not None else 0.7)
-        except Exception:
+        except (TypeError, ValueError):
             self.confidence = 0.7
         self.confidence = max(0.0, min(1.0, self.confidence))
         return self

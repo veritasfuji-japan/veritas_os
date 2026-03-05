@@ -33,7 +33,11 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://backend:8000}
     volumes:
-      - ./:/app
+      - ./frontend:/app/frontend
+      - ./packages:/app/packages
+      - ./package.json:/app/package.json:ro
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:ro
+      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
     depends_on:
       backend:
         condition: service_healthy

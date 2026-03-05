@@ -37,7 +37,7 @@ def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
 try:
     from veritas_os.core.config import cfg as _cfg
     CFG_DIR = _cfg.log_dir or Path(os.path.expanduser("~/.veritas"))
-except Exception:
+except (ImportError, AttributeError):
     CFG_DIR = Path(os.path.expanduser("~/.veritas"))
 
 CFG_PATH = CFG_DIR / "value_core.json"
@@ -96,7 +96,7 @@ class ValueProfile:
                     }
                 )
                 return cls(weights=_normalize_weights(merged))
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
             logger.warning("load failed: %s", e)
 
         # 失敗したらデフォルトで作り直し
