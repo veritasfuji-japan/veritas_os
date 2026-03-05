@@ -112,13 +112,14 @@ def get_cfg() -> Any:
 
 ## 3. HIGH: バグ・競合状態
 
-### R-1: Trust Log ローテーションのTOCTOU競合
+### ~~R-1: Trust Log ローテーションのTOCTOU競合~~ [誤検出 — 修正不要]
 
-**ファイル**: `veritas_os/logging/rotate.py:139-159`
+**ファイル**: `veritas_os/logging/rotate.py:129-140`
 
-**問題**: `is_symlink()` チェックと `unlink()` の間にシンボリックリンク差し替え攻撃が可能。コメントで認識されているが未修正。
-
-**対策**: アトミックな操作に置き換える。
+**再調査結果**: `os.replace()` によるアトミック操作が既に使用されており、
+`is_symlink() → unlink()` の TOCTOU パターンは排除済み。
+コード内コメント (137-139行) でも明記されている。
+`is_symlink()` チェック (130行) は事前ガードであり、TOCTOU の一部ではない。
 
 ---
 
@@ -137,13 +138,17 @@ except Exception:  # SystemExit, KeyboardInterrupt も捕捉してしまう
 
 ---
 
-### R-3: Nonceの有効期限・リプレイ保護がない
+### ~~R-3: Nonceの有効期限・リプレイ保護がない~~ [誤検出 — 修正不要]
 
-**ファイル**: `veritas_os/api/server.py:990-1070`
+**ファイル**: `veritas_os/api/server.py:945-1078`
 
-**問題**: `secrets.token_hex(16)` でnonce生成は暗号学的に安全だが、TTL検証がない。nonceが無期限に有効でリプレイ攻撃が可能。
-
-**対策**: nonce TTL (5分) とリプレイ保護を実装。
+**再調査結果**: 包括的な nonce 管理が既に実装済み:
+- `_NONCE_TTL_SEC = 300` (5分TTL) (945行)
+- `_cleanup_nonces_unsafe()` による期限切れnonce削除 (995行)
+- `_check_and_register_nonce()` によるリプレイ検出 (1056行)
+- `_nonce_lock` によるスレッドセーフ化 (949行)
+- 60秒間隔の定期クリーンアップタイマー (1029行)
+- ストアサイズ上限 `_NONCE_MAX = 5000` (946行)
 
 ---
 

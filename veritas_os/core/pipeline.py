@@ -101,14 +101,14 @@ from .pipeline_contracts import (
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
     _HAS_ATOMIC_IO = True
-except Exception:
+except (ImportError, ModuleNotFoundError):
     _atomic_write_json = None  # type: ignore
     _HAS_ATOMIC_IO = False
 
 
 try:
     from fastapi import Request
-except Exception:  # tests may import pipeline without fastapi installed
+except (ImportError, ModuleNotFoundError):  # tests may import pipeline without fastapi installed
     Request = Any  # type: ignore
 
 
@@ -187,49 +187,49 @@ def _check_required_modules() -> None:
 # ---- kernel (REQUIRED) ----
 try:
     from . import kernel as veritas_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     veritas_core = None  # type: ignore
     _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
 
 # ---- fuji (REQUIRED) ----
 try:
     from . import fuji as fuji_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     fuji_core = None  # type: ignore
     _warn(f"[ERROR][pipeline] fuji import failed (REQUIRED): {repr(e)}")
 
 # ---- memory (RECOMMENDED) ----
 try:
     from . import memory as mem  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     mem = None  # type: ignore
     _warn(f"[WARN][pipeline] memory import failed (RECOMMENDED): {repr(e)}")
 
 # ---- value_core (RECOMMENDED) ----
 try:
     from . import value_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     value_core = None  # type: ignore
     _warn(f"[WARN][pipeline] value_core import failed (RECOMMENDED): {repr(e)}")
 
 # ---- world model (RECOMMENDED) ----
 try:
     from . import world as world_model  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     world_model = None  # type: ignore
     _warn(f"[WARN][pipeline] world import failed (RECOMMENDED): {repr(e)}")
 
 # ---- reason (OPTIONAL) ----
 try:
     from . import reason as reason_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     reason_core = None  # type: ignore
     _warn(f"[INFO][pipeline] reason import failed (OPTIONAL): {repr(e)}")
 
 # ---- debate (RECOMMENDED) ----
 try:
     from . import debate as debate_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     debate_core = None  # type: ignore
     _warn(f"[WARN][pipeline] debate import failed (RECOMMENDED): {repr(e)}")
 
@@ -240,7 +240,7 @@ except Exception as e:  # pragma: no cover
 
 try:
     from veritas_os.api.schemas import DecideRequest, DecideResponse  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     DecideRequest = Any  # type: ignore
     DecideResponse = Any  # type: ignore
     _warn(f"[WARN][pipeline] api.schemas import failed: {repr(e)}")
@@ -278,7 +278,7 @@ def _to_dict(o: Any) -> Dict[str, Any]:
     if hasattr(o, "__dict__"):
         try:
             return dict(o.__dict__)
-        except Exception:
+        except (TypeError, ValueError):
             return {}
     return {}
 
@@ -298,13 +298,13 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
         qp = getattr(request, "query_params", None)
         if qp is not None:
             out.update(dict(qp))
-    except Exception:
+    except Exception:  # subsystem resilience: request objects may raise arbitrary errors
         pass
     try:
         pm = getattr(request, "params", None)
         if pm is not None:
             out.update(dict(pm))
-    except Exception:
+    except Exception:  # subsystem resilience: request objects may raise arbitrary errors
         pass
     return out
 
@@ -380,7 +380,7 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
         VAL_JSON = Path(getattr(lp, "VAL_JSON")).resolve()
         META_LOG = Path(getattr(lp, "META_LOG")).resolve()
         return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
-    except Exception as e:
+    except (ImportError, AttributeError, OSError) as e:
         _warn(f"[WARN][pipeline] logging.paths import failed -> fallback: {repr(e)}")
         LOG_DIR = (Path(env_log).resolve() if env_log else (REPO_ROOT / "logs").resolve())
         DATASET_DIR = (Path(env_ds).resolve() if env_ds else (REPO_ROOT / "dataset").resolve())
@@ -442,7 +442,7 @@ def _load_persisted_decision(decision_id: str) -> Optional[Dict[str, Any]]:
     for path in candidates:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except (json.JSONDecodeError, ValueError, KeyError):
             continue
         if not isinstance(payload, dict):
             continue
@@ -522,7 +522,7 @@ async def replay_decision(
         else:
             report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         report["report_path"] = str(report_path)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         report.setdefault("diff", {})
         report["diff"]["report_save_error"] = repr(e)
 
@@ -539,7 +539,7 @@ async def replay_decision(
 
 try:
     from veritas_os.logging.dataset_writer import build_dataset_record, append_dataset_record  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] dataset_writer import failed: {repr(e)}")
 
     def build_dataset_record(*, req_payload: dict, res_payload: dict, meta: dict, eval_meta: dict) -> dict:  # type: ignore
@@ -587,7 +587,7 @@ def _mem_model_path() -> str:
         for k in ("MODEL_FILE", "MODEL_PATH"):
             if hasattr(mm, k):
                 return str(getattr(mm, k))
-    except Exception:
+    except Exception:  # subsystem resilience: intentionally broad
         pass
     return ""
 
@@ -605,10 +605,10 @@ try:
             try:
                 d = _pgl(text)
                 return d if isinstance(d, dict) else {"allow": 0.5}
-            except Exception:
+            except Exception:  # subsystem resilience: intentionally broad
                 return {"allow": 0.5}
 
-except Exception:
+except Exception:  # subsystem resilience: intentionally broad
     pass
 
 
@@ -616,7 +616,7 @@ def _allow_prob(text: str) -> float:
     d = predict_gate_label(text)
     try:
         return float(d.get("allow", 0.0))
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return 0.0
 
 
@@ -628,7 +628,7 @@ def _load_valstats() -> Dict[str, Any]:
                 obj = json.load(f)
             if isinstance(obj, dict):
                 return obj
-    except Exception:
+    except (OSError, json.JSONDecodeError, ValueError):
         pass
     return {"ema": 0.5, "alpha": 0.2, "n": 0, "history": []}
 
@@ -644,7 +644,7 @@ def _save_valstats(d: Dict[str, Any]) -> None:
                 json.dump(d, f, ensure_ascii=False, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
-    except Exception as e:
+    except OSError as e:
         logger.debug("_save_valstats failed: %s", e)
 
 
@@ -667,7 +667,7 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     try:
         if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
             return veritas_core._dedupe_alts(alts)  # type: ignore
-    except Exception:
+    except Exception:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
         pass
     return _dedupe_alts_fallback(alts)
 
@@ -698,7 +698,7 @@ async def call_core_decide(
     def _params(fn) -> set[str]:
         try:
             return set(inspect.signature(fn).parameters.keys())
-        except Exception:
+        except Exception:  # subsystem resilience: intentionally broad
             return set()
 
     p = _params(core_fn)
@@ -763,7 +763,7 @@ async def call_core_decide(
 _tool_web_search = None
 try:
     from veritas_os.tools.web_search import web_search as _tool_web_search  # type: ignore
-except Exception:
+except (ImportError, ModuleNotFoundError):
     # optional dependency / env missing in CI or local
     _tool_web_search = None
 
@@ -783,7 +783,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
-    except Exception:
+    except Exception:  # subsystem resilience: intentionally broad
         return None
 
 
@@ -794,7 +794,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
 # =========================================================
 try:
     from veritas_os.core import evidence as evidence_core  # type: ignore
-except Exception as e:  # pragma: no cover
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     evidence_core = None  # type: ignore
     _warn(f"[WARN][pipeline] evidence import failed (OPTIONAL): {repr(e)}")
 
@@ -929,13 +929,13 @@ async def run_decide_pipeline(
         if world_model is not None and hasattr(world_model, "inject_state_into_context"):
             context = world_model.inject_state_into_context(context, user_id)  # type: ignore
             body["context"] = context
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: intentionally broad
         _warn(f"[WorldOS] inject_state_into_context skipped: {e}")
 
     # context 差し替え後に memory_meta を追従
     try:
         response_extras["memory_meta"] = {"context": dict(context)}
-    except Exception:
+    except Exception:  # subsystem resilience: intentionally broad
         pass
 
     # ---- contract hardening (early)
@@ -953,7 +953,7 @@ async def run_decide_pipeline(
             if isinstance(p, dict):
                 plan = p or plan
         _warn(f"[PlannerOS] steps={len(plan.get('steps', []))}, source={plan.get('source')}")
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: intentionally broad
         _warn(f"[PlannerOS] skipped: {e}")
 
     response_extras["planner"] = {
@@ -975,12 +975,12 @@ async def run_decide_pipeline(
     seed_raw = body.get("seed")
     try:
         seed = int(seed_raw) if seed_raw is not None else 0
-    except Exception:
+    except (ValueError, TypeError):
         seed = 0
     random.seed(seed)
     try:
         min_ev = int(body.get("min_evidence") or 1)
-    except Exception:
+    except (ValueError, TypeError):
         min_ev = 1
     if min_ev < 1:
         min_ev = 1
@@ -1016,7 +1016,7 @@ async def run_decide_pipeline(
             if want_doc:
                 try:
                     doc_hits_raw = _memory_search(memory_store, query=query, k=5, kinds=["doc"], user_id=user_id)
-                except Exception:
+                except Exception:  # subsystem resilience: intentionally broad
                     doc_hits_raw = None
 
             flat_hits: List[Dict[str, Any]] = []
@@ -1113,10 +1113,10 @@ async def run_decide_pipeline(
                         value={"used": True, "query": query, "citations": cited_ids, "timestamp": ts},
                     )
                     _memory_add_usage(memory_store, user_id, cited_ids)
-            except Exception:
+            except (KeyError, TypeError, AttributeError):
                 pass
 
-        except Exception as e:
+        except Exception as e:  # subsystem resilience: intentionally broad
             _warn(f"[AGI-Retrieval] memory retrieval error: {repr(e)}")
             response_extras.setdefault("env_tools", {})
             response_extras["env_tools"]["memory_error"] = repr(e)
@@ -1151,7 +1151,7 @@ async def run_decide_pipeline(
     web_max = body.get("web_max_results") or context.get("web_max_results") or 5
     try:
         web_max = int(web_max)
-    except Exception:
+    except (ValueError, TypeError):
         web_max = 5
     web_max = max(1, min(20, web_max))
 
@@ -1173,7 +1173,7 @@ async def run_decide_pipeline(
 
             ws = _normalize_web_payload(ws0)
 
-        except Exception as e:
+        except Exception as e:  # subsystem resilience: intentionally broad
             response_extras.setdefault("env_tools", {})
             if isinstance(response_extras["env_tools"], dict):
                 response_extras["env_tools"]["web_search_error"] = repr(e)
@@ -1214,7 +1214,7 @@ async def run_decide_pipeline(
                     )
                     # ★古いweb_search実装でも evidence 側が困らないように final_query を補完
                     meta.setdefault("final_query", ws_final_query)
-            except Exception:
+            except (KeyError, TypeError, AttributeError):
                 ws_final_query = query
 
             response_extras["web_search"] = ws
@@ -1237,7 +1237,7 @@ async def run_decide_pipeline(
 
                 try:
                     confidence = float(item.get("confidence", 0.7) or 0.7)
-                except Exception:
+                except (ValueError, TypeError):
                     confidence = 0.7
 
                 ev = _norm_evidence_item(
@@ -1258,7 +1258,7 @@ async def run_decide_pipeline(
             # ok=True なのに抽出0件 → 最低1件は入れる
             try:
                 ok_flag = bool(ws.get("ok")) if isinstance(ws, dict) else False
-            except Exception:
+            except (KeyError, TypeError, AttributeError):
                 ok_flag = False
 
             if ok_flag and web_evidence_added == 0:
@@ -1388,7 +1388,7 @@ async def run_decide_pipeline(
     try:
         if veritas_core is not None and hasattr(veritas_core, "decide"):
             core_decide = veritas_core.decide  # type: ignore[attr-defined]
-    except Exception:
+    except Exception:  # subsystem resilience: intentionally broad
         core_decide = None
 
     raw = {}
@@ -1423,7 +1423,7 @@ async def run_decide_pipeline(
                 min_evidence=min_ev,
             )
             raw = raw0 if isinstance(raw0, dict) else {}
-        except Exception as e:
+        except Exception as e:  # subsystem resilience: intentionally broad
             _warn(f"[decide] core error: {e}")
             raw = {}
 
@@ -1480,7 +1480,7 @@ async def run_decide_pipeline(
             )
             try:
                 append_trust_log(trust_entry)
-            except Exception as e:
+            except (KeyError, TypeError, AttributeError) as e:
                 _warn(f"[self_healing] trust_log skipped: {repr(e)}")
 
             healing_attempts.append(
@@ -1522,7 +1522,7 @@ async def run_decide_pipeline(
                     min_evidence=min_ev,
                 )
                 raw = raw0 if isinstance(raw0, dict) else {}
-            except Exception as e:
+            except Exception as e:  # subsystem resilience: intentionally broad
                 _warn(f"[self_healing] retry failed: {repr(e)}")
                 healing_stop_reason = "retry_execution_failed"
                 break
@@ -1544,7 +1544,7 @@ async def run_decide_pipeline(
 
         try:
             telos = float(raw.get("telos_score") or telos)
-        except Exception:
+        except (ValueError, TypeError):
             pass
 
         fuji_dict = raw.get("fuji") or fuji_dict
@@ -1607,7 +1607,7 @@ async def run_decide_pipeline(
                     d["score"] = float(d.get("score", 1.0)) * (1.0 + micro)
                 boosted.append(d)
             alts = boosted
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: world_model.simulate may raise arbitrary errors
         _warn(f"[WorldModelOS] skip: {e}")
 
     # =========================================================
@@ -1637,7 +1637,7 @@ async def run_decide_pipeline(
                 "reason": "model_not_loaded",
                 "path": _mem_model_path(),
             }
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         response_extras.setdefault("metrics", {})
         if not isinstance(response_extras["metrics"], dict):
             response_extras["metrics"] = {}
@@ -1650,7 +1650,7 @@ async def run_decide_pipeline(
     if not isinstance(chosen, dict) or not chosen:
         try:
             chosen = max(alts, key=lambda d: float((d.get("world") or {}).get("utility", d.get("score", 1.0))))
-        except Exception:
+        except (ValueError, TypeError):
             chosen = alts[0] if alts else {}
 
     # =========================================================
@@ -1668,7 +1668,7 @@ async def run_decide_pipeline(
                     "telos_weights": (context or {}).get("telos_weights"),
                 },
             ) or {}
-    except Exception as e:
+    except (KeyError, TypeError, AttributeError) as e:
         _warn(f"[DebateOS] skipped: {e}")
         debate_result = {}
 
@@ -1686,7 +1686,7 @@ async def run_decide_pipeline(
         if isinstance(response_extras["debate"], dict):
             try:
                 response_extras["debate"].update({"source": debate_result.get("source"), "raw": debate_result.get("raw")})
-            except Exception:
+            except (KeyError, TypeError, AttributeError):
                 pass
 
         # heuristic: risk_delta
@@ -1700,7 +1700,7 @@ async def run_decide_pipeline(
                     rejected_cnt += 1
             if rejected_cnt > 0 and deb_opts and isinstance(deb_opts[0], dict):
                 deb_opts[0]["risk_delta"] = min(0.20, 0.05 * rejected_cnt)
-        except Exception as e:
+        except (KeyError, TypeError, AttributeError) as e:
             _warn(f"[DebateOS] risk_delta heuristic skipped: {e}")
 
     # =========================================================
@@ -1725,7 +1725,7 @@ async def run_decide_pipeline(
             chosen=chosen,
             critique_obj=critique,
         )
-    except Exception:
+    except Exception:  # subsystem resilience: intentionally broad
         critique = _critique_fallback(reason="critique_guard_exception", query=query, chosen=chosen)
         response_extras.setdefault("env_tools", {})
         if isinstance(response_extras["env_tools"], dict):
@@ -1738,7 +1738,7 @@ async def run_decide_pipeline(
             if isinstance(response_extras["env_tools"], dict):
                 response_extras["env_tools"]["review_required"] = True
                 response_extras["env_tools"]["review_reason"] = "critique_missing_or_failed"
-    except Exception:
+    except (KeyError, TypeError, AttributeError):
         pass
 
     # =========================================================
@@ -1751,7 +1751,7 @@ async def run_decide_pipeline(
             fuji_pre = fuji_core.validate(query, context)  # type: ignore
         else:
             fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: intentionally broad
         _warn(f"[fuji] error: {e}")
         fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
 
@@ -1767,7 +1767,7 @@ async def run_decide_pipeline(
     try:
         if isinstance(fuji_pre, dict):
             fuji_pre["status"] = status_map.get(str(fuji_pre.get("status", "allow")).lower(), "allow")
-    except Exception:
+    except (KeyError, TypeError, AttributeError):
         if isinstance(fuji_pre, dict):
             fuji_pre["status"] = "allow"
 
@@ -1779,7 +1779,7 @@ async def run_decide_pipeline(
     fuji_status = fuji_dict.get("status", "allow")
     try:
         risk_val = float(fuji_dict.get("risk", 0.0))
-    except Exception:
+    except (ValueError, TypeError):
         risk_val = 0.0
     reasons_list = fuji_dict.get("reasons", []) or []
     viols = fuji_dict.get("violations", []) or []
@@ -1813,7 +1813,7 @@ async def run_decide_pipeline(
             }
         else:
             values_payload = {"scores": {}, "total": 0.0, "top_factors": [], "rationale": "value_core missing"}
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: intentionally broad
         _warn(f"[value_core] evaluation error: {e}")
         values_payload = {"scores": {}, "total": 0.0, "top_factors": [], "rationale": "evaluation failed"}
 
@@ -1821,7 +1821,7 @@ async def run_decide_pipeline(
     try:
         vs = _load_valstats()
         value_ema = float(vs.get("ema", 0.5))
-    except Exception:
+    except (ValueError, TypeError):
         value_ema = 0.5
 
     BOOST_MAX = float(os.getenv("VERITAS_VALUE_BOOST_MAX", "0.05"))
@@ -1837,7 +1837,7 @@ async def run_decide_pipeline(
                 s = float(d.get("score", 1.0))
                 d["score_raw"] = float(d.get("score_raw", s))
                 d["score"] = max(0.0, s * (1.0 + boost))
-            except Exception:
+            except (ValueError, TypeError):
                 pass
             out.append(d)
         return out
@@ -1848,7 +1848,7 @@ async def run_decide_pipeline(
     RISK_EMA_WEIGHT = float(os.getenv("VERITAS_RISK_EMA_WEIGHT", "0.15"))
     try:
         effective_risk = float(fuji_dict.get("risk", 0.0)) * (1.0 - RISK_EMA_WEIGHT * value_ema)
-    except Exception:
+    except (ValueError, TypeError):
         effective_risk = 0.0
     effective_risk = max(0.0, min(1.0, effective_risk))
 
@@ -1880,7 +1880,7 @@ async def run_decide_pipeline(
         if not isinstance(response_extras["metrics"], dict):
             response_extras["metrics"] = {}
         response_extras["metrics"]["avg_world_utility"] = round(float(avg_u), 4)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         _warn(f"[world.utility] skipped: {e}")
 
     # =========================================================
@@ -1898,7 +1898,7 @@ async def run_decide_pipeline(
                 new_risk = max(0.0, min(1.0, float(fuji_dict.get("risk", 0.0)) + delta))
                 fuji_dict["risk"] = new_risk
                 effective_risk = max(0.0, min(1.0, new_risk * (1.0 - RISK_EMA_WEIGHT * value_ema)))
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         _warn(f"[Debate→FUJI] merge failed: {e}")
 
     if fuji_dict.get("status") == "modify":
@@ -1938,7 +1938,7 @@ async def run_decide_pipeline(
 
         values_payload["ema"] = round(ema_new, 4)
         value_ema = float(ema_new)
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         _warn(f"[value-learning] skip: {e}")
 
     # =========================================================
@@ -1991,7 +1991,7 @@ async def run_decide_pipeline(
                     evn = _norm_evidence_item(ev0)
                     if evn:
                         evidence.append(evn)
-    except Exception:
+    except (ValueError, TypeError):
         pass
 
     # =========================================================
@@ -2066,7 +2066,7 @@ async def run_decide_pipeline(
         audit_entry = redact_payload(audit_entry)
         append_trust_log(audit_entry)
         write_shadow_decide(request_id, body, chosen, float(telos), fuji_dict)
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: audit write must not crash decide
         _warn(f"[audit] log write skipped: {repr(e)}")
 
     # =========================================================
@@ -2074,7 +2074,7 @@ async def run_decide_pipeline(
     # =========================================================
     try:
         payload = DecideResponse.model_validate(res).model_dump()
-    except Exception as e:
+    except (ValueError, TypeError) as e:
         _warn(f"[model] decide response coerce: {e}")
         payload = res
 
@@ -2122,7 +2122,7 @@ async def run_decide_pipeline(
                 key=episode_key,
                 value=episode_value,
             )
-    except Exception as e:
+    except (KeyError, TypeError, AttributeError) as e:
         extras_tmp = payload.setdefault("extras", {})
         if isinstance(extras_tmp, dict):
             extras_tmp.setdefault("env_tools", {})
@@ -2164,7 +2164,7 @@ async def run_decide_pipeline(
             }
             with open(META_LOG, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        except Exception as e2:
+        except (OSError, ValueError, TypeError) as e2:
             _warn(f"[ReasonOS] meta_log append skipped: {e2}")
 
         llm_stage_started_at = time.time()
@@ -2202,7 +2202,7 @@ async def run_decide_pipeline(
                     stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
                     if isinstance(stage_latency, dict):
                         stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
-        except Exception as e2:
+        except Exception as e2:  # subsystem resilience: reason_core may raise arbitrary errors
             _warn(f"[ReasonOS] LLM reason failed: {e2}")
             tips = reflection.get("improvement_tips") or []
             payload["reason"] = {
@@ -2217,7 +2217,7 @@ async def run_decide_pipeline(
                     stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
                     if isinstance(stage_latency, dict):
                         stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: ReasonOS must not crash decide
         _warn(f"[ReasonOS] final fallback failed: {e}")
         payload["reason"] = {"note": "reflection/LLM both failed"}
 
@@ -2243,7 +2243,7 @@ async def run_decide_pipeline(
             "rater": {"type": "ai", "id": "telos-proxy"},
         }
         append_dataset_record(build_dataset_record(req_payload=body, res_payload=payload, meta=meta_ds, eval_meta=eval_meta))
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: intentionally broad
         _warn(f"[dataset] skip: {e}")
 
     # =========================================================
@@ -2254,7 +2254,7 @@ async def run_decide_pipeline(
         if not isinstance(payload_evidence, list):
             try:
                 payload_evidence = list(payload_evidence or [])
-            except Exception:
+            except (KeyError, TypeError, AttributeError):
                 payload_evidence = []
 
         if len(payload_evidence) == 0:
@@ -2278,7 +2278,7 @@ async def run_decide_pipeline(
                 existing.add(k)
 
         payload["evidence"] = payload_evidence
-    except Exception:
+    except (KeyError, TypeError, AttributeError):
         payload["evidence"] = payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
 
     # FINALIZE 後: normalize/dedupe/cap
@@ -2286,7 +2286,7 @@ async def run_decide_pipeline(
         payload["evidence"] = _dedupe_evidence(
             [ev for ev in (_norm_evidence_item(x) for x in (payload.get("evidence") or [])) if ev]
         )
-    except Exception:
+    except (KeyError, TypeError, AttributeError):
         payload["evidence"] = []
 
     if isinstance(payload.get("evidence"), list) and len(payload["evidence"]) > EVIDENCE_MAX:
@@ -2362,7 +2362,7 @@ async def run_decide_pipeline(
         else:
             log_path.write_text(json.dumps(persist, ensure_ascii=False, indent=2), encoding="utf-8")
             dataset_path.write_text(json.dumps(persist, ensure_ascii=False), encoding="utf-8")
-    except Exception as e:
+    except OSError as e:
         _warn(f"[persist] decide record skipped: {e}")
     finally:
         extras_for_persist = payload.setdefault("extras", {})
@@ -2395,7 +2395,7 @@ async def run_decide_pipeline(
                 latency_ms=int(latency_ms3) if isinstance(latency_ms3, (int, float)) else None,
             )
             _warn(f"[WorldModel] state updated for {uid_world}")
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: world_model.update may raise arbitrary errors
         _warn(f"[WorldModel] update_from_decision skipped: {e}")
 
     # AGI hint (best-effort)
@@ -2405,7 +2405,7 @@ async def run_decide_pipeline(
             extras2 = payload.setdefault("extras", {})
             if isinstance(extras2, dict):
                 extras2["veritas_agi"] = agi_info
-    except Exception as e:
+    except Exception as e:  # subsystem resilience: world_model hint may raise arbitrary errors
         _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
 
     payload_for_replay = dict(payload)
