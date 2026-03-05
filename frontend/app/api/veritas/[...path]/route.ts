@@ -5,6 +5,14 @@ const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
 /** Max request body size for proxied requests (1MB). */
 const MAX_PROXY_BODY_BYTES = 1 * 1024 * 1024;
+const TEXT_ENCODER = new TextEncoder();
+
+/**
+ * Calculate payload size using UTF-8 bytes to enforce byte-accurate limits.
+ */
+export function getBodySizeBytes(body: string): number {
+  return TEXT_ENCODER.encode(body).length;
+}
 
 /**
  * Reject path segments that could cause path traversal or URL manipulation.
@@ -84,7 +92,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   let body: string | undefined;
   if (hasBody) {
     body = await request.text();
-    if (body.length > MAX_PROXY_BODY_BYTES) {
+    if (getBodySizeBytes(body) > MAX_PROXY_BODY_BYTES) {
       return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
     }
   }

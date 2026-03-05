@@ -50,3 +50,20 @@
 ## 追跡提案（任意）
 - 次回リリース前にフロント API proxy のサイズ計測を bytes 基準へ統一。
 - 運用 Runbook に `VERITAS_ALLOW_SSE_QUERY_API_KEY` の禁止ポリシーを明文化。
+
+## 対応状況（2026-03-05 追記）
+
+### 対応済み: 1) フロントのリクエストサイズ上限が「文字数」ベース
+- 変更対象: `frontend/app/api/veritas/[...path]/route.ts`
+- 対応内容:
+  - UTF-8 バイト長を正確に計測する `getBodySizeBytes` を追加。
+  - 上限判定を `body.length` から `getBodySizeBytes(body)` に置換。
+- 追加テスト: `frontend/app/api/veritas/[...path]/route.test.ts`
+  - ASCII 文字列のバイト長が文字数と一致することを確認。
+  - 日本語・絵文字などマルチバイト文字で UTF-8 バイト長を正しく計測することを確認。
+
+### 未対応（運用ポリシー事項）: 2) SSE query API key 許可フラグ
+- 理由:
+  - 本指摘はコード修正よりも運用ポリシー（本番で `VERITAS_ALLOW_SSE_QUERY_API_KEY=0` を徹底）に依存するため。
+- セキュリティ警告:
+  - `VERITAS_ALLOW_SSE_QUERY_API_KEY=1` を有効化すると、URL 経由で資格情報がログ/履歴等へ露出するリスクがあります。短時間・限定環境以外での有効化は避けてください。
