@@ -392,6 +392,14 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
 
+# ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
+
+
+def _safe_filename_id(raw_id: str) -> str:
+    """Sanitize an ID for safe use in file names (prevent path traversal)."""
+    return _SAFE_FILENAME_RE.sub("_", str(raw_id))[:128]
+
 
 def _sanitize_for_diff(value: Any) -> Any:
     """Normalize payload for deterministic diffing by removing volatile fields."""
@@ -516,7 +524,8 @@ async def replay_decision(
 
     try:
         REPLAY_REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        report_path = REPLAY_REPORT_DIR / f"replay_{report['decision_id']}_{int(time.time() * 1000)}.json"
+        safe_id = _safe_filename_id(report["decision_id"])
+        report_path = REPLAY_REPORT_DIR / f"replay_{safe_id}_{int(time.time() * 1000)}.json"
         if _HAS_ATOMIC_IO and _atomic_write_json is not None:
             _atomic_write_json(report_path, report, indent=2)
         else:
