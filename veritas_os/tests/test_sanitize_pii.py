@@ -252,7 +252,8 @@ class TestZipCodeDetection:
     def test_zip_without_hyphen(self):
         text = "郵便番号: 1234567"
         result = detect_pii(text)
-        zips = [r for r in result if r["type"] == "zip_jp"]
+        # ハイフンなし7桁は zip_jp_no_hyphen タイプで検出される
+        zips = [r for r in result if r["type"] in ("zip_jp", "zip_jp_no_hyphen")]
         assert len(zips) == 1
 
 
