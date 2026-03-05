@@ -91,7 +91,7 @@ class TestCosineIndexThreadSafety:
                 for i in range(20):
                     vec = add_rng.random((1, 4), dtype=np.float32)
                     idx.add(vec, [f"add_{i}"])
-                    time.sleep(0.001)  # Small delay to interleave
+                    time.sleep(0)  # yield GIL to interleave threads
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -107,7 +107,7 @@ class TestCosineIndexThreadSafety:
                     assert len(results[0]) <= 5
                     with lock:
                         search_results.append(len(results[0]))
-                    time.sleep(0.001)
+                    time.sleep(0)  # yield GIL to interleave threads
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -283,7 +283,7 @@ class TestMemoryStoreThreadSafety:
             try:
                 for i in range(10):
                     ms.put("episodic", {"text": f"New item {i}", "tags": ["new"]})
-                    time.sleep(0.002)
+                    time.sleep(0)  # yield GIL to interleave threads
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -295,7 +295,7 @@ class TestMemoryStoreThreadSafety:
                     # Should always get some results (at least initial items)
                     with lock:
                         search_succeeded.append("episodic" in result)
-                    time.sleep(0.002)
+                    time.sleep(0)  # yield GIL to interleave threads
             except Exception as e:
                 with lock:
                     errors.append(e)

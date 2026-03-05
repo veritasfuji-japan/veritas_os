@@ -521,11 +521,14 @@ class TestMemoryStore:
         # At least the first record should match
         assert isinstance(recent, list)
 
-    def test_recent_sorted_by_ts(self, tmp_path):
+    def test_recent_sorted_by_ts(self, tmp_path, monkeypatch):
         """Lines 1124-1125: records sorted by ts."""
         store = memory.MemoryStore(tmp_path / "memory.json")
+        fake_time = 1000.0
+        monkeypatch.setattr(time, "time", lambda: fake_time)
         store.put("u1", "k1", "first")
-        time.sleep(0.01)
+        fake_time = 1001.0
+        monkeypatch.setattr(time, "time", lambda: fake_time)
         store.put("u1", "k2", "second")
         records = store.recent("u1", limit=5)
         assert len(records) == 2

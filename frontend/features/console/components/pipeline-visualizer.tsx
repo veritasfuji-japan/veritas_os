@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PIPELINE_STAGES } from "../constants";
 
 export function PipelineVisualizer(): JSX.Element {
@@ -9,6 +9,7 @@ export function PipelineVisualizer(): JSX.Element {
         PIPELINE_STAGES.map((stage) => [stage, "idle"]),
       ) as Record<string, "idle" | "pass" | "adjusted">,
   );
+  const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let index = 0;
@@ -27,7 +28,7 @@ export function PipelineVisualizer(): JSX.Element {
       index += 1;
       if (index >= PIPELINE_STAGES.length) {
         index = 0;
-        setTimeout(() => {
+        resetTimerRef.current = setTimeout(() => {
           setStageStatuses(
             Object.fromEntries(
               PIPELINE_STAGES.map((stage) => [stage, "idle"]),
@@ -39,6 +40,9 @@ export function PipelineVisualizer(): JSX.Element {
 
     return () => {
       clearInterval(intervalId);
+      if (resetTimerRef.current !== null) {
+        clearTimeout(resetTimerRef.current);
+      }
     };
   }, []);
 

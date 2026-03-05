@@ -288,15 +288,18 @@ def test_load_model_is_thread_safe(monkeypatch):
     """_load_model が同時実行されてもモデル初期化は一度だけ実行される。"""
     import sys
     import threading
-    import time
     import types
 
     init_calls = {"count": 0}
+    barrier = threading.Barrier(2, timeout=5)
 
     class SlowSentenceTransformer:
         def __init__(self, model_name):
             init_calls["count"] += 1
-            time.sleep(0.05)
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
             self.model_name = model_name
 
     monkeypatch.setattr(
