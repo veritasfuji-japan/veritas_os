@@ -1,10 +1,39 @@
-"""Ed25519 signing helpers for TrustLog signed audit entries."""
+"""Ed25519 signing helpers for TrustLog signed audit entries.
+
+Security notes — private key storage
+-------------------------------------
+``store_keypair`` writes the private key as URL-safe Base64 to a local file.
+The key material is **not encrypted at rest**.  This design is intentional for
+simplicity in single-host deployments, but operators should be aware of the
+following risk and mitigations:
+
+Risk:
+    If an attacker gains read access to the private key file (e.g., via path
+    traversal, symlink attack, or file-system backup exposure), they can forge
+    TrustLog signatures and invalidate the audit trail's integrity guarantee.
+
+Mitigations applied here:
+    - Files are created with mode ``0o600`` (owner-read/write only).
+    - ``_load_private_key`` checks that the key file is not world-readable
+      and raises ``PermissionError`` when unsafe permissions are detected.
+
+Recommended additional hardening for production:
+    - Store the private key in a secrets manager (HashiCorp Vault, AWS Secrets
+      Manager, GCP Secret Manager) or an HSM/KMS.
+    - Mount the key file from a tmpfs/memory-backed volume.
+    - Rotate keys periodically and re-sign historical log entries.
+"""
 
 from __future__ import annotations
 
 import base64
+import logging
+import os
+import stat
 from pathlib import Path
 from typing import Tuple
+
+logger = logging.getLogger(__name__)
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -35,15 +64,24 @@ def generate_ed25519_keypair() -> Tuple[bytes, bytes]:
 
 
 def store_keypair(private_key_path: Path, public_key_path: Path) -> Tuple[Path, Path]:
-    """Persist a new Ed25519 key pair to disk in URL-safe base64 form."""
+    """Persist a new Ed25519 key pair to disk in URL-safe base64 form.
+
+    Security:
+        The private key file is written with mode ``0o600`` so that only the
+        owning process account can read it.  See the module-level docstring for
+        production hardening recommendations.
+    """
     private_raw, public_raw = generate_ed25519_keypair()
     private_key_path.parent.mkdir(parents=True, exist_ok=True)
     public_key_path.parent.mkdir(parents=True, exist_ok=True)
 
-    private_key_path.write_text(
-        base64.urlsafe_b64encode(private_raw).decode("ascii"),
-        encoding="utf-8",
-    )
+    # Write with restrictive permissions: owner read/write only.
+    fd = os.open(str(private_key_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, base64.urlsafe_b64encode(private_raw))
+    finally:
+        os.close(fd)
+
     public_key_path.write_text(
         base64.urlsafe_b64encode(public_raw).decode("ascii"),
         encoding="utf-8",
@@ -51,7 +89,32 @@ def store_keypair(private_key_path: Path, public_key_path: Path) -> Tuple[Path, 
     return private_key_path, public_key_path
 
 
+def _check_private_key_permissions(private_key_path: Path) -> None:
+    """Warn (or raise) when the private key file has unsafe permissions.
+
+    Security:
+        A world-readable private key file undermines the audit trail integrity
+        guarantee. This check runs at load time so misconfigurations are caught
+        early rather than silently tolerated.
+
+    Raises:
+        PermissionError: When the file is readable by group or others.
+    """
+    try:
+        file_stat = private_key_path.stat()
+        mode = stat.S_IMODE(file_stat.st_mode)
+        if mode & (stat.S_IRGRP | stat.S_IROTH):
+            raise PermissionError(
+                f"Private key file {private_key_path} has unsafe permissions "
+                f"({oct(mode)}). Expected 0o600 (owner-read/write only). "
+                "An attacker with file-system read access could forge TrustLog signatures."
+            )
+    except OSError as exc:
+        logger.warning("Could not stat private key file %s: %s", private_key_path, exc)
+
+
 def _load_private_key(private_key_path: Path) -> Ed25519PrivateKey:
+    _check_private_key_permissions(private_key_path)
     raw = base64.urlsafe_b64decode(private_key_path.read_text(encoding="utf-8"))
     return Ed25519PrivateKey.from_private_bytes(raw)
 

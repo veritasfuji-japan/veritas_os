@@ -543,7 +543,11 @@ try:
         MEM_VEC = VectorMemory(index_path=VECTOR_INDEX_PATH)
         logger.info("[VectorMemory] Using built-in VectorMemory implementation")
 
-except (OSError, TypeError, ValueError) as e:
+except (OSError, TypeError, ValueError, RuntimeError) as e:
+    # RuntimeError を追加: VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 かつ
+    # sentence_transformers 未インストール時に _load_model() が RuntimeError を
+    # 送出するため、モジュールレベル初期化では MEM_VEC = None に graceful degradation
+    # する。個別インスタンス化時（test / explicit use）は RuntimeError が伝播する。
     logger.error("[VectorMemory] Initialization failed: %s", e)
     MEM_VEC = None
 
