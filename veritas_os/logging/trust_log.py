@@ -558,14 +558,28 @@ def _coerce_pagination(cursor: Optional[str], limit: int, *, max_limit: int = 20
     return offset, safe_limit
 
 
+_TRUST_LOG_PAGE_WARN_THRESHOLD = 10_000  # 全件ロード時に警告するエントリ数の閾値
+
+
 def get_trust_log_page(cursor: Optional[str], limit: int) -> Dict[str, Any]:
     """最新→過去の順で TrustLog をページング取得する。
 
     Notes:
         API は必ず cursor/limit で返却し、全件返却を回避する。
+
+    Warning:
+        現実装は全エントリをメモリに読み込んでからスライスする。
+        エントリ数が多い場合はメモリ使用量に注意。
+        大規模運用では JSONL をオフセットシークするストリーミング実装への移行を推奨。
     """
     offset, safe_limit = _coerce_pagination(cursor, limit)
     entries = load_trust_log(limit=None)
+    if len(entries) > _TRUST_LOG_PAGE_WARN_THRESHOLD:
+        logger.warning(
+            "get_trust_log_page: loaded %d entries into memory. "
+            "Consider streaming implementation for large-scale deployments.",
+            len(entries),
+        )
     page_items = entries[offset: offset + safe_limit]
     next_offset = offset + len(page_items)
     has_more = next_offset < len(entries)
