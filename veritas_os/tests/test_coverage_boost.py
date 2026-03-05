@@ -943,8 +943,12 @@ class TestServerMiscCoverage:
         assert result is True
 
     def test_allow_sse_query_api_key_flag_values(self, monkeypatch):
-        """Feature flag should accept common truthy values only."""
+        """Feature flag requires explicit risk acknowledgement."""
         monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "yes")
+        monkeypatch.delenv("VERITAS_ACK_SSE_QUERY_API_KEY_RISK", raising=False)
+        assert server._allow_sse_query_api_key() is False
+
+        monkeypatch.setenv("VERITAS_ACK_SSE_QUERY_API_KEY_RISK", "on")
         assert server._allow_sse_query_api_key() is True
 
         monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "0")
