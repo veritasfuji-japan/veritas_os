@@ -915,8 +915,10 @@ def _resolve_memory_user_id(body_user_id: Any, x_api_key: Optional[str]) -> str:
 
 
 def require_api_key_header_or_query(
+    request: Request = None,  # type: ignore[assignment]
     x_api_key: Optional[str] = Security(api_key_scheme),
     api_key: Optional[str] = Query(default=None),
+    x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
 ):
     """Authenticate SSE requests with header-first policy.
 
@@ -925,17 +927,20 @@ def require_api_key_header_or_query(
         access logs, browser history, and monitoring URLs. To preserve migration
         flexibility, operators may temporarily enable query auth with the
         ``VERITAS_ALLOW_SSE_QUERY_API_KEY=1`` feature flag.
+        Auth failures are rate-limited per client IP (same policy as require_api_key).
     """
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
+    client_ip = _resolve_client_ip(request=request, x_forwarded_for=x_forwarded_for)
     header_candidate = (x_api_key or "").strip()
     query_candidate = (api_key or "").strip()
 
     candidate = header_candidate
     if not candidate and query_candidate:
         if not _allow_sse_query_api_key():
+            _enforce_auth_failure_rate_limit(client_ip)
             raise HTTPException(status_code=401, detail="Query API key is disabled; use X-API-Key header")
         logger.warning(
             "SSE auth accepted query api_key due to VERITAS_ALLOW_SSE_QUERY_API_KEY=1. "
@@ -944,8 +949,10 @@ def require_api_key_header_or_query(
         candidate = query_candidate
 
     if not candidate:
+        _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(candidate, expected):
+        _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 

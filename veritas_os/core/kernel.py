@@ -37,9 +37,6 @@ class StrategyCapability(Protocol):
     def score_options(self, *args: Any, **kwargs: Any) -> Any:
         ...
 
-import threading as _threading
-
-
 def _read_proc_self_status_seccomp() -> int | None:
     """Read Linux seccomp mode from ``/proc/self/status``.
 

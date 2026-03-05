@@ -890,6 +890,24 @@ async def run_decide_pipeline(
     if not isinstance(context, dict):
         context = {}
 
+    # ★ セキュリティ修正: ユーザー提供コンテキストからパイプライン内部フィールドを除去
+    # "_pipeline_*" や "_orchestrated_by_pipeline" 等の内部制御フラグをユーザーが
+    # 外部API経由で注入するとエピソード保存のスキップや証拠の偽装が可能になるため、
+    # パイプライン制御フラグはここで削除し、パイプライン自身が後から設定する。
+    _PIPELINE_PRIVATE_PREFIXES = ("_pipeline_", "_orchestrated_by_pipeline", "_episode_saved",
+                                  "_world_state_", "_daily_plans_", "_world_sim_result")
+    _injected_private_keys = [
+        k for k in list(context.keys())
+        if isinstance(k, str) and any(k.startswith(p) for p in _PIPELINE_PRIVATE_PREFIXES)
+    ]
+    if _injected_private_keys:
+        logger.warning(
+            "Pipeline private fields stripped from user-supplied context: %s",
+            sorted(_injected_private_keys),
+        )
+        for _k in _injected_private_keys:
+            context.pop(_k, None)
+
     replay_mode = bool(context.get("_replay_mode", False))
     mock_external_apis = bool(context.get("_mock_external_apis", replay_mode))
     if replay_mode:
