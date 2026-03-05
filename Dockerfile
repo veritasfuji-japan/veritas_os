@@ -40,7 +40,7 @@ EXPOSE 8000
 
 # ★ M-4 修正: ヘルスチェック追加
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "from http.client import HTTPConnection; c = HTTPConnection('localhost', 8000, timeout=3); c.request('GET', '/health'); r = c.getresponse(); exit(0 if r.status == 200 else 1)"
+    CMD python -c "from http.client import HTTPConnection; c = HTTPConnection('localhost', 8000, timeout=3); c.request('GET', '/health'); exit(0 if c.getresponse().status == 200 else 1)" || exit 1
 
 STOPSIGNAL SIGTERM
 CMD ["uvicorn", "veritas_os.api.server:app", "--host", "0.0.0.0", "--port", "8000"]
