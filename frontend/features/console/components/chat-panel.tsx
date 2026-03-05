@@ -1,4 +1,5 @@
 import { type LocaleKey } from "../../../locales/ja";
+import { sanitizeText } from "../../../lib/utils";
 import { Button, Card } from "@veritas/design-system";
 import { DANGER_PRESETS, isDangerPresetsEnabled } from "../constants";
 import { type ChatMessage } from "../types";
@@ -42,7 +43,7 @@ export function ChatPanel({
                 }`}
               >
                 <p className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">{message.role}</p>
-                {message.content}
+                {sanitizeText(message.content)}
               </li>
             ))}
           </ul>
@@ -93,7 +94,7 @@ export function ChatPanel({
 
         {error ? (
           <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">
-            {error}
+            {sanitizeText(error)}
           </p>
         ) : null}
       </form>

@@ -417,7 +417,7 @@ class VectorMemory:
 
             return np.zeros(len(matrix))
 
-    def rebuild_index(self, documents: List[Dict[str, Any]]):
+    def rebuild_index(self, documents: List[Dict[str, Any]]) -> None:
         """
         既存のドキュメントリストからインデックスを再構築
 
@@ -1731,7 +1731,7 @@ def distill_memory_for_user(
     return doc
 
 
-def rebuild_vector_index():
+def rebuild_vector_index() -> None:
     """
     既存のmemory.jsonからベクトルインデックスを再構築
 
