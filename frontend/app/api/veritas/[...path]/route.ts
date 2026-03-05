@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getBodySizeBytes } from "./body-size";
+
 const API_BASE = process.env.VERITAS_API_BASE_URL ?? process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
@@ -84,7 +86,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   let body: string | undefined;
   if (hasBody) {
     body = await request.text();
-    if (body.length > MAX_PROXY_BODY_BYTES) {
+    if (getBodySizeBytes(body) > MAX_PROXY_BODY_BYTES) {
       return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
     }
   }
