@@ -17,3 +17,20 @@ if (typeof globalThis.EventSource === "undefined") {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).EventSource = MockEventSource;
 }
+
+const CANVAS_CONTEXT_STUB = {
+  setTransform: () => undefined,
+  clearRect: () => undefined,
+  beginPath: () => undefined,
+  arc: () => undefined,
+  fill: () => undefined,
+  fillStyle: "",
+  globalAlpha: 1,
+};
+
+if (typeof HTMLCanvasElement !== "undefined") {
+  Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+    configurable: true,
+    value: () => CANVAS_CONTEXT_STUB,
+  });
+}

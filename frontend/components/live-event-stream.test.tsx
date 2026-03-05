@@ -156,10 +156,11 @@ describe("LiveEventStream", () => {
   it("does not render raw i18n keys in the UI", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        body: createReadableStream([]),
-      }),
+      vi.fn().mockImplementation(
+        () => new Promise<Response>(() => {
+          // keep pending so no async state updates are scheduled during this assertion-only test
+        }),
+      ),
     );
 
     render(
