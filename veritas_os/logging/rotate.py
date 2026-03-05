@@ -28,8 +28,7 @@ def _get_max_lines() -> int:
         except ValueError:
             logger.warning("VERITAS_LOG_MAX_LINES=%r is not a valid integer, using default %d", env_val, _DEFAULT_MAX_LINES)
     # MAX_LINES がテスト等で変更されている場合はそちらを優先
-    import veritas_os.logging.rotate as _self
-    return _self.MAX_LINES
+    return globals()["MAX_LINES"]
 
 
 MAX_LINES = _DEFAULT_MAX_LINES

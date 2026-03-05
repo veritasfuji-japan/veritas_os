@@ -243,14 +243,20 @@ class TestAtomicIoFsyncLogging:
 
         target = tmp_path / "test.txt"
 
-        with mock.patch("os.open", side_effect=OSError("dir open failed")):
-            # The write itself should still succeed because dir fsync is best-effort
-            # But we can't mock just the dir fsync os.open call easily.
-            # Instead, verify the current log level is WARNING in the source.
-            pass
+        # Patch os.open to fail only on the dir fsync call (O_RDONLY for directory)
+        original_os_open = os.open
 
-        # Verify the source code uses logger.warning (not logger.debug)
-        import inspect
-        source = inspect.getsource(atomic_io._atomic_write_bytes)
-        assert "logger.warning" in source
-        assert 'dir fsync failed' in source
+        def patched_os_open(path, flags, *args, **kwargs):
+            if flags == os.O_RDONLY and str(path) == str(target.parent):
+                raise OSError("dir open failed for test")
+            return original_os_open(path, flags, *args, **kwargs)
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.core.atomic_io"):
+            with mock.patch("os.open", side_effect=patched_os_open):
+                atomic_io._atomic_write_bytes(target, b"hello")
+
+        assert target.read_bytes() == b"hello"
+        assert "dir fsync failed" in caplog.text
+        # Verify it's logged at WARNING level, not DEBUG
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("dir fsync failed" in r.message for r in warning_records)
