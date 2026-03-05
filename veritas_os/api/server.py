@@ -973,9 +973,30 @@ def require_api_key_header_or_query(
 
 
 def _allow_sse_query_api_key() -> bool:
-    """Return True when SSE query-string API key auth is explicitly enabled."""
-    raw = (os.getenv("VERITAS_ALLOW_SSE_QUERY_API_KEY") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    """Return True only when dual opt-in flags enable SSE query auth.
+
+    Security note:
+        Query-string API keys can leak through logs and browser history.
+        To reduce accidental exposure, enabling this mode requires two flags:
+        ``VERITAS_ALLOW_SSE_QUERY_API_KEY`` and
+        ``VERITAS_ACK_SSE_QUERY_API_KEY_RISK``.
+    """
+    allow_raw = (os.getenv("VERITAS_ALLOW_SSE_QUERY_API_KEY") or "").strip().lower()
+    allow_query_auth = allow_raw in {"1", "true", "yes", "on"}
+    if not allow_query_auth:
+        return False
+
+    ack_raw = (os.getenv("VERITAS_ACK_SSE_QUERY_API_KEY_RISK") or "").strip().lower()
+    acknowledged = ack_raw in {"1", "true", "yes", "on"}
+    if not acknowledged:
+        logger.warning(
+            "SSE query api_key enable flag ignored because "
+            "VERITAS_ACK_SSE_QUERY_API_KEY_RISK is not set. "
+            "Set both flags only for temporary migration windows.",
+        )
+        return False
+
+    return True
 
 
 # ---- HMAC signature / replay (optional) ----

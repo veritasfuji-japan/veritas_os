@@ -76,3 +76,19 @@
   - テストも `route.ts` 直接 import から `body-size.ts` import へ切替。
 - 結果:
   - `frontend build`（`next build`）が成功することを確認。
+
+
+### 対応済み: 2) SSE query API key 許可フラグ（誤設定耐性の強化）
+- 変更対象: `veritas_os/api/server.py`
+- 対応内容:
+  - `VERITAS_ALLOW_SSE_QUERY_API_KEY` 単独では有効化されないように変更。
+  - 追加の明示同意フラグ `VERITAS_ACK_SSE_QUERY_API_KEY_RISK` を導入し、**2フラグ同時ON** のときのみ query API key を許可。
+  - 同意フラグ未設定時は warning ログを出し、安全側（拒否）にフォールバック。
+- 追加テスト:
+  - `veritas_os/tests/test_coverage_boost.py`
+    - 同意フラグ未設定時は `False`、設定時は `True` になることを確認。
+  - `veritas_os/tests/test_api_server_extra.py`
+    - 2フラグ同時ONで query API key を受理することを確認。
+    - 許可フラグのみON（同意フラグなし）では 401 拒否となることを確認。
+- セキュリティ警告（継続）:
+  - query API key は URL 経由の漏えい面積が広いため、移行期間の一時用途に限定し、本番常用は避けること。
