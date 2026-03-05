@@ -88,14 +88,14 @@ class Context(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=500)
     query: str = Field(..., max_length=MAX_QUERY_LENGTH)
 
-    goals: Optional[List[str]] = None
-    constraints: Optional[List[str]] = None
+    goals: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    constraints: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
 
     # 返答の時間軸（未指定可）
     time_horizon: Optional[Literal["short", "mid", "long"]] = None
 
     # 将来の好み/スタイル切替のフック
-    preferences: Optional[List[str]] = None
+    preferences: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
     telos_weights: Optional[Dict[str, float]] = None
     affect_hint: Optional[Dict[str, str]] = None
     response_style: Optional[Literal["logic", "emotional", "business", "expert", "casual"]] = None
@@ -207,8 +207,8 @@ class FujiDecision(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     status: Literal["allow", "modify", "rejected", "block", "abstain"]
-    reasons: List[str] = Field(default_factory=list)
-    violations: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    violations: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
 
 class TrustLog(BaseModel):
@@ -216,9 +216,9 @@ class TrustLog(BaseModel):
 
     request_id: str
     created_at: str
-    sources: List[str] = Field(default_factory=list)
-    critics: List[str] = Field(default_factory=list)
-    checks: List[str] = Field(default_factory=list)
+    sources: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    critics: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    checks: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
     # 実運用の落下を避けるため、デフォルトを持たせる（必須思想なら外してOK）
     approver: str = "system"
@@ -423,7 +423,7 @@ class Gate(BaseModel):
     bias: Optional[float] = None
     decision_status: Literal["allow", "modify", "rejected", "block", "abstain"] = "allow"
     reason: Optional[str] = None
-    modifications: List[Union[str, Dict[str, Any]]] = Field(default_factory=list)
+    modifications: List[Union[str, Dict[str, Any]]] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
 
 class DecideResponse(BaseModel):
@@ -443,17 +443,17 @@ class DecideResponse(BaseModel):
     request_id: str = ""
     chosen: Dict[str, Any] = Field(default_factory=dict)
 
-    alternatives: List[Alt] = Field(default_factory=list)
+    alternatives: List[Alt] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     # 互換のために残す（通常は alternatives と同じ）
-    options: List[Alt] = Field(default_factory=list)
+    options: List[Alt] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
     values: Optional[ValuesOut] = None
 
-    evidence: List[EvidenceItem] = Field(default_factory=list)
+    evidence: List[EvidenceItem] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
     # critique/debate は “何が来ても落とさない” を最優先
-    critique: List[Any] = Field(default_factory=list)
-    debate: List[Any] = Field(default_factory=list)
+    critique: List[Any] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    debate: List[Any] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
     telos_score: float = 0.0
     fuji: Dict[str, Any] = Field(default_factory=dict)
@@ -469,7 +469,7 @@ class DecideResponse(BaseModel):
     rejection_reason: Optional[str] = None
 
     # MemoryOS メタ
-    memory_citations: List[Any] = Field(default_factory=list)
+    memory_citations: List[Any] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     memory_used_count: int = 0
 
     # PlannerOS / ReasonOS
