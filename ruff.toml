@@ -9,12 +9,20 @@ exclude = [
 ]
 
 [lint]
-select = ["E", "F", "W"]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "B",    # flake8-bugbear (common bugs and design problems)
+]
 ignore = [
     "E501",   # line too long
     "E402",   # module level import not at top
-    "F401",   # imported but unused
+    "F401",   # imported but unused (re-exports)
     "W291",   # trailing whitespace
     "W293",   # whitespace before ':'
     "F841",   # local variable assigned but never used
+    "B007",   # loop control variable not used (common in pattern iteration)
+    "B009",   # getattr with constant value (used deliberately after dynamic imports)
+    "B904",   # raise without from inside except (existing code pattern)
 ]
