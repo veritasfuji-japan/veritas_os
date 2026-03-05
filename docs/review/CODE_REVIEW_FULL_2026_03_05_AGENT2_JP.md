@@ -67,3 +67,12 @@
   - 本指摘はコード修正よりも運用ポリシー（本番で `VERITAS_ALLOW_SSE_QUERY_API_KEY=0` を徹底）に依存するため。
 - セキュリティ警告:
   - `VERITAS_ALLOW_SSE_QUERY_API_KEY=1` を有効化すると、URL 経由で資格情報がログ/履歴等へ露出するリスクがあります。短時間・限定環境以外での有効化は避けてください。
+
+### 追加対応（CI失敗修正）
+- 事象:
+  - Next.js Route Handler の制約により、`route.ts` で `GET/POST/PUT` 以外の named export（`getBodySizeBytes`）を公開すると build 時に型エラーとなる。
+- 修正:
+  - `getBodySizeBytes` を `frontend/app/api/veritas/[...path]/body-size.ts` へ分離し、`route.ts` では import のみ行う構成に変更。
+  - テストも `route.ts` 直接 import から `body-size.ts` import へ切替。
+- 結果:
+  - `frontend build`（`next build`）が成功することを確認。

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getBodySizeBytes } from './route';
+import { getBodySizeBytes } from './body-size';
 
 describe('getBodySizeBytes', () => {
   it('returns ASCII length as bytes', () => {

@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getBodySizeBytes } from "./body-size";
+
 const API_BASE = process.env.VERITAS_API_BASE_URL ?? process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ?? "http://localhost:8000";
 const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
 /** Max request body size for proxied requests (1MB). */
 const MAX_PROXY_BODY_BYTES = 1 * 1024 * 1024;
-const TEXT_ENCODER = new TextEncoder();
-
-/**
- * Calculate payload size using UTF-8 bytes to enforce byte-accurate limits.
- */
-export function getBodySizeBytes(body: string): number {
-  return TEXT_ENCODER.encode(body).length;
-}
 
 /**
  * Reject path segments that could cause path traversal or URL manipulation.
