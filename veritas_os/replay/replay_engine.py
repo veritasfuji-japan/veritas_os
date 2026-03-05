@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import time
 from contextlib import contextmanager
@@ -14,6 +15,14 @@ from typing import Any, Dict, Iterator, List
 
 from veritas_os.api.schemas import DecideRequest
 from veritas_os.core import pipeline
+
+# ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
+
+
+def _safe_filename_id(raw_id: str) -> str:
+    """Sanitize an ID for safe use in file names (prevent path traversal)."""
+    return _SAFE_FILENAME_RE.sub("_", str(raw_id))[:128]
 
 
 @dataclass(frozen=True)
@@ -55,7 +64,8 @@ def _iso_now() -> str:
 
 def _replay_file_name(decision_id: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return f"replay_{decision_id}_{stamp}.json"
+    safe_id = _safe_filename_id(decision_id)
+    return f"replay_{safe_id}_{stamp}.json"
 
 
 def _sort_evidence(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

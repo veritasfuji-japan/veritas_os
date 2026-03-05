@@ -109,6 +109,8 @@ def _check_private_key_permissions(private_key_path: Path) -> None:
                 f"({oct(mode)}). Expected 0o600 (owner-read/write only). "
                 "An attacker with file-system read access could forge TrustLog signatures."
             )
+    except PermissionError:
+        raise
     except OSError as exc:
         logger.warning("Could not stat private key file %s: %s", private_key_path, exc)
 

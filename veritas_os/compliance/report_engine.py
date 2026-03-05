@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,6 +23,14 @@ from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.security.signing import sign_payload_hash
 
 REPORT_DIR = (Path(LOG_DIR) / "compliance_reports").resolve()
+
+# ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
+
+
+def _safe_filename_id(raw_id: str) -> str:
+    """Sanitize an ID for safe use in file names (prevent path traversal)."""
+    return _SAFE_FILENAME_RE.sub("_", str(raw_id))[:128]
 
 
 @dataclass(frozen=True)
@@ -80,7 +89,8 @@ def _latest_replay_result(decision_id: str) -> Dict[str, Any]:
     if not replay_dir.exists():
         return {"available": False, "result": "missing"}
 
-    candidates = sorted(replay_dir.glob(f"replay_{decision_id}_*.json"), reverse=True)
+    safe_id = _safe_filename_id(decision_id)
+    candidates = sorted(replay_dir.glob(f"replay_{safe_id}_*.json"), reverse=True)
     if not candidates:
         return {"available": False, "result": "missing"}
 
