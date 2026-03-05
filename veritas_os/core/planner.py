@@ -26,9 +26,29 @@ _MAX_STEPS_OBJECT_EXTRACT_ATTEMPTS = 512
 _MAX_FENCED_BLOCK_SCAN_ATTEMPTS = 128
 
 
-def _truncate_json_extract_input(raw: str) -> str:
-    """Limit JSON extraction input size to reduce parser and regex DoS risk."""
+def _truncate_json_extract_input(raw: Any) -> str:
+    """Normalize and size-limit JSON extraction input.
+
+    The helper accepts arbitrary values because several planner call paths may
+    pass non-string payloads during fallback handling. It also removes a UTF-8
+    BOM and NUL bytes which frequently appear in streamed model output and can
+    break JSON parsing.
+    """
+    if raw is None:
+        return ""
+
+    if not isinstance(raw, str):
+        raw = str(raw)
+
     cleaned = raw.strip()
+    if cleaned.startswith("\ufeff"):
+        cleaned = cleaned.lstrip("\ufeff")
+        logger.warning("planner JSON extraction removed leading BOM")
+
+    if "\x00" in cleaned:
+        cleaned = cleaned.replace("\x00", "")
+        logger.warning("planner JSON extraction removed NUL bytes")
+
     if len(cleaned) <= _MAX_JSON_EXTRACT_CHARS:
         return cleaned
 
