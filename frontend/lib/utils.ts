@@ -12,5 +12,12 @@ export function cn(...inputs: ClassValue[]): string {
  */
 export function sanitizeText(value: unknown): string {
   if (typeof value !== "string") return String(value ?? "");
-  return value.replace(/<[^>]*>/g, "").replace(/\0/g, "");
+  let result = value.replace(/\0/g, "");
+  const TAG_RE = /<[^>]*>/g;
+  let previous: string;
+  do {
+    previous = result;
+    result = result.replace(TAG_RE, "");
+  } while (result !== previous);
+  return result;
 }
