@@ -7,7 +7,32 @@ from .paths import LOG_JSONL
 
 logger = logging.getLogger(__name__)
 
-MAX_LINES = 5000
+_DEFAULT_MAX_LINES = 5000
+
+
+def _get_max_lines() -> int:
+    """ローテーション閾値を返す。
+
+    優先順位:
+    1. 環境変数 VERITAS_LOG_MAX_LINES
+    2. モジュール変数 MAX_LINES（monkeypatch 等で変更可能）
+    3. デフォルト値 _DEFAULT_MAX_LINES
+    """
+    env_val = os.environ.get("VERITAS_LOG_MAX_LINES")
+    if env_val is not None:
+        try:
+            val = int(env_val)
+            if val > 0:
+                return val
+            logger.warning("VERITAS_LOG_MAX_LINES must be positive, using default %d", _DEFAULT_MAX_LINES)
+        except ValueError:
+            logger.warning("VERITAS_LOG_MAX_LINES=%r is not a valid integer, using default %d", env_val, _DEFAULT_MAX_LINES)
+    # MAX_LINES がテスト等で変更されている場合はそちらを優先
+    import veritas_os.logging.rotate as _self
+    return _self.MAX_LINES
+
+
+MAX_LINES = _DEFAULT_MAX_LINES
 
 # ★ ローテーション時にハッシュチェーンの連続性を保つためのマーカーファイル
 # 最終ハッシュ値を保存し、新しいファイルの最初のエントリで参照する
@@ -116,8 +141,9 @@ def count_lines(path: Union[str, Path]) -> int:
 
 def rotate_if_needed() -> Path:
     trust_log = _get_trust_log_path()
+    max_lines = _get_max_lines()
     lines = count_lines(trust_log)
-    if lines < MAX_LINES:
+    if lines < max_lines:
         return trust_log
 
     # ★ ハッシュチェーン連続性: ローテーション前に最終ハッシュを保存

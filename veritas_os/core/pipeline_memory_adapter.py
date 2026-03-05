@@ -63,6 +63,7 @@ def _call_with_accepted_kwargs(fn: Any, kwargs: Dict[str, Any]) -> Any:
         filtered = {k: v for k, v in kwargs.items() if k in accepted}
         return fn(**filtered)
     except Exception:
+        logger.debug("[_call_with_accepted_kwargs] signature filtering failed, falling back to raw kwargs", exc_info=True)
         return fn(**kwargs)
 
 
@@ -71,6 +72,7 @@ def _memory_has(store: Any, name: str) -> bool:
     try:
         return callable(getattr(store, name))
     except Exception:
+        logger.debug("[_memory_has] failed to check '%s' on store: %s", name, type(store).__name__, exc_info=True)
         return False
 
 
@@ -98,11 +100,12 @@ def _memory_search(store: Any, **kwargs: Any) -> Any:
     try:
         return fn(query=q, k=k)  # type: ignore
     except Exception:
-        pass
+        logger.debug("[_memory_search] fn(query=q, k=k) failed, trying positional args", exc_info=True)
 
     try:
         return fn(q, k)  # type: ignore
     except Exception:
+        logger.debug("[_memory_search] fn(q, k) failed, trying fn(query=q)", exc_info=True)
         return fn(query=q)  # type: ignore
 
 
@@ -123,22 +126,23 @@ def _memory_put(store: Any, user_id: Any, *, key: str, value: Any, meta: Any = N
         )
         return None
     except Exception:
-        pass
+        logger.debug("[_memory_put] accepted_kwargs call failed, trying explicit signature", exc_info=True)
 
     try:
         fn(user_id, key=key, value=value, meta=meta)  # type: ignore
         return None
     except Exception:
-        pass
+        logger.debug("[_memory_put] fn(user_id, key=, value=, meta=) failed", exc_info=True)
     try:
         fn(user_id, key, value)  # type: ignore
         return None
     except Exception:
-        pass
+        logger.debug("[_memory_put] fn(user_id, key, value) failed", exc_info=True)
     try:
         fn(key, value)  # type: ignore
         return None
     except Exception:
+        logger.debug("[_memory_put] all put signatures exhausted", exc_info=True)
         return None
 
 
@@ -151,10 +155,11 @@ def _memory_add_usage(store: Any, user_id: Any, cited_ids: List[str]) -> None:
         _call_with_accepted_kwargs(fn, {"user_id": user_id, "cited_ids": cited_ids})
         return None
     except Exception:
-        pass
+        logger.debug("[_memory_add_usage] accepted_kwargs call failed, trying positional", exc_info=True)
     try:
         fn(user_id, cited_ids)  # type: ignore
     except Exception:
+        logger.debug("[_memory_add_usage] all add_usage signatures exhausted", exc_info=True)
         return None
 
 

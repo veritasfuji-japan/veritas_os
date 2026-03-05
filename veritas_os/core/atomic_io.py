@@ -102,7 +102,7 @@ def _atomic_write_bytes(path: Path, data: bytes) -> None:
         except (OSError, AttributeError):
             # Windows や一部のファイルシステムでは失敗する可能性がある
             # その場合は無視して続行（ベストエフォート）
-            logger.debug("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
+            logger.warning("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
     except (IOError, OSError):
         # Clean up temp file on failure
         if fd >= 0:
@@ -217,7 +217,7 @@ def atomic_write_npz(
                 os.close(dir_fd)
         except (OSError, AttributeError):
             # Windows や一部のファイルシステムでは失敗する可能性がある
-            logger.debug("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
+            logger.warning("dir fsync failed for %s (best-effort)", path.parent, exc_info=True)
     except Exception:
         try:
             os.unlink(tmp_path)
