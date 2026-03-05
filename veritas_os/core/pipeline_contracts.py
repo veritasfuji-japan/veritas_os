@@ -16,9 +16,12 @@ extras / metrics / memory_meta に関する不変条件（invariant）を維持�
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 
 from .pipeline_helpers import _set_bool_metric, _set_int_metric, _to_bool_local
+
+logger = logging.getLogger(__name__)
 
 
 # =========================================================
@@ -92,6 +95,7 @@ def _ensure_full_contract(
         try:
             stage_latency[stage_name] = max(0, int(stage_latency.get(stage_name, 0) or 0))
         except Exception:
+            logger.debug("[_ensure_full_contract] stage_latency[%s] conversion failed", stage_name, exc_info=True)
             stage_latency[stage_name] = 0
     extras["metrics"]["stage_latency"] = stage_latency
 
@@ -102,6 +106,7 @@ def _ensure_full_contract(
             int(extras["metrics"].get("mem_evidence_count", 0) or 0),
         )
     except Exception:
+        logger.debug("[_ensure_full_contract] mem_evidence_count conversion failed", exc_info=True)
         extras["metrics"]["mem_evidence_count"] = 0
 
     # memory_meta.context merge
@@ -109,6 +114,7 @@ def _ensure_full_contract(
     try:
         base_ctx = dict(context_obj) if isinstance(context_obj, dict) else {}
     except Exception:
+        logger.debug("[_ensure_full_contract] context_obj conversion failed", exc_info=True)
         base_ctx = {}
 
     mm_ctx = mm.get("context")
@@ -129,7 +135,7 @@ def _ensure_full_contract(
             if isinstance(query_str, str) and query_str.strip():
                 mm["query"] = query_str
     except Exception:
-        pass
+        logger.debug("[_ensure_full_contract] memory_meta.query assignment failed", exc_info=True)
 
 
 # =========================================================
@@ -164,6 +170,7 @@ def _deep_merge_dict(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]
                 dst[k] = v
         return dst
     except Exception:
+        logger.debug("[_deep_merge_dict] merge failed", exc_info=True)
         return dst
 
 
@@ -204,6 +211,7 @@ def _merge_extras_preserving_contract(
                     prev_mm if isinstance(prev_mm, dict) else {"context": dict(context_obj)}
                 )
             except Exception:
+                logger.debug("[_merge_extras] memory_meta recovery failed", exc_info=True)
                 base_extras["memory_meta"] = {"context": {}}
 
         base_extras["fast_mode"] = _to_bool_local(base_extras.get("fast_mode", prev_fast))
@@ -213,6 +221,7 @@ def _merge_extras_preserving_contract(
         )
         return base_extras
     except Exception:
+        logger.debug("[_merge_extras_preserving_contract] merge failed, attempting recovery", exc_info=True)
         try:
             if isinstance(base_extras, dict):
                 _ensure_full_contract(
@@ -220,7 +229,7 @@ def _merge_extras_preserving_contract(
                 )
                 return base_extras
         except Exception:
-            pass
+            logger.debug("[_merge_extras_preserving_contract] recovery also failed", exc_info=True)
         return base_extras if isinstance(base_extras, dict) else {}
 
 
