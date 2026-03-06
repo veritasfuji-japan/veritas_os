@@ -470,7 +470,7 @@ class HumanReviewQueue:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=5)  # noqa: S310 — URL validated above
+            urllib.request.urlopen(req, timeout=5)  # nosec B310
         except Exception:
             logger.debug("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
 
