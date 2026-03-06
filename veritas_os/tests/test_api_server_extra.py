@@ -85,6 +85,50 @@ def test_health_and_status_and_metrics(monkeypatch):
     assert "trust_jsonl_lines" in data
     assert "last_decide_at" in data
     assert "server_time" in data
+    assert "auth_reject_reasons" in data
+    assert "auth_store_mode" in data
+    assert "auth_store_failure_mode" in data
+
+
+def test_auth_store_error_policy_fail_closed(monkeypatch):
+    """Fail-closed mode should reject requests when auth store access fails."""
+
+    class BrokenStore:
+        def register_nonce(self, nonce: str, ttl_sec: float) -> bool:
+            raise RuntimeError("broken nonce")
+
+        def increment_auth_failure(self, client_ip: str, limit: int, window_sec: float) -> bool:
+            raise RuntimeError("broken auth fail")
+
+        def increment_rate_limit(self, api_key: str, limit: int, window_sec: float) -> bool:
+            raise RuntimeError("broken rate")
+
+    monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "closed")
+    monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", BrokenStore())
+
+    with pytest.raises(HTTPException) as exc:
+        server.enforce_rate_limit(x_api_key="user-1")  # type: ignore[arg-type]
+
+    assert exc.value.status_code == 429
+
+
+def test_auth_store_error_policy_fail_open(monkeypatch):
+    """Fail-open mode should allow requests when auth store access fails."""
+
+    class BrokenStore:
+        def register_nonce(self, nonce: str, ttl_sec: float) -> bool:
+            raise RuntimeError("broken nonce")
+
+        def increment_auth_failure(self, client_ip: str, limit: int, window_sec: float) -> bool:
+            raise RuntimeError("broken auth fail")
+
+        def increment_rate_limit(self, api_key: str, limit: int, window_sec: float) -> bool:
+            raise RuntimeError("broken rate")
+
+    monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
+    monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", BrokenStore())
+
+    assert server.enforce_rate_limit(x_api_key="user-2") is True  # type: ignore[arg-type]
 
 
 
