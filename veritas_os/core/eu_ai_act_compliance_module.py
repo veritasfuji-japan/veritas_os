@@ -47,6 +47,9 @@ except (ImportError, ModuleNotFoundError):
             return {"passed": True, "violations": []}
 
 
+# Default SLA for human review: 4 hours (14400 seconds)
+DEFAULT_HUMAN_REVIEW_SLA_SECONDS = 14400
+
 ANNEX_III_RISK_KEYWORDS = {
     "biometric": 0.95,
     "hiring": 0.90,
@@ -174,6 +177,7 @@ class EUAIActSafetyGateLayer4(SafetyGate):
     layer_name = "layer_4_eu_ai_act"
 
     def __init__(self, *, external_classifier: Callable[[str], Dict[str, Any]] | None = None) -> None:
+        super().__init__()
         self._external_classifier = external_classifier
 
     # ------------------------------------------------------------------
@@ -208,7 +212,7 @@ class EUAIActSafetyGateLayer4(SafetyGate):
                         result["violations"] = violations
                         result["passed"] = False
                     result["external_classifier"] = ext
-            except Exception:
+            except (TypeError, ValueError, RuntimeError, AttributeError):
                 logger.debug("External Art.5 classifier error", exc_info=True)
                 result["external_classifier_error"] = True
         return result
@@ -236,7 +240,7 @@ class EUAIActSafetyGateLayer4(SafetyGate):
                         result["violations"] = violations
                         result["passed"] = False
                     result["external_classifier"] = ext
-            except Exception:
+            except (TypeError, ValueError, RuntimeError, AttributeError):
                 logger.debug("External Art.5 input classifier error", exc_info=True)
                 result["external_classifier_error"] = True
         return result
@@ -358,7 +362,9 @@ class HumanReviewQueue:
     _lock = threading.Lock()
     _queue: List[Dict[str, Any]] = []
     _webhook_url: str | None = os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL")
-    _sla_seconds: int = int(os.environ.get("VERITAS_HUMAN_REVIEW_SLA_SECONDS", "14400"))  # 4h default
+    _sla_seconds: int = int(
+        os.environ.get("VERITAS_HUMAN_REVIEW_SLA_SECONDS", str(DEFAULT_HUMAN_REVIEW_SLA_SECONDS))
+    )
 
     @classmethod
     def enqueue(
@@ -449,6 +455,10 @@ class HumanReviewQueue:
         url = cls._webhook_url
         if not url:
             return
+        # Validate URL scheme to prevent SSRF
+        if not url.startswith(("https://", "http://")):
+            logger.warning("Webhook URL has unsupported scheme, skipping: %s", url[:30])
+            return
         try:
             import urllib.request
             data = json.dumps(
@@ -461,12 +471,12 @@ class HumanReviewQueue:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
-            urllib.request.urlopen(req, timeout=5)  # noqa: S310 — URL from env
+            urllib.request.urlopen(req, timeout=5)  # noqa: S310 — URL validated above
         except Exception:
             logger.debug("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
 
     @classmethod
-    def _clear(cls) -> None:
+    def clear_for_testing(cls) -> None:
         """Clear the queue (test helper only)."""
         with cls._lock:
             cls._queue.clear()

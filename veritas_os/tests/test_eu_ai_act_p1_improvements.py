@@ -106,6 +106,16 @@ class TestArticle5MultiLangDetection:
         assert result["passed"] is True
         assert result.get("external_classifier_error") is True
 
+    def test_external_classifier_unhandled_error_propagates(self) -> None:
+        """Truly unexpected errors (e.g. KeyboardInterrupt) should propagate."""
+        def bad_classifier(text: str) -> dict:
+            raise KeyboardInterrupt
+
+        gate = EUAIActSafetyGateLayer4(external_classifier=bad_classifier)
+        import pytest as _pt
+        with _pt.raises(KeyboardInterrupt):
+            gate.validate_article_5("Normal text")
+
     def test_pipeline_blocks_prohibited_input(self) -> None:
         """P1-1: Pipeline decorator blocks inputs with prohibited patterns."""
 
@@ -129,7 +139,7 @@ class TestHumanReviewQueue:
     """P1-3 — queue, SLA, review workflow."""
 
     def setup_method(self) -> None:
-        HumanReviewQueue._clear()
+        HumanReviewQueue.clear_for_testing()
 
     def test_enqueue_creates_entry(self) -> None:
         entry = HumanReviewQueue.enqueue(
@@ -250,7 +260,7 @@ class TestFailClose:
     """P1-6 — fail-close on human_review."""
 
     def setup_method(self) -> None:
-        HumanReviewQueue._clear()
+        HumanReviewQueue.clear_for_testing()
 
     def test_fail_close_blocks_decision(self) -> None:
         from veritas_os.core.eu_ai_act_compliance_module import apply_human_oversight_hook
