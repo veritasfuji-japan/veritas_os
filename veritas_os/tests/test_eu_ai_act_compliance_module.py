@@ -30,7 +30,7 @@ def test_trustlog_package_contains_hash_chain() -> None:
 def test_decorator_applies_human_review_and_role_injection() -> None:
     debate_roles = []
 
-    @eu_compliance_pipeline(config=EUComplianceConfig(enabled=True, trust_score_threshold=0.8))
+    @eu_compliance_pipeline(config=EUComplianceConfig(enabled=True, trust_score_threshold=0.8, require_audit_for_high_risk=False))
     def fake_decide(**kwargs: object) -> dict:
         assert kwargs.get("eu_risk_assessment") is not None
         return {"output": "normal output", "trust_score": 0.4}

@@ -193,7 +193,8 @@ overrides:
   bench_mode:
     when_mode_in: ["bench", "internal_eval"]
     pii:
-      enabled: false        # ここでは PII は評価しても flag しない（ログ/ベンチ用途）
+      enabled: true           # P1-6: PII protection MUST remain enabled even in bench_mode
+    synthetic_data_only: true  # P1-6: bench_mode requires synthetic data (no real PII)
     thresholds:
       max_uncertainty: 0.80
 
