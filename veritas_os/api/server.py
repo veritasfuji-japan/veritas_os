@@ -26,7 +26,17 @@ from typing import Any, Dict, Optional, Protocol, Tuple
 # ---- ロガー設定（標準化: print → logging）----
 logger = logging.getLogger(__name__)
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Security
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Security,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -47,6 +57,16 @@ from veritas_os.api.constants import (
     MAX_RAW_BODY_LENGTH,
     VALID_MEMORY_KINDS,
 )  # noqa: F401
+from veritas_os.api.pipeline_orchestrator import (
+    ComplianceStopException,
+    enforce_compliance_stop,
+    get_runtime_config,
+    resolve_dynamic_steps,
+    update_runtime_config,
+)
+from veritas_os.core.config import eu_ai_act_cfg
+
+from pydantic import BaseModel, Field
 
 from veritas_os.logging.trust_log import (
     get_trust_log_page,
@@ -283,6 +303,25 @@ class _SSEEventHub:
 
 _event_hub = _SSEEventHub()
 
+try:
+    update_runtime_config(
+        eu_ai_act_mode=bool(eu_ai_act_cfg.eu_ai_act_mode),
+        safety_threshold=float(eu_ai_act_cfg.safety_threshold),
+    )
+except ValueError:
+    logger.warning(
+        "Invalid VERITAS_SAFETY_THRESHOLD=%s. Falling back to 0.8.",
+        eu_ai_act_cfg.safety_threshold,
+    )
+    update_runtime_config(eu_ai_act_mode=bool(eu_ai_act_cfg.eu_ai_act_mode), safety_threshold=0.8)
+
+
+class ComplianceConfigBody(BaseModel):
+    """Runtime compliance config payload."""
+
+    eu_ai_act_mode: bool = Field(default=False)
+    safety_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
+
 
 
 
@@ -302,6 +341,29 @@ def _format_sse_message(event: Dict[str, Any]) -> str:
 
 def _errstr(e: Exception) -> str:
     return f"{type(e).__name__}: {e}"
+
+
+def _stage_summary(stage_payload: Any, default_text: str) -> str:
+    """Return a safe summary string from heterogeneous stage payloads.
+
+    Decide pipeline stage payloads can be dict/list/str depending on fallback
+    paths. This helper avoids attribute errors while preserving observability.
+    """
+    if isinstance(stage_payload, dict):
+        summary = stage_payload.get("summary")
+        if isinstance(summary, str) and summary.strip():
+            return summary.strip()
+    elif isinstance(stage_payload, list):
+        for item in stage_payload:
+            if isinstance(item, dict):
+                summary = item.get("summary")
+                if isinstance(summary, str) and summary.strip():
+                    return summary.strip()
+            elif isinstance(item, str) and item.strip():
+                return item.strip()
+    elif isinstance(stage_payload, str) and stage_payload.strip():
+        return stage_payload.strip()
+    return default_text
 
 
 DECIDE_GENERIC_ERROR = "service_unavailable"
@@ -1256,6 +1318,22 @@ def _allow_sse_query_api_key() -> bool:
     return True
 
 
+def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
+    """Authenticate WebSocket using query-string API key.
+
+    Security warning:
+        Query API keys can leak via URL logs/history. Prefer short-lived keys and
+        TLS (wss://) in production.
+    """
+    expected = (_get_expected_api_key() or "").strip()
+    if not expected:
+        return False
+    candidate = (websocket.query_params.get("api_key") or "").strip()
+    if not candidate:
+        return False
+    return secrets.compare_digest(candidate, expected)
+
+
 # ---- HMAC signature / replay (optional) ----
 # ★ セキュリティ修正: スレッドセーフ化 (threading は L11 で import 済み)
 
@@ -1926,8 +2004,43 @@ async def decide(req: DecideRequest, request: Request):
             },
         )
 
+    if isinstance(payload, dict):
+        resolve_dynamic_steps(payload)
+        _publish_event(
+            "trustlog.debate",
+            {
+                "request_id": payload.get("request_id"),
+                "summary": _stage_summary(
+                    payload.get("debate"),
+                    "debate stage completed",
+                ),
+            },
+        )
+        _publish_event(
+            "trustlog.critique",
+            {
+                "request_id": payload.get("request_id"),
+                "summary": _stage_summary(
+                    payload.get("critique"),
+                    "critique stage completed",
+                ),
+            },
+        )
+
     # ★ response_model を効かせつつ壊れpayloadでも落ちないように最終整形
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
+    try:
+        coerced = enforce_compliance_stop(coerced)
+    except ComplianceStopException as stop:
+        _publish_event(
+            "compliance.pending_review",
+            {
+                "request_id": stop.payload.get("request_id"),
+                "status": stop.payload.get("status"),
+            },
+        )
+        return JSONResponse(status_code=200, content=stop.payload)
+
     # DecideResponse 側に "落ちない" バリデータがある前提で model_validate
     try:
         _publish_event(
@@ -2566,6 +2679,66 @@ async def events(request: Request, heartbeat_sec: int = Query(default=15, ge=5, 
         "X-Accel-Buffering": "no",
     }
     return StreamingResponse(_stream(), media_type="text/event-stream", headers=headers)
+
+
+@app.websocket("/v1/ws/trustlog")
+async def trustlog_ws(websocket: WebSocket):
+    """WebSocket stream for Debate/Critique trust logs.
+
+    Art. 12: enables real-time record visibility for technical traceability.
+    Security warning: browser WebSocket authentication uses query API key.
+    """
+    if not _authenticate_websocket_api_key(websocket):
+        await websocket.close(code=1008, reason="invalid_api_key")
+        return
+
+    await websocket.accept()
+    subscriber = _event_hub.register()
+    allowed_types = {
+        "trustlog.debate",
+        "trustlog.critique",
+        "trustlog.appended",
+        "compliance.pending_review",
+    }
+    try:
+        while True:
+            try:
+                item = await asyncio.to_thread(subscriber.get, timeout=15)
+            except queue.Empty:
+                await websocket.send_json({"type": "heartbeat", "ts": utc_now_iso_z()})
+                continue
+            if item.get("type") in allowed_types:
+                await websocket.send_json(item)
+    except WebSocketDisconnect:
+        logger.debug("trustlog ws disconnected")
+    finally:
+        _event_hub.unregister(subscriber)
+
+
+@app.get(
+    "/v1/compliance/config",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+def compliance_get_config() -> Dict[str, Any]:
+    """Return runtime compliance config for UI toggle."""
+    return {"ok": True, "config": get_runtime_config()}
+
+
+@app.put(
+    "/v1/compliance/config",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
+    """Update runtime compliance config.
+
+    Art. 9/14 controls are toggled here from the frontend switch.
+    """
+    updated = update_runtime_config(
+        eu_ai_act_mode=body.eu_ai_act_mode,
+        safety_threshold=body.safety_threshold,
+    )
+    _publish_event("compliance.config.updated", {"config": updated})
+    return {"ok": True, "config": updated}
 
 
 # ==============================

@@ -38,6 +38,16 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     method: "GET",
     roles: ["viewer", "operator", "admin"],
   },
+  {
+    pathPattern: /^v1\/compliance\/config$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/compliance\/config$/,
+    method: "PUT",
+    roles: ["admin"],
+  },
   { pathPattern: /^v1\/events$/, method: "GET", roles: ["viewer", "operator", "admin"] },
 ];
 

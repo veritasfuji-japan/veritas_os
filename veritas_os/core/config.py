@@ -216,6 +216,21 @@ class PipelineConfig:
 
 
 @dataclass
+class EUAIActConfig:
+    """EU AI Act runtime defaults for API orchestration.
+
+    API layer can override these values via governance endpoints.
+    """
+
+    eu_ai_act_mode: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_EU_AI_ACT_MODE", False)
+    )
+    safety_threshold: float = field(
+        default_factory=lambda: _parse_float("VERITAS_SAFETY_THRESHOLD", 0.8)
+    )
+
+
+@dataclass
 class CapabilityConfig:
     """Optional capability flags shared by core modules.
 
@@ -464,3 +479,4 @@ scoring_cfg = ScoringConfig()
 fuji_cfg = FujiConfig()
 pipeline_cfg = PipelineConfig()
 capability_cfg = CapabilityConfig()
+eu_ai_act_cfg = EUAIActConfig()
