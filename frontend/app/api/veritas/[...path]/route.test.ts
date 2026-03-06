@@ -58,9 +58,13 @@ describe("veritas bff route auth and authorization", () => {
   it("applies route policies for admin-only and operator endpoints", () => {
     const governancePut = matchPolicy(["v1", "governance", "policy"], "PUT");
     const decidePost = matchPolicy(["v1", "decide"], "POST");
+    const compliancePut = matchPolicy(["v1", "compliance", "config"], "PUT");
+    const complianceGet = matchPolicy(["v1", "compliance", "config"], "GET");
 
     expect(governancePut?.policy.roles).toEqual(["admin"]);
     expect(decidePost?.policy.roles).toEqual(["operator", "admin"]);
+    expect(compliancePut?.policy.roles).toEqual(["admin"]);
+    expect(complianceGet?.policy.roles).toEqual(["viewer", "operator", "admin"]);
   });
 
   it("blocks unsafe path segments", () => {

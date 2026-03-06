@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
+import { EUAIActGovernanceDashboard } from "../../features/console/components/eu-ai-act-governance-dashboard";
 
 
 /* ---------- types ---------- */
@@ -464,6 +465,8 @@ export default function GovernanceControlPage(): JSX.Element {
       >
         <div />
       </Card>
+
+      <EUAIActGovernanceDashboard />
 
       {/* Connection */}
       <Card title="接続 / Connection" titleSize="sm" variant="default">
