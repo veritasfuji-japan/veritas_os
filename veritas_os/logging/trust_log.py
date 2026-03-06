@@ -24,6 +24,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
+from veritas_os.logging.encryption import encrypt as _encrypt_line, is_encryption_enabled
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import append_signed_decision
 
@@ -377,8 +378,12 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
         entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
         # ---- JSONL に1行追記 (with fsync for durability) ----
+        # P3-2: Optionally encrypt the line before writing
+        line = json.dumps(entry, ensure_ascii=False)
+        if is_encryption_enabled():
+            line = _encrypt_line(line)
         with open_trust_log_for_append() as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.write(line + "\n")
             f.flush()
             os.fsync(f.fileno())
 

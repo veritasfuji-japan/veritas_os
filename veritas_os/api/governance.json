@@ -23,7 +23,8 @@
     "max_requests_per_minute": 60
   },
   "log_retention": {
-    "retention_days": 90,
+    "retention_days": 180,
+    "retention_days_high_risk": 365,
     "audit_level": "full",
     "include_fields": ["status", "risk", "reasons", "violations", "categories"],
     "redact_before_log": true,

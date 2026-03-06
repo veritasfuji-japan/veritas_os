@@ -375,12 +375,12 @@ def apply_human_oversight_hook(
 | GAP-09 | Art.13 | エンドユーザー向け法定開示なし | 🟠 High | ~~P2~~ ✅ 対応済 |
 | GAP-10 | Art.15 | 精度ベンチマーク結果なし | 🟠 High | ~~P2~~ ✅ 対応済 |
 | GAP-11 | Art.15 | bench_modeでPII無効化リスク | 🟠 High | ~~P2~~ ✅ 対応済 |
-| GAP-12 | Art.12 | 暗号化なしデフォルト保存 | 🟡 Medium | P3 |
-| GAP-13 | Art.12 | 90日保持がEU要件を満たすか未確認 | 🟡 Medium | P3 |
+| GAP-12 | Art.12 | 暗号化なしデフォルト保存 | 🟡 Medium | ~~P3~~ ✅ 対応済 |
+| GAP-13 | Art.12 | 90日保持がEU要件を満たすか未確認 | 🟡 Medium | ~~P3~~ ✅ 対応済 |
 | GAP-14 | Art.14 | 人間レビューのタイムアウト管理なし | 🟡 Medium | P3 |
-| GAP-15 | Art.9 | 継続的リスクモニタリングプロセスなし | 🟡 Medium | P3 |
+| GAP-15 | Art.9 | 継続的リスクモニタリングプロセスなし | 🟡 Medium | ~~P3~~ ✅ 対応済 |
 | GAP-16 | Art.15 | LLM不可時の縮退モード未定義 | 🟡 Medium | P3 |
-| GAP-17 | Art.13 | 影響を受ける第三者への通知なし | 🟡 Medium | P3 |
+| GAP-17 | Art.13 | 影響を受ける第三者への通知なし | 🟡 Medium | ~~P3~~ ✅ 対応済 |
 
 ---
 
@@ -528,17 +528,28 @@ bench_mode:
 
 ### P3（6ヶ月以内に対応）
 
-**[P3-1] ログ保持期間のEU AI Act要件確認・調整**
-- 高リスクAI展開時は最低6ヶ月（推奨1年）の保持期間へ設定変更
+**[P3-1] ログ保持期間のEU AI Act要件確認・調整** ✅ 対応済
+- `governance.json` の `retention_days` を 90日 → 180日（最低6ヶ月）に更新 ✅
+- 高リスク展開向けに `retention_days_high_risk: 365` を追加 ✅
+- `eu_ai_act_compliance_module.py` に `get_retention_config()` 関数を追加し、リスクレベル別の保持期間を返す ✅
 
-**[P3-2] 静止暗号化の標準化**
-- TrustLog・メモリストレージのデフォルト暗号化オプション追加
+**[P3-2] 静止暗号化の標準化** ✅ 対応済
+- `veritas_os/logging/encryption.py` に Fernet ベースの暗号化/復号ユーティリティを追加 ✅
+- `trust_log.py` の JSONL 書き込み時にオプショナル暗号化サポートを追加 ✅
+- 環境変数 `VERITAS_ENCRYPTION_KEY` で暗号化キーを指定可能 ✅
+- `get_encryption_status()` で監査向けの暗号化状態確認が可能 ✅
 
-**[P3-3] 継続的リスクモニタリングプロセスの確立**
-- 月次リスクレビュー・年次コンプライアンス評価の運用手順書作成
+**[P3-3] 継続的リスクモニタリングプロセスの確立** ✅ 対応済
+- `eu_ai_act_compliance_module.py` に `RISK_MONITORING_SCHEDULE`（日次〜年次のモニタリング活動定義）を追加 ✅
+- `assess_continuous_risk_monitoring()` 関数でモニタリング完了状況の評価が可能 ✅
+- `docs/eu_ai_act/continuous_risk_monitoring.md` に運用手順書を作成 ✅
 
-**[P3-4] 影響を受ける第三者への通知メカニズム**
-- 高リスク決定（雇用・与信等）時の通知ワークフロー設計
+**[P3-4] 影響を受ける第三者への通知メカニズム** ✅ 対応済
+- `eu_ai_act_compliance_module.py` に `ThirdPartyNotificationService` クラスを追加 ✅
+- 高リスク決定（雇用・与信等）時の第三者通知レコード生成 ✅
+- 影響を受ける者の権利（説明を求める権利、異議申立権、人間レビュー権）を通知に含める ✅
+- `DecideResponse` に `affected_parties_notice` フィールドを追加 ✅
+- Webhook 連携（`VERITAS_THIRD_PARTY_NOTIFICATION_WEBHOOK_URL`）対応 ✅
 
 ---
 
@@ -589,6 +600,14 @@ bench_mode:
 | Art.15 (P2-3) | `core/eu_ai_act_compliance_module.py` | (全体) | `validate_bench_mode_synthetic_data()` |
 | Art.15 (P2-3) | `policies/fuji_default.yaml` | 193-201 | bench_mode安全制限設定 |
 | Art.13 (P2-4) | `docs/user_guide_eu_ai_act.md` | (全体) | エンドユーザー向け使用説明書 |
+| Art.12 (P3-1) | `api/governance.json` | 25-31 | ログ保持期間設定（180日/365日） |
+| Art.12 (P3-1) | `core/eu_ai_act_compliance_module.py` | (全体) | `get_retention_config()` |
+| Art.12 (P3-2) | `logging/encryption.py` | (全体) | 静止暗号化ユーティリティ |
+| Art.12 (P3-2) | `logging/trust_log.py` | (全体) | JSONL書き込み時の暗号化統合 |
+| Art.9 (P3-3) | `core/eu_ai_act_compliance_module.py` | (全体) | `RISK_MONITORING_SCHEDULE`, `assess_continuous_risk_monitoring()` |
+| Art.9 (P3-3) | `docs/eu_ai_act/continuous_risk_monitoring.md` | (全体) | 継続的リスクモニタリング運用手順書 |
+| Art.13 (P3-4) | `core/eu_ai_act_compliance_module.py` | (全体) | `ThirdPartyNotificationService` |
+| Art.13 (P3-4) | `api/schemas.py` | (全体) | `affected_parties_notice` フィールド |
 
 ---
 
