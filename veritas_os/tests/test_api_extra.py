@@ -170,6 +170,68 @@ class TestMemoryAPI:
         data = response.json()
         assert data["ok"] is True
 
+    def test_memory_erase_respects_legal_hold(self, client):
+        """/v1/memory/erase should preserve legal-hold records and audit."""
+        headers = {"X-API-Key": "test-key"}
+
+        client.post(
+            "/v1/memory/put",
+            headers=headers,
+            json={
+                "user_id": "erase_user",
+                "key": "erasable",
+                "value": {"text": "erase target", "kind": "episodic"},
+                "text": "erase target",
+                "kind": "episodic",
+            },
+        )
+        client.post(
+            "/v1/memory/put",
+            headers=headers,
+            json={
+                "user_id": "erase_user",
+                "key": "protected",
+                "value": {
+                    "text": "must keep",
+                    "kind": "episodic",
+                    "meta": {"legal_hold": True},
+                },
+                "text": "must keep",
+                "kind": "episodic",
+                "legal_hold": True,
+            },
+        )
+
+        erase_response = client.post(
+            "/v1/memory/erase",
+            headers=headers,
+            json={
+                "user_id": "erase_user",
+                "reason": "privacy_request",
+                "actor": "pytest",
+            },
+        )
+        assert erase_response.status_code == 200
+        erase_data = erase_response.json()
+        assert erase_data["ok"] is True
+        assert erase_data["protected_by_legal_hold"] >= 1
+
+        get_deleted = client.post(
+            "/v1/memory/get",
+            headers=headers,
+            json={"user_id": "erase_user", "key": "erasable"},
+        )
+        assert get_deleted.json()["value"] is None
+
+        get_protected = client.post(
+            "/v1/memory/get",
+            headers=headers,
+            json={"user_id": "erase_user", "key": "protected"},
+        )
+        value = get_protected.json()["value"]
+        assert isinstance(value, dict)
+        assert value["meta"]["legal_hold"] is True
+
 
 # =========================
 # Trust Feedback エンドポイント
@@ -512,4 +574,3 @@ class TestPerformance:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

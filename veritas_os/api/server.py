@@ -2265,6 +2265,12 @@ def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias
             return {"ok": False, "error": "too many tags (max 100)"}
         meta = body.get("meta") or {}
 
+        retention_class = str(
+            body.get("retention_class") or meta.get("retention_class") or "standard"
+        ).strip().lower()
+        expires_at = body.get("expires_at", meta.get("expires_at"))
+        legal_hold = bool(body.get("legal_hold", meta.get("legal_hold", False)))
+
         legacy_saved = False
         if value:
             try:
@@ -2284,6 +2290,9 @@ def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias
                 meta_for_store = dict(meta)
                 meta_for_store.setdefault("user_id", user_id)
                 meta_for_store.setdefault("kind", kind)
+                meta_for_store["retention_class"] = retention_class
+                meta_for_store["expires_at"] = expires_at
+                meta_for_store["legal_hold"] = legal_hold
 
                 if hasattr(store, "put"):
                     vector_item = {
@@ -2330,6 +2339,11 @@ def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias
                 "tags": tags if new_id else None,
             },
             "size": len(str(value)) if value else len(text),
+            "lifecycle": {
+                "retention_class": retention_class,
+                "expires_at": expires_at,
+                "legal_hold": legal_hold,
+            },
         }
 
     except Exception as e:
@@ -2427,6 +2441,35 @@ def memory_get(body: dict, x_api_key: Optional[str] = Header(default=None, alias
     except Exception as e:
         logger.error("memory_get failed: %s", e)
         return {"ok": False, "error": "memory retrieval failed", "value": None}
+
+
+@app.post(
+    "/v1/memory/erase",
+    dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
+)
+def memory_erase(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+    """Erase a tenant's memories with legal-hold protection and audit log."""
+    store = get_memory_store()
+    if store is None:
+        return {"ok": False, "error": "memory store unavailable"}
+
+    try:
+        user_id = _resolve_memory_user_id(body.get("user_id"), x_api_key)
+        reason = str(body.get("reason") or "user_request").strip()[:500]
+        actor = str(body.get("actor") or "api").strip()[:200]
+
+        if hasattr(store, "erase_user"):
+            report = store.erase_user(user_id=user_id, reason=reason, actor=actor)
+            report.setdefault("ok", True)
+            return report
+
+        return {
+            "ok": False,
+            "error": "erase operation unsupported by active memory backend",
+        }
+    except Exception as e:
+        logger.error("memory_erase failed: %s", e)
+        return {"ok": False, "error": "memory erase failed"}
 
 
 # ==============================
