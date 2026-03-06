@@ -264,7 +264,9 @@ class VectorMemory:
             kind: ドキュメント種別（"semantic", "episodic" など）
             text: テキスト内容
             tags: タグのリスト
-            meta: メタデータ
+            meta: メタデータ。``meta["lineage"]`` に辞書を渡すと
+                  データリネージュ情報（EU AI Act Art. 10 / GAP-05）
+                  がドキュメントに記録される。
 
         Returns:
             成功したかどうか
@@ -293,6 +295,18 @@ class VectorMemory:
                     "meta": meta or {},
                     "ts": time.time(),
                 }
+
+                # GAP-05 (Art. 10): Data lineage tracking
+                lineage = (meta or {}).get("lineage")
+                if isinstance(lineage, dict):
+                    doc["lineage"] = lineage
+                else:
+                    doc["lineage"] = {
+                        "source": "internal",
+                        "document_type": kind,
+                        "ingested_at": datetime.now(timezone.utc).isoformat(),
+                    }
+
                 self.documents.append(doc)
 
                 # 埋め込み配列を更新
