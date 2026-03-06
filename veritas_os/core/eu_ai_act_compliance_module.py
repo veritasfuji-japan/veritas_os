@@ -748,3 +748,247 @@ AI_DISCLOSURE_TEXT = (
 AI_REGULATION_NOTICE = (
     "Subject to EU AI Act Regulation (EU) 2024/1689."
 )
+
+
+# ---------------------------------------------------------------------------
+# P3-1: Art. 12 — Log retention configuration (GAP-13)
+# ---------------------------------------------------------------------------
+# EU AI Act requires at least 6 months (180 days) for high-risk AI systems.
+# Recommended: 1 year (365 days) for high-risk deployments.
+DEFAULT_RETENTION_DAYS = 180
+HIGH_RISK_RETENTION_DAYS = 365
+# Minimum retention for non-high-risk deployments (days)
+MIN_STANDARD_RETENTION_DAYS = 90
+
+
+def get_retention_config(*, risk_level: str = "LOW") -> Dict[str, Any]:
+    """Return log retention configuration based on risk level.
+
+    Art. 12 Record Keeping — P3-1:
+    EU AI Act requires high-risk AI systems to retain logs for at least
+    6 months.  This helper returns the appropriate retention period.
+
+    Args:
+        risk_level: The risk classification (LOW, MEDIUM, HIGH).
+
+    Returns:
+        Dict with retention_days, minimum_required_days, and compliant flag.
+    """
+    is_high = (risk_level or "").upper() == "HIGH"
+    retention = HIGH_RISK_RETENTION_DAYS if is_high else DEFAULT_RETENTION_DAYS
+    minimum = 180 if is_high else MIN_STANDARD_RETENTION_DAYS
+
+    return {
+        "retention_days": retention,
+        "minimum_required_days": minimum,
+        "risk_level": (risk_level or "LOW").upper(),
+        "compliant": retention >= minimum,
+        "eu_ai_act_article": "Art. 12",
+        "note": (
+            "High-risk AI systems require ≥6 months (180 days) log retention "
+            "per EU AI Act Art. 12. Recommended: 365 days."
+            if is_high
+            else "Standard retention period applied."
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# P3-3: Art. 9 — Continuous risk monitoring schedule (GAP-15)
+# ---------------------------------------------------------------------------
+RISK_MONITORING_SCHEDULE = {
+    "daily": [
+        "trust_log_integrity_check",
+        "anomaly_detection_review",
+    ],
+    "weekly": [
+        "accuracy_drift_analysis",
+        "safety_gate_effectiveness_review",
+    ],
+    "monthly": [
+        "risk_register_update",
+        "incident_trend_analysis",
+        "human_review_sla_compliance",
+    ],
+    "quarterly": [
+        "bias_assessment_review",
+        "red_team_exercise",
+        "residual_risk_re_evaluation",
+        "third_party_model_compliance_check",
+    ],
+    "annually": [
+        "full_compliance_audit",
+        "risk_management_system_review",
+        "regulatory_update_assessment",
+    ],
+}
+
+
+def assess_continuous_risk_monitoring(
+    *,
+    completed_activities: Dict[str, list[str]] | None = None,
+) -> Dict[str, Any]:
+    """Assess the status of continuous risk monitoring activities.
+
+    Art. 9 Risk Management — P3-3:
+    EU AI Act requires a continuous, iterative risk management system
+    throughout the AI system lifecycle.  This function evaluates which
+    scheduled monitoring activities have been completed.
+
+    Args:
+        completed_activities: Dict mapping frequency to list of completed
+            activity names (e.g. {"daily": ["trust_log_integrity_check"]}).
+
+    Returns:
+        Dict with schedule, completion status per frequency, and overall score.
+    """
+    completed = completed_activities or {}
+    results: Dict[str, Any] = {
+        "schedule": dict(RISK_MONITORING_SCHEDULE),
+        "completion": {},
+        "overall_score": 0.0,
+        "eu_ai_act_article": "Art. 9",
+    }
+
+    total = 0
+    done = 0
+    for freq, activities in RISK_MONITORING_SCHEDULE.items():
+        freq_completed = completed.get(freq, [])
+        freq_results = {}
+        for act in activities:
+            is_done = act in freq_completed
+            freq_results[act] = is_done
+            total += 1
+            if is_done:
+                done += 1
+        results["completion"][freq] = freq_results
+
+    results["overall_score"] = round(done / total, 2) if total > 0 else 0.0
+    results["total_activities"] = total
+    results["completed_activities"] = done
+    results["compliant"] = results["overall_score"] >= 0.7
+    return results
+
+
+# ---------------------------------------------------------------------------
+# P3-4: Art. 13 — Third-party notification for high-risk decisions (GAP-17)
+# ---------------------------------------------------------------------------
+class ThirdPartyNotificationService:
+    """Notification service for individuals affected by high-risk AI decisions.
+
+    Art. 13 Transparency — P3-4:
+    When VERITAS OS makes or assists with high-risk decisions (employment,
+    credit, insurance, etc.), affected third parties must be notified that
+    an AI system was involved in the decision-making process.
+
+    In production, integrate with email/SMS/postal notification providers.
+    """
+
+    _lock = threading.Lock()
+    _notifications: List[Dict[str, Any]] = []
+    _webhook_url: str | None = os.environ.get(
+        "VERITAS_THIRD_PARTY_NOTIFICATION_WEBHOOK_URL"
+    )
+
+    @classmethod
+    def build_notification(
+        cls,
+        *,
+        decision_id: str,
+        risk_level: str,
+        matched_categories: list[str],
+        decision_summary: str = "",
+    ) -> Dict[str, Any]:
+        """Build a third-party notification record for a high-risk decision.
+
+        Args:
+            decision_id: Unique ID of the decision.
+            risk_level: Risk classification (HIGH, MEDIUM, LOW).
+            matched_categories: Annex III categories matched.
+            decision_summary: Brief summary of the decision.
+
+        Returns:
+            Notification record dict, or empty dict if not high-risk.
+        """
+        if (risk_level or "").upper() != "HIGH":
+            return {}
+
+        notification: Dict[str, Any] = {
+            "notification_id": hashlib.sha256(
+                f"{decision_id}:{time.time()}".encode()
+            ).hexdigest()[:16],
+            "decision_id": decision_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "risk_level": "HIGH",
+            "matched_categories": list(matched_categories),
+            "decision_summary": decision_summary,
+            "ai_disclosure": AI_DISCLOSURE_TEXT,
+            "regulation_notice": AI_REGULATION_NOTICE,
+            "affected_party_rights": {
+                "right_to_explanation": True,
+                "right_to_contest": True,
+                "right_to_human_review": True,
+                "contest_contact": os.environ.get(
+                    "VERITAS_CONTEST_CONTACT",
+                    "compliance@example.com",
+                ),
+            },
+            "status": "pending_delivery",
+        }
+
+        with cls._lock:
+            cls._notifications.append(notification)
+
+        # Fire webhook if configured
+        cls._notify_webhook(notification)
+        return notification
+
+    @classmethod
+    def get_notifications(cls, *, decision_id: str | None = None) -> List[Dict[str, Any]]:
+        """Retrieve notification records, optionally filtered by decision_id."""
+        with cls._lock:
+            if decision_id is None:
+                return [dict(n) for n in cls._notifications]
+            return [
+                dict(n) for n in cls._notifications
+                if n.get("decision_id") == decision_id
+            ]
+
+    @classmethod
+    def _notify_webhook(cls, notification: Dict[str, Any]) -> None:
+        """Best-effort webhook notification for third-party alerts."""
+        url = cls._webhook_url
+        if not url:
+            return
+        if not url.startswith(("https://", "http://")):
+            logger.warning(
+                "Third-party notification webhook URL has unsupported scheme, skipping: %s",
+                url[:30],
+            )
+            return
+        try:
+            import urllib.request
+
+            data = json.dumps(
+                {"event": "third_party_notification", "notification": notification},
+                default=str,
+            ).encode()
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            urllib.request.urlopen(req, timeout=5)  # nosec B310
+        except Exception:
+            logger.debug(
+                "Third-party webhook notification failed for %s",
+                notification.get("notification_id"),
+                exc_info=True,
+            )
+
+    @classmethod
+    def clear_for_testing(cls) -> None:
+        """Clear notifications (test helper only)."""
+        with cls._lock:
+            cls._notifications.clear()
