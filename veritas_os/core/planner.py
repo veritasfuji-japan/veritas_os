@@ -46,7 +46,7 @@ def _truncate_json_extract_input(raw: Any) -> str:
         logger.warning("planner JSON extraction removed leading BOM")
 
     if "\x00" in cleaned:
-        cleaned = cleaned.replace("\x00", "")
+        cleaned = "".join(cleaned.split("\x00"))
         logger.warning("planner JSON extraction removed NUL bytes")
 
     if len(cleaned) <= _MAX_JSON_EXTRACT_CHARS:
