@@ -18,6 +18,10 @@ Changes (P1-1/P1-3/P1-6):
       override prevention (fail-close).
     - P1-6: Fail-close enforcement, bench_mode PII-bypass restriction,
       audit-deficiency guard for high-risk use cases.
+
+Changes (P2-3):
+    - P2-3: Synthetic-data-only validation for bench_mode.  Real PII markers
+      in bench/internal_eval data are rejected unless explicitly overridden.
 """
 
 from __future__ import annotations
@@ -508,6 +512,83 @@ def validate_bench_mode_pii_safety(
 
 
 # ---------------------------------------------------------------------------
+# P2-3: Bench-mode synthetic-data-only validation
+# ---------------------------------------------------------------------------
+# Heuristic markers that suggest real (non-synthetic) PII is present.
+# These are intentionally broad patterns to err on the side of caution.
+_REAL_PII_MARKERS: tuple[str, ...] = (
+    "@gmail.",
+    "@yahoo.",
+    "@outlook.",
+    "@hotmail.",
+    "@icloud.",
+    # Social-security / national-ID style patterns
+    "ssn",
+    "social security",
+    "passport number",
+    "national id",
+    "マイナンバー",
+    "住民票",
+    # Credit-card-style runs (simplified heuristic)
+    "credit card",
+    "card number",
+)
+
+_REAL_PII_MARKER_RE = re.compile(
+    # 4-groups of 4 digits (credit-card pattern) or XXX-XX-XXXX (SSN pattern)
+    r"\b\d{4}[- ]\d{4}[- ]\d{4}[- ]\d{4}\b"
+    r"|\b\d{3}-\d{2}-\d{4}\b",
+)
+
+
+def validate_bench_mode_synthetic_data(
+    *,
+    mode: str,
+    data_text: str,
+    config: EUComplianceConfig | None = None,
+) -> Dict[str, Any]:
+    """Validate that bench/internal_eval mode uses only synthetic data.
+
+    P2-3: When running in bench_mode, any text data passed through the
+    pipeline is scanned for real-PII markers.  If a real-PII marker is
+    detected and ``bench_mode_pii_override`` is **not** set, the request
+    is rejected to comply with Art. 15 / GAP-11.
+
+    Returns a dict with ``passed``, ``reason``, and ``detected_markers``.
+    """
+    cfg = config or EUComplianceConfig()
+
+    if mode not in ("bench", "internal_eval"):
+        return {"passed": True, "reason": "not_bench_mode", "detected_markers": []}
+
+    if cfg.bench_mode_pii_override:
+        return {
+            "passed": True,
+            "reason": "bench_mode_pii_override_enabled",
+            "detected_markers": [],
+        }
+
+    lowered = (data_text or "").lower()
+    detected: List[str] = [m for m in _REAL_PII_MARKERS if m in lowered]
+
+    if _REAL_PII_MARKER_RE.search(data_text or ""):
+        detected.append("pii_numeric_pattern")
+
+    if detected:
+        return {
+            "passed": False,
+            "reason": (
+                "Real PII markers detected in bench_mode data. "
+                "Use synthetic data only (P2-3 / Art. 15 / GAP-11). "
+                f"Detected: {', '.join(detected)}"
+            ),
+            "detected_markers": detected,
+        }
+
+    return {"passed": True, "reason": "synthetic_data_check_passed", "detected_markers": []}
+
+
+# ---------------------------------------------------------------------------
 # P1-6: Audit-readiness guard for high-risk deployments
 # ---------------------------------------------------------------------------
 def validate_audit_readiness_for_high_risk(
@@ -602,6 +683,22 @@ def eu_compliance_pipeline(
             bench_check = validate_bench_mode_pii_safety(mode=mode, config=active_config)
             if not bench_check["allowed"]:
                 kwargs.setdefault("pii_override_blocked", True)
+
+            # P2-3: Bench-mode synthetic-data-only validation
+            if mode in ("bench", "internal_eval"):
+                synth_check = validate_bench_mode_synthetic_data(
+                    mode=mode, data_text=prompt, config=active_config,
+                )
+                if not synth_check["passed"]:
+                    return {
+                        "output": "",
+                        "eu_risk_assessment": precheck,
+                        "status": "BLOCKED",
+                        "blocked_by": "P2-3_synthetic_data_only",
+                        "decision_status": "rejected",
+                        "rejection_reason": synth_check["reason"],
+                        "detected_markers": synth_check["detected_markers"],
+                    }
 
             # P1-6: Audit-readiness guard for high-risk
             if precheck.get("risk_level") == "HIGH":
