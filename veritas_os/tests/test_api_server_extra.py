@@ -882,6 +882,36 @@ def test_decide_pipeline_execution_failure_classifies_permission_denied(monkeypa
     assert data["detail"] == server.DECIDE_GENERIC_ERROR
 
 
+def test_decide_accepts_list_stage_payloads_for_event_summary(monkeypatch):
+    """Decide endpoint must handle debate/critique payloads that are lists."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-list-summary",
+                "query": "test",
+                "result": "ok",
+                "decision": "allow",
+                "debate": [{"summary": "debate from list"}],
+                "critique": ["critique from list"],
+                "trust_score": 0.95,
+            }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data.get("ok") is True
+
+
 def test_fuji_validate_uses_validate_action(monkeypatch):
     """
     fuji_core.validate_action がある場合、その経路が使われる
