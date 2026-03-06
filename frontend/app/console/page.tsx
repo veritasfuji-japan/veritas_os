@@ -7,6 +7,7 @@ import { useDecide } from "../../features/console/api/useDecide";
 import { ChatPanel } from "../../features/console/components/chat-panel";
 import { CostBenefitPanel } from "../../features/console/components/cost-benefit-panel";
 import { DriftAlert } from "../../features/console/components/drift-alert";
+import { EUAIActDisclosure } from "../../features/console/components/eu-ai-act-disclosure";
 import { FujiGateStatusPanel } from "../../features/console/components/fuji-gate-status-panel";
 import { PipelineVisualizer } from "../../features/console/components/pipeline-visualizer";
 import { ResultSection } from "../../features/console/components/result-section";
@@ -74,6 +75,7 @@ export default function DecisionConsolePage(): JSX.Element {
       <Card title="Result" titleSize="md" variant="elevated" accent={result ? "success" : undefined}>
         {result ? (
           <div className="space-y-4">
+            <EUAIActDisclosure result={result} />
             <ResultSection
               title="decision_status / chosen"
               value={{ decision_status: result.decision_status, chosen: result.chosen }}

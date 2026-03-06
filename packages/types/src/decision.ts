@@ -90,6 +90,13 @@ export interface DecideResponse extends DecideResponseMeta {
   memory_used_count: number;
   trust_log: TrustLog | Record<string, unknown> | null;
 
+  /** Art. 50(1) — mandatory AI-generated content disclosure. */
+  ai_disclosure?: string;
+  /** Art. 50 — regulation reference notice. */
+  regulation_notice?: string;
+  /** Art. 13 — notification record for individuals affected by high-risk decisions. */
+  affected_parties_notice?: Record<string, unknown> | null;
+
   [key: string]: unknown;
 }
 
