@@ -80,6 +80,18 @@ def test_memory_store_lifecycle_expiry_and_legal_hold(tmp_path: Path):
     assert "held" in listed_keys
 
 
+def test_memory_store_put_preserves_generic_kvs_dict(tmp_path: Path):
+    """Generic KVS dict values should remain unchanged for compatibility."""
+    path = tmp_path / "memory.json"
+    store = memory.MemoryStore(path)
+
+    payload = {"foo": "bar", "count": 1}
+    store.put("u1", "legacy", payload)
+
+    got = store.get("u1", "legacy")
+    assert got == payload
+
+
 def test_memory_store_erase_user_with_cascade_and_legal_hold(tmp_path: Path):
     """erase_user should keep legal hold records and cascade semantic delete."""
     path = tmp_path / "memory.json"

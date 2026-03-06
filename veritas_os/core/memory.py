@@ -910,8 +910,19 @@ class MemoryStore:
 
     @staticmethod
     def _normalize_lifecycle(value: Any) -> Any:
-        """Attach normalized lifecycle fields to value.meta for dict payloads."""
+        """Attach lifecycle fields only to memory-document style dict payloads.
+
+        Backward compatibility:
+        - Generic KVS dictionaries (e.g. ``{"foo": "bar"}``) must be
+          preserved as-is.
+        - Lifecycle normalization is applied only when the value looks like a
+          MemoryOS document (has any of ``text/kind/tags/meta`` keys).
+        """
         if not isinstance(value, dict):
+            return value
+
+        lifecycle_target_keys = {"text", "kind", "tags", "meta"}
+        if not any(key in value for key in lifecycle_target_keys):
             return value
 
         normalized = dict(value)
