@@ -95,6 +95,32 @@ def test_reflect_info_gathering_boost(tmp_path, monkeypatch):
     assert out["next_value_boost"] > 0.0
 
 
+def test_reflect_boost_is_clamped_to_range(tmp_path, monkeypatch):
+    """next_value_boost が上下限でクリップされることを検証する。"""
+    meta_path = tmp_path / "meta_log.jsonl"
+    monkeypatch.setattr(reason, "META_LOG", meta_path, raising=False)
+
+    high = reason.reflect(
+        {
+            "query": "high",
+            "chosen": {"title": "情報収集プラン"},
+            "gate": {"risk": 0.0, "decision_status": "allow"},
+            "values": {"total": 2.0, "ema": 1.0},
+        }
+    )
+    low = reason.reflect(
+        {
+            "query": "low",
+            "chosen": {"title": "通常プラン"},
+            "gate": {"risk": 1.0, "decision_status": "allow"},
+            "values": {"total": -1.0, "ema": 0.0},
+        }
+    )
+
+    assert high["next_value_boost"] == 0.1
+    assert low["next_value_boost"] == -0.1
+
+
 # ------------------------------
 # generate_reason
 # ------------------------------
@@ -165,6 +191,19 @@ def test_generate_reason_llm_error(monkeypatch):
     res = reason.generate_reason(query="error test")
 
     assert res == {"text": "", "source": "error"}
+
+
+def test_generate_reason_without_text_uses_empty_string(monkeypatch):
+    """LLMレスポンスがdictでも text 欠損時は空文字にフォールバックする。"""
+
+    def stub_chat(*args, **kwargs):
+        return {"source": "stub_only_source"}
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    res = reason.generate_reason(query="missing text")
+
+    assert res == {"text": "", "source": "stub_only_source"}
 
 
 # ------------------------------
@@ -324,3 +363,58 @@ def test_generate_reflection_template_normalizes_tags_and_priority(monkeypatch):
     assert tmpl["tags"] == ["reflection"]
     assert tmpl["priority"] == 1.0
 
+
+def test_generate_reflection_template_accepts_string_llm_response(monkeypatch):
+    """LLMが文字列JSONを返す場合もテンプレが生成される。"""
+
+    def stub_chat(*args, **kwargs):
+        return json.dumps(
+            {
+                "pattern": "文字列レスポンス",
+                "guidance": "文字列JSONを許容する",
+                "tags": ["reason"],
+                "priority": "not-number",
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    tmpl = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+
+    assert tmpl["pattern"] == "文字列レスポンス"
+    assert tmpl["guidance"] == "文字列JSONを許容する"
+    assert tmpl["tags"] == ["reason"]
+    assert tmpl["priority"] == 0.5
+
+
+def test_generate_reflection_template_missing_required_fields_returns_empty(monkeypatch):
+    """pattern または guidance が空の場合は {} を返す。"""
+
+    def stub_chat(*args, **kwargs):
+        return {
+            "text": json.dumps({"pattern": "", "guidance": ""}, ensure_ascii=False),
+            "source": "stub",
+        }
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    tmpl = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+
+    assert tmpl == {}
