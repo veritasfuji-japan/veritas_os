@@ -280,14 +280,14 @@ class VectorMemory:
 
         # GAP-05 (Art. 10): Data quality validation at ingestion
         # Log quality issues for audit trail but do not block — memory
-        # operations routinely handle short text entries that are valid.
+        # operations may involve short text and other acceptable edge cases.
         try:
             from veritas_os.core.eu_ai_act_compliance_module import validate_data_quality
 
             quality = validate_data_quality(text=text, kind=kind, meta=meta)
             if not quality["passed"]:
                 logger.info(
-                    "[VectorMemory] Data quality note (Art. 10): %s",
+                    "[VectorMemory] Data quality issue detected (Art. 10): %s",
                     quality["issues"],
                 )
         except ImportError:
