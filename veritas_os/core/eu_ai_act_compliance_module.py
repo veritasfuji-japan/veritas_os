@@ -757,6 +757,8 @@ AI_REGULATION_NOTICE = (
 # Recommended: 1 year (365 days) for high-risk deployments.
 DEFAULT_RETENTION_DAYS = 180
 HIGH_RISK_RETENTION_DAYS = 365
+# Minimum retention for non-high-risk deployments (days)
+MIN_STANDARD_RETENTION_DAYS = 90
 
 
 def get_retention_config(*, risk_level: str = "LOW") -> Dict[str, Any]:
@@ -774,7 +776,7 @@ def get_retention_config(*, risk_level: str = "LOW") -> Dict[str, Any]:
     """
     is_high = (risk_level or "").upper() == "HIGH"
     retention = HIGH_RISK_RETENTION_DAYS if is_high else DEFAULT_RETENTION_DAYS
-    minimum = 180 if is_high else 90
+    minimum = 180 if is_high else MIN_STANDARD_RETENTION_DAYS
 
     return {
         "retention_days": retention,

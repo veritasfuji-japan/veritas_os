@@ -16,6 +16,7 @@ import pytest
 from veritas_os.core.eu_ai_act_compliance_module import (
     DEFAULT_RETENTION_DAYS,
     HIGH_RISK_RETENTION_DAYS,
+    MIN_STANDARD_RETENTION_DAYS,
     RISK_MONITORING_SCHEDULE,
     ThirdPartyNotificationService,
     assess_continuous_risk_monitoring,
@@ -138,7 +139,7 @@ class TestEncryption:
         try:
             status = get_encryption_status()
             assert status["encryption_enabled"] is True
-            assert "AES" in status["algorithm"]
+            assert "HMAC" in status["algorithm"]
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old
@@ -231,6 +232,20 @@ class TestContinuousRiskMonitoring:
         assert "月次" in content or "monthly" in content.lower()
         assert "四半期" in content or "quarterly" in content.lower()
         assert "年次" in content or "annual" in content.lower()
+
+    def test_monitoring_doc_references_key_activities(self) -> None:
+        doc_path = (
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "eu_ai_act"
+            / "continuous_risk_monitoring.md"
+        )
+        content = doc_path.read_text(encoding="utf-8")
+        # Verify key activities from RISK_MONITORING_SCHEDULE are documented
+        assert "TrustLog" in content
+        assert "doctor.py" in content or "精度" in content
+        assert "バイアス" in content or "bias" in content.lower()
+        assert "Art. 9" in content or "第9条" in content
 
 
 # =====================================================================

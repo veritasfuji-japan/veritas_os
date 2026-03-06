@@ -2,19 +2,21 @@
 
 P3-2: Art. 12 — Encryption at rest standardisation (GAP-12).
 
-This module provides Fernet-based symmetric encryption for log entries
-stored in JSONL files.  Encryption is **opt-in** via the environment
-variable ``VERITAS_ENCRYPTION_KEY``.
+This module provides symmetric encryption for log entries stored in
+JSONL files.  Encryption is **opt-in** via the environment variable
+``VERITAS_ENCRYPTION_KEY``.
 
 Key management:
-    * ``VERITAS_ENCRYPTION_KEY``  — Base64-encoded 32-byte Fernet key.
+    * ``VERITAS_ENCRYPTION_KEY``  — Base64-encoded 32-byte key.
     * ``generate_key()``         — Helper to create a new key.
 
 When the key is not set, ``encrypt`` / ``decrypt`` are identity
 functions so that the rest of the system works without changes.
 
 Security notes:
-    * Fernet uses AES-128-CBC with HMAC-SHA256 — authenticated encryption.
+    * Uses a hash-based CBC-mode scheme with HMAC-SHA256 authentication.
+    * For production deployments requiring AES, install the ``cryptography``
+      package and replace ``_aes_encrypt_block`` with real AES.
     * The key **must** be stored securely (vault / KMS / env-injected secret).
     * Do **not** commit the key to source control.
 """
@@ -101,11 +103,6 @@ def _aes_encrypt_block(block: bytes, key: bytes) -> bytes:
     For production use, install the ``cryptography`` package for real AES.
     """
     return hashlib.sha256(key + block).digest()[:_AES_BLOCK]
-
-
-def _aes_decrypt_block(block: bytes, key: bytes) -> bytes:
-    """Reverse is not possible with hash-based PRF — see _encrypt/_decrypt below."""
-    raise NotImplementedError("Hash-based PRF is not reversible")
 
 
 def is_encryption_enabled() -> bool:
@@ -198,7 +195,7 @@ def get_encryption_status() -> dict:
     enabled = is_encryption_enabled()
     return {
         "encryption_enabled": enabled,
-        "algorithm": "AES-128-CBC + HMAC-SHA256" if enabled else "none",
+        "algorithm": "HMAC-SHA256 authenticated CBC-mode encryption" if enabled else "none",
         "key_configured": enabled,
         "eu_ai_act_article": "Art. 12",
         "note": (
