@@ -479,6 +479,43 @@ class HumanReviewQueue:
             logger.debug("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
 
     @classmethod
+    def check_expired_entries(cls) -> List[Dict[str, Any]]:
+        """Identify and mark pending entries that have exceeded SLA deadline.
+
+        Art. 14 Human Oversight — GAP-14:
+        Entries that exceed their SLA deadline are marked ``expired`` so that
+        downstream systems can escalate or block the decision.
+
+        Returns:
+            List of newly-expired entries.
+        """
+        now = datetime.now(timezone.utc)
+        expired: List[Dict[str, Any]] = []
+        with cls._lock:
+            for entry in cls._queue:
+                if entry["status"] != "pending":
+                    continue
+                deadline_str = entry.get("sla_deadline", "")
+                if not deadline_str:
+                    continue
+                try:
+                    deadline = datetime.fromisoformat(deadline_str)
+                except (TypeError, ValueError):
+                    continue
+                if now >= deadline:
+                    entry["status"] = "expired"
+                    entry["expired_at"] = now.isoformat()
+                    expired.append(dict(entry))
+        for e in expired:
+            logger.warning(
+                "Human-review entry expired (SLA breached): entry_id=%s deadline=%s",
+                e.get("entry_id"),
+                e.get("sla_deadline"),
+            )
+            cls._notify_webhook({**e, "event_type": "sla_expired"})
+        return expired
+
+    @classmethod
     def clear_for_testing(cls) -> None:
         """Clear the queue (test helper only)."""
         with cls._lock:
@@ -723,6 +760,16 @@ def eu_compliance_pipeline(
             gate_log = safety_gate.validate_article_5(str(output.get("output") or ""))
             output["eu_safety_gate"] = gate_log
 
+            # GAP-04: Attach machine-readable AI content watermark (Art. 50(2))
+            decision_id = str(
+                output.get("request_id")
+                or output.get("decision_id")
+                or hashlib.sha256(prompt.encode()).hexdigest()[:16]
+            )
+            output["ai_content_watermark"] = build_ai_content_watermark(
+                decision_id=decision_id,
+            )
+
             trust_score = float(output.get("trust_score", 1.0))
             output["eu_risk_assessment"] = precheck
             output = apply_human_oversight_hook(
@@ -748,6 +795,93 @@ AI_DISCLOSURE_TEXT = (
 AI_REGULATION_NOTICE = (
     "Subject to EU AI Act Regulation (EU) 2024/1689."
 )
+
+
+# ---------------------------------------------------------------------------
+# GAP-04: Art. 50(2) — Machine-readable AI content watermark
+# ---------------------------------------------------------------------------
+def build_ai_content_watermark(
+    *,
+    decision_id: str,
+    model: str = "gpt-4.1-mini",
+    producer: str = "VERITAS OS",
+) -> Dict[str, Any]:
+    """Build machine-readable watermark metadata for AI-generated content.
+
+    Art. 50(2) requires AI-generated content to carry machine-readable
+    marking so that downstream consumers can programmatically detect it.
+    This follows the C2PA (Coalition for Content Provenance and Authenticity)
+    manifest structure.
+
+    Args:
+        decision_id: Unique identifier of the decision that produced the content.
+        model: Name of the AI model used for generation.
+        producer: Name of the producing system.
+
+    Returns:
+        Dict containing C2PA-compatible watermark metadata.
+    """
+    ts = datetime.now(timezone.utc).isoformat()
+    payload = f"{producer}:{decision_id}:{ts}".encode()
+    signature = hashlib.sha256(payload).hexdigest()
+    return {
+        "version": "1.0",
+        "standard": "C2PA-compatible",
+        "ai_generated": True,
+        "producer": producer,
+        "model": model,
+        "decision_id": decision_id,
+        "timestamp": ts,
+        "regulation": "EU AI Act (EU) 2024/1689",
+        "content_credentials": {
+            "type": "ai_generated_content",
+            "assertion": "c2pa.ai_generated",
+            "signature": signature,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# GAP-16: Art. 15 — Degraded mode for LLM unavailability
+# ---------------------------------------------------------------------------
+def build_degraded_response(
+    *,
+    reason: str,
+    prompt: str = "",
+    risk_assessment: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Build a safe degraded-mode response when the LLM is unavailable.
+
+    Art. 15 Accuracy/Robustness — GAP-16:
+    When the underlying LLM is unreachable or returns an error, the system
+    must not silently fail or produce unvalidated output.  Instead, it
+    returns a clearly-marked degraded response that:
+    - Discloses that the AI could not process the request.
+    - Preserves the risk assessment and audit trail.
+    - Recommends human review for the original request.
+
+    Args:
+        reason: Human-readable description of the failure.
+        prompt: The original user prompt (for audit trail).
+        risk_assessment: Pre-computed Annex III risk classification, if any.
+
+    Returns:
+        A response dict safe for API serialisation.
+    """
+    return {
+        "output": "",
+        "decision_status": "abstain",
+        "degraded_mode": True,
+        "degraded_reason": reason,
+        "ai_disclosure": AI_DISCLOSURE_TEXT,
+        "regulation_notice": AI_REGULATION_NOTICE,
+        "eu_risk_assessment": risk_assessment or classify_annex_iii_risk(prompt),
+        "status": "DEGRADED",
+        "recommendation": (
+            "The AI system is temporarily unavailable. "
+            "Please retry later or escalate to a human decision-maker."
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
