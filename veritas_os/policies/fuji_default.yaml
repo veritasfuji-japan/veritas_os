@@ -195,6 +195,9 @@ overrides:
     pii:
       enabled: true           # P1-6: PII protection MUST remain enabled even in bench_mode
     synthetic_data_only: true  # P1-6: bench_mode requires synthetic data (no real PII)
+    # P2-3: Runtime validation enforced by validate_bench_mode_synthetic_data()
+    # in eu_ai_act_compliance_module.py — real PII markers in bench data are rejected.
+    reject_real_pii_markers: true
     thresholds:
       max_uncertainty: 0.80
 

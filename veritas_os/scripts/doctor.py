@@ -27,6 +27,9 @@ REPO_ROOT = HERE.parent                         # .../veritas_os
 LOG_DIR = HERE / "logs"                         # .../veritas_os/scripts/logs
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# ベンチマーク結果置き場（P2-2: 精度モニタリング）
+BENCH_DIR = REPO_ROOT / "benchmarks" / "results"
+
 # 監査用 JSONL
 TRUST_LOG_JSON = LOG_DIR / "trust_log.jsonl"
 LOG_JSONL = TRUST_LOG_JSON  # 互換のための別名
@@ -216,6 +219,142 @@ def analyze_trustlog() -> dict:
         "first_mismatch": hash_mismatches[0] if hash_mismatches else None,
         "last_hash": last_hash[:16] + "..." if last_hash else None,
         "created_at": last_created_at,
+    }
+
+
+# ---- P2-2: Accuracy monitoring dashboard ---------------------------------
+def analyze_accuracy_benchmarks() -> dict:
+    """Analyse benchmark result files for accuracy monitoring (P2-2 / Art. 15).
+
+    Scans ``BENCH_DIR`` for JSON/JSONL result files and computes aggregate
+    accuracy metrics.  This powers the continuous accuracy monitoring
+    dashboard referenced in the EU AI Act compliance review.
+
+    Returns:
+        {
+            "status": str,
+            "total_runs": int,
+            "latest_run": dict | None,
+            "accuracy_avg": float | None,
+            "accuracy_min": float | None,
+            "accuracy_max": float | None,
+            "drift_detected": bool,
+            "drift_details": str | None,
+            "benchmark_files": int,
+        }
+    """
+    if not BENCH_DIR.exists():
+        return {
+            "status": "no_benchmark_dir",
+            "total_runs": 0,
+            "latest_run": None,
+            "accuracy_avg": None,
+            "accuracy_min": None,
+            "accuracy_max": None,
+            "drift_detected": False,
+            "drift_details": None,
+            "benchmark_files": 0,
+        }
+
+    bench_dir_resolved = BENCH_DIR.resolve()
+    bench_files: list[str] = []
+    for pat in ("*.json", "*.jsonl"):
+        for p in glob.glob(os.path.join(BENCH_DIR, pat)):
+            try:
+                rp = Path(p).resolve()
+                if bench_dir_resolved not in rp.parents and rp != bench_dir_resolved:
+                    continue
+                if Path(p).is_symlink() or not rp.is_file():
+                    continue
+                if os.path.getsize(p) <= 0 or os.path.getsize(p) > MAX_FILE_SIZE:
+                    continue
+            except OSError:
+                continue
+            bench_files.append(p)
+
+    bench_files.sort(key=lambda p: os.path.getmtime(p))
+
+    accuracies: list[float] = []
+    latest_run: dict | None = None
+    total_runs = 0
+
+    for path in bench_files:
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                # Try JSONL
+                data = None
+                for raw_line in content.splitlines():
+                    raw_line = raw_line.strip()
+                    if not raw_line:
+                        continue
+                    try:
+                        data = json.loads(raw_line)
+                    except json.JSONDecodeError:
+                        continue
+
+            if data is None:
+                continue
+
+            # Support both single-run and multi-run formats
+            runs: list[dict] = []
+            if isinstance(data, list):
+                runs = [d for d in data if isinstance(d, dict)]
+            elif isinstance(data, dict):
+                if isinstance(data.get("runs"), list):
+                    runs = [d for d in data["runs"] if isinstance(d, dict)]
+                else:
+                    runs = [data]
+
+            for run in runs[:MAX_ITEMS_PER_FILE]:
+                total_runs += 1
+                # Accept multiple accuracy field names
+                acc = (
+                    run.get("accuracy")
+                    or run.get("accuracy_score")
+                    or run.get("score")
+                )
+                try:
+                    if acc is not None:
+                        accuracies.append(float(acc))
+                except (TypeError, ValueError):
+                    pass
+                latest_run = run
+
+        except Exception:
+            continue
+
+    # Drift detection: if last 5 runs show decline > 5% vs overall average
+    drift_detected = False
+    drift_details: str | None = None
+    if len(accuracies) >= 5:
+        overall_avg = statistics.mean(accuracies)
+        recent_avg = statistics.mean(accuracies[-5:])
+        drop = overall_avg - recent_avg
+        if drop > 0.05 and overall_avg > 0:
+            drift_detected = True
+            drift_details = (
+                f"Recent 5-run avg ({recent_avg:.3f}) dropped {drop:.3f} "
+                f"from overall avg ({overall_avg:.3f})"
+            )
+
+    return {
+        "status": "ok" if total_runs > 0 else "no_results",
+        "total_runs": total_runs,
+        "latest_run": {
+            k: latest_run[k]
+            for k in ("accuracy", "accuracy_score", "score", "timestamp", "benchmark", "model")
+            if k in latest_run
+        } if latest_run else None,
+        "accuracy_avg": round(statistics.mean(accuracies), 4) if accuracies else None,
+        "accuracy_min": round(min(accuracies), 4) if accuracies else None,
+        "accuracy_max": round(max(accuracies), 4) if accuracies else None,
+        "drift_detected": drift_detected,
+        "drift_details": drift_details,
+        "benchmark_files": len(bench_files),
     }
 
 
@@ -412,6 +551,9 @@ def analyze_logs():
 
     # ✨ TrustLog 健全性チェック（新機能）
     trustlog_stats = analyze_trustlog()
+
+    # 📈 P2-2: 精度ベンチマークモニタリング
+    accuracy_stats = analyze_accuracy_benchmarks()
     
     # 最終診断時刻（TrustLogから取得、なければ現在時刻）
     last_check = trustlog_stats.get("created_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -428,6 +570,7 @@ def analyze_logs():
         "last_check":        last_check,
         "by_category":       {k: v["count"] for k, v in metrics.items()},
         "trustlog":          trustlog_stats,  # ✨ TrustLog統計を追加
+        "accuracy":          accuracy_stats,  # 📈 P2-2: 精度モニタリング
         "generated_at":      datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "source_dir":        str(LOG_DIR),
     }
@@ -470,6 +613,24 @@ def analyze_logs():
                 fm = trustlog_stats['first_mismatch']
                 print(f"      最初の不一致: Line {fm['line']} (ID: {fm['request_id']})")
     
+    # 📈 P2-2: 精度モニタリングダッシュボード
+    print("\n📈 精度モニタリング (P2-2 / Art. 15):")
+    if accuracy_stats["status"] == "no_benchmark_dir":
+        print("   ⚠️ ベンチマーク結果ディレクトリが見つかりません")
+    elif accuracy_stats["status"] == "no_results":
+        print("   ⚠️ ベンチマーク結果ファイルが見つかりません")
+    else:
+        print(f"   総実行数: {accuracy_stats['total_runs']}")
+        print(f"   ファイル数: {accuracy_stats['benchmark_files']}")
+        if accuracy_stats["accuracy_avg"] is not None:
+            print(f"   精度 (平均): {accuracy_stats['accuracy_avg']:.4f}")
+            print(f"   精度 (最小): {accuracy_stats['accuracy_min']:.4f}")
+            print(f"   精度 (最大): {accuracy_stats['accuracy_max']:.4f}")
+        if accuracy_stats["drift_detected"]:
+            print(f"   ⚠️ ドリフト検出: {accuracy_stats['drift_details']}")
+        else:
+            print("   ✅ ドリフト: 検出なし")
+
     print("\n✅ 保存完了:", REPORT_PATH)
 
 
