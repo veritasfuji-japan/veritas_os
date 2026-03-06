@@ -231,6 +231,24 @@ def test_safe_json_extract_ignores_leading_unbalanced_closing_brace():
     assert ids == ["ok1", "ok2"]
 
 
+
+
+def test_truncate_json_extract_input_accepts_non_string_and_strips_controls(caplog):
+    raw = "\ufeff{\"steps\": [{\"id\": \"s1\"}]}\x00"
+    with caplog.at_level("WARNING"):
+        cleaned = planner_core._truncate_json_extract_input(raw)
+
+    assert cleaned == '{"steps": [{"id": "s1"}]}'
+    assert any("removed leading BOM" in rec.message for rec in caplog.records)
+    assert any("removed NUL bytes" in rec.message for rec in caplog.records)
+
+
+def test_safe_parse_handles_non_string_payload_without_exception():
+    obj = planner_core._safe_parse(12345)
+
+    assert isinstance(obj, dict)
+    assert obj["steps"] == []
+
 def test_safe_json_extract_truncates_oversized_input(caplog):
     payload = json.dumps({"steps": [{"id": "ok1"}]})
     raw = ("x" * (planner_core._MAX_JSON_EXTRACT_CHARS + 100)) + payload
