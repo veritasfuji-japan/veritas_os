@@ -84,6 +84,23 @@ ARTICLE_5_PROHIBITED_PATTERNS = (
     "emotion recognition",
     "real-time remote biometric",
     "predictive policing",
+    # GAP-01 synonyms / euphemisms to reduce false negatives
+    "social credit",
+    "citizen score",
+    "trustworthiness score",
+    "behavioural scoring",
+    "behavior scoring",
+    "subconscious influence",
+    "psychological manipulation",
+    "exploit cognitive",
+    "exploit mental",
+    "facial recognition",
+    "face identification",
+    "gait recognition",
+    "voiceprint",
+    "untargeted scraping of facial",
+    "mass surveillance",
+    "indiscriminate surveillance",
 )
 
 # Multi-language extensions (Japanese / French / German / Spanish)
@@ -101,24 +118,47 @@ _ARTICLE_5_PROHIBITED_PATTERNS_MULTILANG = (
     "感情認識",
     "リアルタイム遠隔生体認証",
     "予測的取締",
+    # GAP-01: Additional Japanese synonyms
+    "社会信用スコア",
+    "市民スコア",
+    "行動スコアリング",
+    "潜在意識",
+    "心理的操作",
+    "顔認識",
+    "顔認証",
+    "大量監視",
+    "無差別監視",
     # French
     "subliminal",
     "notation sociale",
     "exploiter la vulnérabilité",
     "discrimina",
     "manipula",
+    # GAP-01: Additional French synonyms
+    "crédit social",
+    "score social",
+    "reconnaissance faciale",
+    "surveillance de masse",
     # German
     "unterschwellig",
     "sozialbewertung",
     "schwachstelle ausnutzen",
     "diskriminier",
     "manipulier",
+    # GAP-01: Additional German synonyms
+    "sozialkreditsystem",
+    "gesichtserkennung",
+    "massenüberwachung",
     # Spanish
     "subliminal",
     "puntuación social",
     "explotar vulnerabilidad",
     "discrimina",
     "manipula",
+    # GAP-01: Additional Spanish synonyms
+    "crédito social",
+    "reconocimiento facial",
+    "vigilancia masiva",
 )
 
 # Combined set for matching (deduplicated, lowercased)
@@ -677,6 +717,7 @@ def eu_compliance_pipeline(
     """Decorator for ``/v1/decide`` compliance pipeline.
 
     Enforced steps when compliance mode is enabled:
+    0) System halt check (Art. 14(4)): Refuse all requests if halted.
     1) Pre-check (Art. 9): Annex III high-risk classification.
     1b) Input inspection (Art. 5 / P1-1): Check prompt for prohibited practices.
     1c) Bench-mode guard (P1-6): Block PII bypass unless explicitly allowed.
@@ -692,6 +733,21 @@ def eu_compliance_pipeline(
         def wrapped(*args: Any, **kwargs: Any) -> Dict[str, Any]:
             if not active_config.enabled:
                 return func(*args, **kwargs)
+
+            # Art. 14(4): System halt check — refuse all requests when halted
+            if SystemHaltController.is_halted():
+                halt_status = SystemHaltController.status()
+                return {
+                    "output": "",
+                    "status": "HALTED",
+                    "decision_status": "rejected",
+                    "blocked_by": "Art.14(4)_system_halt",
+                    "rejection_reason": (
+                        "System is halted by a human operator. "
+                        f"Reason: {halt_status.get('reason', 'N/A')}"
+                    ),
+                    "halt_status": halt_status,
+                }
 
             prompt = str(kwargs.get("prompt") or "")
             precheck = classify_annex_iii_risk(prompt)
@@ -1126,3 +1182,198 @@ class ThirdPartyNotificationService:
         """Clear notifications (test helper only)."""
         with cls._lock:
             cls._notifications.clear()
+
+
+# ---------------------------------------------------------------------------
+# Art. 14(4): System halt / emergency stop controller
+# ---------------------------------------------------------------------------
+class SystemHaltController:
+    """Thread-safe emergency stop mechanism for human operators.
+
+    Art. 14(4) requires that natural persons assigned to human oversight
+    can *interrupt, suspend, or halt* the AI system when necessary.
+
+    This controller provides a global halted flag that the compliance
+    pipeline checks before executing any decision.  When halted, all
+    new ``/v1/decide`` requests are refused with an explicit status.
+
+    In production, integrate with your orchestration layer so that
+    halt/resume actions are audit-logged and permission-gated.
+    """
+
+    _lock = threading.Lock()
+    _halted: bool = False
+    _halted_by: str | None = None
+    _halted_at: str | None = None
+    _halt_reason: str | None = None
+    _history: List[Dict[str, Any]] = []
+
+    @classmethod
+    def halt(cls, *, reason: str, operator: str) -> Dict[str, Any]:
+        """Halt the AI decision system.
+
+        Args:
+            reason: Human-readable explanation for the halt.
+            operator: Identifier of the person initiating the halt.
+
+        Returns:
+            Dict with halt confirmation details.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with cls._lock:
+            cls._halted = True
+            cls._halted_by = operator
+            cls._halted_at = now
+            cls._halt_reason = reason
+            cls._history.append({
+                "action": "halt",
+                "operator": operator,
+                "reason": reason,
+                "timestamp": now,
+            })
+        logger.warning(
+            "System HALTED by %s: %s", operator, reason,
+        )
+        return {
+            "halted": True,
+            "halted_by": operator,
+            "halted_at": now,
+            "reason": reason,
+        }
+
+    @classmethod
+    def resume(cls, *, operator: str, comment: str = "") -> Dict[str, Any]:
+        """Resume the AI decision system after a halt.
+
+        Args:
+            operator: Identifier of the person resuming the system.
+            comment: Optional comment explaining the resumption.
+
+        Returns:
+            Dict with resume confirmation details.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with cls._lock:
+            was_halted = cls._halted
+            cls._halted = False
+            cls._halted_by = None
+            cls._halted_at = None
+            cls._halt_reason = None
+            cls._history.append({
+                "action": "resume",
+                "operator": operator,
+                "comment": comment,
+                "timestamp": now,
+            })
+        logger.info("System RESUMED by %s: %s", operator, comment)
+        return {
+            "resumed": True,
+            "was_halted": was_halted,
+            "resumed_by": operator,
+            "resumed_at": now,
+        }
+
+    @classmethod
+    def is_halted(cls) -> bool:
+        """Return ``True`` if the system is currently halted."""
+        with cls._lock:
+            return cls._halted
+
+    @classmethod
+    def status(cls) -> Dict[str, Any]:
+        """Return the current halt status for dashboards and health checks."""
+        with cls._lock:
+            return {
+                "halted": cls._halted,
+                "halted_by": cls._halted_by,
+                "halted_at": cls._halted_at,
+                "reason": cls._halt_reason,
+            }
+
+    @classmethod
+    def clear_for_testing(cls) -> None:
+        """Reset state (test helper only)."""
+        with cls._lock:
+            cls._halted = False
+            cls._halted_by = None
+            cls._halted_at = None
+            cls._halt_reason = None
+            cls._history.clear()
+
+
+# ---------------------------------------------------------------------------
+# GAP-05: Art. 10 — Data quality validation for dataset writes
+# ---------------------------------------------------------------------------
+def validate_data_quality(
+    *,
+    text: str,
+    kind: str = "",
+    meta: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Validate data quality before ingestion into datasets or memory.
+
+    Art. 10 Data Governance — GAP-05:
+    EU AI Act requires that training, validation, and test datasets meet
+    quality criteria including relevance, representativeness, and
+    freedom from errors.
+
+    This function performs basic quality checks on incoming data records.
+    It does *not* replace statistical analysis but catches common issues
+    at the point of ingestion.
+
+    Args:
+        text: The text content to validate.
+        kind: Category / type of the data record.
+        meta: Optional metadata dict for the record.
+
+    Returns:
+        Dict with ``passed``, ``issues`` (list of issue descriptions),
+        and ``quality_score`` (0.0–1.0).
+    """
+    issues: List[str] = []
+
+    # 1. Non-empty content
+    stripped = (text or "").strip()
+    if not stripped:
+        issues.append("empty_content: text is empty or whitespace-only")
+
+    # 2. Minimum meaningful length (configurable via kind)
+    min_len = 10
+    if stripped and len(stripped) < min_len:
+        issues.append(
+            f"too_short: text length {len(stripped)} < minimum {min_len}"
+        )
+
+    # 3. Excessive repetition (data quality signal)
+    if stripped and len(stripped) >= 20:
+        words = stripped.split()
+        if words:
+            unique_ratio = len(set(words)) / len(words)
+            if unique_ratio < 0.2:
+                issues.append(
+                    f"low_diversity: unique word ratio {unique_ratio:.2f} < 0.20"
+                )
+
+    # 4. Valid kind/category
+    valid_kinds = (
+        "semantic", "episodic", "procedural", "factual", "training",
+        "validation", "test", "feedback",
+    )
+    if kind and kind not in valid_kinds:
+        issues.append(f"unknown_kind: '{kind}' not in {valid_kinds}")
+
+    # 5. Meta integrity (if provided)
+    if meta is not None and not isinstance(meta, dict):
+        issues.append("invalid_meta: meta must be a dict or None")
+
+    # 6. Encoding check — ensure no null bytes
+    if "\x00" in (text or ""):
+        issues.append("null_bytes: text contains null byte characters")
+
+    quality_score = max(0.0, 1.0 - 0.25 * len(issues))
+    return {
+        "passed": len(issues) == 0,
+        "issues": issues,
+        "quality_score": round(quality_score, 2),
+        "eu_ai_act_article": "Art. 10",
+    }
