@@ -6,6 +6,7 @@ import {
   parseAuthTokensConfig,
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
+import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
 const API_BASE =
   process.env.VERITAS_API_BASE_URL ??
@@ -26,31 +27,61 @@ function buildTargetUrl(pathSegments: string[], searchParams: URLSearchParams): 
  * Proxies allowed Veritas API calls from browser to backend using server-side API key.
  */
 async function handleProxy(request: NextRequest, pathSegments: string[]): Promise<Response> {
+  const traceId = resolveTraceId(request.headers);
+
   const matched = matchPolicy(pathSegments, request.method);
   if (!matched) {
-    return NextResponse.json({ error: "unsupported_path" }, { status: 404 });
+    return NextResponse.json(
+      { error: "unsupported_path", trace_id: traceId },
+      {
+        status: 404,
+        headers: {
+          [TRACE_ID_HEADER_NAME]: traceId,
+        },
+      },
+    );
   }
 
   const tokenRoleMap = parseAuthTokensConfig(process.env.VERITAS_BFF_AUTH_TOKENS_JSON);
   const authResult = authenticateRoleFromHeaders(request.headers, tokenRoleMap);
   if (authResult.errorResponse) {
+    authResult.errorResponse.headers.set(TRACE_ID_HEADER_NAME, traceId);
     return authResult.errorResponse;
   }
 
   if (!authResult.role || !matched.policy.roles.includes(authResult.role)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { error: "forbidden", trace_id: traceId },
+      {
+        status: 403,
+        headers: {
+          [TRACE_ID_HEADER_NAME]: traceId,
+        },
+      },
+    );
   }
 
   if (!API_KEY.trim()) {
     return NextResponse.json(
-      { error: "server_misconfigured", detail: "VERITAS_API_KEY is not configured on server." },
-      { status: 503 },
+      {
+        error: "server_misconfigured",
+        detail: "VERITAS_API_KEY is not configured on server.",
+        trace_id: traceId,
+      },
+      {
+        status: 503,
+        headers: {
+          [TRACE_ID_HEADER_NAME]: traceId,
+        },
+      },
     );
   }
 
   const targetUrl = buildTargetUrl(pathSegments, request.nextUrl.searchParams);
   const upstreamHeaders = new Headers();
   upstreamHeaders.set("X-API-Key", API_KEY.trim());
+  upstreamHeaders.set(TRACE_ID_HEADER_NAME, traceId);
+  upstreamHeaders.set("X-Request-Id", traceId);
 
   const contentType = request.headers.get("content-type");
   if (contentType) {
@@ -62,7 +93,15 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   if (hasBody) {
     body = await request.text();
     if (getBodySizeBytes(body) > MAX_PROXY_BODY_BYTES) {
-      return NextResponse.json({ error: "payload_too_large" }, { status: 413 });
+      return NextResponse.json(
+        { error: "payload_too_large", trace_id: traceId },
+        {
+          status: 413,
+          headers: {
+            [TRACE_ID_HEADER_NAME]: traceId,
+          },
+        },
+      );
     }
   }
 
@@ -78,6 +117,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   if (upstreamContentType) {
     responseHeaders.set("Content-Type", upstreamContentType);
   }
+  responseHeaders.set(TRACE_ID_HEADER_NAME, traceId);
 
   return new Response(upstreamResponse.body, {
     status: upstreamResponse.status,

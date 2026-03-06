@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -188,6 +189,23 @@ def test_security_headers_present():
         == "max-age=31536000; includeSubDomains"
     )
     assert resp.headers.get("Cache-Control") == "no-store"
+
+
+def test_trace_id_header_preserved_when_valid():
+    trace_id = "trace-12345678"
+    resp = client.get("/health", headers={"X-Trace-Id": trace_id})
+
+    assert resp.headers.get("X-Trace-Id") == trace_id
+    assert resp.headers.get("X-Request-Id") == trace_id
+
+
+def test_trace_id_header_generated_when_invalid():
+    resp = client.get("/health", headers={"X-Trace-Id": "\n"})
+    trace_id = resp.headers.get("X-Trace-Id")
+
+    assert trace_id is not None
+    assert re.fullmatch(r"[0-9a-f]{32}", trace_id) is not None
+    assert resp.headers.get("X-Request-Id") == trace_id
 
 
 # ----------------------------------------------------------------

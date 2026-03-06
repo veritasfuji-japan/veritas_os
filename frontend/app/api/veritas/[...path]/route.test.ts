@@ -7,6 +7,7 @@ import {
   parseAuthTokensConfig,
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
+import { resolveTraceId } from "./trace-id";
 
 describe("veritas bff route auth and authorization", () => {
   it("parses valid token-to-role config", () => {
@@ -76,5 +77,28 @@ describe("getBodySizeBytes", () => {
   it("counts multibyte UTF-8 characters correctly", () => {
     expect(getBodySizeBytes("あ")).toBe(3);
     expect(getBodySizeBytes("😀")).toBe(4);
+  });
+});
+
+describe("resolveTraceId", () => {
+  it("accepts a valid x-trace-id", () => {
+    const headers = new Headers({ "x-trace-id": "trace-abc12345" });
+
+    expect(resolveTraceId(headers)).toBe("trace-abc12345");
+  });
+
+  it("falls back to x-request-id", () => {
+    const headers = new Headers({ "x-request-id": "request-abc12345" });
+
+    expect(resolveTraceId(headers)).toBe("request-abc12345");
+  });
+
+  it("generates a uuid when provided ids are invalid", () => {
+    const headers = new Headers({ "x-trace-id": "..\n" });
+    const traceId = resolveTraceId(headers);
+
+    expect(traceId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
   });
 });

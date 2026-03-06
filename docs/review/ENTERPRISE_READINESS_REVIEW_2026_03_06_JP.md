@@ -63,8 +63,8 @@
 ## 追加改善提案（優先度順）
 1. **P0**: `frontend/app/api/veritas/[...path]/route.ts` に強制認証と権限マトリクスを導入。
 2. **P0**: CIに `pip-audit` / `npm audit --production` を追加し、重大CVSSでデプロイブロック。
-3. **P1**: 監査向けにSLO/SLI（API latency, error budget）と運用Runbookを `docs/` に明文化。
-4. **P1**: BFFとAPI双方で相関ID（trace_id）を必須伝播して監査容易性を向上。
+3. **P1（対応済み）**: 監査向けにSLO/SLI（API latency, error budget）と運用Runbookを `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に明文化。
+4. **P1（対応済み）**: BFFとAPI双方で相関ID（`X-Trace-Id` / `X-Request-Id`）を必須伝播し、監査容易性を向上。
 5. **P2**: 警告ゼロ運用（または期限付き警告管理）へ移行。
 
 ## 結論

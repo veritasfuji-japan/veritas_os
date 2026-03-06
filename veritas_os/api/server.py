@@ -660,6 +660,42 @@ def _resolve_max_request_body_size() -> int:
 
 
 MAX_REQUEST_BODY_SIZE = _resolve_max_request_body_size()
+TRACE_ID_HEADER_NAME = "X-Trace-Id"
+_TRACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$")
+
+
+def _resolve_trace_id_from_request(request: Request) -> str:
+    """Resolve or mint a trace id for end-to-end audit correlation.
+
+    Security:
+        - Accept only a strict ASCII-safe format to avoid header/log injection.
+        - Prefer caller-provided ids (``X-Trace-Id`` / ``X-Request-Id``) when
+          valid, otherwise generate a cryptographically random fallback.
+    """
+    candidates = (
+        request.headers.get(TRACE_ID_HEADER_NAME),
+        request.headers.get("x-trace-id"),
+        request.headers.get("X-Request-Id"),
+        request.headers.get("x-request-id"),
+    )
+
+    for candidate in candidates:
+        normalized = (candidate or "").strip()
+        if _TRACE_ID_PATTERN.match(normalized):
+            return normalized
+
+    return secrets.token_hex(16)
+
+
+@app.middleware("http")
+async def attach_trace_id(request: Request, call_next):
+    """Attach a validated trace id to request state and response headers."""
+    trace_id = _resolve_trace_id_from_request(request)
+    request.state.trace_id = trace_id
+    response = await call_next(request)
+    response.headers[TRACE_ID_HEADER_NAME] = trace_id
+    response.headers.setdefault("X-Request-Id", trace_id)
+    return response
 
 
 @app.middleware("http")
