@@ -370,11 +370,11 @@ def apply_human_oversight_hook(
 | GAP-04 | Art.50 | AI相互作用の法定開示なし | 🔴 Critical | P1 |
 | GAP-05 | Art.10 | LLMモデルのデータカード・バイアス評価なし | 🔴 Critical | P1 |
 | GAP-06 | Art.9 | デフォルトリスクスコア0.2の過小評価 | 🟠 High | P2 |
-| GAP-07 | Art.9 | 残留リスク文書化なし | 🟠 High | P2 |
-| GAP-08 | Art.11 | 附属書IV準拠の技術文書なし | 🟠 High | P2 |
-| GAP-09 | Art.13 | エンドユーザー向け法定開示なし | 🟠 High | P2 |
-| GAP-10 | Art.15 | 精度ベンチマーク結果なし | 🟠 High | P2 |
-| GAP-11 | Art.15 | bench_modeでPII無効化リスク | 🟠 High | P2 |
+| GAP-07 | Art.9 | 残留リスク文書化なし | 🟠 High | ~~P2~~ ✅ 対応済 |
+| GAP-08 | Art.11 | 附属書IV準拠の技術文書なし | 🟠 High | ~~P2~~ ✅ 対応済 |
+| GAP-09 | Art.13 | エンドユーザー向け法定開示なし | 🟠 High | ~~P2~~ ✅ 対応済 |
+| GAP-10 | Art.15 | 精度ベンチマーク結果なし | 🟠 High | ~~P2~~ ✅ 対応済 |
+| GAP-11 | Art.15 | bench_modeでPII無効化リスク | 🟠 High | ~~P2~~ ✅ 対応済 |
 | GAP-12 | Art.12 | 暗号化なしデフォルト保存 | 🟡 Medium | P3 |
 | GAP-13 | Art.12 | 90日保持がEU要件を満たすか未確認 | 🟡 Medium | P3 |
 | GAP-14 | Art.14 | 人間レビューのタイムアウト管理なし | 🟡 Medium | P3 |
@@ -494,33 +494,37 @@ regulation_notice: str = "Subject to EU AI Act Regulation (EU) 2024/1689."
 
 ### P2（3ヶ月以内に対応）
 
-**[P2-1] 附属書IV準拠の技術文書テンプレート作成**
+**[P2-1] 附属書IV準拠の技術文書テンプレート作成** ✅ 対応済
 
 EU AI法附属書IVの要求に合わせた技術文書テンプレートを`docs/eu_ai_act/`配下に作成：
-- `technical_documentation.md`（一般的技術情報）
-- `intended_purpose.md`（意図された用途と制限）
-- `risk_assessment.md`（リスク評価と残留リスク）
-- `performance_metrics.md`（精度・堅牢性指標）
+- `technical_documentation.md`（一般的技術情報） ✅
+- `intended_purpose.md`（意図された用途と制限） ✅
+- `risk_assessment.md`（リスク評価と残留リスク） ✅
+- `performance_metrics.md`（精度・堅牢性指標） ✅
 
-**[P2-2] 精度ベンチマーク基盤の確立**
-- `AGI_BENCH_INTEGRATION_GUIDE.md`を基に定量的ベンチマーク結果を文書化
-- 継続的な精度モニタリングダッシュボードを`doctor.py`に追加
+**[P2-2] 精度ベンチマーク基盤の確立** ✅ 対応済
+- `doctor.py`に`analyze_accuracy_benchmarks()`関数を追加し、継続的な精度モニタリングダッシュボードを実装 ✅
+- ベンチマーク結果の統計分析（平均・最小・最大）とドリフト検出（直近5回の精度が全体平均から5%以上低下した場合にアラート） ✅
+- `doctor_report.json`に`accuracy`セクションを追加 ✅
 
-**[P2-3] bench_modeの安全制限強化**
+**[P2-3] bench_modeの安全制限強化** ✅ 対応済
 ```yaml
-# fuji_default.yaml の bench_mode を修正:
+# fuji_default.yaml の bench_mode:
 bench_mode:
   when_mode_in: ["bench", "internal_eval"]
   pii:
-    enabled: false  # ← 本物PII保護のため削除 or 警告追加を検討
-  # 代替: synthetic_data_only: true をバリデーション要件として追加
+    enabled: true           # P1-6: PII protection MUST remain enabled
+  synthetic_data_only: true  # P1-6: bench_mode requires synthetic data
+  reject_real_pii_markers: true  # P2-3: Runtime validation enforced
 ```
+- `validate_bench_mode_synthetic_data()`関数を追加し、実PIIマーカー（メールドメイン・SSN・クレジットカード・マイナンバー等）を検出して拒否 ✅
+- `eu_compliance_pipeline`デコレータにP2-3チェックを統合 ✅
 
-**[P2-4] エンドユーザー向け使用説明書の作成**
-- `docs/user_guide_eu_ai_act.md`として:
-  - システムの意図された用途と限界
-  - 人間監視の方法と責任者
-  - 異議申し立て（コンテスト）の方法
+**[P2-4] エンドユーザー向け使用説明書の作成** ✅ 対応済
+- `docs/user_guide_eu_ai_act.md`として作成 ✅:
+  - システムの意図された用途と限界 ✅
+  - 人間監視の方法と責任者 ✅
+  - 異議申し立て（コンテスト）の方法 ✅
 
 ### P3（6ヶ月以内に対応）
 
@@ -577,6 +581,14 @@ bench_mode:
 | Art.15 | `policies/fuji_default.yaml` | 219-237 | プロンプトインジェクション検出 |
 | Art.15 | `policies/fuji_default.yaml` | 243-264 | Unicode正規化 |
 | Art.15 | `compliance/report_engine.py` | (全体) | コンプライアンスレポート生成 |
+| Art.9 (P2-1) | `docs/eu_ai_act/risk_assessment.md` | (全体) | リスク評価・残留リスク台帳 |
+| Art.11 (P2-1) | `docs/eu_ai_act/technical_documentation.md` | (全体) | 附属書IV準拠技術文書 |
+| Art.13 (P2-1) | `docs/eu_ai_act/intended_purpose.md` | (全体) | 意図された用途と制限 |
+| Art.15 (P2-1) | `docs/eu_ai_act/performance_metrics.md` | (全体) | 精度・堅牢性指標 |
+| Art.15 (P2-2) | `scripts/doctor.py` | (全体) | 精度モニタリングダッシュボード |
+| Art.15 (P2-3) | `core/eu_ai_act_compliance_module.py` | (全体) | `validate_bench_mode_synthetic_data()` |
+| Art.15 (P2-3) | `policies/fuji_default.yaml` | 193-201 | bench_mode安全制限設定 |
+| Art.13 (P2-4) | `docs/user_guide_eu_ai_act.md` | (全体) | エンドユーザー向け使用説明書 |
 
 ---
 
