@@ -194,7 +194,8 @@ class TestDataQualityValidation:
         assert any("unknown_kind" in i for i in result["issues"])
 
     def test_valid_kind_accepted(self) -> None:
-        for kind in ("semantic", "episodic", "training", "validation", "test"):
+        for kind in ("semantic", "episodic", "procedural", "factual",
+                     "training", "validation", "test", "feedback"):
             result = validate_data_quality(
                 text="Sufficient text content for validation check.",
                 kind=kind,
