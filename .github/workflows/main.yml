@@ -81,12 +81,18 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Run npm audit (production-only)
-        working-directory: frontend
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.3"
+
+      - name: Install Node dependencies
         run: |
           set -euxo pipefail
-          npm install --package-lock-only --ignore-scripts
-          npm audit --production --audit-level=high
+          pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit (production-only)
+        run: pnpm --dir frontend audit --audit-level=high --prod
 
   # ============================================================
   # Test matrix
