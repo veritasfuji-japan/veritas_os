@@ -20,10 +20,22 @@ def clean_tools_state(monkeypatch):
     monkeypatch.setattr(tools, "ALLOWED_TOOLS", set(), raising=False)
     monkeypatch.setattr(tools, "BLOCKED_TOOLS", set(), raising=False)
     monkeypatch.setattr(tools, "TOOL_REGISTRY", {}, raising=False)
+    monkeypatch.setattr(tools, "TOOL_METADATA_REGISTRY", {}, raising=False)
     tools.clear_tool_usage_log()
     yield
     # （後片付けは不要。pytest がモジュール属性差し替えを戻してくれる）
 
+
+
+
+def _register_minimal_metadata(tool_name: str) -> None:
+    tools.register_tool_metadata(
+        tool_name,
+        version="test-1",
+        digest=f"digest-{tool_name}",
+        approval_ticket="ticket-test",
+        egress_allowlist=["*"],
+    )
 
 # =========================
 # allowed()
@@ -81,6 +93,7 @@ def test_call_tool_denied_when_not_allowed(clean_tools_state):
 def test_call_tool_not_implemented_when_missing_impl(clean_tools_state):
     # ホワイトリストにはあるが、TOOL_REGISTRY に実装が無いパターン
     tools.ALLOWED_TOOLS.add("github_search")
+    _register_minimal_metadata("github_search")
     # TOOL_REGISTRY は fixture で {} に初期化済み
 
     resp = tools.call_tool("github_search", query="veritas")
@@ -101,6 +114,7 @@ def test_call_tool_success_with_generic_dummy_impl(clean_tools_state):
         return {"ok": True, "results": ["ok"], "error": None}
 
     tools.ALLOWED_TOOLS.add("dummy")
+    _register_minimal_metadata("dummy")
     tools.TOOL_REGISTRY["dummy"] = dummy_tool
 
     resp = tools.call_tool("dummy", foo="bar", answer=42)
@@ -126,6 +140,7 @@ def test_call_tool_web_search_branch_uses_query_and_max_results(clean_tools_stat
         return {"ok": True, "results": [query] * max_results, "error": None}
 
     tools.ALLOWED_TOOLS.add("web_search")
+    _register_minimal_metadata("web_search")
     tools.TOOL_REGISTRY["web_search"] = dummy_web_search
 
     resp = tools.call_tool("web_search", query="AGI", max_results=3)
@@ -144,6 +159,7 @@ def test_call_tool_normalizes_kind_for_registry_lookup(clean_tools_state):
         return {"ok": True, "results": [query], "error": None}
 
     tools.ALLOWED_TOOLS.add("web_search")
+    _register_minimal_metadata("web_search")
     tools.TOOL_REGISTRY["web_search"] = dummy_web_search
 
     resp = tools.call_tool(" Web_Search ", query="veritas", max_results=1)
@@ -176,6 +192,7 @@ def test_get_available_tools_marks_flags(clean_tools_state):
         return {"ok": True, "results": [], "error": None}
 
     tools.ALLOWED_TOOLS.add("dummy")
+    _register_minimal_metadata("dummy")
     tools.TOOL_REGISTRY["dummy"] = dummy_tool
     tools.BLOCKED_TOOLS.add("dangerous")
 
@@ -294,6 +311,7 @@ def test_get_tool_stats_counts_success_and_status(clean_tools_state):
         return {"ok": True, "results": [1], "error": None}
 
     tools.ALLOWED_TOOLS.add("dummy")
+    _register_minimal_metadata("dummy")
     tools.TOOL_REGISTRY["dummy"] = dummy_tool
 
     tools.call_tool("dummy")
@@ -310,3 +328,50 @@ def test_get_tool_stats_counts_success_and_status(clean_tools_state):
     # success_rate が 0〜1 の範囲で、1/2 付近
     assert 0.0 <= stats["success_rate"] <= 1.0
     assert math.isclose(stats["success_rate"], 0.5, rel_tol=1e-6)
+
+
+def test_call_tool_denied_when_provenance_missing(clean_tools_state):
+    tools.ALLOWED_TOOLS.add("dummy")
+    tools.TOOL_REGISTRY["dummy"] = lambda **kwargs: {"ok": True, "results": kwargs}
+
+    response = tools.call_tool("dummy", foo="bar")
+
+    assert response["ok"] is False
+    assert response["meta"]["reason"] == "missing_provenance"
+    assert response["meta"]["missing_field"] == "version"
+
+
+def test_call_tool_denied_when_egress_target_not_allowlisted(clean_tools_state):
+    tools.ALLOWED_TOOLS.add("dummy")
+    tools.register_tool_metadata(
+        "dummy",
+        version="1.0.0",
+        digest="sha256:dummy",
+        approval_ticket="SEC-1",
+        egress_allowlist=["api.example.com"],
+    )
+    tools.TOOL_REGISTRY["dummy"] = lambda **kwargs: {"ok": True, "results": kwargs}
+
+    response = tools.call_tool("dummy", foo="bar", egress_target="https://evil.example")
+
+    assert response["ok"] is False
+    assert response["meta"]["reason"] == "egress_denied"
+
+
+def test_call_tool_attaches_trustlog_correlation_id_in_response_and_log(clean_tools_state):
+    tools.ALLOWED_TOOLS.add("dummy")
+    _register_minimal_metadata("dummy")
+    tools.TOOL_REGISTRY["dummy"] = lambda **kwargs: {
+        "ok": True,
+        "results": [kwargs.get("foo")],
+        "meta": {"status": "ok"},
+    }
+
+    response = tools.call_tool("dummy", foo="bar", trustlog_correlation_id="corr-123")
+
+    assert response["ok"] is True
+    assert response["meta"]["trustlog_correlation_id"] == "corr-123"
+
+    logs = tools.get_tool_usage_log(limit=1)
+    assert logs[0]["trustlog_correlation_id"] == "corr-123"
+    assert logs[0]["tool_version"] == "test-1"

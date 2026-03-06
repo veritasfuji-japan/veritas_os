@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import logging
 import threading
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +70,29 @@ BLOCKED_TOOLS: Set[str] = {
 
 # ツール実装マッピング（存在する実装だけ登録）
 TOOL_REGISTRY: Dict[str, Any] = {}
+
+TOOL_METADATA_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "web_search": {
+        "version": "builtin-1",
+        "digest": "builtin-web-search",
+        "approval_ticket": "builtin-approved",
+        "egress_allowlist": ["*"],
+    },
+    "github_search": {
+        "version": "builtin-1",
+        "digest": "builtin-github-search",
+        "approval_ticket": "builtin-approved",
+        "egress_allowlist": ["api.github.com", "github.com"],
+    },
+    "llm_safety": {
+        "version": "builtin-1",
+        "digest": "builtin-llm-safety",
+        "approval_ticket": "builtin-approved",
+        "egress_allowlist": ["*"],
+    },
+}
+
+REQUIRED_TOOL_METADATA_FIELDS = ("version", "digest", "approval_ticket")
 
 if _web_search_impl is not None:
     TOOL_REGISTRY["web_search"] = _web_search_impl
@@ -145,6 +170,17 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             }
     """
     normalized_kind = str(kind).strip().lower()
+    correlation_id = str(
+        kwargs.get("trustlog_correlation_id")
+        or kwargs.get("correlation_id")
+        or uuid.uuid4()
+    )
+    egress_target = kwargs.get("egress_target")
+    tool_kwargs = {
+        key: value
+        for key, value in kwargs.items()
+        if key not in {"trustlog_correlation_id", "correlation_id", "egress_target"}
+    }
 
     # 許可チェック
     if not allowed(normalized_kind):
@@ -153,9 +189,11 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 
         _log_tool_usage(
             tool=normalized_kind,
-            args=kwargs,
+            args=tool_kwargs,
             status="denied",
             error=error_msg,
+            trustlog_correlation_id=correlation_id,
+            egress_target=egress_target,
         )
 
         return {
@@ -165,6 +203,54 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             "meta": {
                 "status": "denied",
                 "reason": _get_denial_reason(normalized_kind),
+                "trustlog_correlation_id": correlation_id,
+            },
+        }
+
+    provenance_error = _get_missing_provenance_field(normalized_kind)
+    if provenance_error:
+        error_msg = f"Tool provenance metadata missing: {normalized_kind} ({provenance_error})"
+        logger.error(error_msg)
+        _log_tool_usage(
+            tool=normalized_kind,
+            args=tool_kwargs,
+            status="denied",
+            error=error_msg,
+            trustlog_correlation_id=correlation_id,
+            egress_target=egress_target,
+        )
+        return {
+            "ok": False,
+            "results": [],
+            "error": error_msg,
+            "meta": {
+                "status": "denied",
+                "reason": "missing_provenance",
+                "missing_field": provenance_error,
+                "trustlog_correlation_id": correlation_id,
+            },
+        }
+
+    if egress_target and not _is_egress_target_allowed(normalized_kind, egress_target):
+        error_msg = f"Tool egress denied: {normalized_kind} -> {egress_target}"
+        logger.warning(error_msg)
+        _log_tool_usage(
+            tool=normalized_kind,
+            args=tool_kwargs,
+            status="denied",
+            error=error_msg,
+            trustlog_correlation_id=correlation_id,
+            egress_target=str(egress_target),
+        )
+        return {
+            "ok": False,
+            "results": [],
+            "error": error_msg,
+            "meta": {
+                "status": "denied",
+                "reason": "egress_denied",
+                "egress_target": str(egress_target),
+                "trustlog_correlation_id": correlation_id,
             },
         }
 
@@ -177,9 +263,11 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 
         _log_tool_usage(
             tool=normalized_kind,
-            args=kwargs,
+            args=tool_kwargs,
             status="not_implemented",
             error=error_msg,
+            trustlog_correlation_id=correlation_id,
+            egress_target=egress_target,
         )
 
         return {
@@ -188,6 +276,7 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             "error": error_msg,
             "meta": {
                 "status": "not_implemented",
+                "trustlog_correlation_id": correlation_id,
             },
         }
 
@@ -198,24 +287,24 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         # ツール種別に応じた引数の正規化
         if normalized_kind == "web_search":
             result = tool_impl(
-                query=kwargs.get("query", ""),
-                max_results=kwargs.get("max_results", 5),
+                query=tool_kwargs.get("query", ""),
+                max_results=tool_kwargs.get("max_results", 5),
             )
         elif normalized_kind == "github_search":
             result = tool_impl(
-                query=kwargs.get("query", ""),
-                max_results=kwargs.get("max_results", 5),
+                query=tool_kwargs.get("query", ""),
+                max_results=tool_kwargs.get("max_results", 5),
             )
         elif normalized_kind == "llm_safety":
             result = tool_impl(
-                text=kwargs.get("text", "") or kwargs.get("query", ""),
-                context=kwargs.get("context") or {},
-                alternatives=kwargs.get("alternatives") or [],
-                max_categories=kwargs.get("max_categories", 5),
+                text=tool_kwargs.get("text", "") or tool_kwargs.get("query", ""),
+                context=tool_kwargs.get("context") or {},
+                alternatives=tool_kwargs.get("alternatives") or [],
+                max_categories=tool_kwargs.get("max_categories", 5),
             )
         else:
             # その他のツールはそのまま引数を渡す
-            result = tool_impl(**kwargs)
+            result = tool_impl(**tool_kwargs)
 
         end_time = datetime.now(timezone.utc)
         latency_ms = int((end_time - start_time).total_seconds() * 1000)
@@ -223,10 +312,12 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
         # 成功ログ
         _log_tool_usage(
             tool=normalized_kind,
-            args=kwargs,
+            args=tool_kwargs,
             status="success",
             latency_ms=latency_ms,
             result=result,
+            trustlog_correlation_id=correlation_id,
+            egress_target=egress_target,
         )
 
         logger.info(
@@ -235,6 +326,11 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             latency_ms,
         )
 
+        if isinstance(result, dict):
+            meta = result.get("meta") or {}
+            if isinstance(meta, dict):
+                meta["trustlog_correlation_id"] = correlation_id
+                result["meta"] = meta
         # call_tool はツール実装の戻り値をそのまま返す
         return result
 
@@ -244,9 +340,11 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 
         _log_tool_usage(
             tool=normalized_kind,
-            args=kwargs,
+            args=tool_kwargs,
             status="error",
             error=str(e),
+            trustlog_correlation_id=correlation_id,
+            egress_target=egress_target,
         )
 
         return {
@@ -256,6 +354,7 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
             "meta": {
                 "status": "error",
                 "exception_type": type(e).__name__,
+                "trustlog_correlation_id": correlation_id,
             },
         }
 
@@ -319,6 +418,7 @@ def get_available_tools() -> Dict[str, Dict[str, Any]]:
             "implemented": impl is not None,
             "allowed": True,
             "blocked": False,
+            "provenance": get_tool_metadata(tool_name),
         }
 
     for tool_name in BLOCKED_TOOLS:
@@ -327,9 +427,75 @@ def get_available_tools() -> Dict[str, Dict[str, Any]]:
             "implemented": tool_name in TOOL_REGISTRY,
             "allowed": False,
             "blocked": True,
+            "provenance": get_tool_metadata(tool_name),
         }
 
     return tools
+
+
+def register_tool_metadata(
+    tool_name: str,
+    *,
+    version: str,
+    digest: str,
+    approval_ticket: str,
+    egress_allowlist: Optional[List[str]] = None,
+) -> None:
+    """Register required provenance fields and egress policy for a tool."""
+    normalized_tool_name = str(tool_name).strip().lower()
+    TOOL_METADATA_REGISTRY[normalized_tool_name] = {
+        "version": str(version),
+        "digest": str(digest),
+        "approval_ticket": str(approval_ticket),
+        "egress_allowlist": _normalize_egress_allowlist(egress_allowlist),
+    }
+
+
+def get_tool_metadata(tool_name: str) -> Optional[Dict[str, Any]]:
+    """Return a copy of provenance metadata for ``tool_name`` if available."""
+    normalized_tool_name = str(tool_name).strip().lower()
+    metadata = TOOL_METADATA_REGISTRY.get(normalized_tool_name)
+    if metadata is None:
+        return None
+    return dict(metadata)
+
+
+def _normalize_egress_allowlist(allowlist: Optional[List[str]]) -> List[str]:
+    if allowlist is None:
+        return []
+    return [str(item).strip().lower() for item in allowlist if str(item).strip()]
+
+
+def _get_missing_provenance_field(tool_name: str) -> Optional[str]:
+    metadata = TOOL_METADATA_REGISTRY.get(tool_name, {})
+    for field in REQUIRED_TOOL_METADATA_FIELDS:
+        value = metadata.get(field)
+        if value is None or not str(value).strip():
+            return field
+    return None
+
+
+def _normalize_egress_target(egress_target: Any) -> str:
+    normalized_target = str(egress_target).strip().lower()
+    if not normalized_target:
+        return ""
+    parsed = urlparse(normalized_target)
+    if parsed.hostname:
+        return parsed.hostname.lower()
+    return normalized_target.split(":", maxsplit=1)[0]
+
+
+def _is_egress_target_allowed(tool_name: str, egress_target: Any) -> bool:
+    metadata = TOOL_METADATA_REGISTRY.get(tool_name, {})
+    allowlist = _normalize_egress_allowlist(metadata.get("egress_allowlist"))
+    if not allowlist:
+        return False
+    if "*" in allowlist:
+        return True
+    target = _normalize_egress_target(egress_target)
+    if not target:
+        return False
+    return target in allowlist
 
 
 # =========================
@@ -343,6 +509,8 @@ def _log_tool_usage(
     latency_ms: Optional[int] = None,
     error: Optional[str] = None,
     result: Optional[Dict[str, Any]] = None,
+    trustlog_correlation_id: Optional[str] = None,
+    egress_target: Optional[Any] = None,
 ) -> None:
     """
     ツール使用をメモリ内ログに記録
@@ -357,6 +525,18 @@ def _log_tool_usage(
 
     if latency_ms is not None:
         entry["latency_ms"] = latency_ms
+
+    if trustlog_correlation_id:
+        entry["trustlog_correlation_id"] = trustlog_correlation_id
+
+    if egress_target:
+        entry["egress_target"] = str(egress_target)
+
+    metadata = get_tool_metadata(tool)
+    if metadata:
+        entry["tool_version"] = metadata.get("version")
+        entry["tool_digest"] = metadata.get("digest")
+        entry["approval_ticket"] = metadata.get("approval_ticket")
 
     if error:
         entry["error"] = str(error)[:500]
@@ -514,6 +694,8 @@ __all__ = [
     "get_blocked_tools",
     "get_available_tools",
     # ログ・統計
+    "register_tool_metadata",
+    "get_tool_metadata",
     "get_tool_usage_log",
     "clear_tool_usage_log",
     "get_tool_stats",
@@ -521,4 +703,5 @@ __all__ = [
     "ALLOWED_TOOLS",
     "BLOCKED_TOOLS",
     "TOOL_REGISTRY",
+    "TOOL_METADATA_REGISTRY",
 ]
