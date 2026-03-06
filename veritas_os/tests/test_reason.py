@@ -138,6 +138,35 @@ def test_generate_reason_calls_llm_client(monkeypatch):
     assert "# Context" in up
 
 
+def test_generate_reason_with_string_response(monkeypatch):
+    """LLM が文字列を返した場合のフォールバック値を検証する。"""
+
+    def stub_chat(*args, **kwargs):
+        return "テキストのみの理由"
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    res = reason.generate_reason(query="fallback test")
+
+    assert res == {
+        "text": "テキストのみの理由",
+        "source": "openai_llm",
+    }
+
+
+def test_generate_reason_llm_error(monkeypatch):
+    """LLM 呼び出し例外時に error ソースで空文字を返す。"""
+
+    def stub_chat(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    res = reason.generate_reason(query="error test")
+
+    assert res == {"text": "", "source": "error"}
+
+
 # ------------------------------
 # generate_reflection_template
 # ------------------------------
@@ -241,4 +270,57 @@ def test_generate_reflection_template_bad_json(monkeypatch, tmp_path):
     # JSONパース失敗してもログには何も書かれないはず
     assert not meta_path.exists()
 
+
+def test_generate_reflection_template_validates_required_inputs():
+    """query または chosen が欠ける場合は即時に空辞書を返す。"""
+
+    no_query = asyncio.run(
+        reason.generate_reflection_template(
+            query="",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+    no_chosen = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+
+    assert no_query == {}
+    assert no_chosen == {}
+
+
+def test_generate_reflection_template_normalizes_tags_and_priority(monkeypatch):
+    """tags 非配列と priority 範囲外値の正規化を検証する。"""
+
+    def stub_chat(*args, **kwargs):
+        payload = {
+            "pattern": "相談パターン",
+            "guidance": "追加ヒント",
+            "tags": "not-a-list",
+            "priority": "2.4",
+        }
+        return {"text": json.dumps(payload, ensure_ascii=False), "source": "stub"}
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    tmpl = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+
+    assert tmpl["tags"] == ["reflection"]
+    assert tmpl["priority"] == 1.0
 
