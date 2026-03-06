@@ -222,7 +222,8 @@ class TestDataLineage:
             assert len(mem.documents) == 1
             doc = mem.documents[0]
             assert "lineage" in doc
-            assert doc["lineage"]["source"] == "semantic"
+            assert doc["lineage"]["source"] == "internal"
+            assert doc["lineage"]["document_type"] == "semantic"
             assert "ingested_at" in doc["lineage"]
 
     def test_lineage_from_meta(self) -> None:

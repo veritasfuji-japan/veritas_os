@@ -302,7 +302,8 @@ class VectorMemory:
                     doc["lineage"] = lineage
                 else:
                     doc["lineage"] = {
-                        "source": kind,
+                        "source": "internal",
+                        "document_type": kind,
                         "ingested_at": datetime.now(timezone.utc).isoformat(),
                     }
 
