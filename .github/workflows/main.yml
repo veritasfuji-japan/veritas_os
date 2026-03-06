@@ -50,12 +50,54 @@ jobs:
             --severity-level medium \
             -f txt
 
+
+
+  dependency-audit:
+    name: dependency-audit
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install pip-audit
+
+      - name: Block high/critical CVEs in Python dependencies
+        run: pip-audit -r veritas_os/requirements.txt --desc
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "9.15.3"
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run pnpm audit (production-only)
+        run: pnpm audit --audit-level=high --prod
+
   # ============================================================
   # Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: lint
+    needs: [lint, dependency-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -143,7 +185,7 @@ jobs:
 
   test-slow:
     name: test-slow (py3.12)
-    needs: lint
+    needs: [lint, dependency-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -185,7 +227,7 @@ jobs:
   # ============================================================
   frontend-quality-gate:
     name: frontend-${{ matrix.gate }}
-    needs: lint
+    needs: [lint, dependency-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
