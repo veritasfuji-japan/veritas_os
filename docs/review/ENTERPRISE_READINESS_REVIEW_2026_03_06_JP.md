@@ -65,7 +65,7 @@
 2. **P0**: CIに `pip-audit` / `npm audit --production` を追加し、重大CVSSでデプロイブロック。
 3. **P1（対応済み）**: 監査向けにSLO/SLI（API latency, error budget）と運用Runbookを `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に明文化。
 4. **P1（対応済み）**: BFFとAPI双方で相関ID（`X-Trace-Id` / `X-Request-Id`）を必須伝播し、監査容易性を向上。
-5. **P2**: 警告ゼロ運用（または期限付き警告管理）へ移行。
+5. **P2（対応済み）**: `scripts/quality/check_warning_allowlist.py` と `config/test_warning_allowlist.json` を追加し、`pytest` の ignore 警告を期限付きallowlistで管理（期限切れ・メタデータ欠落でfail）。
 
 ## 結論
 - 現状は、**テスト網羅・責務境界・基本セキュリティ機構**の観点で高水準。
