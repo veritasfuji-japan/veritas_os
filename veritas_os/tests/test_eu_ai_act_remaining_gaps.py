@@ -281,7 +281,7 @@ class TestDeploymentReadiness:
         assert any("model_card" in i for i in result["issues"])
         assert any("bias_assessment" in i for i in result["issues"])
 
-    def test_art10_art11_reference(self) -> None:
+    def test_deployment_readiness_includes_article_references(self) -> None:
         result = validate_deployment_readiness()
         assert "Art. 10" in result["eu_ai_act_article"]
         assert "P1-5" in result["eu_ai_act_article"]
