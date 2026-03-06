@@ -29,6 +29,15 @@ from .config import capability_cfg, emit_capability_manifest
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_RETENTION_CLASS = "standard"
+ALLOWED_RETENTION_CLASSES = {
+    "short",
+    "standard",
+    "long",
+    "regulated",
+}
+
+
 def _is_explicitly_enabled(env_key: str) -> bool:
     """Return True when the capability env var is explicitly set to a truthy value."""
     value = os.getenv(env_key)
@@ -824,14 +833,21 @@ class MemoryStore:
             return False
 
     def put(self, user_id: str, key: str, value: Any) -> bool:
-        """KVS put 操作"""
+        """KVS put 操作。
+
+        Lifecycle metadata policy (P1-4):
+        - value.meta.retention_class を標準化
+        - value.meta.expires_at をUTC ISO-8601へ正規化
+        - value.meta.legal_hold を bool 化
+        """
+        normalized_value = self._normalize_lifecycle(value)
         data = self._load_all(copy=True)
 
         # 既存レコードを探す
         found = False
         for r in data:
             if r.get("user_id") == user_id and r.get("key") == key:
-                r["value"] = value
+                r["value"] = normalized_value
                 r["ts"] = time.time()
                 found = True
                 break
@@ -842,7 +858,7 @@ class MemoryStore:
                 {
                     "user_id": user_id,
                     "key": key,
-                    "value": value,
+                    "value": normalized_value,
                     "ts": time.time(),
                 }
             )
@@ -854,15 +870,228 @@ class MemoryStore:
         data = self._load_all(copy=True)
         for r in data:
             if r.get("user_id") == user_id and r.get("key") == key:
+                if self._is_record_expired(r):
+                    return None
                 return r.get("value")
         return None
 
     def list_all(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """全レコードをリスト"""
         data = self._load_all(copy=True)
+        filtered_data = [r for r in data if not self._is_record_expired(r)]
         if user_id:
-            return [r for r in data if r.get("user_id") == user_id]
-        return data
+            return [r for r in filtered_data if r.get("user_id") == user_id]
+        return filtered_data
+
+    @staticmethod
+    def _parse_expires_at(expires_at: Any) -> Optional[str]:
+        """Normalize expires_at to UTC ISO8601 string, or None."""
+        if expires_at in (None, ""):
+            return None
+
+        if isinstance(expires_at, (int, float)):
+            dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+            return dt.isoformat()
+
+        if isinstance(expires_at, str):
+            raw = expires_at.strip()
+            if not raw:
+                return None
+            iso = raw.replace("Z", "+00:00")
+            try:
+                dt = datetime.fromisoformat(iso)
+            except ValueError:
+                return None
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc).isoformat()
+
+        return None
+
+    @staticmethod
+    def _normalize_lifecycle(value: Any) -> Any:
+        """Attach lifecycle fields only to memory-document style dict payloads.
+
+        Backward compatibility:
+        - Generic KVS dictionaries (e.g. ``{"foo": "bar"}``) must be
+          preserved as-is.
+        - Lifecycle normalization is applied only when the value looks like a
+          MemoryOS document (has any of ``text/kind/tags/meta`` keys).
+        """
+        if not isinstance(value, dict):
+            return value
+
+        lifecycle_target_keys = {"text", "kind", "tags", "meta"}
+        if not any(key in value for key in lifecycle_target_keys):
+            return value
+
+        normalized = dict(value)
+        meta = dict(normalized.get("meta") or {})
+
+        retention_class = str(
+            meta.get("retention_class") or DEFAULT_RETENTION_CLASS
+        ).strip().lower()
+        if retention_class not in ALLOWED_RETENTION_CLASSES:
+            retention_class = DEFAULT_RETENTION_CLASS
+
+        legal_hold = bool(meta.get("legal_hold", False))
+        normalized_expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
+
+        meta["retention_class"] = retention_class
+        meta["legal_hold"] = legal_hold
+        meta["expires_at"] = normalized_expires_at
+
+        normalized["meta"] = meta
+        return normalized
+
+    @staticmethod
+    def _is_record_expired(record: Dict[str, Any], now_ts: Optional[float] = None) -> bool:
+        """Return True if record has passed expires_at and is not on legal hold."""
+        value = record.get("value") or {}
+        if not isinstance(value, dict):
+            return False
+
+        meta = value.get("meta") or {}
+        if not isinstance(meta, dict):
+            return False
+
+        if bool(meta.get("legal_hold", False)):
+            return False
+
+        expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
+        if not expires_at:
+            return False
+
+        try:
+            expire_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+
+        now = now_ts if now_ts is not None else time.time()
+        return expire_dt.timestamp() <= float(now)
+
+    def erase_user(
+        self,
+        user_id: str,
+        reason: str,
+        actor: str,
+    ) -> Dict[str, Any]:
+        """Erase user records while honoring legal hold, with audit trail.
+
+        Also cascades deletion to semantic memories distilled from erased
+        episodic records via ``meta.source_episode_keys`` linkage.
+        """
+        data = self._load_all(copy=True, use_cache=False)
+        to_delete_keys: set[str] = set()
+        legal_hold_count = 0
+
+        for record in data:
+            if record.get("user_id") != user_id:
+                continue
+            if self._is_record_legal_hold(record):
+                legal_hold_count += 1
+                continue
+            value = record.get("value") or {}
+            if isinstance(value, dict):
+                source_keys = (value.get("meta") or {}).get("source_episode_keys")
+                if isinstance(source_keys, list) and source_keys:
+                    # semantic lineage records are deleted in cascade phase.
+                    continue
+            to_delete_keys.add(str(record.get("key") or ""))
+
+        cascade_deleted = 0
+        kept_records: List[Dict[str, Any]] = []
+        deleted_records = 0
+
+        for record in data:
+            record_user = record.get("user_id")
+            record_key = str(record.get("key") or "")
+
+            if record_user == user_id and record_key in to_delete_keys:
+                deleted_records += 1
+                continue
+
+            if self._should_cascade_delete_semantic(record, user_id, to_delete_keys):
+                cascade_deleted += 1
+                continue
+
+            kept_records.append(record)
+
+        report = {
+            "target_user_id": user_id,
+            "deleted_count": deleted_records,
+            "cascade_deleted_count": cascade_deleted,
+            "protected_by_legal_hold": legal_hold_count,
+            "reason": reason,
+            "actor": actor,
+            "executed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        audit_record = {
+            "user_id": "__audit__",
+            "key": f"erase_{user_id}_{int(time.time())}",
+            "value": {
+                "kind": "audit",
+                "text": "memory erase executed",
+                "meta": {
+                    "event": "memory_erase",
+                    "payload": report,
+                    "retention_class": "regulated",
+                    "legal_hold": True,
+                    "expires_at": None,
+                },
+            },
+            "ts": time.time(),
+        }
+        kept_records.append(audit_record)
+
+        saved = self._save_all(kept_records)
+        report["ok"] = bool(saved)
+        return report
+
+    @staticmethod
+    def _is_record_legal_hold(record: Dict[str, Any]) -> bool:
+        """Return True when record carries legal hold metadata."""
+        value = record.get("value") or {}
+        if not isinstance(value, dict):
+            return False
+        meta = value.get("meta") or {}
+        if not isinstance(meta, dict):
+            return False
+        return bool(meta.get("legal_hold", False))
+
+    @staticmethod
+    def _should_cascade_delete_semantic(
+        record: Dict[str, Any],
+        user_id: str,
+        erased_keys: set[str],
+    ) -> bool:
+        """Check semantic distill lineage and decide cascade deletion."""
+        if not erased_keys:
+            return False
+
+        value = record.get("value") or {}
+        if not isinstance(value, dict):
+            return False
+
+        if str(value.get("kind") or "") != "semantic":
+            return False
+
+        meta = value.get("meta") or {}
+        if not isinstance(meta, dict):
+            return False
+
+        if str(meta.get("user_id") or "") != user_id:
+            return False
+
+        if bool(meta.get("legal_hold", False)):
+            return False
+
+        source_keys = meta.get("source_episode_keys") or []
+        if not isinstance(source_keys, list):
+            return False
+
+        return any(str(key) in erased_keys for key in source_keys)
 
     def append_history(self, user_id: str, record: Dict[str, Any]) -> bool:
         """履歴を追加"""
@@ -1633,6 +1862,7 @@ def distill_memory_for_user(
             continue
 
         ep = {
+            "source_key": r.get("key"),
             "text": text,
             "tags": ep_tags,
             "ts": r.get("ts") or time.time(),
@@ -1708,6 +1938,11 @@ def distill_memory_for_user(
     meta = {
         "user_id": user_id,
         "source": "distill_memory_for_user",
+        "source_episode_keys": [
+            str(ep.get("source_key"))
+            for ep in target_eps
+            if ep.get("source_key")
+        ],
         "item_count": len(target_eps),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }

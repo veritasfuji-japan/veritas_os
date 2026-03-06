@@ -42,6 +42,103 @@ def test_memory_store_put_get_list_recent(tmp_path: Path):
     assert recent[0]["key"] == "k1"
 
 
+def test_memory_store_lifecycle_expiry_and_legal_hold(tmp_path: Path):
+    """Retention lifecycle metadata should control visibility on reads."""
+    path = tmp_path / "memory.json"
+    store = memory.MemoryStore(path)
+
+    store.put(
+        "u1",
+        "expired",
+        {
+            "text": "expired item",
+            "meta": {
+                "expires_at": "2000-01-01T00:00:00+00:00",
+                "legal_hold": False,
+            },
+        },
+    )
+    store.put(
+        "u1",
+        "held",
+        {
+            "text": "legal hold item",
+            "meta": {
+                "expires_at": "2000-01-01T00:00:00+00:00",
+                "legal_hold": True,
+            },
+        },
+    )
+
+    assert store.get("u1", "expired") is None
+    held = store.get("u1", "held")
+    assert isinstance(held, dict)
+    assert held["meta"]["legal_hold"] is True
+
+    listed_keys = {item["key"] for item in store.list_all("u1")}
+    assert "expired" not in listed_keys
+    assert "held" in listed_keys
+
+
+def test_memory_store_put_preserves_generic_kvs_dict(tmp_path: Path):
+    """Generic KVS dict values should remain unchanged for compatibility."""
+    path = tmp_path / "memory.json"
+    store = memory.MemoryStore(path)
+
+    payload = {"foo": "bar", "count": 1}
+    store.put("u1", "legacy", payload)
+
+    got = store.get("u1", "legacy")
+    assert got == payload
+
+
+def test_memory_store_erase_user_with_cascade_and_legal_hold(tmp_path: Path):
+    """erase_user should keep legal hold records and cascade semantic delete."""
+    path = tmp_path / "memory.json"
+    store = memory.MemoryStore(path)
+
+    store.put(
+        "u1",
+        "ep1",
+        {"kind": "episodic", "text": "to be erased", "meta": {"user_id": "u1"}},
+    )
+    store.put(
+        "u1",
+        "ep2",
+        {
+            "kind": "episodic",
+            "text": "protected",
+            "meta": {"user_id": "u1", "legal_hold": True},
+        },
+    )
+    store.put(
+        "u1",
+        "sem1",
+        {
+            "kind": "semantic",
+            "text": "distilled",
+            "meta": {
+                "user_id": "u1",
+                "source_episode_keys": ["ep1"],
+            },
+        },
+    )
+
+    report = store.erase_user(user_id="u1", reason="gdpr", actor="tester")
+
+    assert report["ok"] is True
+    assert report["deleted_count"] == 1
+    assert report["cascade_deleted_count"] == 1
+    assert report["protected_by_legal_hold"] == 1
+
+    remaining = store._load_all(copy=True, use_cache=False)
+    remaining_keys = {record["key"] for record in remaining}
+    assert "ep2" in remaining_keys
+    assert "ep1" not in remaining_keys
+    assert "sem1" not in remaining_keys
+    assert any(record["user_id"] == "__audit__" for record in remaining)
+
+
 # -------------------------------------------------
 # 1.5. Lazy MemoryStore initialization
 # -------------------------------------------------
