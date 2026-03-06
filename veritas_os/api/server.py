@@ -21,7 +21,7 @@ from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Protocol, Tuple
 
 # ---- ロガー設定（標準化: print → logging）----
 logger = logging.getLogger(__name__)
@@ -774,6 +774,226 @@ _AUTH_FAIL_BUCKET_MAX = 10000
 _auth_fail_bucket: Dict[str, Tuple[int, float]] = {}
 _auth_fail_lock = threading.Lock()
 
+
+class AuthSecurityStore(Protocol):
+    """Shared store interface for auth security controls.
+
+    This abstraction keeps auth-layer replay prevention and throttling logic
+    independent from Planner / Kernel / FUJI / MemoryOS responsibilities.
+    """
+
+    def register_nonce(self, nonce: str, ttl_sec: float) -> bool:
+        """Return True when nonce is newly registered, False on replay."""
+
+    def increment_auth_failure(
+        self,
+        client_ip: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        """Return True when limit is exceeded for the key within the window."""
+
+    def increment_rate_limit(
+        self,
+        api_key: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        """Return True when rate limit is exceeded for the key in the window."""
+
+
+class InMemoryAuthSecurityStore:
+    """Thread-safe in-memory implementation for auth security controls.
+
+    Security warning:
+        This mode is process-local. In horizontally scaled deployments,
+        replay protection and throttling consistency are not guaranteed.
+    """
+
+    def register_nonce(self, nonce: str, ttl_sec: float) -> bool:
+        with _nonce_lock:
+            _cleanup_nonces_unsafe()
+            if nonce in _nonce_store:
+                return False
+            _nonce_store[nonce] = time.time() + ttl_sec
+            return True
+
+    def increment_auth_failure(
+        self,
+        client_ip: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        now = time.time()
+        with _auth_fail_lock:
+            _cleanup_auth_fail_bucket_unsafe(now)
+            count, start = _auth_fail_bucket.get(client_ip, (0, now))
+            if now - start > window_sec:
+                _auth_fail_bucket[client_ip] = (1, now)
+                return False
+            if count + 1 > limit:
+                return True
+            _auth_fail_bucket[client_ip] = (count + 1, start)
+            return False
+
+    def increment_rate_limit(
+        self,
+        api_key: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        now = time.time()
+        with _rate_lock:
+            _cleanup_rate_bucket_unsafe()
+            count, start = _rate_bucket.get(api_key, (0, now))
+            if now - start > window_sec:
+                _rate_bucket[api_key] = (1, now)
+                return False
+            if count + 1 > limit:
+                return True
+            _rate_bucket[api_key] = (count + 1, start)
+            return False
+
+
+class RedisAuthSecurityStore:
+    """Redis-backed auth security store for distributed deployments."""
+
+    def __init__(self, redis_client: Any):
+        self._redis = redis_client
+
+    def register_nonce(self, nonce: str, ttl_sec: float) -> bool:
+        ttl_ms = max(int(ttl_sec * 1000), 1)
+        result = self._redis.set(name=f"veritas:nonce:{nonce}", value="1", nx=True, px=ttl_ms)
+        return bool(result)
+
+    def increment_auth_failure(
+        self,
+        client_ip: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        key = f"veritas:auth_fail:{client_ip}"
+        return self._increment_with_window(key=key, limit=limit, window_sec=window_sec)
+
+    def increment_rate_limit(
+        self,
+        api_key: str,
+        limit: int,
+        window_sec: float,
+    ) -> bool:
+        key = f"veritas:rate:{api_key}"
+        return self._increment_with_window(key=key, limit=limit, window_sec=window_sec)
+
+    def _increment_with_window(self, key: str, limit: int, window_sec: float) -> bool:
+        ttl_ms = max(int(window_sec * 1000), 1)
+        with self._redis.pipeline(transaction=True) as pipe:
+            pipe.incr(key)
+            pipe.pexpire(key, ttl_ms, nx=True)
+            count, _ = pipe.execute()
+        return int(count) > limit
+
+
+def _create_auth_security_store() -> AuthSecurityStore:
+    """Create auth security store from environment configuration.
+
+    Supported modes:
+        - ``memory`` (default): process-local fallback.
+        - ``redis``: shared distributed mode via ``VERITAS_AUTH_REDIS_URL``.
+    """
+    mode = (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower()
+    if mode != "redis":
+        return InMemoryAuthSecurityStore()
+
+    redis_url = (os.getenv("VERITAS_AUTH_REDIS_URL") or "").strip()
+    if not redis_url:
+        logger.warning(
+            "VERITAS_AUTH_SECURITY_STORE=redis but VERITAS_AUTH_REDIS_URL is missing; "
+            "falling back to in-memory auth store (not distributed-safe)."
+        )
+        return InMemoryAuthSecurityStore()
+
+    try:
+        redis_module = importlib.import_module("redis")
+        client = redis_module.Redis.from_url(redis_url, decode_responses=True)
+        client.ping()
+        logger.info("Auth security store initialized in redis mode")
+        return RedisAuthSecurityStore(client)
+    except Exception as exc:
+        logger.warning(
+            "Failed to initialize redis auth store (%s); falling back to in-memory "
+            "auth store (not distributed-safe).",
+            _errstr(exc),
+        )
+        return InMemoryAuthSecurityStore()
+
+
+_AUTH_SECURITY_STORE = _create_auth_security_store()
+_AUTH_REJECT_REASON_METRICS: Dict[str, int] = {}
+_AUTH_REJECT_REASON_LOCK = threading.Lock()
+
+
+def _auth_store_failure_mode() -> str:
+    """Return auth store failure policy: ``open`` or ``closed``."""
+    raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
+    if raw in {"open", "closed"}:
+        return raw
+    return "closed"
+
+
+def _auth_store_register_nonce(nonce: str, ttl_sec: float) -> bool:
+    """Register nonce with explicit fail-open/fail-closed fallback policy."""
+    try:
+        return _AUTH_SECURITY_STORE.register_nonce(nonce=nonce, ttl_sec=ttl_sec)
+    except Exception as exc:
+        mode = _auth_store_failure_mode()
+        logger.warning("Auth nonce store failure (%s), mode=%s", _errstr(exc), mode)
+        _record_auth_reject_reason("auth_store_nonce_error")
+        if mode == "open":
+            return True
+        return False
+
+
+def _auth_store_increment_auth_failure(client_ip: str, limit: int, window_sec: float) -> bool:
+    """Increment auth failure counter with explicit fail-open/fail-closed policy."""
+    try:
+        return _AUTH_SECURITY_STORE.increment_auth_failure(
+            client_ip=client_ip,
+            limit=limit,
+            window_sec=window_sec,
+        )
+    except Exception as exc:
+        mode = _auth_store_failure_mode()
+        logger.warning("Auth failure store error (%s), mode=%s", _errstr(exc), mode)
+        _record_auth_reject_reason("auth_store_auth_fail_error")
+        return mode == "closed"
+
+
+def _auth_store_increment_rate_limit(api_key: str, limit: int, window_sec: float) -> bool:
+    """Increment request rate counter with explicit fail-open/fail-closed policy."""
+    try:
+        return _AUTH_SECURITY_STORE.increment_rate_limit(
+            api_key=api_key,
+            limit=limit,
+            window_sec=window_sec,
+        )
+    except Exception as exc:
+        mode = _auth_store_failure_mode()
+        logger.warning("Auth rate-limit store error (%s), mode=%s", _errstr(exc), mode)
+        _record_auth_reject_reason("auth_store_rate_limit_error")
+        return mode == "closed"
+
+
+def _record_auth_reject_reason(reason_code: str) -> None:
+    """Track reject reason counters for operational audit metrics."""
+    with _AUTH_REJECT_REASON_LOCK:
+        _AUTH_REJECT_REASON_METRICS[reason_code] = _AUTH_REJECT_REASON_METRICS.get(reason_code, 0) + 1
+
+
+def _snapshot_auth_reject_reason_metrics() -> Dict[str, int]:
+    """Return thread-safe snapshot of auth reject reason counters."""
+    with _AUTH_REJECT_REASON_LOCK:
+        return dict(_AUTH_REJECT_REASON_METRICS)
+
 # 起動時に一度だけ警告を出力（テスト互換性のため）
 if not os.getenv("VERITAS_API_KEY"):
     logger.warning("VERITAS_API_KEY 未設定（テストでは 500 を返す契約）")
@@ -878,20 +1098,14 @@ def _cleanup_auth_fail_bucket_unsafe(now: float) -> None:
 def _enforce_auth_failure_rate_limit(client_ip: str) -> None:
     """Rate-limit repeated authentication failures by client IP."""
     key = client_ip.strip() or "unknown"
-    now = time.time()
-
-    with _auth_fail_lock:
-        _cleanup_auth_fail_bucket_unsafe(now)
-        count, start = _auth_fail_bucket.get(key, (0, now))
-
-        if now - start > _AUTH_FAIL_WINDOW:
-            _auth_fail_bucket[key] = (1, now)
-            return
-
-        if count + 1 > _AUTH_FAIL_RATE_LIMIT:
-            raise HTTPException(status_code=429, detail="Too many auth failures")
-
-        _auth_fail_bucket[key] = (count + 1, start)
+    exceeded = _auth_store_increment_auth_failure(
+        client_ip=key,
+        limit=_AUTH_FAIL_RATE_LIMIT,
+        window_sec=_AUTH_FAIL_WINDOW,
+    )
+    if exceeded:
+        _record_auth_reject_reason("auth_failure_rate_limited")
+        raise HTTPException(status_code=429, detail="Too many auth failures")
 
 
 def require_api_key(
@@ -906,13 +1120,16 @@ def require_api_key(
     """
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
+        _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
     client_ip = _resolve_client_ip(request=request, x_forwarded_for=x_forwarded_for)
     if not x_api_key:
+        _record_auth_reject_reason("api_key_missing")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(x_api_key.strip(), expected):
+        _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
@@ -982,6 +1199,7 @@ def require_api_key_header_or_query(
     """
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
+        _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
     client_ip = _resolve_client_ip(request=request, x_forwarded_for=x_forwarded_for)
@@ -991,6 +1209,7 @@ def require_api_key_header_or_query(
     candidate = header_candidate
     if not candidate and query_candidate:
         if not _allow_sse_query_api_key():
+            _record_auth_reject_reason("api_key_query_disabled")
             _enforce_auth_failure_rate_limit(client_ip)
             raise HTTPException(status_code=401, detail="Query API key is disabled; use X-API-Key header")
         logger.warning(
@@ -1000,9 +1219,11 @@ def require_api_key_header_or_query(
         candidate = query_candidate
 
     if not candidate:
+        _record_auth_reject_reason("api_key_missing")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
     if not secrets.compare_digest(candidate, expected):
+        _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
@@ -1167,12 +1388,7 @@ def _check_and_register_nonce(nonce: str) -> bool:
     if len(nonce) > _NONCE_MAX_LENGTH:
         return False
 
-    with _nonce_lock:
-        _cleanup_nonces_unsafe()
-        if nonce in _nonce_store:
-            return False
-        _nonce_store[nonce] = time.time() + _NONCE_TTL_SEC
-        return True
+    return _auth_store_register_nonce(nonce=nonce, ttl_sec=_NONCE_TTL_SEC)
 
 
 async def verify_signature(
@@ -1209,24 +1425,30 @@ async def verify_signature(
     api_key = _header_or_none(x_api_key)
 
     if not (api_key and timestamp and nonce and signature):
+        _record_auth_reject_reason("signature_missing_headers")
         raise HTTPException(status_code=401, detail="Missing auth headers")
     try:
         ts = int(timestamp)
     except (ValueError, TypeError):
+        _record_auth_reject_reason("signature_invalid_timestamp")
         raise HTTPException(status_code=401, detail="Invalid timestamp") from None
     if abs(int(time.time()) - ts) > _NONCE_TTL_SEC:
+        _record_auth_reject_reason("signature_timestamp_out_of_range")
         raise HTTPException(status_code=401, detail="Timestamp out of range")
     if not _check_and_register_nonce(nonce):
+        _record_auth_reject_reason("signature_replay_detected")
         raise HTTPException(status_code=401, detail="Replay detected")
 
     body_bytes = await request.body()
     try:
         body = body_bytes.decode("utf-8") if body_bytes else ""
     except UnicodeDecodeError:
+        _record_auth_reject_reason("signature_invalid_utf8_body")
         raise HTTPException(status_code=400, detail="Request body is not valid UTF-8") from None
     payload = f"{ts}\n{nonce}\n{body}"
     mac = hmac.new(api_secret, payload.encode("utf-8"), hashlib.sha256).hexdigest().lower()
     if not hmac.compare_digest(mac, signature.lower()):
+        _record_auth_reject_reason("signature_invalid")
         raise HTTPException(status_code=401, detail="Invalid signature")
     return True
 
@@ -1267,25 +1489,19 @@ def enforce_rate_limit(x_api_key: Optional[str] = Header(default=None, alias="X-
     ★ セキュリティ修正: スレッドセーフなレート制限
     """
     if not x_api_key:
+        _record_auth_reject_reason("rate_limit_missing_api_key")
         raise HTTPException(status_code=401, detail="Missing API key")
 
     key = x_api_key.strip()
-    now = time.time()
-
-    with _rate_lock:
-        _cleanup_rate_bucket_unsafe()
-
-        count, start = _rate_bucket.get(key, (0, now))
-
-        if now - start > _RATE_WINDOW:
-            _rate_bucket[key] = (1, now)
-            return True
-
-        if count + 1 > _RATE_LIMIT:
-            raise HTTPException(status_code=429, detail="Rate limit exceeded")
-
-        _rate_bucket[key] = (count + 1, start)
-        return True
+    exceeded = _auth_store_increment_rate_limit(
+        api_key=key,
+        limit=_RATE_LIMIT,
+        window_sec=_RATE_WINDOW,
+    )
+    if exceeded:
+        _record_auth_reject_reason("rate_limit_exceeded")
+        raise HTTPException(status_code=429, detail="Rate limit exceeded")
+    return True
 
 
 # ==============================
@@ -2266,6 +2482,9 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "last_decide_at": last_at,
         "server_time": utc_now_iso_z(),
         "pipeline_ok": get_decision_pipeline() is not None,
+        "auth_store_mode": (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower() or "memory",
+        "auth_store_failure_mode": _auth_store_failure_mode(),
+        "auth_reject_reasons": _snapshot_auth_reject_reason_metrics(),
     }
     # ★ M-13 修正: 内部エラー詳細はデバッグモード時のみ公開
     if _is_debug_mode():
