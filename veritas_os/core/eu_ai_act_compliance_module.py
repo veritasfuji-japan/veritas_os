@@ -1377,3 +1377,101 @@ def validate_data_quality(
         "quality_score": round(quality_score, 2),
         "eu_ai_act_article": "Art. 10",
     }
+
+
+# ---------------------------------------------------------------------------
+# P1-5: Deployment readiness check — model card / bias / DPA freshness
+# ---------------------------------------------------------------------------
+# Maximum age (in days) before a compliance artefact is considered stale.
+_MODEL_CARD_MAX_AGE_DAYS = 90
+_BIAS_ASSESSMENT_MAX_AGE_DAYS = 90
+_DPA_CHECKLIST_MAX_AGE_DAYS = 180
+
+# Expected artefact paths (relative to repository root).
+_DEPLOYMENT_READINESS_ARTEFACTS: tuple[tuple[str, str, int], ...] = (
+    (
+        "model_card",
+        "docs/eu_ai_act/model_card_gpt41_mini.md",
+        _MODEL_CARD_MAX_AGE_DAYS,
+    ),
+    (
+        "bias_assessment",
+        "docs/eu_ai_act/bias_assessment_report.md",
+        _BIAS_ASSESSMENT_MAX_AGE_DAYS,
+    ),
+    (
+        "dpa_checklist",
+        "docs/eu_ai_act/third_party_model_dpa_checklist.md",
+        _DPA_CHECKLIST_MAX_AGE_DAYS,
+    ),
+)
+
+
+def validate_deployment_readiness(
+    *,
+    repo_root: str | None = None,
+) -> Dict[str, Any]:
+    """Check whether compliance artefacts are up-to-date for deployment.
+
+    P1-5 remaining gate: Before deploying in a high-risk context, the
+    following artefacts must exist and have been updated within their
+    maximum allowed staleness window:
+    - Model card (90 days)
+    - Bias assessment report (90 days)
+    - DPA checklist (180 days)
+
+    Args:
+        repo_root: Absolute path to the repository root.  When ``None``
+            the function walks up from this file to locate the repo root.
+
+    Returns:
+        Dict with ``ready`` (bool), ``checks`` (per-artefact status),
+        and ``issues`` (list of human-readable issues).
+    """
+    import pathlib
+
+    if repo_root is None:
+        # Walk up from this file: core/ -> veritas_os/ -> repo root
+        repo_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+
+    now = datetime.now(timezone.utc)
+    checks: Dict[str, Any] = {}
+    issues: List[str] = []
+
+    for name, rel_path, max_age_days in _DEPLOYMENT_READINESS_ARTEFACTS:
+        full_path = os.path.join(repo_root, rel_path)
+        if not os.path.isfile(full_path):
+            checks[name] = {"exists": False, "path": rel_path}
+            issues.append(f"{name}: file not found ({rel_path})")
+            continue
+
+        try:
+            mtime = os.path.getmtime(full_path)
+        except OSError:
+            checks[name] = {"exists": True, "readable": False, "path": rel_path}
+            issues.append(f"{name}: unable to read modification time ({rel_path})")
+            continue
+
+        last_modified = datetime.fromtimestamp(mtime, tz=timezone.utc)
+        age_days = (now - last_modified).days
+        stale = age_days > max_age_days
+
+        checks[name] = {
+            "exists": True,
+            "path": rel_path,
+            "last_modified": last_modified.isoformat(),
+            "age_days": age_days,
+            "max_age_days": max_age_days,
+            "stale": stale,
+        }
+        if stale:
+            issues.append(
+                f"{name}: last updated {age_days} days ago (max {max_age_days})"
+            )
+
+    return {
+        "ready": len(issues) == 0,
+        "checks": checks,
+        "issues": issues,
+        "eu_ai_act_article": "Art. 10 / Art. 11 (P1-5)",
+    }

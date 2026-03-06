@@ -278,6 +278,20 @@ class VectorMemory:
         if not text or not text.strip():
             return False
 
+        # GAP-05 (Art. 10): Data quality validation at ingestion
+        try:
+            from veritas_os.core.eu_ai_act_compliance_module import validate_data_quality
+
+            quality = validate_data_quality(text=text, kind=kind, meta=meta)
+            if not quality["passed"]:
+                logger.warning(
+                    "[VectorMemory] Data quality check failed (Art. 10): %s",
+                    quality["issues"],
+                )
+                return False
+        except ImportError:
+            pass
+
         try:
             import numpy as np
 
