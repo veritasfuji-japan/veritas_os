@@ -15,6 +15,12 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
+      - name: Prepare image tags
+        id: image
+        run: |
+          repo_lower="${GITHUB_REPOSITORY,,}"
+          echo "name=ghcr.io/${repo_lower}" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -34,13 +40,13 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
