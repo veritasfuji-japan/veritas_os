@@ -65,6 +65,10 @@ from veritas_os.api.pipeline_orchestrator import (
     update_runtime_config,
 )
 from veritas_os.core.config import eu_ai_act_cfg
+from veritas_os.core.eu_ai_act_compliance_module import (
+    SystemHaltController,
+    validate_deployment_readiness,
+)
 
 from pydantic import BaseModel, Field
 
@@ -2903,4 +2907,100 @@ def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="t
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to generate governance report"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Art. 14(4): System halt / resume API endpoints
+# ---------------------------------------------------------------------------
+
+
+class SystemHaltRequest(BaseModel):
+    """Request body for POST /v1/system/halt."""
+
+    reason: str = Field(..., min_length=1, max_length=500)
+    operator: str = Field(..., min_length=1, max_length=200)
+
+
+class SystemResumeRequest(BaseModel):
+    """Request body for POST /v1/system/resume."""
+
+    operator: str = Field(..., min_length=1, max_length=200)
+    comment: str = Field(default="", max_length=500)
+
+
+@app.post("/v1/system/halt", dependencies=[Depends(require_api_key)])
+def system_halt(body: SystemHaltRequest):
+    """Halt the AI decision system (Art. 14(4) emergency stop).
+
+    When halted, all ``/v1/decide`` requests are refused until a human
+    operator explicitly resumes the system.
+    """
+    try:
+        result = SystemHaltController.halt(
+            reason=body.reason, operator=body.operator,
+        )
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.error("system_halt failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to halt system"},
+        )
+
+
+@app.post("/v1/system/resume", dependencies=[Depends(require_api_key)])
+def system_resume(body: SystemResumeRequest):
+    """Resume the AI decision system after a halt (Art. 14(4)).
+
+    Only authorised operators should call this endpoint.  The resumption
+    is audit-logged with operator identity and an optional comment.
+    """
+    try:
+        result = SystemHaltController.resume(
+            operator=body.operator, comment=body.comment,
+        )
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.error("system_resume failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to resume system"},
+        )
+
+
+@app.get("/v1/system/halt-status", dependencies=[Depends(require_api_key)])
+def system_halt_status():
+    """Return the current halt status of the AI decision system."""
+    try:
+        status = SystemHaltController.status()
+        return {"ok": True, **status}
+    except Exception as e:
+        logger.error("system_halt_status failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to retrieve halt status"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# P1-5: Deployment readiness check
+# ---------------------------------------------------------------------------
+
+
+@app.get("/v1/compliance/deployment-readiness", dependencies=[Depends(require_api_key)])
+def compliance_deployment_readiness():
+    """Check deployment readiness for EU AI Act compliance (P1-5).
+
+    Validates model card freshness, bias assessment status, and DPA
+    checklist to determine if the system is ready for high-risk deployment.
+    """
+    try:
+        result = validate_deployment_readiness()
+        return {"ok": True, **result}
+    except Exception as e:
+        logger.error("compliance_deployment_readiness failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to check deployment readiness"},
         )

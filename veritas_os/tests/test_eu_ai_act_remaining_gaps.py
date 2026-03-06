@@ -3,6 +3,7 @@
 GAP-01: Art. 5  — Expanded prohibited-pattern detection (synonyms, evasion)
 Art. 14(4)     — System halt / emergency stop controller
 GAP-05: Art. 10 — Data quality validation for dataset writes
+P1-5:          — Deployment readiness check
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from veritas_os.core.eu_ai_act_compliance_module import (
     SystemHaltController,
     eu_compliance_pipeline,
     validate_data_quality,
+    validate_deployment_readiness,
 )
 
 
@@ -226,3 +228,60 @@ class TestDataQualityValidation:
     def test_art10_reference(self) -> None:
         result = validate_data_quality(text="some valid text content here")
         assert result["eu_ai_act_article"] == "Art. 10"
+
+
+# =====================================================================
+# P1-5: Deployment readiness check
+# =====================================================================
+import os
+import tempfile
+
+
+class TestDeploymentReadiness:
+    """Tests for validate_deployment_readiness (P1-5)."""
+
+    def test_ready_with_all_artefacts(self) -> None:
+        """When all artefacts exist and are fresh, readiness passes."""
+        result = validate_deployment_readiness()
+        assert result["ready"] is True
+        assert result["issues"] == []
+        assert "model_card" in result["checks"]
+        assert "bias_assessment" in result["checks"]
+        assert "dpa_checklist" in result["checks"]
+
+    def test_missing_artefact(self) -> None:
+        """When an artefact is missing, readiness fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = validate_deployment_readiness(repo_root=tmpdir)
+        assert result["ready"] is False
+        assert len(result["issues"]) == 3
+        assert any("model_card" in i for i in result["issues"])
+
+    def test_stale_artefact(self) -> None:
+        """When an artefact exists but is stale, readiness fails."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create the directory structure and files
+            docs_dir = os.path.join(tmpdir, "docs", "eu_ai_act")
+            os.makedirs(docs_dir)
+            for fname in (
+                "model_card_gpt41_mini.md",
+                "bias_assessment_report.md",
+                "third_party_model_dpa_checklist.md",
+            ):
+                fpath = os.path.join(docs_dir, fname)
+                with open(fpath, "w") as f:
+                    f.write("# placeholder")
+                # Set mtime to 200 days ago
+                old_time = os.path.getmtime(fpath) - (200 * 86400)
+                os.utime(fpath, (old_time, old_time))
+
+            result = validate_deployment_readiness(repo_root=tmpdir)
+
+        assert result["ready"] is False
+        assert any("model_card" in i for i in result["issues"])
+        assert any("bias_assessment" in i for i in result["issues"])
+
+    def test_deployment_readiness_includes_article_references(self) -> None:
+        result = validate_deployment_readiness()
+        assert "Art. 10" in result["eu_ai_act_article"]
+        assert "P1-5" in result["eu_ai_act_article"]
