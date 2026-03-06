@@ -215,3 +215,102 @@ def test_run_heal_handles_timeout(monkeypatch, tmp_path):
     ok, info = alert_doctor.run_heal()
     assert ok is False
     assert info == "heal timeout: partial output"
+
+
+def test_post_slack_retries_and_returns_false_on_persistent_failure(monkeypatch):
+    """post_slack should retry and eventually return False on repeated errors."""
+    monkeypatch.setattr(
+        alert_doctor,
+        "WEBHOOK",
+        "https://hooks.slack.com/services/a/b/c",
+    )
+
+    calls = {"count": 0}
+
+    def _always_fail(*_args, **_kwargs):
+        calls["count"] += 1
+        raise alert_doctor.urllib.error.URLError("network down")
+
+    monkeypatch.setattr(alert_doctor.urllib.request, "urlopen", _always_fail)
+    monkeypatch.setattr(alert_doctor.time, "sleep", lambda *_args, **_kwargs: None)
+
+    assert alert_doctor.post_slack("hello", max_retry=3) is False
+    assert calls["count"] == 3
+
+
+def test_run_heal_success_after_health_recovery(monkeypatch, tmp_path):
+    """run_heal should report success when health endpoint recovers."""
+    heal_script = tmp_path / "heal.sh"
+    heal_script.write_text("#!/bin/bash\necho healed\n", encoding="utf-8")
+
+    monkeypatch.setattr(alert_doctor, "HEAL_SCRIPT", Path(heal_script))
+    monkeypatch.setattr(
+        alert_doctor,
+        "_validate_heal_script_path",
+        lambda *_args, **_kwargs: True,
+    )
+    monkeypatch.setattr(
+        alert_doctor.subprocess,
+        "check_output",
+        lambda *_args, **_kwargs: "healed\n",
+    )
+    monkeypatch.setattr(alert_doctor.time, "sleep", lambda *_args, **_kwargs: None)
+
+    states = iter([(503, "not ready"), (200, '{"ok": true}')])
+    monkeypatch.setattr(alert_doctor, "http_get", lambda *_args, **_kwargs: next(states))
+
+    ok, info = alert_doctor.run_heal()
+    assert ok is True
+    assert info == "healed"
+
+
+def test_main_warn_level_posts_summary_only(monkeypatch, tmp_path):
+    """main should post one summary notification when level is WARN."""
+    report = tmp_path / "doctor_report.json"
+    report.write_text(
+        '{"total_logs": 10, "avg_uncertainty": 0.41, "last_check": "now", "keywords": {}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(alert_doctor, "REPORT_JSON", report)
+    monkeypatch.setattr(alert_doctor, "THRESH", 0.5)
+    monkeypatch.setattr(alert_doctor, "HEAL_ON_HIGH", True)
+
+    posted = []
+    monkeypatch.setattr(alert_doctor, "post_slack", lambda msg: posted.append(msg) or True)
+    monkeypatch.setattr(
+        alert_doctor,
+        "run_heal",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("run_heal not expected")),
+    )
+
+    alert_doctor.main()
+
+    assert len(posted) == 1
+    assert "[WARN]" in posted[0]
+
+
+def test_main_high_level_runs_heal_and_health_check(monkeypatch, tmp_path):
+    """main should run self-heal and post follow-up messages for HIGH level."""
+    report = tmp_path / "doctor_report.json"
+    report.write_text(
+        '{"total_logs": 20, "avg_uncertainty": 0.8, "last_check": "later", "keywords": {"risk": 2}}',
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(alert_doctor, "REPORT_JSON", report)
+    monkeypatch.setattr(alert_doctor, "THRESH", 0.5)
+    monkeypatch.setattr(alert_doctor, "HEAL_ON_HIGH", True)
+    monkeypatch.setattr(alert_doctor, "HEALTH_URL", "http://127.0.0.1:8000/health")
+    monkeypatch.setattr(alert_doctor, "run_heal", lambda: (True, "healed"))
+    monkeypatch.setattr(alert_doctor, "http_get", lambda *_args, **_kwargs: (200, "ok"))
+
+    posted = []
+    monkeypatch.setattr(alert_doctor, "post_slack", lambda msg: posted.append(msg) or True)
+
+    alert_doctor.main()
+
+    assert len(posted) == 3
+    assert "[HIGH]" in posted[0]
+    assert "Self-Heal: OK" in posted[1]
+    assert "/health: status=200" in posted[2]
