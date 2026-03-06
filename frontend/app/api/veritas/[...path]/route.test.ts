@@ -5,7 +5,7 @@ import {
   hasUnsafeSegment,
   matchPolicy,
   parseAuthTokensConfig,
-} from "./route";
+} from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
 
 describe("veritas bff route auth and authorization", () => {
@@ -67,7 +67,6 @@ describe("veritas bff route auth and authorization", () => {
     expect(matchPolicy(["v1", "..", "policy"], "GET")).toBeNull();
   });
 });
-
 
 describe("getBodySizeBytes", () => {
   it("returns ASCII length as bytes", () => {
