@@ -7,6 +7,7 @@ structured decision audit logs.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import uuid
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex, sha256_of_canonical_json
 from veritas_os.security.signing import (
+    public_key_fingerprint,
     sign_payload_hash,
     store_keypair,
     verify_payload_signature,
@@ -28,6 +30,45 @@ PRIVATE_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_private.key"
 PUBLIC_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_public.key"
 
 _lock = threading.RLock()
+
+
+def _worm_mirror_path() -> Optional[Path]:
+    """Resolve optional immutable mirror destination for TrustLog JSONL.
+
+    The path is configured via ``VERITAS_TRUSTLOG_WORM_MIRROR_PATH`` and is
+    intended to point to a WORM/object-lock mounted location managed by
+    infrastructure.
+    """
+    mirror = os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "").strip()
+    if not mirror:
+        return None
+    return Path(mirror)
+
+
+def _append_line(path: Path, line: str) -> None:
+    """Append a line to ``path``, creating parent directories when required."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as file:
+        file.write(line)
+
+
+def _mirror_to_worm(line: str) -> Dict[str, Any]:
+    """Best-effort append to configured WORM mirror destination."""
+    path = _worm_mirror_path()
+    if path is None:
+        return {"configured": False, "ok": False, "path": None}
+
+    try:
+        _append_line(path, line)
+    except OSError as exc:
+        return {
+            "configured": True,
+            "ok": False,
+            "path": str(path),
+            "error": f"{exc.__class__.__name__}: {exc}",
+        }
+
+    return {"configured": True, "ok": True, "path": str(path)}
 
 
 @dataclass
@@ -103,11 +144,13 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
             "decision_payload": decision_payload,
             "payload_hash": payload_hash,
             "signature": signature,
+            "signature_key_fingerprint": public_key_fingerprint(PUBLIC_KEY_PATH),
         }
 
-        SIGNED_TRUSTLOG_JSONL.parent.mkdir(parents=True, exist_ok=True)
-        with SIGNED_TRUSTLOG_JSONL.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        line = json.dumps(entry, ensure_ascii=False) + "\n"
+        _append_line(SIGNED_TRUSTLOG_JSONL, line)
+        mirror = _mirror_to_worm(line)
+        entry["worm_mirror"] = mirror
 
     return entry
 
@@ -127,7 +170,12 @@ def verify_signature(entry: Dict[str, Any]) -> bool:
 
 
 def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
-    """Verify the full signed TrustLog chain and per-entry signatures."""
+    """Verify the full signed TrustLog chain and per-entry signatures.
+
+    The response includes optional WORM mirror status and key metadata when
+    available, so operators can schedule this function as a periodic integrity
+    job and alert on any drift.
+    """
     entries = _read_all_entries(path)
     issues: List[TrustLogIssue] = []
     previous_hash: Optional[str] = None
@@ -145,10 +193,25 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
 
         previous_hash = _entry_chain_hash(entry)
 
+    worm_path = _worm_mirror_path()
+    worm_status: Dict[str, Any] = {"configured": worm_path is not None}
+    if worm_path is not None:
+        worm_status.update({
+            "path": str(worm_path),
+            "exists": worm_path.exists(),
+            "entries": len(_read_all_entries(worm_path)) if worm_path.exists() else 0,
+        })
+
+    key_meta: Dict[str, Any] = {"public_key_present": PUBLIC_KEY_PATH.exists()}
+    if PUBLIC_KEY_PATH.exists():
+        key_meta["fingerprint"] = public_key_fingerprint(PUBLIC_KEY_PATH)
+
     return {
         "ok": len(issues) == 0,
         "entries_checked": len(entries),
         "issues": [issue.__dict__ for issue in issues],
+        "worm_mirror": worm_status,
+        "key_management": key_meta,
     }
 
 

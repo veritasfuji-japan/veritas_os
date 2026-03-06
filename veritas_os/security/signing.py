@@ -33,6 +33,8 @@ import stat
 from pathlib import Path
 from typing import Tuple
 
+from veritas_os.security.hash import sha256_hex
+
 logger = logging.getLogger(__name__)
 
 from cryptography.exceptions import InvalidSignature
@@ -146,3 +148,13 @@ def verify_payload_signature(
     except InvalidSignature:
         return False
     return True
+
+
+def public_key_fingerprint(public_key_path: Path, *, length: int = 16) -> str:
+    """Return a short, stable fingerprint for a public signing key.
+
+    The fingerprint is derived from SHA-256 over the raw public-key bytes and is
+    intended for lightweight key-id tagging in TrustLog entries.
+    """
+    raw = base64.urlsafe_b64decode(public_key_path.read_text(encoding="utf-8"))
+    return sha256_hex(raw.hex())[:length]
