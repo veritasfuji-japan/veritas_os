@@ -83,6 +83,10 @@ export interface DecideResponse extends DecideResponseMeta {
   debate: unknown[];
 
   extras: Record<string, unknown>;
+  reason: unknown;
+  rsi_note: Record<string, unknown> | null;
+  evo: Record<string, unknown> | null;
+  meta: Record<string, unknown>;
   plan: Record<string, unknown> | null;
   planner: Record<string, unknown> | null;
   persona: Record<string, unknown>;
@@ -129,6 +133,9 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     Array.isArray(value.critique) &&
     Array.isArray(value.debate) &&
     isRecord(value.extras) &&
+    isRecord(value.meta) &&
+    (value.rsi_note === null || value.rsi_note === undefined || isRecord(value.rsi_note)) &&
+    (value.evo === null || value.evo === undefined || isRecord(value.evo)) &&
     (value.plan === null || isRecord(value.plan)) &&
     (value.planner === null || isRecord(value.planner)) &&
     isRecord(value.persona) &&

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
+import { veritasFetch } from "../../../lib/api-client";
 import { toAssistantMessage } from "../analytics/utils";
 import { type ChatMessage } from "../types";
 import { type LocaleKey } from "../../../locales/ja";
@@ -70,17 +71,19 @@ export function useDecide({
     const timeoutId = window.setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
 
     try {
-      const response = await fetch("/api/veritas/v1/decide", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
+      const response = await veritasFetch(
+        "/api/veritas/v1/decide",
+        {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: queryToUse,
+            context: {},
+          }),
         },
-        body: JSON.stringify({
-          query: queryToUse,
-          context: {},
-        }),
-      });
+        DECIDE_TIMEOUT_MS,
+      );
 
       if (!isLatestRequest()) {
         return;

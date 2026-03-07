@@ -80,14 +80,6 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
   const targetUrl = buildTargetUrl(pathSegments, request.nextUrl.searchParams);
   const upstreamHeaders = new Headers();
   upstreamHeaders.set("X-API-Key", API_KEY.trim());
-  console.log("[proxy-debug]", {
-    apiBase: API_BASE,
-    apiKeyJson: JSON.stringify(API_KEY),
-    apiKeyTrimmedJson: JSON.stringify(API_KEY.trim()),
-    apiKeyLength: API_KEY.length,
-    apiKeyTrimmedLength: API_KEY.trim().length,
-    xApiKeyHeaderJson: JSON.stringify(upstreamHeaders.get("X-API-Key")),
-  });
   upstreamHeaders.set(TRACE_ID_HEADER_NAME, traceId);
   upstreamHeaders.set("X-Request-Id", traceId);
 
