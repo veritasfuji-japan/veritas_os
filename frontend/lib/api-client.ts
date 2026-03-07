@@ -1,32 +1,23 @@
 /**
- * Shared BFF API client that attaches the Authorization header
- * required by the BFF proxy (route-auth.ts).
+ * Shared BFF API client for `/api/veritas/*` endpoints.
+ *
+ * Authentication is handled via an httpOnly session cookie
+ * (`__veritas_bff`) set by Next.js middleware on every page load.
+ * The cookie is automatically included by the browser — no
+ * client-side token handling is needed.
  *
  * All browser-side fetch calls to `/api/veritas/*` should use
- * {@link veritasFetch} instead of raw `fetch` so that the Bearer
- * token is consistently included.
+ * {@link veritasFetch} instead of raw `fetch` so that timeout
+ * and credential handling are consistent.
  */
 
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 /**
- * Resolve the BFF bearer token exposed to the browser.
- *
- * The token is injected via `NEXT_PUBLIC_VERITAS_BFF_TOKEN` at build time.
- * Returns an empty string when not configured (dev / test).
- */
-function getBffToken(): string {
-  if (typeof window === "undefined") return "";
-  return process.env.NEXT_PUBLIC_VERITAS_BFF_TOKEN ?? "";
-}
-
-/**
  * Wrapper around `fetch` that:
- * 1. Prepends `Authorization: Bearer <token>` when a BFF token is available.
+ * 1. Sets `credentials: "same-origin"` so the httpOnly session
+ *    cookie is included automatically.
  * 2. Applies an AbortController-based timeout (default 20 s).
- *
- * Callers can still pass their own `signal` via `init`; the timeout controller
- * will abort independently if the deadline is exceeded.
  */
 export async function veritasFetch(
   input: RequestInfo | URL,
@@ -36,16 +27,10 @@ export async function veritasFetch(
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
-  const token = getBffToken();
-  const headers = new Headers(init.headers);
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-
   try {
     return await fetch(input, {
       ...init,
-      headers,
+      credentials: "same-origin",
       signal: controller.signal,
     });
   } finally {
