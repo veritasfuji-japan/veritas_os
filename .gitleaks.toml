@@ -1,0 +1,9 @@
+[allowlist]
+description = "Allowlist for false-positive test dummy keys (already removed in later commits)"
+
+# Historical commits contained a base64-encoded dummy test key
+# ("testkeytestkeytestkeytestkeyy") that gitleaks flags as generic-api-key.
+# The values were replaced with plain "test-dummy-key" but remain in git history.
+commits = [
+  "4230c929cc976084e302481ea38d5dd629397b15",
+]
