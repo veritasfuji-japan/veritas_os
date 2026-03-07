@@ -307,13 +307,55 @@ class TestDeploymentReadiness:
         """When all artefacts exist, are fresh, and env is configured, readiness passes."""
         monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "test-dummy-key")
         monkeypatch.setenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", "https://hook.example.com")
-        result = validate_deployment_readiness()
-        assert result["ready"] is True
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docs_dir = os.path.join(tmpdir, "docs", "eu_ai_act")
+            os.makedirs(docs_dir)
+            for fname in (
+                "model_card_gpt41_mini.md",
+                "bias_assessment_report.md",
+                "third_party_model_dpa_checklist.md",
+            ):
+                with open(os.path.join(docs_dir, fname), "w") as f:
+                    f.write("# placeholder")
+            # change_log.json
+            import json as _json
+            with open(os.path.join(docs_dir, "change_log.json"), "w") as f:
+                _json.dump([{
+                    "date": "2026-03-07",
+                    "author": "test",
+                    "description": "init",
+                    "component": "core",
+                }], f)
+            # legal_approval.json (GAP-02)
+            with open(os.path.join(docs_dir, "legal_approval.json"), "w") as f:
+                _json.dump({
+                    "approved_by": "Legal Team",
+                    "approval_date": "2026-03-07",
+                    "risk_classification": "high-risk",
+                    "scope": "VERITAS OS v2.0",
+                    "status": "approved",
+                    "ce_marking": {
+                        "risk_classification_approved": True,
+                        "technical_documentation_complete": True,
+                        "conformity_assessment_done": True,
+                        "quality_management_system": True,
+                        "post_market_monitoring_plan": True,
+                    },
+                }, f)
+            # governance.json with compliant retention
+            api_dir = os.path.join(tmpdir, "veritas_os", "api")
+            os.makedirs(api_dir)
+            with open(os.path.join(api_dir, "governance.json"), "w") as f:
+                _json.dump({"log_retention_days": 365}, f)
+            result = validate_deployment_readiness(repo_root=tmpdir)
+        assert result["ready"] is True, result["issues"]
         assert result["issues"] == []
         assert "model_card" in result["checks"]
         assert "bias_assessment" in result["checks"]
         assert "dpa_checklist" in result["checks"]
         assert "environment" in result
+        assert "legal_approval" in result
+        assert "ce_marking" in result
 
     def test_missing_artefact(self) -> None:
         """When an artefact is missing, readiness fails."""
@@ -349,8 +391,10 @@ class TestDeploymentReadiness:
 
     def test_deployment_readiness_includes_article_references(self) -> None:
         result = validate_deployment_readiness()
+        assert "Art. 6" in result["eu_ai_act_article"]
         assert "Art. 10" in result["eu_ai_act_article"]
         assert "P1-5" in result["eu_ai_act_article"]
+        assert "GAP-02" in result["eu_ai_act_article"]
 
     def test_environment_section_present(self) -> None:
         """P1-6: environment section is always included."""

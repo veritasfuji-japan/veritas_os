@@ -28,5 +28,35 @@
     "author": "compliance-team",
     "description": "Integrated change management validation into validate_deployment_readiness() deployment gate",
     "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "GAP-01: Added n-gram semantic similarity detection for Art. 5 prohibited practices (_semantic_ngram_check, _char_ngrams, _ngram_similarity)",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "GAP-01: Integrated semantic similarity check into _check_patterns() as a fallback layer when keyword matching finds no violations",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "GAP-02: Added validate_legal_approval() for Art. 6 legal approval validation with docs/eu_ai_act/legal_approval.json template",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "GAP-02: Added validate_ce_marking_readiness() for Art. 6/Art. 43 CE marking conformity assessment prerequisites",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "GAP-02: Integrated legal approval and CE marking validation into validate_deployment_readiness() deployment gate",
+    "component": "core/eu_ai_act_compliance_module"
   }
 ]
