@@ -348,10 +348,16 @@ def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
 
     GAP-01: Applies the same NFKC / confusable / evasion normalisation used
     by Art. 5 checks so that obfuscated domain keywords are still detected.
+    GAP-01d enhancement: Spaced-evasion detection now included to match
+    the full ``_normalise_text()`` pipeline (e.g. "h i r i n g" → "hiring").
     """
     normalized = unicodedata.normalize("NFKC", prompt or "")
     normalized = _EVASION_STRIP_RE.sub("", normalized)
     normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
+    # GAP-01d: Collapse spaced-evasion sequences (e.g. "h i r i n g" → "hiring")
+    normalized = _SPACED_EVASION_RE.sub(
+        lambda m: m.group(0).replace(" ", ""), normalized,
+    )
     normalized = normalized.lower()
     matched: List[str] = [
         keyword for keyword in ANNEX_III_RISK_KEYWORDS if keyword in normalized
@@ -929,11 +935,29 @@ def eu_compliance_pipeline(
                 decision_id=decision_id,
             )
 
+            # Art. 13/50: Ensure transparency disclosure fields are present
+            # in every response so downstream consumers always receive them.
+            output.setdefault("ai_disclosure", AI_DISCLOSURE_TEXT)
+            output.setdefault("regulation_notice", AI_REGULATION_NOTICE)
+
+            # Art. 13 / GAP-17: Auto-generate third-party notification for
+            # high-risk decisions so that affected_parties_notice is populated.
+            risk_level_str = str(precheck.get("risk_level") or "LOW")
+            if risk_level_str == "HIGH" and output.get("affected_parties_notice") is None:
+                tp_notice = ThirdPartyNotificationService.build_notification(
+                    decision_id=decision_id,
+                    risk_level=risk_level_str,
+                    matched_categories=precheck.get("matched_categories", []),
+                    decision_summary=str(output.get("output") or "")[:200],
+                )
+                if tp_notice:
+                    output["affected_parties_notice"] = tp_notice
+
             trust_score = float(output.get("trust_score", 1.0))
             output["eu_risk_assessment"] = precheck
             output = apply_human_oversight_hook(
                 trust_score=trust_score,
-                risk_level=str(precheck.get("risk_level") or "LOW"),
+                risk_level=risk_level_str,
                 response_payload=output,
                 threshold=active_config.trust_score_threshold,
                 config=active_config,
@@ -1483,6 +1507,97 @@ def validate_data_quality(
 
 
 # ---------------------------------------------------------------------------
+# Art. 11 / Art. 15 — Change management validation
+# ---------------------------------------------------------------------------
+# Required change-log fields per entry.
+_REQUIRED_CHANGE_FIELDS: tuple[str, ...] = (
+    "date",
+    "author",
+    "description",
+    "component",
+)
+
+
+def validate_change_management(
+    *,
+    change_log: List[Dict[str, Any]] | None = None,
+    repo_root: str | None = None,
+) -> Dict[str, Any]:
+    """Validate that change management records exist and are well-formed.
+
+    Art. 11 Technical Documentation / Art. 15 Accuracy-Robustness:
+    EU AI Act requires that high-risk AI systems maintain documented
+    change management procedures.  Each significant change must be
+    recorded with date, author, description, and affected component.
+
+    When *change_log* is ``None`` the function looks for
+    ``docs/eu_ai_act/change_log.json`` in the repository root.
+
+    Args:
+        change_log: Explicit list of change-log entries for validation.
+        repo_root: Repository root directory (auto-detected when ``None``).
+
+    Returns:
+        Dict with ``valid`` (bool), ``issues`` (list of problems),
+        ``entries_count``, and ``eu_ai_act_article``.
+    """
+    import pathlib
+
+    issues: List[str] = []
+
+    # Load change log from file if not provided explicitly
+    if change_log is None:
+        if repo_root is None:
+            repo_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        log_path = os.path.join(repo_root, "docs", "eu_ai_act", "change_log.json")
+        if not os.path.isfile(log_path):
+            return {
+                "valid": False,
+                "issues": [
+                    "change_log_missing: docs/eu_ai_act/change_log.json not found"
+                ],
+                "entries_count": 0,
+                "eu_ai_act_article": "Art. 11 / Art. 15",
+            }
+        try:
+            with open(log_path) as fh:
+                change_log = json.load(fh)
+            if not isinstance(change_log, list):
+                return {
+                    "valid": False,
+                    "issues": ["change_log_format: expected a JSON array"],
+                    "entries_count": 0,
+                    "eu_ai_act_article": "Art. 11 / Art. 15",
+                }
+        except (OSError, json.JSONDecodeError) as exc:
+            return {
+                "valid": False,
+                "issues": [f"change_log_read_error: {exc}"],
+                "entries_count": 0,
+                "eu_ai_act_article": "Art. 11 / Art. 15",
+            }
+
+    if not change_log:
+        issues.append("change_log_empty: no change entries recorded")
+
+    # Validate individual entries
+    for idx, entry in enumerate(change_log or []):
+        if not isinstance(entry, dict):
+            issues.append(f"entry_{idx}: not a dict")
+            continue
+        for field in _REQUIRED_CHANGE_FIELDS:
+            if not entry.get(field):
+                issues.append(f"entry_{idx}: missing required field '{field}'")
+
+    return {
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "entries_count": len(change_log or []),
+        "eu_ai_act_article": "Art. 11 / Art. 15",
+    }
+
+
+# ---------------------------------------------------------------------------
 # P1-5: Deployment readiness check — model card / bias / DPA freshness
 # ---------------------------------------------------------------------------
 # Maximum age (in days) before a compliance artefact is considered stale.
@@ -1606,10 +1721,24 @@ def validate_deployment_readiness(
             "(EU AI Act requires ≥6 months for high-risk)"
         )
 
+    # Art. 11 / Art. 15: Change management process validation
+    cm = validate_change_management(repo_root=repo_root)
+    change_management: Dict[str, Any] = {
+        "valid": cm["valid"],
+        "entries_count": cm["entries_count"],
+    }
+    if not cm["valid"]:
+        cm_issues = cm["issues"]
+        summary = "; ".join(cm_issues[:3])
+        if len(cm_issues) > 3:
+            summary += f" (+{len(cm_issues) - 3} more)"
+        issues.append("change_management: " + summary)
+
     return {
         "ready": len(issues) == 0,
         "checks": checks,
         "environment": environment,
+        "change_management": change_management,
         "issues": issues,
-        "eu_ai_act_article": "Art. 10 / Art. 11 / Art. 12 (P1-5 / P1-6)",
+        "eu_ai_act_article": "Art. 10 / Art. 11 / Art. 12 / Art. 15 (P1-5 / P1-6)",
     }

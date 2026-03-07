@@ -1,0 +1,32 @@
+[
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "Initial change log creation for EU AI Act Art. 11/15 change management compliance",
+    "component": "compliance/change_management"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "Added spaced-evasion detection to classify_annex_iii_risk() for GAP-01d normalization consistency",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "Integrated Art.13/50 transparency fields (ai_disclosure, regulation_notice, affected_parties_notice) into eu_compliance_pipeline",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "Added validate_change_management() function for Art. 11/15 change management process validation",
+    "component": "core/eu_ai_act_compliance_module"
+  },
+  {
+    "date": "2026-03-07",
+    "author": "compliance-team",
+    "description": "Integrated change management validation into validate_deployment_readiness() deployment gate",
+    "component": "core/eu_ai_act_compliance_module"
+  }
+]
