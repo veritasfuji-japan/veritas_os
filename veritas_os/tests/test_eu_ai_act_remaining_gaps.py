@@ -11,6 +11,7 @@ from veritas_os.core.eu_ai_act_compliance_module import (
     EUAIActSafetyGateLayer4,
     EUComplianceConfig,
     SystemHaltController,
+    classify_annex_iii_risk,
     eu_compliance_pipeline,
     validate_data_quality,
     validate_deployment_readiness,
@@ -75,6 +76,68 @@ class TestExpandedArticle5Patterns:
         result = gate.validate_article_5("Analyze quarterly revenue data for the board")
         assert result["passed"]
 
+    def test_confusable_cyrillic_evasion(self) -> None:
+        """GAP-01: Cyrillic homoglyphs must not bypass detection."""
+        gate = EUAIActSafetyGateLayer4()
+        # "subliminal" with Cyrillic 'а' (U+0430) instead of Latin 'a'
+        result = gate.validate_article_5("use sublimin\u0430l techniques")
+        assert not result["passed"], "Cyrillic homoglyph evasion should be caught"
+
+    def test_confusable_greek_evasion(self) -> None:
+        """GAP-01: Greek homoglyphs must not bypass detection."""
+        gate = EUAIActSafetyGateLayer4()
+        # "manipulat" with Greek Α (U+0391) → 'a'
+        result = gate.validate_article_5("m\u0391nipulat the outcome")
+        assert not result["passed"], "Greek homoglyph evasion should be caught"
+
+    def test_spaced_evasion_manipulate(self) -> None:
+        """GAP-01: Space-separated chars must not bypass detection."""
+        gate = EUAIActSafetyGateLayer4()
+        result = gate.validate_article_5("we will m a n i p u l a t e users")
+        assert not result["passed"], "Space-insertion evasion should be caught"
+
+    def test_spaced_evasion_subliminal(self) -> None:
+        """GAP-01: Space-separated 'subliminal' is detected."""
+        gate = EUAIActSafetyGateLayer4()
+        result = gate.validate_article_5("apply s u b l i m i n a l methods")
+        assert not result["passed"], "Space-insertion evasion should be caught"
+
+    def test_fullwidth_evasion(self) -> None:
+        """GAP-01: Fullwidth chars (NFKC-normalised to ASCII) must be caught."""
+        gate = EUAIActSafetyGateLayer4()
+        # Fullwidth "subliminal" → NFKC normalises to ASCII "subliminal"
+        result = gate.validate_article_5("\uff53\uff55\uff42\uff4c\uff49\uff4d\uff49\uff4e\uff41\uff4c")
+        assert not result["passed"], "Fullwidth evasion should be caught"
+
+    def test_normal_short_words_not_collapsed(self) -> None:
+        """Ensure common short words are not false-positively collapsed."""
+        gate = EUAIActSafetyGateLayer4()
+        result = gate.validate_article_5("I am a new employee at the company")
+        assert result["passed"]
+
+
+class TestRiskClassificationNormalization:
+    """GAP-01: Annex III risk classification with evasion normalization."""
+
+    def test_confusable_hiring_detected(self) -> None:
+        """Cyrillic 'і' (U+0456) in 'hiring' must still trigger HIGH risk."""
+        result = classify_annex_iii_risk("AI for h\u0456ring decisions")
+        assert result["risk_level"] == "HIGH"
+        assert "hiring" in result["matched_categories"]
+
+    def test_fullwidth_healthcare_detected(self) -> None:
+        """Fullwidth 'healthcare' must still trigger HIGH risk after NFKC."""
+        result = classify_annex_iii_risk(
+            "\uff48\uff45\uff41\uff4c\uff54\uff48\uff43\uff41\uff52\uff45 system"
+        )
+        assert result["risk_level"] == "HIGH"
+        assert "healthcare" in result["matched_categories"]
+
+    def test_hyphenated_biometric_detected(self) -> None:
+        """Hyphen-inserted 'bio-metric' must still trigger HIGH risk."""
+        result = classify_annex_iii_risk("AI for bio-metric identification")
+        assert result["risk_level"] == "HIGH"
+        assert "biometric" in result["matched_categories"]
 
 # =====================================================================
 # Art. 14(4): System halt / emergency stop controller
