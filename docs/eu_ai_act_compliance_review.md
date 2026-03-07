@@ -388,11 +388,6 @@ def apply_human_oversight_hook(
 | GAP-01b | Art.5 | バイオメトリクスパターン不足 | 30+パターンに拡充（多言語5言語対応） |
 | GAP-01c | Art.5 | 文字列操作による回避 | NFKC正規化・ホモグリフ変換・ハイフン/ゼロ幅文字除去・スペース挿入検出 |
 | GAP-01d | Art.9 | リスク分類の回避耐性なし | `classify_annex_iii_risk()` にNFKC/ホモグリフ/ハイフン正規化を適用 |
-
-### 対応済みギャップ
-
-| ギャップID | 条文 | 説明 | 対応内容 |
-|-----------|------|------|---------|
 | GAP-03 | Art.14 | 人間レビューの実際のルーティング機構なし | `HumanReviewQueue`（キュー・Webhook通知・SLA追跡・fail-close）実装 |
 | GAP-04 | Art.50 | 生成コンテンツのウォーターマークなし | `build_ai_content_watermark()`（C2PA互換メタデータ）実装・パイプライン統合 |
 | GAP-05 | Art.10 | 訓練データ品質管理・リネージュなし | `validate_data_quality()` を `memory.py` の `add()` に統合、`memory.py` にデータリネージュ自動記録を追加 |
