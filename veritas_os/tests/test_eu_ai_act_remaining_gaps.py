@@ -238,23 +238,26 @@ import tempfile
 
 
 class TestDeploymentReadiness:
-    """Tests for validate_deployment_readiness (P1-5)."""
+    """Tests for validate_deployment_readiness (P1-5 / P1-6)."""
 
-    def test_ready_with_all_artefacts(self) -> None:
-        """When all artefacts exist and are fresh, readiness passes."""
+    def test_ready_with_all_artefacts(self, monkeypatch) -> None:
+        """When all artefacts exist, are fresh, and env is configured, readiness passes."""
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXk=")
+        monkeypatch.setenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", "https://hook.example.com")
         result = validate_deployment_readiness()
         assert result["ready"] is True
         assert result["issues"] == []
         assert "model_card" in result["checks"]
         assert "bias_assessment" in result["checks"]
         assert "dpa_checklist" in result["checks"]
+        assert "environment" in result
 
     def test_missing_artefact(self) -> None:
         """When an artefact is missing, readiness fails."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = validate_deployment_readiness(repo_root=tmpdir)
         assert result["ready"] is False
-        assert len(result["issues"]) == 3
+        # 3 missing artefacts + environment issues (encryption, webhook, possibly retention)
         assert any("model_card" in i for i in result["issues"])
 
     def test_stale_artefact(self) -> None:
@@ -285,3 +288,25 @@ class TestDeploymentReadiness:
         result = validate_deployment_readiness()
         assert "Art. 10" in result["eu_ai_act_article"]
         assert "P1-5" in result["eu_ai_act_article"]
+
+    def test_environment_section_present(self) -> None:
+        """P1-6: environment section is always included."""
+        result = validate_deployment_readiness()
+        assert "environment" in result
+        env = result["environment"]
+        assert "encryption_enabled" in env
+        assert "notification_webhook_configured" in env
+        assert "log_retention_days" in env
+        assert "log_retention_compliant" in env
+
+    def test_missing_encryption_reported(self, monkeypatch) -> None:
+        """P1-6: missing encryption key is reported as an issue."""
+        monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+        result = validate_deployment_readiness()
+        assert any("encryption" in i for i in result["issues"])
+
+    def test_missing_webhook_reported(self, monkeypatch) -> None:
+        """P1-6: missing webhook URL is reported as an issue."""
+        monkeypatch.delenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", raising=False)
+        result = validate_deployment_readiness()
+        assert any("notification" in i or "webhook" in i for i in result["issues"])

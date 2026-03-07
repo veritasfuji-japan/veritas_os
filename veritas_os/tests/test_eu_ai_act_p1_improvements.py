@@ -336,6 +336,7 @@ class TestAuditReadinessGuard:
             risk_level="HIGH",
             log_retention_days=365,
             notification_flow_ready=True,
+            encryption_enabled=True,
         )
         assert result["allowed"] is True
 
@@ -353,6 +354,38 @@ class TestAuditReadinessGuard:
             config=EUComplianceConfig(require_audit_for_high_risk=False),
         )
         assert result["allowed"] is True
+
+    def test_high_risk_rejected_no_encryption(self) -> None:
+        result = validate_audit_readiness_for_high_risk(
+            risk_level="HIGH",
+            log_retention_days=365,
+            notification_flow_ready=True,
+            encryption_enabled=False,
+        )
+        assert result["allowed"] is False
+        assert "encryption" in result["reason"]
+
+    def test_auto_detect_from_env(self, monkeypatch) -> None:
+        """When parameters are None, values are auto-detected from env."""
+        monkeypatch.setenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", "https://hook.example.com")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXk=")
+        result = validate_audit_readiness_for_high_risk(
+            risk_level="HIGH",
+            log_retention_days=365,
+        )
+        assert result["allowed"] is True
+
+    def test_auto_detect_missing_env(self, monkeypatch) -> None:
+        """When env vars are missing, auto-detection produces failures."""
+        monkeypatch.delenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+        result = validate_audit_readiness_for_high_risk(
+            risk_level="HIGH",
+            log_retention_days=365,
+        )
+        assert result["allowed"] is False
+        assert "notification" in result["reason"]
+        assert "encryption" in result["reason"]
 
 
 class TestDefaultRiskScore:

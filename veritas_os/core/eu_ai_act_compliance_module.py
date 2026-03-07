@@ -666,6 +666,26 @@ def validate_bench_mode_synthetic_data(
 
 
 # ---------------------------------------------------------------------------
+# P1-6: Governance config reading helper
+# ---------------------------------------------------------------------------
+def _read_governance_log_retention() -> int:
+    """Read log retention days from ``governance.json``.
+
+    Falls back to 90 if the file is missing or malformed so that existing
+    behaviour is preserved when governance.json is not available.
+    """
+    try:
+        governance_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "api", "governance.json",
+        )
+        with open(governance_path) as fh:
+            gov = json.load(fh)
+        return int(gov.get("log_retention", {}).get("retention_days", 90))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return 90
+
+
+# ---------------------------------------------------------------------------
 # P1-6: Audit-readiness guard for high-risk deployments
 # ---------------------------------------------------------------------------
 def validate_audit_readiness_for_high_risk(
@@ -673,12 +693,23 @@ def validate_audit_readiness_for_high_risk(
     risk_level: str,
     config: EUComplianceConfig | None = None,
     log_retention_days: int | None = None,
-    notification_flow_ready: bool = False,
+    notification_flow_ready: bool | None = None,
+    encryption_enabled: bool | None = None,
 ) -> Dict[str, Any]:
     """Reject high-risk use when audit infrastructure is incomplete.
 
-    P1-6: Environments lacking adequate log retention or notification flows
-    must not serve high-risk decisions.
+    P1-6: Environments lacking adequate log retention, notification flows,
+    or at-rest encryption must not serve high-risk decisions.
+
+    When *log_retention_days*, *notification_flow_ready*, or
+    *encryption_enabled* are ``None`` the function auto-detects the
+    current environment state:
+
+    * ``log_retention_days`` — read from ``governance.json``.
+    * ``notification_flow_ready`` — ``True`` when
+      ``VERITAS_HUMAN_REVIEW_WEBHOOK_URL`` is set.
+    * ``encryption_enabled`` — ``True`` when
+      ``VERITAS_ENCRYPTION_KEY`` is set.
     """
     cfg = config or EUComplianceConfig()
     if not cfg.require_audit_for_high_risk:
@@ -687,14 +718,32 @@ def validate_audit_readiness_for_high_risk(
     if (risk_level or "").upper() != "HIGH":
         return {"allowed": True, "reason": "not_high_risk"}
 
+    # Auto-detect values from the environment when not explicitly provided.
+    if log_retention_days is None:
+        log_retention_days = _read_governance_log_retention()
+
+    if notification_flow_ready is None:
+        notification_flow_ready = bool(
+            os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL")
+        )
+
+    if encryption_enabled is None:
+        encryption_enabled = bool(os.environ.get("VERITAS_ENCRYPTION_KEY"))
+
     issues: List[str] = []
-    retention = log_retention_days if log_retention_days is not None else 90
-    if retention < 180:
+
+    if log_retention_days < 180:
         issues.append(
-            f"log_retention_days={retention} < 180 (EU AI Act requires ≥6 months for high-risk)"
+            f"log_retention_days={log_retention_days} < 180 "
+            "(EU AI Act requires ≥6 months for high-risk)"
         )
     if not notification_flow_ready:
         issues.append("human_review notification flow not ready")
+    if not encryption_enabled:
+        issues.append(
+            "at-rest encryption not enabled "
+            "(set VERITAS_ENCRYPTION_KEY for high-risk deployments)"
+        )
 
     if issues:
         return {
@@ -1420,13 +1469,18 @@ def validate_deployment_readiness(
     - Bias assessment report (90 days)
     - DPA checklist (180 days)
 
+    P1-6 environment checks (added):
+    - At-rest encryption enabled
+    - Log retention ≥ 180 days
+    - Human-review notification webhook configured
+
     Args:
         repo_root: Absolute path to the repository root.  When ``None``
             the function walks up from this file to locate the repo root.
 
     Returns:
         Dict with ``ready`` (bool), ``checks`` (per-artefact status),
-        and ``issues`` (list of human-readable issues).
+        ``environment`` (infrastructure readiness), and ``issues``.
     """
     import pathlib
 
@@ -1469,9 +1523,38 @@ def validate_deployment_readiness(
                 f"{name}: last updated {age_days} days ago (max {max_age_days})"
             )
 
+    # P1-6: Environment infrastructure checks
+    env_encryption = bool(os.environ.get("VERITAS_ENCRYPTION_KEY"))
+    env_webhook = bool(os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL"))
+    env_retention = _read_governance_log_retention()
+
+    environment: Dict[str, Any] = {
+        "encryption_enabled": env_encryption,
+        "notification_webhook_configured": env_webhook,
+        "log_retention_days": env_retention,
+        "log_retention_compliant": env_retention >= 180,
+    }
+
+    if not env_encryption:
+        issues.append(
+            "encryption: at-rest encryption not enabled "
+            "(set VERITAS_ENCRYPTION_KEY for high-risk deployments)"
+        )
+    if not env_webhook:
+        issues.append(
+            "notification: human-review webhook not configured "
+            "(set VERITAS_HUMAN_REVIEW_WEBHOOK_URL)"
+        )
+    if env_retention < 180:
+        issues.append(
+            f"log_retention: {env_retention} days < 180 "
+            "(EU AI Act requires ≥6 months for high-risk)"
+        )
+
     return {
         "ready": len(issues) == 0,
         "checks": checks,
+        "environment": environment,
         "issues": issues,
-        "eu_ai_act_article": "Art. 10 / Art. 11 (P1-5)",
+        "eu_ai_act_article": "Art. 10 / Art. 11 / Art. 12 (P1-5 / P1-6)",
     }
