@@ -31,6 +31,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping
@@ -171,6 +172,36 @@ _ALL_PROHIBITED_PATTERNS: tuple[str, ...] = tuple(
 # Regex to strip hyphens / zero-width chars used to evade detection
 _EVASION_STRIP_RE = re.compile(r"[-\u00ad\u200b\u200c\u200d\ufeff]")
 
+# GAP-01: Unicode confusable / homoglyph character map for Art. 5 evasion
+# resistance.  Mirrors the map used in fuji.py for prompt-injection detection.
+_CONFUSABLE_ASCII_MAP = str.maketrans(
+    {
+        "а": "a",  # Cyrillic
+        "е": "e",  # Cyrillic
+        "і": "i",  # Cyrillic
+        "о": "o",  # Cyrillic
+        "р": "p",  # Cyrillic
+        "с": "c",  # Cyrillic
+        "у": "y",  # Cyrillic
+        "х": "x",  # Cyrillic
+        "Α": "a",  # Greek
+        "Β": "b",  # Greek
+        "Ε": "e",  # Greek
+        "Ι": "i",  # Greek
+        "Κ": "k",  # Greek
+        "Μ": "m",  # Greek
+        "Ν": "n",  # Greek
+        "Ο": "o",  # Greek
+        "Ρ": "p",  # Greek
+        "Τ": "t",  # Greek
+        "Χ": "x",  # Greek
+    }
+)
+
+# GAP-01: Detect sequences of ≥3 single characters separated by spaces
+# (e.g. "m a n i p u l a t e") used to evade substring matching.
+_SPACED_EVASION_RE = re.compile(r"\b((?:[a-zA-Z] ){2,}[a-zA-Z])\b")
+
 FUNDAMENTAL_RIGHTS_ROLE = {
     "role": "fundamental_rights_officer",
     "instruction": (
@@ -210,7 +241,8 @@ class EUAIActSafetyGateLayer4(SafetyGate):
         Detects obvious prohibited output categories before release.
         P1-1 enhancements:
         - Multi-language pattern matching (EN/JA/FR/DE/ES).
-        - Text normalisation (strip hyphens, zero-width chars) to counter evasion.
+        - Text normalisation (NFKC, confusable homoglyphs, hyphens,
+          zero-width chars, space-insertion) to counter evasion.
         - Input prompt inspection (not only output).
         - Pluggable external classifier interface.
     Art. 15 Accuracy/Robustness/Cybersecurity:
@@ -228,8 +260,24 @@ class EUAIActSafetyGateLayer4(SafetyGate):
     # ------------------------------------------------------------------
     @staticmethod
     def _normalise_text(text: str) -> str:
-        """Strip evasion characters (hyphens, zero-width chars) and lower-case."""
-        return _EVASION_STRIP_RE.sub("", (text or "")).lower()
+        """Normalise text to defeat common evasion techniques.
+
+        GAP-01 hardening:
+        1. NFKC Unicode normalisation (fullwidth → ASCII, ligatures, etc.)
+        2. Strip hyphens, soft-hyphens, zero-width characters.
+        3. Translate Unicode confusable / homoglyph characters to ASCII
+           (Cyrillic 'а' → 'a', Greek 'Α' → 'a', etc.)
+        4. Collapse space-separated single characters that form words
+           (e.g. "m a n i p" → "manip").
+        5. Lower-case.
+        """
+        normalized = unicodedata.normalize("NFKC", text or "")
+        normalized = _EVASION_STRIP_RE.sub("", normalized)
+        normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
+        normalized = _SPACED_EVASION_RE.sub(
+            lambda m: m.group(0).replace(" ", ""), normalized,
+        )
+        return normalized.lower()
 
     def _check_patterns(self, text: str) -> List[str]:
         """Return matched prohibited patterns after normalisation."""
@@ -297,10 +345,16 @@ def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
 
     P1-6: Default score raised from 0.2 to 0.4 to avoid under-estimation of
     unknown use-cases (GAP-06).
+
+    GAP-01: Applies the same NFKC / confusable / evasion normalisation used
+    by Art. 5 checks so that obfuscated domain keywords are still detected.
     """
-    lowered = (prompt or "").lower()
+    normalized = unicodedata.normalize("NFKC", prompt or "")
+    normalized = _EVASION_STRIP_RE.sub("", normalized)
+    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
+    normalized = normalized.lower()
     matched: List[str] = [
-        keyword for keyword in ANNEX_III_RISK_KEYWORDS if keyword in lowered
+        keyword for keyword in ANNEX_III_RISK_KEYWORDS if keyword in normalized
     ]
     if not matched:
         return {"risk_level": "MEDIUM", "risk_score": 0.4, "matched_categories": []}

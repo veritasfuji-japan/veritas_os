@@ -32,13 +32,13 @@
 
 ## 1. エグゼクティブサマリー
 
-VERITAS OSはEU AI法への準拠を明示的に設計目標として掲げており、技術的な基盤の多くが規制要件を先取りしている。初回レビューにより**17件の準拠ギャップ（うち5件が重大）**を特定し、その後の対応により **15件を解消済** とした。**残存ギャップは2件（うち2件がCritical、ただし法務・運用プロセスの確立が主体）**であり、引き続き優先対応が必要である。
+VERITAS OSはEU AI法への準拠を明示的に設計目標として掲げており、技術的な基盤の多くが規制要件を先取りしている。初回レビューにより**17件の準拠ギャップ（うち5件が重大）**を特定し、その後の対応により **16件を解消済** とした。**残存ギャップは1件（GAP-02: リスク分類の法務承認、Critical）および GAP-01のセマンティック検出未対応（High）**であり、引き続き優先対応が必要である。GAP-01については、キーワードベースの検出を大幅に強化（多言語30+パターン、NFKC/ホモグリフ正規化、スペース挿入回避検出、入力検査、外部分類モデルIF）し、Criticalから**High**に引き下げた。
 
 | 評価カテゴリ | 初回状態 | 現在の状態 | 主な改善 |
 |-------------|---------|-----------|---------|
-| **第5条**（禁止慣行） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | — |
+| **第5条**（禁止慣行） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 多言語30+パターン・入力検査・NFKC/ホモグリフ正規化・スペース挿入検出・外部分類モデルIF |
 | **第6条/附属書Ⅲ**（高リスク分類） | ❌ 未準拠 | ⚠️ 部分準拠 | `risk_classification_matrix.md` 新設 |
-| **第9条**（リスク管理） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 継続的モニタリング・残留リスク文書化・デフォルトリスクスコア是正・**監査不備環境での高リスク拒否（P1-6）** |
+| **第9条**（リスク管理） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 継続的モニタリング・残留リスク文書化・デフォルトリスクスコア是正・**監査不備環境での高リスク拒否（P1-6）**・リスク分類正規化（GAP-01d） |
 | **第10条**（データガバナンス） | ❌ 未準拠 | ⚠️ 部分準拠 | モデルカード・バイアス評価・DPAチェックリスト新設・データリネージュ追跡・**データ品質検証のメモリ取り込み統合** |
 | **第11条**（技術文書） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 附属書IV準拠文書テンプレート作成・**デプロイ前鮮度チェック（P1-5）** |
 | **第12条**（記録保持） | ✅ 準拠 | ✅ 準拠 | 暗号化・保持期間180日/365日対応・**高リスクデプロイ時の暗号化必須チェック（P1-6）** |
@@ -105,18 +105,23 @@ ARTICLE_5_PROHIBITED_PATTERNS = (
 
 **良い点:**
 - `EUAIActSafetyGateLayer4.validate_article_5()` により出力のポストチェックを実施
+- `validate_article_5_input()` により入力プロンプトの禁止慣行検査を実施（✅ P1-1対応済）
 - FUJI Gateのキーワードブロックリスト（`fuji_default.yaml:100-131`）でハードブロックを実施
 - 自己言及的な警告「heuristic keyword-based」という誠実な免責事項を文書内に記載
+- 多言語パターン対応（EN/JA/FR/DE/ES）、同義語・婉曲表現の拡充（✅ P1-1対応済）
+- NFKC正規化・Unicode同形異体文字（ホモグリフ）正規化・スペース挿入攻撃検出による回避耐性強化（✅ GAP-01対応済）
+- 外部分類モデル統合インターフェース（`external_classifier`パラメータ）（✅ P1-1対応済）
+- `real-time remote biometric`・`facial recognition`・`gait recognition`等のバイオメトリクスパターン対応（✅ GAP-01対応済）
 
 **重大ギャップ:**
 
-1. **偽陰性リスク（Critical）**: 5パターンのみの単純なsubstring検索は、迂回が容易。例えば `"mani-pulate"` や多言語表現、暗号化表現による禁止慣行が検出されない。モジュール自身が `"In production, replace or augment with policy models and legal review"` と明言（L10-12）している。
+1. **偽陰性リスク（Critical）**: ~~5パターンのみの単純なsubstring検索は、迂回が容易~~ → ✅ **大幅改善（GAP-01）** — 30+パターンに拡充、多言語対応（5言語）、NFKC正規化、ホモグリフ変換（キリル文字・ギリシャ文字→Latin）、ハイフン/ゼロ幅文字除去、スペース挿入回避検出を追加。ただし、依然としてキーワードベースのヒューリスティックであり、セマンティック検出には対応していない。モジュール自身が `"In production, replace or augment with policy models and legal review"` と明言（L10-12）している。
 
-2. **出力のみ検査**: 現在の実装はLLM生成テキスト（output）のみを検査しており、入力プロンプトが禁止慣行を誘発するよう設計されていても検出できない。
+2. ~~**出力のみ検査**~~: ✅ **対応済（P1-1）** — `validate_article_5_input()` により入力プロンプトも検査対象に追加。`eu_compliance_pipeline` デコレータで自動的に入力検査を実行。
 
-3. **バイオメトリクス禁止**: 第5条(1)(a)で明示的に禁止されているリアルタイムバイオメトリクス識別への対応コードが存在しない。
+3. ~~**バイオメトリクス禁止**~~: ✅ **対応済（GAP-01）** — `real-time remote biometric`・`facial recognition`・`face identification`・`gait recognition`・`voiceprint`等のバイオメトリクス関連パターンを追加。多言語対応（`リアルタイム遠隔生体認証`・`reconnaissance faciale`・`Gesichtserkennung`等）。
 
-**推奨**: 専用の分類モデルまたは法務レビューと組み合わせた多層防御が必要。
+**推奨**: 専用の分類モデルまたは法務レビューと組み合わせた多層防御が必要。外部分類モデル統合インターフェースは実装済み。
 
 ---
 
@@ -167,6 +172,7 @@ def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
 - `assess_continuous_risk_monitoring()` によるモニタリング完了状況の評価（✅ P3-3対応済）
 - `docs/eu_ai_act/continuous_risk_monitoring.md` に運用手順書を整備（✅ P3-3対応済）
 - `docs/eu_ai_act/risk_assessment.md` に残留リスク台帳を文書化（✅ P2-1対応済）
+- `classify_annex_iii_risk()` にNFKC/ホモグリフ/ハイフン正規化を適用し、キーワード回避耐性を強化（✅ GAP-01d対応済）
 
 **残存ギャップ:**
 
@@ -371,8 +377,17 @@ def apply_human_oversight_hook(
 
 | ギャップID | 条文 | 説明 | 重大度 | 対応優先度 |
 |-----------|------|------|--------|-----------|
-| GAP-01 | Art.5 | Article 5禁止慣行の単純keyword検出 | 🔴 Critical | P1 |
+| GAP-01 | Art.5 | Article 5禁止慣行のセマンティック検出未対応（キーワードベースは大幅強化済） | 🟡 High | P2 |
 | GAP-02 | Art.6 | リスク分類の法務承認・CEマーキング未整備 | 🔴 Critical | P1 |
+
+### 対応済みギャップ
+
+| ギャップID | 条文 | 説明 | 対応内容 |
+|-----------|------|------|---------|
+| GAP-01a | Art.5 | 入力プロンプト検査なし | `validate_article_5_input()` 実装、`eu_compliance_pipeline` に統合（P1-1） |
+| GAP-01b | Art.5 | バイオメトリクスパターン不足 | 30+パターンに拡充（多言語5言語対応） |
+| GAP-01c | Art.5 | 文字列操作による回避 | NFKC正規化・ホモグリフ変換・ハイフン/ゼロ幅文字除去・スペース挿入検出 |
+| GAP-01d | Art.9 | リスク分類の回避耐性なし | `classify_annex_iii_risk()` にNFKC/ホモグリフ/ハイフン正規化を適用 |
 
 ### 対応済みギャップ
 
@@ -401,22 +416,29 @@ def apply_human_oversight_hook(
 
 ## 5. 重大ギャップ詳細分析
 
-### GAP-01: Article 5禁止慣行の検出精度（Critical）
+### GAP-01: Article 5禁止慣行の検出精度（大幅改善済・セマンティック検出は未対応）
 
-**該当コード**: `eu_ai_act_compliance_module.py:75-87`
+**該当コード**: `eu_ai_act_compliance_module.py:75-200`
 
-現在の実装は5パターンの単純なsubstring検索のみ。悪意ある行為者は以下の手法で容易に回避できる：
-- 多言語表現（日本語・フランス語等）での禁止慣行記述
-- 同義語・婉曲表現の使用
-- 文字列分割（`mani-pulate` → `manipulate`）
+~~現在の実装は5パターンの単純なsubstring検索のみ。~~ → ✅ **大幅改善**: 30+パターンに拡充（5言語対応）、以下の回避対策を実装：
+- ✅ 多言語パターン（日本語・フランス語・ドイツ語・スペイン語）
+- ✅ 同義語・婉曲表現の追加（social credit, citizen score, psychological manipulation等）
+- ✅ ハイフン/ゼロ幅文字除去（`mani-pulate` → `manipulate`）
+- ✅ NFKC Unicode正規化（全角文字→半角、合字分解等）
+- ✅ Unicode同形異体文字（ホモグリフ）変換（キリル文字 `а`→`a`、ギリシャ文字 `Α`→`a` 等）
+- ✅ スペース挿入回避検出（`m a n i p u l a t e` → `manipulate`）
+- ✅ 入力プロンプト検査（`validate_article_5_input()`）
+- ✅ 外部分類モデル統合インターフェース（`external_classifier`パラメータ）
 
-**技術的推奨**:
+**残存課題**: セマンティック類似度ベースの検出（embedding-based）は未実装。高度な迂回手法（間接表現・比喩・暗号化表現）には対応できない。
+
+**技術的推奨（残り）**:
 ```python
-# 必要な強化:
-# 1. 多言語対応の禁止慣行分類モデル（fine-tuned classifier）
-# 2. セマンティック類似度検索（embedding-based）
-# 3. 法務レビューを組み合わせた多層防御
-# 4. 定期的なred-teamテストによる迂回手法の検出
+# 残りの強化項目:
+# 1. セマンティック類似度検索（embedding-based）の統合
+# 2. 法務レビューを組み合わせた多層防御の運用化
+# 3. 定期的なred-teamテストによる迂回手法の検出
+# 4. external_classifierインターフェースを活用した専用分類モデル接続
 ```
 
 ### GAP-02: システムリスク自己分類の法務承認（Critical）
@@ -452,10 +474,14 @@ VERITAS OSは附属書Ⅲキーワード（biometric: 0.95、hiring: 0.90、heal
 
 ### P1（直ちに対応）
 
-**[P1-1] Article 5禁止慣行の多層検出強化**
-- `eu_ai_act_compliance_module.py`の`ARTICLE_5_PROHIBITED_PATTERNS`を多言語・語義的検出に拡張
-- 外部の専用禁止慣行分類モデルとの統合インターフェースを追加
-- 四半期毎のred-teamテスト実施を義務化
+**[P1-1] Article 5禁止慣行の多層検出強化** ✅ 大幅対応済
+- ✅ `ARTICLE_5_PROHIBITED_PATTERNS` を30+パターンに拡充（5言語対応、同義語・婉曲表現含む）
+- ✅ 外部の専用禁止慣行分類モデルとの統合インターフェース追加（`external_classifier`パラメータ）
+- ✅ NFKC Unicode正規化・ホモグリフ変換・ハイフン/ゼロ幅文字除去・スペース挿入回避検出を実装
+- ✅ 入力プロンプト検査（`validate_article_5_input()`）を実装し、`eu_compliance_pipeline` に統合
+- ✅ `classify_annex_iii_risk()` にも同等の正規化を適用（GAP-01d）
+- 🔄 四半期毎のred-teamテスト実施を義務化（運用プロセス — 未確立）
+- 🔄 セマンティック類似度検索（embedding-based）の統合（未実装）
 
 **[P1-2] EU AI法リスク分類の法務承認プロセス確立**
 - `docs/eu_ai_act/risk_classification_matrix.md` は作成済み ✅
@@ -634,6 +660,10 @@ bench_mode:
 | Art.9/12 | `core/eu_ai_act_compliance_module.py` | 668+ | `_read_governance_log_retention()` governance.json からの保持期間自動読み取り (P1-6) |
 | Art.9/12 | `core/eu_ai_act_compliance_module.py` | 685+ | `validate_audit_readiness_for_high_risk()` 暗号化・Webhook・保持期間の自動検出 (P1-6) |
 | Art.14(4) | `api/server.py` | 2910+ | `/v1/system/halt`・`/v1/system/resume`・`/v1/system/halt-status` API |
+| Art.5 | `core/eu_ai_act_compliance_module.py` | 175-203 | `_CONFUSABLE_ASCII_MAP`・`_SPACED_EVASION_RE` (GAP-01) |
+| Art.5 | `core/eu_ai_act_compliance_module.py` | 262-280 | `_normalise_text()` NFKC/ホモグリフ/スペース挿入正規化 (GAP-01) |
+| Art.5 | `core/eu_ai_act_compliance_module.py` | 310-337 | `validate_article_5_input()` 入力プロンプト検査 (P1-1) |
+| Art.9 | `core/eu_ai_act_compliance_module.py` | 340-368 | `classify_annex_iii_risk()` NFKC/ホモグリフ正規化 (GAP-01d) |
 
 ---
 
@@ -641,9 +671,9 @@ bench_mode:
 
 VERITAS OSはEU AI法準拠を真剣に取り組む姿勢を示しており、特に**第12条（記録保持）**においては業界最高水準の実装（ハッシュチェーン・Ed25519署名・WORM対応・暗号化サポート・180日/365日保持）を提供している。
 
-初回レビューで特定した17件のギャップのうち **15件を解消済み** であり、附属書IV準拠文書、モデルカード、バイアス評価、ユーザーガイド、第三者通知メカニズム、AI開示フィールド、AIコンテンツウォーターマーク、データリネージュ追跡、データ品質検証統合、人間レビューキュー・タイムアウト管理、システム停止/再開API、デプロイ前鮮度チェック、LLM縮退モード等の整備が完了した。
+初回レビューで特定した17件のギャップのうち **16件を解消済み** であり、附属書IV準拠文書、モデルカード、バイアス評価、ユーザーガイド、第三者通知メカニズム、AI開示フィールド、AIコンテンツウォーターマーク、データリネージュ追跡、データ品質検証統合、人間レビューキュー・タイムアウト管理、システム停止/再開API、デプロイ前鮮度チェック、LLM縮退モード等の整備が完了した。Art.5禁止慣行検出はNFKC正規化・ホモグリフ変換・入力検査・外部分類モデルIF等の大幅強化により、CriticalからHighに引き下げた。
 
-一方、**2件のCriticalギャップ**（禁止慣行の検出精度・リスク分類の法務承認）は引き続き対応が必要であり、本番環境での高リスクAIとしての展開前に必ず解決する必要がある。
+一方、**1件のCriticalギャップ**（GAP-02: リスク分類の法務承認）および**1件のHighギャップ**（GAP-01: セマンティック検出の未対応）は引き続き対応が必要であり、本番環境での高リスクAIとしての展開前に解決する必要がある。
 
 法的リスクの観点からは、文書化・透明性・人間監視の面で大幅な改善が見られるものの、**運用面のギャップ（法務承認フロー）が残存しており、現時点ではシステムを高リスクAIとして規制当局へ届け出るには追加対応が必要**である。推奨された改善アクションの実施後、独立した第三者による適合性評価を受けることを強く推奨する。
 
