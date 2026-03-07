@@ -1728,10 +1728,11 @@ def validate_deployment_readiness(
         "entries_count": cm["entries_count"],
     }
     if not cm["valid"]:
-        issues.append(
-            "change_management: "
-            + "; ".join(cm["issues"][:3])  # cap to avoid overly long messages
-        )
+        cm_issues = cm["issues"]
+        summary = "; ".join(cm_issues[:3])
+        if len(cm_issues) > 3:
+            summary += f" (+{len(cm_issues) - 3} more)"
+        issues.append("change_management: " + summary)
 
     return {
         "ready": len(issues) == 0,
