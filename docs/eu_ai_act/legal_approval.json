@@ -1,0 +1,15 @@
+{
+  "approved_by": "",
+  "approval_date": "",
+  "risk_classification": "high-risk",
+  "scope": "VERITAS OS v2.0 — Proto-AGI Decision Operating System",
+  "status": "pending",
+  "notes": "This file tracks the formal legal approval of VERITAS OS risk classification under EU AI Act Art. 6 / Annex III. Update 'approved_by' with the legal counsel name, 'approval_date' with the ISO date of approval, and set 'status' to 'approved' once formal review is complete.",
+  "ce_marking": {
+    "risk_classification_approved": false,
+    "technical_documentation_complete": false,
+    "conformity_assessment_done": false,
+    "quality_management_system": false,
+    "post_market_monitoring_plan": false
+  }
+}

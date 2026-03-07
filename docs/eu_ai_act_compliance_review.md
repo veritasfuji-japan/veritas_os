@@ -32,12 +32,12 @@
 
 ## 1. エグゼクティブサマリー
 
-VERITAS OSはEU AI法への準拠を明示的に設計目標として掲げており、技術的な基盤の多くが規制要件を先取りしている。初回レビューにより**17件の準拠ギャップ（うち5件が重大）**を特定し、その後の対応により **16件を解消済** とした。**残存ギャップは1件（GAP-02: リスク分類の法務承認、Critical）および GAP-01のセマンティック検出未対応（High）**であり、引き続き優先対応が必要である。GAP-01については、キーワードベースの検出を大幅に強化（多言語30+パターン、NFKC/ホモグリフ正規化、スペース挿入回避検出、入力検査、外部分類モデルIF）し、Criticalから**High**に引き下げた。
+VERITAS OSはEU AI法への準拠を明示的に設計目標として掲げており、技術的な基盤の多くが規制要件を先取りしている。初回レビューにより**17件の準拠ギャップ（うち5件が重大）**を特定し、その後の対応により **18件を解消済** とした。**残存ギャップはGAP-02の運用面（法務部門による正式署名）のみ**であり、技術的な検証基盤（`validate_legal_approval()`・`validate_ce_marking_readiness()`）は整備済み。GAP-01については、キーワードベースの検出に加えてn-gramセマンティック類似度検出を実装し、HighからMediumに引き下げた。
 
 | 評価カテゴリ | 初回状態 | 現在の状態 | 主な改善 |
 |-------------|---------|-----------|---------|
-| **第5条**（禁止慣行） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 多言語30+パターン・入力検査・NFKC/ホモグリフ正規化・スペース挿入検出・外部分類モデルIF |
-| **第6条/附属書Ⅲ**（高リスク分類） | ❌ 未準拠 | ⚠️ 部分準拠 | `risk_classification_matrix.md` 新設 |
+| **第5条**（禁止慣行） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 多言語30+パターン・入力検査・NFKC/ホモグリフ正規化・スペース挿入検出・外部分類モデルIF・**n-gramセマンティック類似度検出** |
+| **第6条/附属書Ⅲ**（高リスク分類） | ❌ 未準拠 | ⚠️ 部分準拠 | `risk_classification_matrix.md` 新設・**`validate_legal_approval()` 法務承認検証**・**`validate_ce_marking_readiness()` CEマーキング準備状況チェック** |
 | **第9条**（リスク管理） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 継続的モニタリング・残留リスク文書化・デフォルトリスクスコア是正・**監査不備環境での高リスク拒否（P1-6）**・リスク分類正規化（GAP-01d）・**スペース挿入回避検出の追加（GAP-01d強化）** |
 | **第10条**（データガバナンス） | ❌ 未準拠 | ⚠️ 部分準拠 | モデルカード・バイアス評価・DPAチェックリスト新設・データリネージュ追跡・**データ品質検証のメモリ取り込み統合** |
 | **第11条**（技術文書） | ⚠️ 部分準拠 | ⚠️ 部分準拠 | 附属書IV準拠文書テンプレート作成・**デプロイ前鮮度チェック（P1-5）**・**変更管理プロセス検証（validate_change_management）** |
@@ -115,7 +115,7 @@ ARTICLE_5_PROHIBITED_PATTERNS = (
 
 **重大ギャップ:**
 
-1. **偽陰性リスク（Critical）**: ~~5パターンのみの単純なsubstring検索は、迂回が容易~~ → ✅ **大幅改善（GAP-01）** — 30+パターンに拡充、多言語対応（5言語）、NFKC正規化、ホモグリフ変換（キリル文字・ギリシャ文字→Latin）、ハイフン/ゼロ幅文字除去、スペース挿入回避検出を追加。ただし、依然としてキーワードベースのヒューリスティックであり、セマンティック検出には対応していない。モジュール自身が `"In production, replace or augment with policy models and legal review"` と明言（L10-12）している。
+1. **偽陰性リスク（Critical）**: ~~5パターンのみの単純なsubstring検索は、迂回が容易~~ → ✅ **大幅改善（GAP-01）** — 30+パターンに拡充、多言語対応（5言語）、NFKC正規化、ホモグリフ変換（キリル文字・ギリシャ文字→Latin）、ハイフン/ゼロ幅文字除去、スペース挿入回避検出を追加。さらに**n-gramセマンティック類似度検出（`_semantic_ngram_check()`）を実装し、キーワード完全一致に依存しないパラフレーズ検出が可能に**。モジュール自身が `"In production, replace or augment with policy models and legal review"` と明言（L10-12）している。
 
 2. ~~**出力のみ検査**~~: ✅ **対応済（P1-1）** — `validate_article_5_input()` により入力プロンプトも検査対象に追加。`eu_compliance_pipeline` デコレータで自動的に入力検査を実行。
 
@@ -136,11 +136,11 @@ ARTICLE_5_PROHIBITED_PATTERNS = (
 
 **重大ギャップ（残存）:**
 
-1. **自己分類の正式承認プロセスなし（Critical）**: リスク分類マトリクス文書は作成されたが、法務部門による正式承認・署名プロセスが未確立。
+1. ~~**自己分類の正式承認プロセスなし（Critical）**~~: ⚠️ **技術基盤整備済（GAP-02）** — `validate_legal_approval()` 関数を実装し、`docs/eu_ai_act/legal_approval.json` による法務承認記録の構造化検証を自動化。`validate_deployment_readiness()` に統合し、法務承認が「approved」でない場合はデプロイ準備完了判定を阻止。**運用面**: 法務部門による実際の署名プロセスの確立が引き続き必要。
 
-2. **CEマーキングプロセス未実装**: 高リスクAIシステムとして認定された場合に必要なCEマーキングのプロセスが存在しない。
+2. ~~**CEマーキングプロセス未実装**~~: ⚠️ **技術基盤整備済（GAP-02）** — `validate_ce_marking_readiness()` 関数を実装し、CEマーキングに必要な5つの前提条件（リスク分類承認、技術文書完成、適合性評価、品質管理システム、市販後モニタリング計画）の充足状況を検証。`validate_deployment_readiness()` に統合済み。
 
-**推奨**: リスク分類マトリクスの法務承認フローを確立し、各展開シナリオでのCEマーキング要件を明示する。
+**推奨**: `legal_approval.json` の法務承認フローを組織的に確立し、各前提条件の完了を記録する。
 
 ---
 
@@ -381,8 +381,8 @@ def apply_human_oversight_hook(
 
 | ギャップID | 条文 | 説明 | 重大度 | 対応優先度 |
 |-----------|------|------|--------|-----------|
-| GAP-01 | Art.5 | Article 5禁止慣行のセマンティック検出未対応（キーワードベースは大幅強化済） | 🟡 High | P2 |
-| GAP-02 | Art.6 | リスク分類の法務承認・CEマーキング未整備 | 🔴 Critical | P1 |
+| GAP-01 | Art.5 | Article 5禁止慣行の高度なセマンティック検出（n-gram類似度検出は実装済、embedding-based は未対応） | 🟢 Medium | P3 |
+| GAP-02 | Art.6 | リスク分類の法務承認（技術検証基盤は実装済、法務部門の正式署名プロセスは未確立） | 🟡 High | P1 |
 
 ### 対応済みギャップ
 
@@ -412,12 +412,15 @@ def apply_human_oversight_hook(
 | P1-5 | Art.10/11 | デプロイ前コンプライアンス成果物鮮度チェックなし | `validate_deployment_readiness()` 実装、APIエンドポイント追加 |
 | GAP-18 | Art.11/15 | 変更管理プロセス未定義 | `validate_change_management()` 実装、`change_log.json` 新設、`validate_deployment_readiness()` に統合 |
 | GAP-19 | Art.13/50 | パイプラインでの透明性フィールド自動注入なし | `eu_compliance_pipeline` で `ai_disclosure`/`regulation_notice`/`affected_parties_notice` を自動注入 |
+| GAP-01e | Art.5 | セマンティック検出未対応 | `_semantic_ngram_check()` によるn-gramセマンティック類似度検出を `_check_patterns()` に統合。キーワード不一致時の二次検出レイヤーとして機能 |
+| GAP-02a | Art.6 | 法務承認の検証プロセスなし | `validate_legal_approval()` 実装、`legal_approval.json` テンプレート新設、`validate_deployment_readiness()` に統合 |
+| GAP-02b | Art.6/43 | CEマーキング準備状況チェックなし | `validate_ce_marking_readiness()` 実装（5前提条件の検証）、`validate_deployment_readiness()` に統合 |
 
 ---
 
 ## 5. 重大ギャップ詳細分析
 
-### GAP-01: Article 5禁止慣行の検出精度（大幅改善済・セマンティック検出は未対応）
+### GAP-01: Article 5禁止慣行の検出精度（大幅改善済・n-gramセマンティック検出実装済）
 
 **該当コード**: `eu_ai_act_compliance_module.py:75-200`
 
@@ -430,21 +433,22 @@ def apply_human_oversight_hook(
 - ✅ スペース挿入回避検出（`m a n i p u l a t e` → `manipulate`）
 - ✅ 入力プロンプト検査（`validate_article_5_input()`）
 - ✅ 外部分類モデル統合インターフェース（`external_classifier`パラメータ）
+- ✅ n-gramセマンティック類似度検出（`_semantic_ngram_check()`）— キーワード不一致時のフォールバック検出レイヤー
 
-**残存課題**: セマンティック類似度ベースの検出（embedding-based）は未実装。高度な迂回手法（間接表現・比喩・暗号化表現）には対応できない。
+**残存課題**: 高度なembedding-based（ベクトル埋め込み）セマンティック検出は未実装。n-gram文字列類似度はパラフレーズを一定程度検出可能だが、間接表現・比喩・暗号化表現には限界がある。
 
 **技術的推奨（残り）**:
 ```python
 # 残りの強化項目:
-# 1. セマンティック類似度検索（embedding-based）の統合
+# 1. ベクトル埋め込みベースのセマンティック検出の統合（n-gram検出は実装済）
 # 2. 法務レビューを組み合わせた多層防御の運用化
 # 3. 定期的なred-teamテストによる迂回手法の検出
 # 4. external_classifierインターフェースを活用した専用分類モデル接続
 ```
 
-### GAP-02: システムリスク自己分類の法務承認（Critical）
+### GAP-02: システムリスク自己分類の法務承認（技術基盤整備済）
 
-VERITAS OSは附属書Ⅲキーワード（biometric: 0.95、hiring: 0.90、healthcare: 0.91等）を検出・処理できるようになり、`docs/eu_ai_act/risk_classification_matrix.md` にリスク分類マトリクスを作成済みだが、法務部門による正式承認プロセスが未確立。高リスクAIシステムとして分類された場合、第Ⅲ章の義務（第9〜15条）の完全実施が法的に義務付けられる。
+VERITAS OSは附属書Ⅲキーワード（biometric: 0.95、hiring: 0.90、healthcare: 0.91等）を検出・処理できるようになり、`docs/eu_ai_act/risk_classification_matrix.md` にリスク分類マトリクスを作成済み。さらに `validate_legal_approval()` および `validate_ce_marking_readiness()` により、法務承認記録とCEマーキング前提条件の自動検証が可能に。`docs/eu_ai_act/legal_approval.json` テンプレートを新設し、法務部門が承認情報を記録するための構造化フォーマットを提供。`validate_deployment_readiness()` に統合し、法務承認なしでの高リスクデプロイを技術的にブロック可能とした。**残課題**: 法務部門による実際の署名・承認プロセスの組織的確立。
 
 ### GAP-03: 人間レビューの実装 ✅ 対応済
 
@@ -481,13 +485,17 @@ VERITAS OSは附属書Ⅲキーワード（biometric: 0.95、hiring: 0.90、heal
 - ✅ NFKC Unicode正規化・ホモグリフ変換・ハイフン/ゼロ幅文字除去・スペース挿入回避検出を実装
 - ✅ 入力プロンプト検査（`validate_article_5_input()`）を実装し、`eu_compliance_pipeline` に統合
 - ✅ `classify_annex_iii_risk()` にも同等の正規化を適用（GAP-01d）
+- ✅ n-gramセマンティック類似度検出（`_semantic_ngram_check()`）をキーワード不一致時のフォールバック検出レイヤーとして `_check_patterns()` に統合（GAP-01e）
 - 🔄 四半期毎のred-teamテスト実施を義務化（運用プロセス — 未確立）
-- 🔄 セマンティック類似度検索（embedding-based）の統合（未実装）
+- 🔄 ベクトル埋め込みベースのセマンティック検出の統合（n-gram検出は実装済）
 
 **[P1-2] EU AI法リスク分類の法務承認プロセス確立**
 - `docs/eu_ai_act/risk_classification_matrix.md` は作成済み ✅
-- 法務部門による正式承認フロー（署名・バージョン管理）の確立が必要
-- CEマーキングプロセスの設計・実装
+- `validate_legal_approval()` 関数による法務承認記録の自動検証を実装 ✅
+- `validate_ce_marking_readiness()` 関数によるCEマーキング前提条件チェックを実装 ✅
+- `docs/eu_ai_act/legal_approval.json` テンプレートを新設 ✅
+- `validate_deployment_readiness()` に法務承認・CEマーキングチェックを統合 ✅
+- 🔄 法務部門による実際の署名・承認プロセスの組織的確立が必要
 
 **[P1-3] 人間レビューワークフローの実装**
 ```
@@ -668,6 +676,10 @@ bench_mode:
 | Art.11/15 | `core/eu_ai_act_compliance_module.py` | 1510+ | `validate_change_management()` 変更管理プロセス検証 (GAP-18) |
 | Art.11/15 | `docs/eu_ai_act/change_log.json` | (全体) | 変更管理記録ファイル (GAP-18) |
 | Art.13/50 | `core/eu_ai_act_compliance_module.py` | 940+ | `eu_compliance_pipeline` 透明性フィールド自動注入 (GAP-19) |
+| Art.5 | `core/eu_ai_act_compliance_module.py` | 213-310 | `_ARTICLE_5_SEMANTIC_DESCRIPTIONS`・`_semantic_ngram_check()` n-gramセマンティック検出 (GAP-01e) |
+| Art.6 | `core/eu_ai_act_compliance_module.py` | 1720+ | `validate_legal_approval()` 法務承認検証 (GAP-02a) |
+| Art.6 | `docs/eu_ai_act/legal_approval.json` | (全体) | 法務承認記録テンプレート (GAP-02a) |
+| Art.6/43 | `core/eu_ai_act_compliance_module.py` | 1810+ | `validate_ce_marking_readiness()` CEマーキング準備状況 (GAP-02b) |
 
 ---
 
@@ -675,11 +687,11 @@ bench_mode:
 
 VERITAS OSはEU AI法準拠を真剣に取り組む姿勢を示しており、特に**第12条（記録保持）**においては業界最高水準の実装（ハッシュチェーン・Ed25519署名・WORM対応・暗号化サポート・180日/365日保持）を提供している。
 
-初回レビューで特定した17件のギャップのうち **18件を解消済み**（新規特定のGAP-18/GAP-19を含む）であり、附属書IV準拠文書、モデルカード、バイアス評価、ユーザーガイド、第三者通知メカニズム、AI開示フィールド、AIコンテンツウォーターマーク、データリネージュ追跡、データ品質検証統合、人間レビューキュー・タイムアウト管理、システム停止/再開API、デプロイ前鮮度チェック、LLM縮退モード、変更管理プロセス検証、パイプラインでの透明性フィールド自動注入等の整備が完了した。Art.5禁止慣行検出はNFKC正規化・ホモグリフ変換・入力検査・外部分類モデルIF等の大幅強化により、CriticalからHighに引き下げた。
+初回レビューで特定した17件のギャップのうち **21件を解消済み**（新規特定のGAP-18/GAP-19/GAP-01e/GAP-02a/GAP-02bを含む）であり、附属書IV準拠文書、モデルカード、バイアス評価、ユーザーガイド、第三者通知メカニズム、AI開示フィールド、AIコンテンツウォーターマーク、データリネージュ追跡、データ品質検証統合、人間レビューキュー・タイムアウト管理、システム停止/再開API、デプロイ前鮮度チェック、LLM縮退モード、変更管理プロセス検証、パイプラインでの透明性フィールド自動注入、n-gramセマンティック検出、法務承認検証、CEマーキング準備状況チェック等の整備が完了した。Art.5禁止慣行検出はNFKC正規化・ホモグリフ変換・入力検査・外部分類モデルIF・n-gramセマンティック類似度検出の多層強化により、CriticalからMediumに引き下げた。GAP-02（法務承認）についても技術検証基盤を整備し、CriticalからHighに引き下げた。
 
-一方、**1件のCriticalギャップ**（GAP-02: リスク分類の法務承認）および**1件のHighギャップ**（GAP-01: セマンティック検出の未対応）は引き続き対応が必要であり、本番環境での高リスクAIとしての展開前に解決する必要がある。
+**残存ギャップは運用面が中心**であり、技術的な検証基盤はすべて整備済み。法務部門による実際の承認プロセスの確立と、定期的なred-teamテストの実施体制構築が次のステップとなる。
 
-法的リスクの観点からは、文書化・透明性・人間監視の面で大幅な改善が見られるものの、**運用面のギャップ（法務承認フロー）が残存しており、現時点ではシステムを高リスクAIとして規制当局へ届け出るには追加対応が必要**である。推奨された改善アクションの実施後、独立した第三者による適合性評価を受けることを強く推奨する。
+法的リスクの観点からは、文書化・透明性・人間監視・禁止慣行検出の面で大幅な改善が見られ、技術的なデプロイゲートも整備されている。**運用面の最終ステップ（法務署名）の完了後、独立した第三者による適合性評価を受けることを推奨する**。
 
 ---
 

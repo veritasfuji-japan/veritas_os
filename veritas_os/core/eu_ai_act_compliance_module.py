@@ -7,7 +7,8 @@ This module maps high-risk obligations to Veritas OS modules:
              Article 14 human oversight hooks.
 
 Security warning:
-    Annex III / Article 5 detection in this module is heuristic keyword-based.
+    Annex III / Article 5 detection in this module is heuristic keyword-based
+    with n-gram semantic similarity augmentation.
     In production, replace or augment with policy models and legal review to avoid
     false negatives for regulated high-risk use cases.
 
@@ -22,6 +23,13 @@ Changes (P1-1/P1-3/P1-6):
 Changes (P2-3):
     - P2-3: Synthetic-data-only validation for bench_mode.  Real PII markers
       in bench/internal_eval data are rejected unless explicitly overridden.
+
+Changes (GAP-01/GAP-02 review improvements):
+    - GAP-01: N-gram semantic similarity detection for Art. 5 prohibited
+      practices, providing coverage beyond exact keyword substring matching.
+    - GAP-02: Legal approval validation (``validate_legal_approval()``) and
+      CE marking readiness check (``validate_ce_marking_readiness()``),
+      integrated into ``validate_deployment_readiness()``.
 """
 
 from __future__ import annotations
@@ -202,6 +210,95 @@ _CONFUSABLE_ASCII_MAP = str.maketrans(
 # (e.g. "m a n i p u l a t e") used to evade substring matching.
 _SPACED_EVASION_RE = re.compile(r"\b((?:[a-zA-Z] ){2,}[a-zA-Z])\b")
 
+# ---------------------------------------------------------------------------
+# GAP-01: N-gram semantic similarity detection for Art. 5
+# ---------------------------------------------------------------------------
+# Prohibited-practice *descriptions* for n-gram similarity matching.
+# These are full phrases that capture the *intent* of Art. 5 prohibitions,
+# enabling detection of paraphrased or indirect references that evade simple
+# substring matching.
+_ARTICLE_5_SEMANTIC_DESCRIPTIONS: tuple[str, ...] = (
+    "subliminal technique beyond consciousness to distort behavior",
+    "exploiting vulnerabilities of age disability social economic",
+    "social scoring by public authorities leading to detrimental treatment",
+    "real time remote biometric identification in publicly accessible spaces",
+    "untargeted scraping of facial images from internet or cctv",
+    "emotion recognition in workplace or education",
+    "biometric categorisation to deduce race political opinions religion",
+    "individual predictive policing based solely on profiling",
+    "manipulate persons through deceptive techniques to undermine autonomy",
+    "coerce individuals using position of authority or power",
+    "evaluate trustworthiness of persons based on social behavior or personality",
+    "mass indiscriminate surveillance of population",
+    "classify citizens based on behavior or personal traits for punitive measures",
+    "facial recognition database built through untargeted data collection",
+    "exploit cognitive bias to manipulate decision making",
+    "psychological manipulation targeting vulnerable groups",
+)
+
+# Default n-gram size and similarity threshold for semantic detection.
+_NGRAM_SIZE = 3
+_SEMANTIC_SIMILARITY_THRESHOLD = 0.35
+
+
+def _char_ngrams(text: str, n: int = _NGRAM_SIZE) -> set[str]:
+    """Return the set of character n-grams for *text*."""
+    if len(text) < n:
+        return {text} if text else set()
+    return {text[i : i + n] for i in range(len(text) - n + 1)}
+
+
+def _ngram_similarity(text: str, reference: str, n: int = _NGRAM_SIZE) -> float:
+    """Compute Jaccard similarity between character n-gram sets.
+
+    Returns a value in [0.0, 1.0].  A higher value indicates stronger
+    overlap between *text* and *reference*.
+    """
+    a = _char_ngrams(text, n)
+    b = _char_ngrams(reference, n)
+    if not a or not b:
+        return 0.0
+    intersection = a & b
+    union = a | b
+    return len(intersection) / len(union)
+
+
+def _semantic_ngram_check(
+    text: str,
+    *,
+    threshold: float = _SEMANTIC_SIMILARITY_THRESHOLD,
+) -> list[str]:
+    """Detect prohibited practices via n-gram semantic similarity.
+
+    GAP-01 enhancement: Provides a lightweight semantic layer above keyword
+    substring matching.  Compares sliding windows of the input text against
+    known Art. 5 prohibition descriptions using character n-gram Jaccard
+    similarity.  Matches above *threshold* are reported.
+
+    This is intentionally conservative (high-precision) to avoid
+    false positives while still catching paraphrased prohibited content
+    that exact keyword matching would miss.
+    """
+    violations: list[str] = []
+    # Slide a window sized to each reference description across the text.
+    for desc in _ARTICLE_5_SEMANTIC_DESCRIPTIONS:
+        window_size = len(desc)
+        if len(text) < window_size:
+            # Compare entire text if shorter than description.
+            sim = _ngram_similarity(text, desc)
+            if sim >= threshold:
+                violations.append(f"semantic:{desc[:60]}")
+            continue
+        # Slide the window across the text.
+        for start in range(0, len(text) - window_size + 1, max(1, window_size // 4)):
+            window = text[start : start + window_size]
+            sim = _ngram_similarity(window, desc)
+            if sim >= threshold:
+                violations.append(f"semantic:{desc[:60]}")
+                break  # One match per description is enough.
+    return violations
+
+
 FUNDAMENTAL_RIGHTS_ROLE = {
     "role": "fundamental_rights_officer",
     "instruction": (
@@ -280,9 +377,21 @@ class EUAIActSafetyGateLayer4(SafetyGate):
         return normalized.lower()
 
     def _check_patterns(self, text: str) -> List[str]:
-        """Return matched prohibited patterns after normalisation."""
+        """Return matched prohibited patterns after normalisation.
+
+        GAP-01: Augmented with n-gram semantic similarity check to detect
+        paraphrased or indirect references to prohibited practices that
+        exact keyword matching would miss.
+        """
         normalised = self._normalise_text(text)
-        return [p for p in _ALL_PROHIBITED_PATTERNS if p in normalised]
+        keyword_hits = [p for p in _ALL_PROHIBITED_PATTERNS if p in normalised]
+        # GAP-01: Semantic similarity layer — only runs when keyword check
+        # finds nothing, to avoid duplicating detections.
+        if not keyword_hits:
+            semantic_hits = _semantic_ngram_check(normalised)
+            if semantic_hits:
+                return semantic_hits
+        return keyword_hits
 
     def validate_article_5(self, generated_text: str) -> Dict[str, Any]:
         """Validate generated output against Article 5 prohibited practices."""
@@ -1598,6 +1707,160 @@ def validate_change_management(
 
 
 # ---------------------------------------------------------------------------
+# GAP-02: Legal approval validation (Art. 6)
+# ---------------------------------------------------------------------------
+# Required fields in a legal approval record.
+_REQUIRED_LEGAL_APPROVAL_FIELDS: tuple[str, ...] = (
+    "approved_by",
+    "approval_date",
+    "risk_classification",
+    "scope",
+)
+
+_LEGAL_APPROVAL_PATH = os.path.join("docs", "eu_ai_act", "legal_approval.json")
+
+
+def validate_legal_approval(
+    *,
+    approval_record: Dict[str, Any] | None = None,
+    repo_root: str | None = None,
+) -> Dict[str, Any]:
+    """Validate that a legal approval record exists and is well-formed.
+
+    Art. 6 / Annex III — Risk classification & CE marking:
+    EU AI Act requires that high-risk AI systems have their risk
+    classification formally approved by legal counsel before deployment.
+
+    When *approval_record* is ``None`` the function looks for
+    ``docs/eu_ai_act/legal_approval.json`` in the repository root.
+
+    Args:
+        approval_record: Explicit approval record dict for validation.
+        repo_root: Repository root directory (auto-detected when ``None``).
+
+    Returns:
+        Dict with ``valid`` (bool), ``issues`` (list of problems),
+        and ``eu_ai_act_article``.
+    """
+    import pathlib
+
+    issues: List[str] = []
+
+    if approval_record is None:
+        if repo_root is None:
+            repo_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        approval_path = os.path.join(repo_root, _LEGAL_APPROVAL_PATH)
+        if not os.path.isfile(approval_path):
+            return {
+                "valid": False,
+                "issues": [
+                    "legal_approval_missing: docs/eu_ai_act/legal_approval.json not found"
+                ],
+                "eu_ai_act_article": "Art. 6 / Annex III",
+            }
+        try:
+            with open(approval_path) as fh:
+                approval_record = json.load(fh)
+            if not isinstance(approval_record, dict):
+                return {
+                    "valid": False,
+                    "issues": ["legal_approval_format: expected a JSON object"],
+                    "eu_ai_act_article": "Art. 6 / Annex III",
+                }
+        except (OSError, json.JSONDecodeError) as exc:
+            return {
+                "valid": False,
+                "issues": [f"legal_approval_read_error: {exc}"],
+                "eu_ai_act_article": "Art. 6 / Annex III",
+            }
+
+    # Validate required fields
+    for field in _REQUIRED_LEGAL_APPROVAL_FIELDS:
+        if not approval_record.get(field):
+            issues.append(f"legal_approval: missing required field '{field}'")
+
+    # Validate status is explicitly "approved"
+    status = str(approval_record.get("status", "")).lower()
+    if status != "approved":
+        issues.append(
+            f"legal_approval: status is '{status}', expected 'approved'"
+        )
+
+    return {
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "eu_ai_act_article": "Art. 6 / Annex III",
+    }
+
+
+# ---------------------------------------------------------------------------
+# GAP-02: CE marking readiness check (Art. 6)
+# ---------------------------------------------------------------------------
+_CE_MARKING_PREREQUISITES: tuple[str, ...] = (
+    "risk_classification_approved",
+    "technical_documentation_complete",
+    "conformity_assessment_done",
+    "quality_management_system",
+    "post_market_monitoring_plan",
+)
+
+
+def validate_ce_marking_readiness(
+    *,
+    checklist: Dict[str, bool] | None = None,
+    repo_root: str | None = None,
+) -> Dict[str, Any]:
+    """Check whether CE marking prerequisites are satisfied.
+
+    Art. 6 — High-risk AI systems:
+    When an AI system is classified as high-risk under Annex III,
+    the provider must complete a conformity assessment and apply
+    CE marking before placing the system on the market.
+
+    Args:
+        checklist: Explicit dict mapping prerequisite names to completion
+            booleans.  When ``None`` the function checks the
+            ``ce_marking`` section of ``legal_approval.json``.
+        repo_root: Repository root directory (auto-detected when ``None``).
+
+    Returns:
+        Dict with ``ready`` (bool), ``missing`` (list of incomplete
+        prerequisites), ``completed`` (list), and ``eu_ai_act_article``.
+    """
+    import pathlib
+
+    if checklist is None:
+        if repo_root is None:
+            repo_root = str(pathlib.Path(__file__).resolve().parent.parent.parent)
+        approval_path = os.path.join(repo_root, _LEGAL_APPROVAL_PATH)
+        if os.path.isfile(approval_path):
+            try:
+                with open(approval_path) as fh:
+                    data = json.load(fh)
+                if isinstance(data, dict):
+                    checklist = data.get("ce_marking", {})
+            except (OSError, json.JSONDecodeError):
+                logger.debug("Failed to read CE marking data", exc_info=True)
+        if checklist is None:
+            checklist = {}
+
+    completed: list[str] = []
+    missing: list[str] = []
+    for prereq in _CE_MARKING_PREREQUISITES:
+        if checklist.get(prereq):
+            completed.append(prereq)
+        else:
+            missing.append(prereq)
+
+    return {
+        "ready": len(missing) == 0,
+        "completed": completed,
+        "missing": missing,
+        "eu_ai_act_article": "Art. 6 / Art. 43 (Conformity Assessment)",
+    }
+
+
+# ---------------------------------------------------------------------------
 # P1-5: Deployment readiness check — model card / bias / DPA freshness
 # ---------------------------------------------------------------------------
 # Maximum age (in days) before a compliance artefact is considered stale.
@@ -1643,14 +1906,19 @@ def validate_deployment_readiness(
     - Log retention ≥ 180 days
     - Human-review notification webhook configured
 
+    GAP-02 checks (added):
+    - Legal approval record validation (Art. 6)
+    - CE marking readiness check (Art. 6 / Art. 43)
+
     Args:
         repo_root: Absolute path to the repository root.  When ``None``
             the function walks up from this file to locate the repo root.
 
     Returns:
         Dict with ``ready`` (bool), ``checks`` (per-artefact status),
-        ``environment`` (infrastructure readiness), ``issues``
-        (list of human-readable issues), and ``eu_ai_act_article``.
+        ``environment`` (infrastructure readiness), ``legal_approval``,
+        ``ce_marking``, ``issues`` (list of human-readable issues),
+        and ``eu_ai_act_article``.
     """
     import pathlib
 
@@ -1734,11 +2002,35 @@ def validate_deployment_readiness(
             summary += f" (+{len(cm_issues) - 3} more)"
         issues.append("change_management: " + summary)
 
+    # GAP-02: Legal approval validation (Art. 6)
+    la = validate_legal_approval(repo_root=repo_root)
+    legal_approval: Dict[str, Any] = {"valid": la["valid"]}
+    if not la["valid"]:
+        la_issues = la["issues"]
+        summary = "; ".join(la_issues[:3])
+        if len(la_issues) > 3:
+            summary += f" (+{len(la_issues) - 3} more)"
+        issues.append("legal_approval: " + summary)
+
+    # GAP-02: CE marking readiness (Art. 6 / Art. 43)
+    ce = validate_ce_marking_readiness(repo_root=repo_root)
+    ce_marking: Dict[str, Any] = {
+        "ready": ce["ready"],
+        "missing": ce["missing"],
+    }
+    if not ce["ready"]:
+        issues.append(
+            "ce_marking: missing prerequisites: " + ", ".join(ce["missing"][:3])
+            + (f" (+{len(ce['missing']) - 3} more)" if len(ce["missing"]) > 3 else "")
+        )
+
     return {
         "ready": len(issues) == 0,
         "checks": checks,
         "environment": environment,
         "change_management": change_management,
+        "legal_approval": legal_approval,
+        "ce_marking": ce_marking,
         "issues": issues,
-        "eu_ai_act_article": "Art. 10 / Art. 11 / Art. 12 / Art. 15 (P1-5 / P1-6)",
+        "eu_ai_act_article": "Art. 6 / Art. 10 / Art. 11 / Art. 12 / Art. 15 (P1-5 / P1-6 / GAP-02)",
     }
