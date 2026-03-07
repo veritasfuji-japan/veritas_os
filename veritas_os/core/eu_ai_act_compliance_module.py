@@ -1480,7 +1480,8 @@ def validate_deployment_readiness(
 
     Returns:
         Dict with ``ready`` (bool), ``checks`` (per-artefact status),
-        ``environment`` (infrastructure readiness), and ``issues``.
+        ``environment`` (infrastructure readiness), ``issues``
+        (list of human-readable issues), and ``eu_ai_act_article``.
     """
     import pathlib
 
