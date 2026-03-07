@@ -368,7 +368,7 @@ class TestAuditReadinessGuard:
     def test_auto_detect_from_env(self, monkeypatch) -> None:
         """When parameters are None, values are auto-detected from env."""
         monkeypatch.setenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", "https://hook.example.com")
-        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXk=")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "test-dummy-key")
         result = validate_audit_readiness_for_high_risk(
             risk_level="HIGH",
             log_retention_days=365,

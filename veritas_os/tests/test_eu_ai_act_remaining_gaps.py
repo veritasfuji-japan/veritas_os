@@ -242,7 +242,7 @@ class TestDeploymentReadiness:
 
     def test_ready_with_all_artefacts(self, monkeypatch) -> None:
         """When all artefacts exist, are fresh, and env is configured, readiness passes."""
-        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXk=")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "test-dummy-key")
         monkeypatch.setenv("VERITAS_HUMAN_REVIEW_WEBHOOK_URL", "https://hook.example.com")
         result = validate_deployment_readiness()
         assert result["ready"] is True
