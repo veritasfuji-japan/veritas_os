@@ -2620,7 +2620,7 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
         retention_class = str(
             body.retention_class or meta.get("retention_class") or "standard"
         ).strip().lower()
-        expires_at = body.expires_at or meta.get("expires_at")
+        expires_at = body.expires_at if body.expires_at is not None else meta.get("expires_at")
         legal_hold = body.legal_hold or bool(meta.get("legal_hold", False))
 
         legacy_saved = False
