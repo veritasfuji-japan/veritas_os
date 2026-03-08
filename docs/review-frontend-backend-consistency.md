@@ -1,36 +1,36 @@
-# Frontend-Backend Consistency Review Report
+# フロントエンド・バックエンド整合性レビュー報告書
 
-**Date:** 2026-03-08
-**Reviewer:** Claude (automated)
-**Scope:** OpenAPI spec, Backend (Python/FastAPI), Frontend (Next.js/TypeScript), Shared Types
-
----
-
-## Summary
-
-Overall the frontend and backend are **well-aligned**. The shared types package (`@veritas/types`) faithfully mirrors the backend Pydantic schemas, and the BFF proxy route correctly translates paths. However, several inconsistencies and gaps were identified across 3 severity levels.
+**日付:** 2026-03-08
+**レビュー担当:** Claude（自動実行）
+**対象範囲:** OpenAPI 仕様、バックエンド（Python/FastAPI）、フロントエンド（Next.js/TypeScript）、共有型
 
 ---
 
-## Critical Issues (要対応)
+## サマリー
 
-### 1. OpenAPI spec `rsi_note` type mismatch
+全体として、フロントエンドとバックエンドは**良好に整合**しています。共有型パッケージ（`@veritas/types`）はバックエンドの Pydantic スキーマを忠実に反映しており、BFF プロキシルートもパス変換を正しく行っています。一方で、重要度 3 段階にまたがるいくつかの不整合・ギャップが確認されました。
 
-| Layer | Type |
+---
+
+## 重大な課題（要対応）
+
+### 1. OpenAPI 仕様の `rsi_note` 型不一致
+
+| レイヤー | 型 |
 |-------|------|
 | **openapi.yaml** (L196) | `type: string` |
-| **Backend** `schemas.py` (L461) | `Optional[Dict[str, Any]]` |
-| **Frontend** `decision.ts` (L87) | `Record<string, unknown> \| null` |
+| **バックエンド** `schemas.py` (L461) | `Optional[Dict[str, Any]]` |
+| **フロントエンド** `decision.ts` (L87) | `Record<string, unknown> \| null` |
 
-**Impact:** OpenAPI spec says `rsi_note` is a string, but backend actually returns a dict/object. Any client code-generated from the OpenAPI spec will break when receiving the actual response.
+**影響:** OpenAPI 仕様では `rsi_note` は文字列ですが、実際のバックエンドは dict/object を返します。OpenAPI 仕様から自動生成されたクライアントは、実レスポンス受信時に破綻する可能性があります。
 
-**Fix:** Update `openapi.yaml` to `type: object` (nullable).
+**修正案:** `openapi.yaml` の型を `type: object`（nullable）に更新する。
 
-### 2. OpenAPI spec `DecideResponse` missing many fields
+### 2. OpenAPI 仕様の `DecideResponse` に多数のフィールド欠落
 
-The OpenAPI `DecideResponse` schema (L152-196) is missing the following fields that both the backend and frontend expect:
+OpenAPI の `DecideResponse` スキーマ（L152-196）には、バックエンドとフロントエンドの双方が前提としている以下のフィールドが不足しています。
 
-| Missing field | Backend type | Frontend type |
+| 欠落フィールド | バックエンド型 | フロントエンド型 |
 |---------------|-------------|---------------|
 | `version` | `str` | `string` |
 | `options` | `List[Alt]` | `DecisionAlternative[]` |
@@ -47,157 +47,157 @@ The OpenAPI `DecideResponse` schema (L152-196) is missing the following fields t
 | `evo` | `Optional[Dict]` | `Record<string, unknown> \| null` |
 | `memory_citations` | `List[Any]` | `unknown[]` |
 | `memory_used_count` | `int` | `number` |
-| `ai_disclosure` | `str` | `string` (optional) |
-| `regulation_notice` | `str` | `string` (optional) |
+| `ai_disclosure` | `str` | `string`（optional） |
+| `regulation_notice` | `str` | `string`（optional） |
 | `affected_parties_notice` | `Optional[Dict]` | `Record<string, unknown> \| null` |
 
-**Impact:** OpenAPI spec is significantly behind the actual API contract. External consumers relying on openapi.yaml will not be aware of these fields.
+**影響:** OpenAPI 仕様が実際の API 契約に対して大きく遅れており、`openapi.yaml` を前提にする外部利用者はこれらのフィールドを認識できません。
 
-**Fix:** Update `openapi.yaml` DecideResponse schema to include all fields.
+**修正案:** `openapi.yaml` の DecideResponse スキーマを全フィールド含む形に更新する。
 
-### 3. OpenAPI `DecideRequest` schema inconsistency with actual backend
+### 3. OpenAPI の `DecideRequest` と実バックエンド仕様の不整合
 
-| Field | openapi.yaml | Backend (schemas.py) |
+| フィールド | openapi.yaml | バックエンド（schemas.py） |
 |-------|-------------|---------------------|
-| `context` | **required**, `$ref: Context` | **optional** (default `{}`), accepts any dict |
-| `query` | not listed | accepted (default `""`) |
-| `min_evidence` | default `2` | default `1` |
-| `stream` | listed as `boolean` | not in DecideRequest |
-| `alternatives` | not listed | accepted |
-| `memory_auto_put` | not listed | accepted (default `true`) |
-| `persona_evolve` | not listed | accepted (default `true`) |
+| `context` | **必須**、`$ref: Context` | **任意**（デフォルト `{}`）、任意の dict を受理 |
+| `query` | 記載なし | 受理（デフォルト `""`） |
+| `min_evidence` | デフォルト `2` | デフォルト `1` |
+| `stream` | `boolean` として定義 | DecideRequest には存在しない |
+| `alternatives` | 記載なし | 受理 |
+| `memory_auto_put` | 記載なし | 受理（デフォルト `true`） |
+| `persona_evolve` | 記載なし | 受理（デフォルト `true`） |
 
-**Impact:** OpenAPI spec mandates `context` as required with a structured schema, but the backend accepts `query` + empty `context` (which is exactly what the frontend sends). The `stream` field in the spec doesn't exist in the backend. The default value of `min_evidence` differs.
+**影響:** OpenAPI 仕様では `context` が必須かつ構造化スキーマですが、実際のバックエンドは `query` + 空 `context` を受け付けます（これはフロントエンドが実際に送っている形です）。また、仕様にある `stream` はバックエンドに存在せず、`min_evidence` のデフォルト値も一致しません。
 
-**Fix:** Align openapi.yaml with actual DecideRequest schema.
+**修正案:** 実際の DecideRequest スキーマに合わせて `openapi.yaml` を整合させる。
 
 ---
 
-## Medium Issues (推奨対応)
+## 中程度の課題（推奨対応）
 
-### 4. OpenAPI spec missing backend endpoints
+### 4. OpenAPI 仕様にバックエンドのエンドポイントが未記載
 
-The following endpoints exist in the backend but are absent from `openapi.yaml`:
+以下のエンドポイントはバックエンドに存在しますが、`openapi.yaml` には定義がありません。
 
-| Endpoint | Purpose |
+| エンドポイント | 用途 |
 |----------|---------|
-| `GET /v1/events` | SSE event stream |
-| `GET /v1/trust/logs` | Paginated trust log listing |
-| `POST /v1/trust/feedback` | Human feedback recording |
-| `GET /v1/trustlog/verify` | Trust log chain verification |
-| `GET /v1/trustlog/export` | Trust log export |
-| `GET /v1/governance/value-drift` | Value drift metrics |
-| `GET /v1/governance/policy` | Governance policy read |
-| `PUT /v1/governance/policy` | Governance policy update |
-| `GET /v1/compliance/config` | Compliance config read |
-| `PUT /v1/compliance/config` | Compliance config update |
-| `GET /v1/compliance/deployment-readiness` | Deployment readiness check |
-| `POST /v1/system/halt` | Emergency system halt |
-| `POST /v1/system/resume` | System resume |
-| `GET /v1/system/halt-status` | Halt status check |
-| `GET /v1/metrics` | System metrics |
-| `GET /v1/report/eu_ai_act/{decision_id}` | EU AI Act report |
-| `GET /v1/report/governance` | Governance report |
-| `POST /v1/memory/search` | Memory search |
-| `POST /v1/memory/erase` | Memory erasure |
-| `POST /v1/decision/replay/{decision_id}` | Decision replay (v2) |
-| `WS /v1/ws/trustlog` | WebSocket trust log stream |
+| `GET /v1/events` | SSE イベントストリーム |
+| `GET /v1/trust/logs` | 信頼ログのページング一覧 |
+| `POST /v1/trust/feedback` | 人手フィードバック記録 |
+| `GET /v1/trustlog/verify` | 信頼ログチェーン検証 |
+| `GET /v1/trustlog/export` | 信頼ログエクスポート |
+| `GET /v1/governance/value-drift` | 価値ドリフト指標 |
+| `GET /v1/governance/policy` | ガバナンスポリシー取得 |
+| `PUT /v1/governance/policy` | ガバナンスポリシー更新 |
+| `GET /v1/compliance/config` | コンプライアンス設定取得 |
+| `PUT /v1/compliance/config` | コンプライアンス設定更新 |
+| `GET /v1/compliance/deployment-readiness` | デプロイ準備状況チェック |
+| `POST /v1/system/halt` | 緊急システム停止 |
+| `POST /v1/system/resume` | システム再開 |
+| `GET /v1/system/halt-status` | 停止状態確認 |
+| `GET /v1/metrics` | システムメトリクス |
+| `GET /v1/report/eu_ai_act/{decision_id}` | EU AI Act レポート |
+| `GET /v1/report/governance` | ガバナンスレポート |
+| `POST /v1/memory/search` | メモリ検索 |
+| `POST /v1/memory/erase` | メモリ削除 |
+| `POST /v1/decision/replay/{decision_id}` | 意思決定リプレイ（v2） |
+| `WS /v1/ws/trustlog` | WebSocket 信頼ログストリーム |
 
-**Impact:** External API consumers and tooling (Swagger UI, code generators) see an incomplete API surface.
+**影響:** 外部 API 利用者やツール（Swagger UI、コードジェネレータ）から見える API 表面が不完全になります。
 
-### 5. OpenAPI `EvidenceItem` has `hash` field not in backend
+### 5. OpenAPI `EvidenceItem` にバックエンド未対応の `hash` がある
 
-`openapi.yaml` (L83) defines a `hash` field on `EvidenceItem` that does not exist in the backend `EvidenceItem` schema or the frontend `EvidenceItem` interface. The backend has `title` instead, which is missing from the OpenAPI spec.
+`openapi.yaml`（L83）の `EvidenceItem` には `hash` フィールドがありますが、これはバックエンド `EvidenceItem` スキーマにもフロントエンド `EvidenceItem` インターフェースにも存在しません。逆に、バックエンドにある `title` は OpenAPI 仕様にありません。
 
-| Field | openapi.yaml | Backend | Frontend |
+| フィールド | openapi.yaml | バックエンド | フロントエンド |
 |-------|-------------|---------|----------|
-| `hash` | present | absent | absent |
-| `title` | absent | `Optional[str]` | `string \| null` |
+| `hash` | あり | なし | なし |
+| `title` | なし | `Optional[str]` | `string \| null` |
 
-### 6. OpenAPI `TrustLog.fuji` required vs optional mismatch
+### 6. OpenAPI `TrustLog.fuji` の必須/任意不一致
 
-| Layer | Constraint |
+| レイヤー | 制約 |
 |-------|-----------|
-| **openapi.yaml** (L125) | `fuji` is listed in `required` |
-| **Backend** `schemas.py` (L228) | `fuji: Optional[Dict[str, Any]] = None` |
-| **Frontend** `decision.ts` (L64) | `fuji?: Record<string, unknown> \| null` |
+| **openapi.yaml** (L125) | `required` に `fuji` を含む |
+| **バックエンド** `schemas.py` (L228) | `fuji: Optional[Dict[str, Any]] = None` |
+| **フロントエンド** `decision.ts` (L64) | `fuji?: Record<string, unknown> \| null` |
 
-The backend and frontend both treat `fuji` as optional, but the OpenAPI spec marks it as required. This could cause validation failures for clients using strict OpenAPI validation.
+バックエンド・フロントエンドとも `fuji` を任意扱いしていますが、OpenAPI 仕様では必須です。厳密な OpenAPI バリデーションを行うクライアントで検証失敗につながる可能性があります。
 
-### 7. BFF route policy missing some backend endpoints
+### 7. BFF ルートポリシーが一部バックエンドエンドポイントを未カバー
 
-The BFF proxy (`route-auth.ts`) only defines policies for 9 routes. Backend endpoints like `/v1/metrics`, `/v1/system/halt`, `/v1/report/*`, `/v1/memory/*`, `/v1/fuji/validate` have no route policies, meaning the BFF proxy will return 401/403 for requests to these paths even though they exist on the backend.
+BFF プロキシ（`route-auth.ts`）では 9 ルートに対してのみポリシーが定義されています。`/v1/metrics`、`/v1/system/halt`、`/v1/report/*`、`/v1/memory/*`、`/v1/fuji/validate` などはポリシー未定義のため、バックエンドに存在していても BFF 経由では 401/403 になる可能性があります。
 
-This may be intentional (these endpoints might be intended for direct backend access only), but it should be documented.
-
----
-
-## Low Issues (参考)
-
-### 8. Frontend `ai_disclosure` and `regulation_notice` marked optional
-
-In `decision.ts` (L98-100), `ai_disclosure` and `regulation_notice` are marked with `?` (optional), but the backend always includes them with default values. The `isDecideResponse` validator does not check these fields. Not a runtime issue, but the TypeScript types could be more precise.
-
-### 9. Risk page uses synthetic data only
-
-The risk page (`app/risk/page.tsx`) generates all data client-side with synthetic random values. It does not call any backend API. This is fine for a demo/visualization, but should be noted - if real risk data is expected, an API integration is needed.
-
-### 10. Frontend `DecideResponse.coercion_events` not in TypeScript types
-
-The backend includes `coercion_events` in `DecideResponse` (excluded from JSON via `exclude=True`), so it's correctly invisible to the frontend. The `[key: string]: unknown` index signature on the frontend type would catch it if it ever leaked through. No action needed but worth noting.
-
-### 11. `Gate` vs `GateOut` naming
-
-The backend Pydantic model is called `Gate` (schemas.py L419) while the frontend TypeScript interface is called `GateOut` (decision.ts L47). Both have identical fields. Minor naming inconsistency but not a functional issue.
-
-### 12. `Option` schema in openapi.yaml lacks `score` and `score_raw`
-
-The OpenAPI `Option` schema (L61-69) only has `id`, `title`, `description`. The backend `Option`/`Alt` models include `score`, `score_raw`, `world`, `meta`. The frontend `DecisionAlternative` also expects `score`, `score_raw`, `world`, `meta`.
+意図的（これらはバックエンド直アクセス想定）かもしれませんが、文書化が必要です。
 
 ---
 
-## Consistency Matrix
+## 軽微な課題（参考）
 
-| Area | Backend ↔ Frontend | Backend ↔ OpenAPI | Frontend ↔ OpenAPI |
+### 8. フロントエンドで `ai_disclosure` と `regulation_notice` が optional 扱い
+
+`decision.ts`（L98-100）では `ai_disclosure` と `regulation_notice` に `?`（optional）が付いていますが、バックエンドはデフォルト値付きで常にこれらを含めます。`isDecideResponse` バリデータもこれらを検証していません。実行時の問題にはなりにくいですが、TypeScript 型はより厳密にできます。
+
+### 9. リスクページが合成データのみを使用
+
+リスクページ（`app/risk/page.tsx`）はすべてのデータをクライアント側でランダム生成しており、バックエンド API を呼び出していません。デモ/可視化としては問題ありませんが、実データを想定するなら API 連携が必要です。
+
+### 10. フロントエンド型定義に `DecideResponse.coercion_events` がない
+
+バックエンドは `DecideResponse` に `coercion_events` を含みます（`exclude=True` で JSON から除外）。そのためフロントエンドに見えない現状は妥当です。万一漏れた場合でも、フロントエンド側の `[key: string]: unknown` インデックスシグネチャで受け止められます。対応不要ですが、留意点として記載します。
+
+### 11. `Gate` と `GateOut` の命名差
+
+バックエンドの Pydantic モデル名は `Gate`（schemas.py L419）、フロントエンドの TypeScript インターフェース名は `GateOut`（decision.ts L47）です。フィールドは同一で、機能的な問題はありません。
+
+### 12. openapi.yaml の `Option` スキーマに `score` と `score_raw` がない
+
+OpenAPI の `Option` スキーマ（L61-69）には `id`、`title`、`description` しかありません。一方、バックエンド `Option`/`Alt` モデルとフロントエンド `DecisionAlternative` には `score`、`score_raw`、`world`、`meta` が含まれます。
+
+---
+
+## 整合性マトリクス
+
+| 項目 | バックエンド ↔ フロントエンド | バックエンド ↔ OpenAPI | フロントエンド ↔ OpenAPI |
 |------|:------------------:|:-----------------:|:------------------:|
-| `/v1/decide` URL path | OK | OK | OK |
-| DecideRequest fields | OK | MISMATCH | MISMATCH |
-| DecideResponse fields | OK | MISMATCH | MISMATCH |
-| DecisionStatus enum values | OK | OK | OK |
-| EvidenceItem fields | OK | MISMATCH | MISMATCH |
-| TrustLog fields | OK | MISMATCH (required) | MISMATCH |
-| Gate/GateOut fields | OK | N/A (missing) | N/A |
-| Auth mechanism | OK (BFF proxy) | OK | N/A |
-| Error handling | OK | N/A | N/A |
-| SSE events | OK | N/A (missing) | N/A |
+| `/v1/decide` URL パス | OK | OK | OK |
+| DecideRequest フィールド | OK | 不一致 | 不一致 |
+| DecideResponse フィールド | OK | 不一致 | 不一致 |
+| DecisionStatus 列挙値 | OK | OK | OK |
+| EvidenceItem フィールド | OK | 不一致 | 不一致 |
+| TrustLog フィールド | OK | 不一致（required） | 不一致 |
+| Gate/GateOut フィールド | OK | N/A（未定義） | N/A |
+| 認証方式 | OK（BFF プロキシ） | OK | N/A |
+| エラーハンドリング | OK | N/A | N/A |
+| SSE イベント | OK | N/A（未定義） | N/A |
 
 ---
 
-## Recommendations
+## 推奨事項
 
-1. **Priority 1:** Update `openapi.yaml` to match the actual backend schemas - this is the primary source of inconsistency. The frontend and backend are well-synchronized with each other; the OpenAPI spec has fallen behind.
+1. **優先度 1:** 実際のバックエンドスキーマに合わせて `openapi.yaml` を更新する。現在の主要な不整合源は OpenAPI 仕様です。フロントエンドとバックエンド間は概ね同期されています。
 
-2. **Priority 2:** Document which backend endpoints are intentionally excluded from the BFF proxy and why.
+2. **優先度 2:** BFF プロキシから意図的に除外しているバックエンドエンドポイントと、その理由を文書化する。
 
-3. **Priority 3:** Consider generating TypeScript types from the OpenAPI spec (or vice versa) to prevent future drift.
+3. **優先度 3:** 将来の乖離防止のため、OpenAPI 仕様から TypeScript 型を生成する（またはその逆）運用を検討する。
 
 ---
 
-## Files Reviewed
+## レビュー対象ファイル
 
-| File | Role |
+| ファイル | 役割 |
 |------|------|
-| `openapi.yaml` | API contract specification |
-| `veritas_os/api/schemas.py` | Backend Pydantic models |
-| `veritas_os/api/constants.py` | Backend constants |
-| `veritas_os/api/server.py` | Backend FastAPI endpoints |
-| `packages/types/src/decision.ts` | Shared TypeScript types |
-| `packages/types/src/index.ts` | Shared type validators |
-| `frontend/app/api/veritas/[...path]/route.ts` | BFF proxy |
-| `frontend/app/api/veritas/[...path]/route-auth.ts` | BFF auth policies |
-| `frontend/features/console/api/useDecide.ts` | Frontend API client |
-| `frontend/app/governance/page.tsx` | Governance page |
-| `frontend/app/audit/page.tsx` | Audit page |
-| `frontend/app/risk/page.tsx` | Risk page |
-| `frontend/components/live-event-stream.tsx` | SSE client |
-| `frontend/middleware.ts` | Next.js middleware |
+| `openapi.yaml` | API 契約仕様 |
+| `veritas_os/api/schemas.py` | バックエンド Pydantic モデル |
+| `veritas_os/api/constants.py` | バックエンド定数 |
+| `veritas_os/api/server.py` | バックエンド FastAPI エンドポイント |
+| `packages/types/src/decision.ts` | 共有 TypeScript 型 |
+| `packages/types/src/index.ts` | 共有型バリデータ |
+| `frontend/app/api/veritas/[...path]/route.ts` | BFF プロキシ |
+| `frontend/app/api/veritas/[...path]/route-auth.ts` | BFF 認可ポリシー |
+| `frontend/features/console/api/useDecide.ts` | フロントエンド API クライアント |
+| `frontend/app/governance/page.tsx` | ガバナンスページ |
+| `frontend/app/audit/page.tsx` | 監査ページ |
+| `frontend/app/risk/page.tsx` | リスクページ |
+| `frontend/components/live-event-stream.tsx` | SSE クライアント |
+| `frontend/middleware.ts` | Next.js ミドルウェア |
