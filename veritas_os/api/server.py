@@ -606,10 +606,79 @@ def _run_startup_config_validation() -> None:
             raise
 
 
+def _check_runtime_feature_health() -> None:
+    """Warn about degraded runtime features so operators are never silently misled.
+
+    Security:
+        Critical modules like ``sanitize`` (PII masking) and ``atomic_io``
+        (crash-safe writes) degrade gracefully on import failure. However,
+        operators must be explicitly notified at startup so they do not assume
+        full security coverage when running in fallback mode.
+    """
+    if not _HAS_SANITIZE:
+        logger.warning(
+            "[SECURITY] PII masking is DISABLED (sanitize module failed to load). "
+            "Sensitive data may appear in shadow logs. "
+            "Fix the import error and restart to restore full protection."
+        )
+    if not _HAS_ATOMIC_IO:
+        logger.warning(
+            "[RELIABILITY] Atomic I/O is DISABLED (atomic_io module failed to load). "
+            "Trust log writes are less crash-safe (using direct file I/O). "
+            "Fix the import error and restart to restore full protection."
+        )
+
+
+def _check_multiworker_auth_store() -> None:
+    """Warn when in-memory auth store is used in a multi-worker environment.
+
+    Security:
+        Rate limiting, auth failure tracking, and nonce replay protection are
+        stored in process-local memory by default. In multi-worker deployments
+        (Gunicorn, multiple Uvicorn workers), each worker maintains its own
+        independent state. This means:
+        - A client can exceed rate limits by distributing requests across workers.
+        - Replay attacks may succeed if different workers receive the same nonce.
+
+        Set ``VERITAS_AUTH_SECURITY_STORE=redis`` and ``VERITAS_AUTH_REDIS_URL``
+        to enable distributed-safe protection.
+    """
+    if isinstance(_AUTH_SECURITY_STORE, RedisAuthSecurityStore):
+        return
+
+    # Detect likely multi-worker deployment via common env variables
+    web_concurrency = (os.getenv("WEB_CONCURRENCY") or "").strip()
+    uvicorn_workers = (os.getenv("UVICORN_WORKERS") or "").strip()
+
+    try:
+        multi_worker = (int(web_concurrency) > 1 if web_concurrency else False) or (
+            int(uvicorn_workers) > 1 if uvicorn_workers else False
+        )
+    except ValueError:
+        multi_worker = False
+
+    if multi_worker:
+        logger.warning(
+            "[SECURITY] In-memory auth store is active with multi-worker deployment "
+            "(WEB_CONCURRENCY=%s, UVICORN_WORKERS=%s). "
+            "Rate limiting and nonce replay protection are NOT shared across workers. "
+            "Set VERITAS_AUTH_SECURITY_STORE=redis and VERITAS_AUTH_REDIS_URL to fix.",
+            web_concurrency or "unset",
+            uvicorn_workers or "unset",
+        )
+    else:
+        logger.info(
+            "Auth security store: in-memory (single-worker mode). "
+            "For multi-worker deployments, set VERITAS_AUTH_SECURITY_STORE=redis."
+        )
+
+
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
     """Manage startup/shutdown actions using FastAPI lifespan API."""
     _run_startup_config_validation()
+    _check_runtime_feature_health()
+    _check_multiworker_auth_store()
     _start_nonce_cleanup_scheduler()
     try:
         yield
@@ -1870,13 +1939,31 @@ except ImportError:
     _trust_log_lock = threading.Lock()
 
 
+def _secure_chmod(path: Path) -> None:
+    """Set restrictive 0o600 permissions on a sensitive file.
+
+    Security:
+        Trust log and audit files contain decision records that may include
+        PII or sensitive operational data. Restricting read/write access to
+        the owning process reduces the risk of unauthorized access by other
+        local users or processes.
+    """
+    try:
+        os.chmod(path, 0o600)
+    except Exception as e:
+        logger.debug("chmod 0o600 failed for %s: %s", path, _errstr(e))
+
+
 def _save_json(path: Path, items: list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    is_new = not path.exists()
     if _HAS_ATOMIC_IO:
         atomic_write_json(path, {"items": items}, indent=2)
     else:
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"items": items}, f, ensure_ascii=False, indent=2)
+    if is_new:
+        _secure_chmod(path)
 
 
 def append_trust_log(entry: Dict[str, Any]) -> None:
@@ -1901,6 +1988,7 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
     with _trust_log_lock:
         # JSONL への追記（アトミック I/O 使用）
         try:
+            jsonl_is_new = not log_jsonl.exists()
             if _HAS_ATOMIC_IO:
                 atomic_append_line(log_jsonl, json.dumps(entry, ensure_ascii=False))
             else:
@@ -1908,6 +1996,8 @@ def append_trust_log(entry: Dict[str, Any]) -> None:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                     f.flush()
                     os.fsync(f.fileno())
+            if jsonl_is_new:
+                _secure_chmod(log_jsonl)
         except Exception as e:
             logger.warning("write trust_log.jsonl failed: %s", _errstr(e))
 
@@ -1956,6 +2046,7 @@ def write_shadow_decide(
         else:
             with open(out, "w", encoding="utf-8") as f:
                 json.dump(rec, f, ensure_ascii=False, indent=2)
+        _secure_chmod(out)
     except Exception as e:
         logger.warning("write shadow decide failed: %s", _errstr(e))
 
