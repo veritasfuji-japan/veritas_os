@@ -54,6 +54,24 @@ MAX_JSON_ITEMS = 2000
 _trust_log_lock = threading.RLock()
 trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
 
+# Counters for operational observability
+_append_success_count: int = 0
+_append_failure_count: int = 0
+_append_stats_lock = threading.Lock()
+
+
+def get_trust_log_stats() -> dict:
+    """Return append success/failure counts for monitoring.
+
+    These counters are process-local and reset on restart.
+    Expose via health or metrics endpoints for alerting on persistent failures.
+    """
+    with _append_stats_lock:
+        return {
+            "append_success": _append_success_count,
+            "append_failure": _append_failure_count,
+        }
+
 
 # =============================================================================
 # ヘルパー関数
@@ -342,69 +360,85 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     import os
 
     # ★ スレッドセーフ: ハッシュチェーンの整合性を保証するためロックを取得
-    with _trust_log_lock:
-        LOG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        with _trust_log_lock:
+            LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-        # ---- 直前ハッシュの取得（JSONL 側を正とする）----
-        # ★ 修正: JSON (MAX_JSON_ITEMS 件に制限) ではなく JSONL (全件) から
-        #   直前ハッシュを取得する。JSON が 2000 件で切られている場合、
-        #   JSON の末尾と JSONL の末尾が乖離してチェーンが壊れる問題を修正。
-        sha256_prev = get_last_hash()
+            # ---- 直前ハッシュの取得（JSONL 側を正とする）----
+            # ★ 修正: JSON (MAX_JSON_ITEMS 件に制限) ではなく JSONL (全件) から
+            #   直前ハッシュを取得する。JSON が 2000 件で切られている場合、
+            #   JSON の末尾と JSONL の末尾が乖離してチェーンが壊れる問題を修正。
+            sha256_prev = get_last_hash()
 
-        items = _load_logs_json()
+            items = _load_logs_json()
 
-        # 元 entry を壊さないようにコピー
-        entry = dict(entry)
-        entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
-        entry["sha256_prev"] = sha256_prev
+            # 元 entry を壊さないようにコピー
+            entry = dict(entry)
+            entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            entry["sha256_prev"] = sha256_prev
 
-        # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
-        # エントリから sha256 と sha256_prev を除外（これが rₜ）
-        hash_payload = dict(entry)
-        hash_payload.pop("sha256", None)
-        hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
+            # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
+            # エントリから sha256 と sha256_prev を除外（これが rₜ）
+            hash_payload = dict(entry)
+            hash_payload.pop("sha256", None)
+            hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
 
-        # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
-        entry_json = _normalize_entry_for_hash(entry)
+            # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
+            entry_json = _normalize_entry_for_hash(entry)
 
-        # hₜ₋₁ || rₜ を結合
-        if sha256_prev:
-            combined = sha256_prev + entry_json
-        else:
-            # 最初のエントリの場合は rₜ のみ
-            combined = entry_json
+            # hₜ₋₁ || rₜ を結合
+            if sha256_prev:
+                combined = sha256_prev + entry_json
+            else:
+                # 最初のエントリの場合は rₜ のみ
+                combined = entry_json
 
-        # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
-        entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
+            # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
+            entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
-        # ---- JSONL に1行追記 (with fsync for durability) ----
-        # P3-2: Optionally encrypt the line before writing
-        line = json.dumps(entry, ensure_ascii=False)
-        if is_encryption_enabled():
-            line = _encrypt_line(line)
-        with open_trust_log_for_append() as f:
-            f.write(line + "\n")
-            f.flush()
-            os.fsync(f.fileno())
+            # ---- JSONL に1行追記 (with fsync for durability) ----
+            # P3-2: Optionally encrypt the line before writing
+            line = json.dumps(entry, ensure_ascii=False)
+            if is_encryption_enabled():
+                line = _encrypt_line(line)
+            with open_trust_log_for_append() as f:
+                f.write(line + "\n")
+                f.flush()
+                os.fsync(f.fileno())
 
-        # ---- JSON(配列) を更新（最新 N 件だけ残す）----
-        items.append(entry)
-        if len(items) > MAX_JSON_ITEMS:
-            items = items[-MAX_JSON_ITEMS:]
+            # ---- JSON(配列) を更新（最新 N 件だけ残す）----
+            items.append(entry)
+            if len(items) > MAX_JSON_ITEMS:
+                items = items[-MAX_JSON_ITEMS:]
 
-        _save_json(items)
+            _save_json(items)
 
-        # Signed TrustLog (append-only JSONL) is best-effort and must not
-        # break the existing decision pipeline.
-        try:
-            append_signed_decision(entry)
-        except Exception:
-            logger.warning(
-                "append_signed_decision failed; continuing with legacy trust log",
-                exc_info=True,
-            )
+            # Signed TrustLog (append-only JSONL) is best-effort and must not
+            # break the existing decision pipeline.
+            try:
+                append_signed_decision(entry)
+            except Exception:
+                logger.warning(
+                    "append_signed_decision failed; continuing with legacy trust log",
+                    exc_info=True,
+                )
 
-        return entry
+            with _append_stats_lock:
+                global _append_success_count
+                _append_success_count += 1
+
+            return entry
+
+    except Exception:
+        with _append_stats_lock:
+            global _append_failure_count
+            _append_failure_count += 1
+        logger.error(
+            "append_trust_log failed (failure #%d); hash chain integrity may be affected",
+            _append_failure_count,
+            exc_info=True,
+        )
+        raise
 
 
 def write_shadow_decide(
@@ -767,6 +801,7 @@ __all__ = [
     "write_shadow_decide",
     "get_last_hash",
     "calc_sha256",
+    "get_trust_log_stats",
     "trust_log_lock",
     "LOG_JSON",
     "LOG_JSONL",

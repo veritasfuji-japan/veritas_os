@@ -10,20 +10,36 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from pydantic import BaseModel, Field
+
+try:
+    from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
+    _HAS_ATOMIC_IO = True
+except Exception:  # pragma: no cover
+    _HAS_ATOMIC_IO = False
 
 logger = logging.getLogger(__name__)
 
 # ---------- storage path ----------
 _DEFAULT_POLICY_PATH = Path(__file__).resolve().parent / "governance.json"
+_POLICY_HISTORY_PATH = Path(__file__).resolve().parent / "governance_history.jsonl"
+
+# Maximum number of policy change records kept in the history file
+_POLICY_HISTORY_MAX = 500
 
 # Thread-safe lock for file I/O
 _policy_lock = threading.Lock()
+
+# Callbacks invoked after each successful policy update (e.g. for FUJI hot-reload).
+# Each callable receives the full updated policy dict.
+_policy_update_callbacks: List[Callable[[Dict[str, Any]], None]] = []
+_callbacks_lock = threading.Lock()
 
 _VALUE_HISTORY_PATHS = (
     Path(__file__).resolve().parents[1] / ".veritas" / "value_stats.json",
@@ -111,13 +127,98 @@ def _load() -> Dict[str, Any]:
 
 
 def _save(data: Dict[str, Any]) -> None:
-    """Save governance policy to JSON file."""
+    """Save governance policy to JSON file atomically (crash-safe)."""
     path = _policy_path()
     with _policy_lock:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        if _HAS_ATOMIC_IO:
+            _atomic_write_json(path, data, indent=2)
+        else:
+            # Fallback: write to temp file then rename for best-effort atomicity
+            tmp = path.with_suffix(".tmp")
+            try:
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                    f.write("\n")
+                    f.flush()
+                    import os as _os
+                    _os.fsync(f.fileno())
+                tmp.replace(path)
+            except Exception:
+                try:
+                    tmp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                raise
+
+
+def _append_policy_history(previous: Dict[str, Any], updated: Dict[str, Any]) -> None:
+    """Append a policy change record to the audit history JSONL (best-effort)."""
+    record = {
+        "changed_at": updated.get("updated_at", datetime.now(timezone.utc).isoformat()),
+        "changed_by": updated.get("updated_by", "unknown"),
+        "previous_version": previous.get("version"),
+        "new_version": updated.get("version"),
+        "previous_policy": previous,
+        "new_policy": updated,
+    }
+    line = json.dumps(record, ensure_ascii=False)
+    try:
+        _POLICY_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_POLICY_HISTORY_PATH, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        _trim_policy_history()
+    except Exception as e:
+        logger.warning("Failed to append governance policy history: %s", e)
+
+
+def _trim_policy_history() -> None:
+    """Keep only the most recent _POLICY_HISTORY_MAX records in the history file."""
+    try:
+        if not _POLICY_HISTORY_PATH.exists():
+            return
+        lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
+        if len(lines) > _POLICY_HISTORY_MAX:
+            trimmed = "".join(lines[-_POLICY_HISTORY_MAX:])
+            tmp = _POLICY_HISTORY_PATH.with_suffix(".tmp")
+            tmp.write_text(trimmed, encoding="utf-8")
+            tmp.replace(_POLICY_HISTORY_PATH)
+    except Exception as e:
+        logger.warning("Failed to trim governance policy history: %s", e)
+
+
+def _notify_policy_update(policy: Dict[str, Any]) -> None:
+    """Call all registered callbacks with the updated policy (best-effort)."""
+    with _callbacks_lock:
+        callbacks = list(_policy_update_callbacks)
+    for cb in callbacks:
+        try:
+            cb(policy)
+        except Exception as e:
+            logger.warning("Policy update callback %r raised: %s", cb, e)
+
+
+def register_policy_update_callback(callback: Callable[[Dict[str, Any]], None]) -> None:
+    """Register a callback to be invoked after each successful policy update.
+
+    This enables hot-reload: components like FUJI can register here and
+    refresh their cached policy without requiring a process restart.
+
+    Args:
+        callback: Callable accepting the full updated policy dict.
+    """
+    with _callbacks_lock:
+        if callback not in _policy_update_callbacks:
+            _policy_update_callbacks.append(callback)
+
+
+def unregister_policy_update_callback(callback: Callable[[Dict[str, Any]], None]) -> None:
+    """Remove a previously registered policy update callback."""
+    with _callbacks_lock:
+        try:
+            _policy_update_callbacks.remove(callback)
+        except ValueError:
+            pass
 
 
 def _coerce_metric_point(raw: Any, fallback_index: int) -> Dict[str, Any] | None:
@@ -179,9 +280,13 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge *patch* into the current governance policy and persist.
 
+    Changes are written atomically and appended to the audit history log.
+    All registered callbacks (e.g. FUJI hot-reload) are notified after save.
+
     Returns the full updated policy.
     """
-    current = _load()
+    previous = _load()
+    current = deepcopy(previous)
 
     # Validate and deep-merge nested patches immediately.
     # This prevents silently skipping non-dict payloads and validates each
@@ -219,7 +324,42 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     result = validated.model_dump()
 
     _save(result)
+
+    # Record what changed for compliance audit trail
+    _append_policy_history(previous, result)
+
+    # Notify subscribers (e.g. FUJI hot-reload) — best-effort, non-blocking
+    _notify_policy_update(result)
+
     return result
+
+
+def get_policy_history(limit: int = 50) -> List[Dict[str, Any]]:
+    """Return recent policy change records from the audit history, newest first.
+
+    Args:
+        limit: Maximum number of records to return (capped at _POLICY_HISTORY_MAX).
+    """
+    limit = max(1, min(limit, _POLICY_HISTORY_MAX))
+    if not _POLICY_HISTORY_PATH.exists():
+        return []
+    try:
+        lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines()
+        records: List[Dict[str, Any]] = []
+        for line in reversed(lines):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                records.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+            if len(records) >= limit:
+                break
+        return records
+    except Exception as e:
+        logger.warning("Failed to read governance policy history: %s", e)
+        return []
 
 
 def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str, Any]:
