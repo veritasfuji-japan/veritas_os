@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
 import { EUAIActGovernanceDashboard } from "../../features/console/components/eu-ai-act-governance-dashboard";
 
@@ -309,7 +310,7 @@ export default function GovernanceControlPage(): JSX.Element {
   /* -- fetch value drift -- */
   const fetchValueDrift = useCallback(async () => {
     try {
-      const res = await fetch("/api/veritas/v1/governance/value-drift");
+      const res = await veritasFetch("/api/veritas/v1/governance/value-drift");
       if (!res.ok) {
         setValueDrift(null);
         return;
@@ -334,7 +335,7 @@ export default function GovernanceControlPage(): JSX.Element {
     setSuccess(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/veritas/v1/governance/policy");
+      const res = await veritasFetch("/api/veritas/v1/governance/policy");
       if (!res.ok) {
         setError(`HTTP ${res.status}: ポリシー取得に失敗しました。`);
         return;
@@ -368,11 +369,9 @@ export default function GovernanceControlPage(): JSX.Element {
     setSuccess(null);
     setSaving(true);
     try {
-      const res = await fetch("/api/veritas/v1/governance/policy", {
+      const res = await veritasFetch("/api/veritas/v1/governance/policy", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-                  },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(draft),
       });
       if (!res.ok) {

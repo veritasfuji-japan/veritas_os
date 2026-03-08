@@ -28,6 +28,7 @@ function buildDecidePayload(requestId: string, decision: string): DecidePayload 
     critique: [],
     debate: [],
     extras: { decision },
+    meta: {},
     plan: null,
     planner: null,
     persona: {},

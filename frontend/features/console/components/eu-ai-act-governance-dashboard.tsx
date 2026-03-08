@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { veritasFetch } from "../../../lib/api-client";
 
 interface ComplianceConfig {
   eu_ai_act_mode: boolean;
@@ -101,7 +102,7 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
       eu_ai_act_mode: !config.eu_ai_act_mode,
     };
     setConfig(nextConfig);
-    const response = await fetch("/api/veritas/v1/compliance/config", {
+    const response = await veritasFetch("/api/veritas/v1/compliance/config", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(nextConfig),

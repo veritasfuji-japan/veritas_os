@@ -112,7 +112,16 @@ export function matchPolicy(pathSegments: string[], method: string): MatchedPoli
 }
 
 /**
- * Resolve caller role from Authorization header and token map.
+ * Name of the httpOnly cookie set by middleware for same-origin BFF auth.
+ */
+export const BFF_SESSION_COOKIE = "__veritas_bff";
+
+/**
+ * Resolve caller role from Authorization header or session cookie.
+ *
+ * Lookup order:
+ * 1. `Authorization: Bearer <token>` header  (programmatic / external clients)
+ * 2. `__veritas_bff` httpOnly cookie          (browser same-origin requests)
  */
 export function authenticateRoleFromHeaders(
   headers: Headers,
@@ -131,21 +140,44 @@ export function authenticateRoleFromHeaders(
     };
   }
 
+  // 1. Try Authorization header first
   const authorization = headers.get("authorization") ?? "";
-  const [scheme, token] = authorization.split(" ");
-
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    return {
-      errorResponse: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
-    };
-  }
-
-  const role = tokenRoleMap.get(token);
-  if (!role) {
+  const [scheme, headerToken] = authorization.split(" ");
+  if (scheme?.toLowerCase() === "bearer" && headerToken) {
+    const role = tokenRoleMap.get(headerToken);
+    if (role) {
+      return { role };
+    }
     return {
       errorResponse: NextResponse.json({ error: "forbidden" }, { status: 403 }),
     };
   }
 
-  return { role };
+  // 2. Fall back to httpOnly session cookie
+  const cookieHeader = headers.get("cookie") ?? "";
+  const sessionToken = parseCookieValue(cookieHeader, BFF_SESSION_COOKIE);
+  if (sessionToken) {
+    const role = tokenRoleMap.get(sessionToken);
+    if (role) {
+      return { role };
+    }
+    return {
+      errorResponse: NextResponse.json({ error: "forbidden" }, { status: 403 }),
+    };
+  }
+
+  return {
+    errorResponse: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
+  };
+}
+
+/**
+ * Extract a single cookie value by name from a raw `Cookie` header string.
+ */
+function parseCookieValue(cookieHeader: string, name: string): string | undefined {
+  const match = cookieHeader
+    .split(";")
+    .map((s) => s.trim())
+    .find((s) => s.startsWith(`${name}=`));
+  return match ? match.slice(name.length + 1) : undefined;
 }
