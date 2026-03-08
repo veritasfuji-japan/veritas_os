@@ -16,7 +16,10 @@ interface MatchedPolicy {
 }
 
 const ROUTE_POLICIES: readonly RoutePolicy[] = [
+  // Decision
   { pathPattern: /^v1\/decide$/, method: "POST", roles: ["operator", "admin"] },
+
+  // Governance
   {
     pathPattern: /^v1\/governance\/value-drift$/,
     method: "GET",
@@ -28,6 +31,8 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     roles: ["viewer", "operator", "admin"],
   },
   { pathPattern: /^v1\/governance\/policy$/, method: "PUT", roles: ["admin"] },
+
+  // Trust logs
   {
     pathPattern: /^v1\/trust\/logs$/,
     method: "GET",
@@ -39,6 +44,25 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     roles: ["viewer", "operator", "admin"],
   },
   {
+    pathPattern: /^v1\/trust\/feedback$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
+
+  // Trust log chain (signed)
+  {
+    pathPattern: /^v1\/trustlog\/verify$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/trustlog\/export$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+
+  // Compliance
+  {
     pathPattern: /^v1\/compliance\/config$/,
     method: "GET",
     roles: ["viewer", "operator", "admin"],
@@ -48,7 +72,63 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     method: "PUT",
     roles: ["admin"],
   },
+  {
+    pathPattern: /^v1\/compliance\/deployment-readiness$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+
+  // System control (admin only for halt/resume, viewer+ for status)
+  { pathPattern: /^v1\/system\/halt$/, method: "POST", roles: ["admin"] },
+  { pathPattern: /^v1\/system\/resume$/, method: "POST", roles: ["admin"] },
+  {
+    pathPattern: /^v1\/system\/halt-status$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+
+  // Metrics & events
+  { pathPattern: /^v1\/metrics$/, method: "GET", roles: ["viewer", "operator", "admin"] },
   { pathPattern: /^v1\/events$/, method: "GET", roles: ["viewer", "operator", "admin"] },
+
+  // Reports
+  {
+    pathPattern: /^v1\/report\/eu_ai_act\/[^/]+$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/report\/governance$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+
+  // Memory
+  {
+    pathPattern: /^v1\/memory\/search$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/memory\/erase$/,
+    method: "POST",
+    roles: ["admin"],
+  },
+
+  // Safety validation
+  {
+    pathPattern: /^v1\/fuji\/validate$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
+
+  // NOTE: The following backend endpoints are intentionally excluded from the BFF proxy
+  // and must be accessed directly (with API key) or are not exposed to browser clients:
+  //   - WS  /v1/ws/trustlog       (WebSocket; not supported by BFF HTTP proxy)
+  //   - POST /v1/replay/{id}      (internal replay; requires HMAC signature)
+  //   - POST /v1/decision/replay/{id} (v2 replay; internal use)
+  //   - POST /v1/memory/put       (internal memory write; prefer memory_auto_put in /decide)
+  //   - POST /v1/memory/get       (internal memory read; prefer /decide context)
 ];
 
 /**
