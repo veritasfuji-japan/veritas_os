@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
+from veritas_os.api.schemas import MemoryPutRequest
 
 
 client = TestClient(server.app)
@@ -1152,13 +1153,13 @@ def test_memory_put_respects_kind_for_vector_store(monkeypatch):
     monkeypatch.setattr(server, "get_memory_store", lambda: DummyStore())
 
     res = server.memory_put(
-        {
-            "user_id": "u-kind",
-            "kind": "skills",
-            "text": "hello",
-            "tags": ["t1"],
-            "meta": {"source": "test"},
-        }
+        MemoryPutRequest(
+            user_id="u-kind",
+            kind="skills",
+            text="hello",
+            tags=["t1"],
+            meta={"source": "test"},
+        )
     )
 
     assert res["ok"] is True
@@ -1304,14 +1305,15 @@ def test_memory_get_error_path(monkeypatch):
 
 def test_memory_put_outer_error():
     """
-    body=None のような完全異常入力時に、
-    outer try/except で {ok: False, error: "..."} になることを確認。
-    （FastAPI 経由だと 422 になるケースを関数直叩きでカバー）
+    不正な body を POST した場合、FastAPI が Pydantic バリデーションエラー
+    (422) を返すことを確認する。
     """
-    result = server.memory_put(body=None)  # type: ignore[arg-type]
-
-    assert result["ok"] is False
-    assert "memory operation failed" in result["error"]
+    r = client.post(
+        "/v1/memory/put",
+        content=b"not-json",
+        headers={"X-API-Key": "test-api-key", "Content-Type": "application/json"},
+    )
+    assert r.status_code == 422
 
 
 # -------------------------------------------------

@@ -777,3 +777,125 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=500)
     memory_auto_put: bool = True
     persona_evolve: bool = True
+
+
+# =========================
+# Memory API Request Models
+# =========================
+
+MAX_MEMORY_TEXT_LENGTH = 100_000  # Max characters for memory text field
+MAX_MEMORY_TAGS = 100  # Max tags per memory item
+MAX_NOTE_LENGTH = 10_000  # Max characters for feedback notes
+
+
+class MemoryPutRequest(BaseModel):
+    """Typed request body for POST /v1/memory/put."""
+
+    model_config = ConfigDict(extra="allow")
+
+    user_id: Optional[str] = Field(default=None, max_length=500)
+    key: Optional[str] = Field(default=None, max_length=500)
+    text: str = Field(default="", max_length=MAX_MEMORY_TEXT_LENGTH)
+    tags: List[str] = Field(default_factory=list)
+    value: Any = Field(default_factory=dict)
+    kind: str = Field(default="semantic", max_length=50)
+    retention_class: Optional[str] = Field(default=None, max_length=50)
+    meta: Dict[str, Any] = Field(default_factory=dict)
+    expires_at: Optional[int] = None
+    legal_hold: bool = False
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def _validate_tags(cls, v: Any) -> List[str]:
+        if v is None:
+            return []
+        if not isinstance(v, list):
+            v = [v]
+        if len(v) > MAX_MEMORY_TAGS:
+            raise ValueError(f"too many tags (max {MAX_MEMORY_TAGS})")
+        return [str(t) for t in v]
+
+    @field_validator("text", mode="before")
+    @classmethod
+    def _coerce_text(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
+
+    @field_validator("kind", mode="before")
+    @classmethod
+    def _coerce_kind(cls, v: Any) -> str:
+        if v is None:
+            return "semantic"
+        return str(v).strip().lower()
+
+
+class MemoryGetRequest(BaseModel):
+    """Typed request body for POST /v1/memory/get."""
+
+    user_id: Optional[str] = Field(default=None, max_length=500)
+    key: str = Field(..., max_length=500)
+
+
+class MemorySearchRequest(BaseModel):
+    """Typed request body for POST /v1/memory/search."""
+
+    model_config = ConfigDict(extra="allow")
+
+    user_id: Optional[str] = Field(default=None, max_length=500)
+    query: str = Field(default="", max_length=MAX_QUERY_LENGTH)
+    k: int = Field(default=8, ge=1, le=100)
+    min_sim: float = Field(default=0.25, ge=0.0, le=1.0)
+    # Use Any so that server-side _validate_memory_kinds() can enforce
+    # type checking (rejecting non-string items with a domain error).
+    kinds: Any = None
+
+    @field_validator("query", mode="before")
+    @classmethod
+    def _coerce_query(cls, v: Any) -> str:
+        if v is None:
+            return ""
+        return str(v)
+
+    @field_validator("k", mode="before")
+    @classmethod
+    def _coerce_k(cls, v: Any) -> int:
+        try:
+            return max(1, min(int(v), 100))
+        except (ValueError, TypeError):
+            return 8
+
+    @field_validator("min_sim", mode="before")
+    @classmethod
+    def _coerce_min_sim(cls, v: Any) -> float:
+        try:
+            return max(0.0, min(float(v), 1.0))
+        except (ValueError, TypeError):
+            return 0.25
+
+
+class MemoryEraseRequest(BaseModel):
+    """Typed request body for POST /v1/memory/erase."""
+
+    user_id: Optional[str] = Field(default=None, max_length=500)
+    reason: str = Field(default="user_request", max_length=500)
+    actor: str = Field(default="api", max_length=200)
+
+
+class TrustFeedbackRequest(BaseModel):
+    """Typed request body for POST /v1/trust/feedback."""
+
+    user_id: Optional[str] = Field(default=None, max_length=500)
+    score: float = Field(default=0.5, ge=0.0, le=1.0)
+    note: str = Field(default="", max_length=MAX_NOTE_LENGTH)
+    source: str = Field(default="manual", max_length=200)
+
+    @field_validator("score", mode="before")
+    @classmethod
+    def _coerce_score(cls, v: Any) -> float:
+        if v is None:
+            return 0.5
+        try:
+            return max(0.0, min(1.0, float(v)))
+        except (TypeError, ValueError):
+            return 0.5

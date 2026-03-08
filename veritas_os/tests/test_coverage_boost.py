@@ -538,8 +538,8 @@ class TestServerMemoryEndpoints:
         store = SimpleNamespace(put=lambda k, v: "id1", search=lambda: [])
         monkeypatch.setattr(server, "get_memory_store", lambda: store)
         resp = _client.post("/v1/memory/put", headers=_AUTH, json={"text": "x" * 100_001})
-        assert resp.json()["ok"] is False
-        assert "too large" in resp.json()["error"]
+        # Pydantic validates max_length on the text field and returns 422
+        assert resp.status_code == 422
 
     def test_memory_put_too_many_tags(self, monkeypatch):
         store = SimpleNamespace(put=lambda k, v: "id1", search=lambda: [])
@@ -547,8 +547,8 @@ class TestServerMemoryEndpoints:
         resp = _client.post("/v1/memory/put", headers=_AUTH, json={
             "text": "hi", "tags": ["t"] * 101,
         })
-        assert resp.json()["ok"] is False
-        assert "tags" in resp.json()["error"]
+        # Pydantic validator rejects oversized tag lists with 422
+        assert resp.status_code == 422
 
     def test_memory_put_success(self, monkeypatch):
         captured = {}
@@ -696,8 +696,8 @@ class TestServerMemoryEndpoints:
         store = SimpleNamespace(get=lambda uid, key: None)
         monkeypatch.setattr(server, "get_memory_store", lambda: store)
         resp = _client.post("/v1/memory/get", headers=_AUTH, json={})
-        assert resp.json()["ok"] is False
-        assert "required" in resp.json()["error"]
+        # Pydantic requires the 'key' field; missing → 422
+        assert resp.status_code == 422
 
     def test_memory_get_success(self, monkeypatch):
         store = SimpleNamespace(get=lambda uid, **kw: {"data": 1})
