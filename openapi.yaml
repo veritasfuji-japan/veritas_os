@@ -530,7 +530,7 @@ paths:
 
   /v1/trust/{request_id}:
     get:
-      summary: Get immutable trust log
+      summary: Get trust log entries for a request (with chain verification)
       parameters:
         - in: path
           name: request_id
@@ -539,46 +539,64 @@ paths:
             type: string
       responses:
         "200":
-          description: trust log
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TrustLog'
-
-  /v1/trust/logs:
-    get:
-      summary: Paginated trust log listing
-      parameters:
-        - in: query
-          name: page
-          schema:
-            type: integer
-            default: 1
-        - in: query
-          name: page_size
-          schema:
-            type: integer
-            default: 20
-      responses:
-        "200":
-          description: Paginated trust logs
+          description: Trust log entries for the given request_id with chain integrity result
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  ok:
-                    type: boolean
-                  logs:
+                  request_id:
+                    type: string
+                  items:
                     type: array
                     items:
                       $ref: '#/components/schemas/TrustLog'
-                  total:
+                  count:
                     type: integer
-                  page:
+                  chain_ok:
+                    type: boolean
+                  verification_result:
+                    type: string
+                    enum: ["ok", "broken", "not_found"]
+
+  /v1/trust/logs:
+    get:
+      summary: Cursor-paginated trust log listing
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: "カーソル（前回レスポンスの next_cursor を指定）"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+          description: "1回の取得件数上限"
+      responses:
+        "200":
+          description: Cursor-paginated trust logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrustLog'
+                  cursor:
+                    type: string
+                    description: "現在のオフセット（文字列）"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: "次ページのカーソル（null = 末尾）"
+                  limit:
                     type: integer
-                  page_size:
-                    type: integer
+                  has_more:
+                    type: boolean
 
   /v1/trust/feedback:
     post:
