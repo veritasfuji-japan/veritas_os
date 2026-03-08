@@ -44,6 +44,7 @@ describe("DecisionConsolePage", () => {
         memory_used_count: 1,
         trust_log: null,
         extras: { raw: true },
+        meta: {},
       }),
     } as Response);
 
@@ -95,6 +96,7 @@ describe("DecisionConsolePage", () => {
         memory_used_count: 0,
         trust_log: null,
         extras: {},
+        meta: {},
       }),
     } as Response);
 
@@ -139,6 +141,7 @@ describe("DecisionConsolePage", () => {
         memory_citations: [],
         memory_used_count: 0,
         trust_log: null,
+        meta: {},
         extras: {
           cost_benefit_analytics: {
             steps: [
@@ -201,6 +204,7 @@ describe("DecisionConsolePage", () => {
         memory_used_count: 0,
         trust_log: null,
         extras: {},
+        meta: {},
       }),
     } as Response);
 
