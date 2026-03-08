@@ -178,7 +178,7 @@ components:
 
     TrustLog:
       type: object
-      required: [request_id, sources, critics, checks, approver]
+      required: [request_id, created_at, sources, critics, checks, approver]
       properties:
         request_id:
           type: string
