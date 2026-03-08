@@ -242,3 +242,189 @@ class TestNonceEnvConfig:
         import os
         os.environ.pop("_TEST_ENV_INT_SAFE_MISSING", None)
         assert server._env_int_safe("_TEST_ENV_INT_SAFE_MISSING", 99) == 99
+
+
+# =========================================================
+# 5. Trustlog endpoint error handling
+# =========================================================
+
+import os as _os
+import veritas_os.api.server as _server
+from fastapi.testclient import TestClient as _TestClient
+_client = _TestClient(_server.app)
+_FIXED_KEY = "backend-improvement-key"
+
+
+@pytest.fixture()
+def _auth_env(monkeypatch):
+    """Set a known API key and clear rate-limit buckets for each test."""
+    monkeypatch.setenv("VERITAS_API_KEY", _FIXED_KEY)
+    _server._rate_bucket.clear()
+    with _server._inflight_lock:
+        _server._shutting_down = False
+
+
+class TestTrustlogVerifyErrorHandling:
+    """trustlog_verify returns 500 when verify_trustlog_chain raises."""
+
+    def test_verify_returns_500_on_exception(self, monkeypatch, _auth_env):
+        def _boom():
+            raise RuntimeError("disk failure")
+
+        monkeypatch.setattr(_server, "verify_trustlog_chain", _boom)
+        resp = _client.get("/v1/trustlog/verify", headers={"X-API-Key": _FIXED_KEY})
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert "trustlog verification failed" in body["error"]
+
+    def test_verify_success_still_works(self, monkeypatch, _auth_env):
+        monkeypatch.setattr(
+            _server, "verify_trustlog_chain", lambda: {"ok": True, "entries": 0},
+        )
+        resp = _client.get("/v1/trustlog/verify", headers={"X-API-Key": _FIXED_KEY})
+        assert resp.status_code == 200
+        assert resp.json()["ok"] is True
+
+
+class TestTrustlogExportErrorHandling:
+    """trustlog_export returns 500 when export_signed_trustlog raises."""
+
+    def test_export_returns_500_on_exception(self, monkeypatch, _auth_env):
+        def _boom():
+            raise RuntimeError("export failure")
+
+        monkeypatch.setattr(_server, "export_signed_trustlog", _boom)
+        resp = _client.get("/v1/trustlog/export", headers={"X-API-Key": _FIXED_KEY})
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert "trustlog export failed" in body["error"]
+
+    def test_export_success_still_works(self, monkeypatch, _auth_env):
+        monkeypatch.setattr(
+            _server, "export_signed_trustlog", lambda: {"count": 0, "entries": []},
+        )
+        resp = _client.get("/v1/trustlog/export", headers={"X-API-Key": _FIXED_KEY})
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 0
+
+
+# =========================================================
+# 6. Health endpoint error handling
+# =========================================================
+
+
+class TestHealthErrorHandling:
+    """Health endpoint returns 500 on unexpected internal error."""
+
+    def test_health_returns_500_on_exception(self, monkeypatch, _auth_env):
+        def _boom():
+            raise RuntimeError("unexpected")
+
+        monkeypatch.setattr(_server, "get_decision_pipeline", _boom)
+        resp = _client.get("/health")
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert "health check failed" in body["error"]
+
+    def test_health_normal_response(self, _auth_env):
+        resp = _client.get("/health")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "ok" in body
+        assert "uptime" in body
+        assert "checks" in body
+
+
+# =========================================================
+# 7. Schema validation improvements
+# =========================================================
+
+from veritas_os.api.schemas import MemoryPutRequest, MemorySearchRequest  # noqa: E402
+
+
+class TestMemorySearchRequestKindsCoercion:
+    """kinds field is coerced at schema level."""
+
+    def test_kinds_none_stays_none(self):
+        req = MemorySearchRequest(query="test")
+        assert req.kinds is None
+
+    def test_kinds_string_becomes_list(self):
+        req = MemorySearchRequest(query="test", kinds="semantic")
+        assert req.kinds == ["semantic"]
+
+    def test_kinds_list_passes_through(self):
+        req = MemorySearchRequest(query="test", kinds=["semantic", "episodic"])
+        assert req.kinds == ["semantic", "episodic"]
+
+
+class TestMemoryPutRetentionClassCoercion:
+    """retention_class is normalised and validated at schema level."""
+
+    def test_none_stays_none(self):
+        req = MemoryPutRequest(text="hi")
+        assert req.retention_class is None
+
+    def test_valid_value_accepted(self):
+        for rc in ("short", "standard", "long", "regulated"):
+            req = MemoryPutRequest(text="hi", retention_class=rc)
+            assert req.retention_class == rc
+
+    def test_case_normalised(self):
+        req = MemoryPutRequest(text="hi", retention_class="REGULATED")
+        assert req.retention_class == "regulated"
+
+    def test_invalid_becomes_none(self):
+        req = MemoryPutRequest(text="hi", retention_class="bogus")
+        assert req.retention_class is None
+
+
+# =========================================================
+# 8. LLM pool close on shutdown
+# =========================================================
+
+
+class TestLLMPoolCloseOnShutdown:
+    """LLM HTTP connection pool is closed during app shutdown."""
+
+    def test_close_pool_called_on_shutdown(self, monkeypatch):
+        close_called = []
+
+        def _mock_close():
+            close_called.append(True)
+
+        monkeypatch.setattr(_server, "_close_llm_pool", _mock_close)
+        with _TestClient(_server.app):
+            pass
+        assert len(close_called) == 1
+
+    def test_shutdown_works_when_close_pool_is_none(self, monkeypatch):
+        monkeypatch.setattr(_server, "_close_llm_pool", None)
+        with _TestClient(_server.app):
+            pass  # Must not raise
+
+
+# =========================================================
+# 9. Return type annotations smoke tests
+# =========================================================
+
+
+class TestReturnTypeAnnotations:
+    """Endpoints with new type hints still return correct dict responses."""
+
+    def test_root_returns_dict(self, _auth_env):
+        resp = _client.get("/")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert isinstance(body, dict)
+        assert body["ok"] is True
+
+    def test_status_returns_dict(self, _auth_env):
+        resp = _client.get("/status")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert isinstance(body, dict)
+        assert body["ok"] is True

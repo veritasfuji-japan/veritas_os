@@ -102,6 +102,12 @@ except Exception as _atomic_import_err:
     atomic_write_json = None  # type: ignore
     logger.warning("atomic_io import failed, using fallback: %s", _atomic_import_err)
 
+# ---- LLM 接続プール管理 ----
+try:
+    from veritas_os.core.llm_client import close_pool as _close_llm_pool
+except Exception:
+    _close_llm_pool = None  # type: ignore
+
 # ---- PII検出・マスク（sanitize.py から。失敗時はフォールバック）----
 try:
     from veritas_os.core.sanitize import mask_pii as _sanitize_mask_pii
@@ -732,6 +738,8 @@ async def _app_lifespan(_: FastAPI):
         else:
             logger.info("All in-flight requests drained, shutting down cleanly")
         _stop_nonce_cleanup_scheduler()
+        if _close_llm_pool is not None:
+            _close_llm_pool()
 
 
 app = FastAPI(title="VERITAS Public API", version="1.0.3", lifespan=_app_lifespan)
@@ -1996,31 +2004,38 @@ def _is_debug_mode() -> bool:
 
 
 @app.get("/")
-def root():
+def root() -> Dict[str, Any]:
     return {"ok": True, "service": "veritas-api", "server_time": utc_now_iso_z()}
 
 
 @app.get("/health")
 @app.get("/v1/health")
-def health():
-    pipeline_ok = get_decision_pipeline() is not None
-    memory_ok = get_memory_store() is not None
-    all_ok = pipeline_ok and memory_ok
-    result: Dict[str, Any] = {
-        "ok": all_ok,
-        "uptime": int(time.time() - START_TS),
-        "checks": {
-            "pipeline": "ok" if pipeline_ok else "unavailable",
-            "memory": "ok" if memory_ok else "unavailable",
-        },
-    }
-    return result
+def health() -> Dict[str, Any]:
+    try:
+        pipeline_ok = get_decision_pipeline() is not None
+        memory_ok = get_memory_store() is not None
+        all_ok = pipeline_ok and memory_ok
+        result: Dict[str, Any] = {
+            "ok": all_ok,
+            "uptime": int(time.time() - START_TS),
+            "checks": {
+                "pipeline": "ok" if pipeline_ok else "unavailable",
+                "memory": "ok" if memory_ok else "unavailable",
+            },
+        }
+        return result
+    except Exception as e:
+        logger.error("[Health] check failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "health check failed"},
+        )
 
 
 @app.get("/status")
 @app.get("/v1/status")
 @app.get("/api/status")
-def status():
+def status() -> Dict[str, Any]:
     expected = (_get_expected_api_key() or "").strip()
     result = {
         "ok": True,
@@ -2602,7 +2617,7 @@ def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[st
 
 
 @app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     store = get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", _memory_store_state.err)
@@ -2704,7 +2719,7 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
 
 
 @app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     store = get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
@@ -2767,7 +2782,7 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     store = get_memory_store()
     if store is None:
         # Do not expose internal error details to clients
@@ -2787,7 +2802,7 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
     "/v1/memory/erase",
     dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
 )
-def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     """Erase a tenant's memories with legal-hold protection and audit log."""
     store = get_memory_store()
     if store is None:
@@ -3030,13 +3045,27 @@ def trust_feedback(body: TrustFeedbackRequest):
 @app.get("/v1/trustlog/verify", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def trustlog_verify() -> Dict[str, Any]:
     """Verify signed append-only TrustLog integrity and signatures."""
-    return verify_trustlog_chain()
+    try:
+        return verify_trustlog_chain()
+    except Exception as e:
+        logger.error("[TrustLog] verify failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "trustlog verification failed"},
+        )
 
 
 @app.get("/v1/trustlog/export", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
 def trustlog_export() -> Dict[str, Any]:
     """Export signed append-only TrustLog entries for external audit."""
-    return export_signed_trustlog()
+    try:
+        return export_signed_trustlog()
+    except Exception as e:
+        logger.error("[TrustLog] export failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "trustlog export failed"},
+        )
 
 
 # ==============================

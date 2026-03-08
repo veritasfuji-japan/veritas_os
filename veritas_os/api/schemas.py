@@ -786,6 +786,7 @@ class ChatRequest(BaseModel):
 MAX_MEMORY_TEXT_LENGTH = 100_000  # Max characters for memory text field
 MAX_MEMORY_TAGS = 100  # Max tags per memory item
 MAX_NOTE_LENGTH = 10_000  # Max characters for feedback notes
+ALLOWED_RETENTION_CLASSES = {"short", "standard", "long", "regulated"}
 
 
 class MemoryPutRequest(BaseModel):
@@ -829,6 +830,16 @@ class MemoryPutRequest(BaseModel):
             return "semantic"
         return str(v).strip().lower()
 
+    @field_validator("retention_class", mode="before")
+    @classmethod
+    def _coerce_retention_class(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        normalized = str(v).strip().lower()
+        if normalized not in ALLOWED_RETENTION_CLASSES:
+            return None
+        return normalized
+
 
 class MemoryGetRequest(BaseModel):
     """Typed request body for POST /v1/memory/get."""
@@ -849,6 +860,17 @@ class MemorySearchRequest(BaseModel):
     # Use Any so that server-side _validate_memory_kinds() can enforce
     # type checking (rejecting non-string items with a domain error).
     kinds: Any = None
+
+    @field_validator("kinds", mode="before")
+    @classmethod
+    def _coerce_kinds(cls, v: Any) -> Any:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return v
 
     @field_validator("query", mode="before")
     @classmethod
