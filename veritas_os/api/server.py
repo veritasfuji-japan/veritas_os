@@ -54,7 +54,7 @@ from veritas_os.api.schemas import (
     MemorySearchRequest,
     TrustFeedbackRequest,
 )
-from veritas_os.api.governance import get_policy, get_value_drift, update_policy
+from veritas_os.api.governance import get_policy, get_policy_history, get_value_drift, update_policy
 from veritas_os.compliance.report_engine import (
     generate_eu_ai_act_report,
     generate_internal_governance_report,
@@ -714,6 +714,7 @@ async def _app_lifespan(_: FastAPI):
     _check_runtime_feature_health()
     _check_multiworker_auth_store()
     _start_nonce_cleanup_scheduler()
+    _start_rate_cleanup_scheduler()
     try:
         yield
     finally:
@@ -738,6 +739,7 @@ async def _app_lifespan(_: FastAPI):
         else:
             logger.info("All in-flight requests drained, shutting down cleanly")
         _stop_nonce_cleanup_scheduler()
+        _stop_rate_cleanup_scheduler()
         if _close_llm_pool is not None:
             _close_llm_pool()
 
@@ -1643,6 +1645,52 @@ def _stop_nonce_cleanup_scheduler() -> None:
     with _nonce_cleanup_timer_lock:
         timer = _nonce_cleanup_timer
         _nonce_cleanup_timer = None
+    if timer is not None:
+        timer.cancel()
+
+
+# ---- Rate bucket periodic cleanup scheduler ----
+# Without scheduled cleanup, stale rate-limit buckets accumulate indefinitely
+# when traffic drops. The lazy cleanup inside enforce_rate_limit only runs on
+# incoming requests, so low-traffic deployments can leak memory over time.
+_rate_cleanup_timer: threading.Timer | None = None
+_rate_cleanup_timer_lock = threading.Lock()
+_RATE_CLEANUP_INTERVAL = 120.0  # seconds between scheduled sweeps
+
+
+def _schedule_rate_bucket_cleanup() -> None:
+    """Periodically sweep expired rate-limit buckets in the background."""
+    global _rate_cleanup_timer
+    try:
+        _cleanup_rate_bucket()
+    except Exception as e:
+        logger.warning("scheduled rate bucket cleanup failed: %s", e)
+    with _rate_cleanup_timer_lock:
+        if _rate_cleanup_timer is None:
+            return
+        next_timer = threading.Timer(_RATE_CLEANUP_INTERVAL, _schedule_rate_bucket_cleanup)
+        next_timer.daemon = True
+        _rate_cleanup_timer = next_timer
+        next_timer.start()
+
+
+def _start_rate_cleanup_scheduler() -> None:
+    """Start rate bucket cleanup timer once per process lifecycle."""
+    global _rate_cleanup_timer
+    with _rate_cleanup_timer_lock:
+        if _rate_cleanup_timer is not None:
+            return
+        _rate_cleanup_timer = threading.Timer(_RATE_CLEANUP_INTERVAL, _schedule_rate_bucket_cleanup)
+        _rate_cleanup_timer.daemon = True
+        _rate_cleanup_timer.start()
+
+
+def _stop_rate_cleanup_scheduler() -> None:
+    """Stop rate bucket cleanup timer if running."""
+    global _rate_cleanup_timer
+    with _rate_cleanup_timer_lock:
+        timer = _rate_cleanup_timer
+        _rate_cleanup_timer = None
     if timer is not None:
         timer.cancel()
 
@@ -3115,6 +3163,43 @@ def governance_put(body: dict):
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to update governance policy"},
+        )
+
+
+@app.get("/v1/governance/policy/history", dependencies=[Depends(require_api_key)])
+def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
+    """Return recent governance policy change history (newest first).
+
+    Each record contains the previous and new policy state along with who
+    made the change and when, providing a full compliance audit trail.
+    """
+    try:
+        records = get_policy_history(limit=limit)
+        return {"ok": True, "count": len(records), "history": records}
+    except Exception as e:
+        logger.error("governance_policy_history failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load governance policy history"},
+        )
+
+
+@app.get("/v1/trust/stats", dependencies=[Depends(require_api_key)])
+def trust_log_stats():
+    """Return TrustLog append success/failure counters for operational monitoring.
+
+    Persistent failures indicate a broken hash chain or storage issue and
+    should trigger an alert in production environments.
+    """
+    try:
+        from veritas_os.logging.trust_log import get_trust_log_stats
+        stats = get_trust_log_stats()
+        return {"ok": True, **stats}
+    except Exception as e:
+        logger.error("trust_log_stats failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to read trust log stats"},
         )
 
 
