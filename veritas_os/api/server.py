@@ -1919,7 +1919,10 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     Security: Only include raw_body in debug mode to prevent potential
     information leakage in production environments.
     """
-    trace_id = getattr(getattr(request, "state", None), "trace_id", None) or secrets.token_hex(16)
+    trace_id = (
+        getattr(request.state, "trace_id", None)
+        if hasattr(request, "state") else None
+    ) or secrets.token_hex(16)
     # Build response content
     content: Dict[str, Any] = {
         "detail": exc.errors(),
