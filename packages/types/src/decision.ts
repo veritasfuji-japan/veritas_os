@@ -94,10 +94,10 @@ export interface DecideResponse extends DecideResponseMeta {
   memory_used_count: number;
   trust_log: TrustLog | Record<string, unknown> | null;
 
-  /** Art. 50(1) — mandatory AI-generated content disclosure. */
-  ai_disclosure?: string;
-  /** Art. 50 — regulation reference notice. */
-  regulation_notice?: string;
+  /** Art. 50(1) — mandatory AI-generated content disclosure. Always present. */
+  ai_disclosure: string;
+  /** Art. 50 — regulation reference notice. Always present. */
+  regulation_notice: string;
   /** Art. 13 — notification record for individuals affected by high-risk decisions. */
   affected_parties_notice?: Record<string, unknown> | null;
 
@@ -141,7 +141,9 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     isRecord(value.persona) &&
     Array.isArray(value.memory_citations) &&
     typeof value.memory_used_count === "number" &&
-    (value.trust_log === null || isRecord(value.trust_log))
+    (value.trust_log === null || isRecord(value.trust_log)) &&
+    typeof value.ai_disclosure === "string" &&
+    typeof value.regulation_notice === "string"
   );
 }
 

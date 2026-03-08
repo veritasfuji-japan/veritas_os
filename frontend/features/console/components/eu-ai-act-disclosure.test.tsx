@@ -22,12 +22,18 @@ function buildResult(overrides: Partial<DecideResponse> = {}): DecideResponse {
     critique: [],
     debate: [],
     extras: {},
+    reason: null,
+    rsi_note: null,
+    evo: null,
+    meta: {},
     plan: null,
     planner: null,
     persona: {},
     memory_citations: [],
     memory_used_count: 0,
     trust_log: null,
+    ai_disclosure: "",
+    regulation_notice: "",
     ...overrides,
   };
 }
