@@ -67,6 +67,18 @@ components:
           type: string
         description:
           type: string
+        score:
+          type: number
+        score_raw:
+          type: number
+        world:
+          type: object
+          nullable: true
+          additionalProperties: true
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
 
     EvidenceItem:
       type: object
@@ -77,9 +89,10 @@ components:
         uri:
           type: string
           format: uri
-        snippet:
+        title:
           type: string
-        hash:
+          nullable: true
+        snippet:
           type: string
         confidence:
           type: number
@@ -120,9 +133,52 @@ components:
           items:
             type: string
 
+    GateOut:
+      type: object
+      properties:
+        risk:
+          type: number
+        telos_score:
+          type: number
+        bias:
+          type: number
+          nullable: true
+        decision_status:
+          type: string
+          enum: ["allow", "modify", "rejected", "block", "abstain"]
+        reason:
+          type: string
+          nullable: true
+        modifications:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                additionalProperties: true
+
+    ValuesOut:
+      type: object
+      properties:
+        scores:
+          type: object
+          additionalProperties:
+            type: number
+        total:
+          type: number
+        top_factors:
+          type: array
+          items:
+            type: string
+        rationale:
+          type: string
+        ema:
+          type: number
+          nullable: true
+
     TrustLog:
       type: object
-      required: [request_id, sources, critics, checks, approver, fuji]
+      required: [request_id, sources, critics, checks, approver]
       properties:
         request_id:
           type: string
@@ -145,8 +201,10 @@ components:
           type: string
         fuji:
           $ref: '#/components/schemas/FujiDecision'
+          nullable: true
         sha256_prev:
           type: string
+          nullable: true
           description: "チェーン用ハッシュ"
 
     DecideResponse:
@@ -161,6 +219,8 @@ components:
           description: "エラー詳細（ok=falseの場合に設定）"
         request_id:
           type: string
+        version:
+          type: string
         chosen:
           type: object
           properties:
@@ -170,6 +230,10 @@ components:
               type: string
             uncertainty:
               type: number
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/Option'
         alternatives:
           type: array
           items:
@@ -189,11 +253,64 @@ components:
         telos_score:
           type: number
         fuji:
-          $ref: '#/components/schemas/FujiDecision'
+          type: object
+          additionalProperties: true
         trust_log:
           $ref: '#/components/schemas/TrustLog'
+          nullable: true
         rsi_note:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "RSI関連メタ情報（オブジェクト形式）"
+        decision_status:
           type: string
+          enum: ["allow", "modify", "rejected", "block", "abstain"]
+        rejection_reason:
+          type: string
+          nullable: true
+        values:
+          $ref: '#/components/schemas/ValuesOut'
+          nullable: true
+        gate:
+          $ref: '#/components/schemas/GateOut'
+        extras:
+          type: object
+          additionalProperties: true
+        meta:
+          type: object
+          additionalProperties: true
+        persona:
+          type: object
+          additionalProperties: true
+        plan:
+          type: object
+          nullable: true
+          additionalProperties: true
+        planner:
+          type: object
+          nullable: true
+          additionalProperties: true
+        reason:
+          nullable: true
+        evo:
+          type: object
+          nullable: true
+          additionalProperties: true
+        memory_citations:
+          type: array
+          items: {}
+        memory_used_count:
+          type: integer
+        ai_disclosure:
+          type: string
+        regulation_notice:
+          type: string
+        affected_parties_notice:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "高リスクAI決定で第三者に影響する場合の通知レコード"
 
 security:
   - ApiKeyAuth: []
@@ -216,20 +333,37 @@ paths:
           application/json:
             schema:
               type: object
-              required: [context]
               properties:
+                query:
+                  type: string
+                  default: ""
+                  description: "ユーザ要求/問題文（context.queryの代替）"
                 context:
-                  $ref: '#/components/schemas/Context'
+                  oneOf:
+                    - $ref: '#/components/schemas/Context'
+                    - type: object
+                      additionalProperties: true
+                  default: {}
+                  description: "コンテキスト情報（省略可、デフォルト空dict）"
+                alternatives:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Option'
+                  description: "候補選択肢（canonicalフィールド）"
                 options:
                   type: array
                   items:
-                    $ref: '#/components/schemas/Option'  # options の items スキーマ
+                    $ref: '#/components/schemas/Option'
+                  description: "候補選択肢（後方互換フィールド、alternativesを優先）"
                 min_evidence:
                   type: integer
-                  default: 2
-                stream:
+                  default: 1
+                memory_auto_put:
                   type: boolean
-                  default: false
+                  default: true
+                persona_evolve:
+                  type: boolean
+                  default: true
       responses:
         "200":
           description: Decision
@@ -237,7 +371,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DecideResponse'
-
 
   /v1/replay/{decision_id}:
     post:
@@ -268,6 +401,24 @@ paths:
                     type: string
                   replay_time_ms:
                     type: integer
+
+  /v1/decision/replay/{decision_id}:
+    post:
+      summary: Decision replay (v2)
+      parameters:
+        - in: path
+          name: decision_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Replay execution result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
 
   /v1/fuji/validate:
     post:
@@ -339,6 +490,44 @@ paths:
                   value:
                     type: string
 
+  /v1/memory/search:
+    post:
+      summary: Memory search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/memory/erase:
+    post:
+      summary: Memory erasure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Erasure result
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /v1/trust/{request_id}:
     get:
       summary: Get immutable trust log
@@ -355,3 +544,303 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrustLog'
+
+  /v1/trust/logs:
+    get:
+      summary: Paginated trust log listing
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: page_size
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Paginated trust logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  logs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TrustLog'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  page_size:
+                    type: integer
+
+  /v1/trust/feedback:
+    post:
+      summary: Human feedback recording
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Feedback recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+
+  /v1/trustlog/verify:
+    get:
+      summary: Trust log chain verification
+      responses:
+        "200":
+          description: Chain verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  valid:
+                    type: boolean
+                  detail:
+                    type: string
+
+  /v1/trustlog/export:
+    get:
+      summary: Trust log export
+      responses:
+        "200":
+          description: Exported trust logs
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/events:
+    get:
+      summary: SSE event stream
+      responses:
+        "200":
+          description: Server-Sent Events stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /v1/metrics:
+    get:
+      summary: System metrics
+      responses:
+        "200":
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/governance/value-drift:
+    get:
+      summary: Value drift metrics
+      responses:
+        "200":
+          description: Value drift data
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/governance/policy:
+    get:
+      summary: Governance policy read
+      responses:
+        "200":
+          description: Governance policy
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    put:
+      summary: Governance policy update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated policy
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/compliance/config:
+    get:
+      summary: Compliance config read
+      responses:
+        "200":
+          description: Compliance config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  config:
+                    type: object
+                    additionalProperties: true
+    put:
+      summary: Compliance config update
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/compliance/deployment-readiness:
+    get:
+      summary: Deployment readiness check
+      responses:
+        "200":
+          description: Deployment readiness result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  ready:
+                    type: boolean
+                  checks:
+                    type: object
+                    additionalProperties: true
+
+  /v1/system/halt:
+    post:
+      summary: Emergency system halt
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: System halted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  halted:
+                    type: boolean
+
+  /v1/system/resume:
+    post:
+      summary: System resume
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: System resumed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  halted:
+                    type: boolean
+
+  /v1/system/halt-status:
+    get:
+      summary: Halt status check
+      responses:
+        "200":
+          description: Current halt status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  halted:
+                    type: boolean
+                  reason:
+                    type: string
+                    nullable: true
+
+  /v1/report/eu_ai_act/{decision_id}:
+    get:
+      summary: EU AI Act report for a decision
+      parameters:
+        - in: path
+          name: decision_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: EU AI Act compliance report
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/report/governance:
+    get:
+      summary: Governance report
+      responses:
+        "200":
+          description: Governance report
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
