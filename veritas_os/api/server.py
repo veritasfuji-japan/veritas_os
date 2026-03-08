@@ -8,6 +8,7 @@ import hmac
 import importlib
 import json
 import logging
+import math
 import os
 import queue
 import re
@@ -673,9 +674,27 @@ def _check_multiworker_auth_store() -> None:
         )
 
 
+# ---------------------------------------------------------------------------
+# In-flight request tracking for graceful shutdown
+# ---------------------------------------------------------------------------
+_inflight_count = 0
+_inflight_lock = threading.Lock()
+_shutting_down = False
+
+
+def _inflight_snapshot() -> Dict[str, Any]:
+    """Return a thread-safe snapshot of in-flight request state."""
+    with _inflight_lock:
+        return {"inflight": _inflight_count, "shutting_down": _shutting_down}
+
+
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
     """Manage startup/shutdown actions using FastAPI lifespan API."""
+    global _shutting_down, _inflight_count
+    with _inflight_lock:
+        _shutting_down = False
+        _inflight_count = 0
     _run_startup_config_validation()
     _check_runtime_feature_health()
     _check_multiworker_auth_store()
@@ -683,6 +702,26 @@ async def _app_lifespan(_: FastAPI):
     try:
         yield
     finally:
+        with _inflight_lock:
+            _shutting_down = True
+        # Drain in-flight requests (up to _SHUTDOWN_DRAIN_SEC seconds)
+        _drain_sec = float(os.getenv("VERITAS_SHUTDOWN_DRAIN_SEC", "10"))
+        deadline = time.monotonic() + _drain_sec
+        while time.monotonic() < deadline:
+            with _inflight_lock:
+                if _inflight_count <= 0:
+                    break
+            await asyncio.sleep(0.25)
+        with _inflight_lock:
+            remaining = _inflight_count
+        if remaining > 0:
+            logger.warning(
+                "Shutting down with %d in-flight request(s) after %.0fs drain timeout",
+                remaining,
+                _drain_sec,
+            )
+        else:
+            logger.info("All in-flight requests drained, shutting down cleanly")
         _stop_nonce_cleanup_scheduler()
 
 
@@ -831,6 +870,64 @@ async def attach_trace_id(request: Request, call_next):
     response.headers[TRACE_ID_HEADER_NAME] = trace_id
     response.headers.setdefault("X-Request-Id", trace_id)
     return response
+
+
+@app.middleware("http")
+async def add_response_time(request: Request, call_next):
+    """Record and expose request processing time via X-Response-Time header."""
+    start = time.monotonic()
+    response = await call_next(request)
+    elapsed_ms = round((time.monotonic() - start) * 1000, 2)
+    response.headers["X-Response-Time"] = f"{elapsed_ms}ms"
+    return response
+
+
+@app.middleware("http")
+async def add_rate_limit_headers(request: Request, call_next):
+    """Expose rate limit state via standard X-RateLimit-* response headers.
+
+    After the route handler (and its ``enforce_rate_limit`` dependency) runs,
+    this middleware reads the current bucket entry for the caller's API key
+    and attaches ``X-RateLimit-Limit``, ``X-RateLimit-Remaining``, and
+    ``X-RateLimit-Reset`` headers to the response.
+
+    Endpoints without rate limiting (e.g. ``/health``) are silently skipped.
+    """
+    response = await call_next(request)
+    api_key = (request.headers.get("X-API-Key") or "").strip()
+    if api_key:
+        with _rate_lock:
+            entry = _rate_bucket.get(api_key)
+        if entry is not None:
+            count, start = entry
+            remaining = max(0, _RATE_LIMIT - count)
+            reset_at = int(math.ceil(start + _RATE_WINDOW))
+            response.headers["X-RateLimit-Limit"] = str(_RATE_LIMIT)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+            response.headers["X-RateLimit-Reset"] = str(reset_at)
+    return response
+
+
+@app.middleware("http")
+async def track_inflight_requests(request: Request, call_next):
+    """Track in-flight requests for graceful shutdown draining."""
+    global _inflight_count
+
+    if _shutting_down:
+        return JSONResponse(
+            status_code=503,
+            content={"ok": False, "error": "Server is shutting down"},
+            headers={"Retry-After": "5"},
+        )
+
+    with _inflight_lock:
+        _inflight_count += 1
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        with _inflight_lock:
+            _inflight_count -= 1
 
 
 @app.middleware("http")
@@ -1822,9 +1919,11 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
     Security: Only include raw_body in debug mode to prevent potential
     information leakage in production environments.
     """
+    trace_id = getattr(getattr(request, "state", None), "trace_id", None) or secrets.token_hex(16)
     # Build response content
     content: Dict[str, Any] = {
         "detail": exc.errors(),
+        "request_id": trace_id,
         "hint": {"expected_example": _decide_example()},
     }
 
@@ -1865,7 +1964,18 @@ def root():
 @app.get("/health")
 @app.get("/v1/health")
 def health():
-    return {"ok": True, "uptime": int(time.time() - START_TS)}
+    pipeline_ok = get_decision_pipeline() is not None
+    memory_ok = get_memory_store() is not None
+    all_ok = pipeline_ok and memory_ok
+    result: Dict[str, Any] = {
+        "ok": all_ok,
+        "uptime": int(time.time() - START_TS),
+        "checks": {
+            "pipeline": "ok" if pipeline_ok else "unavailable",
+            "memory": "ok" if memory_ok else "unavailable",
+        },
+    }
+    return result
 
 
 @app.get("/status")
