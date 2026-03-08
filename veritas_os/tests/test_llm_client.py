@@ -17,6 +17,14 @@ from veritas_os.core.llm_client import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _reset_circuit_breaker():
+    """Reset the circuit breaker state between tests."""
+    llm_client._circuit_state.clear()
+    yield
+    llm_client._circuit_state.clear()
+
+
 # ------------------------------------------------------------
 # ヘルパークラス
 # ------------------------------------------------------------
@@ -390,7 +398,7 @@ def test_chat_openai_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(
         system_prompt="SYS",
@@ -420,7 +428,7 @@ def test_chat_anthropic_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(
         system_prompt="SYS",
@@ -454,7 +462,7 @@ def test_chat_gemini_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(
         system_prompt="SYS",
@@ -477,7 +485,7 @@ def test_chat_ollama_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(
         system_prompt="SYS",
@@ -510,7 +518,7 @@ def test_chat_openrouter_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(
         system_prompt="SYS",
@@ -540,7 +548,7 @@ def test_chat_uses_default_provider_and_model(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     res = llm_client.chat(system_prompt="SYS", user_prompt="USER")
     assert res["text"] == "default path"
@@ -575,7 +583,7 @@ def test_chat_openai_rate_limit_then_success(monkeypatch):
         }
         return _DummyResponse(status_code=200, data=data, text="ok")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
     monkeypatch.setattr(llm_client.time, "sleep", lambda *_args, **_kwargs: None)
 
     res = llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
@@ -593,7 +601,7 @@ def test_chat_http_error_raises(monkeypatch):
             text="server error",
         )
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     with pytest.raises(LLMError) as exc:
         llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
@@ -623,7 +631,7 @@ def test_chat_4xx_logs_redacted_preview(monkeypatch):
         )
 
     warning_mock = MagicMock()
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
     monkeypatch.setattr(llm_client.log, "warning", warning_mock)
 
     with pytest.raises(LLMError) as exc:
@@ -642,7 +650,7 @@ def test_chat_request_exception_retries_and_fails(monkeypatch):
     def fake_post(url, headers, json, timeout):
         raise httpx.TimeoutException("boom timeout")
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
     monkeypatch.setattr(llm_client.time, "sleep", lambda *_a, **_k: None)
     monkeypatch.setattr(llm_client, "LLM_MAX_RETRIES", 2)
 
@@ -666,7 +674,7 @@ def test_chat_unexpected_error_wraps(monkeypatch):
     def fake_post(url, headers, json, timeout):
         return BadResponse(status_code=200, data={})
 
-    monkeypatch.setattr(llm_client.httpx, "post", fake_post)
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
 
     with pytest.raises(LLMError) as exc:
         llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
@@ -789,7 +797,7 @@ def test_validate_model_name_accepts_ollama_custom_model():
 def test_chat_rejects_invalid_openai_model_before_http(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     post_mock = MagicMock()
-    monkeypatch.setattr(llm_client.httpx, "post", post_mock)
+    monkeypatch.setattr(llm_client, "_http_post", post_mock)
 
     with pytest.raises(LLMError):
         llm_client.chat(
