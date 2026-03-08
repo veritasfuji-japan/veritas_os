@@ -195,3 +195,40 @@ class TestIsMapping:
         assert schemas_mod._is_mapping("string") is False
         assert schemas_mod._is_mapping(123) is False
         assert schemas_mod._is_mapping(None) is False
+
+
+class TestDecideResponsePipelineFields:
+    """query / pipeline_steps / deterministic_replay が extra keys 扱いにならないことを確認。"""
+
+    def test_query_accepted_without_extra_warning(self):
+        """query フィールドが正式 schema に含まれ、extra keys にならない。"""
+        resp = schemas_mod.DecideResponse(query="テストクエリ")
+        assert resp.query == "テストクエリ"
+        extras = getattr(resp, "__pydantic_extra__", None) or {}
+        assert "query" not in extras
+
+    def test_pipeline_steps_accepted_without_extra_warning(self):
+        """pipeline_steps が正式 schema に含まれる。"""
+        steps = ["evidence", "debate", "critique", "safety"]
+        resp = schemas_mod.DecideResponse(pipeline_steps=steps)
+        assert resp.pipeline_steps == steps
+        extras = getattr(resp, "__pydantic_extra__", None) or {}
+        assert "pipeline_steps" not in extras
+
+    def test_deterministic_replay_accepted_without_extra_warning(self):
+        """deterministic_replay が正式 schema に含まれる。"""
+        replay = {"seed": 42, "temperature": 0}
+        resp = schemas_mod.DecideResponse(deterministic_replay=replay)
+        assert resp.deterministic_replay == replay
+        extras = getattr(resp, "__pydantic_extra__", None) or {}
+        assert "deterministic_replay" not in extras
+
+    def test_all_three_fields_together(self):
+        """3 フィールド同時指定で extra keys ログが出ない。"""
+        resp = schemas_mod.DecideResponse(
+            query="hello",
+            pipeline_steps=["evidence"],
+            deterministic_replay={"seed": 1},
+        )
+        extras = getattr(resp, "__pydantic_extra__", None) or {}
+        assert not extras, f"unexpected extra keys: {sorted(extras.keys())}"

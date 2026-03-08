@@ -490,21 +490,27 @@ def _score_alternatives(
         try:
             bias = persona_bias or {}
             scored = strategy_core.score_options(
+                alts,
+                ctx or {},
                 intent=intent,
                 query=q,
-                options=alts,
                 telos_score=telos_score,
                 stakes=stakes,
                 persona_bias=bias,
-                context=ctx or {},
             )
             if isinstance(scored, list) and scored:
                 score_map = {}
                 for o in scored:
-                    oid = o.get("id")
+                    # OptionScore dataclass or dict — extract id and score
+                    if hasattr(o, "option_id"):
+                        oid = o.option_id
+                        sc = getattr(o, "fusion_score", 0.0)
+                    else:
+                        oid = o.get("id")
+                        sc = o.get("score", o.get("fusion_score", 0.0))
                     if not oid:
                         continue
-                    score_map[oid] = _safe_float(o.get("score"), 0.0)
+                    score_map[oid] = _safe_float(sc, 0.0)
 
                 for a in alts:
                     oid = a.get("id")

@@ -492,6 +492,23 @@ class DecideResponse(BaseModel):
     planner: Optional[Dict[str, Any]] = None
     reason: Optional[Any] = None
 
+    # パイプラインが付与する追加フィールド（正式 schema 昇格）
+    # query: 元のユーザー入力。監査・再現・UI 表示で使用。
+    query: Optional[str] = Field(
+        default=None,
+        description="Original user query text, attached by pipeline for audit and replay.",
+    )
+    # pipeline_steps: EU AI Act 動的コンプライアンスステップ一覧。
+    pipeline_steps: Optional[List[str]] = Field(
+        default=None,
+        description="Dynamic pipeline steps resolved by the orchestrator (EU AI Act compliance).",
+    )
+    # deterministic_replay: 決定論的再現に必要なスナップショット。
+    deterministic_replay: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Snapshot for deterministic replay of this decision.",
+    )
+
     # persist 用 meta
     meta: Dict[str, Any] = Field(default_factory=dict)
     coercion_events: List[str] = Field(default_factory=list, exclude=True)

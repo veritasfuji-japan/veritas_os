@@ -253,3 +253,55 @@ def test_rank_fallback_on_score_error(monkeypatch):
     # フォールバック時は _veritas_scores は付かない
     assert "_veritas_scores" not in best
 
+
+# ----------------------------
+# score_options: intent / **kwargs 後方互換テスト
+# ----------------------------
+
+def test_score_options_accepts_intent_kwarg(monkeypatch):
+    """score_options(intent=...) で TypeError が発生しないことを確認。"""
+
+    def fake_evaluate(query: str, ctx: dict):
+        return DummyValueResult(0.5)
+
+    def fake_simulate(option: dict, state: dict):
+        return {"utility": 0.5, "confidence": 0.5}
+
+    monkeypatch.setattr(strategy.value_core, "evaluate", fake_evaluate)
+    monkeypatch.setattr(strategy.wm, "simulate", fake_simulate, raising=False)
+
+    options = [{"id": "A", "base_score": 0.7}]
+    ctx = {"query": "test", "fuji": {"risk": 0.1}}
+
+    # intent を渡しても落ちない
+    scores = strategy.score_options(options, ctx, intent="learn")
+    assert len(scores) == 1
+    assert 0.0 <= scores[0].fusion_score <= 1.0
+
+
+def test_score_options_accepts_extra_kwargs(monkeypatch):
+    """未知の追加キーワード引数で TypeError にならないことを確認。"""
+
+    def fake_evaluate(query: str, ctx: dict):
+        return DummyValueResult(0.5)
+
+    def fake_simulate(option: dict, state: dict):
+        return {"utility": 0.5, "confidence": 0.5}
+
+    monkeypatch.setattr(strategy.value_core, "evaluate", fake_evaluate)
+    monkeypatch.setattr(strategy.wm, "simulate", fake_simulate, raising=False)
+
+    options = [{"id": "A", "base_score": 0.7}]
+    ctx = {"query": "test"}
+
+    # 未知の kwargs でも落ちない
+    scores = strategy.score_options(
+        options, ctx,
+        intent="weather",
+        telos_score=0.8,
+        stakes=0.5,
+        persona_bias={"caution": 0.1},
+        some_future_arg="ignored",
+    )
+    assert len(scores) == 1
+
