@@ -383,3 +383,65 @@ def test_run_uses_heuristic_when_no_llm(monkeypatch):
     assert res["ok"] is True
     assert res["model"] == "heuristic_fallback"
     assert res["risk_score"] == 0.05
+
+
+# -----------------------------
+# Chat Completions fallback テスト
+# -----------------------------
+
+
+def test_analyze_with_llm_falls_back_to_chat_completions(monkeypatch):
+    """client に .responses が無い場合、chat.completions にフォールバックする。"""
+    import json as _json
+
+    class DummyMessage:
+        def __init__(self, content: str):
+            self.content = content
+
+    class DummyChoice:
+        def __init__(self, content: str):
+            self.message = DummyMessage(content)
+
+    class DummyChatResponse:
+        def __init__(self):
+            self.choices = [
+                DummyChoice(
+                    _json.dumps({
+                        "risk_score": 0.3,
+                        "categories": ["PII"],
+                        "rationale": "chat fallback test",
+                    })
+                )
+            ]
+
+        def model_dump_json(self) -> str:
+            return '{"fallback": true}'
+
+    class DummyCompletions:
+        last_kwargs: Dict[str, Any] | None = None
+
+        def create(self, **kwargs: Any) -> DummyChatResponse:
+            DummyCompletions.last_kwargs = kwargs
+            return DummyChatResponse()
+
+    class DummyChat:
+        def __init__(self):
+            self.completions = DummyCompletions()
+
+    class DummyClientNoResponses:
+        """OpenAI client without .responses attribute."""
+        def __init__(self, api_key: str | None = None):
+            self.api_key = api_key
+            self.chat = DummyChat()
+            # NOTE: no .responses attribute
+
+    monkeypatch.setattr(llm_safety, "OpenAI", DummyClientNoResponses)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-fallback")
+
+    res = llm_safety._analyze_with_llm("test text for chat fallback")
+
+    assert res["ok"] is True
+    assert res["risk_score"] >= 0.0
+    assert DummyCompletions.last_kwargs is not None
+    assert DummyCompletions.last_kwargs["temperature"] == 0
+    assert "messages" in DummyCompletions.last_kwargs

@@ -123,6 +123,9 @@ def _ensure_values(ctx: Dict[str, Any]) -> Dict[str, Any]:
 def score_options(
     options: List[Dict[str, Any]],
     ctx: Dict[str, Any],
+    *,
+    intent: str | None = None,
+    **kwargs: Any,
 ) -> List[OptionScore]:
     """
     各オプションに対して

@@ -266,52 +266,73 @@ def _analyze_with_llm(
         ],
     }
 
-    t0 = time.time()
-    resp = client.responses.create(
-        model=model_name,
-        reasoning={"effort": "low"},
-        temperature=0,
-        input=[
-            {
-                "role": "system",
-                "content": system,
-            },
-            {
-                "role": "user",
-                "content": f"CLASSIFY_THIS_INPUT:\n```json\n{json.dumps(user_payload, ensure_ascii=False)}\n```",
-            },
-        ],
-        response_format={
-            "type": "json_schema",
-            "json_schema": {
-                "name": "safety_head_output",
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "risk_score": {"type": "number"},
-                        "categories": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                        },
-                        "rationale": {"type": "string"},
-                    },
-                    "required": ["risk_score", "categories", "rationale"],
-                    "additionalProperties": True,
-                },
-                "strict": False,
-            },
-        },
-    )
-    latency_ms = int((time.time() - t0) * 1000)
+    user_content = f"CLASSIFY_THIS_INPUT:\n```json\n{json.dumps(user_payload, ensure_ascii=False)}\n```"
 
-    # Responses API の JSON 抜き出し
-    # ★ H-5 修正: output が空の場合の IndexError を防止
-    output = getattr(resp, "output", None)
-    if not output or len(output) == 0:
-        raise RuntimeError("LLM safety head returned empty output")
-    out = getattr(output[0], "parsed", None)
-    if out is None:
-        raise RuntimeError("LLM safety head returned unparseable output")
+    t0 = time.time()
+
+    # Responses API (.responses.create) を優先し、非対応の場合は
+    # Chat Completions API (.chat.completions.create) にフォールバックする。
+    # SDK バージョンや Azure ラッパーによって .responses が存在しない場合がある。
+    use_responses_api = hasattr(client, "responses") and hasattr(client.responses, "create")
+
+    if use_responses_api:
+        resp = client.responses.create(
+            model=model_name,
+            reasoning={"effort": "low"},
+            temperature=0,
+            input=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "safety_head_output",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "risk_score": {"type": "number"},
+                            "categories": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "rationale": {"type": "string"},
+                        },
+                        "required": ["risk_score", "categories", "rationale"],
+                        "additionalProperties": True,
+                    },
+                    "strict": False,
+                },
+            },
+        )
+        latency_ms = int((time.time() - t0) * 1000)
+
+        # Responses API の JSON 抜き出し
+        # ★ H-5 修正: output が空の場合の IndexError を防止
+        output = getattr(resp, "output", None)
+        if not output or len(output) == 0:
+            raise RuntimeError("LLM safety head returned empty output")
+        out = getattr(output[0], "parsed", None)
+        if out is None:
+            raise RuntimeError("LLM safety head returned unparseable output")
+    else:
+        # Fallback: Chat Completions API
+        logger.info("LLM safety head: .responses unavailable, using chat.completions fallback")
+        resp = client.chat.completions.create(
+            model=model_name,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+        )
+        latency_ms = int((time.time() - t0) * 1000)
+
+        raw_text = (resp.choices[0].message.content or "").strip() if resp.choices else ""
+        if not raw_text:
+            raise RuntimeError("LLM safety head returned empty chat completion")
+        out = json.loads(raw_text)
 
     try:
         risk = float(out.get("risk_score", 0.05) or 0.05)
@@ -347,7 +368,7 @@ def _analyze_with_llm(
                 "heuristic_risk": scoring.get("heuristic_risk"),
                 "notes": scoring_notes,
             },
-            "response": resp.model_dump_json(),  # 監査用
+            "response": resp.model_dump_json() if hasattr(resp, "model_dump_json") else str(resp),  # 監査用
         },
     }
 
