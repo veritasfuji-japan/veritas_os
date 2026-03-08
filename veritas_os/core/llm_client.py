@@ -94,6 +94,108 @@ LLM_RETRY_DELAY = _env_float("LLM_RETRY_DELAY", 2.0)
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
 LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
 
+# =========================
+# Connection pooling
+# =========================
+# Reuse TCP connections across LLM calls for better performance.
+# The pool is lazily initialized on first use and can be closed via close_pool().
+
+_LLM_POOL_MAX_CONNECTIONS = _env_int("LLM_POOL_MAX_CONNECTIONS", 20)
+_LLM_POOL_MAX_KEEPALIVE = _env_int("LLM_POOL_MAX_KEEPALIVE", 10)
+
+import threading as _threading  # noqa: E402
+
+_pool_lock = _threading.Lock()
+_http_client: Optional[httpx.Client] = None
+
+
+def _get_http_client() -> httpx.Client:
+    """Return a shared httpx.Client with connection pooling (thread-safe)."""
+    global _http_client
+    if _http_client is not None:
+        return _http_client
+    with _pool_lock:
+        if _http_client is not None:
+            return _http_client
+        _http_client = httpx.Client(
+            limits=httpx.Limits(
+                max_connections=_LLM_POOL_MAX_CONNECTIONS,
+                max_keepalive_connections=_LLM_POOL_MAX_KEEPALIVE,
+            ),
+            timeout=httpx.Timeout(LLM_TIMEOUT, connect=LLM_CONNECT_TIMEOUT),
+        )
+    return _http_client
+
+
+def _http_post(url: str, **kwargs: Any) -> httpx.Response:
+    """Send a POST request using the shared connection pool.
+
+    This thin wrapper exists so that tests can ``monkeypatch.setattr``
+    to intercept outbound HTTP calls without touching httpx internals.
+    """
+    return _get_http_client().post(url, **kwargs)
+
+
+def close_pool() -> None:
+    """Close the shared HTTP connection pool (idempotent)."""
+    global _http_client
+    with _pool_lock:
+        if _http_client is not None:
+            try:
+                _http_client.close()
+            except Exception:
+                log.debug("Error closing LLM HTTP pool", exc_info=True)
+            _http_client = None
+
+
+# =========================
+# Circuit breaker
+# =========================
+# Tracks consecutive failures per provider to temporarily disable
+# providers that are consistently failing.
+
+CIRCUIT_BREAKER_THRESHOLD = _env_int("LLM_CIRCUIT_BREAKER_THRESHOLD", 5)
+CIRCUIT_BREAKER_RECOVERY_SEC = _env_float("LLM_CIRCUIT_BREAKER_RECOVERY_SEC", 60.0)
+
+_circuit_lock = _threading.Lock()
+_circuit_state: Dict[str, Dict[str, Any]] = {}
+
+
+def _circuit_check(provider: str) -> None:
+    """Raise LLMError if the provider circuit is open."""
+    with _circuit_lock:
+        state = _circuit_state.get(provider)
+    if state is None:
+        return
+    if state["failures"] >= CIRCUIT_BREAKER_THRESHOLD:
+        elapsed = time.time() - state["last_failure"]
+        if elapsed < CIRCUIT_BREAKER_RECOVERY_SEC:
+            raise LLMError(
+                f"Circuit open for provider '{provider}' "
+                f"({state['failures']} consecutive failures, "
+                f"recovery in {CIRCUIT_BREAKER_RECOVERY_SEC - elapsed:.0f}s)"
+            )
+        # Recovery period elapsed — allow a probe request
+        with _circuit_lock:
+            _circuit_state[provider] = {"failures": 0, "last_failure": 0.0}
+
+
+def _circuit_record_success(provider: str) -> None:
+    """Record a successful call and reset the failure counter."""
+    with _circuit_lock:
+        _circuit_state.pop(provider, None)
+
+
+def _circuit_record_failure(provider: str) -> None:
+    """Record a failed call and increment the failure counter."""
+    with _circuit_lock:
+        state = _circuit_state.get(provider)
+        if state is None:
+            _circuit_state[provider] = {"failures": 1, "last_failure": time.time()}
+        else:
+            state["failures"] += 1
+            state["last_failure"] = time.time()
+
 # Provider-level allowlist for remote model identifiers.
 # NOTE: Ollama intentionally supports local custom models and therefore uses
 # character-level validation only.
@@ -506,6 +608,9 @@ def chat(
     provider = provider or LLM_PROVIDER
     model = _validate_model_name(provider=provider, model=model or LLM_MODEL)
 
+    # ★ Circuit breaker — fail fast if provider is known to be down
+    _circuit_check(provider)
+
     # ★ Affect 注入（必要な時だけ効く）
     system_prompt = _inject_affect_into_system_prompt(
         system_prompt=system_prompt,
@@ -533,7 +638,7 @@ def chat(
 
     for attempt in range(1, LLM_MAX_RETRIES + 1):
         try:
-            resp = httpx.post(
+            resp = _http_post(
                 endpoint,
                 headers=headers,
                 json=payload,
@@ -614,6 +719,7 @@ def chat(
             elif provider == LLMProvider.GOOGLE.value:
                 usage = data.get("usageMetadata")
 
+            _circuit_record_success(provider)
             return {
                 "text": text,
                 "provider": provider,
@@ -625,6 +731,7 @@ def chat(
 
         except httpx.RequestError as e:
             last_error = e
+            _circuit_record_failure(provider)
             wait_time = LLM_RETRY_DELAY * (2 ** (attempt - 1))
             log.warning(
                 "LLM request error (provider=%s, attempt=%s), retry in %.1fs: %r",
@@ -638,10 +745,12 @@ def chat(
                 continue
         except LLMError:
             # LLMError はそのまま再送出（上位で処理させる）
+            _circuit_record_failure(provider)
             raise
         except Exception as e:
             # 予期せぬエラーは即終了
             # ★ セキュリティ: 例外の詳細はログに記録し、外部には型名のみ公開
+            _circuit_record_failure(provider)
             log.error("LLM unexpected error (provider=%s): %r", provider, e)
             raise LLMError(f"Unexpected error: {type(e).__name__}") from e
 
@@ -729,4 +838,5 @@ __all__ = [
     "chat_gemini",
     "chat_local",
     "chat_completion",
+    "close_pool",
 ]

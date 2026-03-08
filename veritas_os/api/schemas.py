@@ -89,17 +89,24 @@ class Context(BaseModel):
     session_id: Optional[str] = Field(default=None, max_length=500)
     query: str = Field(..., max_length=MAX_QUERY_LENGTH)
 
-    goals: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
-    constraints: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    goals: Optional[List[str]] = Field(default=None)
+    constraints: Optional[List[str]] = Field(default=None)
 
     # 返答の時間軸（未指定可）
     time_horizon: Optional[Literal["short", "mid", "long"]] = None
 
     # 将来の好み/スタイル切替のフック
-    preferences: Optional[List[str]] = Field(default=None, max_length=MAX_LIST_ITEMS)
+    preferences: Optional[List[str]] = Field(default=None)
     telos_weights: Optional[Dict[str, float]] = None
     affect_hint: Optional[Dict[str, str]] = None
     response_style: Optional[Literal["logic", "emotional", "business", "expert", "casual"]] = None
+
+    @field_validator("goals", "constraints", "preferences", mode="before")
+    @classmethod
+    def _validate_list_size(cls, v: Any) -> Any:
+        if v is not None and isinstance(v, (list, tuple, set)) and len(v) > MAX_LIST_ITEMS:
+            raise ValueError(f"list exceeds maximum size of {MAX_LIST_ITEMS}")
+        return v
 
 
 class Option(BaseModel):

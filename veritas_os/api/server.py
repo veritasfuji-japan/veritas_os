@@ -1507,9 +1507,21 @@ def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
 # ---- HMAC signature / replay (optional) ----
 # ★ セキュリティ修正: スレッドセーフ化 (threading は L11 で import 済み)
 
-_NONCE_TTL_SEC = 300
-_NONCE_MAX = 5000  # 簡易上限
-_NONCE_MAX_LENGTH = 256  # ノンス長の上限（メモリ消費抑止）
+
+def _env_int_safe(key: str, default: int) -> int:
+    """Parse an environment variable as int, falling back to *default*."""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+_NONCE_TTL_SEC = _env_int_safe("VERITAS_NONCE_TTL_SEC", 300)
+_NONCE_MAX = _env_int_safe("VERITAS_NONCE_MAX_SIZE", 5000)  # 簡易上限
+_NONCE_MAX_LENGTH = _env_int_safe("VERITAS_NONCE_MAX_LENGTH", 256)  # ノンス長の上限（メモリ消費抑止）
 _nonce_store: Dict[str, float] = {}
 _nonce_lock = threading.Lock()  # ★ スレッドセーフ化
 
