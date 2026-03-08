@@ -1748,3 +1748,82 @@ def test_resolve_cors_settings_allows_explicit_origins_only():
 
     assert origins == ["https://example.com", "https://app.example.com"]
     assert allow_credentials is True
+
+
+# -------------------------------------------------
+# Pydantic Request Model Validation Tests
+# -------------------------------------------------
+
+
+def test_memory_put_rejects_oversized_text_with_422():
+    """Pydantic max_length on text field returns 422 for oversized input."""
+    r = client.post(
+        "/v1/memory/put",
+        json={"text": "x" * 100_001},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 422
+
+
+def test_memory_put_rejects_too_many_tags_with_422():
+    """Pydantic validator rejects more than 100 tags with 422."""
+    r = client.post(
+        "/v1/memory/put",
+        json={"text": "hello", "tags": ["t"] * 101},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 422
+
+
+def test_memory_get_requires_key_field():
+    """MemoryGetRequest requires 'key'; missing key returns 422."""
+    r = client.post(
+        "/v1/memory/get",
+        json={"user_id": "u1"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 422
+
+
+def test_memory_search_coerces_bad_k_to_default():
+    """Non-numeric k defaults to 8 instead of failing."""
+    r = client.post(
+        "/v1/memory/search",
+        json={"query": "test", "k": "bad"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_memory_search_coerces_bad_min_sim_to_default():
+    """Non-numeric min_sim defaults to 0.25 instead of failing."""
+    r = client.post(
+        "/v1/memory/search",
+        json={"query": "test", "min_sim": "bad"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True
+
+
+def test_trust_feedback_coerces_bad_score_to_default():
+    """Non-numeric score defaults to 0.5 via Pydantic validator."""
+    r = client.post(
+        "/v1/trust/feedback",
+        json={"score": "not-a-number"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] in ("ok", "error")
+
+
+def test_memory_put_accepts_string_value():
+    """MemoryPutRequest accepts non-dict value for backward compatibility."""
+    r = client.post(
+        "/v1/memory/put",
+        json={"user_id": "u1", "key": "k1", "value": "string-value"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert r.status_code == 200
+    assert r.json()["ok"] is True

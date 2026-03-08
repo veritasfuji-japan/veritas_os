@@ -845,3 +845,40 @@ def test_env_parsing_failsafe_on_module_reload(monkeypatch):
         monkeypatch.setenv("LLM_RETRY_DELAY", str(original_retry_delay))
         monkeypatch.setenv("LLM_MAX_RESPONSE_BYTES", str(original_max_response_bytes))
         importlib.reload(llm_client)
+
+
+# ------------------------------------------------------------
+# _http_post response size enforcement
+# ------------------------------------------------------------
+
+
+def test_http_post_rejects_oversized_response(monkeypatch):
+    """_http_post raises LLMError when response body exceeds LLM_MAX_RESPONSE_BYTES."""
+    oversized_body = b"x" * 200
+
+    fake_resp = MagicMock(spec=httpx.Response)
+    fake_resp.content = oversized_body
+
+    monkeypatch.setattr(llm_client, "_get_http_client", lambda: MagicMock(
+        post=MagicMock(return_value=fake_resp),
+    ))
+    monkeypatch.setattr(llm_client, "LLM_MAX_RESPONSE_BYTES", 100)
+
+    with pytest.raises(llm_client.LLMError, match="LLM_RESPONSE_TOO_LARGE"):
+        llm_client._http_post("https://example.com/api")
+
+
+def test_http_post_allows_normal_sized_response(monkeypatch):
+    """_http_post returns response when body is within LLM_MAX_RESPONSE_BYTES."""
+    normal_body = b"x" * 50
+
+    fake_resp = MagicMock(spec=httpx.Response)
+    fake_resp.content = normal_body
+
+    monkeypatch.setattr(llm_client, "_get_http_client", lambda: MagicMock(
+        post=MagicMock(return_value=fake_resp),
+    ))
+    monkeypatch.setattr(llm_client, "LLM_MAX_RESPONSE_BYTES", 100)
+
+    result = llm_client._http_post("https://example.com/api")
+    assert result is fake_resp
