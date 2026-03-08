@@ -25,6 +25,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import threading
 import time
 from enum import Enum
 from typing import Any, Dict, List, Optional
@@ -103,9 +104,7 @@ LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
 _LLM_POOL_MAX_CONNECTIONS = _env_int("LLM_POOL_MAX_CONNECTIONS", 20)
 _LLM_POOL_MAX_KEEPALIVE = _env_int("LLM_POOL_MAX_KEEPALIVE", 10)
 
-import threading as _threading  # noqa: E402
-
-_pool_lock = _threading.Lock()
+_pool_lock = threading.Lock()
 _http_client: Optional[httpx.Client] = None
 
 
@@ -157,7 +156,7 @@ def close_pool() -> None:
 CIRCUIT_BREAKER_THRESHOLD = _env_int("LLM_CIRCUIT_BREAKER_THRESHOLD", 5)
 CIRCUIT_BREAKER_RECOVERY_SEC = _env_float("LLM_CIRCUIT_BREAKER_RECOVERY_SEC", 60.0)
 
-_circuit_lock = _threading.Lock()
+_circuit_lock = threading.Lock()
 _circuit_state: Dict[str, Dict[str, Any]] = {}
 
 
