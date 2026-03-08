@@ -44,7 +44,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
 
 # ---- API層（ここは基本 "安定" 前提）----
-from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
+from veritas_os.api.schemas import (
+    DecideRequest,
+    DecideResponse,
+    FujiDecision,
+    MemoryEraseRequest,
+    MemoryGetRequest,
+    MemoryPutRequest,
+    MemorySearchRequest,
+    TrustFeedbackRequest,
+)
 from veritas_os.api.governance import get_policy, get_value_drift, update_policy
 from veritas_os.compliance.report_engine import (
     generate_eu_ai_act_report,
@@ -1935,9 +1944,24 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
         getattr(request.state, "trace_id", None)
         if hasattr(request, "state") else None
     ) or secrets.token_hex(16)
+
+    # Sanitize errors: Pydantic v2 ctx may contain non-serializable objects
+    # (e.g. ValueError instances), so we convert each error to a safe dict.
+    safe_errors = []
+    for err in exc.errors():
+        safe_err = {
+            "type": err.get("type"),
+            "loc": err.get("loc"),
+            "msg": err.get("msg"),
+        }
+        ctx = err.get("ctx")
+        if ctx:
+            safe_err["ctx"] = {k: str(v) for k, v in ctx.items()}
+        safe_errors.append(safe_err)
+
     # Build response content
     content: Dict[str, Any] = {
-        "detail": exc.errors(),
+        "detail": safe_errors,
         "request_id": trace_id,
         "hint": {"expected_example": _decide_example()},
     }
@@ -2578,31 +2602,26 @@ def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[st
 
 
 @app.post("/v1/memory/put", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", _memory_store_state.err)
         return {"ok": False, "error": "memory store unavailable"}
 
     try:
-        user_id = _resolve_memory_user_id(body.get("user_id"), x_api_key)
-        key = body.get("key") or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-        value = body.get("value") or {}
+        user_id = _resolve_memory_user_id(body.user_id, x_api_key)
+        key = body.key or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+        value = body.value or {}
 
-        # ★ セキュリティ修正: 入力サイズの制限（DoS対策）
-        text = (body.get("text") or "").strip()
-        if len(text) > 100_000:
-            return {"ok": False, "error": "text too large (max 100000 chars)"}
-        tags = body.get("tags") or []
-        if len(tags) > 100:
-            return {"ok": False, "error": "too many tags (max 100)"}
-        meta = body.get("meta") or {}
+        text = body.text.strip()
+        tags = body.tags
+        meta = body.meta or {}
 
         retention_class = str(
-            body.get("retention_class") or meta.get("retention_class") or "standard"
+            body.retention_class or meta.get("retention_class") or "standard"
         ).strip().lower()
-        expires_at = body.get("expires_at", meta.get("expires_at"))
-        legal_hold = bool(body.get("legal_hold", meta.get("legal_hold", False)))
+        expires_at = body.expires_at if body.expires_at is not None else meta.get("expires_at")
+        legal_hold = body.legal_hold or bool(meta.get("legal_hold", False))
 
         legacy_saved = False
         if value:
@@ -2612,7 +2631,7 @@ def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias
             except Exception as e:
                 logger.warning("[MemoryOS][legacy] Error: %s", e)
 
-        kind = (body.get("kind") or "semantic").strip().lower()
+        kind = body.kind
         if kind not in VALID_MEMORY_KINDS:
             kind = "semantic"
 
@@ -2685,25 +2704,18 @@ def memory_put(body: dict, x_api_key: Optional[str] = Header(default=None, alias
 
 
 @app.post("/v1/memory/search", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_search(payload: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", _memory_store_state.err)
         return {"ok": False, "error": "memory store unavailable", "hits": [], "count": 0}
 
     try:
-        # ★ セキュリティ修正: query フィールドのサイズ制限（DoS対策）
-        q = str(payload.get("query", ""))[:10_000]
-        kinds = payload.get("kinds")
-        try:
-            k = max(1, min(int(payload.get("k", 8)), 100))
-        except (ValueError, TypeError):
-            k = 8
-        try:
-            min_sim = max(0.0, min(float(payload.get("min_sim", 0.25)), 1.0))
-        except (ValueError, TypeError):
-            min_sim = 0.25
-        user_id = _resolve_memory_user_id(payload.get("user_id"), x_api_key)
+        q = payload.query
+        kinds = payload.kinds
+        k = payload.k
+        min_sim = payload.min_sim
+        user_id = _resolve_memory_user_id(payload.user_id, x_api_key)
 
         # Validate kinds against allow-list to prevent backend-specific injection.
         validated_kinds, kinds_error = _validate_memory_kinds(kinds)
@@ -2755,20 +2767,15 @@ def memory_search(payload: dict, x_api_key: Optional[str] = Header(default=None,
 
 
 @app.post("/v1/memory/get", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def memory_get(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     store = get_memory_store()
     if store is None:
         # Do not expose internal error details to clients
         return {"ok": False, "error": "memory store unavailable", "value": None}
 
     try:
-        uid = _resolve_memory_user_id(body.get("user_id"), x_api_key)
-        key = body.get("key")
-        if not key:
-            return {"ok": False, "error": "user_id and key are required", "value": None}
-        # ★ セキュリティ修正: user_id/key フィールドのサイズ制限（DoS対策）
-        uid = str(uid)[:500]
-        key = str(key)[:500]
+        uid = _resolve_memory_user_id(body.user_id, x_api_key)
+        key = body.key
         value = _store_get(store, uid, key)
         return {"ok": True, "value": value}
     except Exception as e:
@@ -2780,16 +2787,16 @@ def memory_get(body: dict, x_api_key: Optional[str] = Header(default=None, alias
     "/v1/memory/erase",
     dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
 )
-def memory_erase(body: dict, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
+def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")):
     """Erase a tenant's memories with legal-hold protection and audit log."""
     store = get_memory_store()
     if store is None:
         return {"ok": False, "error": "memory store unavailable"}
 
     try:
-        user_id = _resolve_memory_user_id(body.get("user_id"), x_api_key)
-        reason = str(body.get("reason") or "user_request").strip()[:500]
-        actor = str(body.get("actor") or "api").strip()[:200]
+        user_id = _resolve_memory_user_id(body.user_id, x_api_key)
+        reason = body.reason.strip()
+        actor = body.actor.strip()
 
         if hasattr(store, "erase_user"):
             report = store.erase_user(user_id=user_id, reason=reason, actor=actor)
@@ -2839,7 +2846,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
             with open(files[-1], encoding="utf-8") as f:
                 last_at = json.load(f).get("created_at")
         except Exception:
-            pass
+            logger.debug("failed to read last decide file: %s", files[-1], exc_info=True)
 
     lines = 0
     try:
@@ -2978,7 +2985,7 @@ def trust_log_by_request(request_id: str):
 
 
 @app.post("/v1/trust/feedback", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
-def trust_feedback(body: dict):
+def trust_feedback(body: TrustFeedbackRequest):
     """
     人間からのフィードバックを trust_log に記録する簡易API。
 
@@ -2992,16 +2999,10 @@ def trust_feedback(body: dict):
         return {"status": "error", "detail": "value_core unavailable"}
 
     try:
-        uid = str(body.get("user_id") or "anon")[:500]
-        raw_score = body.get("score", 0.5)
-        try:
-            score = float(raw_score)
-        except (TypeError, ValueError):
-            score = 0.5
-        score = max(0.0, min(1.0, score))
-        # ★ セキュリティ修正: note/source フィールドのサイズ制限（DoS対策）
-        note = str(body.get("note") or "")[:10_000]
-        source = str(body.get("source") or "manual")[:200]
+        uid = str(body.user_id or "anon")[:500]
+        score = body.score
+        note = body.note
+        source = body.source
         extra = {"api": "/v1/trust/feedback"}
 
         if hasattr(vc, "append_trust_log"):

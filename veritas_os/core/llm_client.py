@@ -131,8 +131,19 @@ def _http_post(url: str, **kwargs: Any) -> httpx.Response:
 
     This thin wrapper exists so that tests can ``monkeypatch.setattr``
     to intercept outbound HTTP calls without touching httpx internals.
+
+    Enforces ``LLM_MAX_RESPONSE_BYTES`` as an early guard to prevent
+    memory exhaustion before response parsing.
     """
-    return _get_http_client().post(url, **kwargs)
+    resp = _get_http_client().post(url, **kwargs)
+    if resp.content and len(resp.content) > LLM_MAX_RESPONSE_BYTES:
+        raise LLMError(
+            _format_llm_error(
+                "LLM_RESPONSE_TOO_LARGE",
+                f"size={len(resp.content)} max={LLM_MAX_RESPONSE_BYTES}",
+            )
+        )
+    return resp
 
 
 def close_pool() -> None:
