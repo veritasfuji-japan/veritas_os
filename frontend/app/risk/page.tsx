@@ -17,6 +17,15 @@ const STREAM_TICK_MS = 2_000;
 const MAX_POINTS = 480;
 
 /**
+ * NOTE: This page uses client-side synthetic telemetry for the scatter visualization.
+ * The backend does not expose a per-request risk/uncertainty time-series endpoint.
+ * The `/v1/metrics` endpoint provides only aggregate counts (total decisions, last
+ * decision timestamp, pipeline health), which are not suitable for scatter plotting.
+ * If a per-request telemetry endpoint is added in the future, replace the synthetic
+ * generators below with a real API call and update `RiskPoint` accordingly.
+ */
+
+/**
  * Generates initial synthetic request telemetry distributed over the past 24h.
  */
 function createInitialPoints(now: number): RiskPoint[] {
