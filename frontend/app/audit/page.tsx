@@ -1194,6 +1194,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
               ).map((opt) => (
                 <label key={opt.value} className="flex items-start gap-1.5">
                   <input
+                    aria-label={opt.label}
                     type="radio"
                     name="redaction"
                     value={opt.value}
@@ -1221,6 +1222,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
             <div className="flex gap-4 text-xs">
               <label className="flex items-start gap-1.5">
                 <input
+                  aria-label="JSON"
                   type="radio"
                   name="exportFormat"
                   value="json"
@@ -1241,6 +1243,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
               </label>
               <label className="flex items-start gap-1.5">
                 <input
+                  aria-label="PDF"
                   type="radio"
                   name="exportFormat"
                   value="pdf"
@@ -1266,6 +1269,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
           <div className="rounded border border-warning/30 bg-warning/5 p-3">
             <label className="flex items-start gap-2 text-xs">
               <input
+                aria-label={t("PII/metadata warningの確認", "Acknowledge PII/metadata warning")}
                 type="checkbox"
                 checked={confirmPiiRisk}
                 onChange={(e) => setConfirmPiiRisk(e.target.checked)}
