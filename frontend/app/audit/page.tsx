@@ -591,8 +591,8 @@ export default function TrustLogExplorerPage(): JSX.Element {
               setCrossSearch((prev) => ({ ...prev, query: e.target.value }))
             }
             placeholder={t(
-              "decision_id / request_id / replay_id / policy_version",
-              "decision_id / request_id / replay_id / policy_version",
+              "ID・ポリシーバージョンで検索",
+              "Search by ID or policy version",
             )}
           />
         </div>
