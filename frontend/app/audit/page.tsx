@@ -22,6 +22,18 @@ import type { RegulatoryReport } from "./types";
 
 const PAGE_LIMIT = 50;
 
+const ALLOW_UNREDACTED_EXPORT =
+  process.env.NEXT_PUBLIC_ALLOW_UNREDACTED_EXPORT === "true";
+
+/**
+ * Returns export redaction modes allowed by deployment policy.
+ */
+function getAllowedRedactionModes(): string[] {
+  return ALLOW_UNREDACTED_EXPORT
+    ? ["strict", "pii-only", "none"]
+    : ["strict", "pii-only"];
+}
+
 function toPrettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -71,6 +83,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
   const [latestReport, setLatestReport] = useState<RegulatoryReport | null>(null);
   const [confirmPiiRisk, setConfirmPiiRisk] = useState(false);
   const [redactionMode, setRedactionMode] = useState("strict");
+  const redactionModes = useMemo(() => getAllowedRedactionModes(), []);
   const [selectedTab, setSelectedTab] = useState<"summary" | "raw">("summary");
   const requestSearchNonceRef = useRef(0);
 
@@ -194,12 +207,16 @@ export default function TrustLogExplorerPage(): JSX.Element {
       return count + (classifyChain(item, next).status === "broken" ? 1 : 0);
     }, 0);
 
+    const safeRedactionMode = redactionModes.includes(redactionMode)
+      ? redactionMode
+      : "strict";
+
     const report: RegulatoryReport = {
       generatedAt: new Date().toISOString(),
       totalEntries: periodItems.length,
       mismatchLinks,
       brokenCount: mismatchLinks,
-      redactionMode,
+      redactionMode: safeRedactionMode,
     };
     setLatestReport(report);
     return report;
@@ -526,12 +543,23 @@ export default function TrustLogExplorerPage(): JSX.Element {
           <label className="text-xs">
             redaction mode
             <select aria-label="redaction mode" className="ml-2 rounded border border-border px-2 py-1" value={redactionMode} onChange={(event) => setRedactionMode(event.target.value)}>
-              <option value="strict">strict (mask PII + metadata)</option>
-              <option value="pii-only">pii-only</option>
-              <option value="none">none (internal only)</option>
+              {redactionModes.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode === "strict"
+                    ? "strict (mask PII + metadata)"
+                    : mode === "pii-only"
+                      ? "pii-only"
+                      : "none (internal only)"}
+                </option>
+              ))}
             </select>
           </label>
           <p className="text-xs">Export preview: {filteredItems.length} entries in current view.</p>
+          {!ALLOW_UNREDACTED_EXPORT ? (
+            <p className="text-xs text-warning">
+              Unredacted export mode is disabled by default for security.
+            </p>
+          ) : null}
           <div className="flex gap-2">
             <button type="button" className="rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm" onClick={downloadJsonReport}>{t("JSON生成", "Generate JSON")}</button>
             <button type="button" className="rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm" onClick={generatePdfReport}>{t("PDF生成", "Generate PDF")}</button>

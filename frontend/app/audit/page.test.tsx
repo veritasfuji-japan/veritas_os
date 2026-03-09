@@ -5,6 +5,7 @@ import TrustLogExplorerPage from "./page";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("TrustLogExplorerPage", () => {
@@ -265,6 +266,25 @@ describe("TrustLogExplorerPage", () => {
     });
     expect(focusMock).toHaveBeenCalledTimes(1);
     expect(printDocument.body.textContent).toContain("Regulatory Report Generator");
+  });
+
+  it("hides unredacted export mode unless explicitly enabled", () => {
+    render(<TrustLogExplorerPage />);
+
+    const redaction = screen.getByLabelText("redaction mode");
+    fireEvent.click(redaction);
+    expect(screen.queryByRole("option", { name: "none (internal only)" })).not.toBeInTheDocument();
+  });
+
+  it("enables unredacted mode when policy flag is true", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ALLOW_UNREDACTED_EXPORT", "true");
+    vi.resetModules();
+    const pageModule = await import("./page");
+
+    const PolicyAwarePage = pageModule.default;
+    render(<PolicyAwarePage />);
+
+    expect(screen.getByRole("option", { name: "none (internal only)" })).toBeInTheDocument();
   });
 
   it("exposes accessible labels for verification and export controls", () => {

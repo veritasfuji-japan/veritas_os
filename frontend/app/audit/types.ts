@@ -1,5 +1,3 @@
-import type { TrustLogItem } from "../../lib/api-validators";
-
 export type VerificationStatus = "verified" | "broken" | "missing" | "orphan";
 
 export interface ChainResult {
@@ -22,11 +20,6 @@ export interface AuditSummaryMetrics {
   policyVersionDistribution: PolicyVersionCount[];
 }
 
-export interface TimelineAuditItem {
-  item: TrustLogItem;
-  chain: ChainResult;
-  replayLinked: boolean;
-}
 
 export interface RegulatoryReport {
   generatedAt: string;
