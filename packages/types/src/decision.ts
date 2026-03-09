@@ -12,6 +12,34 @@ export type DecisionStatus = "allow" | "modify" | "rejected" | "block" | "abstai
 export type CritiqueSeverity = "low" | "med" | "high";
 
 /**
+ * Valid memory kinds for /v1/memory/put.
+ *
+ * Source of truth: veritas_os/api/constants.py — VALID_MEMORY_KINDS
+ */
+export type MemoryKind = "semantic" | "episodic" | "skills" | "doc" | "plan";
+
+/**
+ * Time horizon for context / decision scope.
+ *
+ * Source of truth: veritas_os/api/schemas.py — Context.time_horizon
+ */
+export type TimeHorizon = "short" | "mid" | "long";
+
+/**
+ * Response style hint for persona / tone selection.
+ *
+ * Source of truth: veritas_os/api/schemas.py — Context.response_style
+ */
+export type ResponseStyle = "logic" | "emotional" | "business" | "expert" | "casual";
+
+/**
+ * Retention class for memory lifecycle management.
+ *
+ * Source of truth: veritas_os/api/schemas.py — ALLOWED_RETENTION_CLASSES
+ */
+export type RetentionClass = "short" | "standard" | "long" | "regulated";
+
+/**
  * A single critique entry from the critique pipeline stage.
  *
  * Source of truth: veritas_os/api/schemas.py — CritiqueItem

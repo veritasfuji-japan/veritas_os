@@ -48,6 +48,10 @@ export type {
   EvidenceItem,
   FujiDecision,
   GateOut,
+  MemoryKind,
+  ResponseStyle,
+  RetentionClass,
+  TimeHorizon,
   TrustLog,
   ValuesOut
 } from "./decision";

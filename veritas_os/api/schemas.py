@@ -25,6 +25,9 @@ MAX_DESCRIPTION_LENGTH = 20000  # Max characters for descriptions
 MAX_TITLE_LENGTH = 1000  # Max characters for titles
 MAX_LIST_ITEMS = 100  # Max items in lists (alternatives, evidence, etc.)
 
+# Shared decision status literal used across FujiDecision, Gate, DecideResponse
+DecisionStatusLiteral = Literal["allow", "modify", "rejected", "block", "abstain"]
+
 logger = logging.getLogger(__name__)
 
 # =========================
@@ -214,7 +217,7 @@ class DebateView(BaseModel):
 class FujiDecision(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    status: Literal["allow", "modify", "rejected", "block", "abstain"]
+    status: DecisionStatusLiteral
     reasons: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     violations: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
@@ -431,7 +434,7 @@ class Gate(BaseModel):
     risk: float = 0.0
     telos_score: float = 0.0
     bias: Optional[float] = None
-    decision_status: Literal["allow", "modify", "rejected", "block", "abstain"] = "allow"
+    decision_status: DecisionStatusLiteral = "allow"
     reason: Optional[str] = None
     modifications: List[Union[str, Dict[str, Any]]] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
@@ -475,7 +478,7 @@ class DecideResponse(BaseModel):
     evo: Optional[Dict[str, Any]] = None
 
     # /v1/decide 側に合わせた拡張分
-    decision_status: Literal["allow", "modify", "rejected", "block", "abstain"] = "allow"
+    decision_status: DecisionStatusLiteral = "allow"
     rejection_reason: Optional[str] = None
 
     # P1-4: Art. 50 — AI interaction mandatory disclosure fields
