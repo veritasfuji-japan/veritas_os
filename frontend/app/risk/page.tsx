@@ -54,6 +54,10 @@ const STREAM_WINDOW_MS = 24 * 60 * 60 * 1000;
 const ALERT_CLUSTER_THRESHOLD = 0.82;
 const STREAM_TICK_MS = 2_000;
 const MAX_POINTS = 480;
+const RISK_CONFIDENCE_WEIGHT = 0.9;
+const UNCERTAINTY_CONFIDENCE_WEIGHT = 0.15;
+const UNSAFE_BURST_THRESHOLD = 6;
+const ELEVATED_RISK_THRESHOLD = 3;
 
 const SEVERITY_CLASSES: Record<Severity, string> = {
   critical: "bg-danger/15 text-danger border-danger/30",
@@ -139,7 +143,7 @@ function deriveStatus(point: RiskPoint): RequestStatus {
 
 function buildFlagReason(point: RiskPoint): FlagReason {
   const cluster = getCluster(point);
-  const policyConfidence = Math.max(0, 1 - point.risk * 0.9 - point.uncertainty * 0.15);
+  const policyConfidence = Math.max(0, 1 - point.risk * RISK_CONFIDENCE_WEIGHT - point.uncertainty * UNCERTAINTY_CONFIDENCE_WEIGHT);
   const unstableOutputSignal = point.uncertainty >= 0.75;
   const retrievalAnomaly = point.risk >= 0.7 && point.uncertainty >= 0.6;
 
@@ -210,8 +214,8 @@ function buildTrendBuckets(points: RiskPoint[], now: number): TrendBucket[] {
 }
 
 function bucketMeaning(bucket: TrendBucket): string {
-  if (bucket.highRisk >= 6) return "Unsafe burst — critical concentration detected";
-  if (bucket.highRisk >= 3) return "Elevated risk — multiple critical events";
+  if (bucket.highRisk >= UNSAFE_BURST_THRESHOLD) return "Unsafe burst — critical concentration detected";
+  if (bucket.highRisk >= ELEVATED_RISK_THRESHOLD) return "Elevated risk — multiple critical events";
   if (bucket.highRisk > 0) return "Low-level risk events present";
   if (bucket.total === 0) return "No activity in this window";
   return "Normal operation";
@@ -283,8 +287,8 @@ export default function RiskIntelligencePage(): JSX.Element {
   const trend = useMemo(() => buildTrendBuckets(visiblePoints, now), [visiblePoints, now]);
   const previousHighRisk = trend.slice(0, 7).reduce((sum, bucket) => sum + bucket.highRisk, 0) / 7;
   const latestHighRisk = trend[7]?.highRisk ?? 0;
-  const spikeDetected = latestHighRisk >= previousHighRisk * 1.8 && latestHighRisk >= 3;
-  const unsafeBurst = latestHighRisk >= 6;
+  const spikeDetected = latestHighRisk >= previousHighRisk * 1.8 && latestHighRisk >= ELEVATED_RISK_THRESHOLD;
+  const unsafeBurst = latestHighRisk >= UNSAFE_BURST_THRESHOLD;
 
   const flaggedEntries = useMemo(() => {
     return visiblePoints
