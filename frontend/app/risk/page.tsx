@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface RiskPoint {
   id: string;
@@ -11,22 +12,21 @@ interface RiskPoint {
   timestamp: number;
 }
 
+interface TrendBucket {
+  label: string;
+  total: number;
+  highRisk: number;
+}
+
 const STREAM_WINDOW_MS = 24 * 60 * 60 * 1000;
 const ALERT_CLUSTER_THRESHOLD = 0.82;
 const STREAM_TICK_MS = 2_000;
 const MAX_POINTS = 480;
 
 /**
- * NOTE: This page uses client-side synthetic telemetry for the scatter visualization.
- * The backend does not expose a per-request risk/uncertainty time-series endpoint.
- * The `/v1/metrics` endpoint provides only aggregate counts (total decisions, last
- * decision timestamp, pipeline health), which are not suitable for scatter plotting.
- * If a per-request telemetry endpoint is added in the future, replace the synthetic
- * generators below with a real API call and update `RiskPoint` accordingly.
- */
-
-/**
- * Generates initial synthetic request telemetry distributed over the past 24h.
+ * NOTE: This page uses synthetic telemetry until a per-request risk API is available.
+ * It is safe for UI/interaction validation only, and must not be used as evidence for
+ * production incident response or compliance reporting.
  */
 function createInitialPoints(now: number): RiskPoint[] {
   return Array.from({ length: 160 }, (_, index) => {
@@ -43,9 +43,6 @@ function createInitialPoints(now: number): RiskPoint[] {
   });
 }
 
-/**
- * Creates one new near-real-time point while preserving occasional high-risk events.
- */
 function createStreamPoint(now: number): RiskPoint {
   const id = `${now}-${Math.random().toString(36).slice(2, 8)}`;
   const uncertainty = Math.random();
@@ -60,95 +57,65 @@ function createStreamPoint(now: number): RiskPoint {
   };
 }
 
-function toChartCoordinate(value: number): number {
-  return Math.round(value * 100);
+function getCluster(point: RiskPoint): "critical" | "risky" | "uncertain" | "stable" {
+  if (point.uncertainty >= ALERT_CLUSTER_THRESHOLD && point.risk >= ALERT_CLUSTER_THRESHOLD) {
+    return "critical";
+  }
+  if (point.risk >= ALERT_CLUSTER_THRESHOLD) {
+    return "risky";
+  }
+  if (point.uncertainty >= ALERT_CLUSTER_THRESHOLD) {
+    return "uncertain";
+  }
+  return "stable";
 }
 
-interface RiskScatterCanvasProps {
-  points: RiskPoint[];
+function explainFlag(point: RiskPoint): string {
+  const cluster = getCluster(point);
+  if (cluster === "critical") {
+    return "High uncertainty + high risk. Potential unsafe output with weak policy confidence.";
+  }
+  if (cluster === "risky") {
+    return "Risk score is high despite lower uncertainty. Policy violation likelihood is elevated.";
+  }
+  if (cluster === "uncertain") {
+    return "Uncertainty is high. Model behavior may drift or become unstable.";
+  }
+  return "Within expected safety envelope.";
 }
 
-/**
- * Draws request points on canvas to avoid React-driven SVG node reconciliation on every stream tick.
- */
-const RiskScatterCanvas = memo(function RiskScatterCanvas({ points }: RiskScatterCanvasProps): JSX.Element {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+function buildTrendBuckets(points: RiskPoint[], now: number): TrendBucket[] {
+  const bucketMs = 3 * 60 * 60 * 1000;
+  return Array.from({ length: 8 }, (_, index) => {
+    const start = now - (8 - index) * bucketMs;
+    const end = start + bucketMs;
+    const segment = points.filter((point) => point.timestamp >= start && point.timestamp < end);
+    const highRisk = segment.filter((point) => getCluster(point) === "critical").length;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return;
-    }
-
-    const getContext = canvas.getContext.bind(canvas) as typeof canvas.getContext;
-    let context: CanvasRenderingContext2D | null = null;
-    try {
-      context = getContext("2d");
-    } catch {
-      return;
-    }
-    if (!context) {
-      return;
-    }
-
-    const dpr = window.devicePixelRatio || 1;
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    const nextWidth = Math.max(1, Math.floor(width * dpr));
-    const nextHeight = Math.max(1, Math.floor(height * dpr));
-
-    if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-      canvas.width = nextWidth;
-      canvas.height = nextHeight;
-    }
-
-    context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.clearRect(0, 0, width, height);
-
-    points.forEach((point) => {
-      const x = (toChartCoordinate(point.uncertainty) / 100) * width;
-      const y = (1 - toChartCoordinate(point.risk) / 100) * height;
-      const critical = point.uncertainty >= ALERT_CLUSTER_THRESHOLD
-        && point.risk >= ALERT_CLUSTER_THRESHOLD;
-
-      context.beginPath();
-      context.arc(x, y, critical ? 4.4 : 3, 0, Math.PI * 2);
-      context.fillStyle = critical
-        ? "hsl(var(--destructive))"
-        : "hsl(var(--primary) / 0.82)";
-      context.globalAlpha = critical ? 0.95 : 0.72;
-      context.fill();
-    });
-
-    context.globalAlpha = 1;
-  }, [points]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 h-full w-full"
-      aria-label="Scatter plot of request uncertainty and risk from the last 24 hours"
-      role="img"
-    />
-  );
-});
+    return {
+      label: `${index * 3}-${(index + 1) * 3}h`,
+      total: segment.length,
+      highRisk,
+    };
+  });
+}
 
 export default function RiskIntelligencePage(): JSX.Element {
   const { t, language } = useI18n();
   const [points, setPoints] = useState<RiskPoint[]>(() => createInitialPoints(Date.now()));
   const [now, setNow] = useState<number>(Date.now());
   const [timeWindowHours, setTimeWindowHours] = useState<number>(24);
-  const [selectedCluster, setSelectedCluster] = useState<"all" | "high">("all");
+  const [selectedCluster, setSelectedCluster] = useState<"all" | "critical" | "risky" | "uncertain">("all");
+  const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       const tick = Date.now();
       setNow(tick);
       setPoints((previous) => {
-        const next = [...previous, createStreamPoint(tick)]
+        return [...previous, createStreamPoint(tick)]
           .filter((point) => tick - point.timestamp <= STREAM_WINDOW_MS)
           .slice(-MAX_POINTS);
-        return next;
       });
     }, STREAM_TICK_MS);
 
@@ -157,12 +124,19 @@ export default function RiskIntelligencePage(): JSX.Element {
     };
   }, []);
 
-  const visiblePoints = useMemo(() => points.filter((point) => now - point.timestamp <= timeWindowHours * 60 * 60 * 1000), [points, now, timeWindowHours]);
+  const visiblePoints = useMemo(() => {
+    return points.filter((point) => now - point.timestamp <= timeWindowHours * 60 * 60 * 1000);
+  }, [points, now, timeWindowHours]);
+
+  const filteredPoints = useMemo(() => {
+    if (selectedCluster === "all") {
+      return visiblePoints;
+    }
+    return visiblePoints.filter((point) => getCluster(point) === selectedCluster);
+  }, [visiblePoints, selectedCluster]);
 
   const clusterStats = useMemo(() => {
-    const highRiskPoints = visiblePoints.filter(
-      (point) => point.uncertainty >= ALERT_CLUSTER_THRESHOLD && point.risk >= ALERT_CLUSTER_THRESHOLD,
-    );
+    const highRiskPoints = visiblePoints.filter((point) => getCluster(point) === "critical");
     const ratio = visiblePoints.length === 0 ? 0 : highRiskPoints.length / visiblePoints.length;
     return {
       ratio,
@@ -171,25 +145,39 @@ export default function RiskIntelligencePage(): JSX.Element {
     };
   }, [visiblePoints]);
 
+  const trend = useMemo(() => buildTrendBuckets(visiblePoints, now), [visiblePoints, now]);
+  const previousHighRisk = trend.slice(0, 7).reduce((sum, bucket) => sum + bucket.highRisk, 0) / 7;
+  const latestHighRisk = trend[7]?.highRisk ?? 0;
+  const spikeDetected = latestHighRisk >= previousHighRisk * 1.8 && latestHighRisk >= 3;
+  const unsafeBurst = latestHighRisk >= 6;
+
+  const flaggedRequests = useMemo(() => {
+    return visiblePoints
+      .filter((point) => getCluster(point) !== "stable")
+      .sort((left, right) => right.risk + right.uncertainty - (left.risk + left.uncertainty))
+      .slice(0, 20);
+  }, [visiblePoints]);
+
+  const selectedPoint = flaggedRequests.find((item) => item.id === selectedPointId) ?? flaggedRequests[0] ?? null;
+
   return (
     <div className="space-y-6">
       <Card
         title="Risk Intelligence"
-        description={t("過去24時間の全リクエストを不確実性（横軸）と潜在的リスク（縦軸）でリアルタイム可視化します。危険なクラスタリングを検知するとアラートを表示し、予防的な統治判断を支援します。", "Visualize all requests from the last 24 hours in real time by uncertainty (x-axis) and potential risk (y-axis). When dangerous clustering is detected, alerts support proactive governance decisions.")}
+        description={t("可視化だけでなく、ドリルダウン・原因説明・統治アクションまでつなぐ分析面です。", "From visualization to action: drilldown, root-cause explanation, and governance pathways.")}
         variant="glass"
         accent="danger"
         className="border-danger/15"
       >
-        <div />
+        <div className="flex flex-wrap gap-2 text-xs">
+          <Link href="/console" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40">Decision</Link>
+          <Link href="/audit" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40">TrustLog</Link>
+          <Link href="/governance" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40">Governance</Link>
+        </div>
       </Card>
 
-      <Card
-        title="Real-time Risk Heatmap"
-        titleSize="md"
-        variant="elevated"
-      >
+      <Card title="Real-time Risk Heatmap" titleSize="md" variant="elevated">
         <div className="space-y-5">
-          {/* Stats row */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("ステータス", "Status")}</p>
@@ -213,39 +201,30 @@ export default function RiskIntelligencePage(): JSX.Element {
             </div>
           </div>
 
-
           <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
             <label className="space-y-1">
               <span className="text-muted-foreground">Time window</span>
               <select className="block rounded border border-border bg-background px-2 py-1" value={timeWindowHours} onChange={(event) => setTimeWindowHours(Number(event.target.value))}>
                 <option value={1}>1h</option>
                 <option value={6}>6h</option>
+                <option value={12}>12h</option>
                 <option value={24}>24h</option>
               </select>
             </label>
             <label className="space-y-1">
               <span className="text-muted-foreground">Cluster drilldown</span>
-              <select className="block rounded border border-border bg-background px-2 py-1" value={selectedCluster} onChange={(event) => setSelectedCluster(event.target.value as "all" | "high") }>
+              <select className="block rounded border border-border bg-background px-2 py-1" value={selectedCluster} onChange={(event) => setSelectedCluster(event.target.value as "all" | "critical" | "risky" | "uncertain")}>
                 <option value="all">all points</option>
-                <option value="high">high-risk only</option>
+                <option value="critical">critical cluster</option>
+                <option value="risky">high risk only</option>
+                <option value="uncertain">high uncertainty only</option>
               </select>
             </label>
           </div>
 
-          {/* Alert banner */}
-          {clusterStats.alert && (
-            <div className="flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-danger status-dot-live" aria-hidden="true" />
-              <p className="text-sm font-medium text-danger">
-                {t("危険なクラスタリングを検知しました。即時の統治判断が推奨されます。", "Dangerous clustering detected. Immediate governance action recommended.")}
-              </p>
-            </div>
-          )}
-
-          {/* Heatmap canvas */}
           <div className="rounded-xl border border-border/50 bg-muted/10 p-5">
             <div className="relative mx-auto h-[380px] w-full max-w-5xl">
-              <svg viewBox="0 0 100 100" className="h-full w-full" aria-hidden="true">
+              <svg viewBox="0 0 100 100" className="h-full w-full" aria-label="Scatter plot of request uncertainty and risk from the last 24 hours" role="img">
                 <defs>
                   <linearGradient id="riskGradient" x1="0" y1="100" x2="100" y2="0">
                     <stop offset="0%" stopColor="hsl(var(--ds-color-primary) / 0.12)" />
@@ -253,7 +232,6 @@ export default function RiskIntelligencePage(): JSX.Element {
                     <stop offset="100%" stopColor="hsl(var(--ds-color-danger) / 0.25)" />
                   </linearGradient>
                 </defs>
-
                 <rect x="0" y="0" width="100" height="100" fill="url(#riskGradient)" rx="2" />
 
                 {[20, 40, 60, 80].map((line) => (
@@ -263,33 +241,96 @@ export default function RiskIntelligencePage(): JSX.Element {
                   </g>
                 ))}
 
-                <line x1="82" y1="0" x2="82" y2="100" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
-                <line x1="0" y1="18" x2="100" y2="18" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
+                {filteredPoints.map((point) => {
+                  const x = point.uncertainty * 100;
+                  const y = (1 - point.risk) * 100;
+                  const cluster = getCluster(point);
+                  const isSelected = selectedPointId === point.id;
+                  const fill = cluster === "critical" ? "hsl(var(--destructive))" : "hsl(var(--primary) / 0.82)";
+                  return (
+                    <circle
+                      key={point.id}
+                      cx={x}
+                      cy={y}
+                      r={isSelected ? 1.6 : 1.1}
+                      fill={fill}
+                      opacity={cluster === "critical" ? 0.95 : 0.72}
+                      onClick={() => setSelectedPointId(point.id)}
+                    >
+                      <title>{`ID:${point.id} | ${explainFlag(point)}`}</title>
+                    </circle>
+                  );
+                })}
               </svg>
-              <RiskScatterCanvas points={selectedCluster === "high" ? visiblePoints.filter((point) => point.risk >= 0.82 && point.uncertainty >= 0.82) : visiblePoints} />
-
-              <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground">
-                {t("不確実性 →", "Uncertainty →")}
-              </span>
-              <span className="absolute left-0 top-1/2 -translate-x-10 -translate-y-1/2 -rotate-90 text-xs font-medium text-muted-foreground">
-                {t("リスク →", "Risk →")}
-              </span>
             </div>
           </div>
 
-          {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-primary/80" aria-hidden="true" />
-              {t("通常リクエスト", "Normal requests")}
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+              <p className="font-semibold">Policy drift</p>
+              <p className="mt-1 text-muted-foreground">Recent high-risk ratio is rising versus baseline. Review policy thresholds and blocked categories.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-danger" aria-hidden="true" />
-              {t("高リスク (U≥0.82, R≥0.82)", "High-risk (U≥0.82, R≥0.82)")}
+            <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+              <p className="font-semibold">Unsafe burst</p>
+              <p className="mt-1 text-muted-foreground">A short-term concentration of critical events may indicate prompt injection campaign or rollout regression.</p>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-[10px]">{t("ウィンドウ: 24時間", "Window: 24h")}</span>
+            <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+              <p className="font-semibold">Unstable output cluster</p>
+              <p className="mt-1 text-muted-foreground">High uncertainty clusters can precede trust degradation. Triage model slice and memory retrieval quality.</p>
             </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+              <p className="mb-2 font-semibold">Trend / Spike / Burst</p>
+              <div className="flex items-end gap-2" aria-label="trend chart">
+                {trend.map((bucket) => (
+                  <button
+                    type="button"
+                    key={bucket.label}
+                    className="flex flex-1 flex-col items-center gap-1"
+                    onClick={() => setSelectedCluster(bucket.highRisk > 0 ? "critical" : "all")}
+                  >
+                    <span className="w-full rounded bg-primary/20" style={{ height: `${Math.max(8, bucket.total * 2)}px` }} />
+                    <span className="text-[10px] text-muted-foreground">{bucket.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-muted-foreground">
+                {spikeDetected ? "Spike detected." : "No significant spike."} {unsafeBurst ? "Unsafe burst active." : "Burst within normal band."}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+              <p className="mb-2 font-semibold">Flagged requests</p>
+              <ul className="max-h-56 space-y-2 overflow-auto pr-1">
+                {flaggedRequests.map((request) => (
+                  <li key={request.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPointId(request.id)}
+                      className="w-full rounded border border-border/40 px-2 py-1 text-left hover:bg-muted/30"
+                    >
+                      <p className="font-mono text-[10px]">{request.id}</p>
+                      <p className="text-muted-foreground">risk {request.risk.toFixed(2)} / uncertainty {request.uncertainty.toFixed(2)}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
+            <p className="font-semibold">Why flagged</p>
+            {selectedPoint ? (
+              <div className="mt-2 space-y-1">
+                <p className="font-mono text-[10px]">{selectedPoint.id}</p>
+                <p className="text-muted-foreground">{explainFlag(selectedPoint)}</p>
+                <p className="text-muted-foreground">What to do next: open Decision for immediate mitigation, verify in TrustLog, then enforce policy updates in Governance.</p>
+              </div>
+            ) : (
+              <p className="mt-2 text-muted-foreground">No flagged requests in this window.</p>
+            )}
           </div>
         </div>
       </Card>
