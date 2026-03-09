@@ -234,6 +234,8 @@ class TrustLog(BaseModel):
     # FUJI Gateの判定結果（openapi.yaml で required として定義）
     fuji: Optional[Dict[str, Any]] = None
 
+    # ハッシュチェーン: trust_log.py の append_trust_log で付与される
+    sha256: Optional[str] = None
     sha256_prev: Optional[str] = None
 
 
