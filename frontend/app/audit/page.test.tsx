@@ -311,6 +311,7 @@ describe("TrustLogExplorerPage", () => {
     render(<TrustLogExplorerPage />);
 
     expect(screen.getByText("墨消しモード")).toBeInTheDocument();
+    expect(screen.getByText("出力形式")).toBeInTheDocument();
     expect(screen.getByDisplayValue("full")).toBeInTheDocument();
     expect(screen.getByDisplayValue("redacted")).toBeInTheDocument();
     expect(screen.getByDisplayValue("metadata-only")).toBeInTheDocument();

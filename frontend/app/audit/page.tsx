@@ -1159,10 +1159,10 @@ export default function TrustLogExplorerPage(): JSX.Element {
           </div>
 
           {/* Redaction mode */}
-          <div>
-            <p className="mb-1 text-xs font-semibold">
+          <fieldset className="space-y-1">
+            <legend className="text-xs font-semibold">
               {t("墨消しモード", "Redaction Mode")}
-            </p>
+            </legend>
             <div className="flex gap-3 text-xs">
               {(
                 [
@@ -1205,20 +1205,20 @@ export default function TrustLogExplorerPage(): JSX.Element {
                   <span>
                     <span className="font-medium">{opt.label}</span>
                     <br />
-                    <span className="text-2xs text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {opt.desc}
                     </span>
                   </span>
                 </label>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Format selection */}
-          <div>
-            <p className="mb-1 text-xs font-semibold">
+          <fieldset className="space-y-1">
+            <legend className="text-xs font-semibold">
               {t("出力形式", "Export Format")}
-            </p>
+            </legend>
             <div className="flex gap-4 text-xs">
               <label className="flex items-start gap-1.5">
                 <input
@@ -1233,7 +1233,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                 <span>
                   <span className="font-medium">JSON</span>
                   <br />
-                  <span className="text-2xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {t(
                       "機械可読形式。APIやスクリプトでの処理に最適",
                       "Machine-readable. Best for API and script processing",
@@ -1254,7 +1254,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                 <span>
                   <span className="font-medium">PDF</span>
                   <br />
-                  <span className="text-2xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {t(
                       "印刷用。第三者監査提出に適した形式",
                       "Printable. Suitable for third-party audit submission",
@@ -1263,7 +1263,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                 </span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           {/* PII acknowledgement */}
           <div className="rounded border border-warning/30 bg-warning/5 p-3">
