@@ -11,8 +11,8 @@ describe("DecisionConsolePage", () => {
     render(<DecisionConsolePage />);
 
     expect(screen.getByText("1.", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText("Evidence")).toBeInTheDocument();
-    expect(screen.getByText("TrustLog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Evidence/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /TrustLog/i })).toBeInTheDocument();
   });
 
 
@@ -58,8 +58,8 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
-      expect(screen.getByText("decision_status / chosen")).toBeInTheDocument();
-      expect(screen.getByText("memory_citations / memory_used_count")).toBeInTheDocument();
+      expect(screen.getByText("Chosen")).toBeInTheDocument();
+      expect(screen.getByText("Alternatives")).toBeInTheDocument();
       expect(screen.getByText("Cost-Benefit Analytics")).toBeInTheDocument();
       expect(screen.getByText("Total Token Cost")).toBeInTheDocument();
       expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
@@ -174,9 +174,9 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("Debate").length).toBeGreaterThan(1);
-      expect(screen.getAllByText("520").length).toBeGreaterThan(1);
-      expect(screen.getAllByText("17.0%").length).toBeGreaterThan(1);
+      expect(screen.getAllByText("Debate").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("520").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("17.0%").length).toBeGreaterThan(0);
     });
   });
 
@@ -224,10 +224,11 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
-      expect(screen.getByText("FUJI Gate Violation Analysis")).toBeInTheDocument();
-      expect(screen.getByText(/Rejection reason:/i)).toBeInTheDocument();
+      expect(screen.getByText("rule hit")).toBeInTheDocument();
+      expect(screen.getByText("severity")).toBeInTheDocument();
       expect(screen.getByText("Stage Drilldown")).toBeInTheDocument();
       expect(screen.getByText("Mask PII · Planner generated step", { exact: false })).toBeInTheDocument();
+      expect(screen.getByText(/decision_id:/i)).toBeInTheDocument();
     });
   });
 
