@@ -356,6 +356,10 @@ export function isGovernancePolicyResponse(value: unknown): value is GovernanceP
   return validateGovernancePolicyResponse(value).ok;
 }
 
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((s) => typeof s === "string"));
+}
+
 export function isTrustLogItem(value: unknown): value is TrustLogItem {
   if (!isRecord(value)) {
     return false;
@@ -369,15 +373,7 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
     return false;
   }
 
-  if (value.sources !== undefined && (!Array.isArray(value.sources) || !value.sources.every((s) => typeof s === "string"))) {
-    return false;
-  }
-
-  if (value.critics !== undefined && (!Array.isArray(value.critics) || !value.critics.every((s) => typeof s === "string"))) {
-    return false;
-  }
-
-  if (value.checks !== undefined && (!Array.isArray(value.checks) || !value.checks.every((s) => typeof s === "string"))) {
+  if (!isOptionalStringArray(value.sources) || !isOptionalStringArray(value.critics) || !isOptionalStringArray(value.checks)) {
     return false;
   }
 
