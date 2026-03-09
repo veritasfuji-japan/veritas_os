@@ -12,6 +12,7 @@ import { FujiGateStatusPanel } from "../../features/console/components/fuji-gate
 import { PipelineVisualizer } from "../../features/console/components/pipeline-visualizer";
 import { ResultSection } from "../../features/console/components/result-section";
 import { StepExpansionPanel } from "../../features/console/components/step-expansion-panel";
+import { ReplayDiffViewer } from "../../features/console/components/replay-diff-viewer";
 import { useConsoleState } from "../../features/console/state/useConsoleState";
 
 export default function DecisionConsolePage(): JSX.Element {
@@ -81,6 +82,10 @@ export default function DecisionConsolePage(): JSX.Element {
               value={{ decision_status: result.decision_status, chosen: result.chosen }}
             />
             <ResultSection
+              title="chosen / rationale"
+              value={{ chosen: result.chosen, rejected_reason: result.rejection_reason, reason: result.reason }}
+            />
+            <ResultSection
               title="alternatives/options"
               value={{ alternatives: toArray(result.alternatives), options: toArray(result.options) }}
             />
@@ -109,6 +114,15 @@ export default function DecisionConsolePage(): JSX.Element {
               }}
             />
             <ResultSection title="trust_log" value={result.trust_log ?? null} />
+            <div className="flex flex-wrap gap-2">
+              <a className="rounded-md border border-border px-2 py-1 text-xs" href={`/audit?request_id=${encodeURIComponent(result.request_id)}`}>
+                Open TrustLog Explorer
+              </a>
+              <a className="rounded-md border border-border px-2 py-1 text-xs" href={`/console?decision_id=${encodeURIComponent(String((result.chosen as Record<string, unknown>).id ?? result.request_id))}`}>
+                Replay this decision
+              </a>
+            </div>
+            <ReplayDiffViewer result={result} />
             <details>
               <summary className="cursor-pointer text-sm font-semibold text-foreground">extras</summary>
               <pre className="mt-3 overflow-x-auto rounded-lg border border-border/50 bg-muted/30 p-3 text-xs leading-relaxed text-foreground">
