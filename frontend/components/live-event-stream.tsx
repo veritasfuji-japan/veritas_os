@@ -11,6 +11,11 @@ interface StreamEvent {
   payload: unknown;
 }
 
+interface EventAction {
+  label: string;
+  href: string;
+}
+
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
 const AUTH_RETRY_PAUSE_MS = 60000;
@@ -78,6 +83,62 @@ function getEventTypeStyle(type: string): { dot: string; label: string } {
     return { dot: "bg-violet-500", label: "text-violet-400" };
   }
   return { dot: "bg-primary", label: "text-primary" };
+}
+
+/**
+ * Build actionable links from an event payload.
+ *
+ * All events expose drill-down routes for Decision / TrustLog / Governance /
+ * Risk so operators can move from signal to investigation in one click.
+ */
+function buildEventActions(payload: Record<string, unknown>): EventAction[] {
+  const decisionId = typeof payload.decision_id === "string" ? payload.decision_id : "";
+  const requestId = typeof payload.request_id === "string" ? payload.request_id : "";
+  const policyId = typeof payload.policy_id === "string" ? payload.policy_id : "";
+
+  return [
+    {
+      label: "Decision",
+      href: decisionId ? `/console?decision_id=${encodeURIComponent(decisionId)}` : "/console",
+    },
+    {
+      label: "TrustLog",
+      href: requestId ? `/audit?request_id=${encodeURIComponent(requestId)}` : "/audit",
+    },
+    {
+      label: "Governance",
+      href: policyId ? `/governance?policy_id=${encodeURIComponent(policyId)}` : "/governance",
+    },
+    {
+      label: "Risk",
+      href: requestId ? `/risk?request_id=${encodeURIComponent(requestId)}` : "/risk",
+    },
+  ];
+}
+
+function getEventPriority(type: string, payload: Record<string, unknown>): "P1" | "P2" | "P3" {
+  const eventType = type.toLowerCase();
+  const riskScore = typeof payload.risk_score === "number" ? payload.risk_score : 0;
+
+  if (
+    eventType.includes("reject")
+    || eventType.includes("mismatch")
+    || eventType.includes("broken_chain")
+    || riskScore >= 0.9
+  ) {
+    return "P1";
+  }
+
+  if (
+    eventType.includes("policy")
+    || eventType.includes("warn")
+    || eventType.includes("burst")
+    || riskScore >= 0.75
+  ) {
+    return "P2";
+  }
+
+  return "P3";
 }
 
 export function LiveEventStream(): JSX.Element {
@@ -189,7 +250,6 @@ export function LiveEventStream(): JSX.Element {
       actions={clearAction}
       className="border-primary/20"
     >
-      {/* Connection status */}
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span
@@ -228,7 +288,6 @@ export function LiveEventStream(): JSX.Element {
         </div>
       ) : null}
 
-      {/* Event list */}
       <div
         className="max-h-72 space-y-1.5 overflow-auto pr-0.5"
         aria-label={t("ライブイベントフィード", "Live event feed")}
@@ -237,10 +296,20 @@ export function LiveEventStream(): JSX.Element {
           <div className="flex flex-col items-center gap-2 py-8 text-center">
             <span className="h-2 w-2 rounded-full bg-muted-foreground/30 status-dot-live" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">{t("イベント待機中...", "Waiting for events...")}</p>
+            <p className="text-xs text-muted-foreground/80">
+              {t(
+                "このフィードは reject/mismatch/policy/risk burst を優先表示し、Decision・TrustLog・Governance・Risk へ遷移します。",
+                "This feed prioritizes reject/mismatch/policy/risk burst events and routes to Decision, TrustLog, Governance, and Risk.",
+              )}
+            </p>
           </div>
         ) : (
           events.map((event) => {
             const style = getEventTypeStyle(event.type);
+            const payload = (event.payload ?? {}) as Record<string, unknown>;
+            const priority = getEventPriority(event.type, payload);
+            const actions = buildEventActions(payload);
+
             return (
               <article
                 key={`${event.id}-${event.ts}`}
@@ -250,6 +319,15 @@ export function LiveEventStream(): JSX.Element {
                   <div className="flex items-center gap-2">
                     <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} aria-hidden="true" />
                     <span className={`text-xs font-semibold ${style.label}`}>{event.type}</span>
+                    <span className={[
+                      "rounded px-1.5 py-0.5 text-[10px] font-semibold",
+                      priority === "P1" ? "bg-danger/15 text-danger" : "",
+                      priority === "P2" ? "bg-warning/20 text-warning" : "",
+                      priority === "P3" ? "bg-primary/15 text-primary" : "",
+                    ].join(" ")}
+                    >
+                      {priority}
+                    </span>
                   </div>
                   <span className="font-mono text-[10px] text-muted-foreground">{event.ts}</span>
                 </div>
@@ -257,16 +335,11 @@ export function LiveEventStream(): JSX.Element {
                   {JSON.stringify(event.payload, null, 2)}
                 </pre>
                 <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
-                  {typeof (event.payload as Record<string, unknown>)?.request_id === "string" && (
-                    <a className="rounded border border-border px-2 py-1" href={`/audit?request_id=${encodeURIComponent(String((event.payload as Record<string, unknown>).request_id))}`}>
-                      open request trail
+                  {actions.map((action) => (
+                    <a key={`${event.id}-${action.label}`} className="rounded border border-border px-2 py-1" href={action.href}>
+                      {action.label}
                     </a>
-                  )}
-                  {typeof (event.payload as Record<string, unknown>)?.decision_id === "string" && (
-                    <a className="rounded border border-border px-2 py-1" href={`/console?decision_id=${encodeURIComponent(String((event.payload as Record<string, unknown>).decision_id))}`}>
-                      open decision
-                    </a>
-                  )}
+                  ))}
                 </div>
               </article>
             );

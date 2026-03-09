@@ -45,6 +45,11 @@ describe("LiveEventStream", () => {
 
     expect(await screen.findByText("decide.completed")).toBeInTheDocument();
     expect(screen.getByText(/"ok": true/)).toBeInTheDocument();
+    expect(screen.getByText("P3")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Decision" })).toHaveAttribute("href", "/console");
+    expect(screen.getByRole("link", { name: "TrustLog" })).toHaveAttribute("href", "/audit");
+    expect(screen.getByRole("link", { name: "Governance" })).toHaveAttribute("href", "/governance");
+    expect(screen.getByRole("link", { name: "Risk" })).toHaveAttribute("href", "/risk");
   });
 
 
@@ -151,6 +156,7 @@ describe("LiveEventStream", () => {
     fireEvent.click(screen.getByRole("button", { name: "イベントをクリア" }));
 
     expect(screen.getByText("イベント待機中...")).toBeInTheDocument();
+    expect(screen.getByText(/このフィードは reject\/mismatch\/policy\/risk burst/)).toBeInTheDocument();
   });
 
   it("does not render raw i18n keys in the UI", async () => {
