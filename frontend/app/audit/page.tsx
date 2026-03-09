@@ -7,8 +7,6 @@ import { isRequestLogResponse, isTrustLogsResponse, type RequestLogResponse, typ
 import { useI18n } from "../../components/i18n-provider";
 
 const PAGE_LIMIT = 50;
-const FETCH_TIMEOUT_MS = 15_000;
-
 function toPrettyJson(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
@@ -648,7 +646,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
           {filteredItems.slice(0, 24).map((item, index) => {
             const previous = filteredItems[index + 1];
             const ok = !previous?.sha256 || !item.sha256_prev || item.sha256_prev === previous.sha256;
-            return <span key={`${item.request_id ?? index}-${index}`} className={`h-2 w-4 rounded-sm ${ok ? "bg-success/70" : "bg-danger"}`} title={`${item.stage ?? "unknown"}`} />;
+            return <span key={`${item.request_id ?? "unknown"}-${item.created_at ?? "no-ts"}-${item.sha256 ?? "no-hash"}`} className={`h-2 w-4 rounded-sm ${ok ? "bg-success/70" : "bg-danger"}`} title={`${item.stage ?? "unknown"}`} />;
           })}
         </div>
       </Card>
