@@ -11,6 +11,11 @@ export type DecisionStatus = "allow" | "modify" | "rejected" | "block" | "abstai
 /** Severity level used in CritiqueItem. */
 export type CritiqueSeverity = "low" | "med" | "high";
 
+/**
+ * A single critique entry from the critique pipeline stage.
+ *
+ * Source of truth: veritas_os/api/schemas.py — CritiqueItem
+ */
 export interface CritiqueItem {
   issue: string;
   severity: CritiqueSeverity;
@@ -18,6 +23,11 @@ export interface CritiqueItem {
   [key: string]: unknown;
 }
 
+/**
+ * A single stance from the debate pipeline stage.
+ *
+ * Source of truth: veritas_os/api/schemas.py — DebateView
+ */
 export interface DebateView {
   stance: string;
   argument: string;
@@ -25,6 +35,11 @@ export interface DebateView {
   [key: string]: unknown;
 }
 
+/**
+ * FUJI safety-gate decision result.
+ *
+ * Source of truth: veritas_os/api/schemas.py — FujiDecision
+ */
 export interface FujiDecision {
   status: DecisionStatus;
   reasons: string[];
