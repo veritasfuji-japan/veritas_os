@@ -224,8 +224,8 @@ function validateAutoStop(value: unknown, pathPrefix: string): GovernanceValidat
     issues.push(issue("format", `${pathPrefix}.max_consecutive_rejects`, "number である必要があります。"));
   } else {
     const maxConsecutiveRejects = value.max_consecutive_rejects as number;
-    if (!Number.isInteger(maxConsecutiveRejects) || maxConsecutiveRejects < 0) {
-      issues.push(issue("semantic", `${pathPrefix}.max_consecutive_rejects`, "0 以上の整数である必要があります。"));
+    if (!Number.isInteger(maxConsecutiveRejects) || maxConsecutiveRejects < 1) {
+      issues.push(issue("semantic", `${pathPrefix}.max_consecutive_rejects`, "1 以上の整数である必要があります。"));
     }
   }
 
@@ -275,8 +275,8 @@ function validateLogRetention(value: unknown, pathPrefix: string): GovernanceVal
     issues.push(issue("format", `${pathPrefix}.max_log_size`, "number である必要があります。"));
   } else {
     const maxLogSize = value.max_log_size as number;
-    if (!Number.isInteger(maxLogSize) || maxLogSize <= 0) {
-      issues.push(issue("semantic", `${pathPrefix}.max_log_size`, "1 以上の整数である必要があります。"));
+    if (!Number.isInteger(maxLogSize) || maxLogSize < 100) {
+      issues.push(issue("semantic", `${pathPrefix}.max_log_size`, "100 以上の整数である必要があります。"));
     }
   }
 

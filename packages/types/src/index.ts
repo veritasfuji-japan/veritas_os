@@ -38,11 +38,15 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
 export { isDecideResponse } from "./decision";
 
 export type {
+  CritiqueItem,
+  CritiqueSeverity,
+  DebateView,
   DecideResponse,
   DecideResponseMeta,
   DecisionAlternative,
   DecisionStatus,
   EvidenceItem,
+  FujiDecision,
   GateOut,
   TrustLog,
   ValuesOut

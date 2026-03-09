@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { isDecideResponse, isHealthResponse } from "./index";
-import type { DecideResponse, HealthResponse } from "./index";
+import type {
+  CritiqueItem,
+  DebateView,
+  DecideResponse,
+  FujiDecision,
+  HealthResponse,
+  TrustLog,
+} from "./index";
 
 describe("types", () => {
   it("accepts a valid health response shape", () => {
@@ -162,5 +169,53 @@ describe("types", () => {
         decision_status: "unknown"
       })
     ).toBe(false);
+  });
+
+  it("TrustLog type includes sha256 field for hash-chain verification", () => {
+    const log: TrustLog = {
+      request_id: "req-1",
+      created_at: "2026-02-12T00:00:00Z",
+      sources: ["memory"],
+      critics: [],
+      checks: ["fuji"],
+      approver: "system",
+      sha256: "a".repeat(64),
+      sha256_prev: "b".repeat(64),
+    };
+
+    expect(log.sha256).toBe("a".repeat(64));
+    expect(log.sha256_prev).toBe("b".repeat(64));
+  });
+
+  it("CritiqueItem type matches backend CritiqueItem schema", () => {
+    const item: CritiqueItem = {
+      issue: "Potential bias detected",
+      severity: "high",
+      fix: "Add diverse training data",
+    };
+
+    expect(item.severity).toBe("high");
+    expect(item.fix).toBe("Add diverse training data");
+  });
+
+  it("DebateView type matches backend DebateView schema", () => {
+    const view: DebateView = {
+      stance: "for",
+      argument: "This approach maximizes safety",
+      score: 0.85,
+    };
+
+    expect(view.score).toBe(0.85);
+  });
+
+  it("FujiDecision type matches backend FujiDecision schema", () => {
+    const decision: FujiDecision = {
+      status: "allow",
+      reasons: ["safe content"],
+      violations: [],
+    };
+
+    expect(decision.status).toBe("allow");
+    expect(decision.violations).toHaveLength(0);
   });
 });

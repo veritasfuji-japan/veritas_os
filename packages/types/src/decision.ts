@@ -2,11 +2,35 @@
  * /v1/decide response types aligned to backend runtime payloads.
  *
  * Source of truth:
- * - veritas_os/api/schemas.py (DecideResponse, TrustLog, Gate)
+ * - veritas_os/api/schemas.py (DecideResponse, TrustLog, Gate, CritiqueItem, DebateView, FujiDecision)
  * - veritas_os/core/pipeline.py (response assembly)
  */
 
 export type DecisionStatus = "allow" | "modify" | "rejected" | "block" | "abstain";
+
+/** Severity level used in CritiqueItem. */
+export type CritiqueSeverity = "low" | "med" | "high";
+
+export interface CritiqueItem {
+  issue: string;
+  severity: CritiqueSeverity;
+  fix?: string | null;
+  [key: string]: unknown;
+}
+
+export interface DebateView {
+  stance: string;
+  argument: string;
+  score: number;
+  [key: string]: unknown;
+}
+
+export interface FujiDecision {
+  status: DecisionStatus;
+  reasons: string[];
+  violations: string[];
+  [key: string]: unknown;
+}
 
 export interface DecideResponseMeta {
   ok: boolean;
@@ -62,6 +86,8 @@ export interface TrustLog {
   checks: string[];
   approver: string;
   fuji?: Record<string, unknown> | null;
+  /** Hash-chain: SHA-256 of this entry, computed by trust_log.py append_trust_log. */
+  sha256?: string | null;
   sha256_prev?: string | null;
   [key: string]: unknown;
 }

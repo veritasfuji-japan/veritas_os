@@ -122,6 +122,46 @@ describe("api validators", () => {
     expect(validation.issues[0].path).toBe("policy.log_retention.audit_level");
   });
 
+  it("rejects max_consecutive_rejects of zero (backend requires ge=1)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        auto_stop: {
+          ...validGovernanceResponse.policy.auto_stop,
+          max_consecutive_rejects: 0,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.auto_stop.max_consecutive_rejects")).toBe(true);
+  });
+
+  it("rejects max_log_size below 100 (backend requires ge=100)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        log_retention: {
+          ...validGovernanceResponse.policy.log_retention,
+          max_log_size: 50,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.log_retention.max_log_size")).toBe(true);
+  });
+
   it("accepts valid trust logs response", () => {
     expect(
       isTrustLogsResponse({
