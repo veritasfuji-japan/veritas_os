@@ -137,7 +137,7 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "JSON生成" }));
 
     await waitFor(() => {
-      expect(screen.getByText("期間を指定してください。")).toBeInTheDocument();
+      expect(screen.getByText("PII/metadata warning を確認してください。")).toBeInTheDocument();
     });
   });
 
@@ -189,11 +189,11 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.change(dateInputs[0], { target: { value: "2026-02-10" } });
     fireEvent.change(dateInputs[1], { target: { value: "2026-02-12" } });
 
+    fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "JSON生成" }));
 
     await waitFor(() => {
-      expect(screen.getByText("entries: 2 / decision_ids: 2")).toBeInTheDocument();
-      expect(screen.getByText("FUJI rejection: 1/2 (50.0%)")).toBeInTheDocument();
+      expect(screen.getByText("entries: 2 / mismatches: 0")).toBeInTheDocument();
     });
 
     expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
@@ -255,6 +255,7 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.change(dateInputs[0], { target: { value: "2026-02-10" } });
     fireEvent.change(dateInputs[1], { target: { value: "2026-02-12" } });
 
+    fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "PDF生成" }));
 
     await waitFor(() => {
