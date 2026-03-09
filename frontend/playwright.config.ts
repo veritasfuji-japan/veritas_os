@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { getE2EBaseUrl, getE2EWebServerCommand } from "./e2e/webserver";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -8,7 +10,7 @@ export default defineConfig({
   reporter: [["html", { open: "never" }], ["list"]],
   timeout: 30_000,
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: getE2EBaseUrl(),
     trace: "on-first-retry",
   },
   projects: [
@@ -18,10 +20,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: process.env.CI
-      ? "npx next build && npx next start -H 127.0.0.1"
-      : "pnpm dev",
-    url: "http://127.0.0.1:3000",
+    command: getE2EWebServerCommand(Boolean(process.env.CI)),
+    url: getE2EBaseUrl(),
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
   },
