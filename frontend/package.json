@@ -9,8 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "playwright test",
-    "e2e:install": "playwright install --with-deps chromium"
+    "e2e": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
+    "e2e:install": "PLAYWRIGHT_BROWSERS_PATH=0 playwright install --with-deps chromium chromium-headless-shell"
   },
   "dependencies": {
     "@veritas/design-system": "workspace:*",

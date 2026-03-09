@@ -264,7 +264,12 @@ jobs:
       - name: Install Playwright browsers
         if: matrix.gate == 'e2e'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: pnpm e2e:install
+
+      - name: Verify Playwright browser install
+        if: matrix.gate == 'e2e'
+        working-directory: frontend
+        run: pnpm exec playwright install --list
 
       - name: Build frontend
         if: matrix.gate == 'e2e'
