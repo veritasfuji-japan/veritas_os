@@ -53,10 +53,12 @@ describe("Governance control plane", () => {
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^policy version:/i)).toBeInTheDocument();
-      expect(screen.getByText(/effective_at/i)).toBeInTheDocument();
-      expect(screen.getByText(/last_applied/i)).toBeInTheDocument();
-      expect(screen.getByText(/updated_by/i)).toBeInTheDocument();
+      expect(screen.getByText("Current Version")).toBeInTheDocument();
+      expect(screen.getByText("Draft Version")).toBeInTheDocument();
+      expect(screen.getByText("effective_at")).toBeInTheDocument();
+      expect(screen.getByText("last_applied")).toBeInTheDocument();
+      expect(screen.getByText("updated_by")).toBeInTheDocument();
+      expect(screen.getByText("Approval Status")).toBeInTheDocument();
     });
   });
 

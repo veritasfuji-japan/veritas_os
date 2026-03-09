@@ -65,6 +65,22 @@ describe("GovernanceControlPage", () => {
     expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeInTheDocument();
   });
 
+  it("shows empty state before policy load", () => {
+    render(<GovernanceControlPage />);
+    expect(screen.getByText("ポリシー未読み込み")).toBeInTheDocument();
+  });
+
+  it("shows role capabilities", () => {
+    render(<GovernanceControlPage />);
+    expect(screen.getByText("Admin（管理者）")).toBeInTheDocument();
+    expect(screen.getByText("全操作権限")).toBeInTheDocument();
+  });
+
+  it("shows mode explanation details", () => {
+    render(<GovernanceControlPage />);
+    expect(screen.getByText("通常運用モード")).toBeInTheDocument();
+  });
+
   it("loads policy and shows control-plane sections", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
@@ -80,21 +96,23 @@ describe("GovernanceControlPage", () => {
     });
   });
 
-  it("shows policy state model fields", async () => {
+  it("shows policy state model fields including approval status", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/^policy version:/i)).toBeInTheDocument();
-      expect(screen.getByText(/effective_at:/i)).toBeInTheDocument();
-      expect(screen.getByText(/last_applied:/i)).toBeInTheDocument();
-      expect(screen.getByText(/updated_by:/i)).toBeInTheDocument();
+      expect(screen.getByText("Current Version")).toBeInTheDocument();
+      expect(screen.getByText("Draft Version")).toBeInTheDocument();
+      expect(screen.getByText("Approval Status")).toBeInTheDocument();
+      expect(screen.getByText("effective_at")).toBeInTheDocument();
+      expect(screen.getByText("last_applied")).toBeInTheDocument();
+      expect(screen.getByText("updated_by")).toBeInTheDocument();
     });
   });
 
-  it("supports draft edits and displays diff entries", async () => {
+  it("supports draft edits and displays categorized diff entries", async () => {
     mockPolicyFetch();
     render(<GovernanceControlPage />);
 
@@ -106,6 +124,35 @@ describe("GovernanceControlPage", () => {
 
     fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
     expect(screen.getByText("fuji_rules.pii_check")).toBeInTheDocument();
+    expect(screen.getByText("ルール変更")).toBeInTheDocument();
+  });
+
+  it("shows approval workflow when changes exist", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
+    expect(screen.getByText("Approval Workflow")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "approve" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "reject" })).toBeInTheDocument();
+  });
+
+  it("shows Risk Impact Analysis after load", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Risk Impact Analysis")).toBeInTheDocument();
+      expect(screen.getByText("Current Policy")).toBeInTheDocument();
+      expect(screen.getByText("Pending Impact")).toBeInTheDocument();
+      expect(screen.getByText(/from baseline/)).toBeInTheDocument();
+    });
   });
 
   it("applies RBAC gating in UI", async () => {
@@ -120,6 +167,19 @@ describe("GovernanceControlPage", () => {
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
     expect(screen.getByRole("button", { name: "apply" })).toBeDisabled();
     expect(screen.getByText("RBAC: apply/rollback は admin のみ実行可能です。")).toBeInTheDocument();
+  });
+
+  it("disables toggle switches for viewer role", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
+    expect(screen.getByRole("switch", { name: "PII Check" })).toBeDisabled();
   });
 
   it("executes dry-run and shows status", async () => {
@@ -151,6 +211,16 @@ describe("GovernanceControlPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("レスポンスの検証に失敗しました");
+    });
+  });
+
+  it("shows TrustLog with policy severity tag after load", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/policy version governance_v1 loaded/)).toBeInTheDocument();
     });
   });
 });
