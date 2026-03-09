@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import { useI18n } from "../../components/i18n-provider";
 import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
 import { EUAIActGovernanceDashboard } from "../../features/console/components/eu-ai-act-governance-dashboard";
@@ -236,6 +237,7 @@ function ToggleRow({ label, checked, onChange, disabled }: { label: string; chec
 }
 
 function DiffPreview({ before, after }: { before: GovernancePolicy | null; after: GovernancePolicy | null }): JSX.Element {
+  const { t } = useI18n();
   const rows = before && after
     ? collectChanges(
       "",
@@ -243,7 +245,7 @@ function DiffPreview({ before, after }: { before: GovernancePolicy | null; after
       after as unknown as Record<string, unknown>,
     )
     : [];
-  if (rows.length === 0) return <p className="text-xs text-muted-foreground">変更はありません。</p>;
+  if (rows.length === 0) return <p className="text-xs text-muted-foreground">{t("変更はありません。", "No changes.")}</p>;
 
   const grouped = rows.reduce<Record<string, DiffChange[]>>((acc, row) => {
     const cat = row.category;
@@ -254,7 +256,7 @@ function DiffPreview({ before, after }: { before: GovernancePolicy | null; after
 
   return (
     <div className="space-y-3">
-      <p className="text-xs text-muted-foreground">{rows.length} 件の変更を検出</p>
+      <p className="text-xs text-muted-foreground">{t(`${rows.length} 件の変更を検出`, `${rows.length} change(s) detected`)}</p>
       {(Object.keys(grouped) as DiffChange["category"][]).map((cat) => (
         <div key={cat}>
           <p className="mb-1 text-xs font-semibold text-muted-foreground">{DIFF_CATEGORY_LABELS[cat]}</p>
@@ -327,6 +329,7 @@ function RiskImpactGauge({ current, pending, drift }: { current: number; pending
 /* ------------------------------------------------------------------ */
 
 export default function GovernanceControlPage(): JSX.Element {
+  const { t } = useI18n();
   const [savedPolicy, setSavedPolicy] = useState<GovernancePolicy | null>(null);
   const [draft, setDraft] = useState<GovernancePolicy | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
@@ -373,12 +376,12 @@ export default function GovernanceControlPage(): JSX.Element {
     try {
       const res = await veritasFetch("/api/veritas/v1/governance/policy");
       if (!res.ok) {
-        setError(`HTTP ${res.status}: ポリシー取得に失敗しました。`);
+        setError(t(`HTTP ${res.status}: ポリシー取得に失敗しました。`, `HTTP ${res.status}: Failed to fetch policy.`));
         return;
       }
       const validation = validateGovernancePolicyResponse(await res.json());
       if (!validation.ok) {
-        setError("レスポンスの検証に失敗しました。フォーマット不整合の可能性があります。");
+        setError(t("レスポンスの検証に失敗しました。フォーマット不整合の可能性があります。", "Response validation failed. Possible format mismatch."));
         return;
       }
       const normalized = {
@@ -393,15 +396,15 @@ export default function GovernanceControlPage(): JSX.Element {
       appendHistory("load", `version ${normalized.version} loaded`);
       appendLog(`policy version ${normalized.version} loaded`, "policy");
     } catch {
-      setError("ネットワークエラー: バックエンドへ接続できません。");
+      setError(t("ネットワークエラー: バックエンドへ接続できません。", "Network error: cannot connect to backend."));
     } finally {
       setLoading(false);
     }
-  }, [appendHistory, appendLog]);
+  }, [appendHistory, appendLog, t]);
 
   const applyPolicy = useCallback(async (mode: PolicyActionMode) => {
     if (!draft) return;
-    if (!window.confirm(`${mode} を実行します。変更を確定しますか？`)) return;
+    if (!window.confirm(t(`${mode} を実行します。変更を確定しますか？`, `Execute ${mode}. Confirm changes?`))) return;
 
     setSaving(true);
     setError(null);
@@ -410,7 +413,7 @@ export default function GovernanceControlPage(): JSX.Element {
     if (mode === "dry-run") {
       appendHistory("dry-run", "no persistent write");
       appendLog("dry-run completed without apply", "info");
-      setSuccess("Dry-run を完了しました。適用はされていません。");
+      setSuccess(t("Dry-run を完了しました。適用はされていません。", "Dry-run completed. No changes applied."));
       setSaving(false);
       return;
     }
@@ -418,7 +421,7 @@ export default function GovernanceControlPage(): JSX.Element {
     if (mode === "shadow") {
       appendHistory("shadow", "shadow validation stream enabled");
       appendLog("shadow mode enabled; outputs are validated only", "warning");
-      setSuccess("Shadow mode を有効化しました。判定のみ実施します。");
+      setSuccess(t("Shadow mode を有効化しました。判定のみ実施します。", "Shadow mode enabled. Validation only."));
       setSaving(false);
       return;
     }
@@ -430,12 +433,12 @@ export default function GovernanceControlPage(): JSX.Element {
         body: JSON.stringify(draft),
       });
       if (!res.ok) {
-        setError(`HTTP ${res.status}: ポリシー更新に失敗しました。`);
+        setError(t(`HTTP ${res.status}: ポリシー更新に失敗しました。`, `HTTP ${res.status}: Failed to update policy.`));
         return;
       }
       const validation = validateGovernancePolicyResponse(await res.json());
       if (!validation.ok) {
-        setError("適用レスポンスの検証に失敗しました。TrustLog を確認してください。");
+        setError(t("適用レスポンスの検証に失敗しました。TrustLog を確認してください。", "Apply response validation failed. Check TrustLog."));
         return;
       }
       const nextPolicy = {
@@ -449,40 +452,40 @@ export default function GovernanceControlPage(): JSX.Element {
       setDraft(structuredClone(nextPolicy));
       appendHistory("apply", `version ${nextPolicy.version} applied`);
       appendLog(`applied version ${nextPolicy.version}`, "policy");
-      setSuccess("ポリシーを適用しました。");
+      setSuccess(t("ポリシーを適用しました。", "Policy applied successfully."));
     } catch {
-      setError("適用処理に失敗しました。通信・権限・整合性を確認してください。");
+      setError(t("適用処理に失敗しました。通信・権限・整合性を確認してください。", "Apply failed. Check connectivity, permissions, and consistency."));
     } finally {
       setSaving(false);
     }
-  }, [appendHistory, appendLog, draft]);
+  }, [appendHistory, appendLog, draft, t]);
 
   const rollback = useCallback(() => {
     if (!savedPolicy) return;
-    if (!window.confirm("現在の適用済みポリシーへロールバックしますか？")) return;
+    if (!window.confirm(t("現在の適用済みポリシーへロールバックしますか？", "Rollback to the currently applied policy?"))) return;
     setDraft(structuredClone(savedPolicy));
     appendHistory("rollback", `rolled back to version ${savedPolicy.version}`);
     appendLog(`rollback preview to ${savedPolicy.version}`, "warning");
-    setSuccess("ドラフトを適用済みポリシーへ戻しました。");
-  }, [appendHistory, appendLog, savedPolicy]);
+    setSuccess(t("ドラフトを適用済みポリシーへ戻しました。", "Draft reverted to the applied policy."));
+  }, [appendHistory, appendLog, savedPolicy, t]);
 
   const approveChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
-    if (!window.confirm("ドラフト変更を承認しますか？")) return;
+    if (!window.confirm(t("ドラフト変更を承認しますか？", "Approve draft changes?"))) return;
     setDraft((prev) => prev ? { ...prev, approval_status: "approved" } : prev);
     appendHistory("approve", `draft changes approved by ${selectedRole}`);
     appendLog(`draft approved by ${selectedRole}`, "policy");
-    setSuccess("ドラフトを承認しました。apply で本番適用できます。");
-  }, [draft, hasChanges, appendHistory, appendLog, selectedRole]);
+    setSuccess(t("ドラフトを承認しました。apply で本番適用できます。", "Draft approved. Apply to push to production."));
+  }, [draft, hasChanges, appendHistory, appendLog, selectedRole, t]);
 
   const rejectChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
-    if (!window.confirm("ドラフト変更を却下しますか？")) return;
+    if (!window.confirm(t("ドラフト変更を却下しますか？", "Reject draft changes?"))) return;
     setDraft((prev) => prev ? { ...prev, approval_status: "rejected" } : prev);
     appendHistory("reject", `draft changes rejected by ${selectedRole}`);
     appendLog(`draft rejected by ${selectedRole}`, "warning");
-    setSuccess("ドラフトを却下しました。");
-  }, [draft, hasChanges, appendHistory, appendLog, selectedRole]);
+    setSuccess(t("ドラフトを却下しました。", "Draft rejected."));
+  }, [draft, hasChanges, appendHistory, appendLog, selectedRole, t]);
 
   const currentRisk = savedPolicy ? Math.round(((savedPolicy.risk_thresholds.deny_upper + savedPolicy.auto_stop.max_risk_score) / 2) * 100) : 0;
   const pendingRisk = draft ? Math.round(((draft.risk_thresholds.deny_upper + draft.auto_stop.max_risk_score) / 2) * 100) : 0;
@@ -498,7 +501,7 @@ export default function GovernanceControlPage(): JSX.Element {
   return (
     <div className="space-y-6">
       {/* ── Header: Governance Control Plane ── */}
-      <Card title="Governance Control" description="Rule control / versioning / diff / approval / rollback / shadow validation を統合管理します。" titleSize="lg" variant="elevated" accent="primary">
+      <Card title="Governance Control" description={t("Rule control / versioning / diff / approval / rollback / shadow validation を統合管理します。", "Integrated management of rule control, versioning, diff, approval, rollback, and shadow validation.")} titleSize="lg" variant="glass" accent="primary" className="border-primary/15">
         <div className="grid gap-3 md:grid-cols-4">
           <label className="text-xs">Role
             <select aria-label="role" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value as UserRole)} className="mt-1 w-full rounded border px-2 py-1">
@@ -513,7 +516,7 @@ export default function GovernanceControlPage(): JSX.Element {
               <option value="eu_ai_act">EU AI Act</option>
             </select>
           </label>
-          <button type="button" onClick={() => void fetchPolicy()} className="rounded border px-3 py-2 text-sm" disabled={loading}>{loading ? "読み込み中..." : "ポリシーを読み込む"}</button>
+          <button type="button" onClick={() => void fetchPolicy()} className="rounded border px-3 py-2 text-sm" disabled={loading}>{loading ? t("読み込み中...", "Loading...") : t("ポリシーを読み込む", "Load policy")}</button>
           <div className="rounded border px-3 py-2 text-xs">Risk gauge: <span className="font-mono">{riskGauge}%</span></div>
         </div>
 
@@ -556,8 +559,8 @@ export default function GovernanceControlPage(): JSX.Element {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold">ポリシー未読み込み</p>
-              <p className="text-xs text-muted-foreground mt-1">「ポリシーを読み込む」ボタンでバックエンドから現在の統制ポリシーを取得してください。</p>
+              <p className="text-sm font-semibold">{t("ポリシー未読み込み", "No policy loaded")}</p>
+              <p className="text-xs text-muted-foreground mt-1">{t("「ポリシーを読み込む」ボタンでバックエンドから現在の統制ポリシーを取得してください。", "Click \"Load policy\" to fetch the current governance policy from the backend.")}</p>
             </div>
           </div>
         </Card>
@@ -594,7 +597,7 @@ export default function GovernanceControlPage(): JSX.Element {
               </div>
             </div>
             {hasChanges ? (
-              <p className="mt-2 text-xs text-warning">{changeCount} 件の未適用変更があります。適用前に承認してください。</p>
+              <p className="mt-2 text-xs text-warning">{t(`${changeCount} 件の未適用変更があります。適用前に承認してください。`, `${changeCount} unapplied change(s). Approve before applying.`)}</p>
             ) : null}
           </Card>
 
@@ -646,13 +649,13 @@ export default function GovernanceControlPage(): JSX.Element {
             <Card title="Approval Workflow" titleSize="md" variant="elevated" accent="warning">
               <div className="flex items-center gap-3 mb-3">
                 <StatusBadge status={draftApprovalStatus} />
-                <span className="text-xs text-muted-foreground">{changeCount} 件の変更が承認待ちです</span>
+                <span className="text-xs text-muted-foreground">{t(`${changeCount} 件の変更が承認待ちです`, `${changeCount} change(s) awaiting approval`)}</span>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className="rounded border border-success/60 bg-success/10 px-3 py-2 text-sm text-success" onClick={approveChanges} disabled={!canApprove || draftApprovalStatus === "approved"}>approve</button>
                 <button type="button" className="rounded border border-danger/60 bg-danger/10 px-3 py-2 text-sm text-danger" onClick={rejectChanges} disabled={!canApprove || draftApprovalStatus === "rejected"}>reject</button>
               </div>
-              {!canApprove ? <p className="mt-2 text-xs text-warning">RBAC: approve/reject は admin のみ実行可能です。</p> : null}
+              {!canApprove ? <p className="mt-2 text-xs text-warning">{t("RBAC: approve/reject は admin のみ実行可能です。", "RBAC: approve/reject requires admin role.")}</p> : null}
             </Card>
           ) : null}
 
@@ -664,14 +667,14 @@ export default function GovernanceControlPage(): JSX.Element {
               <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("shadow")} disabled={saving || !canOperate}>shadow mode</button>
               <button type="button" className="rounded border px-3 py-2 text-sm" onClick={rollback} disabled={saving || !hasChanges || !canApply}>rollback</button>
             </div>
-            {!canApply ? <p className="mt-2 text-xs text-warning">RBAC: apply/rollback は admin のみ実行可能です。</p> : null}
-            {hasChanges && draftApprovalStatus !== "approved" ? <p className="mt-2 text-xs text-info">apply するには先に承認が必要です。dry-run / shadow は承認前でも実行できます。</p> : null}
+            {!canApply ? <p className="mt-2 text-xs text-warning">{t("RBAC: apply/rollback は admin のみ実行可能です。", "RBAC: apply/rollback requires admin role.")}</p> : null}
+            {hasChanges && draftApprovalStatus !== "approved" ? <p className="mt-2 text-xs text-info">{t("apply するには先に承認が必要です。dry-run / shadow は承認前でも実行できます。", "Approval is required before apply. dry-run / shadow can be executed before approval.")}</p> : null}
           </Card>
 
           {/* ── TrustLog Stream ── */}
           <Card title="TrustLog Stream" titleSize="md" variant="elevated">
             <ul className="space-y-1 text-xs">
-              {trustLog.length === 0 ? <li className="text-muted-foreground">ポリシー読み込み後にストリームイベントが表示されます。</li> : trustLog.map((entry) => (
+              {trustLog.length === 0 ? <li className="text-muted-foreground">{t("ポリシー読み込み後にストリームイベントが表示されます。", "Stream events will appear after loading a policy.")}</li> : trustLog.map((entry) => (
                 <li key={entry.id} className={`rounded border px-2 py-1 ${entry.severity === "policy" ? "border-info/40 bg-info/5" : ""}`}>
                   <span className="font-mono">{entry.at}</span>{" "}
                   <span className={`inline-flex items-center rounded px-1 py-0.5 text-[10px] font-semibold ${entry.severity === "warning" ? "bg-warning/20 text-warning" : entry.severity === "policy" ? "bg-info/20 text-info" : "bg-muted text-muted-foreground"}`}>{entry.severity}</span>{" "}
@@ -684,7 +687,7 @@ export default function GovernanceControlPage(): JSX.Element {
           {/* ── Change History ── */}
           <Card title="Change History" titleSize="md" variant="elevated">
             <ul className="space-y-1 text-xs">
-              {history.length === 0 ? <li className="text-muted-foreground">ポリシー操作後に変更履歴が表示されます。</li> : history.map((entry) => (
+              {history.length === 0 ? <li className="text-muted-foreground">{t("ポリシー操作後に変更履歴が表示されます。", "Change history will appear after policy operations.")}</li> : history.map((entry) => (
                 <li key={entry.id} className="rounded border px-2 py-1">
                   <span className={`inline-flex items-center rounded px-1 py-0.5 text-[10px] font-semibold mr-1 ${
                     entry.action === "apply" ? "bg-success/20 text-success" :
