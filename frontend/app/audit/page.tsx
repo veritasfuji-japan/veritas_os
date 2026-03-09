@@ -8,12 +8,22 @@ import { useI18n } from "../../components/i18n-provider";
 
 const PAGE_LIMIT = 50;
 
+type VerificationStatus = "verified" | "broken" | "missing" | "orphan";
+
+interface RegulatoryReport {
+  generatedAt: string;
+  totalEntries: number;
+  mismatchLinks: number;
+  brokenCount: number;
+}
+
+interface ChainResult {
+  status: VerificationStatus;
+  reason: string;
+}
+
 function toPrettyJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
+  return JSON.stringify(value, null, 2);
 }
 
 function shortHash(value: string | undefined): string {
@@ -21,85 +31,41 @@ function shortHash(value: string | undefined): string {
     return "missing";
   }
 
-  if (value.length <= 16) {
+  if (value.length <= 18) {
     return value;
   }
 
   return `${value.slice(0, 10)}...${value.slice(-6)}`;
 }
 
-type VerificationStatus = "idle" | "running" | "pass" | "fail";
-
-interface ReportPeriod {
-  startDate: string;
-  endDate: string;
-}
-
-interface StageSummary {
-  stage: string;
-  count: number;
-  passCount: number;
-}
-
-interface RegulatoryReport {
-  generatedAt: string;
-  period: ReportPeriod;
-  totalEntries: number;
-  totalDecisionIds: number;
-  pipelineStageSummary: StageSummary[];
-  fujiGate: {
-    totalEvaluations: number;
-    rejected: number;
-    rejectionRate: number;
-  };
-  trustLogIntegrity: {
-    checkedLinks: number;
-    mismatchLinks: number;
-    chainIntact: boolean;
-  };
+function getString(item: TrustLogItem, key: string): string {
+  const value = item[key];
+  return typeof value === "string" ? value : "-";
 }
 
 /**
- * Returns true if a log item is inside a date range (inclusive).
+ * Classifies a single hash chain link for audit visualization.
  */
-function isWithinPeriod(item: TrustLogItem, startDate: string, endDate: string): boolean {
-  if (!item.created_at) {
-    return false;
+function classifyChain(item: TrustLogItem, previous: TrustLogItem | null): ChainResult {
+  if (!item.sha256) {
+    return { status: "missing", reason: "current sha256 missing" };
   }
 
-  const createdAt = new Date(item.created_at);
-  const start = startDate ? new Date(`${startDate}T00:00:00.000Z`) : null;
-  const end = endDate ? new Date(`${endDate}T23:59:59.999Z`) : null;
-
-  if (Number.isNaN(createdAt.getTime())) {
-    return false;
+  if (!item.sha256_prev) {
+    return previous
+      ? { status: "orphan", reason: "no sha256_prev while previous exists" }
+      : { status: "verified", reason: "genesis entry" };
   }
 
-  if (start && createdAt < start) {
-    return false;
+  if (!previous?.sha256) {
+    return { status: "missing", reason: "previous sha256 missing" };
   }
 
-  if (end && createdAt > end) {
-    return false;
+  if (item.sha256_prev !== previous.sha256) {
+    return { status: "broken", reason: "sha256_prev does not match previous sha256" };
   }
 
-  return true;
-}
-
-/**
- * Heuristically detects whether a trust log entry indicates a gate rejection.
- */
-function isRejectedEntry(item: TrustLogItem): boolean {
-  const status = String(item.status ?? item.result ?? item.verdict ?? "").toLowerCase();
-  return ["deny", "denied", "reject", "rejected", "blocked"].includes(status);
-}
-
-/**
- * Heuristically detects whether a trust log entry indicates a successful pass.
- */
-function isPassedEntry(item: TrustLogItem): boolean {
-  const status = String(item.status ?? item.result ?? item.verdict ?? "").toLowerCase();
-  return ["pass", "passed", "allow", "allowed", "approved", "ok"].includes(status);
+  return { status: "verified", reason: "hash chain match" };
 }
 
 export default function TrustLogExplorerPage(): JSX.Element {
@@ -113,215 +79,139 @@ export default function TrustLogExplorerPage(): JSX.Element {
   const [requestId, setRequestId] = useState("");
   const [requestResult, setRequestResult] = useState<RequestLogResponse | null>(null);
   const [stageFilter, setStageFilter] = useState("ALL");
+  const [searchKey, setSearchKey] = useState("");
   const [selectedDecisionId, setSelectedDecisionId] = useState("");
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>("idle");
-  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
-  const [animationStep, setAnimationStep] = useState(0);
+  const [verificationMessage, setVerificationMessage] = useState("");
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportError, setReportError] = useState<string | null>(null);
   const [latestReport, setLatestReport] = useState<RegulatoryReport | null>(null);
+  const [confirmPiiRisk, setConfirmPiiRisk] = useState(false);
   const requestSearchNonceRef = useRef(0);
+
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => new Date(b.created_at ?? "").getTime() - new Date(a.created_at ?? "").getTime()),
+    [items],
+  );
 
   const stageOptions = useMemo(() => {
     const stages = new Set<string>();
-    for (const item of items) {
-      const stage = typeof item.stage === "string" ? item.stage : "UNKNOWN";
-      stages.add(stage);
+    for (const item of sortedItems) {
+      stages.add(typeof item.stage === "string" ? item.stage : "UNKNOWN");
     }
     return ["ALL", ...Array.from(stages).sort()];
-  }, [items]);
+  }, [sortedItems]);
 
   const filteredItems = useMemo(() => {
-    if (stageFilter === "ALL") {
-      return items;
-    }
-    return items.filter((item) => item.stage === stageFilter);
-  }, [items, stageFilter]);
+    const query = searchKey.trim().toLowerCase();
+    return sortedItems.filter((item) => {
+      if (stageFilter !== "ALL" && item.stage !== stageFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      const decisionId = String(item.decision_id ?? "").toLowerCase();
+      const request = String(item.request_id ?? "").toLowerCase();
+      return request.includes(query) || decisionId.includes(query);
+    });
+  }, [searchKey, sortedItems, stageFilter]);
 
   const decisionIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const item of items) {
-      if (typeof item.request_id === "string" && item.request_id.length > 0) {
-        ids.add(item.request_id);
+    for (const item of sortedItems) {
+      const decisionId = item.decision_id;
+      const fallback = item.request_id;
+      if (typeof decisionId === "string" && decisionId.length > 0) {
+        ids.add(decisionId);
+      } else if (typeof fallback === "string" && fallback.length > 0) {
+        ids.add(fallback);
       }
     }
     return Array.from(ids).sort();
-  }, [items]);
+  }, [sortedItems]);
 
   const selectedDecisionEntry = useMemo(() => {
     if (!selectedDecisionId) {
       return null;
     }
+    return sortedItems.find(
+      (item) => item.decision_id === selectedDecisionId || item.request_id === selectedDecisionId,
+    ) ?? null;
+  }, [selectedDecisionId, sortedItems]);
 
-    return items.find((item) => item.request_id === selectedDecisionId) ?? null;
-  }, [items, selectedDecisionId]);
+  const selectedIndex = useMemo(
+    () => (selected ? filteredItems.findIndex((item) => item === selected) : -1),
+    [filteredItems, selected],
+  );
+  const previousEntry = selectedIndex >= 0 ? filteredItems[selectedIndex + 1] ?? null : null;
+  const nextEntry = selectedIndex > 0 ? filteredItems[selectedIndex - 1] ?? null : null;
 
+  const selectedChain = useMemo(
+    () => (selected ? classifyChain(selected, previousEntry) : null),
+    [previousEntry, selected],
+  );
 
   const auditSummary = useMemo(() => {
-    const total = filteredItems.length;
-    const mismatches = filteredItems.reduce((count, item, index) => {
-      const previous = filteredItems[index + 1];
-      if (!previous?.sha256 || !item.sha256_prev) {
-        return count;
+    let mismatches = 0;
+    let brokenCount = 0;
+    for (let index = 0; index < filteredItems.length; index += 1) {
+      const status = classifyChain(filteredItems[index], filteredItems[index + 1] ?? null).status;
+      if (status === "broken") {
+        mismatches += 1;
+        brokenCount += 1;
       }
-      return count + (item.sha256_prev === previous.sha256 ? 0 : 1);
-    }, 0);
-    const rejected = filteredItems.filter((item) => isRejectedEntry(item)).length;
-    return { total, mismatches, rejected };
+    }
+    return { total: filteredItems.length, mismatches, brokenCount };
   }, [filteredItems]);
-  const previousEntry = useMemo(() => {
-    if (!selectedDecisionEntry) {
-      return null;
-    }
-
-    const selectedIndex = items.findIndex((item) => item === selectedDecisionEntry);
-    if (selectedIndex < 0 || selectedIndex >= items.length - 1) {
-      return null;
-    }
-    return items[selectedIndex + 1] ?? null;
-  }, [items, selectedDecisionEntry]);
-
-  useEffect(() => {
-    if (verificationStatus !== "running") {
-      return undefined;
-    }
-
-    const timer = window.setInterval(() => {
-      setAnimationStep((current) => {
-        if (current >= 2) {
-          return 2;
-        }
-        return current + 1;
-      });
-    }, 400);
-
-    return () => {
-      window.clearInterval(timer);
-    };
-  }, [verificationStatus]);
 
   const verifySelectedDecision = (): void => {
-    setVerificationMessage(null);
     if (!selectedDecisionEntry) {
-      setVerificationStatus("fail");
       setVerificationMessage(t("意思決定IDを選択してください。", "Please select a decision ID."));
       return;
     }
-
-    if (!selectedDecisionEntry.sha256) {
-      setVerificationStatus("fail");
-      setVerificationMessage(t("選択ログに sha256 がありません。", "The selected log has no sha256."));
+    const selectedIndexInAll = sortedItems.findIndex((item) => item === selectedDecisionEntry);
+    const previous = selectedIndexInAll >= 0 ? sortedItems[selectedIndexInAll + 1] ?? null : null;
+    const result = classifyChain(selectedDecisionEntry, previous);
+    if (result.status === "verified") {
+      setVerificationMessage("TAMPER-PROOF ✅");
       return;
     }
-
-    if (!previousEntry || !previousEntry.sha256) {
-      setVerificationStatus("fail");
-      setVerificationMessage(t("直前ログが見つからないため検証できません。", "Cannot verify without a previous log entry."));
-      return;
-    }
-
-    setVerificationStatus("running");
-    setAnimationStep(0);
-
-    window.setTimeout(() => {
-      const isTamperProof = selectedDecisionEntry.sha256_prev === previousEntry.sha256;
-      setVerificationStatus(isTamperProof ? "pass" : "fail");
-      setVerificationMessage(
-        isTamperProof
-          ? t("ハッシュチェーン整合: 改ざんは検出されませんでした。", "Hash chain verified: no tampering detected.")
-          : t("ハッシュ不一致: 改ざんの可能性があります。", "Hash mismatch: potential tampering detected."),
-      );
-    }, 1400);
+    setVerificationMessage(`${result.status.toUpperCase()}: ${result.reason}`);
   };
 
   const createRegulatoryReport = (): RegulatoryReport | null => {
     setReportError(null);
-    const startDate = reportStartDate.trim();
-    const endDate = reportEndDate.trim();
-
-    if (!startDate || !endDate) {
+    if (!confirmPiiRisk) {
+      setReportError(t("PII/metadata warning を確認してください。", "Please acknowledge the PII/metadata warning."));
+      return null;
+    }
+    if (!reportStartDate || !reportEndDate) {
       setReportError(t("期間を指定してください。", "Please select both start and end dates."));
       return null;
     }
-
-    if (startDate > endDate) {
-      setReportError(t("開始日は終了日以前にしてください。", "Start date must be before end date."));
-      return null;
-    }
-
-    const periodItems = items.filter((item) => isWithinPeriod(item, startDate, endDate));
+    const start = new Date(`${reportStartDate}T00:00:00.000Z`).getTime();
+    const end = new Date(`${reportEndDate}T23:59:59.999Z`).getTime();
+    const periodItems = sortedItems.filter((item) => {
+      const stamp = new Date(item.created_at ?? "").getTime();
+      return Number.isFinite(stamp) && stamp >= start && stamp <= end;
+    });
     if (periodItems.length === 0) {
       setReportError(t("指定期間にデータがありません。", "No logs found for the selected period."));
       return null;
     }
 
-    const stageMap = new Map<string, { count: number; passCount: number }>();
-    for (const item of periodItems) {
-      const stage = item.stage ?? "UNKNOWN";
-      const current = stageMap.get(stage) ?? { count: 0, passCount: 0 };
-      current.count += 1;
-      if (isPassedEntry(item)) {
-        current.passCount += 1;
-      }
-      stageMap.set(stage, current);
-    }
-
-    const fujiItems = periodItems.filter((item) => String(item.stage ?? "").toLowerCase().includes("fuji"));
-    const fujiRejected = fujiItems.filter((item) => isRejectedEntry(item)).length;
-    const sortedItems = [...periodItems].sort((a, b) => {
-      const aTime = new Date(a.created_at ?? "").getTime();
-      const bTime = new Date(b.created_at ?? "").getTime();
-      return bTime - aTime;
-    });
-
-    let checkedLinks = 0;
-    let mismatchLinks = 0;
-    for (let index = 0; index < sortedItems.length - 1; index += 1) {
-      const current = sortedItems[index];
-      const previous = sortedItems[index + 1];
-      if (!current?.sha256_prev || !previous?.sha256) {
-        continue;
-      }
-      checkedLinks += 1;
-      if (current.sha256_prev !== previous.sha256) {
-        mismatchLinks += 1;
-      }
-    }
-
-    const decisionIdsInPeriod = new Set(
-      periodItems
-        .map((item) => item.request_id)
-        .filter((id): id is string => typeof id === "string" && id.length > 0),
-    );
+    const mismatchLinks = periodItems.reduce((count, item, index) => {
+      const next = periodItems[index + 1] ?? null;
+      return count + (classifyChain(item, next).status === "broken" ? 1 : 0);
+    }, 0);
 
     const report: RegulatoryReport = {
       generatedAt: new Date().toISOString(),
-      period: {
-        startDate,
-        endDate,
-      },
       totalEntries: periodItems.length,
-      totalDecisionIds: decisionIdsInPeriod.size,
-      pipelineStageSummary: Array.from(stageMap.entries())
-        .map(([stage, value]) => ({
-          stage,
-          count: value.count,
-          passCount: value.passCount,
-        }))
-        .sort((a, b) => b.count - a.count),
-      fujiGate: {
-        totalEvaluations: fujiItems.length,
-        rejected: fujiRejected,
-        rejectionRate: fujiItems.length === 0 ? 0 : fujiRejected / fujiItems.length,
-      },
-      trustLogIntegrity: {
-        checkedLinks,
-        mismatchLinks,
-        chainIntact: mismatchLinks === 0,
-      },
+      mismatchLinks,
+      brokenCount: mismatchLinks,
     };
-
     setLatestReport(report);
     return report;
   };
@@ -331,12 +221,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
     if (!report) {
       return;
     }
-
     const reportBlob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
     const objectUrl = URL.createObjectURL(reportBlob);
     const anchor = document.createElement("a");
     anchor.href = objectUrl;
-    anchor.download = `regulatory-report-${report.period.startDate}-to-${report.period.endDate}.json`;
+    anchor.download = `audit-report-${reportStartDate}-${reportEndDate}.json`;
     anchor.click();
     URL.revokeObjectURL(objectUrl);
   };
@@ -349,98 +238,18 @@ export default function TrustLogExplorerPage(): JSX.Element {
     if (!report) {
       return;
     }
-
     const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
     if (!printWindow) {
       setReportError(t("PDFウィンドウを開けませんでした。", "Failed to open PDF print window."));
       return;
     }
-
-    const documentTitle = printWindow.document.createElement("title");
-    documentTitle.textContent = "Regulatory Report";
-    printWindow.document.head.appendChild(documentTitle);
-
-    const container = printWindow.document.createElement("main");
-    container.style.fontFamily = "Arial, sans-serif";
-    container.style.padding = "20px";
-
     const title = printWindow.document.createElement("h1");
     title.textContent = "Regulatory Report Generator";
-    container.appendChild(title);
-
-    const generatedAt = printWindow.document.createElement("p");
-    generatedAt.textContent = `Generated At: ${report.generatedAt}`;
-    container.appendChild(generatedAt);
-
-    const period = printWindow.document.createElement("p");
-    period.textContent = `Period: ${report.period.startDate} to ${report.period.endDate}`;
-    container.appendChild(period);
-
-    const pipelineTitle = printWindow.document.createElement("h2");
-    pipelineTitle.textContent = "Decision Pipeline Throughput";
-    container.appendChild(pipelineTitle);
-
-    const table = printWindow.document.createElement("table");
-    table.setAttribute("border", "1");
-    table.setAttribute("cellspacing", "0");
-    table.setAttribute("cellpadding", "6");
-
-    const tableHead = printWindow.document.createElement("thead");
-    const headerRow = printWindow.document.createElement("tr");
-    ["Stage", "Count", "Pass Count"].forEach((headerLabel) => {
-      const cell = printWindow.document.createElement("th");
-      cell.textContent = headerLabel;
-      headerRow.appendChild(cell);
-    });
-    tableHead.appendChild(headerRow);
-
-    const tableBody = printWindow.document.createElement("tbody");
-    report.pipelineStageSummary.forEach((row) => {
-      const tableRow = printWindow.document.createElement("tr");
-      [row.stage, String(row.count), String(row.passCount)].forEach((value) => {
-        const cell = printWindow.document.createElement("td");
-        cell.textContent = value;
-        tableRow.appendChild(cell);
-      });
-      tableBody.appendChild(tableRow);
-    });
-
-    table.appendChild(tableHead);
-    table.appendChild(tableBody);
-    container.appendChild(table);
-
-    const fujiTitle = printWindow.document.createElement("h2");
-    fujiTitle.textContent = "FUJI Gate Rejection Rate";
-    container.appendChild(fujiTitle);
-
-    const fujiParagraph = printWindow.document.createElement("p");
-    fujiParagraph.textContent = `${report.fujiGate.rejected} / ${report.fujiGate.totalEvaluations} (${(report.fujiGate.rejectionRate * 100).toFixed(1)}%)`;
-    container.appendChild(fujiParagraph);
-
-    const integrityTitle = printWindow.document.createElement("h2");
-    integrityTitle.textContent = "TrustLog Integrity Proof";
-    container.appendChild(integrityTitle);
-
-    const checkedLinks = printWindow.document.createElement("p");
-    checkedLinks.textContent = `Checked Links: ${report.trustLogIntegrity.checkedLinks}`;
-    container.appendChild(checkedLinks);
-
-    const mismatches = printWindow.document.createElement("p");
-    mismatches.textContent = `Mismatches: ${report.trustLogIntegrity.mismatchLinks}`;
-    container.appendChild(mismatches);
-
-    const chainIntact = printWindow.document.createElement("p");
-    chainIntact.textContent = `Chain Intact: ${String(report.trustLogIntegrity.chainIntact)}`;
-    container.appendChild(chainIntact);
-
-    const securityNote = printWindow.document.createElement("p");
-    securityNote.style.marginTop = "20px";
-    securityNote.style.fontSize = "12px";
-    securityNote.style.color = "#8a8a8a";
-    securityNote.textContent = "Security note: Reports may contain sensitive audit metadata. Handle under your compliance policy.";
-    container.appendChild(securityNote);
-
-    printWindow.document.body.appendChild(container);
+    const warning = printWindow.document.createElement("p");
+    warning.textContent = "Security note: Report may include PII and sensitive metadata.";
+    printWindow.document.body.appendChild(title);
+    printWindow.document.body.appendChild(warning);
+    printWindow.document.body.appendChild(printWindow.document.createTextNode(JSON.stringify(report, null, 2)));
     printWindow.document.close();
     printWindow.focus();
     printWindow.print();
@@ -454,14 +263,11 @@ export default function TrustLogExplorerPage(): JSX.Element {
       if (nextCursor) {
         params.set("cursor", nextCursor);
       }
-
       const response = await veritasFetch(`/api/veritas/v1/trust/logs?${params.toString()}`);
-
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("trust logs取得に失敗しました。", "Failed to fetch trust logs.")}`);
         return;
       }
-
       const payload: unknown = await response.json();
       if (!isTrustLogsResponse(payload)) {
         setError(t("レスポンス形式エラー: trust logs の形式が不正です。", "Response format error: trust logs payload is invalid."));
@@ -495,16 +301,13 @@ export default function TrustLogExplorerPage(): JSX.Element {
       setError(t("request_id を入力してください。", "Please enter request_id."));
       return;
     }
-
     setLoading(true);
     try {
       const response = await veritasFetch(`/api/veritas/v1/trust/${encodeURIComponent(value)}`);
-
       if (!response.ok) {
         setError(`HTTP ${response.status}: ${t("request_id 検索に失敗しました。", "Failed to search request_id.")}`);
         return;
       }
-
       const payload: unknown = await response.json();
       if (requestNonce !== requestSearchNonceRef.current) {
         return;
@@ -518,9 +321,6 @@ export default function TrustLogExplorerPage(): JSX.Element {
         setSelected(payload.items[payload.items.length - 1]);
       }
     } catch (caught: unknown) {
-      if (requestNonce !== requestSearchNonceRef.current) {
-        return;
-      }
       if (caught instanceof DOMException && caught.name === "AbortError") {
         setError(t("タイムアウト: request_id 検索が時間内に完了しませんでした。", "Timeout: request_id search did not complete in time."));
         return;
@@ -533,165 +333,73 @@ export default function TrustLogExplorerPage(): JSX.Element {
     }
   };
 
+  useEffect(() => {
+    if (!selected && filteredItems.length > 0) {
+      setSelected(filteredItems[0]);
+    }
+  }, [filteredItems, selected]);
+
   return (
     <div className="space-y-6">
-      <Card
-        title="TrustLog Explorer"
-        description={t(
-          "/v1/trust/logs と /v1/trust/{request_id} を使って、監査証跡を時系列に確認します。",
-          "Use /v1/trust/logs and /v1/trust/{request_id} to review audit evidence in chronological order.",
-        )}
-        variant="glass"
-        accent="info"
-        className="border-info/20"
-      >
-        <div />
+      <Card title="TrustLog Explorer" description="Hash-chained audit trail for human verification and export" variant="glass" accent="info">
+        <p className="text-xs text-muted-foreground">{t("空状態でも監査できる項目を確認できます。", "Use this page to inspect timeline, chain validity, replay links, and export evidence.")}</p>
       </Card>
 
       <Card title={t("接続・読み込み", "Connection")} titleSize="sm" variant="elevated">
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={[
-              "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              "disabled:pointer-events-none disabled:opacity-50",
-              "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 active:scale-[0.98]",
-            ].join(" ")}
-            disabled={loading}
-            onClick={() => void loadLogs(null, true)}
-          >
-            {loading && (
-              <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
-            {loading ? t("読み込み中...", "Loading...") : t("最新ログを読み込み", "Load latest logs")}
-          </button>
-          <button
-            type="button"
-            className={[
-              "rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors",
-              "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              "disabled:pointer-events-none disabled:opacity-40",
-            ].join(" ")}
-            disabled={loading || !hasMore || !cursor}
-            onClick={() => void loadLogs(cursor, false)}
-          >
-            {t("追加読み込み", "Load more")}
-          </button>
+          <button type="button" className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm" disabled={loading} onClick={() => void loadLogs(null, true)}>{loading ? t("読み込み中...", "Loading...") : t("最新ログを読み込み", "Load latest logs")}</button>
+          <button type="button" className="rounded-lg border border-border px-4 py-2 text-sm" disabled={loading || !hasMore || !cursor} onClick={() => void loadLogs(cursor, false)}>{t("追加読み込み", "Load more")}</button>
         </div>
       </Card>
 
       <Card title={t("request_id 検索", "request_id Search")} titleSize="sm" variant="elevated">
-        <div className="flex flex-col gap-2 md:flex-row">
-          <input
-            aria-label={t("リクエストIDで検索", "Search by request ID")}
-            className="w-full rounded-lg border border-border bg-background/80 px-3 py-2 text-sm font-mono transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-            placeholder="request_id"
-            value={requestId}
-            onChange={(event) => setRequestId(event.target.value)}
-          />
-          <button
-            type="button"
-            className={[
-              "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
-              "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              "disabled:pointer-events-none disabled:opacity-50",
-            ].join(" ")}
-            disabled={loading}
-            onClick={() => void searchByRequestId()}
-          >
-            {t("検索", "Search")}
-          </button>
+        <div className="flex gap-2">
+          <input aria-label={t("リクエストIDで検索", "Search by request ID")} className="w-full rounded-lg border border-border px-3 py-2 text-sm" value={requestId} onChange={(event) => setRequestId(event.target.value)} placeholder="request_id" />
+          <button type="button" className="rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm" disabled={loading} onClick={() => void searchByRequestId()}>{t("検索", "Search")}</button>
         </div>
-        {requestResult ? (
-          <div className="mt-3 flex flex-wrap gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
-            <span className="text-xs text-muted-foreground">
-              count: <span className="font-mono font-semibold text-foreground">{requestResult.count}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              chain_ok: <span className={`font-mono font-semibold ${requestResult.chain_ok ? "text-success" : "text-danger"}`}>{String(requestResult.chain_ok)}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              result: <span className="font-mono font-semibold text-foreground">{requestResult.verification_result}</span>
-            </span>
-          </div>
-        ) : null}
+        {requestResult ? <p className="mt-2 text-xs">count: {requestResult.count} / chain_ok: {String(requestResult.chain_ok)} / result: {requestResult.verification_result}</p> : null}
       </Card>
 
-      {error ? (
-        <div className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
-          <span className="mt-0.5 shrink-0 text-danger" aria-hidden="true">⚠</span>
-          <p className="text-sm text-danger">{error}</p>
-        </div>
-      ) : null}
+      <Card title={t("横断検索", "Cross-search")} titleSize="sm" variant="elevated">
+        <input aria-label="cross-search" className="w-full rounded-lg border border-border px-3 py-2 text-sm" value={searchKey} onChange={(event) => setSearchKey(event.target.value)} placeholder="request_id / decision_id" />
+      </Card>
+
+      {error ? <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p> : null}
 
       <Card title="Audit Summary" titleSize="sm" variant="elevated">
-        <div className="grid gap-3 md:grid-cols-3 text-xs">
-          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
-            <p className="text-muted-foreground">Entries</p>
-            <p className="font-mono font-semibold text-foreground">{auditSummary.total}</p>
-          </div>
-          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
-            <p className="text-muted-foreground">Chain mismatch</p>
-            <p className={`font-mono font-semibold ${auditSummary.mismatches > 0 ? "text-danger" : "text-success"}`}>{auditSummary.mismatches}</p>
-          </div>
-          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
-            <p className="text-muted-foreground">Rejected</p>
-            <p className="font-mono font-semibold text-warning">{auditSummary.rejected}</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-1 overflow-auto rounded-lg border border-border/50 bg-muted/20 px-2 py-2">
-          {filteredItems.slice(0, 24).map((item, index) => {
-            const previous = filteredItems[index + 1];
-            const ok = !previous?.sha256 || !item.sha256_prev || item.sha256_prev === previous.sha256;
-            const hashKey = `${item.request_id ?? "unknown"}-${item.created_at ?? "na"}-${item.sha256 ?? item.sha256_prev ?? "hash"}`;
-            return <span key={hashKey} className={`h-2 w-4 rounded-sm ${ok ? "bg-success/70" : "bg-danger"}`} title={`${item.stage ?? "unknown"}`} />;
-          })}
-        </div>
+        <p className="text-xs">Entries: {auditSummary.total} / Chain mismatch: {auditSummary.mismatches} / Broken: {auditSummary.brokenCount}</p>
       </Card>
 
       <Card title="Timeline" titleSize="md" variant="elevated">
-        <div className="mb-3 flex items-center gap-3">
-          <label htmlFor="stage-filter" className="text-xs font-medium text-foreground">{t("ステージ", "Stage")}</label>
-          <select
-            id="stage-filter"
-            className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-            value={stageFilter}
-            onChange={(event) => setStageFilter(event.target.value)}
-          >
-            {stageOptions.map((stage) => (<option key={stage} value={stage}>{stage}</option>))}
+        <div className="mb-2 flex items-center gap-2">
+          <label htmlFor="stage-filter" className="text-xs">Stage</label>
+          <select id="stage-filter" value={stageFilter} onChange={(event) => setStageFilter(event.target.value)} className="rounded border border-border px-2 py-1 text-xs">
+            {stageOptions.map((stage) => <option key={stage} value={stage}>{stage}</option>)}
           </select>
-          <span className="ml-auto rounded-full border border-border/50 bg-muted/50 px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-            {t("表示件数", "Visible")}: {filteredItems.length}
-          </span>
+          <span className="ml-auto text-xs">{t("表示件数", "Visible")}: {filteredItems.length}</span>
         </div>
-
-        <ol className="max-h-[520px] space-y-1.5 overflow-y-auto pl-1">
+        {filteredItems.length === 0 ? <p className="text-xs text-muted-foreground">{t("監査対象が未読込です。request_id/decision_id・ハッシュ整合・リプレイ関連をここで確認できます。", "No logs loaded yet. This timeline verifies request/decision IDs, hash chain, and replay linkage.")}</p> : null}
+        <ol className="space-y-2">
           {filteredItems.map((item, index) => {
-            const id = `${item.request_id ?? "unknown"}-${index}`;
-            const isSelected = selected === item;
+            const chain = classifyChain(item, filteredItems[index + 1] ?? null);
+            const timelineKey = [
+              item.request_id ?? "unknown",
+              String(item.decision_id ?? "no-decision"),
+              item.created_at ?? "no-timestamp",
+              item.sha256 ?? "no-sha",
+              item.sha256_prev ?? "no-prev-sha",
+            ].join("-");
             return (
-              <li key={id}>
-                <button
-                  type="button"
-                  className={[
-                    "w-full rounded-lg border px-3.5 py-2.5 text-left text-xs transition-all",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                    isSelected
-                      ? "border-primary/40 bg-primary/10 shadow-xs"
-                      : "border-border/50 bg-background/60 hover:border-border hover:bg-background/80",
-                  ].join(" ")}
-                  onClick={() => setSelected(item)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${isSelected ? "bg-primary" : "bg-muted-foreground/40"}`} aria-hidden="true" />
-                    <p className="font-semibold text-foreground">{item.stage ?? "UNKNOWN"}</p>
+              <li key={timelineKey}>
+                <button type="button" onClick={() => setSelected(item)} className="w-full rounded border border-border px-3 py-2 text-left text-xs">
+                  <div className="grid grid-cols-2 gap-1 md:grid-cols-6">
+                    <span>{getString(item, "severity")}</span>
+                    <span>{item.stage ?? "UNKNOWN"}</span>
+                    <span>{getString(item, "status")}</span>
+                    <span className="font-mono">{item.created_at ?? "-"}</span>
+                    <span className="font-mono">req:{item.request_id ?? "-"}</span>
+                    <span className={chain.status === "verified" ? "text-success" : chain.status === "broken" ? "text-danger" : "text-warning"}>{chain.status}</span>
                   </div>
-                  <p className="mt-0.5 font-mono text-muted-foreground">{item.created_at ?? "no timestamp"}</p>
-                  <p className="truncate font-mono text-muted-foreground">id: {item.request_id ?? "unknown"}</p>
                 </button>
               </li>
             );
@@ -699,192 +407,60 @@ export default function TrustLogExplorerPage(): JSX.Element {
         </ol>
       </Card>
 
-      <Card title="Selected JSON" titleSize="md" variant="elevated">
+      <Card title="Selected Audit" titleSize="md" variant="elevated">
         {selected ? (
-          <details open>
-            <summary className="cursor-pointer text-sm font-semibold text-foreground">{t("JSON 展開", "Expand JSON")}</summary>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-border/50 bg-muted/30 p-3 text-xs leading-relaxed">{toPrettyJson(selected)}</pre>
-          </details>
-        ) : (
-          <p className="text-sm text-muted-foreground">{t("ログを選択してください。", "Select a log.")}</p>
-        )}
+          <div className="space-y-3 text-xs">
+            <div className="grid gap-2 rounded border border-border p-3 md:grid-cols-2">
+              <p><strong>Summary:</strong> {`Stage ${selected.stage ?? "UNKNOWN"} returned ${getString(selected, "status")} for request ${selected.request_id ?? "-"}.`}</p>
+              <p><strong>Policy Version:</strong> {getString(selected, "policy_version")}</p>
+              <p><strong>Metadata:</strong> {toPrettyJson(selected.metadata ?? {})}</p>
+              <p><strong>Replay report:</strong> {typeof selected.replay_id === "string" ? <a className="underline" href={`/replay?replay_id=${encodeURIComponent(selected.replay_id)}`}>{selected.replay_id}</a> : "-"}</p>
+              <p><strong>Hash:</strong> {shortHash(selected.sha256)} / prev {shortHash(selected.sha256_prev)}</p>
+              <p><strong>Chain:</strong> {selectedChain?.status ?? "-"}</p>
+            </div>
+            <div className="rounded border border-border p-3">
+              <p><strong>Previous log:</strong> {previousEntry ? shortHash(previousEntry.sha256) : "-"}</p>
+              <p><strong>Next log:</strong> {nextEntry ? shortHash(nextEntry.sha256) : "-"}</p>
+            </div>
+            <details open>
+              <summary className="cursor-pointer font-semibold">{t("JSON 展開", "Expand JSON")}</summary>
+              <pre className="mt-2 overflow-x-auto rounded border border-border bg-muted/20 p-3">{toPrettyJson(selected)}</pre>
+            </details>
+          </div>
+        ) : <p className="text-sm text-muted-foreground">{t("ログを選択してください。", "Select a log.")}</p>}
       </Card>
 
       <Card title={t("TrustLog インタラクティブ検証", "TrustLog Interactive Verification")} titleSize="md" variant="elevated" accent="success">
-        <div className="space-y-3 text-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-end">
-            <label className="flex-1 space-y-1 text-xs">
-              <span className="font-medium">{t("意思決定ID", "Decision ID")}</span>
-              <select
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                value={selectedDecisionId}
-                onChange={(event) => setSelectedDecisionId(event.target.value)}
-              >
-                <option value="">{t("選択してください", "Select one")}</option>
-                {decisionIds.map((id) => (
-                  <option key={id} value={id}>{id}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className={[
-                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
-                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                "disabled:pointer-events-none disabled:opacity-50",
-              ].join(" ")}
-              disabled={loading || !selectedDecisionId}
-              onClick={verifySelectedDecision}
-            >
-              {t("ハッシュチェーン検証", "Verify hash chain")}
-            </button>
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <select className="rounded border border-border px-2 py-1 text-xs" value={selectedDecisionId} onChange={(event) => setSelectedDecisionId(event.target.value)}>
+              <option value="">{t("意思決定IDを選択", "Select a decision ID")}</option>
+              {decisionIds.map((id) => <option key={id} value={id}>{id}</option>)}
+            </select>
+            <button type="button" className="rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs" onClick={verifySelectedDecision}>{t("ハッシュチェーン検証", "Verify hash chain")}</button>
           </div>
-
-          <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t("チェーン検証フロー", "Chain Verification Flow")}</p>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className={[
-                "rounded-lg border px-3 py-1.5 font-mono transition-all",
-                animationStep >= 1 ? "border-primary/50 bg-primary/12 text-primary shadow-xs" : "border-border bg-background text-muted-foreground",
-              ].join(" ")}>
-                {t("直前ログ", "Previous")}: {shortHash(previousEntry?.sha256)}
-              </span>
-              <span aria-hidden="true" className={`font-bold transition-colors ${animationStep >= 2 ? "text-primary" : "text-border"}`}>→</span>
-              <span className={[
-                "rounded-lg border px-3 py-1.5 font-mono transition-all",
-                animationStep >= 2 ? "border-primary/50 bg-primary/12 text-primary shadow-xs" : "border-border bg-background text-muted-foreground",
-              ].join(" ")}>
-                sha256_prev: {shortHash(selectedDecisionEntry?.sha256_prev)}
-              </span>
-              <span aria-hidden="true" className={`font-bold transition-colors ${animationStep >= 2 ? "text-primary" : "text-border"}`}>→</span>
-              <span className="rounded-lg border border-border bg-background px-3 py-1.5 font-mono text-muted-foreground">
-                {t("現在", "Current")}: {shortHash(selectedDecisionEntry?.sha256)}
-              </span>
-            </div>
-          </div>
-
-          {verificationStatus === "pass" ? (
-            <div className="inline-flex items-center gap-2 rounded-full border border-success/40 bg-success/10 px-4 py-1.5">
-              <span className="h-2 w-2 rounded-full bg-success" aria-hidden="true" />
-              <span className="text-xs font-semibold text-success">TAMPER-PROOF ✅</span>
-            </div>
-          ) : null}
-
-          {verificationMessage ? (
-            <div className={[
-              "flex items-start gap-3 rounded-xl border px-4 py-3 text-xs",
-              verificationStatus === "pass"
-                ? "border-success/30 bg-success/8 text-success"
-                : "border-warning/30 bg-warning/8 text-warning",
-            ].join(" ")}>
-              <span aria-hidden="true">{verificationStatus === "pass" ? "✓" : "⚠"}</span>
-              {verificationMessage}
-            </div>
-          ) : null}
+          {verificationMessage ? <p className="text-xs">{verificationMessage}</p> : null}
+          <p className="text-xs text-muted-foreground">verified / broken / missing / orphan</p>
         </div>
       </Card>
 
-      <Card
-        title={t("第三者監査用エクスポート", "Regulatory Report Generator")}
-        titleSize="md"
-        variant="elevated"
-        accent="warning"
-        description={t(
-          "指定期間の決定パイプライン通過データ、FUJI Gate拒絶率、TrustLog整合性証明をPDF/JSONで出力します。",
-          "Generate PDF/JSON with pipeline throughput, FUJI gate rejection rate, and TrustLog integrity proof for a selected period.",
-        )}
-      >
-        <div className="space-y-4 text-sm">
+      <Card title={t("第三者監査用エクスポート", "Regulatory Report Generator")} titleSize="md" variant="elevated" accent="warning">
+        <div className="space-y-3 text-sm">
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1.5 text-xs">
-              <span className="font-medium text-foreground/80">{t("開始日", "Start date")}</span>
-              <input
-                type="date"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                value={reportStartDate}
-                onChange={(event) => setReportStartDate(event.target.value)}
-              />
-            </label>
-            <label className="space-y-1.5 text-xs">
-              <span className="font-medium text-foreground/80">{t("終了日", "End date")}</span>
-              <input
-                type="date"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                value={reportEndDate}
-                onChange={(event) => setReportEndDate(event.target.value)}
-              />
-            </label>
+            <input type="date" value={reportStartDate} onChange={(event) => setReportStartDate(event.target.value)} className="rounded border border-border px-3 py-2" />
+            <input type="date" value={reportEndDate} onChange={(event) => setReportEndDate(event.target.value)} className="rounded border border-border px-3 py-2" />
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className={[
-                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
-                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              ].join(" ")}
-              onClick={downloadJsonReport}
-            >
-              {t("JSON生成", "Generate JSON")}
-            </button>
-            <button
-              type="button"
-              className={[
-                "rounded-lg border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition-all",
-                "hover:bg-primary/15 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              ].join(" ")}
-              onClick={generatePdfReport}
-            >
-              {t("PDF生成", "Generate PDF")}
-            </button>
+          <label className="flex items-start gap-2 text-xs">
+            <input type="checkbox" checked={confirmPiiRisk} onChange={(event) => setConfirmPiiRisk(event.target.checked)} />
+            <span>{t("PII/metadata warning を理解し、社内ポリシーに従って取り扱います。", "I acknowledge PII/metadata warning and will handle exports under policy.")}</span>
+          </label>
+          <div className="flex gap-2">
+            <button type="button" className="rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm" onClick={downloadJsonReport}>{t("JSON生成", "Generate JSON")}</button>
+            <button type="button" className="rounded border border-primary/40 bg-primary/10 px-4 py-2 text-sm" onClick={generatePdfReport}>{t("PDF生成", "Generate PDF")}</button>
           </div>
-
-          {reportError ? (
-            <div className="flex items-start gap-3 rounded-xl border border-warning/30 bg-warning/8 px-4 py-3">
-              <span className="shrink-0 text-warning" aria-hidden="true">⚠</span>
-              <p className="text-xs text-warning">{reportError}</p>
-            </div>
-          ) : null}
-
-          {latestReport ? (
-            <div className="space-y-3">
-            <div className="text-xs text-muted-foreground">
-              <p>entries: {latestReport.totalEntries} / decision_ids: {latestReport.totalDecisionIds}</p>
-              <p>FUJI rejection: {latestReport.fujiGate.rejected}/{latestReport.fujiGate.totalEvaluations} ({(latestReport.fujiGate.rejectionRate * 100).toFixed(1)}%)</p>
-            </div>
-            <div className="grid gap-2 rounded-xl border border-border/50 bg-muted/20 p-4 text-xs md:grid-cols-3">
-              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Entries</p>
-                <p className="font-mono text-lg font-bold text-foreground">{latestReport.totalEntries}</p>
-                <p className="text-muted-foreground">{latestReport.totalDecisionIds} decision IDs</p>
-              </div>
-              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">FUJI Rejection</p>
-                <p className="font-mono text-lg font-bold text-foreground">
-                  {(latestReport.fujiGate.rejectionRate * 100).toFixed(1)}%
-                </p>
-                <p className="text-muted-foreground">{latestReport.fujiGate.rejected}/{latestReport.fujiGate.totalEvaluations}</p>
-              </div>
-              <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chain Integrity</p>
-                <p className={`font-mono text-base font-bold ${latestReport.trustLogIntegrity.mismatchLinks === 0 ? "text-success" : "text-danger"}`}>
-                  {latestReport.trustLogIntegrity.mismatchLinks === 0 ? "INTACT" : "MISMATCH"}
-                </p>
-                <p className="text-muted-foreground">{latestReport.trustLogIntegrity.checkedLinks} links checked</p>
-              </div>
-            </div>
-            </div>
-          ) : null}
-
-          <div className="flex items-start gap-3 rounded-xl border border-warning/25 bg-warning/6 px-4 py-3">
-            <span className="mt-0.5 shrink-0 text-warning" aria-hidden="true">⚠</span>
-            <p className="text-xs text-warning/90">
-              {t(
-                "セキュリティ警告: 出力レポートに監査メタデータが含まれる可能性があります。共有前にPII・機密情報の取り扱いポリシーを確認してください。",
-                "Security warning: Exported reports may include sensitive audit metadata. Confirm your PII and confidential-data handling policy before sharing.",
-              )}
-            </p>
-          </div>
+          {reportError ? <p className="text-xs text-warning">{reportError}</p> : null}
+          {latestReport ? <p className="text-xs">entries: {latestReport.totalEntries} / mismatches: {latestReport.mismatchLinks}</p> : null}
+          <p className="text-xs text-warning">{t("セキュリティ警告: 出力にはPIIや監査メタデータが含まれる可能性があります。", "Security warning: export may include PII and audit metadata.")}</p>
         </div>
       </Card>
     </div>
