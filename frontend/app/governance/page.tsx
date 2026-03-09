@@ -155,7 +155,9 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
 }
 
 function DiffPreview({ before, after }: { before: GovernancePolicy | null; after: GovernancePolicy | null }): JSX.Element {
-  const rows = before && after ? collectChanges("", before as Record<string, unknown>, after as Record<string, unknown>) : [];
+  const rows = before && after
+    ? collectChanges("", before as unknown as Record<string, unknown>, after as unknown as Record<string, unknown>)
+    : [];
   if (rows.length === 0) return <p className="text-xs text-muted-foreground">変更はありません。</p>;
   return (
     <div className="space-y-1">
