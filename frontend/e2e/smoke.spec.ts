@@ -11,7 +11,7 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await page.goto("/console");
     // Use heading role to avoid strict-mode clash with the sidebar nav text
     await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
-    await expect(page.getByText("Pipeline Visualizer")).toBeVisible();
+    await expect(page.getByText("Pipeline Operations View")).toBeVisible();
     await expect(page.getByText("Evidence")).toBeVisible();
     // Scope to <li> so strict mode won't match the separate "FUJI Gate Status" heading
     await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
