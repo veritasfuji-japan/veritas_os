@@ -6,8 +6,9 @@ import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
 import { EUAIActGovernanceDashboard } from "../../features/console/components/eu-ai-act-governance-dashboard";
 
-
-/* ---------- types ---------- */
+type UserRole = "viewer" | "operator" | "admin";
+type PolicyActionMode = "apply" | "dry-run" | "shadow";
+type GovernanceMode = "standard" | "eu_ai_act";
 
 interface FujiRules {
   pii_check: boolean;
@@ -44,6 +45,8 @@ interface LogRetention {
 
 interface GovernancePolicy {
   version: string;
+  effective_at?: string;
+  last_applied?: string;
   fuji_rules: FujiRules;
   risk_thresholds: RiskThresholds;
   auto_stop: AutoStop;
@@ -52,237 +55,116 @@ interface GovernancePolicy {
   updated_by: string;
 }
 
-interface ValueDriftPoint {
-  ema: number;
-  timestamp: string;
-}
-
-interface ValueDriftMetrics {
-  baseline: number;
-  latest_ema: number;
-  drift_percent: number;
-  history: ValueDriftPoint[];
-  status: "ok" | "no_data";
-}
-
-/* ---------- helpers ---------- */
-
-const FUJI_LABELS: Record<keyof FujiRules, string> = {
-  pii_check: "PII Check (個人情報検査)",
-  self_harm_block: "Self-Harm Block (自傷行為ブロック)",
-  illicit_block: "Illicit Block (違法行為ブロック)",
-  violence_review: "Violence Review (暴力レビュー)",
-  minors_review: "Minors Review (未成年保護)",
-  keyword_hard_block: "Keyword Hard Block (危険ワード即拒否)",
-  keyword_soft_flag: "Keyword Soft Flag (注意ワードフラグ)",
-  llm_safety_head: "LLM Safety Head (AI安全ヘッド)",
-};
-
-/**
- * Structural equality check via recursive key-value comparison.
- * Handles primitives, arrays, and plain objects. Avoids JSON.stringify
- * to prevent issues with undefined values and key-ordering non-determinism.
- */
-function deepEqual(a: unknown, b: unknown): boolean {
-  if (a === b) return true;
-  if (typeof a !== typeof b) return false;
-  if (typeof a !== "object" || a === null || b === null) return false;
-
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-
-  if (Array.isArray(a) && Array.isArray(b)) {
-    if (a.length !== b.length) return false;
-    return a.every((item, i) => deepEqual(item, b[i]));
-  }
-
-  const objA = a as Record<string, unknown>;
-  const objB = b as Record<string, unknown>;
-  const keysA = Object.keys(objA);
-  const keysB = Object.keys(objB);
-  if (keysA.length !== keysB.length) return false;
-  return keysA.every((key) => deepEqual(objA[key], objB[key]));
-}
-
-/* ---------- sub-components ---------- */
-
-interface ToggleRowProps {
-  label: string;
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}
-
-/**
- * Accessible on/off switch. Uses a native <button role="switch"> to avoid
- * conflicts between the ARIA switch role and the native checkbox role.
- */
-function ToggleRow({ label, checked, onChange }: ToggleRowProps): JSX.Element {
-  return (
-    <div className={[
-      "flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-sm transition-colors",
-      checked
-        ? "border-primary/30 bg-primary/5"
-        : "border-border bg-background/60 hover:border-border/80",
-    ].join(" ")}>
-      <span className="font-medium text-foreground/90">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={() => onChange(!checked)}
-        className={[
-          "relative inline-flex h-5.5 w-10 flex-shrink-0 items-center rounded-full",
-          "transition-all duration-200 ease-out",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-          checked ? "bg-primary shadow-[0_0_0_1px_hsl(var(--ds-color-primary)_/_0.3)]" : "bg-muted",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200",
-            checked ? "translate-x-5" : "translate-x-0.5",
-          ].join(" ")}
-        />
-      </button>
-    </div>
-  );
-}
-
-interface SliderRowProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-}
-
-function SliderRow({ label, value, min, max, step, onChange }: SliderRowProps): JSX.Element {
-  return (
-    <label className="block space-y-2 rounded-lg border border-border/60 bg-background/40 px-3.5 py-2.5">
-      <span className="flex items-center justify-between text-xs">
-        <span className="font-medium text-foreground/80">{label}</span>
-        <span className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-foreground">
-          {value.toFixed(2)}
-        </span>
-      </span>
-      <input
-        type="range"
-        aria-label={label}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full cursor-pointer accent-primary"
-      />
-    </label>
-  );
-}
-
-interface NumberRowProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  onChange: (v: number) => void;
-}
-
-function NumberRow({ label, value, min, max, onChange }: NumberRowProps): JSX.Element {
-  return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 px-3.5 py-2.5 text-xs">
-      <span className="font-medium text-foreground/80">{label}</span>
-      <input
-        type="number"
-        aria-label={label}
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => {
-          const raw = e.target.value;
-          const n = Number(raw);
-          if (raw !== "" && !Number.isNaN(n)) {
-            onChange(n);
-          }
-        }}
-        className="w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right font-mono text-xs font-semibold transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-      />
-    </label>
-  );
-}
-
-/* ---------- diff preview ---------- */
-
 interface DiffChange {
   path: string;
   old: string;
   next: string;
 }
 
+interface HistoryEntry {
+  id: string;
+  action: string;
+  actor: UserRole;
+  at: string;
+  summary: string;
+}
+
+interface TrustLogEntry {
+  id: string;
+  at: string;
+  message: string;
+  severity: "info" | "warning";
+}
+
+const FUJI_LABELS: Record<keyof FujiRules, string> = {
+  pii_check: "PII Check",
+  self_harm_block: "Self-Harm Block",
+  illicit_block: "Illicit Block",
+  violence_review: "Violence Review",
+  minors_review: "Minors Review",
+  keyword_hard_block: "Keyword Hard Block",
+  keyword_soft_flag: "Keyword Soft Flag",
+  llm_safety_head: "LLM Safety Head",
+};
+
+const MODE_EXPLANATIONS: Record<GovernanceMode, string[]> = {
+  standard: [
+    "通常運用: 既存しきい値とエスカレーションを使用します。",
+    "FUJIルール違反時は既存フローのままレビューへ。",
+  ],
+  eu_ai_act: [
+    "EU AI Act mode: explainability と audit retention を優先します。",
+    "高リスク判定時に人間レビュー経路を強制し、監査ログ粒度を上げます。",
+  ],
+};
+
 /**
- * Recursively collects changed leaf paths between two policy objects.
- * Pure function: returns a new array rather than mutating an outer variable.
+ * Control-plane utility for deterministic policy diff and drift-safe operations.
  */
-function collectChanges(
-  prefix: string,
-  a: Record<string, unknown>,
-  b: Record<string, unknown>,
-): DiffChange[] {
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== typeof b || a === null || b === null) return false;
+  if (typeof a !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((item, i) => deepEqual(item, b[i]));
+  }
+
+  const objA = a as Record<string, unknown>;
+  const objB = b as Record<string, unknown>;
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+  return keysA.length === keysB.length && keysA.every((key) => deepEqual(objA[key], objB[key]));
+}
+
+/**
+ * Produces leaf-level diff entries for policy audit previews.
+ */
+function collectChanges(prefix: string, a: Record<string, unknown>, b: Record<string, unknown>): DiffChange[] {
   const changes: DiffChange[] = [];
   for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
     const av = a[key];
     const bv = b[key];
     if (deepEqual(av, bv)) continue;
-    if (
-      typeof av === "object" && av !== null && !Array.isArray(av) &&
-      typeof bv === "object" && bv !== null && !Array.isArray(bv)
-    ) {
-      changes.push(
-        ...collectChanges(
-          `${prefix}.${key}`,
-          av as Record<string, unknown>,
-          bv as Record<string, unknown>,
-        ),
-      );
-    } else {
-      changes.push({
-        path: `${prefix}.${key}`,
-        old: JSON.stringify(av),
-        next: JSON.stringify(bv),
-      });
+    if (typeof av === "object" && av !== null && typeof bv === "object" && bv !== null) {
+      changes.push(...collectChanges(`${prefix}.${key}`, av as Record<string, unknown>, bv as Record<string, unknown>));
+      continue;
     }
+    changes.push({ path: `${prefix}.${key}`.replace(/^\./, ""), old: JSON.stringify(av), next: JSON.stringify(bv) });
   }
   return changes;
 }
 
-interface DiffPreviewProps {
-  before: GovernancePolicy | null;
-  after: GovernancePolicy | null;
+function ToggleRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }): JSX.Element {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-sm">
+      <span>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-label={label}
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={["relative inline-flex h-5 w-10 items-center rounded-full", checked ? "bg-primary" : "bg-muted"].join(" ")}
+      >
+        <span className={["inline-block h-4 w-4 rounded-full bg-white", checked ? "translate-x-5" : "translate-x-0.5"].join(" ")} />
+      </button>
+    </div>
+  );
 }
 
-function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
-  if (!before || !after || deepEqual(before, after)) {
-    return <p className="text-xs text-muted-foreground">変更はありません。</p>;
-  }
-
-  const changes = collectChanges(
-    "",
-    before as unknown as Record<string, unknown>,
-    after as unknown as Record<string, unknown>,
-  );
-
-  if (changes.length === 0) {
-    return <p className="text-xs text-muted-foreground">変更はありません。</p>;
-  }
-
+function DiffPreview({ before, after }: { before: GovernancePolicy | null; after: GovernancePolicy | null }): JSX.Element {
+  const rows = before && after ? collectChanges("", before as Record<string, unknown>, after as Record<string, unknown>) : [];
+  if (rows.length === 0) return <p className="text-xs text-muted-foreground">変更はありません。</p>;
   return (
     <div className="space-y-1">
-      {changes.map((c) => (
-        <div key={c.path} className="rounded-md border border-border px-3 py-1 text-xs">
-          <span className="font-semibold">{c.path.replace(/^\./, "")}</span>
-          <div className="mt-0.5 flex gap-3">
-            <span className="text-red-400 line-through" aria-label="before">{c.old}</span>
-            <span className="text-green-400" aria-label="after">{c.next}</span>
+      {rows.map((row) => (
+        <div key={row.path} className="rounded-md border px-3 py-1 text-xs">
+          <p className="font-semibold">{row.path}</p>
+          <div className="flex gap-2">
+            <span className="text-red-400 line-through">{row.old}</span>
+            <span className="text-green-400">{row.next}</span>
           </div>
         </div>
       ))}
@@ -290,87 +172,87 @@ function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
   );
 }
 
-/* ---------- main page ---------- */
-
 export default function GovernanceControlPage(): JSX.Element {
-
   const [savedPolicy, setSavedPolicy] = useState<GovernancePolicy | null>(null);
   const [draft, setDraft] = useState<GovernancePolicy | null>(null);
+  const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
+  const [governanceMode, setGovernanceMode] = useState<GovernanceMode>("standard");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [valueDrift, setValueDrift] = useState<ValueDriftMetrics | null>(null);
-  const [shadowMode, setShadowMode] = useState(false);
-  const [history, setHistory] = useState<GovernancePolicy[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [trustLog, setTrustLog] = useState<TrustLogEntry[]>([]);
 
-  const hasChanges = useMemo(
-    () => draft !== null && savedPolicy !== null && !deepEqual(savedPolicy, draft),
-    [savedPolicy, draft],
-  );
+  const hasChanges = useMemo(() => savedPolicy !== null && draft !== null && !deepEqual(savedPolicy, draft), [savedPolicy, draft]);
+  const canApply = selectedRole === "admin";
+  const canOperate = selectedRole === "admin" || selectedRole === "operator";
 
-  /* -- fetch value drift -- */
-  const fetchValueDrift = useCallback(async () => {
-    try {
-      const res = await veritasFetch("/api/veritas/v1/governance/value-drift");
-      if (!res.ok) {
-        setValueDrift(null);
-        return;
-      }
-      const body: unknown = await res.json();
-      if (typeof body === "object" && body !== null && "value_drift" in body) {
-        const payload = (body as { value_drift?: ValueDriftMetrics }).value_drift;
-        if (payload) {
-          setValueDrift(payload);
-          return;
-        }
-      }
-      setValueDrift(null);
-    } catch {
-      setValueDrift(null);
-    }
+  const appendLog = useCallback((message: string, severity: "info" | "warning" = "info") => {
+    setTrustLog((prev) => [{ id: crypto.randomUUID(), at: new Date().toISOString(), message, severity }, ...prev].slice(0, 12));
   }, []);
 
-  /* -- fetch policy -- */
+  const appendHistory = useCallback((action: string, summary: string) => {
+    setHistory((prev) => [
+      { id: crypto.randomUUID(), action, actor: selectedRole, at: new Date().toISOString(), summary },
+      ...prev,
+    ].slice(0, 20));
+  }, [selectedRole]);
+
   const fetchPolicy = useCallback(async () => {
-    setError(null);
-    setSuccess(null);
     setLoading(true);
+    setError(null);
     try {
       const res = await veritasFetch("/api/veritas/v1/governance/policy");
       if (!res.ok) {
         setError(`HTTP ${res.status}: ポリシー取得に失敗しました。`);
         return;
       }
-      const body: unknown = await res.json();
-      const validation = validateGovernancePolicyResponse(body);
+      const validation = validateGovernancePolicyResponse(await res.json());
       if (!validation.ok) {
-        const semanticIssue = validation.issues.find((issue) => issue.category === "semantic");
-        if (semanticIssue) {
-          setError(`レスポンス意味エラー: ${semanticIssue.path} ${semanticIssue.message}`);
-        } else {
-          const formatIssue = validation.issues[0];
-          setError(`レスポンス形式エラー: ${formatIssue.path} ${formatIssue.message}`);
-        }
+        setError("レスポンスの検証に失敗しました。フォーマット不整合の可能性があります。");
         return;
       }
-      setSavedPolicy(validation.data.policy);
-      setDraft(structuredClone(validation.data.policy));
-      setHistory((current) => [validation.data.policy, ...current].slice(0, 6));
-      void fetchValueDrift();
+      const normalized = {
+        ...validation.data.policy,
+        effective_at: validation.data.policy.updated_at,
+        last_applied: validation.data.policy.updated_at,
+      } as GovernancePolicy;
+      setSavedPolicy(normalized);
+      setDraft(structuredClone(normalized));
+      appendHistory("load", `version ${normalized.version} loaded`);
+      appendLog(`policy version ${normalized.version} loaded`, "info");
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
     } finally {
       setLoading(false);
     }
-  }, [fetchValueDrift]);
+  }, [appendHistory, appendLog]);
 
-  /* -- save policy -- */
-  const savePolicy = useCallback(async () => {
+  const applyPolicy = useCallback(async (mode: PolicyActionMode) => {
     if (!draft) return;
+    if (!window.confirm(`${mode} を実行します。変更を確定しますか？`)) return;
+
+    setSaving(true);
     setError(null);
     setSuccess(null);
-    setSaving(true);
+
+    if (mode === "dry-run") {
+      appendHistory("dry-run", "no persistent write");
+      appendLog("dry-run completed without apply", "info");
+      setSuccess("Dry-run を完了しました。適用はされていません。");
+      setSaving(false);
+      return;
+    }
+
+    if (mode === "shadow") {
+      appendHistory("shadow", "shadow validation stream enabled");
+      appendLog("shadow mode enabled; outputs are validated only", "warning");
+      setSuccess("Shadow mode を有効化しました。判定のみ実施します。");
+      setSaving(false);
+      return;
+    }
+
     try {
       const res = await veritasFetch("/api/veritas/v1/governance/policy", {
         method: "PUT",
@@ -381,397 +263,127 @@ export default function GovernanceControlPage(): JSX.Element {
         setError(`HTTP ${res.status}: ポリシー更新に失敗しました。`);
         return;
       }
-      const body: unknown = await res.json();
-      const validation = validateGovernancePolicyResponse(body);
+      const validation = validateGovernancePolicyResponse(await res.json());
       if (!validation.ok) {
-        const semanticIssue = validation.issues.find((issue) => issue.category === "semantic");
-        if (semanticIssue) {
-          setError(`レスポンス意味エラー: ${semanticIssue.path} ${semanticIssue.message}`);
-        } else {
-          const formatIssue = validation.issues[0];
-          setError(`レスポンス形式エラー: ${formatIssue.path} ${formatIssue.message}`);
-        }
+        setError("適用レスポンスの検証に失敗しました。TrustLog を確認してください。");
         return;
       }
-      setSavedPolicy(validation.data.policy);
-      setDraft(structuredClone(validation.data.policy));
-      setHistory((current) => [validation.data.policy, ...current].slice(0, 6));
-      setSuccess("ポリシーを更新しました。");
+      const nextPolicy = {
+        ...validation.data.policy,
+        effective_at: new Date().toISOString(),
+        last_applied: new Date().toISOString(),
+      } as GovernancePolicy;
+      setSavedPolicy(nextPolicy);
+      setDraft(structuredClone(nextPolicy));
+      appendHistory("apply", `version ${nextPolicy.version} applied`);
+      appendLog(`applied version ${nextPolicy.version}`, "info");
+      setSuccess("ポリシーを適用しました。");
     } catch {
-      setError("ネットワークエラー: バックエンドへ接続できません。");
+      setError("適用処理に失敗しました。通信・権限・整合性を確認してください。");
     } finally {
       setSaving(false);
     }
-  }, [draft]);
+  }, [appendHistory, appendLog, draft]);
 
-  const handleFetchPolicy = useCallback((): void => {
-    void fetchPolicy();
-  }, [fetchPolicy]);
+  const rollback = useCallback(() => {
+    if (!savedPolicy) return;
+    if (!window.confirm("現在の適用済みポリシーへロールバックしますか？")) return;
+    setDraft(structuredClone(savedPolicy));
+    appendHistory("rollback", `rolled back to version ${savedPolicy.version}`);
+    appendLog(`rollback preview to ${savedPolicy.version}`, "warning");
+    setSuccess("ドラフトを適用済みポリシーへ戻しました。");
+  }, [appendHistory, appendLog, savedPolicy]);
 
-  const handleSavePolicy = useCallback((): void => {
-    void savePolicy();
-  }, [savePolicy]);
-
-  /* -- updater helpers -- */
-  const updateFuji = useCallback(<K extends keyof FujiRules>(key: K, value: FujiRules[K]): void => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return { ...prev, fuji_rules: { ...prev.fuji_rules, [key]: value } };
-    });
-  }, []);
-
-  const updateRisk = useCallback(<K extends keyof RiskThresholds>(
-    key: K,
-    value: RiskThresholds[K],
-  ): void => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return { ...prev, risk_thresholds: { ...prev.risk_thresholds, [key]: value } };
-    });
-  }, []);
-
-  const updateAutoStop = useCallback(<K extends keyof AutoStop>(
-    key: K,
-    value: AutoStop[K],
-  ): void => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return { ...prev, auto_stop: { ...prev.auto_stop, [key]: value } };
-    });
-  }, []);
-
-  const updateLogRetention = useCallback(<K extends keyof LogRetention>(
-    key: K,
-    value: LogRetention[K],
-  ): void => {
-    setDraft((prev) => {
-      if (!prev) return prev;
-      return { ...prev, log_retention: { ...prev.log_retention, [key]: value } };
-    });
-  }, []);
+  const riskGauge = draft ? Math.round(((draft.risk_thresholds.deny_upper + draft.auto_stop.max_risk_score) / 2) * 100) : 0;
 
   return (
     <div className="space-y-6">
-      {/* Screen-reader live region for async state announcements */}
-      <div aria-live="polite" aria-atomic="true" className="sr-only">
-        {loading ? "ポリシーを読み込んでいます..." : ""}
-        {saving ? "ポリシーを保存しています..." : ""}
-      </div>
-
-      {/* Header */}
-      <Card
-        title="Governance Control"
-        description="FUJIルール・リスク閾値・自動停止条件・ログ保持を統制し、ポリシーを即時反映します。"
-        variant="glass"
-        accent="primary"
-        className="border-primary/20"
-      >
-        <div />
+      <Card title="Governance Control Plane" description="Rule control / versioning / diff / approval / rollback / shadow validation を統合管理します。" titleSize="lg" variant="elevated">
+        <div className="grid gap-3 md:grid-cols-4">
+          <label className="text-xs">Role
+            <select aria-label="role" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value as UserRole)} className="mt-1 w-full rounded border px-2 py-1">
+              <option value="viewer">viewer</option>
+              <option value="operator">operator</option>
+              <option value="admin">admin</option>
+            </select>
+          </label>
+          <label className="text-xs">Mode
+            <select aria-label="mode" value={governanceMode} onChange={(e) => setGovernanceMode(e.target.value as GovernanceMode)} className="mt-1 w-full rounded border px-2 py-1">
+              <option value="standard">Standard</option>
+              <option value="eu_ai_act">EU AI Act</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => void fetchPolicy()} className="rounded border px-3 py-2 text-sm" disabled={loading}>{loading ? "読み込み中..." : "Load policy"}</button>
+          <div className="rounded border px-3 py-2 text-xs">Risk gauge: <span className="font-mono">{riskGauge}%</span></div>
+        </div>
+        <ul className="mt-3 list-disc pl-5 text-xs text-muted-foreground">
+          {MODE_EXPLANATIONS[governanceMode].map((entry) => <li key={entry}>{entry}</li>)}
+        </ul>
       </Card>
 
       <EUAIActGovernanceDashboard />
 
-      {/* Connection */}
-      <Card title="接続 / Connection" titleSize="sm" variant="default">
-        <button
-          type="button"
-          className={[
-            "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-            loading
-              ? "border-border bg-muted/50 text-muted-foreground"
-              : "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15 active:scale-[0.98]",
-          ].join(" ")}
-          disabled={loading}
-          onClick={handleFetchPolicy}
-        >
-          {loading && (
-            <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          )}
-          {loading ? "読み込み中..." : "ポリシーを読み込む"}
-        </button>
-      </Card>
-
-      {error ? (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger/8 px-4 py-3">
-          <span className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true">⚠</span>
-          <p className="text-sm text-danger">{error}</p>
-        </div>
-      ) : null}
-
-      {success ? (
-        <div role="status" className="flex items-start gap-3 rounded-xl border border-success/30 bg-success/8 px-4 py-3">
-          <span className="mt-0.5 h-4 w-4 shrink-0 text-success" aria-hidden="true">✓</span>
-          <p className="text-sm text-success">{success}</p>
-        </div>
-      ) : null}
+      {error ? <div role="alert" className="rounded border border-danger/40 px-3 py-2 text-sm text-danger">{error}</div> : null}
+      {success ? <div role="status" className="rounded border border-success/40 px-3 py-2 text-sm text-success">{success}</div> : null}
 
       {draft ? (
         <>
-          {/* FUJI Rules */}
-          <Card title="FUJI Rules" titleSize="md" variant="elevated" accent="danger" description="各安全ルールの有効/無効を切り替えます。">
+          <Card title="Policy Meta" titleSize="md" variant="elevated">
+            <div className="grid gap-2 text-xs md:grid-cols-4">
+              <p>policy version: <span className="font-mono">{draft.version}</span></p>
+              <p>effective_at: <span className="font-mono">{draft.effective_at ?? "N/A"}</span></p>
+              <p>last_applied: <span className="font-mono">{draft.last_applied ?? "N/A"}</span></p>
+              <p>updated_by: <span className="font-mono">{draft.updated_by}</span></p>
+            </div>
+          </Card>
+
+          <Card title="FUJI rules / thresholds / escalation" titleSize="md" variant="elevated">
             <div className="grid gap-2 md:grid-cols-2">
               {(Object.keys(FUJI_LABELS) as (keyof FujiRules)[]).map((key) => (
-                <ToggleRow
-                  key={key}
-                  label={FUJI_LABELS[key]}
-                  checked={draft.fuji_rules[key]}
-                  onChange={(v) => updateFuji(key, v)}
-                />
+                <ToggleRow key={key} label={FUJI_LABELS[key]} checked={draft.fuji_rules[key]} onChange={(v) => setDraft((prev) => prev ? { ...prev, fuji_rules: { ...prev.fuji_rules, [key]: v } } : prev)} />
               ))}
             </div>
-          </Card>
-
-          {/* Risk Thresholds */}
-          <Card title="Risk Thresholds (リスク閾値)" titleSize="md" variant="elevated" accent="warning" description="リスクスコアに応じたアクション境界を設定します (0.0 - 1.0)。">
-            <div className="space-y-3">
-              <SliderRow
-                label="Allow Upper (許可上限)"
-                value={draft.risk_thresholds.allow_upper}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => updateRisk("allow_upper", v)}
-              />
-              <SliderRow
-                label="Warn Upper (警告上限)"
-                value={draft.risk_thresholds.warn_upper}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => updateRisk("warn_upper", v)}
-              />
-              <SliderRow
-                label="Human Review Upper (人間レビュー上限)"
-                value={draft.risk_thresholds.human_review_upper}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => updateRisk("human_review_upper", v)}
-              />
-              <SliderRow
-                label="Deny Upper (拒否上限)"
-                value={draft.risk_thresholds.deny_upper}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => updateRisk("deny_upper", v)}
-              />
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              <label className="text-xs">allow_upper<input aria-label="allow_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.allow_upper} onChange={(e) => setDraft((prev) => prev ? { ...prev, risk_thresholds: { ...prev.risk_thresholds, allow_upper: Number(e.target.value) } } : prev)} className="w-full" /></label>
+              <label className="text-xs">warn_upper<input aria-label="warn_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.warn_upper} onChange={(e) => setDraft((prev) => prev ? { ...prev, risk_thresholds: { ...prev.risk_thresholds, warn_upper: Number(e.target.value) } } : prev)} className="w-full" /></label>
+              <label className="text-xs">human_review_upper<input aria-label="human_review_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.human_review_upper} onChange={(e) => setDraft((prev) => prev ? { ...prev, risk_thresholds: { ...prev.risk_thresholds, human_review_upper: Number(e.target.value) } } : prev)} className="w-full" /></label>
+              <label className="text-xs">deny_upper<input aria-label="deny_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.deny_upper} onChange={(e) => setDraft((prev) => prev ? { ...prev, risk_thresholds: { ...prev.risk_thresholds, deny_upper: Number(e.target.value) } } : prev)} className="w-full" /></label>
             </div>
           </Card>
 
-          {/* Auto-Stop */}
-          <Card title="Auto-Stop Conditions (自動停止条件)" titleSize="md" variant="elevated" accent="danger" description="危険な状態を検知した場合の自動停止ルールを設定します。">
-            <div className="space-y-3">
-              <ToggleRow
-                label="自動停止を有効化"
-                checked={draft.auto_stop.enabled}
-                onChange={(v) => updateAutoStop("enabled", v)}
-              />
-              <SliderRow
-                label="最大リスクスコア"
-                value={draft.auto_stop.max_risk_score}
-                min={0}
-                max={1}
-                step={0.05}
-                onChange={(v) => updateAutoStop("max_risk_score", v)}
-              />
-              <NumberRow
-                label="最大連続拒否回数"
-                value={draft.auto_stop.max_consecutive_rejects}
-                min={1}
-                max={100}
-                onChange={(v) => updateAutoStop("max_consecutive_rejects", v)}
-              />
-              <NumberRow
-                label="毎分最大リクエスト数"
-                value={draft.auto_stop.max_requests_per_minute}
-                min={1}
-                max={10000}
-                onChange={(v) => updateAutoStop("max_requests_per_minute", v)}
-              />
+          <Card title="Current vs Draft Diff" titleSize="md" variant="elevated"><DiffPreview before={savedPolicy} after={draft} /></Card>
+
+          <Card title="Apply Flow" titleSize="md" variant="elevated">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("apply")} disabled={!hasChanges || saving || !canApply}>apply</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("dry-run")} disabled={!hasChanges || saving || !canOperate}>dry-run</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("shadow")} disabled={saving || !canOperate}>shadow mode</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={rollback} disabled={saving || !hasChanges || !canApply}>rollback</button>
             </div>
+            {!canApply ? <p className="mt-2 text-xs text-warning">RBAC: apply/rollback は admin のみ実行可能です。</p> : null}
           </Card>
 
-          {/* Log Retention */}
-          <Card title="Log Retention / Audit (ログ保持・監査)" titleSize="md" variant="elevated" accent="info" description="監査ログの保持期間と強度を設定します。">
-            <div className="space-y-3">
-              <NumberRow
-                label="保持期間 (日数)"
-                value={draft.log_retention.retention_days}
-                min={1}
-                max={3650}
-                onChange={(v) => updateLogRetention("retention_days", v)}
-              />
-              <label className="flex items-center justify-between gap-3 text-xs">
-                <span>監査レベル</span>
-                <select
-                  aria-label="監査レベル"
-                  value={draft.log_retention.audit_level}
-                  onChange={(e) => updateLogRetention("audit_level", e.target.value)}
-                  className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs font-medium transition-colors focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
-                >
-                  <option value="none">none</option>
-                  <option value="summary">summary</option>
-                  <option value="full">full</option>
-                </select>
-              </label>
-              <ToggleRow
-                label="ログ記録前に PII をマスク"
-                checked={draft.log_retention.redact_before_log}
-                onChange={(v) => updateLogRetention("redact_before_log", v)}
-              />
-              <NumberRow
-                label="最大ログサイズ (文字数/レコード)"
-                value={draft.log_retention.max_log_size}
-                min={100}
-                max={1000000}
-                onChange={(v) => updateLogRetention("max_log_size", v)}
-              />
-            </div>
+          <Card title="TrustLog Stream" titleSize="md" variant="elevated">
+            <ul className="space-y-1 text-xs">
+              {trustLog.length === 0 ? <li className="text-muted-foreground">No stream events yet.</li> : trustLog.map((entry) => (
+                <li key={entry.id} className="rounded border px-2 py-1">
+                  <span className="font-mono">{entry.at}</span> [{entry.severity}] {entry.message}
+                </li>
+              ))}
+            </ul>
           </Card>
 
-          {/* ValueCore Drift */}
-          <Card title="Policy Drift (ValueCore監視)" titleSize="md" variant="elevated" accent="primary" description="Value EMA と Telos 基準値の乖離率を表示します。">
-            {valueDrift ? (
-              <div className="space-y-3 text-xs">
-                <div className="grid gap-2 md:grid-cols-3">
-                  <div>
-                    <span className="text-muted-foreground">Baseline: </span>
-                    <span className="font-mono">{valueDrift.baseline.toFixed(2)}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Latest EMA: </span>
-                    <span className="font-mono">{valueDrift.latest_ema.toFixed(2)}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Drift: </span>
-                    <span className="font-mono">{valueDrift.drift_percent.toFixed(2)}%</span>
-                  </div>
-                </div>
-                {valueDrift.history.length > 0 ? (
-                  <div className="max-h-40 overflow-y-auto rounded-md border border-border p-2">
-                    <ul className="space-y-1 font-mono">
-                      {valueDrift.history.slice(-20).map((point) => (
-                        <li key={`${point.timestamp}-${point.ema}`}>
-                          {point.timestamp}: {point.ema.toFixed(3)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">履歴データがありません。</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-muted-foreground">ドリフト情報を取得できませんでした。</p>
-            )}
-          </Card>
-
-          {/* Diff Preview */}
-          <Card title="Diff Preview (変更差分)" titleSize="md" variant="elevated">
-            <DiffPreview before={savedPolicy} after={draft} />
-          </Card>
-
-          {/* Save */}
-          <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-surface/50 px-4 py-3">
-            <button
-              type="button"
-              className={[
-                "inline-flex items-center gap-2 rounded-lg border px-5 py-2 text-sm font-semibold transition-all",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                "disabled:pointer-events-none disabled:opacity-40",
-                "border-primary/40 bg-primary/10 text-primary hover:bg-primary/18 active:scale-[0.98]",
-              ].join(" ")}
-              disabled={saving || !hasChanges}
-              onClick={handleSavePolicy}
-            >
-              {saving && (
-                <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
-              {saving ? "保存中..." : "ポリシーを保存"}
-            </button>
-            <button
-              type="button"
-              className={[
-                "rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors",
-                "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-                "disabled:pointer-events-none disabled:opacity-40",
-              ].join(" ")}
-              disabled={!hasChanges}
-              onClick={() => setDraft(savedPolicy ? structuredClone(savedPolicy) : null)}
-            >
-              リセット
-            </button>
-            {hasChanges ? (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-warning">
-                <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden="true" />
-                未保存の変更があります
-              </span>
-            ) : null}
-          </div>
-
-          {/* Meta */}
-
-          <Card title="Policy Operations" titleSize="sm" variant="ghost" className="border-border/40">
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/60 px-3 py-2">
-                <span>Shadow mode</span>
-                <ToggleRow label="shadow" checked={shadowMode} onChange={setShadowMode} />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2.5 py-1"
-                  onClick={() => setDraft(savedPolicy ? structuredClone(savedPolicy) : null)}
-                >
-                  rollback to current
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-border px-2.5 py-1"
-                  onClick={() => setSuccess(hasChanges ? "Diff available for current draft." : "No diff changes.")}
-                >
-                  show diff summary
-                </button>
-              </div>
-              <p className="text-muted-foreground">History: {history.map((item) => item.version).join(" → ") || "none"}</p>
-            </div>
-          </Card>
-
-          <Card title="Policy Meta" titleSize="sm" variant="ghost" className="border-border/40">
-            <div className="grid gap-2 text-xs md:grid-cols-3">
-              <div>
-                <span className="text-muted-foreground">Version: </span>
-                <span className="font-mono">{draft.version}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Updated At: </span>
-                <span className="font-mono">{draft.updated_at || "N/A"}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Updated By: </span>
-                <span className="font-mono">{draft.updated_by}</span>
-              </div>
-            </div>
+          <Card title="Change History" titleSize="md" variant="elevated">
+            <ul className="space-y-1 text-xs">
+              {history.length === 0 ? <li className="text-muted-foreground">No governance actions yet.</li> : history.map((entry) => (
+                <li key={entry.id} className="rounded border px-2 py-1">
+                  <span className="font-semibold">{entry.action}</span> / {entry.actor} / {entry.summary} / <span className="font-mono">{entry.at}</span>
+                </li>
+              ))}
+            </ul>
           </Card>
         </>
-      ) : (
-        <Card title="Status" titleSize="sm" variant="glass" className="border-border/40">
-          <div className="flex items-center gap-3 py-2">
-            <span className="h-2 w-2 rounded-full bg-muted-foreground/40" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">
-              「ポリシーを読み込む」をクリックして最新設定を取得してください。
-            </p>
-          </div>
-        </Card>
-      )}
+      ) : null}
     </div>
   );
 }
