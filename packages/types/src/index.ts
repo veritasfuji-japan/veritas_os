@@ -1,7 +1,10 @@
 export interface HealthResponse {
-  status: "ok" | "degraded" | "error";
-  service: string;
-  timestamp: string;
+  ok: boolean;
+  uptime: number;
+  checks: {
+    pipeline: string;
+    memory: string;
+  };
 }
 
 export interface ApiError {
@@ -19,11 +22,17 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
 
   const response = value as Record<string, unknown>;
 
-  return (
-    (response.status === "ok" || response.status === "degraded" || response.status === "error") &&
-    typeof response.service === "string" &&
-    typeof response.timestamp === "string"
-  );
+  if (typeof response.ok !== "boolean" || typeof response.uptime !== "number") {
+    return false;
+  }
+
+  if (typeof response.checks !== "object" || response.checks === null) {
+    return false;
+  }
+
+  const checks = response.checks as Record<string, unknown>;
+
+  return typeof checks.pipeline === "string" && typeof checks.memory === "string";
 }
 
 export { isDecideResponse } from "./decision";
