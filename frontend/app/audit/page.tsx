@@ -158,6 +158,19 @@ export default function TrustLogExplorerPage(): JSX.Element {
     return items.find((item) => item.request_id === selectedDecisionId) ?? null;
   }, [items, selectedDecisionId]);
 
+
+  const auditSummary = useMemo(() => {
+    const total = filteredItems.length;
+    const mismatches = filteredItems.reduce((count, item, index) => {
+      const previous = filteredItems[index + 1];
+      if (!previous?.sha256 || !item.sha256_prev) {
+        return count;
+      }
+      return count + (item.sha256_prev === previous.sha256 ? 0 : 1);
+    }, 0);
+    const rejected = filteredItems.filter((item) => isRejectedEntry(item)).length;
+    return { total, mismatches, rejected };
+  }, [filteredItems]);
   const previousEntry = useMemo(() => {
     if (!selectedDecisionEntry) {
       return null;
@@ -615,6 +628,30 @@ export default function TrustLogExplorerPage(): JSX.Element {
           <p className="text-sm text-danger">{error}</p>
         </div>
       ) : null}
+
+      <Card title="Audit Summary" titleSize="sm" variant="elevated">
+        <div className="grid gap-3 md:grid-cols-3 text-xs">
+          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
+            <p className="text-muted-foreground">Entries</p>
+            <p className="font-mono font-semibold text-foreground">{auditSummary.total}</p>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
+            <p className="text-muted-foreground">Chain mismatch</p>
+            <p className={`font-mono font-semibold ${auditSummary.mismatches > 0 ? "text-danger" : "text-success"}`}>{auditSummary.mismatches}</p>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-background/60 p-3">
+            <p className="text-muted-foreground">Rejected</p>
+            <p className="font-mono font-semibold text-warning">{auditSummary.rejected}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-1 overflow-auto rounded-lg border border-border/50 bg-muted/20 px-2 py-2">
+          {filteredItems.slice(0, 24).map((item, index) => {
+            const previous = filteredItems[index + 1];
+            const ok = !previous?.sha256 || !item.sha256_prev || item.sha256_prev === previous.sha256;
+            return <span key={`${item.request_id ?? index}-${index}`} className={`h-2 w-4 rounded-sm ${ok ? "bg-success/70" : "bg-danger"}`} title={`${item.stage ?? "unknown"}`} />;
+          })}
+        </div>
+      </Card>
 
       <Card title="Timeline" titleSize="md" variant="elevated">
         <div className="mb-3 flex items-center gap-3">

@@ -224,9 +224,9 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
-      expect(screen.getByText("FUJI Gate Status")).toBeInTheDocument();
-      expect(screen.getByText("MODIFY")).toBeInTheDocument();
-      expect(screen.getByText("Step Expansion")).toBeInTheDocument();
+      expect(screen.getByText("FUJI Gate Violation Analysis")).toBeInTheDocument();
+      expect(screen.getByText(/Rejection reason:/i)).toBeInTheDocument();
+      expect(screen.getByText("Stage Drilldown")).toBeInTheDocument();
       expect(screen.getByText("Mask PII · Planner generated step", { exact: false })).toBeInTheDocument();
     });
   });

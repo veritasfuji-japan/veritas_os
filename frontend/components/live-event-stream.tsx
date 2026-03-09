@@ -256,6 +256,18 @@ export function LiveEventStream(): JSX.Element {
                 <pre className="overflow-auto text-[11px] leading-relaxed text-foreground/80">
                   {JSON.stringify(event.payload, null, 2)}
                 </pre>
+                <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
+                  {typeof (event.payload as Record<string, unknown>)?.request_id === "string" && (
+                    <a className="rounded border border-border px-2 py-1" href={`/audit?request_id=${encodeURIComponent(String((event.payload as Record<string, unknown>).request_id))}`}>
+                      open request trail
+                    </a>
+                  )}
+                  {typeof (event.payload as Record<string, unknown>)?.decision_id === "string" && (
+                    <a className="rounded border border-border px-2 py-1" href={`/console?decision_id=${encodeURIComponent(String((event.payload as Record<string, unknown>).decision_id))}`}>
+                      open decision
+                    </a>
+                  )}
+                </div>
               </article>
             );
           })

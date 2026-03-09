@@ -301,6 +301,8 @@ export default function GovernanceControlPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [valueDrift, setValueDrift] = useState<ValueDriftMetrics | null>(null);
+  const [shadowMode, setShadowMode] = useState(false);
+  const [history, setHistory] = useState<GovernancePolicy[]>([]);
 
   const hasChanges = useMemo(
     () => draft !== null && savedPolicy !== null && !deepEqual(savedPolicy, draft),
@@ -354,6 +356,7 @@ export default function GovernanceControlPage(): JSX.Element {
       }
       setSavedPolicy(validation.data.policy);
       setDraft(structuredClone(validation.data.policy));
+      setHistory((current) => [validation.data.policy, ...current].slice(0, 6));
       void fetchValueDrift();
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
@@ -392,6 +395,7 @@ export default function GovernanceControlPage(): JSX.Element {
       }
       setSavedPolicy(validation.data.policy);
       setDraft(structuredClone(validation.data.policy));
+      setHistory((current) => [validation.data.policy, ...current].slice(0, 6));
       setSuccess("ポリシーを更新しました。");
     } catch {
       setError("ネットワークエラー: バックエンドへ接続できません。");
@@ -714,6 +718,33 @@ export default function GovernanceControlPage(): JSX.Element {
           </div>
 
           {/* Meta */}
+
+          <Card title="Policy Operations" titleSize="sm" variant="ghost" className="border-border/40">
+            <div className="space-y-2 text-xs">
+              <div className="flex items-center justify-between rounded-md border border-border/60 bg-background/60 px-3 py-2">
+                <span>Shadow mode</span>
+                <ToggleRow label="shadow" checked={shadowMode} onChange={setShadowMode} />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2.5 py-1"
+                  onClick={() => setDraft(savedPolicy ? structuredClone(savedPolicy) : null)}
+                >
+                  rollback to current
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2.5 py-1"
+                  onClick={() => setSuccess(hasChanges ? "Diff available for current draft." : "No diff changes.")}
+                >
+                  show diff summary
+                </button>
+              </div>
+              <p className="text-muted-foreground">History: {history.map((item) => item.version).join(" → ") || "none"}</p>
+            </div>
+          </Card>
+
           <Card title="Policy Meta" titleSize="sm" variant="ghost" className="border-border/40">
             <div className="grid gap-2 text-xs md:grid-cols-3">
               <div>
