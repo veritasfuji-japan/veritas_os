@@ -1,4 +1,5 @@
 export const PIPELINE_STAGES = [
+  "Input",
   "Evidence",
   "Critique",
   "Debate",
@@ -7,6 +8,8 @@ export const PIPELINE_STAGES = [
   "FUJI",
   "TrustLog",
 ] as const;
+
+export type PipelineStageName = (typeof PIPELINE_STAGES)[number];
 
 export const DANGER_PRESETS = [
   {

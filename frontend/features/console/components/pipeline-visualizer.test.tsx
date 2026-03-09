@@ -18,13 +18,13 @@ describe("PipelineVisualizer", () => {
     render(<PipelineVisualizer loading={false} result={null} error={null} />);
 
     expect(screen.getByText("Pipeline Operations View")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /1\. Evidence/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /7\. TrustLog/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /1\. Input/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /8\. TrustLog/i })).toBeInTheDocument();
 
     const items = screen.getAllByRole("listitem");
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(8);
 
-    fireEvent.click(screen.getByRole("button", { name: /2\. Critique/i }));
+    fireEvent.click(screen.getByRole("button", { name: /3\. Critique/i }));
     expect(screen.getByText("Critique details")).toBeInTheDocument();
     expect(screen.getByText("status: idle")).toBeInTheDocument();
   });

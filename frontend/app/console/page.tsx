@@ -7,6 +7,7 @@ import { renderValue, toArray } from "../../features/console/analytics/utils";
 import { useDecide } from "../../features/console/api/useDecide";
 import { ChatPanel } from "../../features/console/components/chat-panel";
 import { CostBenefitPanel } from "../../features/console/components/cost-benefit-panel";
+import { DecisionResultPanel } from "../../features/console/components/decision-result-panel";
 import { DriftAlert } from "../../features/console/components/drift-alert";
 import { EUAIActDisclosure } from "../../features/console/components/eu-ai-act-disclosure";
 import { FujiGateStatusPanel } from "../../features/console/components/fuji-gate-status-panel";
@@ -52,7 +53,7 @@ export default function DecisionConsolePage(): JSX.Element {
         className="border-primary/20"
       >
         <div className="text-sm text-muted-foreground">
-          Input → pipeline execution → FUJI safety judgment → decision comparison → TrustLog and Replay.
+          Input → Evidence → Critique → Debate → Plan → Value → FUJI → TrustLog.
         </div>
       </Card>
 
@@ -83,14 +84,7 @@ export default function DecisionConsolePage(): JSX.Element {
         {result ? (
           <div className="space-y-4">
             <EUAIActDisclosure result={result} />
-            <div className="grid gap-3 md:grid-cols-3">
-              <ResultSection title="Chosen" value={result.chosen} />
-              <ResultSection title="Alternatives" value={toArray(result.alternatives)} />
-              <ResultSection
-                title="Rejected reasons"
-                value={{ rejection_reason: result.rejection_reason, gate_reason: (result.gate as Record<string, unknown>).reason }}
-              />
-            </div>
+            <DecisionResultPanel result={result} />
             <div className="grid gap-3 md:grid-cols-3">
               <ResultSection title="Evidence sources" value={toArray(result.evidence).map((item) => (item as Record<string, unknown>).source)} />
               <ResultSection title="Critique highlights" value={toArray(result.critique).slice(0, 5)} />
@@ -100,11 +94,15 @@ export default function DecisionConsolePage(): JSX.Element {
             <div className="flex flex-wrap gap-2">
               <span className="rounded-md border border-border px-2 py-1 text-xs">decision_id: {decisionId}</span>
               <a className="rounded-md border border-border px-2 py-1 text-xs" href={`/audit?request_id=${encodeURIComponent(result.request_id)}`}>
-                Trust Log
+                TrustLog
               </a>
-              <button type="button" className="rounded-md border border-border px-2 py-1 text-xs" onClick={() => {
-                window.location.href = `/console?decision_id=${encodeURIComponent(decisionId)}`;
-              }}>
+              <button
+                type="button"
+                className="rounded-md border border-border px-2 py-1 text-xs"
+                onClick={() => {
+                  window.location.href = `/console?decision_id=${encodeURIComponent(decisionId)}`;
+                }}
+              >
                 Replay
               </button>
             </div>
@@ -124,7 +122,8 @@ export default function DecisionConsolePage(): JSX.Element {
         ) : (
           <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground">Start with a real decision question.</p>
-            <p className="mt-1">You will see live pipeline progression, FUJI safety checks, alternatives trade-offs, and auditable TrustLog links in one run.</p>
+            <p className="mt-1">Try prompts like: &quot;Should we delay launch by 2 weeks for security hardening?&quot; or &quot;Choose vendor A vs B under strict budget and compliance constraints.&quot;</p>
+            <p className="mt-1">You will see stage progression, FUJI safety checks, chosen vs alternatives, rejection reasons, and direct TrustLog/Replay links.</p>
           </div>
         )}
       </Card>
