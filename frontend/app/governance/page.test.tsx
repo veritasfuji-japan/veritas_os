@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import GovernanceControlPage from "./page";
 
 afterEach(() => {
@@ -7,201 +7,139 @@ afterEach(() => {
 });
 
 const MOCK_POLICY = {
-  version: "governance_v1",
-  fuji_rules: {
-    pii_check: true,
-    self_harm_block: true,
-    illicit_block: true,
-    violence_review: true,
-    minors_review: true,
-    keyword_hard_block: true,
-    keyword_soft_flag: true,
-    llm_safety_head: true,
+  ok: true,
+  policy: {
+    version: "governance_v1",
+    fuji_rules: {
+      pii_check: true,
+      self_harm_block: true,
+      illicit_block: true,
+      violence_review: true,
+      minors_review: true,
+      keyword_hard_block: true,
+      keyword_soft_flag: true,
+      llm_safety_head: true,
+    },
+    risk_thresholds: {
+      allow_upper: 0.4,
+      warn_upper: 0.65,
+      human_review_upper: 0.85,
+      deny_upper: 1.0,
+    },
+    auto_stop: {
+      enabled: true,
+      max_risk_score: 0.85,
+      max_consecutive_rejects: 5,
+      max_requests_per_minute: 60,
+    },
+    log_retention: {
+      retention_days: 90,
+      audit_level: "full",
+      include_fields: ["status", "risk"],
+      redact_before_log: true,
+      max_log_size: 10000,
+    },
+    updated_at: "2026-02-12T00:00:00+00:00",
+    updated_by: "system",
   },
-  risk_thresholds: {
-    allow_upper: 0.4,
-    warn_upper: 0.65,
-    human_review_upper: 0.85,
-    deny_upper: 1.0,
-  },
-  auto_stop: {
-    enabled: true,
-    max_risk_score: 0.85,
-    max_consecutive_rejects: 5,
-    max_requests_per_minute: 60,
-  },
-  log_retention: {
-    retention_days: 90,
-    audit_level: "full",
-    include_fields: ["status", "risk", "reasons", "violations", "categories"],
-    redact_before_log: true,
-    max_log_size: 10000,
-  },
-  updated_at: "2026-02-12T00:00:00Z",
-  updated_by: "system",
 };
 
-const MOCK_VALUE_DRIFT = {
-  baseline: 0.5,
-  latest_ema: 0.6,
-  drift_percent: 20.0,
-  history: [
-    { ema: 0.5, timestamp: "t1" },
-    { ema: 0.6, timestamp: "t2" },
-  ],
-  status: "ok",
-};
+beforeEach(() => {
+  let seq = 0;
+  vi.stubGlobal("crypto", { randomUUID: vi.fn(() => `uuid-${seq++}`) });
+  vi.stubGlobal("confirm", vi.fn(() => true));
+});
 
-function mockFetchPolicy(): ReturnType<typeof vi.spyOn> {
-  return vi
-    .spyOn(global, "fetch")
-    .mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true, policy: MOCK_POLICY }),
-    } as Response)
-    .mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true, value_drift: MOCK_VALUE_DRIFT }),
-    } as Response);
+function mockPolicyFetch(): ReturnType<typeof vi.spyOn> {
+  return vi.spyOn(global, "fetch").mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => MOCK_POLICY,
+  } as Response);
 }
 
 describe("GovernanceControlPage", () => {
-  it("renders header and connection card", () => {
+  it("renders governance header and load button", () => {
     render(<GovernanceControlPage />);
-    expect(screen.getByText("Governance Control")).toBeInTheDocument();
-    expect(screen.getByText("ポリシーを読み込む")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Governance Control" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ポリシーを読み込む" })).toBeInTheDocument();
   });
 
-  it("loads and displays policy sections after fetch", async () => {
-    mockFetchPolicy();
+  it("loads policy and shows control-plane sections", async () => {
+    mockPolicyFetch();
     render(<GovernanceControlPage />);
 
-    // Enter API key and click load
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("FUJI Rules")).toBeInTheDocument();
-      expect(screen.getByText("Risk Thresholds (リスク閾値)")).toBeInTheDocument();
-      expect(screen.getByText("Auto-Stop Conditions (自動停止条件)")).toBeInTheDocument();
-      expect(screen.getByText("Log Retention / Audit (ログ保持・監査)")).toBeInTheDocument();
-      expect(screen.getByText("Diff Preview (変更差分)")).toBeInTheDocument();
-    });
-  });
-
-  it("shows FUJI rule toggles", async () => {
-    mockFetchPolicy();
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("PII Check (個人情報検査)")).toBeInTheDocument();
-      expect(screen.getByText("LLM Safety Head (AI安全ヘッド)")).toBeInTheDocument();
-    });
-  });
-
-  it("shows diff preview when a toggle is changed", async () => {
-    mockFetchPolicy();
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("PII Check (個人情報検査)")).toBeInTheDocument();
-    });
-
-    // Toggle PII check off
-    const piiToggle = screen.getByRole("switch", { name: "PII Check (個人情報検査)" });
-    fireEvent.click(piiToggle);
-
-    // Should show unsaved warning
-    expect(screen.getByText("未保存の変更があります")).toBeInTheDocument();
-  });
-
-  it("shows no-change message when policy is unchanged", async () => {
-    mockFetchPolicy();
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("変更はありません。")).toBeInTheDocument();
-    });
-  });
-
-  it("sends PUT on save and shows success", async () => {
-    const fetchMock = vi
-      .spyOn(global, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, policy: MOCK_POLICY }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ ok: true, value_drift: MOCK_VALUE_DRIFT }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          ok: true,
-          policy: { ...MOCK_POLICY, fuji_rules: { ...MOCK_POLICY.fuji_rules, pii_check: false } },
-        }),
-      } as Response);
-
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("FUJI Rules")).toBeInTheDocument();
-    });
-
-    // Toggle a rule to enable save button
-    fireEvent.click(screen.getByRole("switch", { name: "PII Check (個人情報検査)" }));
-
-    fireEvent.click(screen.getByText("ポリシーを保存"));
-
-    await waitFor(() => {
-      expect(screen.getByText("ポリシーを更新しました。")).toBeInTheDocument();
-    });
-
-    // PUT was called
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    const putCall = fetchMock.mock.calls[2];
-    expect(putCall?.[1]?.method).toBe("PUT");
-  });
-
-  it("shows policy meta section", async () => {
-    mockFetchPolicy();
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
       expect(screen.getByText("Policy Meta")).toBeInTheDocument();
-      expect(screen.getByText("governance_v1")).toBeInTheDocument();
+      expect(screen.getByText("FUJI rules / thresholds / escalation")).toBeInTheDocument();
+      expect(screen.getByText("Current vs Draft Diff")).toBeInTheDocument();
+      expect(screen.getByText("Apply Flow")).toBeInTheDocument();
+      expect(screen.getByText("Change History")).toBeInTheDocument();
     });
   });
 
-  it("resets draft to saved policy on reset button click", async () => {
-    mockFetchPolicy();
+  it("shows policy state model fields", async () => {
+    mockPolicyFetch();
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
+
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(screen.getByText("FUJI Rules")).toBeInTheDocument();
+      expect(screen.getByText(/^policy version:/i)).toBeInTheDocument();
+      expect(screen.getByText(/effective_at:/i)).toBeInTheDocument();
+      expect(screen.getByText(/last_applied:/i)).toBeInTheDocument();
+      expect(screen.getByText(/updated_by:/i)).toBeInTheDocument();
     });
-
-    // Toggle a rule
-    fireEvent.click(screen.getByRole("switch", { name: "PII Check (個人情報検査)" }));
-    expect(screen.getByText("未保存の変更があります")).toBeInTheDocument();
-
-    // Click reset
-    fireEvent.click(screen.getByText("リセット"));
-    expect(screen.getByText("変更はありません。")).toBeInTheDocument();
   });
 
-  it("shows validation error when policy response shape is invalid", async () => {
+  it("supports draft edits and displays diff entries", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "PII Check" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
+    expect(screen.getByText("fuji_rules.pii_check")).toBeInTheDocument();
+  });
+
+  it("applies RBAC gating in UI", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "apply" })).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
+    expect(screen.getByRole("button", { name: "apply" })).toBeDisabled();
+    expect(screen.getByText("RBAC: apply/rollback は admin のみ実行可能です。")).toBeInTheDocument();
+  });
+
+  it("executes dry-run and shows status", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "dry-run" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
+    fireEvent.click(screen.getByRole("button", { name: "dry-run" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toHaveTextContent("Dry-run を完了しました。適用はされていません。");
+    });
+  });
+
+  it("shows validation error for malformed policy responses", async () => {
     vi.spyOn(global, "fetch").mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -209,25 +147,10 @@ describe("GovernanceControlPage", () => {
     } as Response);
 
     render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/^レスポンス形式エラー: policy\./),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("alert")).toHaveTextContent("レスポンスの検証に失敗しました");
     });
   });
-
-
-  it("shows value drift card with drift metrics", async () => {
-    mockFetchPolicy();
-    render(<GovernanceControlPage />);
-    fireEvent.click(screen.getByText("ポリシーを読み込む"));
-
-    await waitFor(() => {
-      expect(screen.getByText("Policy Drift (ValueCore監視)")).toBeInTheDocument();
-      expect(screen.getByText("20.00%")).toBeInTheDocument();
-    });
-  });
-
 });
