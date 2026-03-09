@@ -44,6 +44,18 @@ function getString(item: TrustLogItem, key: string): string {
 }
 
 /**
+ * Builds a deterministic key for timeline rows without relying on array indices.
+ */
+function buildTimelineKey(item: TrustLogItem): string {
+  const requestId = typeof item.request_id === "string" ? item.request_id : "unknown";
+  const decisionId = typeof item.decision_id === "string" ? item.decision_id : "-";
+  const timestamp = typeof item.created_at === "string" ? item.created_at : "-";
+  const hash = typeof item.sha256 === "string" ? item.sha256 : "-";
+  const prevHash = typeof item.sha256_prev === "string" ? item.sha256_prev : "-";
+  return `${requestId}:${decisionId}:${timestamp}:${hash}:${prevHash}`;
+}
+
+/**
  * Classifies a single hash chain link for audit visualization.
  */
 function classifyChain(item: TrustLogItem, previous: TrustLogItem | null): ChainResult {
@@ -383,7 +395,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
           {filteredItems.map((item, index) => {
             const chain = classifyChain(item, filteredItems[index + 1] ?? null);
             return (
-              <li key={`${item.request_id ?? "unknown"}-${index}`}>
+              <li key={buildTimelineKey(item)}>
                 <button type="button" onClick={() => setSelected(item)} className="w-full rounded border border-border px-3 py-2 text-left text-xs">
                   <div className="grid grid-cols-2 gap-1 md:grid-cols-6">
                     <span>{getString(item, "severity")}</span>
