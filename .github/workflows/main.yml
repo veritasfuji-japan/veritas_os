@@ -261,10 +261,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Prepare Playwright cache directories
+        if: matrix.gate == 'e2e'
+        run: mkdir -p "$HOME/.cache/ms-playwright/.links"
+
       - name: Install Playwright browsers
         if: matrix.gate == 'e2e'
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: pnpm e2e:install
+
+      - name: Verify Playwright browser install
+        if: matrix.gate == 'e2e'
+        working-directory: frontend
+        run: |
+          mkdir -p "$HOME/.cache/ms-playwright/.links"
+          pnpm exec playwright install --list
 
       - name: Build frontend
         if: matrix.gate == 'e2e'

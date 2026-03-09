@@ -30,8 +30,8 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("value").length).toBeGreaterThanOrEqual(2);
-      expect(screen.getAllByText("fuji").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(/req:req-1/)).toBeInTheDocument();
+      expect(screen.getByText(/req:req-2/)).toBeInTheDocument();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -193,7 +193,9 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "JSON生成" }));
 
     await waitFor(() => {
-      expect(screen.getByText("entries: 2 / mismatches: 0")).toBeInTheDocument();
+      expect(
+        screen.getByText("entries: 2 / mismatches: 0 / redaction: strict"),
+      ).toBeInTheDocument();
     });
 
     expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
@@ -271,6 +273,7 @@ describe("TrustLogExplorerPage", () => {
     expect(screen.getByLabelText("検証対象の意思決定ID")).toBeInTheDocument();
     expect(screen.getByLabelText("監査レポート開始日")).toBeInTheDocument();
     expect(screen.getByLabelText("監査レポート終了日")).toBeInTheDocument();
+    expect(screen.getByLabelText("redaction mode")).toBeInTheDocument();
   });
 
 });

@@ -9,13 +9,14 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 1. /console — render preset buttons and pipeline stages
   test("Console page renders pipeline and presets", async ({ page }) => {
     await page.goto("/console");
-    // Use heading role to avoid strict-mode clash with the sidebar nav text
-    await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
-    await expect(page.getByText("Pipeline Operations View")).toBeVisible();
-    await expect(page.locator("li", { hasText: "Evidence" })).toBeVisible();
-    // Scope to <li> so strict mode won't match the separate "FUJI Gate Status" heading
+    await expect(
+      page.getByRole("heading", { name: /(Decision Console|意思決定コンソール)/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/(Pipeline Operations View|パイプライン)/),
+    ).toBeVisible();
+    await expect(page.locator("li", { hasText: /(Evidence|証拠)/ })).toBeVisible();
     await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
-    // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
     await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
 
     const presetButtons = page.locator("button").filter({ hasText: "..." });
@@ -30,17 +31,21 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 2. /audit — TrustLog explorer renders
   test("Audit page renders TrustLog explorer", async ({ page }) => {
     await page.goto("/audit");
-    await expect(page.getByRole("heading", { name: "TrustLog Explorer" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /TrustLog Explorer/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /request_id (検索|Search)/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Timeline/i })).toBeVisible();
     await expect(page.getByPlaceholder("request_id")).toBeVisible();
   });
 
   // 3. /governance — load governance UI
   test("Governance page renders controls", async ({ page }) => {
     await page.goto("/governance");
-    await expect(page.getByRole("heading", { name: "Governance Control" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /(ポリシーを読み込む|Load policy)/ })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /(Governance Control|ガバナンス)/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /(ポリシーを読み込む|Load policy)/ }),
+    ).toBeVisible();
   });
 
   // 4. Navigation works across all pages
@@ -48,16 +53,13 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Command Dashboard" })).toBeVisible();
 
-    // Click Console
-    await page.getByRole("link", { name: /Decision Console/i }).click();
+    await page.locator('a[href="/console"]').first().click();
     await expect(page).toHaveURL(/\/console/);
 
-    // Click Governance
-    await page.getByRole("link", { name: /Governance Control/i }).click();
+    await page.locator('a[href="/governance"]').first().click();
     await expect(page).toHaveURL(/\/governance/);
 
-    // Click Audit
-    await page.getByRole("link", { name: /TrustLog Explorer/i }).click();
+    await page.locator('a[href="/audit"]').first().click();
     await expect(page).toHaveURL(/\/audit/);
   });
 });
@@ -85,6 +87,7 @@ test.describe("Accessibility (axe)", () => {
   for (const { path, name } of pages) {
     test(`${name} page passes axe checks`, async ({ page }) => {
       await page.goto(path);
+      await expect(page.locator("main")).toBeVisible();
       // Wait for hydration and client-side rendering to finish
       await page.waitForLoadState("networkidle");
       // Extra settle time for React hydration
