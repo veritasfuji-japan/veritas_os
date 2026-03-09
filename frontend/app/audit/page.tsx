@@ -474,6 +474,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
         )}
         variant="glass"
         accent="info"
+        className="border-info/15"
       >
         <div className="space-y-1 text-xs text-muted-foreground">
           <p>

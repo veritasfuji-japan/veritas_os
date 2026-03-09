@@ -1,3 +1,5 @@
+"use client";
+
 import { Card } from "@veritas/design-system";
 import { CriticalRail } from "./critical-rail";
 import { GlobalHealthSummary } from "./global-health-summary";
