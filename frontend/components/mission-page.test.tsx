@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { MissionPage } from "./mission-page";
 import { I18nProvider } from "./i18n-provider";
+import { MissionPage } from "./mission-page";
 
 describe("MissionPage", () => {
-  it("renders critical rail items and operational priorities", () => {
+  it("renders enhanced critical rail and global health summary", () => {
     render(
       <I18nProvider>
         <MissionPage
@@ -16,16 +16,14 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
+    expect(screen.getByText("Global Health Summary")).toBeInTheDocument();
+    expect(screen.getByText("Current band:", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Critical Rail")).toBeInTheDocument();
     expect(screen.getByText("FUJI reject")).toBeInTheDocument();
-    expect(screen.getByText("Replay mismatch")).toBeInTheDocument();
-    expect(screen.getByText("policy update")).toBeInTheDocument();
-    expect(screen.getByText("broken chain")).toBeInTheDocument();
-    expect(screen.getByText("risk burst")).toBeInTheDocument();
-    expect(screen.getByText(/#1 最優先/)).toBeInTheDocument();
+    expect(screen.getByText("Open incidents: 4")).toBeInTheDocument();
   });
 
-  it("renders system health states", () => {
+  it("renders action-oriented priority cards", () => {
     render(
       <I18nProvider>
         <MissionPage
@@ -36,8 +34,8 @@ describe("MissionPage", () => {
       </I18nProvider>,
     );
 
-    expect(screen.getByText("critical")).toBeInTheDocument();
-    expect(screen.getByText("degraded")).toBeInTheDocument();
-    expect(screen.getByText("health")).toBeInTheDocument();
+    expect(screen.getAllByText(/Why now/)).toHaveLength(3);
+    expect(screen.getAllByText(/Impact window/)).toHaveLength(3);
+    expect(screen.getByRole("link", { name: "Decision で triage" })).toHaveAttribute("href", "/console");
   });
 });

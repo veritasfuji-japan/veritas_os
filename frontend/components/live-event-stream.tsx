@@ -1,24 +1,111 @@
 "use client";
 
 import { Card } from "@veritas/design-system";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "./i18n-provider";
-import { useEffect, useRef, useState } from "react";
 
-interface StreamEvent {
-  id: string | number;
-  type: string;
-  ts: string;
-  payload: unknown;
-}
+type EventFilter = "all" | "critical" | "degraded" | "health";
+type EventSeverity = "critical" | "degraded" | "health";
+type EventStage = "detect" | "triage" | "mitigate" | "resolved";
+type EventType =
+  | "fuji_reject"
+  | "replay_mismatch"
+  | "policy_update_pending"
+  | "broken_hash_chain"
+  | "risk_burst";
 
-interface EventAction {
-  label: string;
-  href: string;
+interface LiveEvent {
+  id: string;
+  type: EventType;
+  severity: EventSeverity;
+  stage: EventStage;
+  request_id: string;
+  decision_id: string;
+  occurred_at: string;
+  owner: string;
+  linked_page: "decision" | "trustlog" | "governance" | "risk";
+  summary: string;
 }
 
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
 const AUTH_RETRY_PAUSE_MS = 60000;
+
+const FILTERS: EventFilter[] = ["all", "critical", "degraded", "health"];
+
+const EVENT_TYPE_LABEL: Record<EventType, string> = {
+  fuji_reject: "FUJI reject",
+  replay_mismatch: "replay mismatch",
+  policy_update_pending: "policy update pending",
+  broken_hash_chain: "broken hash chain",
+  risk_burst: "risk burst",
+};
+
+const STAGE_LABEL: Record<EventStage, string> = {
+  detect: "Detect",
+  triage: "Triage",
+  mitigate: "Mitigate",
+  resolved: "Resolved",
+};
+
+const LINKED_PAGE_ROUTE: Record<LiveEvent["linked_page"], string> = {
+  decision: "/console",
+  trustlog: "/audit",
+  governance: "/governance",
+  risk: "/risk",
+};
+
+const SEVERITY_STYLE: Record<EventSeverity, string> = {
+  critical: "border-danger/40 bg-danger/10 text-danger",
+  degraded: "border-warning/40 bg-warning/10 text-warning",
+  health: "border-success/40 bg-success/10 text-success",
+};
+
+const STAGE_STYLE: Record<EventStage, string> = {
+  detect: "bg-danger/10 text-danger",
+  triage: "bg-warning/10 text-warning",
+  mitigate: "bg-primary/10 text-primary",
+  resolved: "bg-success/10 text-success",
+};
+
+const SEED_EVENTS: LiveEvent[] = [
+  {
+    id: "evt-001",
+    type: "fuji_reject",
+    severity: "critical",
+    stage: "triage",
+    request_id: "req_9af21",
+    decision_id: "dec_2201",
+    occurred_at: "2026-03-09T06:12:10Z",
+    owner: "Fuji",
+    linked_page: "decision",
+    summary: "Reject burst detected under policy.v44. Manual split needed.",
+  },
+  {
+    id: "evt-002",
+    type: "replay_mismatch",
+    severity: "critical",
+    stage: "mitigate",
+    request_id: "req_9af09",
+    decision_id: "dec_2198",
+    occurred_at: "2026-03-09T06:10:22Z",
+    owner: "Kernel",
+    linked_page: "trustlog",
+    summary: "Replay mismatch persisted for 3 checks. Chain revalidation running.",
+  },
+  {
+    id: "evt-003",
+    type: "policy_update_pending",
+    severity: "degraded",
+    stage: "detect",
+    request_id: "req_9aef0",
+    decision_id: "dec_2195",
+    occurred_at: "2026-03-09T06:08:02Z",
+    owner: "Governance",
+    linked_page: "governance",
+    summary: "Sign-off pending for policy rollout v44, impact window active.",
+  },
+];
 
 function getReconnectDelayMs(attempt: number): number {
   const boundedAttempt = Math.max(0, attempt);
@@ -30,126 +117,62 @@ function getReconnectDelayMs(attempt: number): number {
   return Math.round(exponentialDelay * jitterFactor);
 }
 
-/**
- * Parse and dispatch SSE payload chunks emitted by the backend stream.
- *
- * We only consume `data:` lines and ignore heartbeat/comments, then emit a
- * complete event each time a blank line terminator is observed.
- */
-function processSseChunk(
-  chunk: string,
-  carry: string,
-  onData: (payload: string) => void,
-): string {
-  let buffer = `${carry}${chunk}`;
-
-  while (true) {
-    const terminatorIndex = buffer.indexOf("\n\n");
-    if (terminatorIndex === -1) {
-      break;
-    }
-
-    const rawEvent = buffer.slice(0, terminatorIndex);
-    buffer = buffer.slice(terminatorIndex + 2);
-
-    const data = rawEvent
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trimStart())
-      .join("\n")
-      .trim();
-
-    if (data) {
-      onData(data);
-    }
+function toLiveEvent(payload: unknown): LiveEvent | null {
+  if (typeof payload !== "object" || payload === null) {
+    return null;
   }
 
-  return buffer;
+  const record = payload as Partial<LiveEvent> & { type?: string };
+
+  const validType = Object.keys(EVENT_TYPE_LABEL).includes(record.type ?? "")
+    ? (record.type as EventType)
+    : null;
+
+  if (!validType || !record.id) {
+    return null;
+  }
+
+  if (!record.severity || !record.stage || !record.request_id || !record.decision_id || !record.occurred_at || !record.owner || !record.linked_page || !record.summary) {
+    return null;
+  }
+
+  return {
+    id: String(record.id),
+    type: validType,
+    severity: record.severity,
+    stage: record.stage,
+    request_id: record.request_id,
+    decision_id: record.decision_id,
+    occurred_at: record.occurred_at,
+    owner: record.owner,
+    linked_page: record.linked_page,
+    summary: record.summary,
+  } as LiveEvent;
 }
 
-/** Maps event type prefixes to a colour-class pair */
-function getEventTypeStyle(type: string): { dot: string; label: string } {
-  const lower = type.toLowerCase();
-  if (lower.includes("error") || lower.includes("fail") || lower.includes("deny")) {
-    return { dot: "bg-danger", label: "text-danger" };
+function buildLink(event: LiveEvent): string {
+  const base = LINKED_PAGE_ROUTE[event.linked_page];
+  if (event.linked_page === "decision") {
+    return `${base}?decision_id=${encodeURIComponent(event.decision_id)}`;
   }
-  if (lower.includes("warn") || lower.includes("alert") || lower.includes("drift")) {
-    return { dot: "bg-warning", label: "text-warning" };
+  if (event.linked_page === "trustlog" || event.linked_page === "risk") {
+    return `${base}?request_id=${encodeURIComponent(event.request_id)}`;
   }
-  if (lower.includes("success") || lower.includes("pass") || lower.includes("allow")) {
-    return { dot: "bg-success", label: "text-success" };
-  }
-  if (lower.includes("policy") || lower.includes("sync") || lower.includes("update")) {
-    return { dot: "bg-violet-500", label: "text-violet-400" };
-  }
-  return { dot: "bg-primary", label: "text-primary" };
-}
-
-/**
- * Build actionable links from an event payload.
- *
- * All events expose drill-down routes for Decision / TrustLog / Governance /
- * Risk so operators can move from signal to investigation in one click.
- */
-function buildEventActions(payload: Record<string, unknown>): EventAction[] {
-  const decisionId = typeof payload.decision_id === "string" ? payload.decision_id : "";
-  const requestId = typeof payload.request_id === "string" ? payload.request_id : "";
-  const policyId = typeof payload.policy_id === "string" ? payload.policy_id : "";
-
-  return [
-    {
-      label: "Decision",
-      href: decisionId ? `/console?decision_id=${encodeURIComponent(decisionId)}` : "/console",
-    },
-    {
-      label: "TrustLog",
-      href: requestId ? `/audit?request_id=${encodeURIComponent(requestId)}` : "/audit",
-    },
-    {
-      label: "Governance",
-      href: policyId ? `/governance?policy_id=${encodeURIComponent(policyId)}` : "/governance",
-    },
-    {
-      label: "Risk",
-      href: requestId ? `/risk?request_id=${encodeURIComponent(requestId)}` : "/risk",
-    },
-  ];
-}
-
-function getEventPriority(type: string, payload: Record<string, unknown>): "P1" | "P2" | "P3" {
-  const eventType = type.toLowerCase();
-  const riskScore = typeof payload.risk_score === "number" ? payload.risk_score : 0;
-
-  if (
-    eventType.includes("reject")
-    || eventType.includes("mismatch")
-    || eventType.includes("broken_chain")
-    || riskScore >= 0.9
-  ) {
-    return "P1";
-  }
-
-  if (
-    eventType.includes("policy")
-    || eventType.includes("warn")
-    || eventType.includes("burst")
-    || riskScore >= 0.75
-  ) {
-    return "P2";
-  }
-
-  return "P3";
+  return base;
 }
 
 export function LiveEventStream(): JSX.Element {
-  const { t, tk } = useI18n();
-  const [events, setEvents] = useState<StreamEvent[]>([]);
+  const { t } = useI18n();
+  const [events, setEvents] = useState<LiveEvent[]>(SEED_EVENTS);
   const [connected, setConnected] = useState(false);
   const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
+  const [ackedIds, setAckedIds] = useState<Set<string>>(new Set());
+  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const authPauseRef = useRef(false);
-
   const streamUrl = "/api/veritas/v1/events";
 
   useEffect(() => {
@@ -160,6 +183,7 @@ export function LiveEventStream(): JSX.Element {
       if (!mounted) {
         return;
       }
+
       if (reconnectRef.current) {
         clearTimeout(reconnectRef.current);
       }
@@ -168,10 +192,7 @@ export function LiveEventStream(): JSX.Element {
       controller = new AbortController();
 
       try {
-        const response = await fetch(streamUrl, {
-          signal: controller.signal,
-        });
-
+        const response = await fetch(streamUrl, { signal: controller.signal });
         if (!response.ok || !response.body) {
           if (response.status === 401 || response.status === 403) {
             const recoveryAt = Date.now() + AUTH_RETRY_PAUSE_MS;
@@ -187,27 +208,34 @@ export function LiveEventStream(): JSX.Element {
         setAuthRecoveryAt(null);
         setConnected(true);
         reconnectAttemptRef.current = 0;
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        let carry = "";
+        let buffer = "";
 
         while (mounted) {
           const { value, done } = await reader.read();
           if (done) {
             break;
           }
+          buffer += decoder.decode(value, { stream: true });
 
-          carry = processSseChunk(decoder.decode(value, { stream: true }), carry, (payload) => {
-            try {
-              const parsed = JSON.parse(payload) as StreamEvent;
-              setEvents((prev) => [parsed, ...prev].slice(0, 30));
-            } catch {
-              // no-op: ignore malformed event payload
+          while (buffer.includes("\n\n")) {
+            const [rawEvent, ...rest] = buffer.split("\n\n");
+            buffer = rest.join("\n\n");
+            const dataLine = rawEvent.split(/\r?\n/).find((line) => line.startsWith("data:"));
+            if (!dataLine) {
+              continue;
             }
-          });
+            const parsed = toLiveEvent(JSON.parse(dataLine.slice(5).trim()));
+            if (!parsed) {
+              continue;
+            }
+            setEvents((prev) => [parsed, ...prev].slice(0, 40));
+          }
         }
       } catch {
-        // no-op: reconnection handled below
+        // reconnect handled below
       }
 
       if (mounted) {
@@ -230,118 +258,137 @@ export function LiveEventStream(): JSX.Element {
         clearTimeout(reconnectRef.current);
       }
     };
-  }, [streamUrl]);
+  }, []);
 
-  const clearAction = (
-    <button
-      type="button"
-      onClick={() => setEvents([])}
-      className="rounded-md border border-border/70 bg-muted/50 px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-    >
-      {tk("clearEvents")}
-    </button>
-  );
+  const filteredEvents = useMemo(() => {
+    const withoutMuted = events.filter((event) => !mutedIds.has(event.id));
+    if (activeFilter === "all") {
+      return withoutMuted;
+    }
+    return withoutMuted.filter((event) => event.severity === activeFilter);
+  }, [activeFilter, events, mutedIds]);
+
+  const toggle = (setState: Dispatch<SetStateAction<Set<string>>>, id: string): void => {
+    setState((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   return (
-    <Card
-      title={tk("liveEventStreamTitle")}
-      titleSize="md"
-      variant="glass"
-      actions={clearAction}
-      className="border-primary/20"
-    >
+    <Card title="Live Event Feed" titleSize="md" variant="glass" className="border-primary/20">
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span
-            className={[
-              "h-2 w-2 rounded-full",
-              connected ? "bg-emerald-500 status-dot-live" : "bg-amber-500",
-            ].join(" ")}
-            aria-hidden="true"
-          />
-          <span
-            aria-live="polite"
-            className={[
-              "text-xs font-medium",
-              connected ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400",
-            ].join(" ")}
-          >
-            {connected ? t("接続済み", "Connected") : t("再接続中...", "Reconnecting...")}
-          </span>
+        <div className="flex items-center gap-2 text-xs">
+          <span className={["h-2 w-2 rounded-full", connected ? "bg-emerald-500 status-dot-live" : "bg-amber-500"].join(" ")} />
+          <span>{connected ? t("接続済み", "Connected") : t("再接続中...", "Reconnecting...")}</span>
         </div>
-        <p className="text-xs text-emerald-700 dark:text-emerald-500">
-          {tk("streamSecurityNote")}
-        </p>
+        <div className="flex gap-1">
+          {FILTERS.map((filter) => (
+            <button
+              key={filter}
+              type="button"
+              onClick={() => setActiveFilter(filter)}
+              className={[
+                "rounded-md border px-2 py-1 text-[11px] capitalize",
+                activeFilter === filter ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground",
+              ].join(" ")}
+            >
+              {filter}
+            </button>
+          ))}
+        </div>
       </div>
 
       {authRecoveryAt !== null ? (
-        <div
-          className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning"
-          role="alert"
-        >
-          <p>{tk("streamAuthRecoveryHint")}</p>
-          <p className="mt-1 text-[11px] text-warning/90">
-            {tk("streamAuthRetryPausedUntil")}
-            {" "}
-            {new Date(authRecoveryAt).toLocaleTimeString()}
-          </p>
-        </div>
+        <p className="mb-3 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+          {t("認証エラーを検知。再認証後に再接続します。", "Authentication error detected. Reconnect after re-auth.")}
+          {" "}
+          {new Date(authRecoveryAt).toLocaleTimeString()}
+        </p>
       ) : null}
 
-      <div
-        className="max-h-72 space-y-1.5 overflow-auto pr-0.5"
-        aria-label={t("ライブイベントフィード", "Live event feed")}
-      >
-        {events.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center">
-            <span className="h-2 w-2 rounded-full bg-muted-foreground/30 status-dot-live" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">{t("イベント待機中...", "Waiting for events...")}</p>
-            <p className="text-xs text-muted-foreground/80">
+      <div className="max-h-80 space-y-2 overflow-auto pr-0.5" aria-label="Live event feed">
+        {filteredEvents.length === 0 ? (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4 text-xs text-muted-foreground">
+            <p>{t("現在は低アクティビティです。", "Low activity right now.")}</p>
+            <p className="mt-1">
               {t(
-                "このフィードは reject/mismatch/policy/risk burst を優先表示し、Decision・TrustLog・Governance・Risk へ遷移します。",
-                "This feed prioritizes reject/mismatch/policy/risk burst events and routes to Decision, TrustLog, Governance, and Risk.",
+                "このフィードは FUJI reject / replay mismatch / policy update pending / broken hash chain / risk burst を監視し、異常時は Decision・TrustLog・Governance・Risk へ遷移できます。",
+                "This feed monitors FUJI reject/replay mismatch/policy update pending/broken hash chain/risk burst and routes to Decision, TrustLog, Governance, and Risk when anomalies occur.",
               )}
             </p>
           </div>
         ) : (
-          events.map((event) => {
-            const style = getEventTypeStyle(event.type);
-            const payload = (event.payload ?? {}) as Record<string, unknown>;
-            const priority = getEventPriority(event.type, payload);
-            const actions = buildEventActions(payload);
+          filteredEvents.map((event) => {
+            const link = buildLink(event);
+            const isAcked = ackedIds.has(event.id);
+            const isPinned = pinnedIds.has(event.id);
 
             return (
-              <article
-                key={`${event.id}-${event.ts}`}
-                className="animate-fade-in rounded-lg border border-border/50 bg-background/60 px-3 py-2 shadow-xs transition-colors"
+              <a
+                key={event.id}
+                href={link}
+                className="block rounded-lg border border-border/60 bg-background/70 p-3 transition-colors hover:bg-background"
               >
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${style.dot}`} aria-hidden="true" />
-                    <span className={`text-xs font-semibold ${style.label}`}>{event.type}</span>
-                    <span className={[
-                      "rounded px-1.5 py-0.5 text-[10px] font-semibold",
-                      priority === "P1" ? "bg-danger/15 text-danger" : "",
-                      priority === "P2" ? "bg-warning/20 text-warning" : "",
-                      priority === "P3" ? "bg-primary/15 text-primary" : "",
-                    ].join(" ")}
-                    >
-                      {priority}
-                    </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className={["rounded border px-1.5 py-0.5 font-semibold", SEVERITY_STYLE[event.severity]].join(" ")}>
+                        {event.severity}
+                      </span>
+                      <span className={["rounded px-1.5 py-0.5 text-[10px] font-semibold", STAGE_STYLE[event.stage]].join(" ")}>
+                        {STAGE_LABEL[event.stage]}
+                      </span>
+                      <span className="font-semibold">{EVENT_TYPE_LABEL[event.type]}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{event.summary}</p>
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      request_id:{event.request_id} / decision_id:{event.decision_id}
+                    </p>
                   </div>
-                  <span className="font-mono text-[10px] text-muted-foreground">{event.ts}</span>
+                  <div className="text-right text-[10px] text-muted-foreground">
+                    <p>Owner: {event.owner}</p>
+                    <p>{new Date(event.occurred_at).toLocaleTimeString()}</p>
+                  </div>
                 </div>
-                <pre className="overflow-auto text-[11px] leading-relaxed text-foreground/80">
-                  {JSON.stringify(event.payload, null, 2)}
-                </pre>
-                <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
-                  {actions.map((action) => (
-                    <a key={`${event.id}-${action.label}`} className="rounded border border-border px-2 py-1" href={action.href}>
-                      {action.label}
-                    </a>
-                  ))}
+                <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={(targetEvent) => {
+                      targetEvent.preventDefault();
+                      toggle(setAckedIds, event.id);
+                    }}
+                    className="rounded border border-border px-2 py-1"
+                  >
+                    {isAcked ? "acknowledged" : "acknowledge"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(targetEvent) => {
+                      targetEvent.preventDefault();
+                      toggle(setMutedIds, event.id);
+                    }}
+                    className="rounded border border-border px-2 py-1"
+                  >
+                    mute
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(targetEvent) => {
+                      targetEvent.preventDefault();
+                      toggle(setPinnedIds, event.id);
+                    }}
+                    className="rounded border border-border px-2 py-1"
+                  >
+                    {isPinned ? "pinned" : "pin"}
+                  </button>
                 </div>
-              </article>
+              </a>
             );
           })
         )}
