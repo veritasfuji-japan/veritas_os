@@ -122,7 +122,7 @@ export default function DecisionConsolePage(): JSX.Element {
         ) : (
           <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
             <p className="font-semibold text-foreground">Start with a real decision question.</p>
-            <p className="mt-1">Try prompts like: "Should we delay launch by 2 weeks for security hardening?" or "Choose vendor A vs B under strict budget and compliance constraints."</p>
+            <p className="mt-1">Try prompts like: &quot;Should we delay launch by 2 weeks for security hardening?&quot; or &quot;Choose vendor A vs B under strict budget and compliance constraints.&quot;</p>
             <p className="mt-1">You will see stage progression, FUJI safety checks, chosen vs alternatives, rejection reasons, and direct TrustLog/Replay links.</p>
           </div>
         )}

@@ -24,6 +24,13 @@ export interface CostBenefitAnalytics {
 
 export type PipelineStageStatus = "idle" | "running" | "complete" | "warning" | "failed";
 
+export interface PipelineStepView {
+  name: string;
+  summary: string;
+  status: "complete" | "idle";
+  detail: string;
+}
+
 export interface PipelineStageView {
   name: PipelineStageName;
   summary: string;
