@@ -822,7 +822,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                     <span className="font-medium">
                       {getString(item, "severity")}
                     </span>
-                    <span>{item.stage ?? "UNKNOWN"}</span>
+                    <span>{getString(item, "stage")}</span>
                     <span className="font-mono text-2xs">
                       {item.created_at ?? "-"}
                     </span>
@@ -898,7 +898,7 @@ export default function TrustLogExplorerPage(): JSX.Element {
                 </div>
                 <div className="grid gap-2 rounded border border-border p-3 md:grid-cols-2">
                   <p>
-                    <strong>Stage:</strong> {selected.stage ?? "UNKNOWN"}
+                    <strong>Stage:</strong> {getString(selected, "stage")}
                   </p>
                   <p>
                     <strong>Status:</strong> {getString(selected, "status")}

@@ -101,6 +101,13 @@ export interface DecideResponse extends DecideResponseMeta {
   /** Art. 13 — notification record for individuals affected by high-risk decisions. */
   affected_parties_notice?: Record<string, unknown> | null;
 
+  /** Original user query text, attached by pipeline for audit and replay. */
+  query?: string | null;
+  /** Dynamic pipeline steps resolved by the orchestrator (EU AI Act compliance). */
+  pipeline_steps?: string[] | null;
+  /** Snapshot for deterministic replay of this decision. */
+  deterministic_replay?: Record<string, unknown> | null;
+
   [key: string]: unknown;
 }
 

@@ -5,28 +5,47 @@ import type { DecideResponse, HealthResponse } from "./index";
 describe("types", () => {
   it("accepts a valid health response shape", () => {
     const response: HealthResponse = {
-      status: "ok",
-      service: "api",
-      timestamp: "2026-01-01T00:00:00.000Z"
+      ok: true,
+      uptime: 120,
+      checks: {
+        pipeline: "ok",
+        memory: "ok",
+      },
     };
 
-    expect(response.status).toBe("ok");
+    expect(response.ok).toBe(true);
   });
 
   it("validates health response payloads at runtime", () => {
     expect(
       isHealthResponse({
-        status: "ok",
-        service: "api",
-        timestamp: "2026-01-01T00:00:00.000Z"
+        ok: true,
+        uptime: 120,
+        checks: {
+          pipeline: "ok",
+          memory: "ok",
+        },
       })
     ).toBe(true);
 
     expect(
       isHealthResponse({
-        status: "unknown",
-        service: "api",
-        timestamp: "2026-01-01T00:00:00.000Z"
+        ok: true,
+        uptime: "not-a-number",
+        checks: {
+          pipeline: "ok",
+          memory: "ok",
+        },
+      })
+    ).toBe(false);
+
+    expect(
+      isHealthResponse({
+        ok: true,
+        uptime: 120,
+        checks: {
+          pipeline: "ok",
+        },
       })
     ).toBe(false);
   });

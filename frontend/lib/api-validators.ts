@@ -67,9 +67,13 @@ export type GovernanceValidationResult = GovernanceValidationSuccess | Governanc
 const AUDIT_LEVELS = new Set(["none", "minimal", "standard", "full", "strict"]);
 
 export interface TrustLogItem {
-  request_id?: string;
-  created_at?: string;
-  stage?: string;
+  request_id: string;
+  created_at: string;
+  sources?: string[];
+  critics?: string[];
+  checks?: string[];
+  approver?: string;
+  fuji?: Record<string, unknown> | null;
   sha256?: string;
   sha256_prev?: string;
   [key: string]: unknown;
@@ -352,20 +356,32 @@ export function isGovernancePolicyResponse(value: unknown): value is GovernanceP
   return validateGovernancePolicyResponse(value).ok;
 }
 
+function isOptionalStringArray(value: unknown): boolean {
+  return value === undefined || (Array.isArray(value) && value.every((s) => typeof s === "string"));
+}
+
 export function isTrustLogItem(value: unknown): value is TrustLogItem {
   if (!isRecord(value)) {
     return false;
   }
 
-  if (value.request_id !== undefined && typeof value.request_id !== "string") {
+  if (typeof value.request_id !== "string") {
     return false;
   }
 
-  if (value.created_at !== undefined && typeof value.created_at !== "string") {
+  if (typeof value.created_at !== "string") {
     return false;
   }
 
-  if (value.stage !== undefined && typeof value.stage !== "string") {
+  if (!isOptionalStringArray(value.sources) || !isOptionalStringArray(value.critics) || !isOptionalStringArray(value.checks)) {
+    return false;
+  }
+
+  if (value.approver !== undefined && typeof value.approver !== "string") {
+    return false;
+  }
+
+  if (value.fuji !== undefined && value.fuji !== null && !isRecord(value.fuji)) {
     return false;
   }
 

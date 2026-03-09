@@ -125,13 +125,47 @@ describe("api validators", () => {
   it("accepts valid trust logs response", () => {
     expect(
       isTrustLogsResponse({
-        items: [{ request_id: "req-1", stage: "fuji", created_at: "2026-02-12T00:00:00Z" }],
+        items: [
+          {
+            request_id: "req-1",
+            created_at: "2026-02-12T00:00:00Z",
+            sources: ["memory"],
+            critics: [],
+            checks: ["fuji"],
+            approver: "system",
+            sha256: "abc123",
+          },
+        ],
         cursor: "0",
         next_cursor: "1",
         limit: 50,
         has_more: true,
       }),
     ).toBe(true);
+  });
+
+  it("rejects trust log item missing required request_id", () => {
+    expect(
+      isTrustLogsResponse({
+        items: [{ created_at: "2026-02-12T00:00:00Z" }],
+        cursor: "0",
+        next_cursor: "1",
+        limit: 50,
+        has_more: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item missing required created_at", () => {
+    expect(
+      isTrustLogsResponse({
+        items: [{ request_id: "req-1" }],
+        cursor: "0",
+        next_cursor: "1",
+        limit: 50,
+        has_more: true,
+      }),
+    ).toBe(false);
   });
 
   it("rejects malformed trust logs response", () => {
@@ -150,7 +184,7 @@ describe("api validators", () => {
     expect(
       isRequestLogResponse({
         request_id: "req-1",
-        items: [{ request_id: "req-1", stage: "planner" }],
+        items: [{ request_id: "req-1", created_at: "2026-02-12T00:00:00Z", approver: "system" }],
         count: 1,
         chain_ok: true,
         verification_result: "ok",
