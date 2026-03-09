@@ -1,5 +1,13 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+
+/**
+ * Navigates to a path and waits for hydration/network to settle to reduce CI flakes.
+ */
+async function gotoAndSettle(page: Page, path: string): Promise<void> {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await page.waitForLoadState("networkidle");
+}
 
 // ============================================================
 // Smoke E2E: 3-minute demo flow
@@ -8,14 +16,16 @@ import AxeBuilder from "@axe-core/playwright";
 test.describe("Smoke: 3-minute demo flow", () => {
   // 1. /console — render preset buttons and pipeline stages
   test("Console page renders pipeline and presets", async ({ page }) => {
-    await page.goto("/console");
-    // Use heading role to avoid strict-mode clash with the sidebar nav text
-    await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
-    await expect(page.getByText("Pipeline Operations View")).toBeVisible();
+    await gotoAndSettle(page, "/console");
+    // Use heading role to avoid strict-mode clash with sidebar/nav duplicate text.
+    await expect(
+      page.getByRole("heading", { name: /Decision Console|意思決定コンソール/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Pipeline Operations View|パイプライン運用ビュー/i),
+    ).toBeVisible();
     await expect(page.locator("li", { hasText: "Evidence" })).toBeVisible();
-    // Scope to <li> so strict mode won't match the separate "FUJI Gate Status" heading
     await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
-    // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
     await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
 
     const presetButtons = page.locator("button").filter({ hasText: "..." });
@@ -29,31 +39,39 @@ test.describe("Smoke: 3-minute demo flow", () => {
 
   // 2. /audit — TrustLog explorer renders
   test("Audit page renders TrustLog explorer", async ({ page }) => {
-    await page.goto("/audit");
-    await expect(page.getByRole("heading", { name: "TrustLog Explorer" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /request_id (検索|Search)/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Timeline" })).toBeVisible();
+    await gotoAndSettle(page, "/audit");
+    await expect(page.getByRole("heading", { name: /TrustLog Explorer/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /request_id (検索|Search)/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Timeline/i })).toBeVisible();
     await expect(page.getByPlaceholder("request_id")).toBeVisible();
   });
 
   // 3. /governance — load governance UI
   test("Governance page renders controls", async ({ page }) => {
-    await page.goto("/governance");
-    await expect(page.getByRole("heading", { name: "Governance Control" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /(ポリシーを読み込む|Load policy)/ })).toBeVisible();
+    await gotoAndSettle(page, "/governance");
+    await expect(
+      page.getByRole("heading", { name: /Governance Control|ガバナンス制御/i }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /(ポリシーを読み込む|Load policy)/ }),
+    ).toBeVisible();
   });
 
   // 4. Navigation works across all pages
   test("Navigation sidebar links work", async ({ page }) => {
-    await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Command Dashboard" })).toBeVisible();
+    await gotoAndSettle(page, "/");
+    await expect(
+      page.getByRole("heading", { name: /Command Dashboard|コマンドダッシュボード/i }),
+    ).toBeVisible();
 
     // Click Console
-    await page.getByRole("link", { name: /Decision Console/i }).click();
+    await page.getByRole("link", { name: /Decision Console|意思決定コンソール/i }).click();
     await expect(page).toHaveURL(/\/console/);
 
     // Click Governance
-    await page.getByRole("link", { name: /Governance Control/i }).click();
+    await page.getByRole("link", { name: /Governance Control|ガバナンス制御/i }).click();
     await expect(page).toHaveURL(/\/governance/);
 
     // Click Audit
@@ -71,8 +89,7 @@ test.describe("Accessibility (axe)", () => {
   // - color-contrast: design-token colours use CSS custom properties that
   //   axe cannot resolve, producing false positives.
   // - region: Next.js injects internal elements (e.g. route-announcer)
-  //   outside landmarks that we cannot control.  All *application* content
-  //   is inside proper landmark elements.
+  //   outside landmarks that we cannot control.
   const IGNORED_RULES = new Set(["color-contrast", "region"]);
 
   const pages = [
@@ -84,18 +101,13 @@ test.describe("Accessibility (axe)", () => {
 
   for (const { path, name } of pages) {
     test(`${name} page passes axe checks`, async ({ page }) => {
-      await page.goto(path);
-      // Wait for hydration and client-side rendering to finish
-      await page.waitForLoadState("networkidle");
-      // Extra settle time for React hydration
+      await gotoAndSettle(page, path);
       await page.waitForTimeout(500);
 
       const results = await new AxeBuilder({ page })
         .withTags(["wcag2a", "wcag2aa"])
         .analyze();
 
-      // Filter results in JS — more reliable than disableRules() which
-      // can be ignored by certain axe-core/playwright version combinations.
       const violations = results.violations
         .filter((v) => !IGNORED_RULES.has(v.id))
         .map((v) => ({
