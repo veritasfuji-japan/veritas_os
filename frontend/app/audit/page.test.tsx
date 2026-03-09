@@ -30,8 +30,8 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("value").length).toBeGreaterThanOrEqual(2);
-      expect(screen.getAllByText("fuji").length).toBeGreaterThanOrEqual(2);
+      expect(screen.getByText(/req:req-1/)).toBeInTheDocument();
+      expect(screen.getByText(/req:req-2/)).toBeInTheDocument();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -193,7 +193,9 @@ describe("TrustLogExplorerPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "JSON生成" }));
 
     await waitFor(() => {
-      expect(screen.getByText("entries: 2 / mismatches: 0")).toBeInTheDocument();
+      expect(
+        screen.getByText("entries: 2 / mismatches: 0 / redaction: strict"),
+      ).toBeInTheDocument();
     });
 
     expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
@@ -205,6 +207,83 @@ describe("TrustLogExplorerPage", () => {
     clickMock.mockRestore();
   });
 
+  it("blocks export when redaction mode is none without extra confirmation", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          {
+            request_id: "req-100",
+            stage: "fuji",
+            status: "allow",
+            created_at: "2026-02-12T10:00:00Z",
+            sha256: "cccccccccccccccccccccccccccccccc",
+            sha256_prev: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    render(<TrustLogExplorerPage />);
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/表示件数: 1/)).toBeInTheDocument();
+    });
+
+    const dateInputs = document.querySelectorAll('input[type="date"]');
+    fireEvent.change(dateInputs[0], { target: { value: "2026-02-10" } });
+    fireEvent.change(dateInputs[1], { target: { value: "2026-02-12" } });
+
+    fireEvent.click(screen.getByRole("checkbox", {
+      name: "PII/metadata warning を理解し、社内ポリシーに従って取り扱います。",
+    }));
+    fireEvent.change(screen.getByLabelText("redaction mode"), {
+      target: { value: "none" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "JSON生成" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("redaction none は高リスクです。追加確認を有効化してください。"),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("renders selected audit tabs with ARIA semantics", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        items: [
+          { request_id: "req-1", stage: "value", created_at: "2026-02-12T00:00:00Z" },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
+      }),
+    } as Response);
+
+    render(<TrustLogExplorerPage />);
+    fireEvent.click(screen.getByRole("button", { name: "最新ログを読み込み" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("tab", { name: "Summary" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Raw JSON" }));
+    expect(screen.getByRole("tab", { name: "Raw JSON" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
 
   it("generates printable report without using HTML string injection", async () => {
     vi.spyOn(global, "fetch").mockResolvedValueOnce({
@@ -271,6 +350,7 @@ describe("TrustLogExplorerPage", () => {
     expect(screen.getByLabelText("検証対象の意思決定ID")).toBeInTheDocument();
     expect(screen.getByLabelText("監査レポート開始日")).toBeInTheDocument();
     expect(screen.getByLabelText("監査レポート終了日")).toBeInTheDocument();
+    expect(screen.getByLabelText("redaction mode")).toBeInTheDocument();
   });
 
 });
