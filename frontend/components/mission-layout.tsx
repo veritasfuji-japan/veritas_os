@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useI18n } from "./i18n-provider";
+import { TraceabilityRail } from "./traceability-rail";
 
 /* ─── SVG icons ─── */
 
@@ -340,6 +341,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
             </div>
           ))}
         </div>
+        <TraceabilityRail />
       </header>
 
       {/* ── Main content ── */}

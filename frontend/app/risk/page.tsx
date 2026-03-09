@@ -137,6 +137,8 @@ export default function RiskIntelligencePage(): JSX.Element {
   const { t, language } = useI18n();
   const [points, setPoints] = useState<RiskPoint[]>(() => createInitialPoints(Date.now()));
   const [now, setNow] = useState<number>(Date.now());
+  const [timeWindowHours, setTimeWindowHours] = useState<number>(24);
+  const [selectedCluster, setSelectedCluster] = useState<"all" | "high">("all");
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -155,17 +157,19 @@ export default function RiskIntelligencePage(): JSX.Element {
     };
   }, []);
 
+  const visiblePoints = useMemo(() => points.filter((point) => now - point.timestamp <= timeWindowHours * 60 * 60 * 1000), [points, now, timeWindowHours]);
+
   const clusterStats = useMemo(() => {
-    const highRiskPoints = points.filter(
+    const highRiskPoints = visiblePoints.filter(
       (point) => point.uncertainty >= ALERT_CLUSTER_THRESHOLD && point.risk >= ALERT_CLUSTER_THRESHOLD,
     );
-    const ratio = points.length === 0 ? 0 : highRiskPoints.length / points.length;
+    const ratio = visiblePoints.length === 0 ? 0 : highRiskPoints.length / visiblePoints.length;
     return {
       ratio,
       count: highRiskPoints.length,
       alert: highRiskPoints.length >= 15 || ratio >= 0.08,
     };
-  }, [points]);
+  }, [visiblePoints]);
 
   return (
     <div className="space-y-6">
@@ -195,7 +199,7 @@ export default function RiskIntelligencePage(): JSX.Element {
             </div>
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("高リスク", "High-risk")}</p>
-              <p className="mt-0.5 font-mono font-semibold text-foreground">{clusterStats.count} / {points.length}</p>
+              <p className="mt-0.5 font-mono font-semibold text-foreground">{clusterStats.count} / {visiblePoints.length}</p>
             </div>
             <div className="rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{t("クラスタ率", "Cluster rate")}</p>
@@ -207,6 +211,25 @@ export default function RiskIntelligencePage(): JSX.Element {
                 {new Date(now).toLocaleTimeString(language === "ja" ? "ja-JP" : "en-US", { hour12: false })}
               </p>
             </div>
+          </div>
+
+
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Time window</span>
+              <select className="block rounded border border-border bg-background px-2 py-1" value={timeWindowHours} onChange={(event) => setTimeWindowHours(Number(event.target.value))}>
+                <option value={1}>1h</option>
+                <option value={6}>6h</option>
+                <option value={24}>24h</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-muted-foreground">Cluster drilldown</span>
+              <select className="block rounded border border-border bg-background px-2 py-1" value={selectedCluster} onChange={(event) => setSelectedCluster(event.target.value as "all" | "high") }>
+                <option value="all">all points</option>
+                <option value="high">high-risk only</option>
+              </select>
+            </label>
           </div>
 
           {/* Alert banner */}
@@ -243,7 +266,7 @@ export default function RiskIntelligencePage(): JSX.Element {
                 <line x1="82" y1="0" x2="82" y2="100" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
                 <line x1="0" y1="18" x2="100" y2="18" stroke="hsl(var(--ds-color-danger) / 0.55)" strokeDasharray="1.5 1" strokeWidth="0.4" />
               </svg>
-              <RiskScatterCanvas points={points} />
+              <RiskScatterCanvas points={selectedCluster === "high" ? visiblePoints.filter((point) => point.risk >= 0.82 && point.uncertainty >= 0.82) : visiblePoints} />
 
               <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground">
                 {t("不確実性 →", "Uncertainty →")}
