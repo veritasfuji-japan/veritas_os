@@ -11,7 +11,7 @@ interface PipelineVisualizerProps {
 }
 
 interface StageCard {
-  name: string;
+  name: (typeof PIPELINE_STAGES)[number];
   status: StageState;
   latencyMs: number | null;
   summary: string;
@@ -67,7 +67,7 @@ function extractStageCards(result: DecideResponse | null, error: string | null):
  */
 export function PipelineVisualizer({ loading, result, error }: PipelineVisualizerProps): JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [selectedStage, setSelectedStage] = useState(PIPELINE_STAGES[0]);
+  const [selectedStage, setSelectedStage] = useState<(typeof PIPELINE_STAGES)[number]>(PIPELINE_STAGES[0]);
 
   const cards = useMemo(() => extractStageCards(result, error), [result, error]);
 
