@@ -1,64 +1,12 @@
 import { type DecideResponse } from "@veritas/types";
 import { useEffect, useMemo, useState } from "react";
+import { toPipelineStageViews } from "../adapters/decision-view";
 import { PIPELINE_STAGES } from "../constants";
-
-type StageState = "idle" | "running" | "complete" | "warning" | "failed";
 
 interface PipelineVisualizerProps {
   loading: boolean;
   result: DecideResponse | null;
   error: string | null;
-}
-
-interface StageCard {
-  name: (typeof PIPELINE_STAGES)[number];
-  status: StageState;
-  latencyMs: number | null;
-  summary: string;
-  rawDetail: Record<string, unknown>;
-}
-
-
-function extractStageCards(result: DecideResponse | null, error: string | null): StageCard[] {
-  const metrics = ((result?.extras?.stage_metrics ?? {}) as Record<string, unknown>);
-
-  return PIPELINE_STAGES.map((stage) => {
-    const key = stage.toLowerCase();
-    const row = (metrics[key] ?? metrics[stage] ?? {}) as Record<string, unknown>;
-    const latencyMs = typeof row.latency_ms === "number" ? row.latency_ms : null;
-    const health = typeof row.health === "string" ? row.health : "unknown";
-
-    let status: StageState = "idle";
-    if (result) {
-      status = "complete";
-    }
-    if (health === "warning") {
-      status = "warning";
-    }
-    if (health === "failed") {
-      status = "failed";
-    }
-
-    if (error && !result && stage === "Evidence") {
-      status = "failed";
-    }
-
-    const summary = typeof row.summary === "string"
-      ? row.summary
-      : status === "complete"
-        ? "Stage finished"
-        : status === "failed"
-          ? "Execution stopped"
-          : "Waiting";
-
-    return {
-      name: stage,
-      status,
-      latencyMs,
-      summary,
-      rawDetail: row,
-    };
-  });
 }
 
 /**
@@ -69,7 +17,10 @@ export function PipelineVisualizer({ loading, result, error }: PipelineVisualize
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedStage, setSelectedStage] = useState<(typeof PIPELINE_STAGES)[number]>(PIPELINE_STAGES[0]);
 
-  const cards = useMemo(() => extractStageCards(result, error), [result, error]);
+  const cards = useMemo(
+    () => toPipelineStageViews(result, loading, error, activeIndex),
+    [result, loading, error, activeIndex],
+  );
 
   useEffect(() => {
     if (!loading) {
@@ -93,7 +44,7 @@ export function PipelineVisualizer({ loading, result, error }: PipelineVisualize
           {loading ? "Live execution in progress" : "Latest execution snapshot"}
         </span>
       </div>
-      <ol className="grid gap-2 text-xs md:grid-cols-7">
+      <ol className="grid gap-2 text-xs md:grid-cols-8">
         {cards.map((card, index) => {
           const live = loading && activeIndex === index;
           const color = card.status === "failed"
@@ -123,16 +74,24 @@ export function PipelineVisualizer({ loading, result, error }: PipelineVisualize
           );
         })}
       </ol>
+      {loading && (
+        <div className="grid gap-2 md:grid-cols-3" aria-label="pipeline loading skeleton">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={`sk-${index}`} className="h-12 animate-pulse rounded-md border border-border bg-muted/30" />
+          ))}
+        </div>
+      )}
       {selected && (
         <div className="rounded-md border border-border bg-background/70 p-3 text-xs">
           <p className="font-semibold text-foreground">{selected.name} details</p>
           <p className="mt-1 text-muted-foreground">status: {selected.status}</p>
           <p className="text-muted-foreground">latency: {selected.latencyMs !== null ? `${selected.latencyMs.toFixed(0)} ms` : "n/a"}</p>
-          <p className="mt-2 text-foreground">{selected.summary}</p>
+          <p className="mt-2 text-foreground">summary: {selected.summary}</p>
+          <p className="mt-1 text-muted-foreground">detail: {selected.detail}</p>
           <details className="mt-2">
-            <summary className="cursor-pointer text-muted-foreground">raw detail</summary>
+            <summary className="cursor-pointer text-muted-foreground">raw JSON</summary>
             <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-background/80 p-2 text-[11px] text-foreground">
-              {JSON.stringify(selected.rawDetail, null, 2)}
+              {JSON.stringify(selected.raw, null, 2)}
             </pre>
           </details>
         </div>
