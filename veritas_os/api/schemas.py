@@ -95,6 +95,9 @@ class Context(BaseModel):
     goals: Optional[List[str]] = Field(default=None)
     constraints: Optional[List[str]] = Field(default=None)
 
+    # OpenAPI で定義されているツール許可リスト
+    tools_allowed: Optional[List[str]] = Field(default=None)
+
     # 返答の時間軸（未指定可）
     time_horizon: Optional[Literal["short", "mid", "long"]] = None
 
@@ -104,7 +107,7 @@ class Context(BaseModel):
     affect_hint: Optional[Dict[str, str]] = None
     response_style: Optional[Literal["logic", "emotional", "business", "expert", "casual"]] = None
 
-    @field_validator("goals", "constraints", "preferences", mode="before")
+    @field_validator("goals", "constraints", "preferences", "tools_allowed", mode="before")
     @classmethod
     def _validate_list_size(cls, v: Any) -> Any:
         if v is not None and isinstance(v, (list, tuple, set)) and len(v) > MAX_LIST_ITEMS:
