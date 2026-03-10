@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import type { AutoStop, FujiRules, GovernancePolicy, LogRetention, RiskThresholds } from "@veritas/types";
 import { useI18n } from "../../components/i18n-provider";
 import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
@@ -16,51 +17,12 @@ type PolicyActionMode = "apply" | "dry-run" | "shadow";
 type GovernanceMode = "standard" | "eu_ai_act";
 type ApprovalStatus = "approved" | "pending" | "rejected" | "draft";
 
-interface FujiRules {
-  pii_check: boolean;
-  self_harm_block: boolean;
-  illicit_block: boolean;
-  violence_review: boolean;
-  minors_review: boolean;
-  keyword_hard_block: boolean;
-  keyword_soft_flag: boolean;
-  llm_safety_head: boolean;
-}
-
-interface RiskThresholds {
-  allow_upper: number;
-  warn_upper: number;
-  human_review_upper: number;
-  deny_upper: number;
-}
-
-interface AutoStop {
-  enabled: boolean;
-  max_risk_score: number;
-  max_consecutive_rejects: number;
-  max_requests_per_minute: number;
-}
-
-interface LogRetention {
-  retention_days: number;
-  audit_level: string;
-  include_fields: string[];
-  redact_before_log: boolean;
-  max_log_size: number;
-}
-
-interface GovernancePolicy {
-  version: string;
+/** UI-specific extension of the API GovernancePolicy with local workflow fields. */
+interface GovernancePolicyUI extends GovernancePolicy {
   draft_version?: string;
   effective_at?: string;
   last_applied?: string;
   approval_status: ApprovalStatus;
-  fuji_rules: FujiRules;
-  risk_thresholds: RiskThresholds;
-  auto_stop: AutoStop;
-  log_retention: LogRetention;
-  updated_at: string;
-  updated_by: string;
 }
 
 interface DiffChange {
@@ -236,7 +198,7 @@ function ToggleRow({ label, checked, onChange, disabled }: { label: string; chec
   );
 }
 
-function DiffPreview({ before, after }: { before: GovernancePolicy | null; after: GovernancePolicy | null }): JSX.Element {
+function DiffPreview({ before, after }: { before: GovernancePolicyUI | null; after: GovernancePolicyUI | null }): JSX.Element {
   const { t } = useI18n();
   const rows = before && after
     ? collectChanges(
@@ -330,8 +292,8 @@ function RiskImpactGauge({ current, pending, drift }: { current: number; pending
 
 export default function GovernanceControlPage(): JSX.Element {
   const { t } = useI18n();
-  const [savedPolicy, setSavedPolicy] = useState<GovernancePolicy | null>(null);
-  const [draft, setDraft] = useState<GovernancePolicy | null>(null);
+  const [savedPolicy, setSavedPolicy] = useState<GovernancePolicyUI | null>(null);
+  const [draft, setDraft] = useState<GovernancePolicyUI | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>("admin");
   const [governanceMode, setGovernanceMode] = useState<GovernanceMode>("standard");
   const [loading, setLoading] = useState(false);
@@ -362,7 +324,7 @@ export default function GovernanceControlPage(): JSX.Element {
     ].slice(0, 20));
   }, [selectedRole]);
 
-  const updateDraft = useCallback((updater: (prev: GovernancePolicy) => GovernancePolicy) => {
+  const updateDraft = useCallback((updater: (prev: GovernancePolicyUI) => GovernancePolicyUI) => {
     setDraft((prev) => {
       if (!prev) return prev;
       const next = updater(prev);
@@ -390,7 +352,7 @@ export default function GovernanceControlPage(): JSX.Element {
         last_applied: validation.data.policy.updated_at,
         approval_status: "approved" as ApprovalStatus,
         draft_version: bumpDraftVersion(validation.data.policy.version),
-      } as GovernancePolicy;
+      } as GovernancePolicyUI;
       setSavedPolicy(normalized);
       setDraft(structuredClone(normalized));
       appendHistory("load", `version ${normalized.version} loaded`);
@@ -447,7 +409,7 @@ export default function GovernanceControlPage(): JSX.Element {
         last_applied: new Date().toISOString(),
         approval_status: "approved" as ApprovalStatus,
         draft_version: bumpDraftVersion(validation.data.policy.version),
-      } as GovernancePolicy;
+      } as GovernancePolicyUI;
       setSavedPolicy(nextPolicy);
       setDraft(structuredClone(nextPolicy));
       appendHistory("apply", `version ${nextPolicy.version} applied`);

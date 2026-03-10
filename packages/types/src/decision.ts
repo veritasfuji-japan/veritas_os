@@ -257,8 +257,8 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     isRecord(value.meta) &&
     (value.rsi_note === null || value.rsi_note === undefined || isRecord(value.rsi_note)) &&
     (value.evo === null || value.evo === undefined || isRecord(value.evo)) &&
-    (value.plan === null || isRecord(value.plan)) &&
-    (value.planner === null || isRecord(value.planner)) &&
+    (value.plan === null || value.plan === undefined || isRecord(value.plan)) &&
+    (value.planner === null || value.planner === undefined || isRecord(value.planner)) &&
     isRecord(value.persona) &&
     Array.isArray(value.memory_citations) &&
     typeof value.memory_used_count === "number" &&
