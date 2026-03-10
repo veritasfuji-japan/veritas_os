@@ -15,6 +15,11 @@
 - `PersonaState`、`EvoTips`、`ChatRequest` 型をフロントエンド共有型に追加
 - `isTrustLogItem` バリデータにパイプライン付与フィールド（`query`、`gate_status`、`gate_risk`）の型検証を追加
 - OpenAPI 仕様に `PersonaState`、`EvoTips`、`ChatRequest` スキーマを追加
+- OpenAPI 仕様にガバナンスポリシー関連スキーマ（`GovernancePolicy`、`FujiRules`、`RiskThresholds`、`AutoStop`、`LogRetention`、`GovernancePolicyResponse`）を追加
+- OpenAPI 仕様に `TrustFeedbackRequest` スキーマを追加
+- OpenAPI の `/v1/governance/policy` エンドポイントを正式なスキーマ参照に更新
+- OpenAPI の `/v1/trust/feedback` エンドポイントを正式なスキーマ参照に更新
+- OpenAPI の `Context`、`EvidenceItem`、`Option` フィールドに `maxLength` 制約を追加
 
 ---
 
@@ -84,6 +89,21 @@ DecideResponse スキーマを全フィールド含む形に更新。
 
 `TrustLogItem` インターフェースには `query`、`gate_status`、`gate_risk` フィールドが定義されていたが、`isTrustLogItem()` バリデータではこれらのフィールドの型チェックが行われていなかった。`Optional[str]`/`Optional[float]` に対応する `undefined | null | string`/`undefined | null | number` の型検証を追加。
 
+### 17. ~~OpenAPI にガバナンスポリシー関連スキーマが未定義~~ ✅ 修正済み (本 PR)
+
+バックエンド（`governance.py`）とフロントエンド（`api-validators.ts`）にはガバナンスポリシーの完全な型定義が存在していたが、OpenAPI 仕様にはコンポーネントスキーマが定義されておらず、エンドポイントのレスポンスは汎用的な `additionalProperties: true` になっていた。`FujiRules`、`RiskThresholds`、`AutoStop`、`LogRetention`、`GovernancePolicy`、`GovernancePolicyResponse` をコンポーネントスキーマとして追加し、`/v1/governance/policy` の GET/PUT エンドポイントを正式なスキーマ参照に更新。
+
+### 18. ~~OpenAPI の `/v1/trust/feedback` リクエストスキーマが未定義~~ ✅ 修正済み (本 PR)
+
+バックエンド `TrustFeedbackRequest`（`schemas.py`）には `user_id`、`score`、`note`、`source` の各フィールドが型制約付きで定義されていたが、OpenAPI では `additionalProperties: true` のみとなっていた。`TrustFeedbackRequest` コンポーネントスキーマを追加し、エンドポイントを正式なスキーマ参照に更新。
+
+### 19. ~~OpenAPI の入力フィールドに `maxLength` 制約が欠如~~ ✅ 修正済み (本 PR)
+
+バックエンド Pydantic モデルには `max_length` 制約が定義されていたが、OpenAPI 仕様に反映されていなかった。以下のフィールドに `maxLength` を追加：
+- `Context`: `user_id`（500）、`session_id`（500）、`query`（10000）
+- `EvidenceItem`: `source`（500）、`uri`（2000）、`title`（1000）、`snippet`（50000）
+- `Option`: `id`（500）、`title`（1000）、`description`（20000）、`text`（1000）
+
 ---
 
 ## 整合性マトリクス（更新版）
@@ -104,6 +124,9 @@ DecideResponse スキーマを全フィールド含む形に更新。
 | エラーハンドリング | OK | OK | N/A |
 | SSE イベント | OK | OK | N/A |
 | ガバナンスバリデーション | OK | OK | OK |
+| ガバナンスポリシースキーマ | OK | OK | OK |
+| TrustFeedbackRequest | OK | OK | OK |
+| 入力フィールド制約（maxLength） | OK | OK | OK |
 
 ---
 

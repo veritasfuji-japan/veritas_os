@@ -20,10 +20,13 @@ components:
       properties:
         user_id:
           type: string
+          maxLength: 500
         session_id:
           type: string
+          maxLength: 500
         query:
           type: string
+          maxLength: 10000
           description: "ユーザ要求/問題文"
         goals:
           type: array
@@ -63,14 +66,22 @@ components:
       properties:
         id:
           type: string
+          maxLength: 500
         title:
           type: string
+          maxLength: 1000
+        text:
+          type: string
+          maxLength: 1000
+          description: "titleの別名（後方互換フィールド）"
         description:
           type: string
+          maxLength: 20000
         score:
           type: number
         score_raw:
           type: number
+          nullable: true
         world:
           type: object
           nullable: true
@@ -86,14 +97,18 @@ components:
       properties:
         source:
           type: string
+          maxLength: 500
         uri:
           type: string
           format: uri
+          maxLength: 2000
         title:
           type: string
           nullable: true
+          maxLength: 1000
         snippet:
           type: string
+          maxLength: 50000
         confidence:
           type: number
 
@@ -229,6 +244,165 @@ components:
         persona_evolve:
           type: boolean
           default: true
+
+    FujiRules:
+      type: object
+      description: "FUJI安全ゲートのルール設定"
+      properties:
+        pii_check:
+          type: boolean
+          default: true
+        self_harm_block:
+          type: boolean
+          default: true
+        illicit_block:
+          type: boolean
+          default: true
+        violence_review:
+          type: boolean
+          default: true
+        minors_review:
+          type: boolean
+          default: true
+        keyword_hard_block:
+          type: boolean
+          default: true
+        keyword_soft_flag:
+          type: boolean
+          default: true
+        llm_safety_head:
+          type: boolean
+          default: true
+
+    RiskThresholds:
+      type: object
+      description: "リスクしきい値設定"
+      properties:
+        allow_upper:
+          type: number
+          default: 0.40
+          minimum: 0.0
+          maximum: 1.0
+        warn_upper:
+          type: number
+          default: 0.65
+          minimum: 0.0
+          maximum: 1.0
+        human_review_upper:
+          type: number
+          default: 0.85
+          minimum: 0.0
+          maximum: 1.0
+        deny_upper:
+          type: number
+          default: 1.00
+          minimum: 0.0
+          maximum: 1.0
+
+    AutoStop:
+      type: object
+      description: "自動停止設定"
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        max_risk_score:
+          type: number
+          default: 0.85
+          minimum: 0.0
+          maximum: 1.0
+        max_consecutive_rejects:
+          type: integer
+          default: 5
+          minimum: 1
+          maximum: 1000
+        max_requests_per_minute:
+          type: integer
+          default: 60
+          minimum: 1
+          maximum: 10000
+
+    LogRetention:
+      type: object
+      description: "ログ保持設定"
+      properties:
+        retention_days:
+          type: integer
+          default: 90
+          minimum: 1
+          maximum: 3650
+        audit_level:
+          type: string
+          default: "full"
+          enum: ["none", "minimal", "standard", "full", "strict"]
+        include_fields:
+          type: array
+          items:
+            type: string
+        redact_before_log:
+          type: boolean
+          default: true
+        max_log_size:
+          type: integer
+          default: 10000
+          minimum: 100
+          maximum: 1000000
+
+    GovernancePolicy:
+      type: object
+      description: "ガバナンスポリシー設定"
+      properties:
+        version:
+          type: string
+          default: "governance_v1"
+        fuji_rules:
+          $ref: '#/components/schemas/FujiRules'
+        risk_thresholds:
+          $ref: '#/components/schemas/RiskThresholds'
+        auto_stop:
+          $ref: '#/components/schemas/AutoStop'
+        log_retention:
+          $ref: '#/components/schemas/LogRetention'
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+          default: "system"
+
+    GovernancePolicyResponse:
+      type: object
+      description: "ガバナンスポリシーAPIレスポンス"
+      properties:
+        ok:
+          type: boolean
+        policy:
+          $ref: '#/components/schemas/GovernancePolicy'
+
+    TrustFeedbackRequest:
+      type: object
+      description: "信頼フィードバックリクエスト"
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        score:
+          type: number
+          default: 0.5
+          minimum: 0.0
+          maximum: 1.0
+          description: "フィードバックスコア（0.0〜1.0）"
+        note:
+          type: string
+          default: ""
+          maxLength: 10000
+          description: "フィードバックメモ"
+        source:
+          type: string
+          default: "manual"
+          maxLength: 200
+          description: "フィードバック元"
 
     TrustLog:
       type: object
@@ -805,8 +979,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/TrustFeedbackRequest'
       responses:
         "200":
           description: Feedback recorded
@@ -892,8 +1065,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/GovernancePolicyResponse'
     put:
       summary: Governance policy update
       requestBody:
@@ -901,16 +1073,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              additionalProperties: true
+              $ref: '#/components/schemas/GovernancePolicy'
       responses:
         "200":
           description: Updated policy
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/GovernancePolicyResponse'
 
   /v1/governance/policy/history:
     get:
@@ -936,11 +1106,9 @@ paths:
                         actor:
                           type: string
                         previous:
-                          type: object
-                          additionalProperties: true
+                          $ref: '#/components/schemas/GovernancePolicy'
                         new:
-                          type: object
-                          additionalProperties: true
+                          $ref: '#/components/schemas/GovernancePolicy'
 
   /v1/compliance/config:
     get:
