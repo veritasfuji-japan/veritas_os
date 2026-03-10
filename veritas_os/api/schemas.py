@@ -224,6 +224,32 @@ class FujiDecision(BaseModel):
     reasons: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     violations: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
+    # Diagnostic fields consumed by the frontend FujiGateView adapter.
+    # rule_hit: the specific policy rule or keyword that triggered the gate.
+    rule_hit: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Policy rule or keyword that triggered the FUJI gate.",
+    )
+    # severity: qualitative risk level ("low" | "medium" | "high" | "critical").
+    severity: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Qualitative risk severity level produced by the safety head.",
+    )
+    # remediation_hint: suggested action for the operator or user.
+    remediation_hint: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+        description="Suggested remediation action for operators when gate fires.",
+    )
+    # risky_text_fragment: short excerpt from the input that triggered the rule.
+    risky_text_fragment: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Short excerpt from the input that triggered the policy rule.",
+    )
+
 
 class TrustLog(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -408,6 +434,54 @@ class DecideRequest(BaseModel):
 
 
 # =========================
+# Pipeline stage metrics (extras["stage_metrics"])
+# =========================
+
+
+class StageMetrics(BaseModel):
+    """
+    Per-stage execution metrics written into DecideResponse.extras["stage_metrics"].
+
+    Each pipeline stage (Input, Evidence, Critique, Debate, Plan, Value, FUJI,
+    TrustLog) may publish a StageMetrics entry keyed by its lowercase name.
+
+    Frontend adapter contract (decision-view.ts):
+    - Key aliases: Input→"input", Evidence→"evidence", Critique→"critique",
+      Debate→"debate", Plan→"plan"/"planner", Value→"value"/"values",
+      FUJI→"fuji"/"gate", TrustLog→"trustlog"/"trust_log"
+    - latency_ms: stage wall-clock time in milliseconds
+    - health: "ok" | "warning" | "failed" | "unknown"
+    - summary: one-line human-readable result description
+    - detail: extended diagnostic text (shown on hover / expanded view)
+    """
+    model_config = ConfigDict(extra="allow")
+
+    latency_ms: Optional[float] = Field(
+        default=None,
+        description="Stage wall-clock execution time in milliseconds.",
+    )
+    health: Literal["ok", "warning", "failed", "unknown"] = Field(
+        default="unknown",
+        description="Stage health status consumed by the pipeline visualizer.",
+    )
+    summary: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="One-line human-readable description of stage outcome.",
+    )
+    detail: Optional[str] = Field(
+        default=None,
+        max_length=5000,
+        description="Extended diagnostic text for the stage (shown in expanded UI view).",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        max_length=2000,
+        description="Fallback for detail when detail is absent (e.g. gate rejection reason).",
+    )
+
+
+# =========================
 # API I/O（Response）
 # =========================
 
@@ -445,6 +519,30 @@ class Gate(BaseModel):
     decision_status: DecisionStatusLiteral = "allow"
     reason: Optional[str] = None
     modifications: List[Union[str, Dict[str, Any]]] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+
+    # Diagnostic fields consumed by the frontend FujiGateView adapter.
+    # Mirrors the same fields on FujiDecision so the adapter's merged lookup works
+    # regardless of which object carries the value.
+    rule_hit: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Policy rule or keyword that triggered the gate (mirrors FujiDecision.rule_hit).",
+    )
+    severity: Optional[str] = Field(
+        default=None,
+        max_length=50,
+        description="Qualitative risk severity level (mirrors FujiDecision.severity).",
+    )
+    remediation_hint: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+        description="Suggested remediation action (mirrors FujiDecision.remediation_hint).",
+    )
+    risky_text_fragment: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Short excerpt triggering the rule (mirrors FujiDecision.risky_text_fragment).",
+    )
 
 
 class DecideResponse(BaseModel):

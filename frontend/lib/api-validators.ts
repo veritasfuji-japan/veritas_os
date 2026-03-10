@@ -1,13 +1,15 @@
 import type {
+  AuditLevel,
   AutoStop,
   FujiRules,
   GovernancePolicy,
   GovernancePolicyResponse,
   LogRetention,
   RiskThresholds,
+  TrustLog,
 } from "@veritas/types";
 
-export type { GovernancePolicy, GovernancePolicyResponse };
+export type { AuditLevel, GovernancePolicy, GovernancePolicyResponse, TrustLog };
 
 export interface GovernanceValidationIssue {
   category: "format" | "semantic";
@@ -27,27 +29,13 @@ interface GovernanceValidationFailure {
 
 export type GovernanceValidationResult = GovernanceValidationSuccess | GovernanceValidationFailure;
 
-const AUDIT_LEVELS = new Set(["none", "minimal", "standard", "full", "strict"]);
+const AUDIT_LEVELS: ReadonlySet<AuditLevel> = new Set<AuditLevel>(["none", "minimal", "summary", "standard", "full", "strict"]);
 
-export interface TrustLogItem {
-  request_id: string;
-  created_at: string;
-  sources: string[];
-  critics: string[];
-  checks: string[];
-  approver: string;
-  fuji?: Record<string, unknown> | null;
-  sha256?: string | null;
-  sha256_prev?: string | null;
-  /** Pipeline-provided fields (optional — present in audit entries from pipeline.py) */
-  query?: string | null;
-  gate_status?: string | null;
-  gate_risk?: number | null;
-  [key: string]: unknown;
-}
+/** @deprecated Use TrustLog from @veritas/types directly. */
+export type TrustLogItem = TrustLog;
 
 export interface TrustLogsResponse {
-  items: TrustLogItem[];
+  items: TrustLog[];
   cursor: string;
   next_cursor: string | null;
   limit: number;
@@ -56,7 +44,7 @@ export interface TrustLogsResponse {
 
 export interface RequestLogResponse {
   request_id: string;
-  items: TrustLogItem[];
+  items: TrustLog[];
   count: number;
   chain_ok: boolean;
   verification_result: string;
@@ -226,8 +214,8 @@ function validateLogRetention(value: unknown, pathPrefix: string): GovernanceVal
 
   if (!hasStringField(value, "audit_level")) {
     issues.push(issue("format", `${pathPrefix}.audit_level`, "string である必要があります。"));
-  } else if (!AUDIT_LEVELS.has(value.audit_level as string)) {
-    issues.push(issue("semantic", `${pathPrefix}.audit_level`, "許可された監査レベルではありません。"));
+  } else if (!AUDIT_LEVELS.has(value.audit_level as AuditLevel)) {
+    issues.push(issue("semantic", `${pathPrefix}.audit_level`, `許可された監査レベル (${[...AUDIT_LEVELS].join(", ")}) ではありません。`));
   }
 
   if (!Array.isArray(value.include_fields) || !value.include_fields.every((field) => typeof field === "string")) {
@@ -327,7 +315,12 @@ function isStringArray(value: unknown): boolean {
   return Array.isArray(value) && value.every((s) => typeof s === "string");
 }
 
-export function isTrustLogItem(value: unknown): value is TrustLogItem {
+/**
+ * Runtime type guard for TrustLog payloads.
+ * Validates the shared TrustLog type from @veritas/types,
+ * used for both /v1/decide embedded trust_log and /v1/trust/logs list items.
+ */
+export function isTrustLog(value: unknown): value is TrustLog {
   if (!isRecord(value)) {
     return false;
   }
@@ -375,6 +368,9 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
   return true;
 }
 
+/** @deprecated Use isTrustLog instead. */
+export const isTrustLogItem = isTrustLog;
+
 export function isTrustLogsResponse(value: unknown): value is TrustLogsResponse {
   if (!isRecord(value)) {
     return false;
@@ -382,7 +378,7 @@ export function isTrustLogsResponse(value: unknown): value is TrustLogsResponse 
 
   return (
     Array.isArray(value.items)
-    && value.items.every((item) => isTrustLogItem(item))
+    && value.items.every((item) => isTrustLog(item))
     && hasStringField(value, "cursor")
     && (value.next_cursor === null || typeof value.next_cursor === "string")
     && hasNumberField(value, "limit")
@@ -398,7 +394,7 @@ export function isRequestLogResponse(value: unknown): value is RequestLogRespons
   return (
     hasStringField(value, "request_id")
     && Array.isArray(value.items)
-    && value.items.every((item) => isTrustLogItem(item))
+    && value.items.every((item) => isTrustLog(item))
     && hasNumberField(value, "count")
     && hasBooleanField(value, "chain_ok")
     && hasStringField(value, "verification_result")
