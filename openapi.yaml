@@ -63,6 +63,7 @@ components:
 
     Option:
       type: object
+      description: "入力用の候補選択肢（全フィールド省略可能）"
       properties:
         id:
           type: string
@@ -91,16 +92,47 @@ components:
           nullable: true
           additionalProperties: true
 
+    Alt:
+      type: object
+      description: "レスポンス用の候補選択肢（パイプラインにより正規化済み）"
+      required: [id, title, description, score]
+      properties:
+        id:
+          type: string
+          default: ""
+        title:
+          type: string
+          default: ""
+        description:
+          type: string
+          default: ""
+        score:
+          type: number
+          default: 1.0
+        score_raw:
+          type: number
+          nullable: true
+        world:
+          type: object
+          nullable: true
+          additionalProperties: true
+        meta:
+          type: object
+          nullable: true
+          additionalProperties: true
+
     EvidenceItem:
       type: object
       required: [source, snippet, confidence]
       properties:
         source:
           type: string
+          default: "unknown"
           maxLength: 500
         uri:
           type: string
           format: uri
+          nullable: true
           maxLength: 2000
         title:
           type: string
@@ -108,23 +140,29 @@ components:
           maxLength: 1000
         snippet:
           type: string
+          default: ""
           maxLength: 50000
         confidence:
           type: number
+          default: 0.7
 
     CritiqueItem:
       type: object
+      required: [issue]
       properties:
         issue:
           type: string
         severity:
           type: string
           enum: ["low", "med", "high"]
+          default: "med"
         fix:
           type: string
+          nullable: true
 
     DebateView:
       type: object
+      required: [stance, argument, score]
       properties:
         stance:
           type: string
@@ -135,6 +173,7 @@ components:
 
     FujiDecision:
       type: object
+      required: [status]
       properties:
         status:
           type: string
@@ -153,14 +192,17 @@ components:
       properties:
         risk:
           type: number
+          default: 0.0
         telos_score:
           type: number
+          default: 0.0
         bias:
           type: number
           nullable: true
         decision_status:
           type: string
           enum: ["allow", "modify", "rejected", "block", "abstain"]
+          default: "allow"
         reason:
           type: string
           nullable: true
@@ -174,6 +216,7 @@ components:
 
     ValuesOut:
       type: object
+      required: [scores, total, top_factors, rationale]
       properties:
         scores:
           type: object
@@ -196,14 +239,18 @@ components:
       properties:
         name:
           type: string
+          default: "VERITAS"
         style:
           type: string
+          default: "direct, strategic, honest"
         tone:
           type: string
+          default: "warm"
         principles:
           type: array
           items:
             type: string
+          default: ["honesty", "dignity", "growth"]
         last_updated:
           type: string
           nullable: true
@@ -428,6 +475,7 @@ components:
             type: string
         approver:
           type: string
+          default: "system"
         fuji:
           $ref: '#/components/schemas/FujiDecision'
           nullable: true
@@ -480,11 +528,13 @@ components:
         options:
           type: array
           items:
-            $ref: '#/components/schemas/Option'
+            $ref: '#/components/schemas/Alt'
+          description: "候補選択肢（後方互換フィールド、alternativesと同値に正規化）"
         alternatives:
           type: array
           items:
-            $ref: '#/components/schemas/Option'
+            $ref: '#/components/schemas/Alt'
+          description: "候補選択肢（canonicalフィールド）"
         evidence:
           type: array
           items:
