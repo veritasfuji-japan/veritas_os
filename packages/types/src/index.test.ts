@@ -6,6 +6,10 @@ import type {
   DecideResponse,
   FujiDecision,
   HealthResponse,
+  MemoryKind,
+  ResponseStyle,
+  RetentionClass,
+  TimeHorizon,
   TrustLog,
 } from "./index";
 
@@ -217,5 +221,27 @@ describe("types", () => {
 
     expect(decision.status).toBe("allow");
     expect(decision.violations).toHaveLength(0);
+  });
+
+  it("MemoryKind type matches backend VALID_MEMORY_KINDS", () => {
+    const kinds: MemoryKind[] = ["semantic", "episodic", "skills", "doc", "plan"];
+    expect(kinds).toHaveLength(5);
+    expect(kinds).toContain("semantic");
+    expect(kinds).toContain("plan");
+  });
+
+  it("TimeHorizon type matches backend Context.time_horizon", () => {
+    const horizons: TimeHorizon[] = ["short", "mid", "long"];
+    expect(horizons).toHaveLength(3);
+  });
+
+  it("ResponseStyle type matches backend Context.response_style", () => {
+    const styles: ResponseStyle[] = ["logic", "emotional", "business", "expert", "casual"];
+    expect(styles).toHaveLength(5);
+  });
+
+  it("RetentionClass type matches backend ALLOWED_RETENTION_CLASSES", () => {
+    const classes: RetentionClass[] = ["short", "standard", "long", "regulated"];
+    expect(classes).toHaveLength(4);
   });
 });

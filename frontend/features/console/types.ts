@@ -27,7 +27,7 @@ export type PipelineStageStatus = "idle" | "running" | "complete" | "warning" | 
 export interface PipelineStepView {
   name: string;
   summary: string;
-  status: "complete" | "idle";
+  status: PipelineStageStatus;
   detail: string;
 }
 
