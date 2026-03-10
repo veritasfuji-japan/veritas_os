@@ -518,4 +518,154 @@ describe("types", () => {
     // evo and rsi_note undefined (should also work)
     expect(isDecideResponse({ ...base, evo: undefined, rsi_note: undefined })).toBe(true);
   });
+
+  it("isDecideResponse accepts payload with optional nullable fields (affected_parties_notice, query, pipeline_steps, deterministic_replay)", () => {
+    const base = {
+      ok: true,
+      error: null,
+      request_id: "req_123",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: {
+        risk: 0.1,
+        telos_score: 0.8,
+        decision_status: "allow",
+        modifications: [],
+      },
+      evidence: [],
+      critique: [],
+      debate: [],
+      extras: {},
+      meta: {},
+      persona: {},
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "disclosure",
+      regulation_notice: "notice",
+    };
+
+    // omitted (undefined)
+    expect(isDecideResponse({ ...base })).toBe(true);
+
+    // explicitly null
+    expect(isDecideResponse({
+      ...base,
+      affected_parties_notice: null,
+      query: null,
+      pipeline_steps: null,
+      deterministic_replay: null,
+    })).toBe(true);
+
+    // with values
+    expect(isDecideResponse({
+      ...base,
+      affected_parties_notice: { parties: ["user-1"] },
+      query: "test query",
+      pipeline_steps: ["step1", "step2"],
+      deterministic_replay: { seed: 42 },
+    })).toBe(true);
+  });
+
+  it("isDecideResponse rejects invalid affected_parties_notice type", () => {
+    const base = {
+      ok: true,
+      error: null,
+      request_id: "req_123",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: {
+        risk: 0.1,
+        telos_score: 0.8,
+        decision_status: "allow",
+        modifications: [],
+      },
+      evidence: [],
+      critique: [],
+      debate: [],
+      extras: {},
+      meta: {},
+      persona: {},
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "disclosure",
+      regulation_notice: "notice",
+    };
+
+    // affected_parties_notice must be null, undefined, or object
+    expect(isDecideResponse({ ...base, affected_parties_notice: "invalid" })).toBe(false);
+
+    // query must be null, undefined, or string
+    expect(isDecideResponse({ ...base, query: 123 })).toBe(false);
+
+    // pipeline_steps must be null, undefined, or array
+    expect(isDecideResponse({ ...base, pipeline_steps: "not-an-array" })).toBe(false);
+
+    // deterministic_replay must be null, undefined, or object
+    expect(isDecideResponse({ ...base, deterministic_replay: "invalid" })).toBe(false);
+  });
+
+  it("DecideResponse critique and debate use typed arrays (CritiqueItem[] and DebateView[])", () => {
+    const response: DecideResponse = {
+      ok: true,
+      error: null,
+      request_id: "req_123",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: {
+        risk: 0.1,
+        telos_score: 0.8,
+        decision_status: "allow",
+        modifications: [],
+      },
+      evidence: [],
+      critique: [{ issue: "bias detected", severity: "high", fix: "add diversity" }],
+      debate: [{ stance: "for", argument: "safe approach", score: 0.9 }],
+      extras: {},
+      reason: null,
+      rsi_note: null,
+      evo: null,
+      meta: {},
+      plan: null,
+      planner: null,
+      persona: {},
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "AI generated",
+      regulation_notice: "EU AI Act",
+    };
+
+    // critique items are typed — access CritiqueItem fields
+    expect(response.critique[0].issue).toBe("bias detected");
+    expect(response.critique[0].severity).toBe("high");
+    expect(response.critique[0].fix).toBe("add diversity");
+
+    // debate items are typed — access DebateView fields
+    expect(response.debate[0].stance).toBe("for");
+    expect(response.debate[0].argument).toBe("safe approach");
+    expect(response.debate[0].score).toBe(0.9);
+  });
 });

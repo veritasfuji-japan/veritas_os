@@ -83,14 +83,6 @@ components:
         score_raw:
           type: number
           nullable: true
-        world:
-          type: object
-          nullable: true
-          additionalProperties: true
-        meta:
-          type: object
-          nullable: true
-          additionalProperties: true
 
     Alt:
       type: object
