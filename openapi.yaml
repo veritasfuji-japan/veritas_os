@@ -202,10 +202,14 @@ components:
         fuji:
           $ref: '#/components/schemas/FujiDecision'
           nullable: true
+        sha256:
+          type: string
+          nullable: true
+          description: "このエントリ自身のSHA-256ハッシュ"
         sha256_prev:
           type: string
           nullable: true
-          description: "チェーン用ハッシュ"
+          description: "チェーン用ハッシュ（前エントリのsha256）"
 
     DecideResponse:
       type: object
@@ -223,6 +227,8 @@ components:
           type: string
         chosen:
           type: object
+          additionalProperties: true
+          description: "選択されたアクションと理由（構造は可変。action/rationale/uncertaintyを含むことが多い）"
           properties:
             action:
               type: string
@@ -311,6 +317,21 @@ components:
           nullable: true
           additionalProperties: true
           description: "高リスクAI決定で第三者に影響する場合の通知レコード"
+        query:
+          type: string
+          nullable: true
+          description: "監査・再現用に付与された元のユーザークエリテキスト"
+        pipeline_steps:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: "オーケストレーターが解決した動的パイプラインステップ（EU AI Act準拠）"
+        deterministic_replay:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "決定の決定論的再現に必要なスナップショット"
 
 security:
   - ApiKeyAuth: []
@@ -452,17 +473,87 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_id, key, value]
               properties:
                 user_id:
                   type: string
+                  nullable: true
                 key:
                   type: string
-                value:
+                  nullable: true
+                text:
                   type: string
+                  description: "メモリ本文テキスト（最大100,000文字）"
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: "タグリスト（最大100件）"
+                value:
+                  description: "任意のJSON値"
+                kind:
+                  type: string
+                  default: "semantic"
+                  description: "メモリ種別 (semantic / episodic / skills / doc / plan)"
+                retention_class:
+                  type: string
+                  nullable: true
+                  enum: ["short", "standard", "long", "regulated"]
+                  description: "保持クラス"
+                meta:
+                  type: object
+                  additionalProperties: true
+                  description: "任意メタデータ"
+                expires_at:
+                  type: integer
+                  nullable: true
+                  description: "有効期限（UNIXタイムスタンプ秒）"
+                legal_hold:
+                  type: boolean
+                  default: false
+                  description: "法的保持フラグ"
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  legacy:
+                    type: object
+                    properties:
+                      saved:
+                        type: boolean
+                      key:
+                        type: string
+                        nullable: true
+                  vector:
+                    type: object
+                    properties:
+                      saved:
+                        type: boolean
+                      id:
+                        type: string
+                      kind:
+                        type: string
+                      tags:
+                        type: array
+                        items:
+                          type: string
+                  size:
+                    type: integer
+                  lifecycle:
+                    type: object
+                    properties:
+                      retention_class:
+                        type: string
+                      expires_at:
+                        type: integer
+                        nullable: true
+                      legal_hold:
+                        type: boolean
 
   /v1/memory/get:
     post:
@@ -473,22 +564,28 @@ paths:
           application/json:
             schema:
               type: object
-              required: [user_id, key]
+              required: [key]
               properties:
                 user_id:
                   type: string
+                  nullable: true
                 key:
                   type: string
       responses:
         "200":
-          description: value
+          description: Retrieved memory entry
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  value:
+                  ok:
+                    type: boolean
+                  error:
                     type: string
+                    nullable: true
+                  value:
+                    description: "取得した値（任意のJSON）"
 
   /v1/memory/search:
     post:
@@ -499,7 +596,34 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
+              properties:
+                user_id:
+                  type: string
+                  nullable: true
+                query:
+                  type: string
+                  default: ""
+                  description: "検索クエリ（最大10,000文字）"
+                k:
+                  type: integer
+                  default: 8
+                  minimum: 1
+                  maximum: 100
+                  description: "返却件数上限"
+                min_sim:
+                  type: number
+                  default: 0.25
+                  minimum: 0.0
+                  maximum: 1.0
+                  description: "最小類似度スコア"
+                kinds:
+                  oneOf:
+                    - type: string
+                    - type: array
+                      items:
+                        type: string
+                  nullable: true
+                  description: "絞り込むメモリ種別（単一または配列）"
       responses:
         "200":
           description: Search results
@@ -518,7 +642,18 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
+              properties:
+                user_id:
+                  type: string
+                  nullable: true
+                reason:
+                  type: string
+                  default: "user_request"
+                  description: "消去理由"
+                actor:
+                  type: string
+                  default: "api"
+                  description: "消去を行うアクター名"
       responses:
         "200":
           description: Erasure result
