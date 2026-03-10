@@ -3,6 +3,7 @@ import {
   isChatRequest,
   isCritiqueItem,
   isDebateView,
+  isDecideRequest,
   isDecideResponse,
   isDecisionAlternative,
   isEvidenceItem,
@@ -10,7 +11,12 @@ import {
   isFujiDecision,
   isGateOut,
   isHealthResponse,
+  isMemoryEraseRequest,
+  isMemoryGetRequest,
+  isMemoryPutRequest,
+  isMemorySearchRequest,
   isPersonaState,
+  isTrustFeedbackRequest,
   isValuesOut,
 } from "./index";
 import type {
@@ -18,6 +24,7 @@ import type {
   ChatRequest,
   CritiqueItem,
   DebateView,
+  DecideRequest,
   DecideResponse,
   EvoTips,
   FujiDecision,
@@ -25,12 +32,17 @@ import type {
   GovernancePolicyResponse,
   HealthResponse,
   LogRetention,
+  MemoryEraseRequest,
+  MemoryGetRequest,
   MemoryKind,
+  MemoryPutRequest,
+  MemorySearchRequest,
   PersonaState,
   ResponseStyle,
   RetentionClass,
   RiskThresholds,
   TimeHorizon,
+  TrustFeedbackRequest,
   TrustLog,
 } from "./index";
 
@@ -1042,5 +1054,145 @@ describe("types", () => {
     expect(
       isChatRequest({ message: "Hello", persona_evolve: "yes" })
     ).toBe(false);
+  });
+
+  it("validates TrustFeedbackRequest payloads at runtime", () => {
+    expect(isTrustFeedbackRequest({})).toBe(true);
+    expect(
+      isTrustFeedbackRequest({
+        user_id: "u1",
+        score: 0.8,
+        note: "good",
+        source: "manual",
+      })
+    ).toBe(true);
+    expect(isTrustFeedbackRequest({ user_id: null })).toBe(true);
+    expect(isTrustFeedbackRequest({ score: 0.5 })).toBe(true);
+
+    expect(isTrustFeedbackRequest(null)).toBe(false);
+    expect(isTrustFeedbackRequest({ score: "high" })).toBe(false);
+    expect(isTrustFeedbackRequest({ note: 123 })).toBe(false);
+    expect(isTrustFeedbackRequest({ source: 456 })).toBe(false);
+    expect(isTrustFeedbackRequest({ user_id: 789 })).toBe(false);
+  });
+
+  it("validates DecideRequest payloads at runtime", () => {
+    expect(isDecideRequest({})).toBe(true);
+    expect(
+      isDecideRequest({
+        query: "What should I do?",
+        context: { user_id: "u1", query: "test" },
+        alternatives: [{ title: "A" }],
+        min_evidence: 2,
+        memory_auto_put: true,
+        persona_evolve: false,
+      })
+    ).toBe(true);
+
+    expect(isDecideRequest(null)).toBe(false);
+    expect(isDecideRequest({ query: 123 })).toBe(false);
+    expect(isDecideRequest({ context: "bad" })).toBe(false);
+    expect(isDecideRequest({ alternatives: "bad" })).toBe(false);
+    expect(isDecideRequest({ min_evidence: "bad" })).toBe(false);
+    expect(isDecideRequest({ memory_auto_put: "yes" })).toBe(false);
+    expect(isDecideRequest({ persona_evolve: "yes" })).toBe(false);
+  });
+
+  it("validates MemoryPutRequest payloads at runtime", () => {
+    expect(isMemoryPutRequest({})).toBe(true);
+    expect(
+      isMemoryPutRequest({
+        user_id: "u1",
+        key: "k1",
+        text: "hello",
+        tags: ["tag1"],
+        kind: "semantic",
+        retention_class: "standard",
+        meta: {},
+        expires_at: 1234567890,
+        legal_hold: false,
+      })
+    ).toBe(true);
+    expect(isMemoryPutRequest({ user_id: null, key: null })).toBe(true);
+    expect(isMemoryPutRequest({ retention_class: null })).toBe(true);
+    expect(isMemoryPutRequest({ expires_at: null })).toBe(true);
+
+    expect(isMemoryPutRequest(null)).toBe(false);
+    expect(isMemoryPutRequest({ text: 123 })).toBe(false);
+    expect(isMemoryPutRequest({ tags: [123] })).toBe(false);
+    expect(isMemoryPutRequest({ kind: 123 })).toBe(false);
+    expect(isMemoryPutRequest({ meta: "bad" })).toBe(false);
+    expect(isMemoryPutRequest({ expires_at: "bad" })).toBe(false);
+    expect(isMemoryPutRequest({ legal_hold: "bad" })).toBe(false);
+  });
+
+  it("validates MemoryGetRequest payloads at runtime", () => {
+    expect(isMemoryGetRequest({ key: "k1" })).toBe(true);
+    expect(isMemoryGetRequest({ user_id: "u1", key: "k1" })).toBe(true);
+    expect(isMemoryGetRequest({ user_id: null, key: "k1" })).toBe(true);
+
+    expect(isMemoryGetRequest(null)).toBe(false);
+    expect(isMemoryGetRequest({})).toBe(false);
+    expect(isMemoryGetRequest({ key: 123 })).toBe(false);
+    expect(isMemoryGetRequest({ user_id: 123, key: "k1" })).toBe(false);
+  });
+
+  it("validates MemorySearchRequest payloads at runtime", () => {
+    expect(isMemorySearchRequest({})).toBe(true);
+    expect(
+      isMemorySearchRequest({
+        user_id: "u1",
+        query: "test",
+        k: 10,
+        min_sim: 0.5,
+        kinds: ["semantic", "doc"],
+      })
+    ).toBe(true);
+    expect(isMemorySearchRequest({ kinds: "semantic" })).toBe(true);
+    expect(isMemorySearchRequest({ kinds: null })).toBe(true);
+
+    expect(isMemorySearchRequest(null)).toBe(false);
+    expect(isMemorySearchRequest({ query: 123 })).toBe(false);
+    expect(isMemorySearchRequest({ k: "bad" })).toBe(false);
+    expect(isMemorySearchRequest({ min_sim: "bad" })).toBe(false);
+    expect(isMemorySearchRequest({ kinds: 123 })).toBe(false);
+    expect(isMemorySearchRequest({ kinds: [123] })).toBe(false);
+  });
+
+  it("validates MemoryEraseRequest payloads at runtime", () => {
+    expect(isMemoryEraseRequest({})).toBe(true);
+    expect(
+      isMemoryEraseRequest({
+        user_id: "u1",
+        reason: "user_request",
+        actor: "api",
+      })
+    ).toBe(true);
+    expect(isMemoryEraseRequest({ user_id: null })).toBe(true);
+
+    expect(isMemoryEraseRequest(null)).toBe(false);
+    expect(isMemoryEraseRequest({ reason: 123 })).toBe(false);
+    expect(isMemoryEraseRequest({ actor: 123 })).toBe(false);
+    expect(isMemoryEraseRequest({ user_id: 123 })).toBe(false);
+  });
+
+  it("assigns new type interfaces correctly", () => {
+    const trustFeedback: TrustFeedbackRequest = { score: 0.8, note: "good" };
+    expect(trustFeedback.score).toBe(0.8);
+
+    const decideReq: DecideRequest = { query: "test" };
+    expect(decideReq.query).toBe("test");
+
+    const memPut: MemoryPutRequest = { text: "hello", kind: "semantic" };
+    expect(memPut.kind).toBe("semantic");
+
+    const memGet: MemoryGetRequest = { key: "k1" };
+    expect(memGet.key).toBe("k1");
+
+    const memSearch: MemorySearchRequest = { query: "test", k: 5 };
+    expect(memSearch.k).toBe(5);
+
+    const memErase: MemoryEraseRequest = { reason: "gdpr" };
+    expect(memErase.reason).toBe("gdpr");
   });
 });

@@ -614,6 +614,158 @@ components:
           additionalProperties: true
           description: "決定の決定論的再現に必要なスナップショット"
 
+    DecideRequest:
+      type: object
+      description: "意思決定リクエスト（全フィールドにデフォルト値あり、alternatives/options互換）"
+      properties:
+        query:
+          type: string
+          default: ""
+          maxLength: 10000
+          description: "ユーザ要求/問題文（context.queryの代替）"
+        context:
+          oneOf:
+            - $ref: '#/components/schemas/Context'
+            - type: object
+              additionalProperties: true
+          default: {}
+          description: "コンテキスト情報（省略可、デフォルト空dict）"
+        alternatives:
+          type: array
+          items:
+            $ref: '#/components/schemas/Option'
+          description: "候補選択肢（canonicalフィールド）"
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/Option'
+          description: "候補選択肢（後方互換フィールド、alternativesを優先）"
+        min_evidence:
+          type: integer
+          default: 1
+          minimum: 0
+          maximum: 100
+        memory_auto_put:
+          type: boolean
+          default: true
+        persona_evolve:
+          type: boolean
+          default: true
+
+    MemoryPutRequest:
+      type: object
+      description: "メモリ保存リクエスト"
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        key:
+          type: string
+          nullable: true
+          maxLength: 500
+        text:
+          type: string
+          default: ""
+          maxLength: 100000
+          description: "メモリ本文テキスト（最大100,000文字）"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "タグリスト（最大100件）"
+        value:
+          description: "任意のJSON値"
+        kind:
+          type: string
+          default: "semantic"
+          maxLength: 50
+          description: "メモリ種別 (semantic / episodic / skills / doc / plan)"
+        retention_class:
+          type: string
+          nullable: true
+          maxLength: 50
+          enum: ["short", "standard", "long", "regulated"]
+          description: "保持クラス"
+        meta:
+          type: object
+          additionalProperties: true
+          description: "任意メタデータ"
+        expires_at:
+          type: integer
+          nullable: true
+          description: "有効期限（UNIXタイムスタンプ秒）"
+        legal_hold:
+          type: boolean
+          default: false
+          description: "法的保持フラグ"
+
+    MemoryGetRequest:
+      type: object
+      description: "メモリ取得リクエスト"
+      required: [key]
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        key:
+          type: string
+          maxLength: 500
+
+    MemorySearchRequest:
+      type: object
+      description: "メモリ検索リクエスト"
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        query:
+          type: string
+          default: ""
+          maxLength: 10000
+          description: "検索クエリ（最大10,000文字）"
+        k:
+          type: integer
+          default: 8
+          minimum: 1
+          maximum: 100
+          description: "返却件数上限"
+        min_sim:
+          type: number
+          default: 0.25
+          minimum: 0.0
+          maximum: 1.0
+          description: "最小類似度スコア"
+        kinds:
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+          nullable: true
+          description: "絞り込むメモリ種別（単一または配列）"
+
+    MemoryEraseRequest:
+      type: object
+      description: "メモリ消去リクエスト"
+      properties:
+        user_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        reason:
+          type: string
+          default: "user_request"
+          maxLength: 500
+          description: "消去理由"
+        actor:
+          type: string
+          default: "api"
+          maxLength: 200
+          description: "消去を行うアクター名"
+
 security:
   - ApiKeyAuth: []
 
@@ -634,38 +786,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                query:
-                  type: string
-                  default: ""
-                  description: "ユーザ要求/問題文（context.queryの代替）"
-                context:
-                  oneOf:
-                    - $ref: '#/components/schemas/Context'
-                    - type: object
-                      additionalProperties: true
-                  default: {}
-                  description: "コンテキスト情報（省略可、デフォルト空dict）"
-                alternatives:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Option'
-                  description: "候補選択肢（canonicalフィールド）"
-                options:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/Option'
-                  description: "候補選択肢（後方互換フィールド、alternativesを優先）"
-                min_evidence:
-                  type: integer
-                  default: 1
-                memory_auto_put:
-                  type: boolean
-                  default: true
-                persona_evolve:
-                  type: boolean
-                  default: true
+              $ref: '#/components/schemas/DecideRequest'
       responses:
         "200":
           description: Decision
@@ -753,45 +874,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                user_id:
-                  type: string
-                  nullable: true
-                key:
-                  type: string
-                  nullable: true
-                text:
-                  type: string
-                  description: "メモリ本文テキスト（最大100,000文字）"
-                tags:
-                  type: array
-                  items:
-                    type: string
-                  description: "タグリスト（最大100件）"
-                value:
-                  description: "任意のJSON値"
-                kind:
-                  type: string
-                  default: "semantic"
-                  description: "メモリ種別 (semantic / episodic / skills / doc / plan)"
-                retention_class:
-                  type: string
-                  nullable: true
-                  enum: ["short", "standard", "long", "regulated"]
-                  description: "保持クラス"
-                meta:
-                  type: object
-                  additionalProperties: true
-                  description: "任意メタデータ"
-                expires_at:
-                  type: integer
-                  nullable: true
-                  description: "有効期限（UNIXタイムスタンプ秒）"
-                legal_hold:
-                  type: boolean
-                  default: false
-                  description: "法的保持フラグ"
+              $ref: '#/components/schemas/MemoryPutRequest'
       responses:
         "200":
           description: OK
@@ -844,14 +927,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [key]
-              properties:
-                user_id:
-                  type: string
-                  nullable: true
-                key:
-                  type: string
+              $ref: '#/components/schemas/MemoryGetRequest'
       responses:
         "200":
           description: Retrieved memory entry
@@ -876,35 +952,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                user_id:
-                  type: string
-                  nullable: true
-                query:
-                  type: string
-                  default: ""
-                  description: "検索クエリ（最大10,000文字）"
-                k:
-                  type: integer
-                  default: 8
-                  minimum: 1
-                  maximum: 100
-                  description: "返却件数上限"
-                min_sim:
-                  type: number
-                  default: 0.25
-                  minimum: 0.0
-                  maximum: 1.0
-                  description: "最小類似度スコア"
-                kinds:
-                  oneOf:
-                    - type: string
-                    - type: array
-                      items:
-                        type: string
-                  nullable: true
-                  description: "絞り込むメモリ種別（単一または配列）"
+              $ref: '#/components/schemas/MemorySearchRequest'
       responses:
         "200":
           description: Search results
@@ -922,19 +970,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                user_id:
-                  type: string
-                  nullable: true
-                reason:
-                  type: string
-                  default: "user_request"
-                  description: "消去理由"
-                actor:
-                  type: string
-                  default: "api"
-                  description: "消去を行うアクター名"
+              $ref: '#/components/schemas/MemoryEraseRequest'
       responses:
         "200":
           description: Erasure result

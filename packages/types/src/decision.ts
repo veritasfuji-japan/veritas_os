@@ -479,3 +479,204 @@ export function isEvoTips(value: unknown): value is EvoTips {
     value.notes.every((n: unknown) => typeof n === "string")
   );
 }
+
+// =========================
+// Request types aligned to backend schemas.py
+// =========================
+
+/**
+ * Trust feedback request body for POST /v1/trust/feedback.
+ *
+ * Source of truth: veritas_os/api/schemas.py — TrustFeedbackRequest
+ */
+export interface TrustFeedbackRequest {
+  user_id?: string | null;
+  score?: number;
+  note?: string;
+  source?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for TrustFeedbackRequest payloads.
+ *
+ * All fields have defaults in the backend, so only type checks are enforced.
+ */
+export function isTrustFeedbackRequest(value: unknown): value is TrustFeedbackRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
+    (value.score === undefined || typeof value.score === "number") &&
+    (value.note === undefined || typeof value.note === "string") &&
+    (value.source === undefined || typeof value.source === "string")
+  );
+}
+
+/**
+ * Decision request body for POST /v1/decide.
+ *
+ * Source of truth: veritas_os/api/schemas.py — DecideRequest
+ *
+ * Both `alternatives` (canonical) and `options` (deprecated, backward-compatible)
+ * are accepted. The backend normalizes them: `alternatives` takes precedence when
+ * both are provided; `options` is synced to match `alternatives` after coercion.
+ */
+export interface DecideRequest {
+  query?: string;
+  context?: Record<string, unknown>;
+  /** Canonical candidate list. */
+  alternatives?: Record<string, unknown>[];
+  /** @deprecated Use `alternatives`. Kept for backward compatibility; backend syncs to `alternatives`. */
+  options?: Record<string, unknown>[];
+  min_evidence?: number;
+  memory_auto_put?: boolean;
+  persona_evolve?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for DecideRequest payloads.
+ *
+ * Checks field types when present; all fields have defaults in the backend.
+ */
+export function isDecideRequest(value: unknown): value is DecideRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.query === undefined || typeof value.query === "string") &&
+    (value.context === undefined || isRecord(value.context)) &&
+    (value.alternatives === undefined || Array.isArray(value.alternatives)) &&
+    (value.options === undefined || Array.isArray(value.options)) &&
+    (value.min_evidence === undefined || typeof value.min_evidence === "number") &&
+    (value.memory_auto_put === undefined || typeof value.memory_auto_put === "boolean") &&
+    (value.persona_evolve === undefined || typeof value.persona_evolve === "boolean")
+  );
+}
+
+/**
+ * Memory put request body for POST /v1/memory/put.
+ *
+ * Source of truth: veritas_os/api/schemas.py — MemoryPutRequest
+ */
+export interface MemoryPutRequest {
+  user_id?: string | null;
+  key?: string | null;
+  text?: string;
+  tags?: string[];
+  value?: unknown;
+  kind?: string;
+  retention_class?: RetentionClass | null;
+  meta?: Record<string, unknown>;
+  expires_at?: number | null;
+  legal_hold?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for MemoryPutRequest payloads.
+ */
+export function isMemoryPutRequest(value: unknown): value is MemoryPutRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
+    (value.key === undefined || value.key === null || typeof value.key === "string") &&
+    (value.text === undefined || typeof value.text === "string") &&
+    (value.tags === undefined || (Array.isArray(value.tags) && value.tags.every((t: unknown) => typeof t === "string"))) &&
+    (value.kind === undefined || typeof value.kind === "string") &&
+    (value.retention_class === undefined || value.retention_class === null || typeof value.retention_class === "string") &&
+    (value.meta === undefined || isRecord(value.meta)) &&
+    (value.expires_at === undefined || value.expires_at === null || typeof value.expires_at === "number") &&
+    (value.legal_hold === undefined || typeof value.legal_hold === "boolean")
+  );
+}
+
+/**
+ * Memory get request body for POST /v1/memory/get.
+ *
+ * Source of truth: veritas_os/api/schemas.py — MemoryGetRequest
+ */
+export interface MemoryGetRequest {
+  user_id?: string | null;
+  key: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for MemoryGetRequest payloads.
+ */
+export function isMemoryGetRequest(value: unknown): value is MemoryGetRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
+    typeof value.key === "string"
+  );
+}
+
+/**
+ * Memory search request body for POST /v1/memory/search.
+ *
+ * Source of truth: veritas_os/api/schemas.py — MemorySearchRequest
+ */
+export interface MemorySearchRequest {
+  user_id?: string | null;
+  query?: string;
+  k?: number;
+  min_sim?: number;
+  kinds?: string | string[] | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for MemorySearchRequest payloads.
+ */
+export function isMemorySearchRequest(value: unknown): value is MemorySearchRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
+    (value.query === undefined || typeof value.query === "string") &&
+    (value.k === undefined || typeof value.k === "number") &&
+    (value.min_sim === undefined || typeof value.min_sim === "number") &&
+    (value.kinds === undefined || value.kinds === null || typeof value.kinds === "string" || (Array.isArray(value.kinds) && value.kinds.every((k: unknown) => typeof k === "string")))
+  );
+}
+
+/**
+ * Memory erase request body for POST /v1/memory/erase.
+ *
+ * Source of truth: veritas_os/api/schemas.py — MemoryEraseRequest
+ */
+export interface MemoryEraseRequest {
+  user_id?: string | null;
+  reason?: string;
+  actor?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Runtime type guard for MemoryEraseRequest payloads.
+ */
+export function isMemoryEraseRequest(value: unknown): value is MemoryEraseRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
+    (value.reason === undefined || typeof value.reason === "string") &&
+    (value.actor === undefined || typeof value.actor === "string")
+  );
+}
