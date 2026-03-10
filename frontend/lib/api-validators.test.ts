@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   isGovernancePolicyResponse,
   isRequestLogResponse,
+  isTrustLogItem,
   isTrustLogsResponse,
   validateGovernancePolicyResponse,
 } from "./api-validators";
@@ -329,7 +330,7 @@ describe("api validators", () => {
     expect(
       isRequestLogResponse({
         request_id: "req-1",
-        items: [{ request_id: "req-1", created_at: "2026-02-12T00:00:00Z", approver: "system" }],
+        items: [{ request_id: "req-1", created_at: "2026-02-12T00:00:00Z", sources: [], critics: [], checks: [], approver: "system" }],
         count: 1,
         chain_ok: true,
         verification_result: "ok",
@@ -347,5 +348,68 @@ describe("api validators", () => {
         verification_result: "ok",
       }),
     ).toBe(false);
+  });
+
+  it("rejects trust log item missing required sources (backend always provides default)", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        critics: [],
+        checks: [],
+        approver: "system",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item missing required critics (backend always provides default)", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        checks: [],
+        approver: "system",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item missing required checks (backend always provides default)", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        approver: "system",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item missing required approver (backend defaults to 'system')", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts trust log item with null sha256 fields (backend Optional[str])", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        sha256: null,
+        sha256_prev: null,
+      }),
+    ).toBe(true);
   });
 });

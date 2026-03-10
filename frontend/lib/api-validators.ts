@@ -69,17 +69,17 @@ const AUDIT_LEVELS = new Set(["none", "minimal", "standard", "full", "strict"]);
 export interface TrustLogItem {
   request_id: string;
   created_at: string;
-  sources?: string[];
-  critics?: string[];
-  checks?: string[];
-  approver?: string;
+  sources: string[];
+  critics: string[];
+  checks: string[];
+  approver: string;
   fuji?: Record<string, unknown> | null;
-  sha256?: string;
-  sha256_prev?: string;
+  sha256?: string | null;
+  sha256_prev?: string | null;
   /** Pipeline-provided fields (optional — present in audit entries from pipeline.py) */
-  query?: string;
-  gate_status?: string;
-  gate_risk?: number;
+  query?: string | null;
+  gate_status?: string | null;
+  gate_risk?: number | null;
   [key: string]: unknown;
 }
 
@@ -360,8 +360,8 @@ export function isGovernancePolicyResponse(value: unknown): value is GovernanceP
   return validateGovernancePolicyResponse(value).ok;
 }
 
-function isOptionalStringArray(value: unknown): boolean {
-  return value === undefined || (Array.isArray(value) && value.every((s) => typeof s === "string"));
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((s) => typeof s === "string");
 }
 
 export function isTrustLogItem(value: unknown): value is TrustLogItem {
@@ -377,11 +377,11 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
     return false;
   }
 
-  if (!isOptionalStringArray(value.sources) || !isOptionalStringArray(value.critics) || !isOptionalStringArray(value.checks)) {
+  if (!isStringArray(value.sources) || !isStringArray(value.critics) || !isStringArray(value.checks)) {
     return false;
   }
 
-  if (value.approver !== undefined && typeof value.approver !== "string") {
+  if (typeof value.approver !== "string") {
     return false;
   }
 
@@ -389,11 +389,11 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
     return false;
   }
 
-  if (value.sha256 !== undefined && typeof value.sha256 !== "string") {
+  if (value.sha256 !== undefined && value.sha256 !== null && typeof value.sha256 !== "string") {
     return false;
   }
 
-  if (value.sha256_prev !== undefined && typeof value.sha256_prev !== "string") {
+  if (value.sha256_prev !== undefined && value.sha256_prev !== null && typeof value.sha256_prev !== "string") {
     return false;
   }
 

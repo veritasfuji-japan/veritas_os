@@ -18,6 +18,10 @@ const MOCK_ITEMS_CHAINED = [
     sha256_prev: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
     decision_id: "dec-100",
     policy_version: "v1.2",
+    sources: ["memory"],
+    critics: [],
+    checks: ["fuji"],
+    approver: "system",
   },
   {
     request_id: "req-099",
@@ -30,6 +34,10 @@ const MOCK_ITEMS_CHAINED = [
     decision_id: "dec-099",
     replay_id: "rpl-001",
     policy_version: "v1.1",
+    sources: ["web"],
+    critics: [],
+    checks: ["fuji"],
+    approver: "system",
   },
 ];
 
@@ -59,8 +67,8 @@ describe("TrustLogExplorerPage", () => {
       ok: true,
       json: async () => ({
         items: [
-          { request_id: "req-1", stage: "value", created_at: "2026-02-12T00:00:00Z" },
-          { request_id: "req-2", stage: "fuji", created_at: "2026-02-11T00:00:00Z" },
+          { request_id: "req-1", stage: "value", created_at: "2026-02-12T00:00:00Z", sources: [], critics: [], checks: [], approver: "system" },
+          { request_id: "req-2", stage: "fuji", created_at: "2026-02-11T00:00:00Z", sources: [], critics: [], checks: [], approver: "system" },
         ],
         cursor: "0",
         next_cursor: "2",
