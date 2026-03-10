@@ -273,7 +273,8 @@ class TestFujiValidateErrorPaths:
         resp = client.post("/v1/fuji/validate", headers=HEADERS, json={"action": "x"})
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
+        assert body["ok"] is False
+        assert body["error"] == "Validation failed"
         assert body["reasons"] == ["Validation failed"]
 
     def test_general_exception_returns_error_structure(self, monkeypatch):
@@ -287,4 +288,5 @@ class TestFujiValidateErrorPaths:
         resp = client.post("/v1/fuji/validate", headers=HEADERS, json={"action": "x"})
         assert resp.status_code == 200
         body = resp.json()
-        assert body["status"] == "error"
+        assert body["ok"] is False
+        assert body["error"] == "Validation failed"

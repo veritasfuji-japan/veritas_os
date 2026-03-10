@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
-import type { GovernancePolicy as GovernancePolicyBase } from "@veritas/types";
+import type { FujiRules, GovernancePolicy as GovernancePolicyBase } from "@veritas/types";
 import { useI18n } from "../../components/i18n-provider";
 import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";

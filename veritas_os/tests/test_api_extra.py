@@ -276,7 +276,7 @@ class TestTrustFeedback:
         data = response.json()
         
         # レスポンス確認
-        assert data["status"] == "ok"
+        assert data["ok"] is True
         assert data["user_id"] == "feedback_user"
 
         # コア関数が正しく呼ばれているか確認
