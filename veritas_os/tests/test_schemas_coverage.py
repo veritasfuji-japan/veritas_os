@@ -258,6 +258,19 @@ class TestDecideResponseValidators:
         resp = DecideResponse(trust_log=tl_data)
         assert isinstance(resp.trust_log, TrustLog)
 
+    def test_trust_log_with_pipeline_fields(self):
+        """TrustLog accepts pipeline-provided fields (gate_status, gate_risk, query)."""
+        tl = TrustLog(
+            request_id="r2",
+            created_at="2024-01-01T00:00:00Z",
+            query="test query",
+            gate_status="allow",
+            gate_risk=0.15,
+        )
+        assert tl.query == "test query"
+        assert tl.gate_status == "allow"
+        assert tl.gate_risk == 0.15
+
     def test_trust_log_from_invalid_type(self):
         resp = DecideResponse(trust_log=12345)
         assert resp.trust_log is not None

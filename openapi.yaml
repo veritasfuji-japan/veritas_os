@@ -210,6 +210,18 @@ components:
           type: string
           nullable: true
           description: "チェーン用ハッシュ（前エントリのsha256）"
+        query:
+          type: string
+          nullable: true
+          description: "元のユーザークエリテキスト（パイプライン監査エントリに付与）"
+        gate_status:
+          type: string
+          nullable: true
+          description: "FUJIゲートの判定ステータス（allow/modify/rejected/block/abstain）"
+        gate_risk:
+          type: number
+          nullable: true
+          description: "ゲートのリスクスコア"
 
     DecideResponse:
       type: object
@@ -847,6 +859,36 @@ paths:
               schema:
                 type: object
                 additionalProperties: true
+
+  /v1/governance/policy/history:
+    get:
+      summary: Governance policy change history
+      responses:
+        "200":
+          description: Policy change history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  history:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        actor:
+                          type: string
+                        previous:
+                          type: object
+                          additionalProperties: true
+                        new:
+                          type: object
+                          additionalProperties: true
 
   /v1/compliance/config:
     get:

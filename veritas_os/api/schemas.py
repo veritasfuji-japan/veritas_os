@@ -237,12 +237,17 @@ class TrustLog(BaseModel):
     # 実運用の落下を避けるため、デフォルトを持たせる（必須思想なら外してOK）
     approver: str = "system"
 
-    # FUJI Gateの判定結果（openapi.yaml で required として定義）
+    # FUJI Gateの判定結果（openapi.yaml では任意フィールド）
     fuji: Optional[Dict[str, Any]] = None
 
     # ハッシュチェーン: trust_log.py の append_trust_log で付与される
     sha256: Optional[str] = None
     sha256_prev: Optional[str] = None
+
+    # パイプラインが付与する追加フィールド（pipeline.py の audit entry から）
+    query: Optional[str] = None
+    gate_status: Optional[str] = None
+    gate_risk: Optional[float] = None
 
 
 # =========================

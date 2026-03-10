@@ -132,6 +132,10 @@ export interface TrustLog {
   /** Hash-chain: SHA-256 of this entry, computed by trust_log.py append_trust_log. */
   sha256?: string | null;
   sha256_prev?: string | null;
+  /** Pipeline-provided fields (optional — present in audit entries from pipeline.py) */
+  query?: string | null;
+  gate_status?: string | null;
+  gate_risk?: number | null;
   [key: string]: unknown;
 }
 
