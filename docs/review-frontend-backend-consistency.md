@@ -10,7 +10,11 @@
 
 全体として、フロントエンドとバックエンドは**良好に整合**しています。共有型パッケージ（`@veritas/types`）はバックエンドの Pydantic スキーマを忠実に反映しており、BFF プロキシルートもパス変換を正しく行っています。
 
-**2026-03-10 更新:** PR #699, #700, #701, #703 により、以下の課題が修正されました。
+**2026-03-10 更新:** PR #699, #700, #701, #703, #704 により、以下の課題が修正されました。
+また、本 PR にて以下の追加修正を実施しました：
+- `PersonaState`、`EvoTips`、`ChatRequest` 型をフロントエンド共有型に追加
+- `isTrustLogItem` バリデータにパイプライン付与フィールド（`query`、`gate_status`、`gate_risk`）の型検証を追加
+- OpenAPI 仕様に `PersonaState`、`EvoTips`、`ChatRequest` スキーマを追加
 
 ---
 
@@ -72,6 +76,14 @@ DecideResponse スキーマを全フィールド含む形に更新。
 
 `fuji` フィールドのコメントを「任意フィールド」に更新。
 
+### 15. ~~フロントエンド共有型に `PersonaState`/`EvoTips`/`ChatRequest` が未定義~~ ✅ 修正済み (本 PR)
+
+バックエンド `schemas.py` に定義されている `PersonaState`、`EvoTips`、`ChatRequest` モデルに対応する TypeScript インターフェースを `packages/types/src/decision.ts` に追加。ランタイム型ガード `isPersonaState()`、`isEvoTips()` も追加。OpenAPI にも対応するスキーマを追加。
+
+### 16. ~~`isTrustLogItem` バリデータがパイプライン付与フィールドを未検証~~ ✅ 修正済み (本 PR)
+
+`TrustLogItem` インターフェースには `query`、`gate_status`、`gate_risk` フィールドが定義されていたが、`isTrustLogItem()` バリデータではこれらのフィールドの型チェックが行われていなかった。`Optional[str]`/`Optional[float]` に対応する `undefined | null | string`/`undefined | null | number` の型検証を追加。
+
 ---
 
 ## 整合性マトリクス（更新版）
@@ -85,6 +97,9 @@ DecideResponse スキーマを全フィールド含む形に更新。
 | EvidenceItem フィールド | OK | OK | OK |
 | TrustLog フィールド | OK | OK | OK |
 | Gate/GateOut フィールド | OK | OK | OK |
+| PersonaState/EvoTips 型 | OK | OK | OK |
+| ChatRequest 型 | OK | OK | OK |
+| TrustLogItem バリデータ | OK | OK | OK |
 | 認証方式 | OK（BFF プロキシ） | OK | N/A |
 | エラーハンドリング | OK | OK | N/A |
 | SSE イベント | OK | OK | N/A |

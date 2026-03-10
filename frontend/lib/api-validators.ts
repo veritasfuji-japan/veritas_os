@@ -397,6 +397,18 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
     return false;
   }
 
+  if (value.query !== undefined && value.query !== null && typeof value.query !== "string") {
+    return false;
+  }
+
+  if (value.gate_status !== undefined && value.gate_status !== null && typeof value.gate_status !== "string") {
+    return false;
+  }
+
+  if (value.gate_risk !== undefined && value.gate_risk !== null && typeof value.gate_risk !== "number") {
+    return false;
+  }
+
   return true;
 }
 

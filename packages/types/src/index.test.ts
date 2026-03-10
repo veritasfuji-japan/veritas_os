@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { isDecideResponse, isHealthResponse } from "./index";
+import { isDecideResponse, isHealthResponse, isPersonaState, isEvoTips } from "./index";
 import type {
+  ChatRequest,
   CritiqueItem,
   DebateView,
   DecideResponse,
+  EvoTips,
   FujiDecision,
   HealthResponse,
   MemoryKind,
+  PersonaState,
   ResponseStyle,
   RetentionClass,
   TimeHorizon,
@@ -243,5 +246,104 @@ describe("types", () => {
   it("RetentionClass type matches backend ALLOWED_RETENTION_CLASSES", () => {
     const classes: RetentionClass[] = ["short", "standard", "long", "regulated"];
     expect(classes).toHaveLength(4);
+  });
+
+  it("PersonaState type matches backend PersonaState schema", () => {
+    const state: PersonaState = {
+      name: "VERITAS",
+      style: "direct, strategic, honest",
+      tone: "warm",
+      principles: ["honesty", "dignity", "growth"],
+      last_updated: "2026-03-10T00:00:00Z",
+    };
+
+    expect(state.name).toBe("VERITAS");
+    expect(state.principles).toHaveLength(3);
+  });
+
+  it("validates PersonaState payloads at runtime", () => {
+    expect(
+      isPersonaState({
+        name: "VERITAS",
+        style: "direct",
+        tone: "warm",
+        principles: ["honesty"],
+      })
+    ).toBe(true);
+
+    expect(
+      isPersonaState({
+        name: "VERITAS",
+        style: "direct",
+        tone: "warm",
+        principles: ["honesty"],
+        last_updated: null,
+      })
+    ).toBe(true);
+
+    expect(isPersonaState(null)).toBe(false);
+    expect(isPersonaState({ name: "VERITAS" })).toBe(false);
+    expect(
+      isPersonaState({
+        name: "VERITAS",
+        style: "direct",
+        tone: "warm",
+        principles: [123],
+      })
+    ).toBe(false);
+  });
+
+  it("EvoTips type matches backend EvoTips schema", () => {
+    const tips: EvoTips = {
+      insights: { safety: "high" },
+      actions: ["review policy"],
+      next_prompts: ["consider edge cases"],
+      notes: ["note 1"],
+    };
+
+    expect(tips.actions).toHaveLength(1);
+    expect(tips.next_prompts).toHaveLength(1);
+  });
+
+  it("validates EvoTips payloads at runtime", () => {
+    expect(
+      isEvoTips({
+        insights: {},
+        actions: [],
+        next_prompts: [],
+        notes: [],
+      })
+    ).toBe(true);
+
+    expect(isEvoTips(null)).toBe(false);
+    expect(isEvoTips({ insights: {} })).toBe(false);
+    expect(
+      isEvoTips({
+        insights: {},
+        actions: [123],
+        next_prompts: [],
+        notes: [],
+      })
+    ).toBe(false);
+  });
+
+  it("ChatRequest type matches backend ChatRequest schema", () => {
+    const req: ChatRequest = {
+      message: "Hello, VERITAS",
+      session_id: "sess_abc",
+      memory_auto_put: true,
+      persona_evolve: true,
+    };
+
+    expect(req.message).toBe("Hello, VERITAS");
+  });
+
+  it("ChatRequest accepts minimal required fields", () => {
+    const req: ChatRequest = {
+      message: "Hello",
+    };
+
+    expect(req.message).toBe("Hello");
+    expect(req.session_id).toBeUndefined();
   });
 });
