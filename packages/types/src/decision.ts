@@ -519,11 +519,17 @@ export function isTrustFeedbackRequest(value: unknown): value is TrustFeedbackRe
  * Decision request body for POST /v1/decide.
  *
  * Source of truth: veritas_os/api/schemas.py — DecideRequest
+ *
+ * Both `alternatives` (canonical) and `options` (deprecated, backward-compatible)
+ * are accepted. The backend normalizes them: `alternatives` takes precedence when
+ * both are provided; `options` is synced to match `alternatives` after coercion.
  */
 export interface DecideRequest {
   query?: string;
   context?: Record<string, unknown>;
+  /** Canonical candidate list. */
   alternatives?: Record<string, unknown>[];
+  /** @deprecated Use `alternatives`. Kept for backward compatibility; backend syncs to `alternatives`. */
   options?: Record<string, unknown>[];
   min_evidence?: number;
   memory_auto_put?: boolean;
