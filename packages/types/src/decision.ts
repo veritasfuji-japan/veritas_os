@@ -2,7 +2,8 @@
  * /v1/decide response types aligned to backend runtime payloads.
  *
  * Source of truth:
- * - veritas_os/api/schemas.py (DecideResponse, TrustLog, Gate, CritiqueItem, DebateView, FujiDecision)
+ * - veritas_os/api/schemas.py (DecideResponse, TrustLog, Gate, CritiqueItem, DebateView,
+ *   FujiDecision, PersonaState, EvoTips, ChatRequest)
  * - veritas_os/core/pipeline.py (response assembly)
  */
 
@@ -139,6 +140,46 @@ export interface TrustLog {
   [key: string]: unknown;
 }
 
+/**
+ * Persona state maintained by the PersonaOS module.
+ *
+ * Source of truth: veritas_os/api/schemas.py — PersonaState
+ */
+export interface PersonaState {
+  name: string;
+  style: string;
+  tone: string;
+  principles: string[];
+  last_updated?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Evolution tips returned by the EvoOS module.
+ *
+ * Source of truth: veritas_os/api/schemas.py — EvoTips
+ */
+export interface EvoTips {
+  insights: Record<string, unknown>;
+  actions: string[];
+  next_prompts: string[];
+  notes: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * Chat request body for the SSE streaming endpoint.
+ *
+ * Source of truth: veritas_os/api/schemas.py — ChatRequest
+ */
+export interface ChatRequest {
+  message: string;
+  session_id?: string | null;
+  memory_auto_put?: boolean;
+  persona_evolve?: boolean;
+  [key: string]: unknown;
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   chosen: Record<string, unknown>;
   alternatives: DecisionAlternative[];
@@ -233,4 +274,45 @@ function isDecisionStatus(value: unknown): value is DecisionStatus {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+/**
+ * Runtime type guard for PersonaState payloads.
+ *
+ * Checks required fields: name, style, tone, principles.
+ */
+export function isPersonaState(value: unknown): value is PersonaState {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.name === "string" &&
+    typeof value.style === "string" &&
+    typeof value.tone === "string" &&
+    Array.isArray(value.principles) &&
+    value.principles.every((p: unknown) => typeof p === "string") &&
+    (value.last_updated === undefined || value.last_updated === null || typeof value.last_updated === "string")
+  );
+}
+
+/**
+ * Runtime type guard for EvoTips payloads.
+ *
+ * Checks required fields: insights, actions, next_prompts, notes.
+ */
+export function isEvoTips(value: unknown): value is EvoTips {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isRecord(value.insights) &&
+    Array.isArray(value.actions) &&
+    value.actions.every((a: unknown) => typeof a === "string") &&
+    Array.isArray(value.next_prompts) &&
+    value.next_prompts.every((p: unknown) => typeof p === "string") &&
+    Array.isArray(value.notes) &&
+    value.notes.every((n: unknown) => typeof n === "string")
+  );
 }

@@ -176,6 +176,60 @@ components:
           type: number
           nullable: true
 
+    PersonaState:
+      type: object
+      properties:
+        name:
+          type: string
+        style:
+          type: string
+        tone:
+          type: string
+        principles:
+          type: array
+          items:
+            type: string
+        last_updated:
+          type: string
+          nullable: true
+
+    EvoTips:
+      type: object
+      properties:
+        insights:
+          type: object
+          additionalProperties: true
+        actions:
+          type: array
+          items:
+            type: string
+        next_prompts:
+          type: array
+          items:
+            type: string
+        notes:
+          type: array
+          items:
+            type: string
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          maxLength: 10000
+        session_id:
+          type: string
+          nullable: true
+          maxLength: 500
+        memory_auto_put:
+          type: boolean
+          default: true
+        persona_evolve:
+          type: boolean
+          default: true
+
     TrustLog:
       type: object
       required: [request_id, created_at, sources, critics, checks, approver]
@@ -299,8 +353,7 @@ components:
           type: object
           additionalProperties: true
         persona:
-          type: object
-          additionalProperties: true
+          $ref: '#/components/schemas/PersonaState'
         plan:
           type: object
           nullable: true
@@ -312,9 +365,8 @@ components:
         reason:
           nullable: true
         evo:
-          type: object
+          $ref: '#/components/schemas/EvoTips'
           nullable: true
-          additionalProperties: true
         memory_citations:
           type: array
           items: {}

@@ -412,4 +412,62 @@ describe("api validators", () => {
       }),
     ).toBe(true);
   });
+
+  it("accepts trust log item with null pipeline fields (backend Optional types)", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        query: null,
+        gate_status: null,
+        gate_risk: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects trust log item with invalid query type (backend Optional[str])", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        query: 123,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item with invalid gate_status type (backend Optional[str])", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        gate_status: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item with invalid gate_risk type (backend Optional[float])", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        gate_risk: "high",
+      }),
+    ).toBe(false);
+  });
 });
