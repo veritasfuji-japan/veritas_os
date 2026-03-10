@@ -73,7 +73,7 @@ components:
         text:
           type: string
           maxLength: 1000
-          description: "titleの別名（後方互換フィールド）"
+          description: "titleの別名（後方互換フィールド）。titleが未指定の場合にtitleとして使用される。"
         description:
           type: string
           maxLength: 20000
@@ -372,6 +372,7 @@ components:
 
     GovernancePolicyResponse:
       type: object
+      required: [ok, policy]
       description: "ガバナンスポリシーAPIレスポンス"
       properties:
         ok:
@@ -381,7 +382,7 @@ components:
 
     TrustFeedbackRequest:
       type: object
-      description: "信頼フィードバックリクエスト"
+      description: "信頼フィードバックリクエスト（全フィールドにデフォルト値あり）"
       properties:
         user_id:
           type: string
