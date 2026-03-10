@@ -76,6 +76,10 @@ export interface TrustLogItem {
   fuji?: Record<string, unknown> | null;
   sha256?: string;
   sha256_prev?: string;
+  /** Pipeline-provided fields (optional — present in audit entries from pipeline.py) */
+  query?: string;
+  gate_status?: string;
+  gate_risk?: number;
   [key: string]: unknown;
 }
 
@@ -224,8 +228,8 @@ function validateAutoStop(value: unknown, pathPrefix: string): GovernanceValidat
     issues.push(issue("format", `${pathPrefix}.max_consecutive_rejects`, "number である必要があります。"));
   } else {
     const maxConsecutiveRejects = value.max_consecutive_rejects as number;
-    if (!Number.isInteger(maxConsecutiveRejects) || maxConsecutiveRejects < 1) {
-      issues.push(issue("semantic", `${pathPrefix}.max_consecutive_rejects`, "1 以上の整数である必要があります。"));
+    if (!Number.isInteger(maxConsecutiveRejects) || maxConsecutiveRejects < 1 || maxConsecutiveRejects > 1000) {
+      issues.push(issue("semantic", `${pathPrefix}.max_consecutive_rejects`, "1 以上 1000 以下の整数である必要があります。"));
     }
   }
 
@@ -233,8 +237,8 @@ function validateAutoStop(value: unknown, pathPrefix: string): GovernanceValidat
     issues.push(issue("format", `${pathPrefix}.max_requests_per_minute`, "number である必要があります。"));
   } else {
     const maxRequestsPerMinute = value.max_requests_per_minute as number;
-    if (!Number.isInteger(maxRequestsPerMinute) || maxRequestsPerMinute <= 0) {
-      issues.push(issue("semantic", `${pathPrefix}.max_requests_per_minute`, "1 以上の整数である必要があります。"));
+    if (!Number.isInteger(maxRequestsPerMinute) || maxRequestsPerMinute < 1 || maxRequestsPerMinute > 10000) {
+      issues.push(issue("semantic", `${pathPrefix}.max_requests_per_minute`, "1 以上 10000 以下の整数である必要があります。"));
     }
   }
 
@@ -252,8 +256,8 @@ function validateLogRetention(value: unknown, pathPrefix: string): GovernanceVal
     issues.push(issue("format", `${pathPrefix}.retention_days`, "number である必要があります。"));
   } else {
     const retentionDays = value.retention_days as number;
-    if (!Number.isInteger(retentionDays) || retentionDays <= 0) {
-      issues.push(issue("semantic", `${pathPrefix}.retention_days`, "1 以上の整数である必要があります。"));
+    if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > 3650) {
+      issues.push(issue("semantic", `${pathPrefix}.retention_days`, "1 以上 3650 以下の整数である必要があります。"));
     }
   }
 
@@ -275,8 +279,8 @@ function validateLogRetention(value: unknown, pathPrefix: string): GovernanceVal
     issues.push(issue("format", `${pathPrefix}.max_log_size`, "number である必要があります。"));
   } else {
     const maxLogSize = value.max_log_size as number;
-    if (!Number.isInteger(maxLogSize) || maxLogSize < 100) {
-      issues.push(issue("semantic", `${pathPrefix}.max_log_size`, "100 以上の整数である必要があります。"));
+    if (!Number.isInteger(maxLogSize) || maxLogSize < 100 || maxLogSize > 1000000) {
+      issues.push(issue("semantic", `${pathPrefix}.max_log_size`, "100 以上 1000000 以下の整数である必要があります。"));
     }
   }
 

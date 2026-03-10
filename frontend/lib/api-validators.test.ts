@@ -162,6 +162,86 @@ describe("api validators", () => {
     expect(validation.issues.some((issue) => issue.path === "policy.log_retention.max_log_size")).toBe(true);
   });
 
+  it("rejects max_consecutive_rejects above 1000 (backend requires le=1000)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        auto_stop: {
+          ...validGovernanceResponse.policy.auto_stop,
+          max_consecutive_rejects: 1001,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.auto_stop.max_consecutive_rejects")).toBe(true);
+  });
+
+  it("rejects max_requests_per_minute above 10000 (backend requires le=10000)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        auto_stop: {
+          ...validGovernanceResponse.policy.auto_stop,
+          max_requests_per_minute: 10001,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.auto_stop.max_requests_per_minute")).toBe(true);
+  });
+
+  it("rejects retention_days above 3650 (backend requires le=3650)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        log_retention: {
+          ...validGovernanceResponse.policy.log_retention,
+          retention_days: 3651,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.log_retention.retention_days")).toBe(true);
+  });
+
+  it("rejects max_log_size above 1000000 (backend requires le=1000000)", () => {
+    const validation = validateGovernancePolicyResponse({
+      ok: true,
+      policy: {
+        ...validGovernanceResponse.policy,
+        log_retention: {
+          ...validGovernanceResponse.policy.log_retention,
+          max_log_size: 1000001,
+        },
+      },
+    });
+
+    expect(validation.ok).toBe(false);
+    if (validation.ok) {
+      return;
+    }
+
+    expect(validation.issues.some((issue) => issue.path === "policy.log_retention.max_log_size")).toBe(true);
+  });
+
   it("accepts valid trust logs response", () => {
     expect(
       isTrustLogsResponse({
@@ -180,6 +260,31 @@ describe("api validators", () => {
         next_cursor: "1",
         limit: 50,
         has_more: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("accepts trust log item with pipeline-provided fields (gate_status, gate_risk, query)", () => {
+    expect(
+      isTrustLogsResponse({
+        items: [
+          {
+            request_id: "req-2",
+            created_at: "2026-02-12T00:00:00Z",
+            sources: ["web"],
+            critics: [],
+            checks: ["fuji"],
+            approver: "system",
+            sha256: "def456",
+            query: "What is the risk?",
+            gate_status: "allow",
+            gate_risk: 0.15,
+          },
+        ],
+        cursor: "0",
+        next_cursor: null,
+        limit: 50,
+        has_more: false,
       }),
     ).toBe(true);
   });
