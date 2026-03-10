@@ -72,6 +72,7 @@ export type {
 } from "./decision";
 
 export type {
+  AuditLevel,
   AutoStop,
   FujiRules,
   GovernancePolicy,

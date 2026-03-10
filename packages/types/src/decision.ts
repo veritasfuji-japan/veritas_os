@@ -73,6 +73,14 @@ export interface FujiDecision {
   status: DecisionStatus;
   reasons: string[];
   violations: string[];
+  /** Policy rule or keyword that triggered the FUJI gate. */
+  rule_hit?: string | null;
+  /** Qualitative risk severity level ("low" | "medium" | "high" | "critical"). */
+  severity?: string | null;
+  /** Suggested remediation action for operators when gate fires. */
+  remediation_hint?: string | null;
+  /** Short excerpt from the input that triggered the policy rule. */
+  risky_text_fragment?: string | null;
   [key: string]: unknown;
 }
 
@@ -119,6 +127,14 @@ export interface GateOut {
   decision_status: DecisionStatus;
   reason?: string | null;
   modifications: Array<string | Record<string, unknown>>;
+  /** Policy rule or keyword that triggered the gate. */
+  rule_hit?: string | null;
+  /** Qualitative risk severity level ("low" | "medium" | "high" | "critical"). */
+  severity?: string | null;
+  /** Suggested remediation action for operators when gate fires. */
+  remediation_hint?: string | null;
+  /** Short excerpt from the input that triggered the policy rule. */
+  risky_text_fragment?: string | null;
   [key: string]: unknown;
 }
 
@@ -193,8 +209,18 @@ export interface DecideResponse extends DecideResponseMeta {
   gate: GateOut;
 
   evidence: EvidenceItem[];
-  critique: CritiqueItem[];
-  debate: DebateView[];
+  /**
+   * Backend declares List[Any] for resilience; items are CritiqueItem when
+   * the critique stage succeeds, but may be arbitrary records on error paths.
+   * Use isCritiqueItem() to narrow before accessing typed fields.
+   */
+  critique: Array<CritiqueItem | Record<string, unknown>>;
+  /**
+   * Backend declares List[Any] for resilience; items are DebateView when
+   * the debate stage succeeds, but may be arbitrary records on error paths.
+   * Use isDebateView() to narrow before accessing typed fields.
+   */
+  debate: Array<DebateView | Record<string, unknown>>;
 
   extras: Record<string, unknown>;
   reason: unknown;

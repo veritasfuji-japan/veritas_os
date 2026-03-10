@@ -14,7 +14,7 @@ from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -78,7 +78,7 @@ class AutoStop(BaseModel):
 
 class LogRetention(BaseModel):
     retention_days: int = Field(default=90, ge=1, le=3650)
-    audit_level: str = "full"
+    audit_level: Literal["none", "minimal", "standard", "full", "strict"] = "full"
     include_fields: list[str] = Field(
         default_factory=lambda: ["status", "risk", "reasons", "violations", "categories"]
     )
