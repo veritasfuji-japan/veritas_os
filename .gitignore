@@ -94,3 +94,6 @@ node_modules/
 *.tsbuildinfo
 test-results/
 playwright-report/
+
+# Governance runtime artifacts
+veritas_os/api/governance_history.jsonl
