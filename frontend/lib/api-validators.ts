@@ -1,50 +1,13 @@
-interface FujiRules {
-  pii_check: boolean;
-  self_harm_block: boolean;
-  illicit_block: boolean;
-  violence_review: boolean;
-  minors_review: boolean;
-  keyword_hard_block: boolean;
-  keyword_soft_flag: boolean;
-  llm_safety_head: boolean;
-}
+import type {
+  AutoStop,
+  FujiRules,
+  GovernancePolicy,
+  GovernancePolicyResponse,
+  LogRetention,
+  RiskThresholds,
+} from "@veritas/types";
 
-interface RiskThresholds {
-  allow_upper: number;
-  warn_upper: number;
-  human_review_upper: number;
-  deny_upper: number;
-}
-
-interface AutoStop {
-  enabled: boolean;
-  max_risk_score: number;
-  max_consecutive_rejects: number;
-  max_requests_per_minute: number;
-}
-
-interface LogRetention {
-  retention_days: number;
-  audit_level: string;
-  include_fields: string[];
-  redact_before_log: boolean;
-  max_log_size: number;
-}
-
-export interface GovernancePolicy {
-  version: string;
-  fuji_rules: FujiRules;
-  risk_thresholds: RiskThresholds;
-  auto_stop: AutoStop;
-  log_retention: LogRetention;
-  updated_at: string;
-  updated_by: string;
-}
-
-export interface GovernancePolicyResponse {
-  ok: boolean;
-  policy: GovernancePolicy;
-}
+export type { GovernancePolicy, GovernancePolicyResponse };
 
 export interface GovernanceValidationIssue {
   category: "format" | "semantic";

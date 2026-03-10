@@ -58,3 +58,12 @@ export type {
   TrustLog,
   ValuesOut
 } from "./decision";
+
+export type {
+  AutoStop,
+  FujiRules,
+  GovernancePolicy,
+  GovernancePolicyResponse,
+  LogRetention,
+  RiskThresholds,
+} from "./governance";

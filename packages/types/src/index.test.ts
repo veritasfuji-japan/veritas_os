@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vitest";
 import { isDecideResponse, isHealthResponse, isPersonaState, isEvoTips } from "./index";
 import type {
+  AutoStop,
   ChatRequest,
   CritiqueItem,
   DebateView,
   DecideResponse,
   EvoTips,
   FujiDecision,
+  GovernancePolicy,
+  GovernancePolicyResponse,
   HealthResponse,
+  LogRetention,
   MemoryKind,
   PersonaState,
   ResponseStyle,
   RetentionClass,
+  RiskThresholds,
   TimeHorizon,
   TrustLog,
 } from "./index";
@@ -345,5 +350,172 @@ describe("types", () => {
 
     expect(req.message).toBe("Hello");
     expect(req.session_id).toBeUndefined();
+  });
+
+  it("GovernancePolicy type matches backend governance.py GovernancePolicy", () => {
+    const policy: GovernancePolicy = {
+      version: "governance_v1",
+      fuji_rules: {
+        pii_check: true,
+        self_harm_block: true,
+        illicit_block: true,
+        violence_review: true,
+        minors_review: true,
+        keyword_hard_block: true,
+        keyword_soft_flag: true,
+        llm_safety_head: true,
+      },
+      risk_thresholds: {
+        allow_upper: 0.4,
+        warn_upper: 0.65,
+        human_review_upper: 0.85,
+        deny_upper: 1.0,
+      },
+      auto_stop: {
+        enabled: true,
+        max_risk_score: 0.85,
+        max_consecutive_rejects: 5,
+        max_requests_per_minute: 60,
+      },
+      log_retention: {
+        retention_days: 90,
+        audit_level: "full",
+        include_fields: ["status", "risk", "reasons", "violations", "categories"],
+        redact_before_log: true,
+        max_log_size: 10000,
+      },
+      updated_at: "2026-03-10T00:00:00Z",
+      updated_by: "system",
+    };
+
+    expect(policy.version).toBe("governance_v1");
+    expect(policy.fuji_rules.pii_check).toBe(true);
+    expect(policy.risk_thresholds.allow_upper).toBe(0.4);
+    expect(policy.auto_stop.max_consecutive_rejects).toBe(5);
+    expect(policy.log_retention.retention_days).toBe(90);
+  });
+
+  it("GovernancePolicyResponse wraps GovernancePolicy with ok flag", () => {
+    const response: GovernancePolicyResponse = {
+      ok: true,
+      policy: {
+        version: "governance_v1",
+        fuji_rules: {
+          pii_check: true,
+          self_harm_block: true,
+          illicit_block: true,
+          violence_review: true,
+          minors_review: true,
+          keyword_hard_block: true,
+          keyword_soft_flag: true,
+          llm_safety_head: true,
+        },
+        risk_thresholds: {
+          allow_upper: 0.4,
+          warn_upper: 0.65,
+          human_review_upper: 0.85,
+          deny_upper: 1.0,
+        },
+        auto_stop: {
+          enabled: true,
+          max_risk_score: 0.85,
+          max_consecutive_rejects: 5,
+          max_requests_per_minute: 60,
+        },
+        log_retention: {
+          retention_days: 90,
+          audit_level: "full",
+          include_fields: ["status", "risk"],
+          redact_before_log: true,
+          max_log_size: 10000,
+        },
+        updated_at: "2026-03-10T00:00:00Z",
+        updated_by: "system",
+      },
+    };
+
+    expect(response.ok).toBe(true);
+    expect(response.policy.version).toBe("governance_v1");
+  });
+
+  it("RiskThresholds type matches backend RiskThresholds fields", () => {
+    const thresholds: RiskThresholds = {
+      allow_upper: 0.4,
+      warn_upper: 0.65,
+      human_review_upper: 0.85,
+      deny_upper: 1.0,
+    };
+
+    expect(thresholds.allow_upper).toBeLessThan(thresholds.warn_upper);
+    expect(thresholds.warn_upper).toBeLessThan(thresholds.human_review_upper);
+    expect(thresholds.human_review_upper).toBeLessThanOrEqual(thresholds.deny_upper);
+  });
+
+  it("AutoStop type matches backend AutoStop constraints", () => {
+    const autoStop: AutoStop = {
+      enabled: true,
+      max_risk_score: 0.85,
+      max_consecutive_rejects: 5,
+      max_requests_per_minute: 60,
+    };
+
+    expect(autoStop.enabled).toBe(true);
+    expect(autoStop.max_risk_score).toBeLessThanOrEqual(1.0);
+  });
+
+  it("LogRetention type matches backend LogRetention fields", () => {
+    const retention: LogRetention = {
+      retention_days: 90,
+      audit_level: "full",
+      include_fields: ["status", "risk", "reasons", "violations", "categories"],
+      redact_before_log: true,
+      max_log_size: 10000,
+    };
+
+    expect(retention.include_fields).toContain("status");
+    expect(retention.retention_days).toBe(90);
+  });
+
+  it("isDecideResponse accepts payload with undefined plan/planner (consistent with evo/rsi_note)", () => {
+    const base = {
+      ok: true,
+      error: null,
+      request_id: "req_123",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: {
+        risk: 0.1,
+        telos_score: 0.8,
+        decision_status: "allow",
+        modifications: [],
+      },
+      evidence: [],
+      critique: [],
+      debate: [],
+      extras: {},
+      meta: {},
+      persona: {},
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "disclosure",
+      regulation_notice: "notice",
+    };
+
+    // plan and planner undefined (omitted from payload)
+    expect(isDecideResponse({ ...base })).toBe(true);
+
+    // plan and planner explicitly null
+    expect(isDecideResponse({ ...base, plan: null, planner: null })).toBe(true);
+
+    // evo and rsi_note undefined (should also work)
+    expect(isDecideResponse({ ...base, evo: undefined, rsi_note: undefined })).toBe(true);
   });
 });
