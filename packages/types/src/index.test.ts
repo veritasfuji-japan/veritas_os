@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { isDecideResponse, isHealthResponse, isPersonaState, isEvoTips } from "./index";
+import {
+  isChatRequest,
+  isCritiqueItem,
+  isDebateView,
+  isDecideResponse,
+  isDecisionAlternative,
+  isEvidenceItem,
+  isEvoTips,
+  isFujiDecision,
+  isGateOut,
+  isHealthResponse,
+  isPersonaState,
+  isValuesOut,
+} from "./index";
 import type {
   AutoStop,
   ChatRequest,
@@ -667,5 +680,343 @@ describe("types", () => {
     expect(response.debate[0].stance).toBe("for");
     expect(response.debate[0].argument).toBe("safe approach");
     expect(response.debate[0].score).toBe(0.9);
+  });
+
+  it("validates CritiqueItem payloads at runtime", () => {
+    expect(
+      isCritiqueItem({
+        issue: "Potential bias",
+        severity: "high",
+        fix: "Add diverse data",
+      })
+    ).toBe(true);
+
+    expect(
+      isCritiqueItem({
+        issue: "Minor issue",
+        severity: "low",
+      })
+    ).toBe(true);
+
+    expect(
+      isCritiqueItem({
+        issue: "Issue",
+        severity: "high",
+        fix: null,
+      })
+    ).toBe(true);
+
+    expect(isCritiqueItem(null)).toBe(false);
+    expect(isCritiqueItem({ issue: "x" })).toBe(false);
+    expect(
+      isCritiqueItem({ issue: "x", severity: "critical" })
+    ).toBe(false);
+    expect(
+      isCritiqueItem({ issue: 123, severity: "low" })
+    ).toBe(false);
+    expect(
+      isCritiqueItem({ issue: "x", severity: "high", fix: 42 })
+    ).toBe(false);
+  });
+
+  it("validates DebateView payloads at runtime", () => {
+    expect(
+      isDebateView({
+        stance: "for",
+        argument: "This approach maximizes safety",
+        score: 0.85,
+      })
+    ).toBe(true);
+
+    expect(isDebateView(null)).toBe(false);
+    expect(isDebateView({ stance: "for" })).toBe(false);
+    expect(
+      isDebateView({ stance: "for", argument: "test", score: "not-a-number" })
+    ).toBe(false);
+    expect(
+      isDebateView({ stance: 123, argument: "test", score: 0.5 })
+    ).toBe(false);
+  });
+
+  it("validates EvidenceItem payloads at runtime", () => {
+    expect(
+      isEvidenceItem({
+        source: "memory",
+        snippet: "evidence text",
+        confidence: 0.9,
+      })
+    ).toBe(true);
+
+    expect(
+      isEvidenceItem({
+        source: "web",
+        uri: "https://example.com",
+        title: "Example",
+        snippet: "text",
+        confidence: 0.7,
+      })
+    ).toBe(true);
+
+    expect(
+      isEvidenceItem({
+        source: "unknown",
+        snippet: "",
+        confidence: 0.7,
+        uri: null,
+        title: null,
+      })
+    ).toBe(true);
+
+    expect(isEvidenceItem(null)).toBe(false);
+    expect(isEvidenceItem({ source: "x" })).toBe(false);
+    expect(
+      isEvidenceItem({ source: "x", snippet: "y", confidence: "high" })
+    ).toBe(false);
+    expect(
+      isEvidenceItem({ source: "x", snippet: "y", confidence: 0.5, uri: 123 })
+    ).toBe(false);
+  });
+
+  it("validates FujiDecision payloads at runtime", () => {
+    expect(
+      isFujiDecision({
+        status: "allow",
+        reasons: ["safe content"],
+        violations: [],
+      })
+    ).toBe(true);
+
+    expect(
+      isFujiDecision({
+        status: "block",
+        reasons: [],
+        violations: ["harmful content"],
+      })
+    ).toBe(true);
+
+    expect(isFujiDecision(null)).toBe(false);
+    expect(isFujiDecision({ status: "allow" })).toBe(false);
+    expect(
+      isFujiDecision({ status: "unknown", reasons: [], violations: [] })
+    ).toBe(false);
+    expect(
+      isFujiDecision({ status: "allow", reasons: [123], violations: [] })
+    ).toBe(false);
+    expect(
+      isFujiDecision({ status: "allow", reasons: [], violations: [456] })
+    ).toBe(false);
+  });
+
+  it("validates DecisionAlternative payloads at runtime", () => {
+    expect(
+      isDecisionAlternative({
+        id: "alt-1",
+        title: "Option A",
+        description: "Description of A",
+        score: 0.9,
+      })
+    ).toBe(true);
+
+    expect(
+      isDecisionAlternative({
+        id: "alt-2",
+        title: "Option B",
+        description: "Description of B",
+        score: 0.8,
+        score_raw: 0.75,
+        world: { economy: "good" },
+        meta: { source: "pipeline" },
+      })
+    ).toBe(true);
+
+    expect(
+      isDecisionAlternative({
+        id: "alt-3",
+        title: "Option C",
+        description: "Description of C",
+        score: 0.7,
+        score_raw: null,
+        world: null,
+        meta: null,
+      })
+    ).toBe(true);
+
+    expect(isDecisionAlternative(null)).toBe(false);
+    expect(isDecisionAlternative({ id: "x" })).toBe(false);
+    expect(
+      isDecisionAlternative({
+        id: "x",
+        title: "t",
+        description: "d",
+        score: "not-a-number",
+      })
+    ).toBe(false);
+    expect(
+      isDecisionAlternative({
+        id: "x",
+        title: "t",
+        description: "d",
+        score: 1,
+        score_raw: "invalid",
+      })
+    ).toBe(false);
+    expect(
+      isDecisionAlternative({
+        id: "x",
+        title: "t",
+        description: "d",
+        score: 1,
+        world: "not-an-object",
+      })
+    ).toBe(false);
+  });
+
+  it("validates GateOut payloads at runtime", () => {
+    expect(
+      isGateOut({
+        risk: 0.1,
+        telos_score: 0.8,
+        decision_status: "allow",
+        modifications: [],
+      })
+    ).toBe(true);
+
+    expect(
+      isGateOut({
+        risk: 0.9,
+        telos_score: 0.3,
+        bias: 0.2,
+        decision_status: "block",
+        reason: "too risky",
+        modifications: ["reduce scope"],
+      })
+    ).toBe(true);
+
+    expect(
+      isGateOut({
+        risk: 0.5,
+        telos_score: 0.5,
+        bias: null,
+        decision_status: "modify",
+        reason: null,
+        modifications: [],
+      })
+    ).toBe(true);
+
+    expect(isGateOut(null)).toBe(false);
+    expect(isGateOut({ risk: 0.1 })).toBe(false);
+    expect(
+      isGateOut({
+        risk: 0.1,
+        telos_score: 0.5,
+        decision_status: "invalid",
+        modifications: [],
+      })
+    ).toBe(false);
+    expect(
+      isGateOut({
+        risk: 0.1,
+        telos_score: 0.5,
+        decision_status: "allow",
+        modifications: [],
+        bias: "not-a-number",
+      })
+    ).toBe(false);
+  });
+
+  it("validates ValuesOut payloads at runtime", () => {
+    expect(
+      isValuesOut({
+        scores: { safety: 0.9, fairness: 0.8 },
+        total: 0.85,
+        top_factors: ["safety", "fairness"],
+        rationale: "Safe and fair",
+      })
+    ).toBe(true);
+
+    expect(
+      isValuesOut({
+        scores: { safety: 0.9 },
+        total: 0.9,
+        top_factors: ["safety"],
+        rationale: "safe",
+        ema: 0.88,
+      })
+    ).toBe(true);
+
+    expect(
+      isValuesOut({
+        scores: {},
+        total: 0,
+        top_factors: [],
+        rationale: "",
+        ema: null,
+      })
+    ).toBe(true);
+
+    expect(isValuesOut(null)).toBe(false);
+    expect(isValuesOut({ scores: {} })).toBe(false);
+    expect(
+      isValuesOut({
+        scores: "not-object",
+        total: 0,
+        top_factors: [],
+        rationale: "",
+      })
+    ).toBe(false);
+    expect(
+      isValuesOut({
+        scores: {},
+        total: 0,
+        top_factors: [123],
+        rationale: "",
+      })
+    ).toBe(false);
+    expect(
+      isValuesOut({
+        scores: {},
+        total: 0,
+        top_factors: [],
+        rationale: "",
+        ema: "not-a-number",
+      })
+    ).toBe(false);
+  });
+
+  it("validates ChatRequest payloads at runtime", () => {
+    expect(
+      isChatRequest({
+        message: "Hello, VERITAS",
+      })
+    ).toBe(true);
+
+    expect(
+      isChatRequest({
+        message: "Hello",
+        session_id: "sess_abc",
+        memory_auto_put: true,
+        persona_evolve: false,
+      })
+    ).toBe(true);
+
+    expect(
+      isChatRequest({
+        message: "Hello",
+        session_id: null,
+      })
+    ).toBe(true);
+
+    expect(isChatRequest(null)).toBe(false);
+    expect(isChatRequest({})).toBe(false);
+    expect(isChatRequest({ message: 123 })).toBe(false);
+    expect(
+      isChatRequest({ message: "Hello", session_id: 456 })
+    ).toBe(false);
+    expect(
+      isChatRequest({ message: "Hello", memory_auto_put: "yes" })
+    ).toBe(false);
+    expect(
+      isChatRequest({ message: "Hello", persona_evolve: "yes" })
+    ).toBe(false);
   });
 });

@@ -35,7 +35,19 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
   return typeof checks.pipeline === "string" && typeof checks.memory === "string";
 }
 
-export { isDecideResponse, isPersonaState, isEvoTips } from "./decision";
+export {
+  isChatRequest,
+  isCritiqueItem,
+  isDebateView,
+  isDecideResponse,
+  isDecisionAlternative,
+  isEvidenceItem,
+  isEvoTips,
+  isFujiDecision,
+  isGateOut,
+  isPersonaState,
+  isValuesOut,
+} from "./decision";
 
 export type {
   ChatRequest,

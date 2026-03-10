@@ -301,6 +301,164 @@ export function isPersonaState(value: unknown): value is PersonaState {
 }
 
 /**
+ * Runtime type guard for CritiqueItem payloads.
+ *
+ * Checks required fields: issue, severity (must be "low" | "med" | "high").
+ * Optional: fix (string | null).
+ */
+export function isCritiqueItem(value: unknown): value is CritiqueItem {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.issue === "string" &&
+    (value.severity === "low" || value.severity === "med" || value.severity === "high") &&
+    (value.fix === undefined || value.fix === null || typeof value.fix === "string")
+  );
+}
+
+/**
+ * Runtime type guard for DebateView payloads.
+ *
+ * Checks required fields: stance, argument, score.
+ */
+export function isDebateView(value: unknown): value is DebateView {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.stance === "string" &&
+    typeof value.argument === "string" &&
+    typeof value.score === "number"
+  );
+}
+
+/**
+ * Runtime type guard for EvidenceItem payloads.
+ *
+ * Checks required fields: source, snippet, confidence.
+ * Optional: uri (string | null), title (string | null).
+ */
+export function isEvidenceItem(value: unknown): value is EvidenceItem {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.source === "string" &&
+    typeof value.snippet === "string" &&
+    typeof value.confidence === "number" &&
+    (value.uri === undefined || value.uri === null || typeof value.uri === "string") &&
+    (value.title === undefined || value.title === null || typeof value.title === "string")
+  );
+}
+
+/**
+ * Runtime type guard for FujiDecision payloads.
+ *
+ * Checks required field: status (must be a valid DecisionStatus).
+ * Checks required arrays: reasons, violations.
+ */
+export function isFujiDecision(value: unknown): value is FujiDecision {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isDecisionStatus(value.status) &&
+    Array.isArray(value.reasons) &&
+    value.reasons.every((r: unknown) => typeof r === "string") &&
+    Array.isArray(value.violations) &&
+    value.violations.every((v: unknown) => typeof v === "string")
+  );
+}
+
+/**
+ * Runtime type guard for DecisionAlternative (Alt) payloads.
+ *
+ * Checks required fields: id, title, description, score.
+ * Optional: score_raw (number | null), world (object | null), meta (object | null).
+ */
+export function isDecisionAlternative(value: unknown): value is DecisionAlternative {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    typeof value.description === "string" &&
+    typeof value.score === "number" &&
+    (value.score_raw === undefined || value.score_raw === null || typeof value.score_raw === "number") &&
+    (value.world === undefined || value.world === null || isRecord(value.world)) &&
+    (value.meta === undefined || value.meta === null || isRecord(value.meta))
+  );
+}
+
+/**
+ * Runtime type guard for GateOut payloads.
+ *
+ * Checks required fields: risk, telos_score, decision_status, modifications.
+ * Optional: bias (number | null), reason (string | null).
+ */
+export function isGateOut(value: unknown): value is GateOut {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.risk === "number" &&
+    typeof value.telos_score === "number" &&
+    (value.bias === undefined || value.bias === null || typeof value.bias === "number") &&
+    isDecisionStatus(value.decision_status) &&
+    (value.reason === undefined || value.reason === null || typeof value.reason === "string") &&
+    Array.isArray(value.modifications)
+  );
+}
+
+/**
+ * Runtime type guard for ValuesOut payloads.
+ *
+ * Checks required fields: scores, total, top_factors, rationale.
+ * Optional: ema (number | null).
+ */
+export function isValuesOut(value: unknown): value is ValuesOut {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isRecord(value.scores) &&
+    typeof value.total === "number" &&
+    Array.isArray(value.top_factors) &&
+    value.top_factors.every((f: unknown) => typeof f === "string") &&
+    typeof value.rationale === "string" &&
+    (value.ema === undefined || value.ema === null || typeof value.ema === "number")
+  );
+}
+
+/**
+ * Runtime type guard for ChatRequest payloads.
+ *
+ * Checks required field: message.
+ * Optional: session_id (string | null), memory_auto_put (boolean), persona_evolve (boolean).
+ */
+export function isChatRequest(value: unknown): value is ChatRequest {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.message === "string" &&
+    (value.session_id === undefined || value.session_id === null || typeof value.session_id === "string") &&
+    (value.memory_auto_put === undefined || typeof value.memory_auto_put === "boolean") &&
+    (value.persona_evolve === undefined || typeof value.persona_evolve === "boolean")
+  );
+}
+
+/**
  * Runtime type guard for EvoTips payloads.
  *
  * Checks required fields: insights, actions, next_prompts, notes.
