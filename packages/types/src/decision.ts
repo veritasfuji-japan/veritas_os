@@ -193,8 +193,8 @@ export interface DecideResponse extends DecideResponseMeta {
   gate: GateOut;
 
   evidence: EvidenceItem[];
-  critique: unknown[];
-  debate: unknown[];
+  critique: CritiqueItem[];
+  debate: DebateView[];
 
   extras: Record<string, unknown>;
   reason: unknown;
@@ -264,7 +264,11 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     typeof value.memory_used_count === "number" &&
     (value.trust_log === null || isRecord(value.trust_log)) &&
     typeof value.ai_disclosure === "string" &&
-    typeof value.regulation_notice === "string"
+    typeof value.regulation_notice === "string" &&
+    (value.affected_parties_notice === null || value.affected_parties_notice === undefined || isRecord(value.affected_parties_notice)) &&
+    (value.query === null || value.query === undefined || typeof value.query === "string") &&
+    (value.pipeline_steps === null || value.pipeline_steps === undefined || Array.isArray(value.pipeline_steps)) &&
+    (value.deterministic_replay === null || value.deterministic_replay === undefined || isRecord(value.deterministic_replay))
   );
 }
 
