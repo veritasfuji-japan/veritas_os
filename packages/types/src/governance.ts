@@ -19,7 +19,6 @@ export interface FujiRules {
   keyword_hard_block: boolean;
   keyword_soft_flag: boolean;
   llm_safety_head: boolean;
-  [key: string]: unknown;
 }
 
 /* ------------------------------------------------------------------ */
@@ -35,7 +34,6 @@ export interface RiskThresholds {
   human_review_upper: number;
   /** Upper boundary for "deny" band (0–1). */
   deny_upper: number;
-  [key: string]: unknown;
 }
 
 /* ------------------------------------------------------------------ */
@@ -47,7 +45,6 @@ export interface AutoStop {
   max_risk_score: number;
   max_consecutive_rejects: number;
   max_requests_per_minute: number;
-  [key: string]: unknown;
 }
 
 /* ------------------------------------------------------------------ */
@@ -62,7 +59,6 @@ export interface LogRetention {
   include_fields: string[];
   redact_before_log: boolean;
   max_log_size: number;
-  [key: string]: unknown;
 }
 
 /* ------------------------------------------------------------------ */
