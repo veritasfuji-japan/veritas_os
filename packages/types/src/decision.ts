@@ -227,6 +227,18 @@ function isDecisionStatus(value: unknown): value is DecisionStatus {
   return value === "allow" || value === "modify" || value === "rejected" || value === "block" || value === "abstain";
 }
 
+/**
+ * Normalize legacy "rejected" status to the canonical "block".
+ *
+ * The backend keeps "rejected" for backward compatibility
+ * (see veritas_os/api/constants.py — DecisionStatus.REJECTED).
+ * Frontend code should use this helper to avoid treating "rejected"
+ * and "block" as distinct states.
+ */
+export function normalizeDecisionStatus(status: DecisionStatus): DecisionStatus {
+  return status === "rejected" ? "block" : status;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }

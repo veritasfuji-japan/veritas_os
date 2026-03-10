@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import type { GovernancePolicy as GovernancePolicyBase } from "@veritas/types";
 import { useI18n } from "../../components/i18n-provider";
 import { veritasFetch } from "../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../lib/api-validators";
@@ -16,51 +17,15 @@ type PolicyActionMode = "apply" | "dry-run" | "shadow";
 type GovernanceMode = "standard" | "eu_ai_act";
 type ApprovalStatus = "approved" | "pending" | "rejected" | "draft";
 
-interface FujiRules {
-  pii_check: boolean;
-  self_harm_block: boolean;
-  illicit_block: boolean;
-  violence_review: boolean;
-  minors_review: boolean;
-  keyword_hard_block: boolean;
-  keyword_soft_flag: boolean;
-  llm_safety_head: boolean;
-}
-
-interface RiskThresholds {
-  allow_upper: number;
-  warn_upper: number;
-  human_review_upper: number;
-  deny_upper: number;
-}
-
-interface AutoStop {
-  enabled: boolean;
-  max_risk_score: number;
-  max_consecutive_rejects: number;
-  max_requests_per_minute: number;
-}
-
-interface LogRetention {
-  retention_days: number;
-  audit_level: string;
-  include_fields: string[];
-  redact_before_log: boolean;
-  max_log_size: number;
-}
-
-interface GovernancePolicy {
-  version: string;
+/**
+ * Extended governance policy with UI-only fields derived from the backend response.
+ * The base shape comes from @veritas/types (aligned to backend API).
+ */
+interface GovernancePolicy extends GovernancePolicyBase {
   draft_version?: string;
   effective_at?: string;
   last_applied?: string;
   approval_status: ApprovalStatus;
-  fuji_rules: FujiRules;
-  risk_thresholds: RiskThresholds;
-  auto_stop: AutoStop;
-  log_retention: LogRetention;
-  updated_at: string;
-  updated_by: string;
 }
 
 interface DiffChange {

@@ -35,7 +35,7 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
   return typeof checks.pipeline === "string" && typeof checks.memory === "string";
 }
 
-export { isDecideResponse } from "./decision";
+export { isDecideResponse, normalizeDecisionStatus } from "./decision";
 
 export type {
   CritiqueItem,
@@ -55,3 +55,15 @@ export type {
   TrustLog,
   ValuesOut
 } from "./decision";
+
+export type {
+  AuditLevel,
+  AutoStop,
+  FujiRules,
+  GovernancePolicy,
+  GovernancePolicyResponse,
+  LogRetention,
+  RiskThresholds,
+  SSEEventPayload,
+  TrustFeedbackResponse,
+} from "./governance";

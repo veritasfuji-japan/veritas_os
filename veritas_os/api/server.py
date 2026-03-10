@@ -2528,7 +2528,8 @@ def fuji_validate(payload: dict):
         return JSONResponse(
             status_code=200,
             content={
-                "status": "error",
+                "ok": False,
+                "error": "Validation failed",
                 "reasons": ["Validation failed"],
                 "violations": []
             }
@@ -2540,7 +2541,8 @@ def fuji_validate(payload: dict):
         return JSONResponse(
             status_code=200,
             content={
-                "status": "error",
+                "ok": False,
+                "error": "Validation failed",
                 "reasons": ["Validation failed"],
                 "violations": []
             }
@@ -3059,7 +3061,7 @@ def trust_feedback(body: TrustFeedbackRequest):
     vc = get_value_core()
     if vc is None:
         logger.warning("trust_feedback: value_core unavailable: %s", _value_core_state.err)
-        return {"status": "error", "detail": "value_core unavailable"}
+        return {"ok": False, "error": "value_core unavailable"}
 
     try:
         uid = str(body.user_id or "anon")[:500]
@@ -3080,14 +3082,14 @@ def trust_feedback(body: TrustFeedbackRequest):
                 "trustlog.appended",
                 {"kind": "feedback", "user_id": uid, "source": source},
             )
-            return {"status": "ok", "user_id": uid}
+            return {"ok": True, "error": None, "user_id": uid}
 
-        return {"status": "error", "detail": "value_core.append_trust_log not found"}
+        return {"ok": False, "error": "value_core.append_trust_log not found"}
 
     except Exception as e:
         # Log the detailed error server-side, but do not expose it to the client.
         logger.error("[Trust] feedback failed: %s", e)
-        return {"status": "error", "detail": "internal error in trust_feedback"}
+        return {"ok": False, "error": "internal error in trust_feedback"}
 
 
 @app.get("/v1/trustlog/verify", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { SSEEventPayload } from "@veritas/types";
 import { veritasFetch } from "../../../lib/api-client";
 
 interface ComplianceConfig {
@@ -13,13 +14,6 @@ interface TrustLogEvent {
   type: string;
   ts: string;
   payload: Record<string, unknown>;
-}
-
-interface SSEEventPayload {
-  type?: string;
-  ts?: string;
-  payload?: Record<string, unknown>;
-  id?: number;
 }
 
 const PIPELINE_STAGES = ["Evidence", "Debate", "Critique", "Safety"];

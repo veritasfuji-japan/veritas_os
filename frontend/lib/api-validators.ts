@@ -1,50 +1,9 @@
-interface FujiRules {
-  pii_check: boolean;
-  self_harm_block: boolean;
-  illicit_block: boolean;
-  violence_review: boolean;
-  minors_review: boolean;
-  keyword_hard_block: boolean;
-  keyword_soft_flag: boolean;
-  llm_safety_head: boolean;
-}
+import type {
+  GovernancePolicy,
+  GovernancePolicyResponse,
+} from "@veritas/types";
 
-interface RiskThresholds {
-  allow_upper: number;
-  warn_upper: number;
-  human_review_upper: number;
-  deny_upper: number;
-}
-
-interface AutoStop {
-  enabled: boolean;
-  max_risk_score: number;
-  max_consecutive_rejects: number;
-  max_requests_per_minute: number;
-}
-
-interface LogRetention {
-  retention_days: number;
-  audit_level: string;
-  include_fields: string[];
-  redact_before_log: boolean;
-  max_log_size: number;
-}
-
-export interface GovernancePolicy {
-  version: string;
-  fuji_rules: FujiRules;
-  risk_thresholds: RiskThresholds;
-  auto_stop: AutoStop;
-  log_retention: LogRetention;
-  updated_at: string;
-  updated_by: string;
-}
-
-export interface GovernancePolicyResponse {
-  ok: boolean;
-  policy: GovernancePolicy;
-}
+export type { GovernancePolicy, GovernancePolicyResponse } from "@veritas/types";
 
 export interface GovernanceValidationIssue {
   category: "format" | "semantic";
@@ -66,13 +25,19 @@ export type GovernanceValidationResult = GovernanceValidationSuccess | Governanc
 
 const AUDIT_LEVELS = new Set(["none", "minimal", "standard", "full", "strict"]);
 
+/**
+ * TrustLogItem aligned to backend TrustLog schema (schemas.py).
+ *
+ * Backend guarantees default values for sources, critics, checks, and approver,
+ * so these are required here to match @veritas/types TrustLog.
+ */
 export interface TrustLogItem {
   request_id: string;
   created_at: string;
-  sources?: string[];
-  critics?: string[];
-  checks?: string[];
-  approver?: string;
+  sources: string[];
+  critics: string[];
+  checks: string[];
+  approver: string;
   fuji?: Record<string, unknown> | null;
   sha256?: string;
   sha256_prev?: string;
@@ -147,7 +112,7 @@ function validateFujiRules(value: unknown, pathPrefix: string): GovernanceValida
 
 function validateThresholdValue(
   obj: Record<string, unknown>,
-  key: keyof RiskThresholds,
+  key: string,
   pathPrefix: string,
 ): GovernanceValidationIssue[] {
   const path = `${pathPrefix}.${key}`;
@@ -356,10 +321,16 @@ export function isGovernancePolicyResponse(value: unknown): value is GovernanceP
   return validateGovernancePolicyResponse(value).ok;
 }
 
-function isOptionalStringArray(value: unknown): boolean {
-  return value === undefined || (Array.isArray(value) && value.every((s) => typeof s === "string"));
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((s) => typeof s === "string");
 }
 
+/**
+ * Runtime type guard for TrustLogItem.
+ *
+ * Aligned with backend TrustLog schema (schemas.py) where sources, critics,
+ * checks, and approver have default values and are always present.
+ */
 export function isTrustLogItem(value: unknown): value is TrustLogItem {
   if (!isRecord(value)) {
     return false;
@@ -373,11 +344,11 @@ export function isTrustLogItem(value: unknown): value is TrustLogItem {
     return false;
   }
 
-  if (!isOptionalStringArray(value.sources) || !isOptionalStringArray(value.critics) || !isOptionalStringArray(value.checks)) {
+  if (!isStringArray(value.sources) || !isStringArray(value.critics) || !isStringArray(value.checks)) {
     return false;
   }
 
-  if (value.approver !== undefined && typeof value.approver !== "string") {
+  if (typeof value.approver !== "string") {
     return false;
   }
 
