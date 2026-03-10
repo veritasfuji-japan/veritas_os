@@ -78,7 +78,7 @@ class AutoStop(BaseModel):
 
 class LogRetention(BaseModel):
     retention_days: int = Field(default=90, ge=1, le=3650)
-    audit_level: Literal["none", "minimal", "standard", "full", "strict"] = "full"
+    audit_level: Literal["none", "minimal", "summary", "standard", "full", "strict"] = "full"
     include_fields: list[str] = Field(
         default_factory=lambda: ["status", "risk", "reasons", "violations", "categories"]
     )

@@ -29,7 +29,7 @@ interface GovernanceValidationFailure {
 
 export type GovernanceValidationResult = GovernanceValidationSuccess | GovernanceValidationFailure;
 
-const AUDIT_LEVELS: ReadonlySet<AuditLevel> = new Set<AuditLevel>(["none", "minimal", "standard", "full", "strict"]);
+const AUDIT_LEVELS: ReadonlySet<AuditLevel> = new Set<AuditLevel>(["none", "minimal", "summary", "standard", "full", "strict"]);
 
 /** @deprecated Use TrustLog from @veritas/types directly. */
 export type TrustLogItem = TrustLog;

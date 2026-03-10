@@ -9,7 +9,9 @@ from collections import OrderedDict
 from typing import Any, Dict, List
 
 import pytest
+from pydantic import ValidationError
 
+from veritas_os.api.governance import LogRetention, GovernancePolicy
 from veritas_os.api.schemas import (
     _as_list,
     _coerce_context,
@@ -22,6 +24,7 @@ from veritas_os.api.schemas import (
     FujiDecision,
     Gate,
     Option,
+    StageMetrics,
     TrustLog,
     ValuesOut,
     _altin_to_altitem,
@@ -367,3 +370,152 @@ class TestIsMapping:
 
     def test_string(self):
         assert _is_mapping("hello") is False
+
+
+# =========================================================
+# 10. StageMetrics
+# =========================================================
+
+
+class TestStageMetrics:
+    def test_defaults(self):
+        m = StageMetrics()
+        assert m.health == "unknown"
+        assert m.latency_ms is None
+        assert m.summary is None
+        assert m.detail is None
+        assert m.reason is None
+
+    def test_all_fields(self):
+        m = StageMetrics(
+            latency_ms=42.5,
+            health="ok",
+            summary="Gate passed",
+            detail="No violations found.",
+            reason="telos score within threshold",
+        )
+        assert m.health == "ok"
+        assert m.latency_ms == 42.5
+
+    def test_health_warning(self):
+        m = StageMetrics(health="warning")
+        assert m.health == "warning"
+
+    def test_health_failed(self):
+        m = StageMetrics(health="failed", summary="Blocked by FUJI gate")
+        assert m.health == "failed"
+        assert m.summary == "Blocked by FUJI gate"
+
+    def test_health_invalid(self):
+        with pytest.raises(ValidationError):
+            StageMetrics(health="invalid_value")
+
+    def test_extra_fields_allowed(self):
+        m = StageMetrics(health="ok", custom_counter=99)
+        assert m.model_extra.get("custom_counter") == 99
+
+    def test_roundtrip(self):
+        data = {"health": "ok", "latency_ms": 10.0, "summary": "done"}
+        m = StageMetrics.model_validate(data)
+        dumped = m.model_dump(exclude_none=True)
+        assert dumped["health"] == "ok"
+        assert dumped["latency_ms"] == 10.0
+
+
+# =========================================================
+# 11. FujiDecision and Gate diagnostic fields
+# =========================================================
+
+
+class TestFujiDecisionDiagnosticFields:
+    def test_defaults_absent(self):
+        fd = FujiDecision(status="allow")
+        assert fd.rule_hit is None
+        assert fd.severity is None
+        assert fd.remediation_hint is None
+        assert fd.risky_text_fragment is None
+
+    def test_all_diagnostic_fields(self):
+        fd = FujiDecision(
+            status="block",
+            reasons=["profanity detected"],
+            violations=["content_policy"],
+            rule_hit="profanity_v2",
+            severity="high",
+            remediation_hint="Remove offensive language before resubmitting.",
+            risky_text_fragment="offensive snippet",
+        )
+        assert fd.rule_hit == "profanity_v2"
+        assert fd.severity == "high"
+        assert fd.remediation_hint == "Remove offensive language before resubmitting."
+        assert fd.risky_text_fragment == "offensive snippet"
+
+    def test_roundtrip(self):
+        fd = FujiDecision(status="modify", rule_hit="bias_v1", severity="medium")
+        d = fd.model_dump()
+        fd2 = FujiDecision.model_validate(d)
+        assert fd2.rule_hit == "bias_v1"
+        assert fd2.severity == "medium"
+
+
+class TestGateDiagnosticFields:
+    def test_defaults_absent(self):
+        g = Gate(risk=0.1, decision_status="allow")
+        assert g.rule_hit is None
+        assert g.severity is None
+        assert g.remediation_hint is None
+        assert g.risky_text_fragment is None
+
+    def test_all_diagnostic_fields(self):
+        g = Gate(
+            risk=0.9,
+            telos_score=0.3,
+            decision_status="block",
+            rule_hit="keyword_block",
+            severity="critical",
+            remediation_hint="Contact admin.",
+            risky_text_fragment="dangerous term",
+        )
+        assert g.rule_hit == "keyword_block"
+        assert g.severity == "critical"
+
+    def test_roundtrip(self):
+        g = Gate(risk=0.5, decision_status="modify", rule_hit="pii_v1")
+        d = g.model_dump()
+        g2 = Gate.model_validate(d)
+        assert g2.rule_hit == "pii_v1"
+
+
+# =========================================================
+# 12. LogRetention audit_level validation
+# =========================================================
+
+
+class TestLogRetentionAuditLevel:
+    @pytest.mark.parametrize("level", ["none", "minimal", "summary", "standard", "full", "strict"])
+    def test_valid_levels(self, level: str):
+        lr = LogRetention(audit_level=level)
+        assert lr.audit_level == level
+
+    def test_default_is_full(self):
+        lr = LogRetention()
+        assert lr.audit_level == "full"
+
+    def test_invalid_level_raises(self):
+        with pytest.raises(ValidationError):
+            LogRetention(audit_level="verbose")
+
+    def test_invalid_level_debug_raises(self):
+        with pytest.raises(ValidationError):
+            LogRetention(audit_level="debug")
+
+    def test_governance_policy_default(self):
+        gp = GovernancePolicy()
+        assert gp.log_retention.audit_level == "full"
+
+    def test_governance_policy_summary_level(self):
+        gp = GovernancePolicy(
+            log_retention=LogRetention(audit_level="summary", retention_days=180)
+        )
+        assert gp.log_retention.audit_level == "summary"
+        assert gp.log_retention.retention_days == 180

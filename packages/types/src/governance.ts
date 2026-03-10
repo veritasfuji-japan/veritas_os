@@ -36,7 +36,7 @@ export interface AutoStop {
 }
 
 /** Permitted audit verbosity levels. Source of truth: veritas_os/api/governance.py — LogRetention.audit_level */
-export type AuditLevel = "none" | "minimal" | "standard" | "full" | "strict";
+export type AuditLevel = "none" | "minimal" | "summary" | "standard" | "full" | "strict";
 
 /** Audit-log retention and redaction settings. */
 export interface LogRetention {
