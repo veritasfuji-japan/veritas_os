@@ -414,7 +414,8 @@ export function isGateOut(value: unknown): value is GateOut {
     (value.bias === undefined || value.bias === null || typeof value.bias === "number") &&
     isDecisionStatus(value.decision_status) &&
     (value.reason === undefined || value.reason === null || typeof value.reason === "string") &&
-    Array.isArray(value.modifications)
+    Array.isArray(value.modifications) &&
+    value.modifications.every((m: unknown) => typeof m === "string" || (typeof m === "object" && m !== null))
   );
 }
 

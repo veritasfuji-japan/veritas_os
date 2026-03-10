@@ -700,6 +700,13 @@ describe("types", () => {
 
     expect(
       isCritiqueItem({
+        issue: "Moderate issue",
+        severity: "med",
+      })
+    ).toBe(true);
+
+    expect(
+      isCritiqueItem({
         issue: "Issue",
         severity: "high",
         fix: null,
@@ -896,6 +903,15 @@ describe("types", () => {
       isGateOut({
         risk: 0.5,
         telos_score: 0.5,
+        decision_status: "modify",
+        modifications: ["adjust scope", { field: "budget", action: "reduce" }],
+      })
+    ).toBe(true);
+
+    expect(
+      isGateOut({
+        risk: 0.5,
+        telos_score: 0.5,
         bias: null,
         decision_status: "modify",
         reason: null,
@@ -920,6 +936,14 @@ describe("types", () => {
         decision_status: "allow",
         modifications: [],
         bias: "not-a-number",
+      })
+    ).toBe(false);
+    expect(
+      isGateOut({
+        risk: 0.1,
+        telos_score: 0.5,
+        decision_status: "allow",
+        modifications: [null],
       })
     ).toBe(false);
   });
