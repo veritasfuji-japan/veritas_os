@@ -329,11 +329,11 @@ def persist_decision_to_disk(
         if isinstance(payload.get("evidence"), list):
             evidence_list = [ev for ev in payload["evidence"] if isinstance(ev, dict)]
 
-        mem_evidence_count2 = 0
+        actual_mem_evidence_count = 0
         for ev in evidence_list:
             src = str(ev.get("source", "")).lower()
             if src.startswith("memory"):
-                mem_evidence_count2 += 1
+                actual_mem_evidence_count += 1
 
         meta_payload = payload.get("meta") or {}
         if not isinstance(meta_payload, dict):
@@ -342,7 +342,7 @@ def persist_decision_to_disk(
         meta_payload["memory_evidence_count"] = int(
             metrics2.get("memory_evidence_count", 0) or 0
         )
-        meta_payload["mem_evidence_count"] = int(mem_evidence_count2)
+        meta_payload["mem_evidence_count"] = int(actual_mem_evidence_count)
         meta_payload["mem_hits"] = int(metrics2.get("mem_hits", 0) or 0)
         meta_payload["web_hits"] = int(metrics2.get("web_hits", 0) or 0)
         meta_payload["fast_mode"] = bool(
@@ -500,7 +500,7 @@ def build_replay_snapshot(
         "temperature": ctx.body.get("temperature", 0),
         "seed": ctx.seed,
         "tool_calls": {
-            "memory_search": bool(ctx.query and ctx.retrieved is not None),
+            "memory_search": bool(ctx.query and ctx.retrieved),
             "web_search": bool(should_run_web and not ctx.mock_external_apis),
             "web_search_mocked": bool(should_run_web and ctx.mock_external_apis),
         },

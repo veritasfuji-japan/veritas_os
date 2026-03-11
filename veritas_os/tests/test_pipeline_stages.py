@@ -298,11 +298,14 @@ class TestPersistAuditLog:
     def test_audit_log_resilient_to_errors(self) -> None:
         from veritas_os.core.pipeline_persist import persist_audit_log
 
+        def _raise(*_args: Any, **_kwargs: Any) -> None:
+            raise RuntimeError("boom")
+
         ctx = PipelineContext(query="test", request_id="req-1")
         # Should not raise even if callbacks fail
         persist_audit_log(
             ctx,
-            append_trust_log_fn=lambda e: (_ for _ in ()).throw(RuntimeError("boom")),
+            append_trust_log_fn=_raise,
             write_shadow_decide_fn=lambda *a: None,
         )
 

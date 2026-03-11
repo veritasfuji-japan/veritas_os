@@ -863,7 +863,7 @@ async def run_decide_pipeline(
         lowered = {str(k).lower() for k in raw_memory_kinds}
         want_doc = "doc" in lowered
 
-    if is_veritas_query or any(key in qlower for key in ["\u8ad6\u6587", "paper", "zenodo", "veritas os", "protoagi", "\u30d7\u30ed\u30c8agi"]):
+    if is_veritas_query or any(key in qlower for key in ["論文", "paper", "zenodo", "veritas os", "protoagi", "プロトagi"]):
         want_doc = True
 
     memory_store = _get_memory_store()
@@ -989,7 +989,7 @@ async def run_decide_pipeline(
     params = _get_request_params(request)
     web_explicit = _to_bool(body.get("web")) or _to_bool(context.get("web")) or _to_bool(params.get("web"))
     want_web = web_explicit or bool(is_veritas_query) or any(
-        k in qlower for k in ["agi", "research", "\u8ad6\u6587", "paper", "zenodo", "arxiv"]
+        k in qlower for k in ["agi", "research", "論文", "paper", "zenodo", "arxiv"]
     )
 
     web_max = body.get("web_max_results") or context.get("web_max_results") or 5
@@ -1163,10 +1163,10 @@ async def run_decide_pipeline(
             )
 
         input_alts = step_alts or [
-            _norm_alt({"id": "veritas_mvp_demo", "title": "MVP\u30c7\u30e2\u3092\u6700\u77ed\u3067\u898b\u305b\u3089\u308c\u308b\u5f62\u306b\u3059\u308b", "description": "Swagger/CLI\u3067 /v1/decide \u306e30\u301c60\u79d2\u30c7\u30e2\u3092\u4f5c\u308b\u3002"}),
-            _norm_alt({"id": "veritas_report", "title": "\u6280\u8853\u76e3\u67fb\u30ec\u30dd\u30fc\u30c8\u3092\u4ed5\u4e0a\u3052\u308b", "description": "\u7b2c\u4e09\u8005\u304c\u8aad\u3081\u308b\u30ec\u30d9\u30eb\u306b\u30d6\u30e9\u30c3\u30b7\u30e5\u30a2\u30c3\u30d7\u3059\u308b\u3002"}),
-            _norm_alt({"id": "veritas_spec_sheet", "title": "MVP\u4ed5\u69d8\u66f8\u30921\u679a\u306b\u307e\u3068\u3081\u308b", "description": "CLI/API\u30fbFUJI\u30fbDebate\u30fbMemory\u306e\u6d41\u308c\u30921\u679a\u306b\u6574\u7406\u3059\u308b\u3002"}),
-            _norm_alt({"id": "veritas_demo_script", "title": "\u7b2c\u4e09\u8005\u5411\u3051\u30c7\u30e2\u53f0\u672c\u3092\u4f5c\u308b", "description": "\u753b\u9762\u9806\u30fb\u8aac\u660e\u9806\u30fb\u60f3\u5b9aQA\u3092\u53f0\u672c\u5316\u3059\u308b\u3002"}),
+            _norm_alt({"id": "veritas_mvp_demo", "title": "MVPデモを最短で見せられる形にする", "description": "Swagger/CLIで /v1/decide の30〜60秒デモを作る。"}),
+            _norm_alt({"id": "veritas_report", "title": "技術監査レポートを仕上げる", "description": "第三者が読めるレベルにブラッシュアップする。"}),
+            _norm_alt({"id": "veritas_spec_sheet", "title": "MVP仕様書を1枚にまとめる", "description": "CLI/API・FUJI・Debate・Memoryの流れを1枚に整理する。"}),
+            _norm_alt({"id": "veritas_demo_script", "title": "第三者向けデモ台本を作る", "description": "画面順・説明順・想定QAを台本化する。"}),
         ]
 
     alternatives: List[Dict[str, Any]] = list(input_alts)
@@ -1235,9 +1235,9 @@ async def run_decide_pipeline(
     # Stage 4c: Fallback alternatives
     # =================================================================
     alts: List[Dict[str, Any]] = alternatives or [
-        _norm_alt({"title": "\u6700\u5c0f\u30b9\u30c6\u30c3\u30d7\u3067\u524d\u9032\u3059\u308b"}),
-        _norm_alt({"title": "\u60c5\u5831\u53ce\u96c6\u3092\u512a\u5148\u3059\u308b"}),
-        _norm_alt({"title": "\u4eca\u65e5\u306f\u4f11\u606f\u306b\u5145\u3066\u308b"}),
+        _norm_alt({"title": "最小ステップで前進する"}),
+        _norm_alt({"title": "情報収集を優先する"}),
+        _norm_alt({"title": "今日は休息に充てる"}),
     ]
     alts = _dedupe_alts(alts)
 
@@ -1327,7 +1327,7 @@ async def run_decide_pipeline(
                 if not isinstance(o, dict):
                     continue
                 v = str(o.get("verdict") or "").strip()
-                if v in ("\u5374\u4e0b", "reject", "Rejected", "NG"):
+                if v in ("却下", "reject", "Rejected", "NG"):
                     rejected_cnt += 1
             if rejected_cnt > 0 and deb_opts and isinstance(deb_opts[0], dict):
                 deb_opts[0]["risk_delta"] = min(0.20, 0.05 * rejected_cnt)
