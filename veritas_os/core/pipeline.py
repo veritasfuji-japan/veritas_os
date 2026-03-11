@@ -321,8 +321,8 @@ def _to_float_or(v: Any, default: float) -> float:
 def _to_dict(o: Any) -> Dict[str, Any]:
     """Convert a request/response object to dict.
 
-    Supports Pydantic v2 (model_dump), Pydantic v1 (dict), and plain dicts.
-    Does NOT fall back to __dict__ to avoid exposing private attributes.
+    Supports Pydantic v2 (model_dump), Pydantic v1 (dict), plain dicts,
+    and falls back to ``__dict__`` (excluding private attributes).
     """
     if isinstance(o, dict):
         return o
@@ -330,6 +330,11 @@ def _to_dict(o: Any) -> Dict[str, Any]:
         return o.model_dump(exclude_none=True)  # type: ignore
     if hasattr(o, "dict"):
         return o.dict()  # type: ignore
+    if hasattr(o, "__dict__"):
+        try:
+            return {k: v for k, v in o.__dict__.items() if not k.startswith("_")}
+        except (TypeError, ValueError, AttributeError):
+            return {}
     return {}
 
 

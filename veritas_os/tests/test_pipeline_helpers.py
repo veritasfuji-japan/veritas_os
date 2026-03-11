@@ -3,7 +3,7 @@
 Helper coverage tests for veritas_os.core.pipeline
 
 Targets:
-- _to_dict: cover model_dump / dict / plain-dict / unknown-object paths
+- _to_dict: cover model_dump / dict / plain-dict / __dict__ / error paths
 - _get_request_params: cover request.params path + exception swallow
 """
 
@@ -30,12 +30,32 @@ def test__to_dict_with_dict_method():
     assert _to_dict(PydanticV1Like()) == {"y": 20}
 
 
-def test__to_dict_unknown_object_returns_empty():
+def test__to_dict_uses___dict__():
     class Foo:
         def __init__(self):
             self.a = 1
+            self.b = "x"
 
-    assert _to_dict(Foo()) == {}
+    assert _to_dict(Foo()) == {"a": 1, "b": "x"}
+
+
+def test__to_dict___dict___excludes_private_attrs():
+    class WithPrivate:
+        def __init__(self):
+            self.public = 1
+            self._private = 2
+
+    assert _to_dict(WithPrivate()) == {"public": 1}
+
+
+def test__to_dict___dict___conversion_error_returns_empty():
+    class Weird:
+        def __getattribute__(self, name):
+            if name == "__dict__":
+                return 123  # dict(123).items() -> AttributeError
+            return object.__getattribute__(self, name)
+
+    assert _to_dict(Weird()) == {}
 
 
 def test__get_request_params_reads_params():
