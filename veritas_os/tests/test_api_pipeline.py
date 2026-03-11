@@ -195,6 +195,22 @@ async def test_call_core_decide_sync_and_async():
     assert calls[1]["query"] == "Q2"
 
 
+@pytest.mark.anyio
+async def test_safe_web_search_sanitizes_max_results(monkeypatch):
+    calls: List[int] = []
+
+    def fake_ws(query: str, max_results: int = 5) -> Dict[str, Any]:
+        calls.append(max_results)
+        return {"ok": True, "results": []}
+
+    monkeypatch.setattr(api_pipeline, "web_search", fake_ws, raising=False)
+
+    await api_pipeline._safe_web_search("q", max_results="999")
+    await api_pipeline._safe_web_search("q", max_results="bad")
+
+    assert calls == [20, 5]
+
+
 # =========================================================
 # run_decide_pipeline のためのダミー型
 # =========================================================
