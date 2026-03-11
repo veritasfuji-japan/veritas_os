@@ -10,7 +10,7 @@ Tests for pipeline split review fixes:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 import pytest
@@ -285,7 +285,7 @@ class TestReplayDelegation:
             },
         }
 
-        load_calls: list[str] = []
+        load_calls: List[str] = []
 
         def _tracking_load(did: str) -> Any:
             load_calls.append(did)

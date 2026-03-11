@@ -55,7 +55,7 @@ from .utils import (
     utc_now,
     utc_now_iso_z,
 )
-from . import self_healing  # noqa: F401 – tests monkeypatch pipeline.self_healing
+from . import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
 
 # ---- pipeline サブモジュール（分割済み） ----
 from .pipeline_helpers import (
