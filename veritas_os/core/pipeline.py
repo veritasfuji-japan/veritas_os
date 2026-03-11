@@ -144,6 +144,21 @@ from .pipeline_persist import (
     persist_world_state,
     build_replay_snapshot,
 )
+from .pipeline_retrieval import (
+    stage_memory_retrieval,
+    stage_web_search_async,
+)
+from .pipeline_decide_stages import (
+    stage_normalize_options,
+    stage_absorb_raw_results,
+    stage_fallback_alternatives,
+    stage_model_boost,
+    stage_debate as stage_debate_fn,
+    stage_critique_async,
+    stage_value_learning_ema,
+    stage_compute_metrics,
+    stage_evidence_hardening,
+)
 from .pipeline_replay import (
     _safe_filename_id,  # noqa: F401 – backward compat
     _sanitize_for_diff,  # noqa: F401 – backward compat
@@ -760,10 +775,16 @@ except (ImportError, ModuleNotFoundError):
 async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
     """Returns web_search result dict or None (never raises).
     Supports both sync/async web_search (tests often monkeypatch async).
+
+    Resolution order:
+      1. module-level ``web_search`` (set by monkeypatch in tests)
+      2. ``_tool_web_search`` (imported from tools.web_search)
     """
-    fn = globals().get("web_search")
+    import sys
+    _this = sys.modules[__name__]
+    fn = getattr(_this, "web_search", None)
     if not callable(fn):
-        fn = globals().get("_tool_web_search")
+        fn = getattr(_this, "_tool_web_search", None)
     if not callable(fn):
         return None
 
@@ -811,14 +832,16 @@ async def run_decide_pipeline(
       - import-time failures must not break the request (ISSUE-4 style lazy import)
 
     Stage modules:
-      1. pipeline_inputs     - input normalisation & PlannerOS
-      2. (inline)            - MemoryOS retrieval + WebSearch
-      3. (inline)            - options normalization
-      4. pipeline_execute    - kernel.decide + self-healing
-      5. (inline)            - absorb raw / debate / critique
-      6. pipeline_policy     - FUJI / ValueCore / gate
-      7. pipeline_response   - response assembly & evidence finalisation
-      8. pipeline_persist    - audit, disk, memory, world-state, replay
+      1. pipeline_inputs          – input normalisation & PlannerOS
+      2. pipeline_retrieval       – MemoryOS retrieval + WebSearch
+      3. pipeline_decide_stages   – options normalization
+      4. pipeline_execute         – kernel.decide + self-healing
+      4b-4d. pipeline_decide_stages – absorb raw / fallback / boost
+      5-5b. pipeline_decide_stages  – debate / critique
+      6. pipeline_policy          – FUJI / ValueCore / gate
+      6b-6d. pipeline_decide_stages – EMA / metrics / evidence hardening
+      7. pipeline_response        – response assembly & evidence finalisation
+      8. pipeline_persist         – audit, disk, memory, world-state, replay
     """
 
     # Required modules check
@@ -833,660 +856,131 @@ async def run_decide_pipeline(
         _get_request_params=_get_request_params,
         _to_dict_fn=_to_dict,
     )
-    body = ctx.body
-    context = ctx.context
-    query = ctx.query
-    user_id = ctx.user_id
-    fast_mode = ctx.fast_mode
-    replay_mode = ctx.replay_mode
-    mock_external_apis = ctx.mock_external_apis
-    request_id = ctx.request_id
-    seed = ctx.seed
-    min_ev = ctx.min_ev
-    is_veritas_query = ctx.is_veritas_query
-    plan = ctx.plan
-    response_extras = ctx.response_extras
-    evidence = ctx.evidence
-    started_at = ctx.started_at
-
-    qlower = query.lower()
 
     # =================================================================
-    # Stage 2: MemoryOS retrieval  (best-effort)
+    # Stage 2: MemoryOS retrieval  (-> pipeline_retrieval)
     # =================================================================
-    retrieval_stage_started_at = time.time()
-    retrieved: List[Dict[str, Any]] = []
-    want_doc = False
-    raw_memory_kinds = context.get("memory_kinds") or body.get("memory_kinds")
-
-    if isinstance(raw_memory_kinds, list):
-        lowered = {str(k).lower() for k in raw_memory_kinds}
-        want_doc = "doc" in lowered
-
-    if is_veritas_query or any(key in qlower for key in ["論文", "paper", "zenodo", "veritas os", "protoagi", "プロトagi"]):
-        want_doc = True
-
-    memory_store = _get_memory_store()
-    if query and memory_store is not None:
-        try:
-            mem_hits_raw = _memory_search(
-                memory_store,
-                query=query,
-                k=8,
-                kinds=["semantic", "skills", "episodic", "doc"],
-                min_sim=MIN_MEMORY_SIMILARITY,
-                user_id=user_id,
-            )
-
-            doc_hits_raw = None
-            if want_doc:
-                try:
-                    doc_hits_raw = _memory_search(memory_store, query=query, k=5, kinds=["doc"], user_id=user_id)
-                except Exception:  # subsystem resilience: intentionally broad
-                    doc_hits_raw = None
-
-            flat_hits: List[Dict[str, Any]] = []
-            flat_hits.extend(_flatten_memory_hits(mem_hits_raw))
-            flat_hits.extend(_flatten_memory_hits(doc_hits_raw, default_kind="doc"))
-
-            seen_ids: set[str] = set()
-            deduped: List[Dict[str, Any]] = []
-            for h in flat_hits:
-                _id = h.get("id") or h.get("key")
-                _id_s = str(_id) if _id is not None else ""
-                if _id_s:
-                    if _id_s in seen_ids:
-                        continue
-                    seen_ids.add(_id_s)
-                deduped.append(h)
-
-            for h in deduped:
-                v = h.get("value") or {}
-                text = h.get("text") or v.get("text") or v.get("query") or ""
-                if not text:
-                    continue
-                kind = h.get("kind") or (h.get("meta") or {}).get("kind") or "episodic"
-                retrieved.append(
-                    {
-                        "id": h.get("id") or h.get("key"),
-                        "kind": kind,
-                        "text": text,
-                        "score": float(h.get("score", 0.5)),
-                    }
-                )
-
-            retrieved.sort(key=lambda r: r.get("score", 0.0), reverse=True)
-            response_extras["metrics"]["mem_hits"] = int(len(retrieved))
-
-            if want_doc:
-                doc_only = [r for r in retrieved if r.get("kind") == "doc"]
-                non_doc = [r for r in retrieved if r.get("kind") != "doc"]
-                top_hits = doc_only[:3] + non_doc[: max(0, 3 - len(doc_only[:3]))]
-            else:
-                top_hits = retrieved[:3]
-
-            response_extras["metrics"]["memory_evidence_count"] = int(len(top_hits))
-
-            for r in top_hits:
-                text = r.get("text") or ""
-                snippet = text[:200] + ("..." if len(text) > 200 else "")
-                conf = max(0.3, min(1.0, float(r.get("score", 0.5))))
-                if r.get("kind") == "doc" and conf < DOC_MIN_CONFIDENCE:
-                    conf = DOC_MIN_CONFIDENCE
-                ev = _norm_evidence_item(
-                    {
-                        "source": f"memory:{r.get('kind','')}",
-                        "uri": r.get("id"),
-                        "snippet": snippet,
-                        "confidence": conf,
-                    }
-                )
-                if ev:
-                    evidence.append(ev)
-
-            # record memory usage (best-effort)
-            try:
-                cited_ids = [str(r.get("id")) for r in top_hits if r.get("id")]
-                if cited_ids:
-                    ts = utc_now_iso_z()
-                    _memory_put(
-                        memory_store,
-                        user_id,
-                        key=f"memory_use_{ts}",
-                        value={"used": True, "query": query, "citations": cited_ids, "timestamp": ts},
-                    )
-                    _memory_add_usage(memory_store, user_id, cited_ids)
-            except (KeyError, TypeError, AttributeError):
-                pass
-
-        except Exception as e:  # subsystem resilience: intentionally broad
-            _warn(f"[AGI-Retrieval] memory retrieval error: {repr(e)}")
-            response_extras.setdefault("env_tools", {})
-            response_extras["env_tools"]["memory_error"] = repr(e)
-
-    response_extras["metrics"]["stage_latency"]["retrieval"] = max(
-        0,
-        int((time.time() - retrieval_stage_started_at) * 1000),
-    )
-
-    memory_citations_list: List[Dict[str, Any]] = []
-    for r in retrieved[:10]:
-        cid = r.get("id")
-        if cid:
-            memory_citations_list.append({"id": cid, "kind": r.get("kind"), "score": float(r.get("score", 0.0))})
-    response_extras["memory_citations"] = memory_citations_list
-    response_extras["memory_used_count"] = int(len(memory_citations_list))
-
-    # =================================================================
-    # Stage 2b: WebSearch  (optional / best-effort)
-    # =================================================================
-    web_evidence: List[Dict[str, Any]] = []
-    web_evidence_added = 0
-
-    if not isinstance(evidence, list):
-        evidence = list(evidence or [])
-
-    params = _get_request_params(request)
-    web_explicit = _to_bool(body.get("web")) or _to_bool(context.get("web")) or _to_bool(params.get("web"))
-    want_web = web_explicit or bool(is_veritas_query) or any(
-        k in qlower for k in ["agi", "research", "論文", "paper", "zenodo", "arxiv"]
-    )
-
-    web_max = body.get("web_max_results") or context.get("web_max_results") or 5
-    try:
-        web_max = int(web_max)
-    except (ValueError, TypeError):
-        web_max = 5
-    web_max = max(1, min(20, web_max))
-
-    response_extras.setdefault("metrics", {})
-    if not isinstance(response_extras["metrics"], dict):
-        response_extras["metrics"] = {}
-    response_extras["metrics"].setdefault("web_hits", 0)
-    response_extras["metrics"].setdefault("web_evidence_count", 0)
-
-    should_run_web = bool(query and want_web and (not fast_mode or web_explicit or is_veritas_query))
-
-    web_stage_started_at = time.time()
-    if should_run_web and not mock_external_apis:
-        ws = None
-        ws_final_query = query
-
-        try:
-            ws0 = await _safe_web_search(query, max_results=web_max)
-            ws = _normalize_web_payload(ws0)
-        except Exception as e:  # subsystem resilience: intentionally broad
-            response_extras.setdefault("env_tools", {})
-            if isinstance(response_extras["env_tools"], dict):
-                response_extras["env_tools"]["web_search_error"] = repr(e)
-
-        if ws is None:
-            response_extras["web_search"] = {"ok": True, "results": [], "degraded": True}
-            ev_fallback = _norm_evidence_item(
-                {
-                    "source": "web",
-                    "uri": "web:search",
-                    "title": "web_search attempted (degraded)",
-                    "snippet": f"[q={ws_final_query}] web_search unavailable or returned None",
-                    "confidence": DEFAULT_CONFIDENCE,
-                }
-            )
-            if ev_fallback:
-                ev_fallback["source"] = "web"
-                web_evidence.append(ev_fallback)
-                evidence.append(ev_fallback)
-                web_evidence_added = 1
-        else:
-            if isinstance(ws, dict) and "ok" not in ws:
-                ws["ok"] = True
-            try:
-                meta = ws.get("meta") if isinstance(ws, dict) else None
-                if isinstance(meta, dict):
-                    ws_final_query = (
-                        meta.get("final_query")
-                        or meta.get("boosted_query")
-                        or ws_final_query
-                    )
-                    meta.setdefault("final_query", ws_final_query)
-            except (KeyError, TypeError, AttributeError):
-                ws_final_query = query
-
-            response_extras["web_search"] = ws
-            results = _extract_web_results(ws)
-            response_extras["metrics"]["web_hits"] = int(len(results))
-
-            for item in results[:3]:
-                if isinstance(item, str):
-                    item = {"title": item, "snippet": item}
-                elif not isinstance(item, dict):
-                    item = {"title": str(item), "snippet": str(item)}
-                uri = item.get("url") or item.get("uri") or item.get("link") or item.get("href")
-                title = item.get("title") or item.get("name") or ""
-                snippet = item.get("snippet") or item.get("text") or title or (str(uri) if uri else "")
-                snippet = f"[q={ws_final_query}] {snippet}"
-                try:
-                    confidence = float(item.get("confidence", 0.7) or 0.7)
-                except (ValueError, TypeError):
-                    confidence = 0.7
-                ev = _norm_evidence_item(
-                    {
-                        "source": "web",
-                        "uri": uri,
-                        "title": title,
-                        "snippet": snippet,
-                        "confidence": confidence,
-                    }
-                )
-                if ev:
-                    ev["source"] = "web"
-                    web_evidence.append(ev)
-                    evidence.append(ev)
-                    web_evidence_added += 1
-
-            try:
-                ok_flag = bool(ws.get("ok")) if isinstance(ws, dict) else False
-            except (KeyError, TypeError, AttributeError):
-                ok_flag = False
-
-            if ok_flag and web_evidence_added == 0:
-                ev_fallback = _norm_evidence_item(
-                    {
-                        "source": "web",
-                        "uri": "web:search",
-                        "title": "web_search executed",
-                        "snippet": f"[q={ws_final_query}] web_search ok=True but no structured results extracted",
-                        "confidence": DEFAULT_CONFIDENCE,
-                    }
-                )
-                if ev_fallback:
-                    ev_fallback["source"] = "web"
-                    web_evidence.append(ev_fallback)
-                    evidence.append(ev_fallback)
-                    web_evidence_added = 1
-
-    elif should_run_web and mock_external_apis:
-        response_extras["web_search"] = {
-            "ok": True,
-            "results": [],
-            "mocked": True,
-            "meta": {"reason": "replay_mock_external_apis"},
-        }
-        response_extras.setdefault("env_tools", {})
-        if isinstance(response_extras["env_tools"], dict):
-            response_extras["env_tools"]["web_search_mocked"] = True
-    else:
-        if want_web and "web_search" not in response_extras:
-            response_extras["web_search"] = {
-                "ok": False,
-                "results": [],
-                "skipped": True,
-                "reason": "fast_mode",
-            }
-
-    response_extras["metrics"]["web_evidence_count"] = int(web_evidence_added)
-    response_extras["metrics"]["stage_latency"]["web"] = max(
-        0,
-        int((time.time() - web_stage_started_at) * 1000),
+    stage_memory_retrieval(
+        ctx,
+        _get_memory_store=_get_memory_store,
+        _memory_search=_memory_search,
+        _memory_put=_memory_put,
+        _memory_add_usage=_memory_add_usage,
+        _flatten_memory_hits=_flatten_memory_hits,
+        _warn=_warn,
+        utc_now_iso_z=utc_now_iso_z,
     )
 
     # =================================================================
-    # Stage 3: Options normalization
+    # Stage 2b: WebSearch  (-> pipeline_retrieval)
     # =================================================================
-    explicit_raw = body.get("options") or body.get("alternatives") or []
-    if not isinstance(explicit_raw, list):
-        explicit_raw = []
+    await stage_web_search_async(
+        ctx,
+        _safe_web_search=_safe_web_search,
+        _normalize_web_payload=_normalize_web_payload,
+        _extract_web_results=_extract_web_results,
+        _to_bool=_to_bool,
+        _get_request_params=_get_request_params,
+        _warn=_warn,
+        request=request,
+    )
 
-    explicit_options: List[Dict[str, Any]] = [
-        _norm_alt(a) for a in explicit_raw if isinstance(a, dict)
-    ]
-    explicit_options = [a for a in explicit_options if isinstance(a, dict)]
-
-    input_alts: List[Dict[str, Any]] = list(explicit_options)
-
-    if not input_alts and is_veritas_query:
-        step_alts: List[Dict[str, Any]] = []
-        for i, st in enumerate((plan.get("steps") if isinstance(plan, dict) else []) or [], 1):
-            if not isinstance(st, dict):
-                continue
-            title = st.get("title") or st.get("name") or f"Step {i}"
-            detail = st.get("detail") or st.get("description") or st.get("why") or ""
-            step_alts.append(
-                _norm_alt(
-                    {
-                        "id": st.get("id") or f"plan_step_{i}",
-                        "title": title,
-                        "description": detail,
-                        "score": 1.0,
-                        "meta": {"source": "planner", "step_index": i},
-                    }
-                )
-            )
-
-        input_alts = step_alts or [
-            _norm_alt({"id": "veritas_mvp_demo", "title": "MVPデモを最短で見せられる形にする", "description": "Swagger/CLIで /v1/decide の30〜60秒デモを作る。"}),
-            _norm_alt({"id": "veritas_report", "title": "技術監査レポートを仕上げる", "description": "第三者が読めるレベルにブラッシュアップする。"}),
-            _norm_alt({"id": "veritas_spec_sheet", "title": "MVP仕様書を1枚にまとめる", "description": "CLI/API・FUJI・Debate・Memoryの流れを1枚に整理する。"}),
-            _norm_alt({"id": "veritas_demo_script", "title": "第三者向けデモ台本を作る", "description": "画面順・説明順・想定QAを台本化する。"}),
-        ]
-
-    alternatives: List[Dict[str, Any]] = list(input_alts)
-
-    if not isinstance(web_evidence, list):
-        web_evidence = []
+    # =================================================================
+    # Stage 3: Options normalization  (-> pipeline_decide_stages)
+    # =================================================================
+    stage_normalize_options(ctx, _norm_alt=_norm_alt)
 
     # =================================================================
     # Stage 4: Core decision + self-healing  (-> pipeline_execute)
     # =================================================================
-    ctx.evidence = evidence
-    ctx.input_alts = input_alts
-    ctx.alternatives = alternatives
-    ctx.explicit_options = explicit_options
-    ctx.web_evidence = web_evidence
-    ctx.retrieved = retrieved
-
     await stage_core_execute(
         ctx,
         call_core_decide_fn=call_core_decide,
         append_trust_log_fn=append_trust_log,
         veritas_core=veritas_core,
     )
-    raw = ctx.raw
 
     # =================================================================
-    # Stage 4b: Absorb raw results
+    # Stage 4b: Absorb raw results  (-> pipeline_decide_stages)
     # =================================================================
-    critique: Dict[str, Any] = {}
-    debate: List[Any] = []
-    telos: float = 0.0
-    fuji_dict: Dict[str, Any] = {}
-    modifications: List[Any] = []
-
-    if raw:
-        if isinstance(raw.get("evidence"), list):
-            for ev0 in raw["evidence"]:
-                ev = _norm_evidence_item(ev0)
-                if ev:
-                    evidence.append(ev)
-
-        if "critique" in raw:
-            critique = _normalize_critique_payload(raw.get("critique"))
-
-        debate = raw.get("debate") or debate
-
-        try:
-            telos = float(raw.get("telos_score") or telos)
-        except (ValueError, TypeError):
-            pass
-
-        fuji_dict = raw.get("fuji") or fuji_dict
-
-        alts_from_core = raw.get("alternatives") or raw.get("options") or []
-        if (not explicit_options) and isinstance(alts_from_core, list) and alts_from_core:
-            alternatives = [_norm_alt(a) for a in alts_from_core]
-
-        if isinstance(raw.get("extras"), dict):
-            response_extras = _merge_extras_preserving_contract(
-                response_extras,
-                raw["extras"],
-                fast_mode_default=fast_mode,
-                context_obj=context,
-            )
+    stage_absorb_raw_results(
+        ctx,
+        _norm_alt=_norm_alt,
+        _normalize_critique_payload=_normalize_critique_payload,
+        _merge_extras_preserving_contract=_merge_extras_preserving_contract,
+    )
 
     # =================================================================
-    # Stage 4c: Fallback alternatives
+    # Stage 4c: Fallback alternatives  (-> pipeline_decide_stages)
     # =================================================================
-    alts: List[Dict[str, Any]] = alternatives or [
-        _norm_alt({"title": "最小ステップで前進する"}),
-        _norm_alt({"title": "情報収集を優先する"}),
-        _norm_alt({"title": "今日は休息に充てる"}),
-    ]
-    alts = _dedupe_alts(alts)
+    stage_fallback_alternatives(ctx, _norm_alt=_norm_alt, _dedupe_alts=_dedupe_alts)
 
     # =================================================================
-    # Stage 4d: WorldModel + MemoryModel boost
+    # Stage 4d: WorldModel + MemoryModel boost  (-> pipeline_decide_stages)
     # =================================================================
-    try:
-        if world_model is not None and hasattr(world_model, "simulate"):
-            boosted: List[Dict[str, Any]] = []
-            uid_for_world = (context or {}).get("user_id") or user_id or "anon"
-            uid_for_world = str(uid_for_world) if uid_for_world is not None else "anon"
-
-            for d in alts:
-                sim = world_model.simulate(user_id=uid_for_world, query=query, chosen=d)  # type: ignore
-                if isinstance(sim, dict):
-                    d["world"] = sim
-                    micro = max(0.0, min(0.03, 0.02 * float(sim.get("utility", 0.0)) + 0.01 * float(sim.get("confidence", 0.5))))
-                    d["score"] = float(d.get("score", 1.0)) * (1.0 + micro)
-                boosted.append(d)
-            alts = boosted
-    except Exception as e:  # subsystem resilience
-        _warn(f"[WorldModelOS] skip: {e}")
-
-    try:
-        response_extras.setdefault("metrics", {})
-        if not isinstance(response_extras["metrics"], dict):
-            response_extras["metrics"] = {}
-
-        if MEM_VEC is not None and MEM_CLF is not None:
-            response_extras["metrics"]["mem_model"] = {
-                "applied": True, "reason": "loaded", "path": _mem_model_path(),
-                "classes": getattr(MEM_CLF, "classes_", []).tolist() if hasattr(MEM_CLF, "classes_") else None,
-            }
-            for d in alts:
-                text = (d.get("title") or "") + " " + (d.get("description") or "")
-                p_allow = _allow_prob(text)
-                base = float(d.get("score", 1.0))
-                d["score_raw"] = float(d.get("score_raw", base))
-                d["score"] = base * (1.0 + 0.10 * p_allow)
-        else:
-            response_extras["metrics"]["mem_model"] = {"applied": False, "reason": "model_not_loaded", "path": _mem_model_path()}
-    except (ValueError, TypeError, AttributeError) as e:
-        response_extras.setdefault("metrics", {})
-        if not isinstance(response_extras["metrics"], dict):
-            response_extras["metrics"] = {}
-        response_extras["metrics"]["mem_model"] = {"applied": False, "error": str(e), "path": _mem_model_path()}
-
-    # chosen (pre-debate)
-    chosen = raw.get("chosen") if isinstance(raw, dict) else {}
-    if not isinstance(chosen, dict) or not chosen:
-        try:
-            chosen = max(alts, key=lambda d: float((d.get("world") or {}).get("utility", d.get("score", 1.0))))
-        except (ValueError, TypeError):
-            chosen = alts[0] if alts else {}
+    stage_model_boost(
+        ctx,
+        world_model=world_model,
+        MEM_VEC=MEM_VEC,
+        MEM_CLF=MEM_CLF,
+        _allow_prob=_allow_prob,
+        _mem_model_path=_mem_model_path,
+        _warn=_warn,
+    )
 
     # =================================================================
-    # Stage 5: DebateOS  (best-effort)
+    # Stage 5: DebateOS  (-> pipeline_decide_stages)
     # =================================================================
-    debate_result: Dict[str, Any] = {}
-    try:
-        if debate_core is not None and hasattr(debate_core, "run_debate") and not fast_mode:
-            debate_result = debate_core.run_debate(  # type: ignore
-                query=query, options=alts,
-                context={"user_id": user_id, "stakes": (context or {}).get("stakes"), "telos_weights": (context or {}).get("telos_weights")},
-            ) or {}
-    except (KeyError, TypeError, AttributeError) as e:
-        _warn(f"[DebateOS] skipped: {e}")
-        debate_result = {}
-
-    if isinstance(debate_result, dict) and debate_result:
-        deb_opts = debate_result.get("options") or []
-        if isinstance(deb_opts, list) and deb_opts:
-            alts = deb_opts
-            debate = deb_opts
-        deb_chosen = debate_result.get("chosen")
-        if isinstance(deb_chosen, dict) and deb_chosen:
-            chosen = deb_chosen
-        response_extras.setdefault("debate", {})
-        if isinstance(response_extras["debate"], dict):
-            try:
-                response_extras["debate"].update({"source": debate_result.get("source"), "raw": debate_result.get("raw")})
-            except (KeyError, TypeError, AttributeError):
-                pass
-        try:
-            rejected_cnt = 0
-            for o in deb_opts:
-                if not isinstance(o, dict):
-                    continue
-                v = str(o.get("verdict") or "").strip()
-                if v in ("却下", "reject", "Rejected", "NG"):
-                    rejected_cnt += 1
-            if rejected_cnt > 0 and deb_opts and isinstance(deb_opts[0], dict):
-                deb_opts[0]["risk_delta"] = min(0.20, 0.05 * rejected_cnt)
-        except (KeyError, TypeError, AttributeError) as e:
-            _warn(f"[DebateOS] risk_delta heuristic skipped: {e}")
+    stage_debate_fn(ctx, debate_core=debate_core, _warn=_warn)
 
     # =================================================================
-    # Stage 5b: Critique  (post-debate, pre-FUJI)
+    # Stage 5b: Critique  (-> pipeline_decide_stages)
     # =================================================================
-    try:
-        critique = _normalize_critique_payload(critique)
-        if not critique:
-            critique = await _run_critique_best_effort(
-                query=query, chosen=chosen,
-                evidence=evidence if isinstance(evidence, list) else [],
-                debate=debate, context=context, user_id=user_id,
-            )
-        critique = _ensure_critique_required(
-            response_extras=response_extras, query=query, chosen=chosen, critique_obj=critique,
-        )
-    except Exception:  # subsystem resilience: intentionally broad
-        critique = _critique_fallback(reason="critique_guard_exception", query=query, chosen=chosen)
-        response_extras.setdefault("env_tools", {})
-        if isinstance(response_extras["env_tools"], dict):
-            response_extras["env_tools"]["critique_degraded"] = True
-
-    try:
-        if isinstance(critique, dict) and critique.get("ok") is False:
-            response_extras.setdefault("env_tools", {})
-            if isinstance(response_extras["env_tools"], dict):
-                response_extras["env_tools"]["review_required"] = True
-                response_extras["env_tools"]["review_reason"] = "critique_missing_or_failed"
-    except (KeyError, TypeError, AttributeError):
-        pass
+    await stage_critique_async(
+        ctx,
+        _normalize_critique_payload=_normalize_critique_payload,
+        _run_critique_best_effort=_run_critique_best_effort,
+        _ensure_critique_required=_ensure_critique_required,
+        _critique_fallback=_critique_fallback,
+    )
 
     # =================================================================
     # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
     # =================================================================
-    ctx.fuji_dict = fuji_dict
-    ctx.evidence = evidence
-    ctx.alternatives = alts
-    ctx.input_alts = input_alts
-    ctx.telos = telos
-    ctx.debate = debate
-    ctx.response_extras = response_extras
-
     stage_fuji_precheck(ctx)
-
     stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
-
     stage_gate_decision(ctx)
 
-    # Sync back from ctx
-    fuji_dict = ctx.fuji_dict
-    evidence = ctx.evidence
-    alts = ctx.alternatives
-    input_alts = ctx.input_alts
-    telos = ctx.telos
-    response_extras = ctx.response_extras
-    decision_status = ctx.decision_status
-    rejection_reason = ctx.rejection_reason
-    modifications = ctx.modifications
-    effective_risk = ctx.effective_risk
-    value_ema = ctx.value_ema
-    telos_threshold = ctx.telos_threshold
-    values_payload = ctx.values_payload
-    if ctx.decision_status == "rejected":
-        chosen = ctx.chosen
-        alts = ctx.alternatives
+    # =================================================================
+    # Stage 6b: Value learning EMA  (-> pipeline_decide_stages)
+    # =================================================================
+    stage_value_learning_ema(
+        ctx,
+        _load_valstats=_load_valstats,
+        _save_valstats=_save_valstats,
+        _warn=_warn,
+        utc_now_iso_z=utc_now_iso_z,
+    )
 
     # =================================================================
-    # Stage 6b: Value learning EMA update
+    # Stage 6c: Metrics  (-> pipeline_decide_stages)
     # =================================================================
-    try:
-        valstats = _load_valstats()
-        alpha = float(valstats.get("alpha", 0.2))
-        ema_prev = float(valstats.get("ema", 0.5))
-        n_prev = int(valstats.get("n", 0))
-        v_val = float(values_payload.get("total", 0.5))
-        ema_new = (1.0 - alpha) * ema_prev + alpha * v_val
-        hist = valstats.get("history", [])
-        if not isinstance(hist, list):
-            hist = []
-        hist.append({"ts": utc_now_iso_z(), "ema": ema_new, "value": v_val})
-        hist = hist[-1000:]
-        valstats.update({"ema": ema_new, "n": n_prev + 1, "last": v_val, "history": hist})
-        _save_valstats(valstats)
-        values_payload["ema"] = round(ema_new, 4)
-        value_ema = float(ema_new)
-    except (ValueError, TypeError) as e:
-        _warn(f"[value-learning] skip: {e}")
+    stage_compute_metrics(ctx, _ensure_full_contract=_ensure_full_contract)
 
     # =================================================================
-    # Stage 6c: Metrics
+    # Stage 6d: Low-evidence hardening  (-> pipeline_decide_stages)
     # =================================================================
-    duration_ms = max(1, int((time.time() - started_at) * 1000))
-    mem_evi_cnt = 0
-    for ev in evidence:
-        if isinstance(ev, dict) and str(ev.get("source", "")).startswith("memory"):
-            mem_evi_cnt += 1
-    response_extras.setdefault("metrics", {})
-    if not isinstance(response_extras["metrics"], dict):
-        response_extras["metrics"] = {}
-    response_extras["metrics"].update({
-        "latency_ms": duration_ms,
-        "mem_evidence_count": int(mem_evi_cnt),
-        "memory_evidence_count": int(response_extras["metrics"].get("memory_evidence_count", 0) or 0),
-        "alts_count": int(len(alts)),
-        "has_evidence": bool(evidence),
-        "value_ema": round(float(value_ema), 4),
-        "effective_risk": round(float(effective_risk), 4),
-        "telos_threshold": round(float(telos_threshold), 3),
-    })
-    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
-
-    # =================================================================
-    # Stage 6d: Low-evidence hardening
-    # =================================================================
-    try:
-        if not isinstance(evidence, list):
-            evidence = list(evidence or [])
-        step1_intent = False
-        if not fast_mode:
-            step1_intent = _query_is_step1_hint(query)
-        if step1_intent and (not _has_step1_minimum_evidence(evidence)) and (evidence_core is not None):
-            fn = getattr(evidence_core, "step1_minimum_evidence", None)
-            if callable(fn):
-                for ev0 in fn(context):  # type: ignore[misc]
-                    evn = _norm_evidence_item(ev0)
-                    if evn:
-                        evidence.append(evn)
-    except (ValueError, TypeError):
-        pass
-
-    evidence = [ev for ev in (_norm_evidence_item(x) for x in evidence) if ev]  # type: ignore[misc]
-    evidence = _dedupe_evidence(evidence)
-    EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
-    if len(evidence) > EVIDENCE_MAX:
-        evidence = evidence[:EVIDENCE_MAX]
+    stage_evidence_hardening(
+        ctx,
+        evidence_core=evidence_core,
+        _query_is_step1_hint=_query_is_step1_hint,
+        _has_step1_minimum_evidence=_has_step1_minimum_evidence,
+    )
 
     # =================================================================
     # Stage 7: Response assembly  (-> pipeline_response)
     # =================================================================
-    ctx.chosen = chosen
-    ctx.alternatives = alts
-    ctx.critique = critique
-    ctx.debate = debate
-    ctx.telos = telos
-    ctx.fuji_dict = fuji_dict
-    ctx.evidence = evidence
-    ctx.response_extras = response_extras
-    ctx.decision_status = decision_status
-    ctx.rejection_reason = rejection_reason
-    ctx.modifications = modifications
-    ctx.effective_risk = effective_risk
-    ctx.values_payload = values_payload
-    ctx.raw = raw
-
+    plan = ctx.plan
     res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)
     payload = coerce_to_decide_response(res, DecideResponse=DecideResponse)
 
@@ -1504,8 +998,10 @@ async def run_decide_pipeline(
     )
 
     # FINALIZE evidence
-    finalize_evidence(payload, web_evidence=web_evidence, evidence_max=EVIDENCE_MAX)
+    EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
+    finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
 
+    duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
     persist_decision_to_disk(
         ctx, payload, duration_ms=duration_ms,
         LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
@@ -1523,6 +1019,7 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 8b: Replay snapshot
     # =================================================================
+    should_run_web = getattr(ctx, "_should_run_web", False)
     build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
 
     return payload
