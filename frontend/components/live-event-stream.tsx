@@ -192,7 +192,7 @@ export function LiveEventStream(): JSX.Element {
       controller = new AbortController();
 
       try {
-        const response = await fetch(streamUrl, { signal: controller.signal });
+        const response = await fetch(streamUrl, { signal: controller.signal, credentials: "same-origin" });
         if (!response.ok || !response.body) {
           if (response.status === 401 || response.status === 403) {
             const recoveryAt = Date.now() + AUTH_RETRY_PAUSE_MS;

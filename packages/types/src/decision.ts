@@ -41,6 +41,42 @@ export type ResponseStyle = "logic" | "emotional" | "business" | "expert" | "cas
 export type RetentionClass = "short" | "standard" | "long" | "regulated";
 
 /**
+ * User context information passed alongside a decision request.
+ *
+ * Source of truth: veritas_os/api/schemas.py — Context
+ */
+export interface Context {
+  user_id?: string;
+  session_id?: string;
+  query?: string;
+  goals?: string[];
+  constraints?: string[];
+  tools_allowed?: string[];
+  time_horizon?: TimeHorizon;
+  preferences?: string[];
+  response_style?: ResponseStyle;
+  telos_weights?: Record<string, number>;
+  affect_hint?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/**
+ * Input candidate option for /v1/decide requests.
+ *
+ * Source of truth: veritas_os/api/schemas.py — Option
+ */
+export interface Option {
+  id?: string;
+  title?: string;
+  /** @deprecated Alias for title (backward-compatible). */
+  text?: string;
+  description?: string;
+  score?: number;
+  score_raw?: number | null;
+  [key: string]: unknown;
+}
+
+/**
  * A single critique entry from the critique pipeline stage.
  *
  * Source of truth: veritas_os/api/schemas.py — CritiqueItem
@@ -552,11 +588,11 @@ export function isTrustFeedbackRequest(value: unknown): value is TrustFeedbackRe
  */
 export interface DecideRequest {
   query?: string;
-  context?: Record<string, unknown>;
+  context?: Context | Record<string, unknown>;
   /** Canonical candidate list. */
-  alternatives?: Record<string, unknown>[];
+  alternatives?: Array<Option | Record<string, unknown>>;
   /** @deprecated Use `alternatives`. Kept for backward compatibility; backend syncs to `alternatives`. */
-  options?: Record<string, unknown>[];
+  options?: Array<Option | Record<string, unknown>>;
   min_evidence?: number;
   memory_auto_put?: boolean;
   persona_evolve?: boolean;

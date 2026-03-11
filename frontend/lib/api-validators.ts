@@ -42,12 +42,14 @@ export interface TrustLogsResponse {
   has_more: boolean;
 }
 
+export type VerificationResult = "ok" | "broken" | "not_found";
+
 export interface RequestLogResponse {
   request_id: string;
   items: TrustLog[];
   count: number;
   chain_ok: boolean;
-  verification_result: string;
+  verification_result: VerificationResult;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -391,6 +393,8 @@ export function isRequestLogResponse(value: unknown): value is RequestLogRespons
     return false;
   }
 
+  const VALID_VERIFICATION_RESULTS: ReadonlySet<string> = new Set(["ok", "broken", "not_found"]);
+
   return (
     hasStringField(value, "request_id")
     && Array.isArray(value.items)
@@ -398,5 +402,6 @@ export function isRequestLogResponse(value: unknown): value is RequestLogRespons
     && hasNumberField(value, "count")
     && hasBooleanField(value, "chain_ok")
     && hasStringField(value, "verification_result")
+    && VALID_VERIFICATION_RESULTS.has(value.verification_result as string)
   );
 }

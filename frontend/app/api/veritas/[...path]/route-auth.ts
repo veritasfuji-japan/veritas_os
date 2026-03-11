@@ -31,6 +31,11 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     roles: ["viewer", "operator", "admin"],
   },
   { pathPattern: /^v1\/governance\/policy$/, method: "PUT", roles: ["admin"] },
+  {
+    pathPattern: /^v1\/governance\/policy\/history$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
 
   // Trust logs
   {
@@ -47,6 +52,12 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     pathPattern: /^v1\/trust\/feedback$/,
     method: "POST",
     roles: ["operator", "admin"],
+  },
+
+  {
+    pathPattern: /^v1\/trust\/stats$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
   },
 
   // Trust log chain (signed)
