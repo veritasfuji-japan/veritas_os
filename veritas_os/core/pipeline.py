@@ -329,17 +329,17 @@ def _to_dict(o: Any) -> Dict[str, Any]:
         try:
             return o.model_dump(exclude_none=True)  # type: ignore
         except (TypeError, ValueError, RuntimeError):
-            pass
+            logger.debug("_to_dict: model_dump() failed for %r", type(o).__name__, exc_info=True)
     if hasattr(o, "dict"):
         try:
             return o.dict()  # type: ignore
         except (TypeError, ValueError, RuntimeError):
-            pass
+            logger.debug("_to_dict: dict() failed for %r", type(o).__name__, exc_info=True)
     try:
         if hasattr(o, "__dict__"):
             return dict(o.__dict__)
     except (TypeError, ValueError):
-        pass
+        logger.debug("_to_dict: __dict__ fallback failed for %r", type(o).__name__, exc_info=True)
     return {}
 
 
@@ -455,9 +455,10 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
+_EVIDENCE_MAX_UPPER = 10000  # Upper bound for EVIDENCE_MAX to prevent unreasonable memory usage
 EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
-if not (1 <= EVIDENCE_MAX <= 10000):
-    logger.warning("VERITAS_EVIDENCE_MAX=%d out of bounds [1,10000], using default 50", EVIDENCE_MAX)
+if not (1 <= EVIDENCE_MAX <= _EVIDENCE_MAX_UPPER):
+    logger.warning("VERITAS_EVIDENCE_MAX=%d out of bounds [1,%d], using default 50", EVIDENCE_MAX, _EVIDENCE_MAX_UPPER)
     EVIDENCE_MAX = 50
 
 # ★ Replay functions moved to pipeline_replay.py.

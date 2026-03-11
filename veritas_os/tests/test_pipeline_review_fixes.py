@@ -204,7 +204,23 @@ class TestEvidenceMaxBounds:
         from veritas_os.core.pipeline import EVIDENCE_MAX
         assert EVIDENCE_MAX >= 1
 
-    def test_evidence_max_default_is_50(self):
-        from veritas_os.core.pipeline import EVIDENCE_MAX
-        # Default is 50 when env var is not set
-        assert EVIDENCE_MAX == 50
+    def test_evidence_max_within_bounds(self):
+        from veritas_os.core.pipeline import EVIDENCE_MAX, _EVIDENCE_MAX_UPPER
+        assert 1 <= EVIDENCE_MAX <= _EVIDENCE_MAX_UPPER
+
+    def test_evidence_max_fallback_on_invalid_env(self, monkeypatch):
+        """Values outside [1, 10000] should fall back to 50."""
+        import importlib
+        import veritas_os.core.pipeline as pipeline_mod
+
+        monkeypatch.setenv("VERITAS_EVIDENCE_MAX", "0")
+        importlib.reload(pipeline_mod)
+        assert pipeline_mod.EVIDENCE_MAX == 50
+
+        monkeypatch.setenv("VERITAS_EVIDENCE_MAX", "-5")
+        importlib.reload(pipeline_mod)
+        assert pipeline_mod.EVIDENCE_MAX == 50
+
+        # Restore default
+        monkeypatch.delenv("VERITAS_EVIDENCE_MAX", raising=False)
+        importlib.reload(pipeline_mod)
