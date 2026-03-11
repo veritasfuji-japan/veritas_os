@@ -791,8 +791,18 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     Resolution order:
       1. module-level ``web_search`` (set by monkeypatch in tests)
       2. ``_tool_web_search`` (imported from tools.web_search)
+
+    ``max_results`` is sanitized to an integer in [1, 20] to avoid
+    accidentally passing unbounded values to external adapters.
     """
     import sys
+
+    try:
+        max_results_int = int(max_results)
+    except (TypeError, ValueError):
+        max_results_int = 5
+    max_results_int = max(1, min(20, max_results_int))
+
     _this = sys.modules[__name__]
     fn = getattr(_this, "web_search", None)
     if not callable(fn):
@@ -801,7 +811,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         return None
 
     try:
-        ws = fn(query, max_results=max_results)  # type: ignore[misc]
+        ws = fn(query, max_results=max_results_int)  # type: ignore[misc]
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
