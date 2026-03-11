@@ -137,3 +137,74 @@ class TestDebugLoggingOnExceptions:
             assert any("kernel helper failed" in r.message for r in caplog.records)
         finally:
             pipeline_mod.veritas_core = original
+
+
+# =========================================================
+# _to_dict defensive try-except on model_dump / dict
+# =========================================================
+
+class TestToDictDefensive:
+
+    def test_dict_passthrough(self):
+        from veritas_os.core.pipeline import _to_dict
+        d = {"a": 1}
+        assert _to_dict(d) is d
+
+    def test_model_dump_failure_falls_through(self):
+        from veritas_os.core.pipeline import _to_dict
+
+        class BadModel:
+            def model_dump(self, **kwargs):
+                raise RuntimeError("model_dump broken")
+
+            def __init__(self):
+                self.x = 42
+
+        result = _to_dict(BadModel())
+        assert result.get("x") == 42
+
+    def test_dict_method_failure_falls_through(self):
+        from veritas_os.core.pipeline import _to_dict
+
+        class BadDictModel:
+            def dict(self):
+                raise TypeError("dict broken")
+
+            def __init__(self):
+                self.y = 99
+
+        result = _to_dict(BadDictModel())
+        assert result.get("y") == 99
+
+    def test_all_methods_fail_returns_empty(self):
+        from veritas_os.core.pipeline import _to_dict
+
+        class AllBad:
+            def model_dump(self, **kwargs):
+                raise ValueError("broken")
+
+            def dict(self):
+                raise ValueError("broken")
+
+            @property
+            def __dict__(self):
+                raise TypeError("broken")
+
+        result = _to_dict(AllBad())
+        assert result == {}
+
+
+# =========================================================
+# EVIDENCE_MAX bounds validation
+# =========================================================
+
+class TestEvidenceMaxBounds:
+
+    def test_evidence_max_is_positive(self):
+        from veritas_os.core.pipeline import EVIDENCE_MAX
+        assert EVIDENCE_MAX >= 1
+
+    def test_evidence_max_default_is_50(self):
+        from veritas_os.core.pipeline import EVIDENCE_MAX
+        # Default is 50 when env var is not set
+        assert EVIDENCE_MAX == 50
