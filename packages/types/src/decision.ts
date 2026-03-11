@@ -41,6 +41,13 @@ export type ResponseStyle = "logic" | "emotional" | "business" | "expert" | "cas
 export type RetentionClass = "short" | "standard" | "long" | "regulated";
 
 /**
+ * Stage health status consumed by the pipeline visualizer.
+ *
+ * Source of truth: veritas_os/api/schemas.py — StageMetrics.health
+ */
+export type StageHealth = "ok" | "warning" | "failed" | "unknown";
+
+/**
  * User context information passed alongside a decision request.
  *
  * Source of truth: veritas_os/api/schemas.py — Context
@@ -229,6 +236,28 @@ export interface ChatRequest {
   session_id?: string | null;
   memory_auto_put?: boolean;
   persona_evolve?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Per-stage execution metrics written into DecideResponse.extras["stage_metrics"].
+ *
+ * Each pipeline stage (Input, Evidence, Critique, Debate, Plan, Value, FUJI,
+ * TrustLog) may publish a StageMetrics entry keyed by its lowercase name.
+ *
+ * Source of truth: veritas_os/api/schemas.py — StageMetrics
+ */
+export interface StageMetrics {
+  /** Stage wall-clock execution time in milliseconds. */
+  latency_ms?: number | null;
+  /** Stage health status consumed by the pipeline visualizer. */
+  health: StageHealth;
+  /** One-line human-readable description of stage outcome. */
+  summary?: string | null;
+  /** Extended diagnostic text for the stage (shown in expanded UI view). */
+  detail?: string | null;
+  /** Fallback for detail when detail is absent (e.g. gate rejection reason). */
+  reason?: string | null;
   [key: string]: unknown;
 }
 
@@ -740,5 +769,231 @@ export function isMemoryEraseRequest(value: unknown): value is MemoryEraseReques
     (value.user_id === undefined || value.user_id === null || typeof value.user_id === "string") &&
     (value.reason === undefined || typeof value.reason === "string") &&
     (value.actor === undefined || typeof value.actor === "string")
+  );
+}
+
+// =========================
+// Response types aligned to openapi.yaml
+// =========================
+
+/**
+ * Response from POST /v1/memory/put.
+ *
+ * Source of truth: openapi.yaml — /v1/memory/put 200 response
+ */
+export interface MemoryPutResponse {
+  ok: boolean;
+  legacy: {
+    saved: boolean;
+    key: string | null;
+  };
+  vector: {
+    saved: boolean;
+    id: string;
+    kind: string;
+    tags: string[];
+  };
+  size: number;
+  lifecycle: {
+    retention_class: string;
+    expires_at: number | null;
+    legal_hold: boolean;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/memory/get.
+ *
+ * Source of truth: openapi.yaml — /v1/memory/get 200 response
+ */
+export interface MemoryGetResponse {
+  ok: boolean;
+  error?: string | null;
+  /** Retrieved value (arbitrary JSON). */
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/replay/{decision_id}.
+ *
+ * Source of truth: openapi.yaml — /v1/replay/{decision_id} 200 response
+ */
+export interface ReplayResponse {
+  ok: boolean;
+  decision_id: string;
+  replay_path: string;
+  match: boolean;
+  diff_summary: string;
+  replay_time_ms: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/trust/feedback.
+ *
+ * Source of truth: openapi.yaml — /v1/trust/feedback 200 response
+ */
+export interface TrustFeedbackResponse {
+  ok: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from GET /v1/trustlog/verify.
+ *
+ * Source of truth: openapi.yaml — /v1/trustlog/verify 200 response
+ */
+export interface TrustVerifyResponse {
+  ok: boolean;
+  valid: boolean;
+  detail: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from GET /v1/compliance/config.
+ *
+ * Source of truth: openapi.yaml — /v1/compliance/config 200 response
+ */
+export interface ComplianceConfigResponse {
+  ok: boolean;
+  config: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/compliance/deployment-readiness.
+ *
+ * Source of truth: openapi.yaml — /v1/compliance/deployment-readiness 200 response
+ */
+export interface DeploymentReadinessResponse {
+  ok: boolean;
+  ready: boolean;
+  checks: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/system/halt.
+ *
+ * Source of truth: openapi.yaml — /v1/system/halt 200 response
+ */
+export interface SystemHaltResponse {
+  ok: boolean;
+  halted: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from POST /v1/system/resume.
+ *
+ * Source of truth: openapi.yaml — /v1/system/resume 200 response
+ */
+export interface SystemResumeResponse {
+  ok: boolean;
+  halted: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from GET /v1/system/halt-status.
+ *
+ * Source of truth: openapi.yaml — /v1/system/halt-status 200 response
+ */
+export interface SystemHaltStatusResponse {
+  ok: boolean;
+  halted: boolean;
+  reason: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Single entry in governance policy history.
+ *
+ * Source of truth: openapi.yaml — /v1/governance/policy/history 200 response
+ */
+export interface PolicyHistoryEntry {
+  timestamp: string;
+  actor: string;
+  previous: Record<string, unknown>;
+  new: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * Response from GET /v1/governance/policy/history.
+ *
+ * Source of truth: openapi.yaml — /v1/governance/policy/history 200 response
+ */
+export interface GovernancePolicyHistoryResponse {
+  ok: boolean;
+  history: PolicyHistoryEntry[];
+  [key: string]: unknown;
+}
+
+// =========================
+// Request types aligned to server.py
+// =========================
+
+/**
+ * Runtime compliance config payload for PUT /v1/compliance/config.
+ *
+ * Source of truth: veritas_os/api/server.py — ComplianceConfigBody
+ */
+export interface ComplianceConfigBody {
+  eu_ai_act_mode?: boolean;
+  safety_threshold?: number;
+  [key: string]: unknown;
+}
+
+/**
+ * Request body for POST /v1/system/halt.
+ *
+ * Source of truth: veritas_os/api/server.py — SystemHaltRequest
+ */
+export interface SystemHaltRequest {
+  reason: string;
+  operator: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Request body for POST /v1/system/resume.
+ *
+ * Source of truth: veritas_os/api/server.py — SystemResumeRequest
+ */
+export interface SystemResumeRequest {
+  operator: string;
+  comment?: string;
+  [key: string]: unknown;
+}
+
+// =========================
+// Additional type guards
+// =========================
+
+function isStageHealth(value: unknown): value is StageHealth {
+  return value === "ok" || value === "warning" || value === "failed" || value === "unknown";
+}
+
+/**
+ * Runtime type guard for StageMetrics payloads.
+ *
+ * Checks required field: health (must be a valid StageHealth).
+ * Optional: latency_ms, summary, detail, reason.
+ */
+export function isStageMetrics(value: unknown): value is StageMetrics {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    isStageHealth(value.health) &&
+    (value.latency_ms === undefined || value.latency_ms === null || typeof value.latency_ms === "number") &&
+    (value.summary === undefined || value.summary === null || typeof value.summary === "string") &&
+    (value.detail === undefined || value.detail === null || typeof value.detail === "string") &&
+    (value.reason === undefined || value.reason === null || typeof value.reason === "string")
   );
 }
