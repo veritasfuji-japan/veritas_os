@@ -1188,6 +1188,7 @@ async def run_decide_pipeline(
         ctx,
         call_core_decide_fn=call_core_decide,
         append_trust_log_fn=append_trust_log,
+        veritas_core=veritas_core,
     )
     raw = ctx.raw
 

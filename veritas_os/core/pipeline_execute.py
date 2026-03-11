@@ -40,14 +40,25 @@ async def stage_core_execute(
     *,
     call_core_decide_fn: Any,
     append_trust_log_fn: Any,
+    veritas_core: Any = None,
 ) -> None:
-    """Run kernel.decide and self‑healing loop, mutating *ctx* in place."""
+    """Run kernel.decide and self‑healing loop, mutating *ctx* in place.
+
+    Parameters
+    ----------
+    veritas_core:
+        Pre-resolved kernel module. When ``None`` (default), the kernel
+        is lazily imported here.  Passing the module explicitly allows the
+        caller (pipeline.py) to provide a value that tests can
+        monkeypatch on the *pipeline* module.
+    """
     from . import self_healing
 
-    veritas_core = (
-        _lazy_import("veritas_os.core.kernel", None)
-        or _lazy_import("veritas_os.core", "kernel")
-    )
+    if veritas_core is None:
+        veritas_core = (
+            _lazy_import("veritas_os.core.kernel", None)
+            or _lazy_import("veritas_os.core", "kernel")
+        )
 
     core_decide = None
     try:
