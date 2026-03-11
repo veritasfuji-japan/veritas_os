@@ -72,7 +72,7 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
 
     fuji_status = ctx.fuji_dict.get("status", "allow")
     try:
-        risk_val = float(ctx.fuji_dict.get("risk", 0.0))
+        risk_val = max(0.0, min(1.0, float(ctx.fuji_dict.get("risk", 0.0))))
     except (ValueError, TypeError):
         risk_val = 0.0
     reasons_list = ctx.fuji_dict.get("reasons", []) or []
