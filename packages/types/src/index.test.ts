@@ -16,34 +16,52 @@ import {
   isMemoryPutRequest,
   isMemorySearchRequest,
   isPersonaState,
+  isStageMetrics,
   isTrustFeedbackRequest,
   isValuesOut,
 } from "./index";
 import type {
   AutoStop,
   ChatRequest,
+  ComplianceConfigBody,
+  ComplianceConfigResponse,
   CritiqueItem,
   DebateView,
   DecideRequest,
   DecideResponse,
+  DeploymentReadinessResponse,
   EvoTips,
   FujiDecision,
   GovernancePolicy,
+  GovernancePolicyHistoryResponse,
   GovernancePolicyResponse,
   HealthResponse,
   LogRetention,
   MemoryEraseRequest,
   MemoryGetRequest,
+  MemoryGetResponse,
   MemoryKind,
   MemoryPutRequest,
+  MemoryPutResponse,
   MemorySearchRequest,
   PersonaState,
+  PolicyHistoryEntry,
+  ReplayResponse,
   ResponseStyle,
   RetentionClass,
   RiskThresholds,
+  StageHealth,
+  StageMetrics,
+  SystemHaltRequest,
+  SystemHaltResponse,
+  SystemHaltStatusResponse,
+  SystemResumeRequest,
+  SystemResumeResponse,
   TimeHorizon,
   TrustFeedbackRequest,
+  TrustFeedbackResponse,
   TrustLog,
+  TrustVerifyResponse,
 } from "./index";
 
 describe("types", () => {
@@ -1194,5 +1212,114 @@ describe("types", () => {
 
     const memErase: MemoryEraseRequest = { reason: "gdpr" };
     expect(memErase.reason).toBe("gdpr");
+  });
+
+  it("validates StageMetrics payloads at runtime", () => {
+    expect(isStageMetrics({ health: "ok" })).toBe(true);
+    expect(isStageMetrics({ health: "warning", latency_ms: 42.5 })).toBe(true);
+    expect(isStageMetrics({ health: "failed", latency_ms: null, summary: "timeout", detail: "stage timed out", reason: "slow network" })).toBe(true);
+    expect(isStageMetrics({ health: "unknown" })).toBe(true);
+    expect(isStageMetrics({ health: "ok", extra_field: 123 })).toBe(true);
+
+    expect(isStageMetrics(null)).toBe(false);
+    expect(isStageMetrics({})).toBe(false);
+    expect(isStageMetrics({ health: "invalid" })).toBe(false);
+    expect(isStageMetrics({ health: 123 })).toBe(false);
+    expect(isStageMetrics({ health: "ok", latency_ms: "not-a-number" })).toBe(false);
+    expect(isStageMetrics({ health: "ok", summary: 42 })).toBe(false);
+    expect(isStageMetrics({ health: "ok", detail: true })).toBe(false);
+    expect(isStageMetrics({ health: "ok", reason: 99 })).toBe(false);
+  });
+
+  it("assigns StageMetrics interface correctly", () => {
+    const metrics: StageMetrics = {
+      health: "ok",
+      latency_ms: 12.5,
+      summary: "Evidence gathered",
+      detail: "Fetched 3 sources",
+      reason: null,
+    };
+    expect(metrics.health).toBe("ok");
+    expect(metrics.latency_ms).toBe(12.5);
+  });
+
+  it("assigns StageHealth type correctly", () => {
+    const statuses: StageHealth[] = ["ok", "warning", "failed", "unknown"];
+    expect(statuses).toHaveLength(4);
+  });
+
+  it("assigns response type interfaces correctly", () => {
+    const memPutResp: MemoryPutResponse = {
+      ok: true,
+      legacy: { saved: true, key: "k1" },
+      vector: { saved: true, id: "v1", kind: "semantic", tags: ["a"] },
+      size: 128,
+      lifecycle: { retention_class: "standard", expires_at: null, legal_hold: false },
+    };
+    expect(memPutResp.ok).toBe(true);
+    expect(memPutResp.legacy.saved).toBe(true);
+    expect(memPutResp.vector.kind).toBe("semantic");
+    expect(memPutResp.lifecycle.legal_hold).toBe(false);
+
+    const memGetResp: MemoryGetResponse = { ok: true, value: { data: 42 } };
+    expect(memGetResp.ok).toBe(true);
+
+    const replayResp: ReplayResponse = {
+      ok: true,
+      decision_id: "d1",
+      replay_path: "/path",
+      match: true,
+      diff_summary: "no diff",
+      replay_time_ms: 100,
+    };
+    expect(replayResp.match).toBe(true);
+
+    const feedbackResp: TrustFeedbackResponse = { ok: true };
+    expect(feedbackResp.ok).toBe(true);
+
+    const verifyResp: TrustVerifyResponse = { ok: true, valid: true, detail: "chain intact" };
+    expect(verifyResp.valid).toBe(true);
+
+    const complianceResp: ComplianceConfigResponse = { ok: true, config: { eu_ai_act_mode: true } };
+    expect(complianceResp.config.eu_ai_act_mode).toBe(true);
+
+    const readinessResp: DeploymentReadinessResponse = { ok: true, ready: false, checks: { safety: "pass" } };
+    expect(readinessResp.ready).toBe(false);
+
+    const haltResp: SystemHaltResponse = { ok: true, halted: true };
+    expect(haltResp.halted).toBe(true);
+
+    const resumeResp: SystemResumeResponse = { ok: true, halted: false };
+    expect(resumeResp.halted).toBe(false);
+
+    const statusResp: SystemHaltStatusResponse = { ok: true, halted: false, reason: null };
+    expect(statusResp.reason).toBeNull();
+
+    const historyEntry: PolicyHistoryEntry = {
+      timestamp: "2025-01-01T00:00:00Z",
+      actor: "admin",
+      previous: {},
+      new: {},
+    };
+    expect(historyEntry.actor).toBe("admin");
+
+    const historyResp: GovernancePolicyHistoryResponse = { ok: true, history: [historyEntry] };
+    expect(historyResp.history).toHaveLength(1);
+  });
+
+  it("assigns request type interfaces correctly", () => {
+    const complianceBody: ComplianceConfigBody = { eu_ai_act_mode: true, safety_threshold: 0.9 };
+    expect(complianceBody.eu_ai_act_mode).toBe(true);
+
+    const haltReq: SystemHaltRequest = { reason: "emergency", operator: "admin1" };
+    expect(haltReq.reason).toBe("emergency");
+    expect(haltReq.operator).toBe("admin1");
+
+    const resumeReq: SystemResumeRequest = { operator: "admin1", comment: "issue resolved" };
+    expect(resumeReq.operator).toBe("admin1");
+    expect(resumeReq.comment).toBe("issue resolved");
+
+    const resumeReqMinimal: SystemResumeRequest = { operator: "admin2" };
+    expect(resumeReqMinimal.operator).toBe("admin2");
   });
 });
