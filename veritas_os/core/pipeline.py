@@ -353,13 +353,13 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
         if qp is not None:
             out.update(dict(qp))
     except Exception:  # subsystem resilience: request objects may raise arbitrary errors
-        pass
+        logger.debug("_get_request_params: query_params extraction failed", exc_info=True)
     try:
         pm = getattr(request, "params", None)
         if pm is not None:
             out.update(dict(pm))
     except Exception:  # subsystem resilience: request objects may raise arbitrary errors
-        pass
+        logger.debug("_get_request_params: params extraction failed", exc_info=True)
     return out
 
 
@@ -396,11 +396,16 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
     d["score_raw"] = _to_float_or(d.get("score_raw", d["score"]), d["score"])
 
     # ★ id は「あるなら保持」、None/空/空白だけ新規発行
+    # ★ 制御文字・null バイトを除去し、長さを制限（downstream 安全性）
     _id = d.get("id")
     if _id is None or (isinstance(_id, str) and _id.strip() == ""):
         d["id"] = uuid4().hex
     else:
-        d["id"] = str(_id)
+        _id_str = str(_id)
+        _id_str = re.sub(r"[\x00-\x1f\x7f]", "", _id_str)
+        if len(_id_str) > 256:
+            _id_str = _id_str[:256]
+        d["id"] = _id_str if _id_str.strip() else uuid4().hex
 
     return d
 
@@ -592,7 +597,7 @@ def _mem_model_path() -> str:
             if hasattr(mm, k):
                 return str(getattr(mm, k))
     except Exception:  # subsystem resilience: intentionally broad
-        pass
+        logger.debug("_mem_model_path: import/attr lookup failed", exc_info=True)
     return ""
 
 
@@ -610,10 +615,11 @@ try:
                 d = _pgl(text)
                 return d if isinstance(d, dict) else {"allow": 0.5}
             except Exception:  # subsystem resilience: intentionally broad
+                logger.debug("predict_gate_label failed", exc_info=True)
                 return {"allow": 0.5}
 
 except Exception:  # subsystem resilience: intentionally broad
-    pass
+    logger.debug("memory_model import failed", exc_info=True)
 
 
 def _allow_prob(text: str) -> float:
@@ -649,7 +655,7 @@ def _save_valstats(d: Dict[str, Any]) -> None:
                 f.flush()
                 os.fsync(f.fileno())
     except OSError as e:
-        logger.debug("_save_valstats failed: %s", e)
+        logger.warning("_save_valstats failed: %s", e)
 
 
 def _dedupe_alts_fallback(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -672,7 +678,7 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
             return veritas_core._dedupe_alts(alts)  # type: ignore
     except Exception:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
-        pass
+        logger.debug("_dedupe_alts: kernel helper failed, using fallback", exc_info=True)
     return _dedupe_alts_fallback(alts)
 
 
@@ -703,6 +709,7 @@ async def call_core_decide(
         try:
             return set(inspect.signature(fn).parameters.keys())
         except Exception:  # subsystem resilience: intentionally broad
+            logger.debug("call_core_decide: signature inspection failed for %r", fn)
             return set()
 
     p = _params(core_fn)
@@ -799,6 +806,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
             ws = await ws
         return ws if isinstance(ws, dict) else None
     except Exception:  # subsystem resilience: intentionally broad
+        logger.debug("_safe_web_search failed for query=%r", query, exc_info=True)
         return None
 
 
