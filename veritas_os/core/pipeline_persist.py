@@ -23,20 +23,9 @@ from typing import Any, Dict, List, Optional
 
 from .pipeline_types import PipelineContext
 from .utils import utc_now, utc_now_iso_z, redact_payload
+from .pipeline_helpers import _warn
 
 logger = logging.getLogger(__name__)
-
-
-def _warn(msg: str) -> None:
-    from .pipeline_helpers import _to_bool_local
-
-    if _to_bool_local(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        if msg.startswith("[INFO]"):
-            logger.info(msg)
-        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
-            logger.error(msg)
-        else:
-            logger.warning(msg)
 
 
 def persist_audit_log(

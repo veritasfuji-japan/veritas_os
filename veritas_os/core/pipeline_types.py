@@ -90,6 +90,9 @@ class PipelineContext:
     rejection_reason: Optional[str] = None
     modifications: List[Any] = field(default_factory=list)
 
+    # --- Stage flags ---
+    _should_run_web: bool = False
+
     # --- Computed values ---
     effective_risk: float = 0.0
     value_ema: float = 0.5

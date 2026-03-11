@@ -182,25 +182,6 @@ def stage_memory_retrieval(
 # Stage 2b: WebSearch
 # =========================================================
 
-def stage_web_search(
-    ctx: PipelineContext,
-    *,
-    _safe_web_search: Callable[..., Any],
-    _normalize_web_payload: Callable[..., Optional[Dict[str, Any]]],
-    _extract_web_results: Callable[..., List[Any]],
-    _to_bool: Callable[..., bool],
-    _get_request_params: Callable[..., Dict[str, Any]],
-    _warn: Callable[[str], None],
-    request: Any,
-) -> None:
-    """Stage 2b: WebSearch (同期版 — 呼び出し側で await する)。ctx を直接更新する。
-
-    NOTE: _safe_web_search は async callable を想定。呼び出し側で
-    ``await stage_web_search_async(...)`` としてラップする。
-    """
-    raise NotImplementedError("Use stage_web_search_async instead")
-
-
 async def stage_web_search_async(
     ctx: PipelineContext,
     *,
@@ -373,7 +354,7 @@ async def stage_web_search_async(
 
     ctx.web_evidence = web_evidence
     # should_run_web を ctx に保存（persist 用）
-    ctx._should_run_web = should_run_web  # type: ignore[attr-defined]
+    ctx._should_run_web = should_run_web
 
 
 __all__ = [
