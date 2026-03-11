@@ -9,14 +9,13 @@ with all fields validated, sanitised and defaults applied.
 from __future__ import annotations
 
 import logging
-import os
 import random  # nosec B311 - deterministic test seeding only
 import secrets
 import time
 from typing import Any, Dict
 
 from .pipeline_types import PipelineContext
-from .pipeline_helpers import _to_bool_local, _lazy_import, _now_iso
+from .pipeline_helpers import _to_bool_local, _lazy_import, _now_iso, _warn
 from .pipeline_contracts import _ensure_full_contract
 
 logger = logging.getLogger(__name__)
@@ -34,16 +33,6 @@ _PIPELINE_PRIVATE_PREFIXES = (
 
 def _to_bool(v: Any) -> bool:
     return _to_bool_local(v)
-
-
-def _warn(msg: str) -> None:
-    if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        if msg.startswith("[INFO]"):
-            logger.info(msg)
-        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
-            logger.error(msg)
-        else:
-            logger.warning(msg)
 
 
 def normalize_pipeline_inputs(
@@ -66,7 +55,17 @@ def normalize_pipeline_inputs(
 
     # --- body ---
     if _to_dict_fn is None:
-        from .pipeline import _to_dict as _to_dict_fn  # type: ignore[assignment]
+        def _to_dict_fn(o: Any) -> Dict[str, Any]:  # type: ignore[misc]
+            """Inline fallback when no _to_dict_fn is injected."""
+            if isinstance(o, dict):
+                return o
+            if hasattr(o, "model_dump"):
+                return o.model_dump(exclude_none=True)
+            if hasattr(o, "dict"):
+                return o.dict()
+            if hasattr(o, "__dict__"):
+                return dict(o.__dict__)
+            return {}
     body = req.model_dump() if hasattr(req, "model_dump") else _to_dict_fn(req)
     if not isinstance(body, dict):
         body = {}
@@ -107,7 +106,16 @@ def normalize_pipeline_inputs(
 
     # --- fast mode ---
     if _get_request_params is None:
-        from .pipeline import _get_request_params  # type: ignore[assignment]
+        def _get_request_params(request: Any) -> Dict[str, Any]:  # type: ignore[misc]
+            """Inline fallback when no _get_request_params is injected."""
+            out: Dict[str, Any] = {}
+            qp = getattr(request, "query_params", None)
+            if qp is not None:
+                out.update(dict(qp))
+            pm = getattr(request, "params", None)
+            if pm is not None:
+                out.update(dict(pm))
+            return out
     params = _get_request_params(request)
     fast_from_body = _to_bool(body.get("fast"))
     _ctx_mode = context.get("mode")

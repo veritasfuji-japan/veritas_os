@@ -10,7 +10,6 @@ Handles:
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict, List, Optional
 
 from .pipeline_types import PipelineContext
@@ -18,21 +17,10 @@ from .pipeline_helpers import (
     _lazy_import,
     _extract_rejection,
     _summarize_last_output,
+    _warn,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _warn(msg: str) -> None:
-    from .pipeline_helpers import _to_bool_local
-
-    if _to_bool_local(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        if msg.startswith("[INFO]"):
-            logger.info(msg)
-        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
-            logger.error(msg)
-        else:
-            logger.warning(msg)
 
 
 async def stage_core_execute(

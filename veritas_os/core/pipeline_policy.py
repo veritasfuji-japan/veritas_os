@@ -23,22 +23,10 @@ from .pipeline_types import (
     TELOS_THRESHOLD_MIN,
     TELOS_THRESHOLD_MAX,
 )
-from .pipeline_helpers import _lazy_import, _apply_value_boost
+from .pipeline_helpers import _lazy_import, _apply_value_boost, _warn
 from .pipeline_evidence import _norm_evidence_item
 
 logger = logging.getLogger(__name__)
-
-
-def _warn(msg: str) -> None:
-    from .pipeline_helpers import _to_bool_local
-
-    if _to_bool_local(os.getenv("VERITAS_PIPELINE_WARN", "1")):
-        if msg.startswith("[INFO]"):
-            logger.info(msg)
-        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
-            logger.error(msg)
-        else:
-            logger.warning(msg)
 
 
 def stage_fuji_precheck(ctx: PipelineContext) -> None:

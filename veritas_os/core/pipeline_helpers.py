@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -65,6 +66,17 @@ def _to_bool_local(x: Any) -> bool:
         logger.debug("[_to_bool_local] str() conversion failed for %r", type(x).__name__, exc_info=True)
         return False
     return s in ("1", "true", "yes", "y", "on")
+
+
+def _warn(msg: str) -> None:
+    """警告メッセージを出力（環境変数で抑制可能）。メッセージの接頭辞に応じてログレベルを自動選択する。"""
+    if _to_bool_local(os.getenv("VERITAS_PIPELINE_WARN", "1")):
+        if msg.startswith("[INFO]"):
+            logger.info(msg)
+        elif msg.startswith("[ERROR]") or msg.startswith("[FATAL]"):
+            logger.error(msg)
+        else:
+            logger.warning(msg)
 
 
 # =========================================================
@@ -253,6 +265,7 @@ __all__ = [
     "_norm_severity",
     "_now_iso",
     "_to_bool_local",
+    "_warn",
     "_set_int_metric",
     "_set_bool_metric",
     "_lazy_import",

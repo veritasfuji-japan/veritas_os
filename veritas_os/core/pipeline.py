@@ -214,7 +214,14 @@ def _to_bool(v: Any) -> bool:
 
 
 def _warn(msg: str) -> None:
-    """警告メッセージを出力（環境変数で抑制可能）。メッセージの接頭辞に応じてログレベルを自動選択する。"""
+    """警告メッセージを出力（環境変数で抑制可能）。メッセージの接頭辞に応じてログレベルを自動選択する。
+
+    NOTE: This is kept as a standalone function (not delegating to
+    pipeline_helpers._warn) because tests capture logs from the
+    ``veritas_os.core.pipeline`` logger name and monkeypatch this
+    function directly.  Sub-modules use the shared implementation
+    from ``pipeline_helpers._warn`` instead.
+    """
     if _to_bool(os.getenv("VERITAS_PIPELINE_WARN", "1")):
         if msg.startswith("[INFO]"):
             logger.info(msg)
