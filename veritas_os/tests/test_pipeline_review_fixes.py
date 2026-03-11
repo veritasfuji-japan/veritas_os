@@ -4,11 +4,17 @@ Tests for pipeline.py review fixes:
 - _norm_alt: id sanitisation (null bytes, control chars, length limit)
 - _save_valstats: warning-level logging on I/O failure
 - Silent exception handlers: debug logging
+- EVIDENCE_MAX validation
+- _dedupe_alts type validation
+- call_core_decide TypeError propagation
+- _to_dict circular reference guard
 """
 
 import logging
 import re
 from unittest.mock import patch
+
+import pytest
 
 from veritas_os.core.pipeline import (
     _norm_alt,
@@ -224,3 +230,176 @@ class TestEvidenceMaxBounds:
         # Restore default
         monkeypatch.delenv("VERITAS_EVIDENCE_MAX", raising=False)
         importlib.reload(pipeline_mod)
+
+    def test_evidence_max_fallback_on_non_numeric_env(self, monkeypatch):
+        """Non-numeric string should fall back to 50 without crashing."""
+        import importlib
+        import veritas_os.core.pipeline as pipeline_mod
+
+        monkeypatch.setenv("VERITAS_EVIDENCE_MAX", "abc")
+        importlib.reload(pipeline_mod)
+        assert pipeline_mod.EVIDENCE_MAX == 50
+
+        monkeypatch.setenv("VERITAS_EVIDENCE_MAX", "")
+        importlib.reload(pipeline_mod)
+        assert pipeline_mod.EVIDENCE_MAX == 50
+
+        monkeypatch.setenv("VERITAS_EVIDENCE_MAX", "3.14")
+        importlib.reload(pipeline_mod)
+        assert pipeline_mod.EVIDENCE_MAX == 50
+
+        # Restore default
+        monkeypatch.delenv("VERITAS_EVIDENCE_MAX", raising=False)
+        importlib.reload(pipeline_mod)
+
+
+# =========================================================
+# _dedupe_alts type validation
+# =========================================================
+
+class TestDedupeAltsTypeValidation:
+
+    def test_kernel_returns_none_uses_fallback(self, caplog):
+        """When kernel._dedupe_alts returns None, fallback should be used."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        class FakeKernel:
+            def _dedupe_alts(self, alts):
+                return None  # Not a list
+
+        original = pipeline_mod.veritas_core
+        try:
+            pipeline_mod.veritas_core = FakeKernel()
+            with caplog.at_level(logging.DEBUG, logger="veritas_os.core.pipeline"):
+                result = _dedupe_alts([{"title": "a", "description": "b"}])
+            assert isinstance(result, list)
+            assert len(result) == 1
+        finally:
+            pipeline_mod.veritas_core = original
+
+    def test_kernel_returns_string_uses_fallback(self):
+        """When kernel._dedupe_alts returns a non-list, fallback should be used."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        class FakeKernel:
+            def _dedupe_alts(self, alts):
+                return "not a list"
+
+        original = pipeline_mod.veritas_core
+        try:
+            pipeline_mod.veritas_core = FakeKernel()
+            result = _dedupe_alts([{"title": "a", "description": "b"}])
+            assert isinstance(result, list)
+            assert len(result) == 1
+        finally:
+            pipeline_mod.veritas_core = original
+
+
+# =========================================================
+# _norm_alt Unicode control character sanitisation
+# =========================================================
+
+class TestNormAltUnicodeSanitisation:
+
+    def test_bidi_override_removed(self):
+        """U+202E (RLO) and U+202C (PDF) should be stripped from IDs."""
+        result = _norm_alt({"id": "abc\u202edef\u202c", "text": "x"})
+        assert "\u202e" not in result["id"]
+        assert "\u202c" not in result["id"]
+        assert result["id"] == "abcdef"
+
+    def test_line_separator_removed(self):
+        """U+2028 (LINE SEPARATOR) should be stripped."""
+        result = _norm_alt({"id": "abc\u2028def", "text": "x"})
+        assert "\u2028" not in result["id"]
+
+    def test_paragraph_separator_removed(self):
+        """U+2029 (PARAGRAPH SEPARATOR) should be stripped."""
+        result = _norm_alt({"id": "abc\u2029def", "text": "x"})
+        assert "\u2029" not in result["id"]
+
+    def test_normal_unicode_preserved(self):
+        """Regular Unicode text (CJK, accented, emoji) should be kept."""
+        result = _norm_alt({"id": "日本語テスト", "text": "x"})
+        assert result["id"] == "日本語テスト"
+
+    def test_mixed_control_and_normal_chars(self):
+        """Mix of control and normal chars: only control stripped."""
+        result = _norm_alt({"id": "ok\x00\u202ebad\u202c", "text": "x"})
+        assert result["id"] == "okbad"
+
+
+# =========================================================
+# call_core_decide TypeError propagation
+# =========================================================
+
+class TestCallCoreDecideTypeErrorPropagation:
+
+    @pytest.mark.asyncio
+    async def test_internal_type_error_propagated(self):
+        """TypeError raised *inside* core_fn should not be swallowed."""
+        from veritas_os.core.pipeline import call_core_decide
+
+        def bad_core_fn(context, query, alternatives, min_evidence=None):
+            # Internal TypeError, not a signature mismatch
+            raise TypeError("internal processing error")
+
+        with pytest.raises(TypeError, match="internal processing error"):
+            await call_core_decide(
+                bad_core_fn,
+                context={"q": "test"},
+                query="test",
+                alternatives=[],
+            )
+
+    @pytest.mark.asyncio
+    async def test_signature_mismatch_falls_through(self):
+        """Signature mismatch (missing args) should try next convention."""
+        from veritas_os.core.pipeline import call_core_decide
+
+        def positional_fn(ctx, query, alts, min_evidence=None):
+            return {"chosen": "ok"}
+
+        result = await call_core_decide(
+            positional_fn,
+            context={"q": "test"},
+            query="test",
+            alternatives=[],
+        )
+        assert result["chosen"] == "ok"
+
+
+# =========================================================
+# _to_dict circular reference guard
+# =========================================================
+
+class TestToDictCircularRef:
+
+    def test_self_referencing_object(self):
+        """Object with self-reference should not include the circular ref."""
+        from veritas_os.core.pipeline import _to_dict
+        import json
+
+        class Circular:
+            def __init__(self):
+                self.name = "test"
+                self.self_ref = self  # circular
+
+        obj = Circular()
+        result = _to_dict(obj)
+        assert result["name"] == "test"
+        assert "self_ref" not in result
+        # Must be JSON-serializable
+        json.dumps(result)
+
+    def test_non_circular_object_unchanged(self):
+        """Normal objects should be converted without filtering."""
+        from veritas_os.core.pipeline import _to_dict
+
+        class Normal:
+            def __init__(self):
+                self.a = 1
+                self.b = "hello"
+
+        result = _to_dict(Normal())
+        assert result == {"a": 1, "b": "hello"}
