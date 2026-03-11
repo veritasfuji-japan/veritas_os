@@ -35,16 +35,12 @@ Payload contracts restored (tests / server expectations):
 - decision saved into MemoryOS with key prefix "decision_"
 """
 
-import asyncio
 import inspect
 import json
 import logging
 import os
-import random  # nosec B311 - deterministic test seeding only
 import re
-import secrets
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -323,17 +319,17 @@ def _to_float_or(v: Any, default: float) -> float:
 
 
 def _to_dict(o: Any) -> Dict[str, Any]:
+    """Convert a request/response object to dict.
+
+    Supports Pydantic v2 (model_dump), Pydantic v1 (dict), and plain dicts.
+    Does NOT fall back to __dict__ to avoid exposing private attributes.
+    """
     if isinstance(o, dict):
         return o
     if hasattr(o, "model_dump"):
         return o.model_dump(exclude_none=True)  # type: ignore
     if hasattr(o, "dict"):
         return o.dict()  # type: ignore
-    if hasattr(o, "__dict__"):
-        try:
-            return dict(o.__dict__)
-        except (TypeError, ValueError):
-            return {}
     return {}
 
 
@@ -465,76 +461,20 @@ async def replay_decision(
 ) -> Dict[str, Any]:
     """Replay a persisted decision deterministically and generate an audit diff report.
 
-    This wrapper keeps backward-compat: tests can monkeypatch
-    ``pipeline._load_persisted_decision``, ``pipeline.run_decide_pipeline``,
-    etc. and the changes are respected.
+    Delegates to ``pipeline_replay.replay_decision`` with injected dependencies,
+    keeping backward-compat: tests can monkeypatch ``pipeline.run_decide_pipeline``,
+    ``pipeline._load_persisted_decision``, etc.
     """
-    started_at = time.time()
-    snapshot = _load_persisted_decision(decision_id)
-    if snapshot is None:
-        return {
-            "match": False,
-            "diff": {"error": "decision_not_found", "decision_id": decision_id},
-            "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
-        }
-
-    replay_meta = snapshot.get("deterministic_replay") or {}
-    req_body = replay_meta.get("request_body") or {}
-    if not isinstance(req_body, dict):
-        req_body = {}
-
-    req_body.setdefault("query", snapshot.get("query") or "")
-    ctx = req_body.setdefault("context", {})
-    if not isinstance(ctx, dict):
-        ctx = {}
-        req_body["context"] = ctx
-
-    req_body["request_id"] = str(snapshot.get("request_id") or decision_id)
-    req_body["seed"] = replay_meta.get("seed", req_body.get("seed", 0))
-    req_body["temperature"] = replay_meta.get(
-        "temperature", req_body.get("temperature", 0)
+    return await _replay_decision_impl(
+        decision_id,
+        mock_external_apis=mock_external_apis,
+        run_decide_pipeline_fn=run_decide_pipeline,
+        DecideRequest=DecideRequest,
+        LOG_DIR=LOG_DIR,
+        REPLAY_REPORT_DIR=REPLAY_REPORT_DIR,
+        _HAS_ATOMIC_IO=_HAS_ATOMIC_IO,
+        _atomic_write_json=_atomic_write_json,
     )
-    ctx["_replay_mode"] = True
-    ctx["_mock_external_apis"] = bool(mock_external_apis)
-
-    if hasattr(DecideRequest, "model_validate"):
-        replay_req = DecideRequest.model_validate(req_body)
-    else:
-        replay_req = req_body
-
-    replay_output = await run_decide_pipeline(replay_req, _ReplayRequest())
-    original_output = replay_meta.get("final_output") or {}
-    if not isinstance(original_output, dict):
-        original_output = {}
-    diff = _build_replay_diff(original_output, replay_output)
-    match = not bool(diff.get("changed"))
-
-    report = {
-        "decision_id": str(snapshot.get("request_id") or decision_id),
-        "match": match,
-        "diff": diff,
-        "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
-        "created_at": utc_now_iso_z(),
-    }
-
-    try:
-        REPLAY_REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        safe_id = _safe_filename_id(report["decision_id"])
-        report_path = REPLAY_REPORT_DIR / f"replay_{safe_id}_{int(time.time() * 1000)}.json"
-        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
-            _atomic_write_json(report_path, report, indent=2)
-        else:
-            report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        report["report_path"] = str(report_path)
-    except (ValueError, TypeError, OSError) as e:
-        report.setdefault("diff", {})
-        report["diff"]["report_save_error"] = repr(e)
-
-    return {
-        "match": report["match"],
-        "diff": report["diff"],
-        "replay_time_ms": report["replay_time_ms"],
-    }
 
 
 # =========================================================
@@ -591,8 +531,8 @@ def _mem_model_path() -> str:
         for k in ("MODEL_FILE", "MODEL_PATH"):
             if hasattr(mm, k):
                 return str(getattr(mm, k))
-    except Exception:  # subsystem resilience: intentionally broad
-        pass
+    except Exception as e:  # subsystem resilience: intentionally broad
+        logger.debug("_mem_model_path failed: %s", e)
     return ""
 
 
@@ -609,11 +549,12 @@ try:
             try:
                 d = _pgl(text)
                 return d if isinstance(d, dict) else {"allow": 0.5}
-            except Exception:  # subsystem resilience: intentionally broad
+            except Exception as e:  # subsystem resilience: intentionally broad
+                logger.debug("predict_gate_label failed: %s", e)
                 return {"allow": 0.5}
 
-except Exception:  # subsystem resilience: intentionally broad
-    pass
+except Exception as e:  # subsystem resilience: intentionally broad
+    logger.debug("memory_model import failed: %s", e)
 
 
 def _allow_prob(text: str) -> float:
@@ -671,8 +612,8 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     try:
         if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
             return veritas_core._dedupe_alts(alts)  # type: ignore
-    except Exception:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
-        pass
+    except Exception as e:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
+        logger.debug("kernel._dedupe_alts failed, using fallback: %s", e)
     return _dedupe_alts_fallback(alts)
 
 
@@ -702,7 +643,8 @@ async def call_core_decide(
     def _params(fn) -> set[str]:
         try:
             return set(inspect.signature(fn).parameters.keys())
-        except Exception:  # subsystem resilience: intentionally broad
+        except Exception as e:  # subsystem resilience: intentionally broad
+            logger.debug("Failed to inspect signature of %r: %s", fn, e)
             return set()
 
     p = _params(core_fn)
@@ -776,6 +718,10 @@ except (ImportError, ModuleNotFoundError):
     # optional dependency / env missing in CI or local
     _tool_web_search = None
 
+# テストが monkeypatch で差し替え可能な web_search スロット。
+# デフォルトは None（_tool_web_search にフォールバック）。
+web_search: Optional[Callable] = None
+
 
 async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
     """Returns web_search result dict or None (never raises).
@@ -785,11 +731,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
       1. module-level ``web_search`` (set by monkeypatch in tests)
       2. ``_tool_web_search`` (imported from tools.web_search)
     """
-    import sys
-    _this = sys.modules[__name__]
-    fn = getattr(_this, "web_search", None)
-    if not callable(fn):
-        fn = getattr(_this, "_tool_web_search", None)
+    fn = web_search if callable(web_search) else _tool_web_search
     if not callable(fn):
         return None
 
@@ -798,7 +740,8 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
-    except Exception:  # subsystem resilience: intentionally broad
+    except Exception as e:  # subsystem resilience: intentionally broad
+        logger.debug("_safe_web_search failed for query=%r: %s", query, e)
         return None
 
 
