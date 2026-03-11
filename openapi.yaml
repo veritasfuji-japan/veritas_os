@@ -306,6 +306,35 @@ components:
           items:
             type: string
 
+    StageMetrics:
+      type: object
+      description: "パイプラインステージごとの実行メトリクス（extras.stage_metricsに格納）"
+      properties:
+        latency_ms:
+          type: number
+          nullable: true
+          description: "ステージの実行時間（ミリ秒）"
+        health:
+          type: string
+          enum: ["ok", "warning", "failed", "unknown"]
+          default: "unknown"
+          description: "パイプラインビジュアライザーが使用するステージヘルスステータス"
+        summary:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: "ステージ結果の1行説明"
+        detail:
+          type: string
+          nullable: true
+          maxLength: 5000
+          description: "ステージの拡張診断テキスト（展開UIビューで表示）"
+        reason:
+          type: string
+          nullable: true
+          maxLength: 2000
+          description: "detailが存在しない場合のフォールバック（例: ゲート拒否理由）"
+
     ChatRequest:
       type: object
       required: [message]
