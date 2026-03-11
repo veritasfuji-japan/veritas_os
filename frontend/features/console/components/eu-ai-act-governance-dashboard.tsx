@@ -50,6 +50,22 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    veritasFetch("/api/veritas/v1/compliance/config")
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        const payload = await res.json();
+        if (!cancelled && payload?.config) {
+          setConfig(payload.config as ComplianceConfig);
+        }
+      })
+      .catch(() => {
+        // keep hardcoded defaults on failure
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
     if (typeof EventSource === "undefined") {
       return () => undefined;
     }

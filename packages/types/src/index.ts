@@ -57,6 +57,7 @@ export {
 
 export type {
   ChatRequest,
+  Context,
   CritiqueItem,
   CritiqueSeverity,
   DebateView,
@@ -74,6 +75,7 @@ export type {
   MemoryKind,
   MemoryPutRequest,
   MemorySearchRequest,
+  Option,
   PersonaState,
   ResponseStyle,
   RetentionClass,
