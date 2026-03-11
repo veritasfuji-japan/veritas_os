@@ -237,6 +237,6 @@ class TestGetMemoryStoreCallable:
         assert result is fake_mem
 
     def test_none_returns_none(self):
-        result = _get_memory_store(mem=None)
-        # When module-level _mem_module is None, should return None
-        # (depends on module state, but passing None explicitly is safe)
+        with patch("veritas_os.core.pipeline_memory_adapter._mem_module", None):
+            result = _get_memory_store(mem=None)
+        assert result is None

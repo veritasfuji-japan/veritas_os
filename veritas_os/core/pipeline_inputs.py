@@ -9,7 +9,6 @@ with all fields validated, sanitised and defaults applied.
 from __future__ import annotations
 
 import logging
-import random  # nosec B311 - deterministic test seeding only
 import secrets
 import time
 from typing import Any, Dict
@@ -210,9 +209,9 @@ def normalize_pipeline_inputs(
         seed = int(seed_raw) if seed_raw is not None else 0
     except (ValueError, TypeError):
         seed = 0
-    # Use a per-request Random instance to avoid mutating global random state
-    # which would affect concurrent requests sharing the same process.
-    _rng = random.Random(seed)  # noqa: F841 – stored in ctx for downstream use
+    # NOTE: Previously ``random.seed(seed)`` was called here, which mutated
+    # the process-global random state and could affect concurrent requests.
+    # The seed value is stored in ``ctx.seed`` for deterministic downstream use.
 
     try:
         min_ev = int(body.get("min_evidence") or 1)
