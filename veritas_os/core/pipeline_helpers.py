@@ -214,6 +214,36 @@ def _has_step1_minimum_evidence(evs: Any) -> bool:
         logger.debug("[_has_step1_minimum_evidence] evidence check failed", exc_info=True)
         return False
 
+# =========================================================
+# Value ブースト適用
+# =========================================================
+
+def _apply_value_boost(
+    alts: List[Dict[str, Any]],
+    boost: float,
+) -> List[Dict[str, Any]]:
+    """alternatives の score に value EMA ブーストを掛ける（例外を出さない）。
+
+    Args:
+        alts: alternatives リスト（各要素に ``score`` / ``score_raw`` を期待）
+        boost: 適用する乗数（-1.0 ~ 1.0 程度）
+
+    Returns:
+        dict のみを含むリスト（非 dict は除外）
+    """
+    out: List[Dict[str, Any]] = []
+    for d in alts:
+        if not isinstance(d, dict):
+            continue
+        try:
+            s = float(d.get("score", 1.0))
+            d["score_raw"] = float(d.get("score_raw", s))
+            d["score"] = max(0.0, s * (1.0 + boost))
+        except (ValueError, TypeError):
+            logger.debug("[_apply_value_boost] score conversion failed", exc_info=True)
+        out.append(d)
+    return out
+
 
 __all__ = [
     "_as_str",
@@ -227,4 +257,5 @@ __all__ = [
     "_summarize_last_output",
     "_query_is_step1_hint",
     "_has_step1_minimum_evidence",
+    "_apply_value_boost",
 ]
