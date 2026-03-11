@@ -466,12 +466,26 @@ def _score_alternatives(
     stakes: float,
     persona_bias: Dict[str, float] | None,
     ctx: Dict[str, Any] | None = None,
-) -> None:
+    telemetry: Dict[str, Any] | None = None,
+) -> bool:
     """
     alternatives に対してスコアリングを行う。
 
     ★ リファクタリング: kernel_stages.score_alternatives() に委譲。
     設定値は config.scoring_cfg から取得されるため、マジックナンバーが排除されています。
+
+    Args:
+        intent: 推定意図。
+        q: ユーザー入力テキスト。
+        alts: スコアリング対象の候補。
+        telos_score: 価値評価スコア。
+        stakes: 意思決定の重要度。
+        persona_bias: ペルソナ重み。
+        ctx: 追加文脈。
+        telemetry: 劣化運転情報を反映する辞書。
+
+    Returns:
+        bool: strategy_core による追加スコアリングが成功した場合 ``True``。
     """
     from .kernel_stages import score_alternatives as _score_alts_impl
 
@@ -518,8 +532,16 @@ def _score_alternatives(
                         continue
                     if oid in score_map:
                         a["score"] = round(score_map[oid], 4)
+            return True
         except (TypeError, ValueError, RuntimeError):
             logger.warning("[Kernel] _score_alternatives strategy scoring failed", exc_info=True)
+            if isinstance(telemetry, dict):
+                telemetry.setdefault("degraded_subsystems", [])
+                telemetry.setdefault("metrics", {})
+                telemetry["degraded_subsystems"].append("strategy_scoring")
+                telemetry["metrics"]["strategy_scoring_degraded"] = True
+            return False
+    return False
 
 
 def _score_alternatives_with_value_core_and_persona(
@@ -530,7 +552,8 @@ def _score_alternatives_with_value_core_and_persona(
     stakes: float,
     persona_bias: Dict[str, float] | None,
     ctx: Dict[str, Any] | None = None,
-) -> None:
+    telemetry: Dict[str, Any] | None = None,
+) -> bool:
     """
     ★ 後方互換ラッパ
     旧バージョンから呼ばれている名前を維持するための薄い wrapper。
@@ -544,6 +567,7 @@ def _score_alternatives_with_value_core_and_persona(
         stakes=stakes,
         persona_bias=persona_bias,
         ctx=ctx,
+        telemetry=telemetry,
     )
 
 # ============================================================
@@ -581,6 +605,9 @@ async def decide(
     debate_logs: List[Dict[str, Any]] = []
     extras: Dict[str, Any] = {}
     memory_evidence_count: int = 0
+    degraded_subsystems: List[str] = []
+
+    extras.setdefault("metrics", {})
 
     mode = ctx.get("mode") or ""
     tw = (ctx.get("telos_weights") or {})
@@ -676,6 +703,8 @@ async def decide(
                 alts.append(alt)
 
     if not alts and planner_obj is None:
+        degraded_subsystems.append("planner_fallback")
+        extras["metrics"]["planner_fallback_used"] = True
         try:
             planner_obj = planner_core.plan_for_veritas_agi(
                 context=ctx,
@@ -703,7 +732,20 @@ async def decide(
 
     # alternatives 整形・スコアリング
     alts = _dedupe_alts(alts)
-    _score_alternatives(intent, q_text, alts, telos_score, stakes, persona_bias, ctx)
+    strategy_scored = _score_alternatives(
+        intent,
+        q_text,
+        alts,
+        telos_score,
+        stakes,
+        persona_bias,
+        ctx,
+        {
+            "degraded_subsystems": degraded_subsystems,
+            "metrics": extras["metrics"],
+        },
+    )
+    extras["metrics"]["strategy_scoring_applied"] = bool(strategy_scored)
 
     # =======================================================
     # DebateOS
@@ -954,10 +996,12 @@ async def decide(
 
     try:
         latency_ms = int((time.time() - start_ts) * 1000)
-        extras.setdefault("metrics", {})
         extras["metrics"]["latency_ms"] = latency_ms
     except (TypeError, ValueError, OverflowError):
         pass
+
+    if degraded_subsystems:
+        extras["degraded_subsystems"] = sorted(set(degraded_subsystems))
 
     legacy_flag_map = {
         "_world_state_injected": ("world_model_inject", "already_injected_by_pipeline"),

@@ -19,7 +19,7 @@ class _DummyMemoryStore:
         return None
 
 
-def _patch_minimal_decide_dependencies(monkeypatch) -> None:
+def _patch_minimal_decide_dependencies(monkeypatch, stub_scoring: bool = True) -> None:
     """Patch heavyweight dependencies so ``kernel.decide`` can run deterministically."""
 
     monkeypatch.setattr(
@@ -46,7 +46,8 @@ def _patch_minimal_decide_dependencies(monkeypatch) -> None:
             "steps": [{"id": "s1", "title": "Collect facts", "detail": "A"}]
         },
     )
-    monkeypatch.setattr(kernel, "_score_alternatives", lambda *args, **kwargs: None)
+    if stub_scoring:
+        monkeypatch.setattr(kernel, "_score_alternatives", lambda *args, **kwargs: None)
     monkeypatch.setattr(
         kernel.fuji_core,
         "evaluate",
@@ -137,3 +138,48 @@ def test_decide_auto_doctor_warns_without_confinement(monkeypatch) -> None:
 
     assert result["extras"]["doctor"]["skipped"] == "confinement_required"
     assert "security_warning" in result["extras"]["doctor"]
+
+
+def test_decide_records_strategy_scoring_degradation(monkeypatch) -> None:
+    """Strategy scoring failure must be visible in metrics and degraded subsystems."""
+
+    _patch_minimal_decide_dependencies(monkeypatch, stub_scoring=False)
+    monkeypatch.setattr(
+        kernel._strategy_core,
+        "score_options",
+        lambda *args, **kwargs: (_ for _ in ()).throw(TypeError("boom")),
+    )
+    monkeypatch.setattr(kernel, "strategy_core", kernel._strategy_core)
+
+    context: Dict[str, Any] = {
+        "user_id": "u-4",
+        "fast": True,
+        "_episode_saved_by_pipeline": True,
+        "_world_state_updated_by_pipeline": True,
+        "_daily_plans_generated_by_pipeline": True,
+    }
+
+    result = asyncio.run(kernel.decide(context, "query", alternatives=None))
+
+    assert result["extras"]["metrics"]["strategy_scoring_applied"] is False
+    assert result["extras"]["metrics"]["strategy_scoring_degraded"] is True
+    assert "strategy_scoring" in result["extras"]["degraded_subsystems"]
+
+
+def test_decide_marks_planner_fallback_degradation(monkeypatch) -> None:
+    """Kernel planner fallback path must be marked as degraded orchestration."""
+
+    _patch_minimal_decide_dependencies(monkeypatch)
+
+    context: Dict[str, Any] = {
+        "user_id": "u-5",
+        "fast": True,
+        "_episode_saved_by_pipeline": True,
+        "_world_state_updated_by_pipeline": True,
+        "_daily_plans_generated_by_pipeline": True,
+    }
+
+    result = asyncio.run(kernel.decide(context, "query", alternatives=[]))
+
+    assert result["extras"]["metrics"]["planner_fallback_used"] is True
+    assert "planner_fallback" in result["extras"]["degraded_subsystems"]
