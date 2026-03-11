@@ -3,7 +3,19 @@
 from __future__ import annotations
 
 """
-VERITAS Decision Pipeline (core/pipeline.py)
+VERITAS Decision Pipeline – Orchestrator (core/pipeline.py)
+
+This module is the *single entry-point* for the /v1/decide endpoint.
+``run_decide_pipeline(req, request)`` orchestrates the full decision flow
+by delegating to responsibility-separated stage modules:
+
+  pipeline_inputs   – input normalisation
+  pipeline_execute  – kernel.decide + self-healing
+  pipeline_policy   – FUJI / gate / ValueCore
+  pipeline_response – response assembly & evidence finalisation
+  pipeline_persist  – audit, disk persist, memory, world-state, replay
+  pipeline_replay   – deterministic replay & diff
+  pipeline_types    – PipelineContext dataclass + constants
 
 ISSUE-4 / robustness goals:
 - Import must be resilient (optional components must not crash import).
@@ -100,6 +112,47 @@ from .pipeline_contracts import (
     _merge_extras_preserving_contract,
 )
 
+# ---- Stage modules (responsibility-separated) ----
+from .pipeline_types import (  # noqa: F401 – re-exported for backward compat
+    PipelineContext,
+    MIN_MEMORY_SIMILARITY,
+    DEFAULT_CONFIDENCE,
+    DOC_MIN_CONFIDENCE,
+    TELOS_THRESHOLD_MIN,
+    TELOS_THRESHOLD_MAX,
+    HIGH_RISK_THRESHOLD,
+    BASE_TELOS_THRESHOLD,
+)
+from .pipeline_inputs import normalize_pipeline_inputs
+from .pipeline_execute import stage_core_execute
+from .pipeline_policy import (
+    stage_fuji_precheck,
+    stage_value_core,
+    stage_gate_decision,
+)
+from .pipeline_response import (
+    assemble_response,
+    coerce_to_decide_response,
+    finalize_evidence,
+)
+from .pipeline_persist import (
+    persist_audit_log,
+    persist_to_memory,
+    persist_reason_and_reflection,
+    persist_dataset_record,
+    persist_decision_to_disk,
+    persist_world_state,
+    build_replay_snapshot,
+)
+from .pipeline_replay import (
+    _safe_filename_id,  # noqa: F401 – backward compat
+    _sanitize_for_diff,  # noqa: F401 – backward compat
+    _build_replay_diff,  # noqa: F401 – backward compat
+    _load_persisted_decision as _load_persisted_decision_impl,
+    _ReplayRequest,  # noqa: F401 – backward compat
+    replay_decision as _replay_decision_impl,
+)
+
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
     _HAS_ATOMIC_IO = True
@@ -119,17 +172,6 @@ except (ImportError, ModuleNotFoundError):  # tests may import pipeline without 
 # =========================================================
 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
-
-# =========================================================
-# Pipeline constants (magic numbers consolidated)
-# =========================================================
-MIN_MEMORY_SIMILARITY = 0.30       # メモリ検索の最小類似度
-DEFAULT_CONFIDENCE = 0.55          # デフォルト信頼度（web_search fallback等）
-DOC_MIN_CONFIDENCE = 0.75          # ドキュメント証拠の最小信頼度
-TELOS_THRESHOLD_MIN = 0.35         # テロス閾値の下限
-TELOS_THRESHOLD_MAX = 0.75         # テロス閾値の上限
-HIGH_RISK_THRESHOLD = 0.90         # 高リスク判定閾値
-BASE_TELOS_THRESHOLD = 0.55        # 基本テロススコア閾値
 
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
 
@@ -389,80 +431,16 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
 
-# ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
+# ★ Replay functions moved to pipeline_replay.py.
+# _safe_filename_id, _sanitize_for_diff, _build_replay_diff,
+# _load_persisted_decision, _ReplayRequest are imported above for backward compat.
+# _SAFE_FILENAME_RE kept here only for direct-access backward compat.
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
 
 
-def _safe_filename_id(raw_id: str) -> str:
-    """Sanitize an ID for safe use in file names (prevent path traversal)."""
-    return _SAFE_FILENAME_RE.sub("_", str(raw_id))[:128]
-
-
-def _sanitize_for_diff(value: Any) -> Any:
-    """Normalize payload for deterministic diffing by removing volatile fields."""
-    if isinstance(value, dict):
-        volatile = {
-            "created_at",
-            "latency_ms",
-            "stage_latency",
-            "replay_time_ms",
-            "ts",
-        }
-        return {
-            str(k): _sanitize_for_diff(v)
-            for k, v in value.items()
-            if str(k) not in volatile
-        }
-    if isinstance(value, list):
-        return [_sanitize_for_diff(v) for v in value]
-    return value
-
-
-def _build_replay_diff(original: Dict[str, Any], replayed: Dict[str, Any]) -> Dict[str, Any]:
-    """Create a concise structural diff report for audit-friendly replay checks."""
-    orig_norm = _sanitize_for_diff(original)
-    replay_norm = _sanitize_for_diff(replayed)
-    if orig_norm == replay_norm:
-        return {"changed": False, "summary": "no_diff", "keys": []}
-
-    keys = sorted(set(orig_norm.keys()) | set(replay_norm.keys()))
-    changed_keys = [
-        key for key in keys if orig_norm.get(key) != replay_norm.get(key)
-    ]
-    return {
-        "changed": True,
-        "summary": f"changed_keys={len(changed_keys)}",
-        "keys": changed_keys,
-        "original": orig_norm,
-        "replayed": replay_norm,
-    }
-
-
 def _load_persisted_decision(decision_id: str) -> Optional[Dict[str, Any]]:
-    """Load persisted decision snapshot by decision_id/request_id from LOG_DIR."""
-    log_dir = Path(LOG_DIR)
-    if not log_dir.exists():
-        return None
-    candidates = sorted(log_dir.glob("decide_*.json"), reverse=True)
-    for path in candidates:
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, ValueError, KeyError):
-            continue
-        if not isinstance(payload, dict):
-            continue
-        rid = str(payload.get("request_id") or "")
-        did = str(payload.get("decision_id") or "")
-        if decision_id in {rid, did}:
-            return payload
-    return None
-
-
-class _ReplayRequest:
-    """Minimal Request-like object accepted by run_decide_pipeline during replay."""
-
-    def __init__(self) -> None:
-        self.query_params: Dict[str, Any] = {}
+    """Backward-compat wrapper that passes LOG_DIR automatically."""
+    return _load_persisted_decision_impl(decision_id, LOG_DIR=LOG_DIR)
 
 
 async def replay_decision(
@@ -470,7 +448,12 @@ async def replay_decision(
     *,
     mock_external_apis: bool = True,
 ) -> Dict[str, Any]:
-    """Replay a persisted decision deterministically and generate an audit diff report."""
+    """Replay a persisted decision deterministically and generate an audit diff report.
+
+    This wrapper keeps backward-compat: tests can monkeypatch
+    ``pipeline._load_persisted_decision``, ``pipeline.run_decide_pipeline``,
+    etc. and the changes are respected.
+    """
     started_at = time.time()
     snapshot = _load_persisted_decision(decision_id)
     if snapshot is None:
@@ -809,7 +792,7 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 
 
 # =========================================================
-# main pipeline (FULL / hardened) - COMPLETE EDITION (DROP-IN)
+# main pipeline (FULL / hardened) - Orchestrator
 # =========================================================
 
 async def run_decide_pipeline(
@@ -826,192 +809,51 @@ async def run_decide_pipeline(
       - extras.memory_meta.context.fast always exists
       - backward compat key: metrics.mem_evidence_count
       - import-time failures must not break the request (ISSUE-4 style lazy import)
+
+    Stage modules:
+      1. pipeline_inputs     - input normalisation & PlannerOS
+      2. (inline)            - MemoryOS retrieval + WebSearch
+      3. (inline)            - options normalization
+      4. pipeline_execute    - kernel.decide + self-healing
+      5. (inline)            - absorb raw / debate / critique
+      6. pipeline_policy     - FUJI / ValueCore / gate
+      7. pipeline_response   - response assembly & evidence finalisation
+      8. pipeline_persist    - audit, disk, memory, world-state, replay
     """
 
-    # ★ 必須モジュールの存在確認（欠落時は明確なエラー）
+    # Required modules check
     _check_required_modules()
 
-    # -----------------------------------------------------------------------
-    # 注: 以下の nested ヘルパーはサブモジュールに移動済みのため削除した。
-    # モジュールレベルの import で参照可能（後方互換維持）。
-    #
-    # pipeline_helpers    : _lazy_import, _as_str, _norm_severity, _now_iso,
-    #                       _to_bool_local, _set_int_metric, _set_bool_metric,
-    #                       _extract_rejection, _summarize_last_output,
-    #                       _query_is_step1_hint, _has_step1_minimum_evidence
-    # pipeline_critique   : _default_findings, _pad_findings, _critique_fallback,
-    #                       _list_to_findings, _normalize_critique_payload,
-    #                       _ensure_critique_required, _chosen_to_option,
-    #                       _run_critique_best_effort
-    # pipeline_evidence   : _norm_evidence_item, _dedupe_evidence
-    # pipeline_contracts  : _ensure_full_contract, _deep_merge_dict,
-    #                       _merge_extras_preserving_contract
-    # -----------------------------------------------------------------------
-
-    # -------------------------------
-    # Critique / Web / Evidence / Contract ヘルパーはサブモジュールに移動済み。
-    # （上部 import で利用可能）
-    
-    
-    # -------------------------------
-    # start
-    # -------------------------------
-    started_at = time.time()
-    body = req.model_dump() if hasattr(req, "model_dump") else _to_dict(req)
-    if not isinstance(body, dict):
-        body = {}
-
-    # ---------- SAFE INIT ----------
-    evidence: List[Dict[str, Any]] = []
-    critique: Dict[str, Any] = {}
-    debate: List[Any] = []
-    telos: float = 0.0
-    fuji_dict: Dict[str, Any] = {}
-    alternatives: List[Dict[str, Any]] = []
-    modifications: List[Any] = []
-
-    # --------- Metrics contract (ALWAYS present) ----------
-    response_extras: Dict[str, Any] = {
-        "metrics": {
-            "mem_hits": 0,
-            "memory_evidence_count": 0,
-            "web_hits": 0,
-            "web_evidence_count": 0,
-            "fast_mode": False,
-            "mem_evidence_count": 0,  # backward compat
-            "stage_latency": {
-                "retrieval": 0,
-                "web": 0,
-                "llm": 0,
-                "gate": 0,
-                "persist": 0,
-            },
-        },
-        "fast_mode": False,
-        "env_tools": {},
-    }
-
-    # ---------- Query / Context / user_id ----------
-    context: Dict[str, Any] = body.get("context") or {}
-    if not isinstance(context, dict):
-        context = {}
-
-    # ★ セキュリティ修正: ユーザー提供コンテキストからパイプライン内部フィールドを除去
-    # "_pipeline_*" や "_orchestrated_by_pipeline" 等の内部制御フラグをユーザーが
-    # 外部API経由で注入するとエピソード保存のスキップや証拠の偽装が可能になるため、
-    # パイプライン制御フラグはここで削除し、パイプライン自身が後から設定する。
-    _PIPELINE_PRIVATE_PREFIXES = ("_pipeline_", "_orchestrated_by_pipeline", "_episode_saved",
-                                  "_world_state_", "_daily_plans_", "_world_sim_result")
-    _injected_private_keys = [
-        k for k in list(context.keys())
-        if isinstance(k, str) and any(k.startswith(p) for p in _PIPELINE_PRIVATE_PREFIXES)
-    ]
-    if _injected_private_keys:
-        logger.warning(
-            "Pipeline private fields stripped from user-supplied context: %s",
-            sorted(_injected_private_keys),
-        )
-        for _k in _injected_private_keys:
-            context.pop(_k, None)
-
-    replay_mode = bool(context.get("_replay_mode", False))
-    mock_external_apis = bool(context.get("_mock_external_apis", replay_mode))
-    if replay_mode:
-        body["temperature"] = body.get("temperature", 0)
-
-    raw_query = body.get("query") or context.get("query") or ""
-    if not isinstance(raw_query, str):
-        raw_query = str(raw_query)
-    query = raw_query.strip()
-
-    # ★重要: user_idは必ず str 化（MemoryOS / WorldModel / logs が壊れない）
-    user_id_raw = context.get("user_id") or body.get("user_id") or "anon"
-    user_id = str(user_id_raw) if user_id_raw is not None else "anon"
-
-    # ---------- fast mode (restore contract) ----------
-    params = _get_request_params(request)
-    fast_from_body = _to_bool(body.get("fast"))
-    _ctx_mode = context.get("mode")
-    fast_from_ctx = _to_bool(context.get("fast")) or (
-        isinstance(_ctx_mode, str) and _ctx_mode.lower() == "fast"
+    # =================================================================
+    # Stage 1: Input normalization  (-> pipeline_inputs)
+    # =================================================================
+    ctx = normalize_pipeline_inputs(
+        req,
+        request,
+        _get_request_params=_get_request_params,
+        _to_dict_fn=_to_dict,
     )
-    fast_from_query = _to_bool(params.get("fast"))
-
-    fast_mode = bool(fast_from_body or fast_from_ctx or fast_from_query)
-    context["fast"] = bool(fast_mode)
-    if fast_mode:
-        context.setdefault("mode", "fast")
-        body["fast"] = True
-
-    response_extras["fast_mode"] = fast_mode
-    response_extras["metrics"]["fast_mode"] = fast_mode
-    response_extras["memory_meta"] = {"context": dict(context)}
-
-    # ---------- WorldOS: inject state ----------
-    world_model = _lazy_import("veritas_os.core.world", None) or _lazy_import("veritas_os.core.world_model", None)
-    try:
-        if world_model is not None and hasattr(world_model, "inject_state_into_context"):
-            context = world_model.inject_state_into_context(context, user_id)  # type: ignore
-            body["context"] = context
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[WorldOS] inject_state_into_context skipped: {e}")
-
-    # context 差し替え後に memory_meta を追従
-    try:
-        response_extras["memory_meta"] = {"context": dict(context)}
-    except Exception:  # subsystem resilience: intentionally broad
-        pass
-
-    # ---- contract hardening (early)
-    _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
+    body = ctx.body
+    context = ctx.context
+    query = ctx.query
+    user_id = ctx.user_id
+    fast_mode = ctx.fast_mode
+    replay_mode = ctx.replay_mode
+    mock_external_apis = ctx.mock_external_apis
+    request_id = ctx.request_id
+    seed = ctx.seed
+    min_ev = ctx.min_ev
+    is_veritas_query = ctx.is_veritas_query
+    plan = ctx.plan
+    response_extras = ctx.response_extras
+    evidence = ctx.evidence
+    started_at = ctx.started_at
 
     qlower = query.lower()
-    is_veritas_query = any(k in qlower for k in ["veritas", "agi", "protoagi", "プロトagi", "veritasのagi化"])
 
-    # ---------- PlannerOS ----------
-    plan: Dict[str, Any] = {"steps": [], "raw": None, "source": "fallback"}
-    try:
-        plan_for_veritas_agi = _lazy_import("veritas_os.core.planner", "plan_for_veritas_agi")
-        if callable(plan_for_veritas_agi):
-            p = plan_for_veritas_agi(context=context, query=query)  # type: ignore[misc]
-            if isinstance(p, dict):
-                plan = p or plan
-        _warn(f"[PlannerOS] steps={len(plan.get('steps', []))}, source={plan.get('source')}")
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[PlannerOS] skipped: {e}")
-
-    response_extras["planner"] = {
-        "steps": plan.get("steps", []) if isinstance(plan, dict) else [],
-        "raw": plan.get("raw") if isinstance(plan, dict) else None,
-        "source": plan.get("source") if isinstance(plan, dict) else "fallback",
-    }
-
-    # ---------- Request id / min evidence ----------
-    if replay_mode:
-        request_id = str(
-            body.get("request_id")
-            or context.get("request_id")
-            or secrets.token_hex(16)
-        )
-    else:
-        request_id = body.get("request_id") or secrets.token_hex(16)
-
-    seed_raw = body.get("seed")
-    try:
-        seed = int(seed_raw) if seed_raw is not None else 0
-    except (ValueError, TypeError):
-        seed = 0
-    random.seed(seed)
-    try:
-        min_ev = int(body.get("min_evidence") or 1)
-    except (ValueError, TypeError):
-        min_ev = 1
-    if min_ev < 1:
-        min_ev = 1
-
-    # =========================================================
-    # MemoryOS retrieval (best-effort) + contracts
-    # =========================================================
+    # =================================================================
+    # Stage 2: MemoryOS retrieval  (best-effort)
+    # =================================================================
     retrieval_stage_started_at = time.time()
     retrieved: List[Dict[str, Any]] = []
     want_doc = False
@@ -1021,7 +863,7 @@ async def run_decide_pipeline(
         lowered = {str(k).lower() for k in raw_memory_kinds}
         want_doc = "doc" in lowered
 
-    if is_veritas_query or any(key in qlower for key in ["論文", "paper", "zenodo", "veritas os", "protoagi", "プロトagi"]):
+    if is_veritas_query or any(key in qlower for key in ["\u8ad6\u6587", "paper", "zenodo", "veritas os", "protoagi", "\u30d7\u30ed\u30c8agi"]):
         want_doc = True
 
     memory_store = _get_memory_store()
@@ -1135,18 +977,19 @@ async def run_decide_pipeline(
     response_extras["memory_citations"] = memory_citations_list
     response_extras["memory_used_count"] = int(len(memory_citations_list))
 
-    # =========================================================
-    # WebSearch (optional / best-effort) + contract  [COMPLETE+ANCHOR]
-    # =========================================================
+    # =================================================================
+    # Stage 2b: WebSearch  (optional / best-effort)
+    # =================================================================
     web_evidence: List[Dict[str, Any]] = []
     web_evidence_added = 0
 
     if not isinstance(evidence, list):
         evidence = list(evidence or [])
 
+    params = _get_request_params(request)
     web_explicit = _to_bool(body.get("web")) or _to_bool(context.get("web")) or _to_bool(params.get("web"))
     want_web = web_explicit or bool(is_veritas_query) or any(
-        k in qlower for k in ["agi", "research", "論文", "paper", "zenodo", "arxiv"]
+        k in qlower for k in ["agi", "research", "\u8ad6\u6587", "paper", "zenodo", "arxiv"]
     )
 
     web_max = body.get("web_max_results") or context.get("web_max_results") or 5
@@ -1167,44 +1010,35 @@ async def run_decide_pipeline(
     web_stage_started_at = time.time()
     if should_run_web and not mock_external_apis:
         ws = None
-        ws_final_query = query  # ★ evidence に残す最終query（アンカー後が来る想定）
+        ws_final_query = query
 
         try:
             ws0 = await _safe_web_search(query, max_results=web_max)
-
             ws = _normalize_web_payload(ws0)
-
         except Exception as e:  # subsystem resilience: intentionally broad
             response_extras.setdefault("env_tools", {})
             if isinstance(response_extras["env_tools"], dict):
                 response_extras["env_tools"]["web_search_error"] = repr(e)
 
         if ws is None:
-            # CI / offline / tool-missing でも contract を満たす（attempted=True）
             response_extras["web_search"] = {"ok": True, "results": [], "degraded": True}
-
             ev_fallback = _norm_evidence_item(
                 {
                     "source": "web",
                     "uri": "web:search",
                     "title": "web_search attempted (degraded)",
-                    # ★ evidence に query を残す（アンカー後が取れないのでここは query）
                     "snippet": f"[q={ws_final_query}] web_search unavailable or returned None",
                     "confidence": DEFAULT_CONFIDENCE,
                 }
             )
             if ev_fallback:
-                ev_fallback["source"] = "web"  # ★テスト契約: 必須
+                ev_fallback["source"] = "web"
                 web_evidence.append(ev_fallback)
                 evidence.append(ev_fallback)
                 web_evidence_added = 1
-
         else:
-            # normalize が ok を落とすケースを防ぐ（results があるなら ok=True 扱い）
             if isinstance(ws, dict) and "ok" not in ws:
                 ws["ok"] = True
-
-            # ★最重要: アンカー後の確定クエリを ws.meta.final_query から取得し、以降これを使う
             try:
                 meta = ws.get("meta") if isinstance(ws, dict) else None
                 if isinstance(meta, dict):
@@ -1213,13 +1047,11 @@ async def run_decide_pipeline(
                         or meta.get("boosted_query")
                         or ws_final_query
                     )
-                    # ★古いweb_search実装でも evidence 側が困らないように final_query を補完
                     meta.setdefault("final_query", ws_final_query)
             except (KeyError, TypeError, AttributeError):
                 ws_final_query = query
 
             response_extras["web_search"] = ws
-
             results = _extract_web_results(ws)
             response_extras["metrics"]["web_hits"] = int(len(results))
 
@@ -1228,19 +1060,14 @@ async def run_decide_pipeline(
                     item = {"title": item, "snippet": item}
                 elif not isinstance(item, dict):
                     item = {"title": str(item), "snippet": str(item)}
-
                 uri = item.get("url") or item.get("uri") or item.get("link") or item.get("href")
                 title = item.get("title") or item.get("name") or ""
                 snippet = item.get("snippet") or item.get("text") or title or (str(uri) if uri else "")
-
-                # ★ evidence に必ずアンカー後queryを残す（今回破れていた箇所）
                 snippet = f"[q={ws_final_query}] {snippet}"
-
                 try:
                     confidence = float(item.get("confidence", 0.7) or 0.7)
                 except (ValueError, TypeError):
                     confidence = 0.7
-
                 ev = _norm_evidence_item(
                     {
                         "source": "web",
@@ -1251,12 +1078,11 @@ async def run_decide_pipeline(
                     }
                 )
                 if ev:
-                    ev["source"] = "web"  # ★テスト契約: 必須
+                    ev["source"] = "web"
                     web_evidence.append(ev)
                     evidence.append(ev)
                     web_evidence_added += 1
 
-            # ok=True なのに抽出0件 → 最低1件は入れる
             try:
                 ok_flag = bool(ws.get("ok")) if isinstance(ws, dict) else False
             except (KeyError, TypeError, AttributeError):
@@ -1268,7 +1094,6 @@ async def run_decide_pipeline(
                         "source": "web",
                         "uri": "web:search",
                         "title": "web_search executed",
-                        # ★ここもアンカー後 query を残す
                         "snippet": f"[q={ws_final_query}] web_search ok=True but no structured results extracted",
                         "confidence": DEFAULT_CONFIDENCE,
                     }
@@ -1304,9 +1129,9 @@ async def run_decide_pipeline(
         int((time.time() - web_stage_started_at) * 1000),
     )
 
-    # =========================================================
-    # options normalization + planner→alts for veritas queries
-    # =========================================================
+    # =================================================================
+    # Stage 3: Options normalization
+    # =================================================================
     explicit_raw = body.get("options") or body.get("alternatives") or []
     if not isinstance(explicit_raw, list):
         explicit_raw = []
@@ -1314,12 +1139,10 @@ async def run_decide_pipeline(
     explicit_options: List[Dict[str, Any]] = [
         _norm_alt(a) for a in explicit_raw if isinstance(a, dict)
     ]
-    explicit_options = [a for a in explicit_options if isinstance(a, dict)]  # safety
+    explicit_options = [a for a in explicit_options if isinstance(a, dict)]
 
-    # input_alts は「最終的に core に渡す alternatives」
     input_alts: List[Dict[str, Any]] = list(explicit_options)
 
-    # 明示が無い場合だけ planner からステップを alternatives 化（veritas query 限定）
     if not input_alts and is_veritas_query:
         step_alts: List[Dict[str, Any]] = []
         for i, st in enumerate((plan.get("steps") if isinstance(plan, dict) else []) or [], 1):
@@ -1340,197 +1163,43 @@ async def run_decide_pipeline(
             )
 
         input_alts = step_alts or [
-            _norm_alt(
-                {
-                    "id": "veritas_mvp_demo",
-                    "title": "MVPデモを最短で見せられる形にする",
-                    "description": "Swagger/CLIで /v1/decide の30〜60秒デモを作る。",
-                }
-            ),
-            _norm_alt(
-                {
-                    "id": "veritas_report",
-                    "title": "技術監査レポートを仕上げる",
-                    "description": "第三者が読めるレベルにブラッシュアップする。",
-                }
-            ),
-            _norm_alt(
-                {
-                    "id": "veritas_spec_sheet",
-                    "title": "MVP仕様書を1枚にまとめる",
-                    "description": "CLI/API・FUJI・Debate・Memoryの流れを1枚に整理する。",
-                }
-            ),
-            _norm_alt(
-                {
-                    "id": "veritas_demo_script",
-                    "title": "第三者向けデモ台本を作る",
-                    "description": "画面順・説明順・想定QAを台本化する。",
-                }
-            ),
+            _norm_alt({"id": "veritas_mvp_demo", "title": "MVP\u30c7\u30e2\u3092\u6700\u77ed\u3067\u898b\u305b\u3089\u308c\u308b\u5f62\u306b\u3059\u308b", "description": "Swagger/CLI\u3067 /v1/decide \u306e30\u301c60\u79d2\u30c7\u30e2\u3092\u4f5c\u308b\u3002"}),
+            _norm_alt({"id": "veritas_report", "title": "\u6280\u8853\u76e3\u67fb\u30ec\u30dd\u30fc\u30c8\u3092\u4ed5\u4e0a\u3052\u308b", "description": "\u7b2c\u4e09\u8005\u304c\u8aad\u3081\u308b\u30ec\u30d9\u30eb\u306b\u30d6\u30e9\u30c3\u30b7\u30e5\u30a2\u30c3\u30d7\u3059\u308b\u3002"}),
+            _norm_alt({"id": "veritas_spec_sheet", "title": "MVP\u4ed5\u69d8\u66f8\u30921\u679a\u306b\u307e\u3068\u3081\u308b", "description": "CLI/API\u30fbFUJI\u30fbDebate\u30fbMemory\u306e\u6d41\u308c\u30921\u679a\u306b\u6574\u7406\u3059\u308b\u3002"}),
+            _norm_alt({"id": "veritas_demo_script", "title": "\u7b2c\u4e09\u8005\u5411\u3051\u30c7\u30e2\u53f0\u672c\u3092\u4f5c\u308b", "description": "\u753b\u9762\u9806\u30fb\u8aac\u660e\u9806\u30fb\u60f3\u5b9aQA\u3092\u53f0\u672c\u5316\u3059\u308b\u3002"}),
         ]
 
-    # alternatives の初期値は input_alts（= 明示 or planner）
     alternatives: List[Dict[str, Any]] = list(input_alts)
 
     if not isinstance(web_evidence, list):
         web_evidence = []
 
-    # =========================================================
-    # call kernel.decide (core)  ※ISSUE-4: lazy import
-    # =========================================================
-    veritas_core = _lazy_import("veritas_os.core.kernel", None) or _lazy_import("veritas_os.core", "kernel")
-    debate_core = _lazy_import("veritas_os.core.debate", None) or _lazy_import("veritas_os.core", "debate")
-    reason_core = _lazy_import("veritas_os.core.reason", None) or _lazy_import("veritas_os.core", "reason")
-    fuji_core = _lazy_import("veritas_os.core.fuji", None) or _lazy_import("veritas_os.core", "fuji")
-    value_core = _lazy_import("veritas_os.core.value_core", None) or _lazy_import("veritas_os.core", "value_core")
+    # =================================================================
+    # Stage 4: Core decision + self-healing  (-> pipeline_execute)
+    # =================================================================
+    ctx.evidence = evidence
+    ctx.input_alts = input_alts
+    ctx.alternatives = alternatives
+    ctx.explicit_options = explicit_options
+    ctx.web_evidence = web_evidence
+    ctx.retrieved = retrieved
 
-    core_decide = None
-    try:
-        if veritas_core is not None and hasattr(veritas_core, "decide"):
-            core_decide = veritas_core.decide  # type: ignore[attr-defined]
-    except Exception:  # subsystem resilience: intentionally broad
-        core_decide = None
+    await stage_core_execute(
+        ctx,
+        call_core_decide_fn=call_core_decide,
+        append_trust_log_fn=append_trust_log,
+    )
+    raw = ctx.raw
 
-    raw = {}
-    healing_attempts: List[Dict[str, Any]] = []
-    healing_stop_reason: Optional[str] = None
-    healing_enabled = self_healing.is_healing_enabled(context or {})
-    healing_state = self_healing.HealingState()
-    healing_budget = self_healing.HealingBudget()
-    prev_healing_input: Optional[Dict[str, Any]] = None
+    # =================================================================
+    # Stage 4b: Absorb raw results
+    # =================================================================
+    critique: Dict[str, Any] = {}
+    debate: List[Any] = []
+    telos: float = 0.0
+    fuji_dict: Dict[str, Any] = {}
+    modifications: List[Any] = []
 
-    # _extract_rejection, _summarize_last_output -> pipeline_helpers.py に移動済み
-
-    if core_decide is None:
-        response_extras.setdefault("env_tools", {})
-        if isinstance(response_extras["env_tools"], dict):
-            response_extras["env_tools"]["kernel_missing"] = True
-        _warn("[decide] kernel.decide missing -> skip core call")
-    else:
-        core_context = dict(context or {})
-        core_context["_orchestrated_by_pipeline"] = True
-        core_context["evidence"] = list(evidence)
-        core_context["planner"] = dict(response_extras.get("planner") or {})
-        core_context["env_tools"] = dict(response_extras.get("env_tools") or {})
-        if isinstance(response_extras.get("world_simulation"), dict):
-            core_context["world_simulation"] = dict(response_extras["world_simulation"])
-        try:
-            raw0 = await call_core_decide(
-                core_fn=core_decide,  # type: ignore[arg-type]
-                context=core_context,
-                query=query,
-                alternatives=input_alts,   # ★ core に渡すのは input_alts
-                min_evidence=min_ev,
-            )
-            raw = raw0 if isinstance(raw0, dict) else {}
-        except Exception as e:  # subsystem resilience: intentionally broad
-            _warn(f"[decide] core error: {e}")
-            raw = {}
-
-    if raw and healing_enabled:
-        original_task = query
-        latest_healing_input: Optional[Dict[str, Any]] = None
-        current_context = dict(context or {})
-        while True:
-            rejection = _extract_rejection(raw)
-            if not rejection:
-                break
-            error_code = (rejection.get("error") or {}).get("code") or "unknown"
-            feedback_action = (rejection.get("feedback") or {}).get("action")
-            decision = self_healing.decide_healing_action(
-                error_code=error_code,
-                feedback_action=feedback_action,
-            )
-
-            attempt_no = healing_state.attempt + 1
-            last_output = _summarize_last_output(raw, plan)
-            healing_input = self_healing.build_healing_input(
-                original_task=original_task,
-                last_output=last_output,
-                rejection=rejection,
-                attempt=attempt_no,
-                policy_decision=decision.reason,
-            )
-            input_signature = self_healing.healing_input_signature(healing_input)
-            diff_text = self_healing.diff_summary(prev_healing_input, healing_input)
-
-            stop_reason = self_healing.check_guardrails(
-                state=healing_state,
-                budget=healing_budget,
-                error_code=str(error_code),
-                input_signature=input_signature,
-            )
-            if not decision.allow:
-                stop_reason = decision.stop_reason or "policy_blocked"
-
-            budget_snapshot = self_healing.budget_remaining(
-                healing_state,
-                healing_budget,
-            )
-            trust_entry = self_healing.build_healing_trust_log_entry(
-                request_id=request_id,
-                healing_enabled=True,
-                attempt=attempt_no,
-                prev_error_code=str(error_code),
-                chosen_action=decision.action.value,
-                budget_snapshot=budget_snapshot,
-                diff_summary_text=diff_text,
-                linked_trust_log_id=rejection.get("trust_log_id"),
-                stop_reason=stop_reason,
-            )
-            try:
-                append_trust_log(trust_entry)
-            except (KeyError, TypeError, AttributeError) as e:
-                _warn(f"[self_healing] trust_log skipped: {repr(e)}")
-
-            healing_attempts.append(
-                {
-                    "attempt": attempt_no,
-                    "action": decision.action.value,
-                    "error_code": error_code,
-                    "stop_reason": stop_reason,
-                    "diff_summary": diff_text,
-                }
-            )
-            prev_healing_input = healing_input
-            latest_healing_input = healing_input
-
-            if stop_reason:
-                healing_stop_reason = stop_reason
-                break
-
-            self_healing.advance_state(
-                state=healing_state,
-                error_code=str(error_code),
-                input_signature=input_signature,
-            )
-
-            current_context = dict(core_context)
-            current_context["healing"] = {
-                "attempt": attempt_no,
-                "action": decision.action.value,
-                "feedback": rejection.get("feedback"),
-                "policy_decision": decision.reason,
-                "input": healing_input,
-            }
-            try:
-                raw0 = await call_core_decide(
-                    core_fn=core_decide,  # type: ignore[arg-type]
-                    context=current_context,
-                    query=query,
-                    alternatives=input_alts,
-                    min_evidence=min_ev,
-                )
-                raw = raw0 if isinstance(raw0, dict) else {}
-            except Exception as e:  # subsystem resilience: intentionally broad
-                _warn(f"[self_healing] retry failed: {repr(e)}")
-                healing_stop_reason = "retry_execution_failed"
-                break
-
-    # =========================================================
-    # absorb raw (respect explicit options)
-    # =========================================================
     if raw:
         if isinstance(raw.get("evidence"), list):
             for ev0 in raw["evidence"]:
@@ -1550,7 +1219,6 @@ async def run_decide_pipeline(
 
         fuji_dict = raw.get("fuji") or fuji_dict
 
-        # core が alternatives/options を返しても、明示 options がある場合は上書きしない
         alts_from_core = raw.get("alternatives") or raw.get("options") or []
         if (not explicit_options) and isinstance(alts_from_core, list) and alts_from_core:
             alternatives = [_norm_alt(a) for a in alts_from_core]
@@ -1563,31 +1231,19 @@ async def run_decide_pipeline(
                 context_obj=context,
             )
 
-    if healing_attempts:
-        response_extras.setdefault("self_healing", {})
-        if isinstance(response_extras["self_healing"], dict):
-            response_extras["self_healing"].update(
-                {
-                    "enabled": True,
-                    "attempts": healing_attempts,
-                    "stop_reason": healing_stop_reason,
-                    "input": latest_healing_input,
-                }
-            )
-
-    # =========================================================
-    # fallback alternatives (still respects explicit/planner)
-    # =========================================================
+    # =================================================================
+    # Stage 4c: Fallback alternatives
+    # =================================================================
     alts: List[Dict[str, Any]] = alternatives or [
-        _norm_alt({"title": "最小ステップで前進する"}),
-        _norm_alt({"title": "情報収集を優先する"}),
-        _norm_alt({"title": "今日は休息に充てる"}),
+        _norm_alt({"title": "\u6700\u5c0f\u30b9\u30c6\u30c3\u30d7\u3067\u524d\u9032\u3059\u308b"}),
+        _norm_alt({"title": "\u60c5\u5831\u53ce\u96c6\u3092\u512a\u5148\u3059\u308b"}),
+        _norm_alt({"title": "\u4eca\u65e5\u306f\u4f11\u606f\u306b\u5145\u3066\u308b"}),
     ]
     alts = _dedupe_alts(alts)
 
-    # =========================================================
-    # WorldModel boost (best-effort)
-    # =========================================================
+    # =================================================================
+    # Stage 4d: WorldModel + MemoryModel boost
+    # =================================================================
     try:
         if world_model is not None and hasattr(world_model, "simulate"):
             boosted: List[Dict[str, Any]] = []
@@ -1598,22 +1254,13 @@ async def run_decide_pipeline(
                 sim = world_model.simulate(user_id=uid_for_world, query=query, chosen=d)  # type: ignore
                 if isinstance(sim, dict):
                     d["world"] = sim
-                    micro = max(
-                        0.0,
-                        min(
-                            0.03,
-                            0.02 * float(sim.get("utility", 0.0)) + 0.01 * float(sim.get("confidence", 0.5)),
-                        ),
-                    )
+                    micro = max(0.0, min(0.03, 0.02 * float(sim.get("utility", 0.0)) + 0.01 * float(sim.get("confidence", 0.5))))
                     d["score"] = float(d.get("score", 1.0)) * (1.0 + micro)
                 boosted.append(d)
             alts = boosted
-    except Exception as e:  # subsystem resilience: world_model.simulate may raise arbitrary errors
+    except Exception as e:  # subsystem resilience
         _warn(f"[WorldModelOS] skip: {e}")
 
-    # =========================================================
-    # MemoryModel boost (optional)
-    # =========================================================
     try:
         response_extras.setdefault("metrics", {})
         if not isinstance(response_extras["metrics"], dict):
@@ -1621,9 +1268,7 @@ async def run_decide_pipeline(
 
         if MEM_VEC is not None and MEM_CLF is not None:
             response_extras["metrics"]["mem_model"] = {
-                "applied": True,
-                "reason": "loaded",
-                "path": _mem_model_path(),
+                "applied": True, "reason": "loaded", "path": _mem_model_path(),
                 "classes": getattr(MEM_CLF, "classes_", []).tolist() if hasattr(MEM_CLF, "classes_") else None,
             }
             for d in alts:
@@ -1633,20 +1278,14 @@ async def run_decide_pipeline(
                 d["score_raw"] = float(d.get("score_raw", base))
                 d["score"] = base * (1.0 + 0.10 * p_allow)
         else:
-            response_extras["metrics"]["mem_model"] = {
-                "applied": False,
-                "reason": "model_not_loaded",
-                "path": _mem_model_path(),
-            }
+            response_extras["metrics"]["mem_model"] = {"applied": False, "reason": "model_not_loaded", "path": _mem_model_path()}
     except (ValueError, TypeError, AttributeError) as e:
         response_extras.setdefault("metrics", {})
         if not isinstance(response_extras["metrics"], dict):
             response_extras["metrics"] = {}
         response_extras["metrics"]["mem_model"] = {"applied": False, "error": str(e), "path": _mem_model_path()}
 
-    # =========================================================
     # chosen (pre-debate)
-    # =========================================================
     chosen = raw.get("chosen") if isinstance(raw, dict) else {}
     if not isinstance(chosen, dict) or not chosen:
         try:
@@ -1654,20 +1293,15 @@ async def run_decide_pipeline(
         except (ValueError, TypeError):
             chosen = alts[0] if alts else {}
 
-    # =========================================================
-    # DebateOS (best-effort)
-    # =========================================================
+    # =================================================================
+    # Stage 5: DebateOS  (best-effort)
+    # =================================================================
     debate_result: Dict[str, Any] = {}
     try:
         if debate_core is not None and hasattr(debate_core, "run_debate") and not fast_mode:
             debate_result = debate_core.run_debate(  # type: ignore
-                query=query,
-                options=alts,
-                context={
-                    "user_id": user_id,
-                    "stakes": (context or {}).get("stakes"),
-                    "telos_weights": (context or {}).get("telos_weights"),
-                },
+                query=query, options=alts,
+                context={"user_id": user_id, "stakes": (context or {}).get("stakes"), "telos_weights": (context or {}).get("telos_weights")},
             ) or {}
     except (KeyError, TypeError, AttributeError) as e:
         _warn(f"[DebateOS] skipped: {e}")
@@ -1678,53 +1312,41 @@ async def run_decide_pipeline(
         if isinstance(deb_opts, list) and deb_opts:
             alts = deb_opts
             debate = deb_opts
-
         deb_chosen = debate_result.get("chosen")
         if isinstance(deb_chosen, dict) and deb_chosen:
             chosen = deb_chosen
-
         response_extras.setdefault("debate", {})
         if isinstance(response_extras["debate"], dict):
             try:
                 response_extras["debate"].update({"source": debate_result.get("source"), "raw": debate_result.get("raw")})
             except (KeyError, TypeError, AttributeError):
                 pass
-
-        # heuristic: risk_delta
         try:
             rejected_cnt = 0
             for o in deb_opts:
                 if not isinstance(o, dict):
                     continue
                 v = str(o.get("verdict") or "").strip()
-                if v in ("却下", "reject", "Rejected", "NG"):
+                if v in ("\u5374\u4e0b", "reject", "Rejected", "NG"):
                     rejected_cnt += 1
             if rejected_cnt > 0 and deb_opts and isinstance(deb_opts[0], dict):
                 deb_opts[0]["risk_delta"] = min(0.20, 0.05 * rejected_cnt)
         except (KeyError, TypeError, AttributeError) as e:
             _warn(f"[DebateOS] risk_delta heuristic skipped: {e}")
 
-    # =========================================================
-    # ISSUE-2: Critique required (post-debate, pre-FUJI)
-    # =========================================================
+    # =================================================================
+    # Stage 5b: Critique  (post-debate, pre-FUJI)
+    # =================================================================
     try:
         critique = _normalize_critique_payload(critique)
-
         if not critique:
             critique = await _run_critique_best_effort(
-                query=query,
-                chosen=chosen,
+                query=query, chosen=chosen,
                 evidence=evidence if isinstance(evidence, list) else [],
-                debate=debate,
-                context=context,
-                user_id=user_id,
+                debate=debate, context=context, user_id=user_id,
             )
-
         critique = _ensure_critique_required(
-            response_extras=response_extras,
-            query=query,
-            chosen=chosen,
-            critique_obj=critique,
+            response_extras=response_extras, query=query, chosen=chosen, critique_obj=critique,
         )
     except Exception:  # subsystem resilience: intentionally broad
         critique = _critique_fallback(reason="critique_guard_exception", query=query, chosen=chosen)
@@ -1732,7 +1354,6 @@ async def run_decide_pipeline(
         if isinstance(response_extras["env_tools"], dict):
             response_extras["env_tools"]["critique_degraded"] = True
 
-    # critique がフォールバックならレビュー要求フラグ（extrasに置く）
     try:
         if isinstance(critique, dict) and critique.get("ok") is False:
             response_extras.setdefault("env_tools", {})
@@ -1742,178 +1363,50 @@ async def run_decide_pipeline(
     except (KeyError, TypeError, AttributeError):
         pass
 
-    # =========================================================
-    # FUJI pre-check (best-effort)
-    # =========================================================
-    try:
-        if fuji_core is not None and hasattr(fuji_core, "validate_action"):
-            fuji_pre = fuji_core.validate_action(query, context)  # type: ignore
-        elif fuji_core is not None and hasattr(fuji_core, "validate"):
-            fuji_pre = fuji_core.validate(query, context)  # type: ignore
-        else:
-            fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[fuji] error: {e}")
-        fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
+    # =================================================================
+    # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
+    # =================================================================
+    ctx.fuji_dict = fuji_dict
+    ctx.evidence = evidence
+    ctx.alternatives = alts
+    ctx.input_alts = input_alts
+    ctx.telos = telos
+    ctx.debate = debate
+    ctx.response_extras = response_extras
 
-    status_map = {
-        "ok": "allow",
-        "allow": "allow",
-        "pass": "allow",
-        "modify": "modify",
-        "block": "rejected",
-        "deny": "rejected",
-        "rejected": "rejected",
-    }
-    try:
-        if isinstance(fuji_pre, dict):
-            fuji_pre["status"] = status_map.get(str(fuji_pre.get("status", "allow")).lower(), "allow")
-    except (KeyError, TypeError, AttributeError):
-        if isinstance(fuji_pre, dict):
-            fuji_pre["status"] = "allow"
+    stage_fuji_precheck(ctx)
 
-    fuji_dict = {
-        **(fuji_dict if isinstance(fuji_dict, dict) else {}),
-        **(fuji_pre if isinstance(fuji_pre, dict) else {}),
-    }
+    stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
 
-    fuji_status = fuji_dict.get("status", "allow")
-    try:
-        risk_val = float(fuji_dict.get("risk", 0.0))
-    except (ValueError, TypeError):
-        risk_val = 0.0
-    reasons_list = fuji_dict.get("reasons", []) or []
-    viols = fuji_dict.get("violations", []) or []
+    stage_gate_decision(ctx)
 
-    ev_fuji = _norm_evidence_item(
-        {
-            "source": "internal:fuji",
-            "uri": None,
-            "snippet": (
-                f"[FUJI pre] status={fuji_status}, risk={risk_val}, "
-                f"reasons={'; '.join(reasons_list) if reasons_list else '-'}, "
-                f"violations={', '.join(viols) if viols else '-'}"
-            ),
-            "confidence": 0.9 if fuji_status in ("modify", "rejected") else 0.8,
-        }
-    )
-    if ev_fuji:
-        evidence.append(ev_fuji)
+    # Sync back from ctx
+    fuji_dict = ctx.fuji_dict
+    evidence = ctx.evidence
+    alts = ctx.alternatives
+    input_alts = ctx.input_alts
+    telos = ctx.telos
+    response_extras = ctx.response_extras
+    decision_status = ctx.decision_status
+    rejection_reason = ctx.rejection_reason
+    modifications = ctx.modifications
+    effective_risk = ctx.effective_risk
+    value_ema = ctx.value_ema
+    telos_threshold = ctx.telos_threshold
+    values_payload = ctx.values_payload
+    if ctx.decision_status == "rejected":
+        chosen = ctx.chosen
+        alts = ctx.alternatives
 
-    # =========================================================
-    # ValueCore (best-effort)
-    # =========================================================
-    try:
-        if value_core is not None and hasattr(value_core, "evaluate"):
-            vc = value_core.evaluate(query, context or {})  # type: ignore
-            values_payload = {
-                "scores": getattr(vc, "scores", {}) if vc is not None else {},
-                "total": getattr(vc, "total", 0.0) if vc is not None else 0.0,
-                "top_factors": getattr(vc, "top_factors", []) if vc is not None else [],
-                "rationale": getattr(vc, "rationale", "") if vc is not None else "",
-            }
-        else:
-            values_payload = {"scores": {}, "total": 0.0, "top_factors": [], "rationale": "value_core missing"}
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[value_core] evaluation error: {e}")
-        values_payload = {"scores": {}, "total": 0.0, "top_factors": [], "rationale": "evaluation failed"}
-
-    # load EMA
-    try:
-        vs = _load_valstats()
-        value_ema = float(vs.get("ema", 0.5))
-    except (ValueError, TypeError):
-        value_ema = 0.5
-
-    BOOST_MAX = float(os.getenv("VERITAS_VALUE_BOOST_MAX", "0.05"))
-    boost = (value_ema - 0.5) * 2.0
-    boost = max(-1.0, min(1.0, boost)) * BOOST_MAX
-
-    input_alts = _apply_value_boost(input_alts, boost)
-    alts = _apply_value_boost(alts, boost)
-
-    RISK_EMA_WEIGHT = float(os.getenv("VERITAS_RISK_EMA_WEIGHT", "0.15"))
-    try:
-        effective_risk = float(fuji_dict.get("risk", 0.0)) * (1.0 - RISK_EMA_WEIGHT * value_ema)
-    except (ValueError, TypeError):
-        effective_risk = 0.0
-    effective_risk = max(0.0, min(1.0, effective_risk))
-
-    TELOS_EMA_DELTA = float(os.getenv("VERITAS_TELOS_EMA_DELTA", "0.10"))
-    telos_threshold = BASE_TELOS_THRESHOLD - TELOS_EMA_DELTA * (value_ema - 0.5) * 2.0
-    telos_threshold = max(TELOS_THRESHOLD_MIN, min(TELOS_THRESHOLD_MAX, telos_threshold))
-
-    # world.utility synthesis (best-effort)
-    try:
-        v_total = _clip01(values_payload.get("total", 0.5))
-        t_val = _clip01(telos)
-        r_val = _clip01(effective_risk)
-
-        for d in alts:
-            if not isinstance(d, dict):
-                continue
-            base = _clip01(d.get("score", 0.0))
-            util = base
-            util *= (0.5 + 0.5 * v_total)
-            util *= (1.0 - r_val)
-            util *= (0.5 + 0.5 * t_val)
-            util = _clip01(util)
-            d.setdefault("world", {})
-            if isinstance(d["world"], dict):
-                d["world"]["utility"] = util
-
-        avg_u = (sum(float((d.get("world") or {}).get("utility", 0.0)) for d in alts) / len(alts)) if alts else 0.0
-        response_extras.setdefault("metrics", {})
-        if not isinstance(response_extras["metrics"], dict):
-            response_extras["metrics"] = {}
-        response_extras["metrics"]["avg_world_utility"] = round(float(avg_u), 4)
-    except (ValueError, TypeError) as e:
-        _warn(f"[world.utility] skipped: {e}")
-
-    # =========================================================
-    # Gate decision
-    # =========================================================
-    gate_stage_started_at = time.time()
-    decision_status, rejection_reason = "allow", None
-    modifications = fuji_dict.get("modifications") or []
-
-    # merge Debate risk_delta
-    try:
-        if isinstance(debate, list) and debate:
-            delta = float((debate[0] or {}).get("risk_delta", 0.0))
-            if delta:
-                new_risk = max(0.0, min(1.0, float(fuji_dict.get("risk", 0.0)) + delta))
-                fuji_dict["risk"] = new_risk
-                effective_risk = max(0.0, min(1.0, new_risk * (1.0 - RISK_EMA_WEIGHT * value_ema)))
-    except (ValueError, TypeError) as e:
-        _warn(f"[Debate→FUJI] merge failed: {e}")
-
-    if fuji_dict.get("status") == "modify":
-        modifications = fuji_dict.get("modifications") or []
-    elif fuji_dict.get("status") == "rejected":
-        decision_status = "rejected"
-        rejection_reason = "FUJI gate: " + ", ".join(fuji_dict.get("reasons", []) or ["policy_violation"])
-        chosen, alts = {}, []
-    elif effective_risk >= HIGH_RISK_THRESHOLD and float(telos) < float(telos_threshold):
-        decision_status = "rejected"
-        rejection_reason = f"FUJI gate: high risk ({effective_risk:.2f}) & low telos (<{telos_threshold:.2f})"
-        chosen, alts = {}, []
-
-    response_extras["metrics"]["stage_latency"]["gate"] = max(
-        0,
-        int((time.time() - gate_stage_started_at) * 1000),
-    )
-
-    # =========================================================
-    # Value learning: EMA update (best-effort)
-    # =========================================================
+    # =================================================================
+    # Stage 6b: Value learning EMA update
+    # =================================================================
     try:
         valstats = _load_valstats()
         alpha = float(valstats.get("alpha", 0.2))
         ema_prev = float(valstats.get("ema", 0.5))
         n_prev = int(valstats.get("n", 0))
         v_val = float(values_payload.get("total", 0.5))
-
         ema_new = (1.0 - alpha) * ema_prev + alpha * v_val
         hist = valstats.get("history", [])
         if not isinstance(hist, list):
@@ -1922,55 +1415,43 @@ async def run_decide_pipeline(
         hist = hist[-1000:]
         valstats.update({"ema": ema_new, "n": n_prev + 1, "last": v_val, "history": hist})
         _save_valstats(valstats)
-
         values_payload["ema"] = round(ema_new, 4)
         value_ema = float(ema_new)
     except (ValueError, TypeError) as e:
         _warn(f"[value-learning] skip: {e}")
 
-    # =========================================================
-    # Metrics
-    # =========================================================
+    # =================================================================
+    # Stage 6c: Metrics
+    # =================================================================
     duration_ms = max(1, int((time.time() - started_at) * 1000))
-
     mem_evi_cnt = 0
     for ev in evidence:
         if isinstance(ev, dict) and str(ev.get("source", "")).startswith("memory"):
             mem_evi_cnt += 1
-
     response_extras.setdefault("metrics", {})
     if not isinstance(response_extras["metrics"], dict):
         response_extras["metrics"] = {}
-
-    response_extras["metrics"].update(
-        {
-            "latency_ms": duration_ms,
-            "mem_evidence_count": int(mem_evi_cnt),  # backward compat (actual evidence list)
-            "memory_evidence_count": int(response_extras["metrics"].get("memory_evidence_count", 0) or 0),  # top_hits count
-            "alts_count": int(len(alts)),
-            "has_evidence": bool(evidence),
-            "value_ema": round(float(value_ema), 4),
-            "effective_risk": round(float(effective_risk), 4),
-            "telos_threshold": round(float(telos_threshold), 3),
-        }
-    )
-
+    response_extras["metrics"].update({
+        "latency_ms": duration_ms,
+        "mem_evidence_count": int(mem_evi_cnt),
+        "memory_evidence_count": int(response_extras["metrics"].get("memory_evidence_count", 0) or 0),
+        "alts_count": int(len(alts)),
+        "has_evidence": bool(evidence),
+        "value_ema": round(float(value_ema), 4),
+        "effective_risk": round(float(effective_risk), 4),
+        "telos_threshold": round(float(telos_threshold), 3),
+    })
     _ensure_full_contract(response_extras, fast_mode_default=fast_mode, context_obj=context, query_str=query)
 
-    # =========================================================
-    # Low-evidence hardening (query hint only)
-    # =========================================================
-
-    # _query_is_step1_hint, _has_step1_minimum_evidence -> pipeline_helpers.py に移動済み
-
+    # =================================================================
+    # Stage 6d: Low-evidence hardening
+    # =================================================================
     try:
         if not isinstance(evidence, list):
             evidence = list(evidence or [])
-
         step1_intent = False
         if not fast_mode:
             step1_intent = _query_is_step1_hint(query)
-
         if step1_intent and (not _has_step1_minimum_evidence(evidence)) and (evidence_core is not None):
             fn = getattr(evidence_core, "step1_minimum_evidence", None)
             if callable(fn):
@@ -1981,456 +1462,66 @@ async def run_decide_pipeline(
     except (ValueError, TypeError):
         pass
 
-    # =========================================================
-    # Evidence normalize/dedupe/cap (hardening)
-    # =========================================================
     evidence = [ev for ev in (_norm_evidence_item(x) for x in evidence) if ev]  # type: ignore[misc]
     evidence = _dedupe_evidence(evidence)
-
     EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
     if len(evidence) > EVIDENCE_MAX:
         evidence = evidence[:EVIDENCE_MAX]
 
-    # =========================================================
-    # Response assembly
-    # =========================================================
-    res: Dict[str, Any] = {
-        "ok": True,
-        "error": None,
-        "request_id": request_id,
-        "query": query,
-        "chosen": chosen,
-        "alternatives": alts,
-        "options": list(alts),
-        "evidence": evidence,
-        "critique": critique,
-        "debate": debate,
-        "telos_score": float(telos),
-        "fuji": fuji_dict,
-        "extras": response_extras,
-        "gate": {
-            "risk": float(effective_risk),
-            "telos_score": float(telos),
-            "decision_status": decision_status,
-            "reason": rejection_reason,
-            "modifications": modifications,
-        },
-        "values": values_payload,
-        "persona": load_persona(),
-        "version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
-        "decision_status": decision_status,
-        "rejection_reason": rejection_reason,
-        "memory_citations": response_extras.get("memory_citations", []),
-        "memory_used_count": response_extras.get("memory_used_count", 0),
-        "plan": plan,
-        "planner": response_extras.get("planner", {"steps": [], "raw": None, "source": "fallback"}),
-        "trust_log": raw.get("trust_log") if isinstance(raw, dict) else None,
-    }
+    # =================================================================
+    # Stage 7: Response assembly  (-> pipeline_response)
+    # =================================================================
+    ctx.chosen = chosen
+    ctx.alternatives = alts
+    ctx.critique = critique
+    ctx.debate = debate
+    ctx.telos = telos
+    ctx.fuji_dict = fuji_dict
+    ctx.evidence = evidence
+    ctx.response_extras = response_extras
+    ctx.decision_status = decision_status
+    ctx.rejection_reason = rejection_reason
+    ctx.modifications = modifications
+    ctx.effective_risk = effective_risk
+    ctx.values_payload = values_payload
+    ctx.raw = raw
 
-    # =========================================================
-    # Audit logs (best-effort)
-    # =========================================================
-    try:
-        audit_entry = {
-            "request_id": request_id,
-            "created_at": utc_now().isoformat(),
-            "context": context,
-            "query": query,
-            "chosen": chosen,
-            "telos_score": float(telos),
-            "fuji": fuji_dict if isinstance(fuji_dict, dict) else {},
-            "gate_status": (fuji_dict or {}).get("status", "n/a"),
-            "gate_risk": float((fuji_dict or {}).get("risk", 0.0)),
-            "gate_total": float(values_payload.get("total", 0.0)),
-            "plan_steps": len(plan.get("steps", [])) if isinstance(plan, dict) else 0,
-            "fast_mode": bool(fast_mode),
-            "mem_hits": int((response_extras.get("metrics") or {}).get("mem_hits", 0) or 0),
-            "web_hits": int((response_extras.get("metrics") or {}).get("web_hits", 0) or 0),
-            "critique_ok": bool((critique or {}).get("ok")) if isinstance(critique, dict) else False,
-            "critique_mode": (critique or {}).get("mode") if isinstance(critique, dict) else None,
-            "critique_reason": (critique or {}).get("reason") if isinstance(critique, dict) else None,
-        }
-        audit_entry = redact_payload(audit_entry)
-        append_trust_log(audit_entry)
-        write_shadow_decide(request_id, body, chosen, float(telos), fuji_dict)
-    except Exception as e:  # subsystem resilience: audit write must not crash decide
-        _warn(f"[audit] log write skipped: {repr(e)}")
+    res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)
+    payload = coerce_to_decide_response(res, DecideResponse=DecideResponse)
 
-    # =========================================================
-    # Coerce to DecideResponse (best-effort)
-    # =========================================================
-    try:
-        payload = DecideResponse.model_validate(res).model_dump()
-    except (ValueError, TypeError) as e:
-        _warn(f"[model] decide response coerce: {e}")
-        payload = res
+    # =================================================================
+    # Stage 8: Persist / telemetry  (-> pipeline_persist)
+    # =================================================================
+    persist_audit_log(ctx, append_trust_log_fn=append_trust_log, write_shadow_decide_fn=write_shadow_decide)
 
-    # =========================================================
-    # Persist decision into MemoryOS
-    # =========================================================
-    try:
-        store2 = _get_memory_store()
-        if store2 is not None:
-            decision_key = f"decision_{request_id}"
-            decision_value = redact_payload(
-                {
-                    "kind": "decision",
-                    "request_id": request_id,
-                    "query": query,
-                    "chosen": payload.get("chosen"),
-                    "gate": payload.get("gate"),
-                    "values": payload.get("values"),
-                    "extras": payload.get("extras"),
-                    "created_at": utc_now_iso_z(),
-                }
-            )
-            _memory_put(
-                store2,
-                user_id,
-                key=decision_key,
-                value=decision_value,
-            )
+    persist_to_memory(ctx, payload, _get_memory_store=_get_memory_store, _memory_put=_memory_put)
 
-            episode_key = f"episode_{time.time_ns()}_{request_id[:8]}"
-            episode_value = redact_payload(
-                {
-                    "kind": "episode",
-                    "request_id": request_id,
-                    "query": query,
-                    "chosen": payload.get("chosen"),
-                    "decision_status": payload.get("decision_status"),
-                    "rejection_reason": payload.get("rejection_reason"),
-                    "created_at": utc_now_iso_z(),
-                }
-            )
-            _memory_put(
-                store2,
-                user_id,
-                key=episode_key,
-                value=episode_value,
-            )
-    except (KeyError, TypeError, AttributeError) as e:
-        extras_tmp = payload.setdefault("extras", {})
-        if isinstance(extras_tmp, dict):
-            extras_tmp.setdefault("env_tools", {})
-            if isinstance(extras_tmp["env_tools"], dict):
-                extras_tmp["env_tools"]["memory_decision_save_error"] = repr(e)
+    persist_reason_and_reflection(
+        ctx, payload,
+        VAL_JSON=VAL_JSON, META_LOG=META_LOG,
+        _load_valstats=_load_valstats, _save_valstats=_save_valstats,
+    )
 
-    # =========================================================
-    # ReasonOS: reflection + meta log (best-effort)
-    # =========================================================
-    try:
-        if reason_core is not None and hasattr(reason_core, "reflect"):
-            reflection = reason_core.reflect(  # type: ignore
-                {
-                    "query": query,
-                    "chosen": payload.get("chosen", {}),
-                    "gate": payload.get("gate", {}),
-                    "values": payload.get("values", {}),
-                }
-            )
-        else:
-            reflection = {"next_value_boost": 0.0, "improvement_tips": []}
+    # FINALIZE evidence
+    finalize_evidence(payload, web_evidence=web_evidence, evidence_max=EVIDENCE_MAX)
 
-        try:
-            vs_path = Path(VAL_JSON)
-            valstats2 = _load_valstats() if vs_path.exists() else {}
-            ema2 = float(valstats2.get("ema", 0.5))
-            ema2 = max(0.0, min(1.0, ema2 + float(reflection.get("next_value_boost", 0.0) or 0.0)))
-            valstats2["ema"] = round(ema2, 4)
-            _save_valstats(valstats2)
+    persist_decision_to_disk(
+        ctx, payload, duration_ms=duration_ms,
+        LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
+        _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
+    )
 
-            Path(META_LOG).parent.mkdir(parents=True, exist_ok=True)
-            entry = {
-                "created_at": utc_now_iso_z(),
-                "request_id": request_id,
-                "next_value_boost": float(reflection.get("next_value_boost", 0.0) or 0.0),
-                "value_ema": ema2,
-                "source": "reason_core",
-                "fast_mode": bool(fast_mode),
-            }
-            with open(META_LOG, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-        except (OSError, ValueError, TypeError) as e2:
-            _warn(f"[ReasonOS] meta_log append skipped: {e2}")
+    persist_world_state(ctx, payload)
 
-        llm_stage_started_at = time.time()
-        try:
-            llm_reason = None
-            if reason_core is not None and hasattr(reason_core, "generate_reason"):
-                llm_reason = reason_core.generate_reason(  # type: ignore
-                    query=query,
-                    planner=payload.get("planner") or payload.get("plan"),
-                    values=payload.get("values"),
-                    gate=payload.get("gate"),
-                    context=context,
-                )
+    persist_dataset_record(
+        ctx, payload, duration_ms=duration_ms,
+        build_dataset_record_fn=build_dataset_record,
+        append_dataset_record_fn=append_dataset_record,
+    )
 
-            note_text = ""
-            if isinstance(llm_reason, dict):
-                note_text = llm_reason.get("text") or ""
-            elif isinstance(llm_reason, str):
-                note_text = llm_reason
-
-            if not note_text:
-                tips = reflection.get("improvement_tips") or []
-                note_text = " / ".join(str(t) for t in tips) if tips else "自動反省メモはありません。"
-
-            payload["reason"] = {
-                "note": note_text,
-                "next_value_boost": reflection.get("next_value_boost", 0.0),
-                "reflection": reflection,
-                "llm": llm_reason,
-            }
-            extras_for_llm = payload.setdefault("extras", {})
-            if isinstance(extras_for_llm, dict):
-                extras_for_llm.setdefault("metrics", {})
-                if isinstance(extras_for_llm["metrics"], dict):
-                    stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
-                    if isinstance(stage_latency, dict):
-                        stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
-        except Exception as e2:  # subsystem resilience: reason_core may raise arbitrary errors
-            _warn(f"[ReasonOS] LLM reason failed: {e2}")
-            tips = reflection.get("improvement_tips") or []
-            payload["reason"] = {
-                "note": (" / ".join(tips) if tips else "reflection only."),
-                "next_value_boost": reflection.get("next_value_boost", 0.0),
-                "reflection": reflection,
-            }
-            extras_for_llm = payload.setdefault("extras", {})
-            if isinstance(extras_for_llm, dict):
-                extras_for_llm.setdefault("metrics", {})
-                if isinstance(extras_for_llm["metrics"], dict):
-                    stage_latency = extras_for_llm["metrics"].setdefault("stage_latency", {})
-                    if isinstance(stage_latency, dict):
-                        stage_latency["llm"] = max(0, int((time.time() - llm_stage_started_at) * 1000))
-    except Exception as e:  # subsystem resilience: ReasonOS must not crash decide
-        _warn(f"[ReasonOS] final fallback failed: {e}")
-        payload["reason"] = {"note": "reflection/LLM both failed"}
-
-    # =========================================================
-    # Dataset record (best-effort)
-    # =========================================================
-    try:
-        duration_ms_ds = int((payload.get("extras") or {}).get("metrics", {}).get("latency_ms", 0) or duration_ms)
-        duration_ms_ds = max(1, duration_ms_ds)
-
-        meta_ds = {
-            "session_id": (context or {}).get("user_id") or "anon",
-            "request_id": request_id,
-            "model": os.getenv("VERITAS_MODEL_NAME", "gpt-5-thinking"),
-            "api_version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
-            "kernel_version": os.getenv("VERITAS_KERNEL_VERSION", "core-kernel 0.x"),
-            "latency_ms": duration_ms_ds,
-            "fast_mode": bool(fast_mode),
-        }
-        eval_meta = {
-            "task_type": "decision",
-            "policy_tags": ["no_harm", "privacy_ok"],
-            "rater": {"type": "ai", "id": "telos-proxy"},
-        }
-        append_dataset_record(build_dataset_record(req_payload=body, res_payload=payload, meta=meta_ds, eval_meta=eval_meta))
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[dataset] skip: {e}")
-
-    # =========================================================
-    # FINALIZE: ensure evidence survives later overwrites
-    # =========================================================
-    try:
-        payload_evidence = payload.get("evidence", None)
-        if not isinstance(payload_evidence, list):
-            try:
-                payload_evidence = list(payload_evidence or [])
-            except (KeyError, TypeError, AttributeError):
-                payload_evidence = []
-
-        if len(payload_evidence) == 0:
-            if isinstance(evidence, list) and len(evidence) > 0:
-                payload_evidence = list(evidence)
-            else:
-                payload_evidence = []
-
-        existing = set()
-        for ev in payload_evidence:
-            if not isinstance(ev, dict):
-                continue
-            existing.add((ev.get("source"), ev.get("uri"), ev.get("title"), ev.get("snippet")))
-
-        for ev in (web_evidence or []):
-            if not isinstance(ev, dict):
-                continue
-            k = (ev.get("source"), ev.get("uri"), ev.get("title"), ev.get("snippet"))
-            if k not in existing:
-                payload_evidence.append(ev)
-                existing.add(k)
-
-        payload["evidence"] = payload_evidence
-    except (KeyError, TypeError, AttributeError):
-        payload["evidence"] = payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
-
-    # FINALIZE 後: normalize/dedupe/cap
-    try:
-        payload["evidence"] = _dedupe_evidence(
-            [ev for ev in (_norm_evidence_item(x) for x in (payload.get("evidence") or [])) if ev]
-        )
-    except (KeyError, TypeError, AttributeError):
-        payload["evidence"] = []
-
-    if isinstance(payload.get("evidence"), list) and len(payload["evidence"]) > EVIDENCE_MAX:
-        payload["evidence"] = payload["evidence"][:EVIDENCE_MAX]
-
-    # =========================================================
-    # Persist (best-effort)
-    # =========================================================
-    persist_stage_started_at = time.time()
-    try:
-        Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
-        Path(DATASET_DIR).mkdir(parents=True, exist_ok=True)
-
-        metrics2 = (payload.get("extras") or {}).get("metrics") or {}
-        latency_ms2 = int(metrics2.get("latency_ms", duration_ms))
-
-        evidence_list: List[Dict[str, Any]] = []
-        if isinstance(payload.get("evidence"), list):
-            evidence_list = [ev for ev in payload["evidence"] if isinstance(ev, dict)]  # type: ignore
-
-        mem_evidence_count2 = 0
-        for ev in evidence_list:
-            src = str(ev.get("source", "")).lower()
-            if src.startswith("memory"):
-                mem_evidence_count2 += 1
-
-        meta_payload = payload.get("meta") or {}
-        if not isinstance(meta_payload, dict):
-            meta_payload = {}
-
-        meta_payload["memory_evidence_count"] = int(metrics2.get("memory_evidence_count", 0) or 0)  # top_hits
-        meta_payload["mem_evidence_count"] = int(mem_evidence_count2)  # evidence-based
-        meta_payload["mem_hits"] = int(metrics2.get("mem_hits", 0) or 0)
-        meta_payload["web_hits"] = int(metrics2.get("web_hits", 0) or 0)
-        meta_payload["fast_mode"] = bool((payload.get("extras") or {}).get("fast_mode", fast_mode))
-        payload["meta"] = meta_payload
-
-        fuji_full = payload.get("fuji") or {}
-        world_snapshot = (context or {}).get("world")
-
-        persist = redact_payload({
-            "request_id": request_id,
-            "ts": utc_now_iso_z(timespec="seconds"),
-            "query": query,
-            "chosen": payload.get("chosen"),
-            "decision_status": payload.get("decision_status") or "unknown",
-            "telos_score": float(payload.get("telos_score", 0.0)),
-            "gate_risk": float(((payload.get("gate") or {}) if isinstance(payload.get("gate"), dict) else {}).get("risk", 0.0)),
-            "fuji_status": fuji_full.get("status") if isinstance(fuji_full, dict) else None,
-            "fuji": fuji_full,
-            "latency_ms": latency_ms2,
-            "evidence": evidence_list[-5:] if evidence_list else [],
-            "memory_evidence_count": int(meta_payload.get("memory_evidence_count", 0) or 0),
-            "mem_evidence_count": int(meta_payload.get("mem_evidence_count", 0) or 0),
-            "context": context,
-            "world": world_snapshot,
-            "fast_mode": bool((payload.get("extras") or {}).get("fast_mode", fast_mode)),
-            "mem_hits": int(metrics2.get("mem_hits", 0) or 0),
-            "web_hits": int(metrics2.get("web_hits", 0) or 0),
-            "critique_ok": bool((critique or {}).get("ok")) if isinstance(critique, dict) else False,
-            "critique_mode": (critique or {}).get("mode") if isinstance(critique, dict) else None,
-            "critique_reason": (critique or {}).get("reason") if isinstance(critique, dict) else None,
-        })
-
-        stamp = utc_now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        fname = f"decide_{stamp}.json"
-        # ★ クラッシュセーフ: atomic_write_json を使用（利用可能な場合）
-        log_path = Path(LOG_DIR) / fname
-        dataset_path = Path(DATASET_DIR) / fname
-        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
-            _atomic_write_json(log_path, persist, indent=2)
-            _atomic_write_json(dataset_path, persist)
-        else:
-            log_path.write_text(json.dumps(persist, ensure_ascii=False, indent=2), encoding="utf-8")
-            dataset_path.write_text(json.dumps(persist, ensure_ascii=False), encoding="utf-8")
-    except OSError as e:
-        _warn(f"[persist] decide record skipped: {e}")
-    finally:
-        extras_for_persist = payload.setdefault("extras", {})
-        if isinstance(extras_for_persist, dict):
-            extras_for_persist.setdefault("metrics", {})
-            if isinstance(extras_for_persist["metrics"], dict):
-                stage_latency = extras_for_persist["metrics"].setdefault("stage_latency", {})
-                if isinstance(stage_latency, dict):
-                    stage_latency["persist"] = max(0, int((time.time() - persist_stage_started_at) * 1000))
-
-    # =========================================================
-    # WorldState update (best-effort)
-    # =========================================================
-    try:
-        if world_model is not None and hasattr(world_model, "update_from_decision"):
-            uid_world = (context or {}).get("user_id") or user_id or "anon"
-            uid_world = str(uid_world) if uid_world is not None else "anon"
-
-            extras_w = payload.get("extras") or {}
-            planner_obj = extras_w.get("planner") if isinstance(extras_w, dict) else None
-            latency_ms3 = (extras_w.get("metrics") or {}).get("latency_ms") if isinstance(extras_w, dict) else None
-
-            world_model.update_from_decision(  # type: ignore
-                user_id=uid_world,
-                query=payload.get("query") or query,
-                chosen=payload.get("chosen") or {},
-                gate=payload.get("gate") or {},
-                values=payload.get("values") or {},
-                planner=planner_obj if isinstance(planner_obj, dict) else None,
-                latency_ms=int(latency_ms3) if isinstance(latency_ms3, (int, float)) else None,
-            )
-            _warn(f"[WorldModel] state updated for {uid_world}")
-    except Exception as e:  # subsystem resilience: world_model.update may raise arbitrary errors
-        _warn(f"[WorldModel] update_from_decision skipped: {e}")
-
-    # AGI hint (best-effort)
-    try:
-        if world_model is not None and hasattr(world_model, "next_hint_for_veritas_agi"):
-            agi_info = world_model.next_hint_for_veritas_agi()  # type: ignore
-            extras2 = payload.setdefault("extras", {})
-            if isinstance(extras2, dict):
-                extras2["veritas_agi"] = agi_info
-    except Exception as e:  # subsystem resilience: world_model hint may raise arbitrary errors
-        _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
-
-    payload_for_replay = dict(payload)
-    payload_for_replay.pop("deterministic_replay", None)
-
-    replay_snapshot = {
-        "input_prompt": query,
-        "evidence_snapshot": (
-            payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
-        ),
-        "policy_snapshot": {
-            "min_evidence": min_ev,
-            "fast_mode": fast_mode,
-            "mock_external_apis": mock_external_apis,
-        },
-        "model_version": os.getenv("VERITAS_MODEL_NAME", "gpt-5-thinking"),
-        "temperature": body.get("temperature", 0),
-        "seed": seed,
-        "tool_calls": {
-            "memory_search": bool(query and memory_store is not None),
-            "web_search": bool(should_run_web and not mock_external_apis),
-            "web_search_mocked": bool(should_run_web and mock_external_apis),
-        },
-        "stage_outputs": {
-            "planner": response_extras.get("planner"),
-            "retrieval": retrieved,
-            "web": response_extras.get("web_search"),
-            "kernel_raw": raw,
-            "fuji": fuji_dict,
-            "gate": payload.get("gate"),
-            "values": payload.get("values"),
-            "reason": payload.get("reason"),
-        },
-        "request_body": body,
-        "final_output": payload_for_replay,
-    }
-    payload["deterministic_replay"] = replay_snapshot
-    if isinstance(payload.get("meta"), dict):
-        payload["meta"]["replay_ready"] = True
+    # =================================================================
+    # Stage 8b: Replay snapshot
+    # =================================================================
+    build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
 
     return payload
