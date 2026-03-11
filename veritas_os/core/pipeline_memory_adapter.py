@@ -163,6 +163,58 @@ def _memory_add_usage(store: Any, user_id: Any, cited_ids: List[str]) -> None:
         return None
 
 
+# =========================================================
+# メモリ検索結果をフラットなリストに展開
+# =========================================================
+
+def _flatten_memory_hits(
+    src: Any,
+    *,
+    default_kind: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    memory.search の戻り値（dict/list）をフラットな List[dict] に展開する。
+
+    対応形式:
+      - dict: ``{kind: [hit, ...], ...}`` → kind をヒットに付与して展開
+      - list: ``[hit, ...]`` → default_kind があれば kind 未設定ヒットに付与
+      - None / その他: 空リスト
+
+    kind の解決順序（dict 形式のとき）:
+      1. ヒットの既存 ``kind``
+      2. dict のキー名（例: ``"semantic"``, ``"episodic"``）
+      3. ``default_kind`` 引数
+      4. フォールバック ``"episodic"``
+
+    例外を出さない。
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        if not src:
+            return out
+        if isinstance(src, dict):
+            for kind, hits in src.items():
+                if not isinstance(hits, list):
+                    continue
+                for h in hits:
+                    if not isinstance(h, dict):
+                        continue
+                    h2 = dict(h)
+                    h2.setdefault("kind", kind or default_kind or "episodic")
+                    out.append(h2)
+        elif isinstance(src, list):
+            for h in src:
+                if not isinstance(h, dict):
+                    continue
+                h2 = dict(h)
+                if default_kind and not h2.get("kind"):
+                    h2["kind"] = default_kind
+                out.append(h2)
+    except Exception:
+        logger.debug("[_flatten_memory_hits] flatten failed", exc_info=True)
+    return out
+
+
 __all__ = [
     "_get_memory_store",
     "_call_with_accepted_kwargs",
@@ -170,4 +222,5 @@ __all__ = [
     "_memory_search",
     "_memory_put",
     "_memory_add_usage",
+    "_flatten_memory_hits",
 ]

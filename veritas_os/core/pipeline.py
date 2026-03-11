@@ -62,6 +62,7 @@ from .pipeline_helpers import (
     _summarize_last_output,
     _query_is_step1_hint,
     _has_step1_minimum_evidence,
+    _apply_value_boost,
 )
 from .pipeline_critique import (
     _default_findings,
@@ -86,6 +87,7 @@ from .pipeline_memory_adapter import (
     _memory_search,
     _memory_put,
     _memory_add_usage,
+    _flatten_memory_hits,
 )
 from .pipeline_web_adapter import (
     _normalize_web_payload,
@@ -146,17 +148,12 @@ BASE_TELOS_THRESHOLD = 0.55        # 基本テロススコア閾値
 # =========================================================
 
 def _to_bool(v: Any) -> bool:
-    """Convert value to bool (for env vars, config values, etc.)"""
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, float)):
-        return v != 0
-    if isinstance(v, str):
-        s = v.strip().lower()
-        if s in ("0", "false", "no", "n", "off", ""):
-            return False
-        return s in ("1", "true", "yes", "y", "on")
-    return False
+    """Convert value to bool (for env vars, config values, etc.).
+
+    Delegates to ``_to_bool_local`` from pipeline_helpers to eliminate
+    duplication while keeping the public name for backward compatibility.
+    """
+    return _to_bool_local(v)
 
 
 def _warn(msg: str) -> None:
@@ -1047,31 +1044,8 @@ async def run_decide_pipeline(
                     doc_hits_raw = None
 
             flat_hits: List[Dict[str, Any]] = []
-
-            def _append_hits(src: Any, default_kind: Optional[str] = None) -> None:
-                if not src:
-                    return
-                if isinstance(src, dict):
-                    for kind, hits in src.items():
-                        if not isinstance(hits, list):
-                            continue
-                        for h in hits:
-                            if not isinstance(h, dict):
-                                continue
-                            h2 = dict(h)
-                            h2.setdefault("kind", kind or default_kind or "episodic")
-                            flat_hits.append(h2)
-                elif isinstance(src, list):
-                    for h in src:
-                        if not isinstance(h, dict):
-                            continue
-                        h2 = dict(h)
-                        if default_kind and not h2.get("kind"):
-                            h2["kind"] = default_kind
-                        flat_hits.append(h2)
-
-            _append_hits(mem_hits_raw)
-            _append_hits(doc_hits_raw, default_kind="doc")
+            flat_hits.extend(_flatten_memory_hits(mem_hits_raw))
+            flat_hits.extend(_flatten_memory_hits(doc_hits_raw, default_kind="doc"))
 
             seen_ids: set[str] = set()
             deduped: List[Dict[str, Any]] = []
@@ -1855,22 +1829,8 @@ async def run_decide_pipeline(
     boost = (value_ema - 0.5) * 2.0
     boost = max(-1.0, min(1.0, boost)) * BOOST_MAX
 
-    def _apply_boost(arr: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        out: List[Dict[str, Any]] = []
-        for d in arr:
-            if not isinstance(d, dict):
-                continue
-            try:
-                s = float(d.get("score", 1.0))
-                d["score_raw"] = float(d.get("score_raw", s))
-                d["score"] = max(0.0, s * (1.0 + boost))
-            except (ValueError, TypeError):
-                pass
-            out.append(d)
-        return out
-
-    input_alts = _apply_boost(input_alts)
-    alts = _apply_boost(alts)
+    input_alts = _apply_value_boost(input_alts, boost)
+    alts = _apply_value_boost(alts, boost)
 
     RISK_EMA_WEIGHT = float(os.getenv("VERITAS_RISK_EMA_WEIGHT", "0.15"))
     try:
