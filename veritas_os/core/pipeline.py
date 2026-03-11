@@ -187,6 +187,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
 
+# Unicode categories unsafe for use in ID strings (control, format, separators)
+_UNSAFE_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
+
 
 # =========================================================
 # Safe imports (core modules)
@@ -424,13 +427,10 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
         _id_str = str(_id)
         # ASCII control chars + DEL
         _id_str = re.sub(r"[\x00-\x1f\x7f]", "", _id_str)
-        # Unicode categories: Cc (control), Cf (format/bidi overrides),
-        # Cs (surrogates), Co (private use), Zl (line separator),
-        # Zp (paragraph separator) – none belong in an ID string.
-        _UNSAFE_CATEGORIES = {"Cc", "Cf", "Cs", "Co", "Zl", "Zp"}
+        # Filter out unsafe Unicode categories (bidi overrides, surrogates, etc.)
         _id_str = "".join(
             ch for ch in _id_str
-            if unicodedata.category(ch) not in _UNSAFE_CATEGORIES
+            if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
         )
         if len(_id_str) > 256:
             _id_str = _id_str[:256]
@@ -703,6 +703,15 @@ async def call_core_decide(
             logger.debug("call_core_decide: signature inspection failed for %r", fn)
             return set()
 
+    def _reraise_if_internal() -> None:
+        """Re-raise the current TypeError if it originated inside core_fn
+        (traceback depth > 1), rather than from a signature mismatch."""
+        import sys as _sys
+        _tb = _sys.exc_info()[2]
+        if _tb is not None and _tb.tb_next is not None:
+            raise
+        del _tb
+
     p = _params(core_fn)
 
     # ---- Try A: ctx/options style ----
@@ -711,13 +720,7 @@ async def call_core_decide(
             res = core_fn(ctx=ctx, options=opts, min_evidence=min_evidence, query=query)
             return await res if _is_awaitable(res) else res
     except TypeError:
-        # Re-raise if TypeError originated inside core_fn (tb depth > 1),
-        # only suppress genuine signature-mismatch errors.
-        import sys as _sys
-        _tb = _sys.exc_info()[2]
-        if _tb is not None and _tb.tb_next is not None:
-            raise
-        del _tb
+        _reraise_if_internal()
 
     # ---- Try B: context/query/alternatives style ----
     try:
@@ -749,11 +752,7 @@ async def call_core_decide(
         res = core_fn(**kw)
         return await res if _is_awaitable(res) else res
     except TypeError:
-        import sys as _sys
-        _tb = _sys.exc_info()[2]
-        if _tb is not None and _tb.tb_next is not None:
-            raise
-        del _tb
+        _reraise_if_internal()
 
     # ---- Try C: positional (last resort) ----
     try:
