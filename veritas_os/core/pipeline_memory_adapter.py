@@ -180,6 +180,12 @@ def _flatten_memory_hits(
       - list: ``[hit, ...]`` → default_kind があれば kind 未設定ヒットに付与
       - None / その他: 空リスト
 
+    kind の解決順序（dict 形式のとき）:
+      1. ヒットの既存 ``kind``
+      2. dict のキー名（例: ``"semantic"``, ``"episodic"``）
+      3. ``default_kind`` 引数
+      4. フォールバック ``"episodic"``
+
     例外を出さない。
     """
     out: List[Dict[str, Any]] = []

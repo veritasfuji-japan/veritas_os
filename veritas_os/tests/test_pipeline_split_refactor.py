@@ -187,3 +187,17 @@ class TestApplyValueBoost:
         alts = [{"title": "A", "score": "not_a_number"}]
         result = _apply_value_boost(alts, 0.1)
         assert len(result) == 1  # item still included
+        assert result[0]["score"] == "not_a_number"  # setdefault keeps existing
+        assert result[0]["score_raw"] == 1.0  # safe default set
+
+    def test_missing_score_after_failure_gets_default(self):
+        """When score key is absent and conversion fails, safe defaults are applied."""
+        class BadScore:
+            """Object whose float() raises."""
+            def __float__(self):
+                raise ValueError("boom")
+        alts = [{"title": "A", "score": BadScore()}]
+        result = _apply_value_boost(alts, 0.1)
+        assert len(result) == 1
+        # setdefault won't override existing "score" key even though it's BadScore
+        assert result[0].get("score_raw") == 1.0

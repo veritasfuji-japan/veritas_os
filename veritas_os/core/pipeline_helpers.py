@@ -229,7 +229,8 @@ def _apply_value_boost(
         boost: 適用する乗数（-1.0 ~ 1.0 程度）
 
     Returns:
-        dict のみを含むリスト（非 dict は除外）
+        dict のみを含むリスト（非 dict は除外）。
+        score 変換に失敗したアイテムは score=1.0 をセットして含める。
     """
     out: List[Dict[str, Any]] = []
     for d in alts:
@@ -241,6 +242,8 @@ def _apply_value_boost(
             d["score"] = max(0.0, s * (1.0 + boost))
         except (ValueError, TypeError):
             logger.debug("[_apply_value_boost] score conversion failed", exc_info=True)
+            d.setdefault("score", 1.0)
+            d.setdefault("score_raw", 1.0)
         out.append(d)
     return out
 
