@@ -188,7 +188,7 @@ export interface TrustLog {
   critics: string[];
   checks: string[];
   approver: string;
-  fuji?: Record<string, unknown> | null;
+  fuji?: FujiDecision | Record<string, unknown> | null;
   /** Hash-chain: SHA-256 of this entry, computed by trust_log.py append_trust_log. */
   sha256?: string | null;
   sha256_prev?: string | null;
@@ -290,11 +290,11 @@ export interface DecideResponse extends DecideResponseMeta {
   extras: Record<string, unknown>;
   reason: unknown;
   rsi_note: Record<string, unknown> | null;
-  evo: Record<string, unknown> | null;
+  evo: EvoTips | Record<string, unknown> | null;
   meta: Record<string, unknown>;
   plan: Record<string, unknown> | null;
   planner: Record<string, unknown> | null;
-  persona: Record<string, unknown>;
+  persona: PersonaState | Record<string, unknown>;
   memory_citations: unknown[];
   memory_used_count: number;
   trust_log: TrustLog | Record<string, unknown> | null;

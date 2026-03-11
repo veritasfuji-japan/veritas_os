@@ -1322,4 +1322,117 @@ describe("types", () => {
     const resumeReqMinimal: SystemResumeRequest = { operator: "admin2" };
     expect(resumeReqMinimal.operator).toBe("admin2");
   });
+
+  it("DecideResponse.persona accepts typed PersonaState (OpenAPI $ref alignment)", () => {
+    const persona: PersonaState = {
+      name: "VERITAS",
+      style: "direct, strategic, honest",
+      tone: "warm",
+      principles: ["honesty", "dignity", "growth"],
+      last_updated: "2026-03-10T00:00:00Z",
+    };
+    const response: DecideResponse = {
+      ok: true,
+      error: null,
+      request_id: "req_typed_persona",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: { risk: 0.1, telos_score: 0.8, decision_status: "allow", modifications: [] },
+      evidence: [],
+      critique: [],
+      debate: [],
+      extras: {},
+      reason: null,
+      rsi_note: null,
+      evo: null,
+      meta: {},
+      plan: null,
+      planner: null,
+      persona,
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "disclosure",
+      regulation_notice: "notice",
+    };
+
+    expect(isDecideResponse(response)).toBe(true);
+    expect(isPersonaState(response.persona)).toBe(true);
+  });
+
+  it("DecideResponse.evo accepts typed EvoTips (OpenAPI $ref alignment)", () => {
+    const evo: EvoTips = {
+      insights: { key: "value" },
+      actions: ["action1"],
+      next_prompts: ["prompt1"],
+      notes: ["note1"],
+    };
+    const response: DecideResponse = {
+      ok: true,
+      error: null,
+      request_id: "req_typed_evo",
+      version: "veritas-api 1.x",
+      chosen: {},
+      alternatives: [],
+      options: [],
+      decision_status: "allow",
+      rejection_reason: null,
+      values: null,
+      telos_score: 0.8,
+      fuji: {},
+      gate: { risk: 0.1, telos_score: 0.8, decision_status: "allow", modifications: [] },
+      evidence: [],
+      critique: [],
+      debate: [],
+      extras: {},
+      reason: null,
+      rsi_note: null,
+      evo,
+      meta: {},
+      plan: null,
+      planner: null,
+      persona: {},
+      memory_citations: [],
+      memory_used_count: 0,
+      trust_log: null,
+      ai_disclosure: "disclosure",
+      regulation_notice: "notice",
+    };
+
+    expect(isDecideResponse(response)).toBe(true);
+    expect(isEvoTips(response.evo)).toBe(true);
+  });
+
+  it("TrustLog.fuji accepts typed FujiDecision (OpenAPI $ref alignment)", () => {
+    const fuji: FujiDecision = {
+      status: "allow",
+      reasons: ["safe content"],
+      violations: [],
+      rule_hit: null,
+      severity: null,
+      remediation_hint: null,
+      risky_text_fragment: null,
+    };
+    const log: TrustLog = {
+      request_id: "req-typed-fuji",
+      created_at: "2026-03-10T00:00:00Z",
+      sources: ["memory"],
+      critics: [],
+      checks: ["fuji"],
+      approver: "system",
+      fuji,
+      sha256: "abc123",
+      sha256_prev: null,
+    };
+
+    expect(log.fuji).toBeDefined();
+    expect(isFujiDecision(log.fuji)).toBe(true);
+  });
 });
