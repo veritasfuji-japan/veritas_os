@@ -402,7 +402,6 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
         d["id"] = uuid4().hex
     else:
         _id_str = str(_id)
-        _id_str = _id_str.replace("\x00", "")
         _id_str = re.sub(r"[\x00-\x1f\x7f]", "", _id_str)
         if len(_id_str) > 256:
             _id_str = _id_str[:256]
@@ -710,7 +709,7 @@ async def call_core_decide(
         try:
             return set(inspect.signature(fn).parameters.keys())
         except Exception:  # subsystem resilience: intentionally broad
-            logger.debug("call_core_decide._params: signature inspection failed for %r", fn)
+            logger.debug("call_core_decide: signature inspection failed for %r", fn)
             return set()
 
     p = _params(core_fn)
