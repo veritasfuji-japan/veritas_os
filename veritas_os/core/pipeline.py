@@ -46,7 +46,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -405,7 +405,6 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
     return d
 
 
-
 def _clip01(x: float) -> float:
     """_clip01_base のラッパー（後方互換性のため維持）"""
     return _clip01_base(x)
@@ -445,6 +444,7 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
+EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
 
 # ★ Replay functions moved to pipeline_replay.py.
 # _safe_filename_id, _sanitize_for_diff, _build_replay_diff,
@@ -526,7 +526,7 @@ async def replay_decision(
         else:
             report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         report["report_path"] = str(report_path)
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, OSError) as e:
         report.setdefault("diff", {})
         report["diff"]["report_save_error"] = repr(e)
 
@@ -677,7 +677,7 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 async def call_core_decide(
-    core_fn,
+    core_fn: Callable,
     context: Dict[str, Any] | None,
     query: str,
     alternatives: List[Dict[str, Any]] | None,
@@ -747,10 +747,15 @@ async def call_core_decide(
     except TypeError:
         pass
 
-    # ---- Try C: positional ----
-    res = core_fn(ctx, query, opts, min_evidence)
-    return await res if _is_awaitable(res) else res
-
+    # ---- Try C: positional (last resort) ----
+    try:
+        res = core_fn(ctx, query, opts, min_evidence)
+        return await res if _is_awaitable(res) else res
+    except TypeError as e:
+        raise TypeError(
+            f"call_core_decide: all calling conventions failed for {core_fn!r}. "
+            f"Last error: {e}"
+        ) from e
 
 
 # =========================================================
@@ -998,7 +1003,6 @@ async def run_decide_pipeline(
     )
 
     # FINALIZE evidence
-    EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
     finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
 
     duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
