@@ -107,10 +107,14 @@ async def replay_decision(
     REPLAY_REPORT_DIR: Any,
     _HAS_ATOMIC_IO: bool = False,
     _atomic_write_json: Any = None,
+    _load_decision_fn: Any = None,
 ) -> Dict[str, Any]:
     """Replay a persisted decision deterministically and generate an audit diff report."""
     started_at = time.time()
-    snapshot = _load_persisted_decision(decision_id, LOG_DIR=LOG_DIR)
+    if _load_decision_fn is not None:
+        snapshot = _load_decision_fn(decision_id)
+    else:
+        snapshot = _load_persisted_decision(decision_id, LOG_DIR=LOG_DIR)
     if snapshot is None:
         return {
             "match": False,
@@ -168,7 +172,7 @@ async def replay_decision(
                 json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
             )
         report["report_path"] = str(report_path)
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, OSError) as e:
         report.setdefault("diff", {})
         report["diff"]["report_save_error"] = repr(e)
 

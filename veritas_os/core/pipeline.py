@@ -35,16 +35,12 @@ Payload contracts restored (tests / server expectations):
 - decision saved into MemoryOS with key prefix "decision_"
 """
 
-import asyncio
 import inspect
 import json
 import logging
 import os
-import random  # nosec B311 - deterministic test seeding only
 import re
-import secrets
 import time
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
@@ -59,7 +55,7 @@ from .utils import (
     utc_now,
     utc_now_iso_z,
 )
-from . import self_healing
+from . import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
 
 # ---- pipeline サブモジュール（分割済み） ----
 from .pipeline_helpers import (
@@ -487,76 +483,24 @@ async def replay_decision(
 ) -> Dict[str, Any]:
     """Replay a persisted decision deterministically and generate an audit diff report.
 
-    This wrapper keeps backward-compat: tests can monkeypatch
-    ``pipeline._load_persisted_decision``, ``pipeline.run_decide_pipeline``,
-    etc. and the changes are respected.
+    Delegates to ``pipeline_replay.replay_decision`` while injecting
+    module-level dependencies.  This wrapper keeps backward-compat:
+    tests can monkeypatch ``pipeline._load_persisted_decision``,
+    ``pipeline.run_decide_pipeline``, ``pipeline.DecideRequest``,
+    etc. and the changes are respected because the references are
+    captured at call time, not import time.
     """
-    started_at = time.time()
-    snapshot = _load_persisted_decision(decision_id)
-    if snapshot is None:
-        return {
-            "match": False,
-            "diff": {"error": "decision_not_found", "decision_id": decision_id},
-            "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
-        }
-
-    replay_meta = snapshot.get("deterministic_replay") or {}
-    req_body = replay_meta.get("request_body") or {}
-    if not isinstance(req_body, dict):
-        req_body = {}
-
-    req_body.setdefault("query", snapshot.get("query") or "")
-    ctx = req_body.setdefault("context", {})
-    if not isinstance(ctx, dict):
-        ctx = {}
-        req_body["context"] = ctx
-
-    req_body["request_id"] = str(snapshot.get("request_id") or decision_id)
-    req_body["seed"] = replay_meta.get("seed", req_body.get("seed", 0))
-    req_body["temperature"] = replay_meta.get(
-        "temperature", req_body.get("temperature", 0)
+    return await _replay_decision_impl(
+        decision_id,
+        mock_external_apis=mock_external_apis,
+        run_decide_pipeline_fn=run_decide_pipeline,
+        DecideRequest=DecideRequest,
+        LOG_DIR=LOG_DIR,
+        REPLAY_REPORT_DIR=REPLAY_REPORT_DIR,
+        _HAS_ATOMIC_IO=_HAS_ATOMIC_IO,
+        _atomic_write_json=_atomic_write_json,
+        _load_decision_fn=_load_persisted_decision,
     )
-    ctx["_replay_mode"] = True
-    ctx["_mock_external_apis"] = bool(mock_external_apis)
-
-    if hasattr(DecideRequest, "model_validate"):
-        replay_req = DecideRequest.model_validate(req_body)
-    else:
-        replay_req = req_body
-
-    replay_output = await run_decide_pipeline(replay_req, _ReplayRequest())
-    original_output = replay_meta.get("final_output") or {}
-    if not isinstance(original_output, dict):
-        original_output = {}
-    diff = _build_replay_diff(original_output, replay_output)
-    match = not bool(diff.get("changed"))
-
-    report = {
-        "decision_id": str(snapshot.get("request_id") or decision_id),
-        "match": match,
-        "diff": diff,
-        "replay_time_ms": max(1, int((time.time() - started_at) * 1000)),
-        "created_at": utc_now_iso_z(),
-    }
-
-    try:
-        REPLAY_REPORT_DIR.mkdir(parents=True, exist_ok=True)
-        safe_id = _safe_filename_id(report["decision_id"])
-        report_path = REPLAY_REPORT_DIR / f"replay_{safe_id}_{int(time.time() * 1000)}.json"
-        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
-            _atomic_write_json(report_path, report, indent=2)
-        else:
-            report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-        report["report_path"] = str(report_path)
-    except (ValueError, TypeError, OSError) as e:
-        report.setdefault("diff", {})
-        report["diff"]["report_save_error"] = repr(e)
-
-    return {
-        "match": report["match"],
-        "diff": report["diff"],
-        "replay_time_ms": report["replay_time_ms"],
-    }
 
 
 # =========================================================
