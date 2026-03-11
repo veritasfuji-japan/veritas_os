@@ -200,11 +200,19 @@ describe("GovernanceControlPage", () => {
   });
 
   it("shows validation error for malformed policy responses", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ ok: true, policy: { updated_by: 123 } }),
-    } as Response);
+    vi.spyOn(global, "fetch")
+      // First call: EUAIActGovernanceDashboard compliance/config on mount
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ config: { eu_ai_act_mode: false, safety_threshold: 0.8 } }),
+      } as Response)
+      // Second call: governance/policy triggered by button click
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, policy: { updated_by: 123 } }),
+      } as Response);
 
     render(<GovernanceControlPage />);
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
