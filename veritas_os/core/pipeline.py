@@ -41,6 +41,7 @@ import logging
 import os
 import re
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
@@ -185,6 +186,9 @@ except (ImportError, ModuleNotFoundError):  # tests may import pipeline without 
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
+
+# Unicode categories unsafe for use in ID strings (control, format, separators)
+_UNSAFE_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
 
 
 # =========================================================
@@ -340,8 +344,17 @@ def _to_dict(o: Any) -> Dict[str, Any]:
             logger.debug("_to_dict: dict() failed for %r", type(o).__name__, exc_info=True)
     try:
         if hasattr(o, "__dict__"):
-            return dict(o.__dict__)
-    except (TypeError, ValueError):
+            raw = o.__dict__
+            if isinstance(raw, dict):
+                # Filter out values that reference the original object to
+                # prevent circular references from breaking downstream
+                # JSON serialization.
+                return {
+                    k: v for k, v in raw.items()
+                    if v is not o
+                }
+            # __dict__ returned a non-dict (e.g. int) – fall through
+    except (TypeError, ValueError, AttributeError):
         logger.debug("_to_dict: __dict__ fallback failed for %r", type(o).__name__, exc_info=True)
     return {}
 
@@ -405,13 +418,20 @@ def _norm_alt(o: Any) -> Dict[str, Any]:
     d["score_raw"] = _to_float_or(d.get("score_raw", d["score"]), d["score"])
 
     # ★ id は「あるなら保持」、None/空/空白だけ新規発行
-    # ★ 制御文字・null バイトを除去し、長さを制限（downstream 安全性）
+    # ★ 制御文字・null バイト・Unicode制御文字（bidiオーバーライド等）を除去し、
+    #   長さを制限（downstream 安全性）
     _id = d.get("id")
     if _id is None or (isinstance(_id, str) and _id.strip() == ""):
         d["id"] = uuid4().hex
     else:
         _id_str = str(_id)
+        # ASCII control chars + DEL
         _id_str = re.sub(r"[\x00-\x1f\x7f]", "", _id_str)
+        # Filter out unsafe Unicode categories (bidi overrides, surrogates, etc.)
+        _id_str = "".join(
+            ch for ch in _id_str
+            if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
+        )
         if len(_id_str) > 256:
             _id_str = _id_str[:256]
         d["id"] = _id_str if _id_str.strip() else uuid4().hex
@@ -459,7 +479,11 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
 _EVIDENCE_MAX_UPPER = 10000  # Upper bound for EVIDENCE_MAX to prevent unreasonable memory usage
-EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
+try:
+    EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
+except (ValueError, TypeError):
+    logger.warning("VERITAS_EVIDENCE_MAX=%r is not a valid integer, using default 50", os.getenv("VERITAS_EVIDENCE_MAX"))
+    EVIDENCE_MAX = 50
 if not (1 <= EVIDENCE_MAX <= _EVIDENCE_MAX_UPPER):
     logger.warning("VERITAS_EVIDENCE_MAX=%d out of bounds [1,%d], using default 50", EVIDENCE_MAX, _EVIDENCE_MAX_UPPER)
     EVIDENCE_MAX = 50
@@ -640,7 +664,10 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     # Prefer kernel helper if present
     try:
         if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
-            return veritas_core._dedupe_alts(alts)  # type: ignore
+            result = veritas_core._dedupe_alts(alts)  # type: ignore
+            if isinstance(result, list):
+                return result
+            logger.debug("_dedupe_alts: kernel helper returned %s, expected list", type(result).__name__)
     except Exception:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
         logger.debug("_dedupe_alts: kernel helper failed, using fallback", exc_info=True)
     return _dedupe_alts_fallback(alts)
@@ -676,6 +703,15 @@ async def call_core_decide(
             logger.debug("call_core_decide: signature inspection failed for %r", fn)
             return set()
 
+    def _reraise_if_internal() -> None:
+        """Re-raise the current TypeError if it originated inside core_fn
+        (traceback depth > 1), rather than from a signature mismatch."""
+        import sys as _sys
+        _tb = _sys.exc_info()[2]
+        if _tb is not None and _tb.tb_next is not None:
+            raise
+        del _tb
+
     p = _params(core_fn)
 
     # ---- Try A: ctx/options style ----
@@ -684,7 +720,7 @@ async def call_core_decide(
             res = core_fn(ctx=ctx, options=opts, min_evidence=min_evidence, query=query)
             return await res if _is_awaitable(res) else res
     except TypeError:
-        pass
+        _reraise_if_internal()
 
     # ---- Try B: context/query/alternatives style ----
     try:
@@ -716,7 +752,7 @@ async def call_core_decide(
         res = core_fn(**kw)
         return await res if _is_awaitable(res) else res
     except TypeError:
-        pass
+        _reraise_if_internal()
 
     # ---- Try C: positional (last resort) ----
     try:
