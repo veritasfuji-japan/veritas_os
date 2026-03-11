@@ -46,7 +46,7 @@ import secrets
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -326,14 +326,20 @@ def _to_dict(o: Any) -> Dict[str, Any]:
     if isinstance(o, dict):
         return o
     if hasattr(o, "model_dump"):
-        return o.model_dump(exclude_none=True)  # type: ignore
-    if hasattr(o, "dict"):
-        return o.dict()  # type: ignore
-    if hasattr(o, "__dict__"):
         try:
+            return o.model_dump(exclude_none=True)  # type: ignore
+        except (TypeError, ValueError, RuntimeError):
+            logger.debug("_to_dict: model_dump() failed for %r", type(o).__name__, exc_info=True)
+    if hasattr(o, "dict"):
+        try:
+            return o.dict()  # type: ignore
+        except (TypeError, ValueError, RuntimeError):
+            logger.debug("_to_dict: dict() failed for %r", type(o).__name__, exc_info=True)
+    try:
+        if hasattr(o, "__dict__"):
             return dict(o.__dict__)
-        except (TypeError, ValueError):
-            return {}
+    except (TypeError, ValueError):
+        logger.debug("_to_dict: __dict__ fallback failed for %r", type(o).__name__, exc_info=True)
     return {}
 
 
@@ -449,7 +455,11 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
 
 LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
+_EVIDENCE_MAX_UPPER = 10000  # Upper bound for EVIDENCE_MAX to prevent unreasonable memory usage
 EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
+if not (1 <= EVIDENCE_MAX <= _EVIDENCE_MAX_UPPER):
+    logger.warning("VERITAS_EVIDENCE_MAX=%d out of bounds [1,%d], using default 50", EVIDENCE_MAX, _EVIDENCE_MAX_UPPER)
+    EVIDENCE_MAX = 50
 
 # ★ Replay functions moved to pipeline_replay.py.
 # _safe_filename_id, _sanitize_for_diff, _build_replay_diff,
@@ -653,13 +663,16 @@ def _save_valstats(d: Dict[str, Any]) -> None:
             with open(p, "w", encoding="utf-8") as f:
                 json.dump(d, f, ensure_ascii=False, indent=2)
                 f.flush()
-                os.fsync(f.fileno())
+                try:
+                    os.fsync(f.fileno())
+                except OSError:
+                    pass
     except OSError as e:
         logger.warning("_save_valstats failed: %s", e)
 
 
 def _dedupe_alts_fallback(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen: set[Tuple[str, str]] = set()
+    seen: Set[Tuple[str, str]] = set()
     out: List[Dict[str, Any]] = []
     for a in alts or []:
         if not isinstance(a, dict):
@@ -684,10 +697,10 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 async def call_core_decide(
     core_fn: Callable,
-    context: Dict[str, Any] | None,
+    context: Optional[Dict[str, Any]],
     query: str,
-    alternatives: List[Dict[str, Any]] | None,
-    min_evidence: int | None = None,
+    alternatives: Optional[List[Dict[str, Any]]],
+    min_evidence: Optional[int] = None,
 ):
     """
     core_fn のシグネチャ差（kernel.decide / veritas_core.decide の揺れ）を吸収するラッパ。
@@ -705,7 +718,7 @@ async def call_core_decide(
     def _is_awaitable(x: Any) -> bool:
         return hasattr(x, "__await__")
 
-    def _params(fn) -> set[str]:
+    def _params(fn) -> Set[str]:
         try:
             return set(inspect.signature(fn).parameters.keys())
         except Exception:  # subsystem resilience: intentionally broad
