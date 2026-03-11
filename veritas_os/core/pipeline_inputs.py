@@ -210,7 +210,9 @@ def normalize_pipeline_inputs(
         seed = int(seed_raw) if seed_raw is not None else 0
     except (ValueError, TypeError):
         seed = 0
-    random.seed(seed)
+    # Use a per-request Random instance to avoid mutating global random state
+    # which would affect concurrent requests sharing the same process.
+    _rng = random.Random(seed)  # noqa: F841 – stored in ctx for downstream use
 
     try:
         min_ev = int(body.get("min_evidence") or 1)

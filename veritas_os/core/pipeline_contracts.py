@@ -158,14 +158,31 @@ def _ensure_metrics_contract(extras: Dict[str, Any]) -> None:
 # extras の深いマージ
 # =========================================================
 
-def _deep_merge_dict(dst: Dict[str, Any], src: Dict[str, Any]) -> Dict[str, Any]:
-    """dict を再帰的に安全マージする（例外を出さない）。"""
+_DEEP_MERGE_MAX_DEPTH = 20
+
+
+def _deep_merge_dict(
+    dst: Dict[str, Any],
+    src: Dict[str, Any],
+    *,
+    _depth: int = 0,
+) -> Dict[str, Any]:
+    """dict を再帰的に安全マージする（例外を出さない）。
+
+    *_depth* guards against pathologically nested dicts causing a
+    ``RecursionError``.  Beyond ``_DEEP_MERGE_MAX_DEPTH`` levels the
+    source value overwrites the destination without further recursion.
+    """
     try:
         if not isinstance(dst, dict) or not isinstance(src, dict):
             return dst
         for k, v in src.items():
-            if isinstance(v, dict) and isinstance(dst.get(k), dict):
-                _deep_merge_dict(dst[k], v)  # type: ignore[index]
+            if (
+                _depth < _DEEP_MERGE_MAX_DEPTH
+                and isinstance(v, dict)
+                and isinstance(dst.get(k), dict)
+            ):
+                _deep_merge_dict(dst[k], v, _depth=_depth + 1)  # type: ignore[index]
             else:
                 dst[k] = v
         return dst

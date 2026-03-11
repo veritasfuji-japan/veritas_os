@@ -60,6 +60,7 @@ async def stage_core_execute(
     healing_budget = self_healing.HealingBudget()
     prev_healing_input: Optional[Dict[str, Any]] = None
 
+    core_context: Dict[str, Any] = {}
     if core_decide is None:
         ctx.response_extras.setdefault("env_tools", {})
         if isinstance(ctx.response_extras["env_tools"], dict):
@@ -166,7 +167,7 @@ async def stage_core_execute(
                 input_signature=input_signature,
             )
 
-            current_context = dict(core_context)  # type: ignore[possibly-undefined]
+            current_context = dict(core_context)
             current_context["healing"] = {
                 "attempt": attempt_no,
                 "action": decision.action.value,

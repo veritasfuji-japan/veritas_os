@@ -41,7 +41,11 @@ def _get_memory_store(mem: Any = None) -> Optional[Any]:
     m = mem if mem is not None else _mem_module
     if m is None:
         return None
-    if hasattr(m, "search") or hasattr(m, "put") or hasattr(m, "get"):
+    if (
+        callable(getattr(m, "search", None))
+        or callable(getattr(m, "put", None))
+        or callable(getattr(m, "get", None))
+    ):
         return m
     store = getattr(m, "MEM", None)
     if store is not None:
