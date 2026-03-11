@@ -211,3 +211,142 @@ class TestPipelineInputsNoCircularImport:
             _get_request_params=None,
         )
         assert ctx.fast_mode is True
+
+
+# =========================================================
+# Fix 5: pipeline_replay OSError handling
+# =========================================================
+
+
+class TestReplayOSErrorHandling:
+    """pipeline_replay.replay_decision should catch OSError on report writes."""
+
+    @pytest.mark.asyncio
+    async def test_replay_catches_oserror_on_report_write(self) -> None:
+        """When report write raises OSError, replay should not crash."""
+        from veritas_os.core.pipeline_replay import replay_decision
+
+        snapshot = {
+            "request_id": "oserr-1",
+            "query": "test",
+            "deterministic_replay": {
+                "seed": 0,
+                "temperature": 0,
+                "request_body": {"query": "test", "context": {}},
+                "final_output": {"decision": "ok"},
+            },
+        }
+
+        async def _fake_run(req: Any, request: Any) -> Dict[str, Any]:
+            return {"decision": "ok"}
+
+        class _Bare:
+            pass
+
+        def _raise_oserror(*args: Any, **kwargs: Any) -> None:
+            raise OSError("disk full")
+
+        result = await replay_decision(
+            "oserr-1",
+            run_decide_pipeline_fn=_fake_run,
+            DecideRequest=_Bare,
+            LOG_DIR="/nonexistent",
+            REPLAY_REPORT_DIR="/tmp/test_replay_oserr",
+            _HAS_ATOMIC_IO=True,
+            _atomic_write_json=_raise_oserror,
+            _load_decision_fn=lambda _: snapshot,
+        )
+
+        assert result["match"] is True
+        assert result["replay_time_ms"] >= 1
+
+
+# =========================================================
+# Fix 6: replay_decision delegation
+# =========================================================
+
+
+class TestReplayDelegation:
+    """pipeline.replay_decision should delegate to pipeline_replay.replay_decision."""
+
+    @pytest.mark.asyncio
+    async def test_replay_delegation_uses_injected_load_fn(self, monkeypatch: Any) -> None:
+        """pipeline.replay_decision should use pipeline._load_persisted_decision via injection."""
+        from veritas_os.core import pipeline
+
+        snapshot = {
+            "request_id": "deleg-1",
+            "query": "delegate test",
+            "deterministic_replay": {
+                "seed": 0,
+                "temperature": 0,
+                "request_body": {"query": "delegate test", "context": {}},
+                "final_output": {"decision": "allow"},
+            },
+        }
+
+        load_calls: list[str] = []
+
+        def _tracking_load(did: str) -> Any:
+            load_calls.append(did)
+            return snapshot
+
+        async def _fake_pipeline(req: Any, request: Any) -> Dict[str, Any]:
+            return {"decision": "allow"}
+
+        monkeypatch.setattr(pipeline, "_load_persisted_decision", _tracking_load)
+        monkeypatch.setattr(pipeline, "run_decide_pipeline", _fake_pipeline)
+        monkeypatch.setattr(pipeline, "REPLAY_REPORT_DIR", "/tmp/test_replay_deleg")
+
+        result = await pipeline.replay_decision("deleg-1")
+
+        assert result["match"] is True
+        assert "deleg-1" in load_calls  # confirms delegation uses pipeline._load_persisted_decision
+
+
+# =========================================================
+# Fix 7: Unused imports removed from pipeline.py
+# =========================================================
+
+
+class TestPipelineUnusedImportsRemoved:
+    """Unused stdlib imports should be cleaned up after the split."""
+
+    def test_no_asyncio_import(self) -> None:
+        """asyncio is no longer used directly in pipeline.py."""
+        import veritas_os.core.pipeline as p
+        import ast
+        import inspect
+
+        source = inspect.getsource(p)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name != "asyncio", "asyncio should not be imported in pipeline.py"
+
+    def test_no_random_import(self) -> None:
+        """random moved to pipeline_inputs.py."""
+        import veritas_os.core.pipeline as p
+        import ast
+        import inspect
+
+        source = inspect.getsource(p)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name != "random", "random should not be imported in pipeline.py"
+
+    def test_no_secrets_import(self) -> None:
+        """secrets moved to pipeline_inputs.py."""
+        import veritas_os.core.pipeline as p
+        import ast
+        import inspect
+
+        source = inspect.getsource(p)
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    assert alias.name != "secrets", "secrets should not be imported in pipeline.py"
