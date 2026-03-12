@@ -756,8 +756,12 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                         )
                         lockfile.unlink(missing_ok=True)
                         continue
-                except OSError:
-                    pass
+                except OSError as e:
+                    logger.debug(
+                        "[MemoryOS] lockfile mtime check failed: %s (%s)",
+                        lockfile,
+                        e,
+                    )
                 if time.time() - start > timeout:
                     raise TimeoutError(f"failed to acquire lock for {path}")
                 time.sleep(backoff)

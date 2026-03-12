@@ -673,6 +673,44 @@ class TestLockedMemoryWindowsPath:
 
         assert "inside" in accessed
 
+    def test_windows_path_mtime_check_oserror_logs_debug(
+        self,
+        tmp_path,
+        monkeypatch,
+        caplog,
+    ):
+        """Lock mtime check OSError is logged at debug and lock acquisition continues."""
+        monkeypatch.setattr(memory, "fcntl", None)
+
+        path = tmp_path / "memory.json"
+        path.write_text("[]", encoding="utf-8")
+
+        attempts = {"count": 0}
+
+        def _fake_open(*args, **kwargs):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise FileExistsError
+            return 123
+
+        monkeypatch.setattr(memory.os, "open", _fake_open)
+        monkeypatch.setattr(memory.os, "close", lambda _fd: None)
+        monkeypatch.setattr(
+            memory.os.path,
+            "getmtime",
+            lambda _p: (_ for _ in ()).throw(OSError("mtime failed")),
+        )
+        monkeypatch.setattr(memory.time, "sleep", lambda _s: None)
+
+        lockfile = path.with_suffix(path.suffix + ".lock")
+        lockfile.write_text("exists", encoding="utf-8")
+
+        with caplog.at_level("DEBUG"):
+            with memory.locked_memory(path, timeout=0.2):
+                pass
+
+        assert "lockfile mtime check failed" in caplog.text
+
 
 # =========================================================
 # predict_gate_label with MEM_CLF
