@@ -473,3 +473,33 @@ class TestSecurityHardening:
 
         assert log_dir == (tmp_path / "logs").resolve()
         assert dataset_dir == (tmp_path / "dataset").resolve()
+
+    def test_safe_paths_rejects_external_lp_file_targets_by_default(
+        self,
+        monkeypatch,
+        caplog,
+    ):
+        """VAL_JSON/META_LOG from logging.paths must also follow path policy."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        from veritas_os.logging import paths as lp
+
+        monkeypatch.delenv("VERITAS_ALLOW_EXTERNAL_PATHS", raising=False)
+        monkeypatch.setattr(lp, "LOG_DIR", str(pipeline_mod.REPO_ROOT / "logs"))
+        monkeypatch.setattr(lp, "DATASET_DIR", str(pipeline_mod.REPO_ROOT / "dataset"))
+        monkeypatch.setattr(lp, "VAL_JSON", "/tmp/veritas_external_value_ema.json")
+        monkeypatch.setattr(lp, "META_LOG", "/tmp/veritas_external_meta.log")
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.core.pipeline"):
+            _, _, val_json, meta_log = pipeline_mod._safe_paths()
+
+        assert val_json == (pipeline_mod.REPO_ROOT / "logs" / "value_ema.json").resolve()
+        assert meta_log == (pipeline_mod.REPO_ROOT / "logs" / "meta.log").resolve()
+        assert any(
+            "[SECURITY][pipeline] Ignoring logging.paths.VAL_JSON" in record.getMessage()
+            for record in caplog.records
+        )
+        assert any(
+            "[SECURITY][pipeline] Ignoring logging.paths.META_LOG" in record.getMessage()
+            for record in caplog.records
+        )
