@@ -238,7 +238,7 @@ veritas_os/core/
     ├── __init__.py
     ├── memory_model.py
     ├── memory_model.py.old     # 旧バージョン
-    └── vector_index.pkl        # MemoryOS 用ベクトルインデックス
+    └── vector_index.json       # MemoryOS 用ベクトルインデックス（pickleはruntimeで無効）
 ```
 
 ---
@@ -392,7 +392,8 @@ LLM 駆動の自己批判・自己検証。
 
 * エピソード / 意思決定 / メタデータの保存
 * 過去の意思決定に対する類似検索
-* 内部的には `core/models/memory_model.py` と `vector_index.pkl` を使用
+* 内部的には `core/models/memory_model.py` と `vector_index.json` を使用
+* 旧 `.pkl` アーティファクトは RCE リスク対策で runtime でブロック
 
 高レベルユーティリティ例:
 
@@ -400,7 +401,7 @@ LLM 駆動の自己批判・自己検証。
 * エピソード → セマンティックへの蒸留（長期「要約メモ」）
 * 既存メモリからのベクトルインデックス再構築
 
-#### `models/memory_model.py` / `models/vector_index.pkl`
+#### `models/memory_model.py` / `models/vector_index.json`
 
 MemoryOS 用の埋め込みモデルとベクトルインデックスを実装。
 

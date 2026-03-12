@@ -222,7 +222,7 @@ veritas_os/core/
     ├── __init__.py
     ├── memory_model.py
     ├── memory_model.py.old     # legacy variant
-    └── vector_index.pkl        # vector index for MemoryOS
+    └── vector_index.json       # vector index for MemoryOS (pickle is blocked)
 ```
 
 ---
@@ -375,7 +375,8 @@ Manages long-term memory centered around `scripts/logs/memory.json` (exact path 
 
 * Stores episodes / decisions / metadata
 * Supports similarity-based retrieval of past decisions
-* Internally uses `core/models/memory_model.py` and `vector_index.pkl`
+* Internally uses `core/models/memory_model.py` and `vector_index.json`
+* Legacy `.pkl` artifacts are blocked at runtime due to RCE risk
 
 It also provides higher-level utilities such as:
 
@@ -383,7 +384,7 @@ It also provides higher-level utilities such as:
 * Episodic→semantic distillation (long-term “summary notes”)
 * Rebuilding vector index from existing memory
 
-#### `models/memory_model.py` / `models/vector_index.pkl`
+#### `models/memory_model.py` / `models/vector_index.json`
 
 Implements the embedding model and vector index used by MemoryOS.
 
