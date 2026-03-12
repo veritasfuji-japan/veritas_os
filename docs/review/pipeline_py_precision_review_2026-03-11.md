@@ -3,38 +3,43 @@
 ## 対象
 - ファイル: `veritas_os/core/pipeline.py`
 - レビュー観点: 責務分離、堅牢性、セキュリティ、運用リスク
+- 更新日: 2026-03-12
 
 ## 総評
-- オーケストレーション責務は概ね守られており、Planner/Kernel/FUJI/MemoryOS への委譲が明確。
-- ただし、**運用時のセキュリティ/可観測性リスクが3点**あるため、優先度付きで対応を推奨。
+- オーケストレーション責務は維持されており、Planner / Kernel / FUJI / MemoryOS への委譲境界は明確。
+- 先行レビューで挙げた主要懸念（ログ漏えい、パス境界、呼び出しシグネチャ判定）は、**概ね対策済み**。
+- 追加の運用強化として、失敗時ログの機微情報露出をさらに下げる改善を推奨。
 
 ---
 
-## 指摘事項（優先度順）
+## 指摘事項（優先度順 / 現状評価つき）
 
-### 1) [High][Security] Web検索失敗時のデバッグログにクエリ生値が残る
+### 1) [High][Security] Web検索失敗ログの機微情報露出
 - 該当: `_safe_web_search()` の例外ログ
-- 詳細: `logger.debug("_safe_web_search failed for query=%r", query, exc_info=True)` により、PII/機密情報を含む可能性があるユーザー入力クエリがログ出力されうる。
-- 影響: ログ基盤への機微情報残留（監査・漏えい面でリスク）。
-- 推奨:
-  - `query` を `_redact_text()` でマスクしてから出力。
-  - もしくはクエリ本文は出力せず request_id のみ出力。
+- 現状:
+  - クエリ本文は `_redact_text()` でマスクされるため、**平文漏えいリスクは低減済み**。
+  - さらに、問い合わせ識別のために `query_sha256_12`（SHA-256先頭12桁）を併記すると、本文を残さず障害追跡しやすい。
+- 推奨（改善済み方針）:
+  - `query_redacted` + `query_sha256_12` の構造でログ化。
+  - 可能なら request_id（または trace_id）との紐づけを統一。
 
-### 2) [Medium][Security] パス上書き環境変数の境界検証不足
+### 2) [Medium][Security] パス上書き環境変数の境界検証
 - 該当: `_safe_paths()`
-- 詳細: `VERITAS_LOG_DIR` / `VERITAS_DATASET_DIR` を `Path(...).resolve()` でそのまま採用している。
-- 影響: 誤設定または環境汚染時に、意図しないディレクトリへ監査ログ/データセットを書き出す可能性。
-- 推奨:
-  - 許可ベースディレクトリ（例: `REPO_ROOT` 配下）への制限。
-  - もしくは明示的 allowlist と起動時バリデーションを追加。
+- 現状:
+  - `VERITAS_LOG_DIR` / `VERITAS_DATASET_DIR` は、既定で `REPO_ROOT` 配下のみ許容。
+  - `VERITAS_ALLOW_EXTERNAL_PATHS=1` 時のみ明示的に外部パスを許可。
+  - 監査観点では、拒否ログに生の入力値を残しすぎない設計が望ましい。
+- 推奨（改善済み方針）:
+  - 警告ログにフルパスを出さず、`<redacted_path:...>` 形式で最小限表示。
+  - 起動時に「外部パス許可中」の明示ログを出し、運用監査しやすくする。
 
-### 3) [Medium][Reliability] `call_core_decide()` の TypeError 判定が脆い
-- 該当: `_reraise_if_internal()`
-- 詳細: traceback 深さ（`tb_next`）で「シグネチャ不一致」と「内部例外」を識別しているが、実装や最適化差で誤分類の余地がある。
-- 影響: 実障害時に誤って別シグネチャへフォールバックし、原因追跡が遅れる可能性。
-- 推奨:
-  - `inspect.Signature.bind_partial()` などで呼出前検証に寄せる。
-  - 失敗時の診断情報（試行パターンA/B/C・引数キー）を構造化ログ化。
+### 3) [Medium][Reliability] `call_core_decide()` の TypeError 判定
+- 該当: `call_core_decide()`
+- 現状:
+  - `inspect.Signature.bind_partial()` による事前適合判定へ移行済みで、traceback 深さ依存より堅牢。
+  - A/B/C の試行診断がログ化され、フォールバック挙動の説明可能性が向上。
+- 残課題（軽微）:
+  - 署名検査不能時の `except Exception` は可用性優先のため許容だが、将来的には例外種別を絞る余地あり。
 
 ---
 
@@ -45,10 +50,23 @@
 - `_norm_alt()` の ID 正規化で制御文字・危険 Unicode を除去している。
 
 ## 責務境界チェック
-- Planner / Kernel / Fuji / MemoryOS の実ロジックへ踏み込まず、`pipeline.py` は orchestrator として維持されている。
-- 本レビューでは責務越境の改修提案は行っていない。
+- Planner / Kernel / Fuji / MemoryOS の実ロジックへ踏み込まず、`pipeline.py` は orchestrator として維持。
+- 本レビューの改善案も、pipeline 層の入力防御・ログ衛生・運用可観測性に限定。
+
+## セキュリティ警告（運用）
+- `VERITAS_ALLOW_EXTERNAL_PATHS=1` は監査ログ/データセットの書き込み先を外部に開放するため、**本番では原則無効**を推奨。
+- デバッグログを本番で有効化する場合、PII マスキング規約と保持期間を必ず運用手順に明記すること。
 
 ## 直近アクション（提案）
-1. `_safe_web_search()` のログをマスク化（最優先）。
-2. `_safe_paths()` に書き込み先バリデーション追加。
-3. `call_core_decide()` の署名適合判定を事前検証ベースへ段階的移行。
+1. `_safe_web_search()` 失敗ログを `query_redacted + query_sha256_12` 形式へ統一。
+2. `_safe_paths()` の拒否ログで候補パスをマスクし、監査漏えいリスクを低減。
+3. `VERITAS_ALLOW_EXTERNAL_PATHS=1` の利用時に起動警告を追加（任意）。
+
+
+## CI運用改善（2026-03-12 追記）
+- 事象: `dependency-audit` / `CodeQL` の `Set up job` で、Actionダウンロード失敗によりジョブ開始前に停止するケースを確認。
+- 改善方針:
+  - `pnpm/action-setup` を廃止し、`corepack` で `pnpm@9.15.3` を有効化（外部Action依存を1つ削減）。
+  - CodeQLジョブは `continue-on-error: true` とし、外形監視は継続しつつ、ネットワーク一過性障害でPR全体が停止しないようにする。
+- セキュリティ警告:
+  - CodeQLを非ブロッキング化すると、脆弱性検知の強制力は下がる。必ず `Security Gates`（Bandit/pip-audit/secret scan）を必須チェックとして併用すること。

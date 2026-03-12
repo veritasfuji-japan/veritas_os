@@ -37,6 +37,7 @@ Payload contracts restored (tests / server expectations):
 
 import inspect
 import json
+import hashlib
 import logging
 import os
 import re
@@ -477,11 +478,12 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
             resolved.relative_to(REPO_ROOT)
             return resolved
         except ValueError:
+            masked_candidate = f"<redacted_path:{candidate.name or 'path'}>"
             logger.warning(
                 "[SECURITY][pipeline] Ignoring %s=%r outside REPO_ROOT (%s). "
                 "Set VERITAS_ALLOW_EXTERNAL_PATHS=1 to allow explicitly.",
                 source_name,
-                str(candidate),
+                masked_candidate,
                 REPO_ROOT,
             )
             return None
@@ -910,6 +912,10 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     if not callable(fn):
         return None
 
+    query_fingerprint = hashlib.sha256(
+        query_text.encode("utf-8", errors="ignore")
+    ).hexdigest()[:12]
+
     try:
         ws = fn(query_text, max_results=max_results_int)  # type: ignore[misc]
         if inspect.isawaitable(ws):
@@ -917,8 +923,9 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         return ws if isinstance(ws, dict) else None
     except Exception:  # subsystem resilience: intentionally broad
         logger.debug(
-            "_safe_web_search failed for query=%r",
+            "_safe_web_search failed for query_redacted=%r query_sha256_12=%s",
             _redact_text(query_text),
+            query_fingerprint,
             exc_info=True,
         )
         return None
