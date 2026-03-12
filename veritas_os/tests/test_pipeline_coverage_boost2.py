@@ -253,6 +253,7 @@ class TestSafePaths:
             assert isinstance(p, Path)
 
     def test_env_override_log_dir(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("VERITAS_ALLOW_EXTERNAL_PATHS", "1")
         monkeypatch.setenv("VERITAS_LOG_DIR", str(tmp_path / "logs"))
         monkeypatch.setenv("VERITAS_DATASET_DIR", str(tmp_path / "ds"))
         log_dir, ds_dir, _, _ = pipeline._safe_paths()
