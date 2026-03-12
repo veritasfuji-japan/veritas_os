@@ -3,12 +3,12 @@ title: VERITAS OS - Code Review Status Update
 doc_type: review_status
 latest: true
 lifecycle: active
-updated_at: 2026-02-25
+updated_at: 2026-03-12
 ---
 
 # VERITAS OS - Code Review Status Update
 
-**Date**: 2026-02-25 (Updated)
+**Date**: 2026-03-12 (Updated)
 **Status**: Single source of truth for review status (active)
 **PR**: copilot/review-all-code-improvements
 
@@ -29,12 +29,12 @@ updated_at: 2026-02-25
 
 ## Latest Assessment (Integrated)
 
-- **統合時点の全体完成度判定: 68%**
+- **統合時点の全体完成度判定: 70%**
 - 根拠:
-  1. 指摘45件中27件対応（ベースライン60%）。
+  1. 指摘45件中28件対応（ベースライン62%）。
   2. `ruff check veritas_os` 通過。
   3. `test_code_review_fixes*.py` 系統の代表テスト通過（25件）。
-  4. Deferred項目（特に `pickle` 依存）が残るため上限評価を抑制。
+  4. Deferred項目（import時副作用・設計改善系）が残るため上限評価を抑制。
 
 ---
 
@@ -47,10 +47,10 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 | Severity | Total | Fixed | Deferred | % Complete |
 |----------|-------|-------|----------|-----------|
 | CRITICAL | 3     | 3     | 0        | 100%      |
-| HIGH     | 12    | 9     | 3        | 75%       |
+| HIGH     | 12    | 10    | 2        | 83%       |
 | MEDIUM   | 20    | 12    | 8        | 60%       |
 | LOW      | 10    | 3     | 7        | 30%       |
-| **TOTAL**| 45    | 27    | 18       | **60%**   |
+| **TOTAL**| 45    | 28    | 17       | **62%**   |
 
 ---
 
@@ -110,10 +110,15 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 **Location**: `logging/rotate.py:45-52`
 **Fix**: Documented that the function is protected by `_trust_log_lock` in the calling code. The atomicity is guaranteed by the lock held in `trust_log.py`.
 
-### ⏸️ H-8: Pickle deserialization still permitted
-**Status**: DEFERRED (requires deprecation timeline)
-**Location**: `core/memory.py:134-257`
-**Reason**: Requires coordinated deprecation plan with users. The restricted unpickler provides temporary mitigation. Should set hard deadline for removal.
+### ✅ H-8: Pickle deserialization still permitted
+**Status**: FIXED (2026-03-12)
+**Location**: `core/memory.py`
+**Fix**:
+- Runtimeでのpickle/joblib読込を廃止し、`joblib_load = None` を明示。
+- レガシー `.pkl` インデックス/モデル検出時はロードせず、`[SECURITY]` ログを出して安全停止。
+- 永続化フォーマットをJSONへ統一し、移行はオフライン手順に限定。
+
+> ⚠️ **Security warning**: 過去バージョン由来の `.pkl` ファイルは任意コード実行リスクがあります。運用環境へ配置しないでください。
 
 ### ✅ H-9: TOCTOU Race Condition in Policy Hot Reload
 **Status**: FIXED (2026-02-08)
@@ -259,6 +264,16 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 ### ⏸️ L-7: Unused imports and dead code
 **Status**: DEFERRED (code quality)
 **Reason**: Low priority cleanup
+
+---
+
+## Remaining Security-Risk Watchlist
+
+- **現在、CRITICAL/HIGHで未解決の直接的セキュリティ欠陥はなし。**
+- ただし以下は将来的にセキュリティ/信頼性へ波及し得るため継続監視する。
+  - H-4: module import時の重い副作用（初期化順序依存による誤動作リスク）
+  - M-2: `paths.py` の import-time side effect（設定不整合時の予期せぬパス解決）
+  - L-5: bare `except` の残存（障害兆候の見逃し）
 
 ---
 
