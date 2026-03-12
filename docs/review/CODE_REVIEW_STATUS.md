@@ -338,7 +338,7 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 ### Short-term Recommendations (Next PR)
 1. ✅ Set hard deadline for pickle runtime block (2026-06-30) in MemoryOS runtime logs
 2. ✅ Document offline migration path for pickle users: `docs/operations/MEMORY_PICKLE_MIGRATION.md`
-3. Keep CI/runtime guardrails to prevent `.pkl` artifacts in production paths
+3. ✅ Add CI/runtime guardrails to prevent `.pkl` artifacts in production paths (`scripts/security/check_runtime_pickle_artifacts.py`)
 
 ### Long-term Recommendations (Next Major Version)
 1. Refactor module initialization to lazy pattern (H-4, M-2)
