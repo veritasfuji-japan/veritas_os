@@ -459,18 +459,52 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
     env_log = (os.getenv("VERITAS_LOG_DIR") or "").strip()
     env_ds = (os.getenv("VERITAS_DATASET_DIR") or "").strip()
 
+    def _resolve_within_repo(path_text: str, *, env_name: str) -> Optional[Path]:
+        """Resolve and validate environment override directory.
+
+        Security policy:
+        - By default, only paths under ``REPO_ROOT`` are accepted.
+        - External paths can be explicitly allowed by setting
+          ``VERITAS_ALLOW_EXTERNAL_PATHS=1``.
+        """
+        if not path_text:
+            return None
+
+        candidate = Path(path_text).resolve()
+        allow_external = _to_bool(os.getenv("VERITAS_ALLOW_EXTERNAL_PATHS", "0"))
+        if allow_external:
+            return candidate
+
+        try:
+            candidate.relative_to(REPO_ROOT)
+            return candidate
+        except ValueError:
+            logger.warning(
+                "[SECURITY][pipeline] Ignoring %s=%r outside REPO_ROOT (%s). "
+                "Set VERITAS_ALLOW_EXTERNAL_PATHS=1 to allow explicitly.",
+                env_name,
+                path_text,
+                REPO_ROOT,
+            )
+            return None
+
     try:
         from veritas_os.logging import paths as lp  # type: ignore
 
-        LOG_DIR = Path(env_log).resolve() if env_log else Path(getattr(lp, "LOG_DIR")).resolve()
-        DATASET_DIR = Path(env_ds).resolve() if env_ds else Path(getattr(lp, "DATASET_DIR")).resolve()
+        env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
+        env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
+
+        LOG_DIR = env_log_path or Path(getattr(lp, "LOG_DIR")).resolve()
+        DATASET_DIR = env_ds_path or Path(getattr(lp, "DATASET_DIR")).resolve()
         VAL_JSON = Path(getattr(lp, "VAL_JSON")).resolve()
         META_LOG = Path(getattr(lp, "META_LOG")).resolve()
         return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
     except (ImportError, AttributeError, OSError) as e:
         _warn(f"[WARN][pipeline] logging.paths import failed -> fallback: {repr(e)}")
-        LOG_DIR = (Path(env_log).resolve() if env_log else (REPO_ROOT / "logs").resolve())
-        DATASET_DIR = (Path(env_ds).resolve() if env_ds else (REPO_ROOT / "dataset").resolve())
+        env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
+        env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
+        LOG_DIR = env_log_path or (REPO_ROOT / "logs").resolve()
+        DATASET_DIR = env_ds_path or (REPO_ROOT / "dataset").resolve()
         VAL_JSON = (LOG_DIR / "value_ema.json").resolve()
         META_LOG = (LOG_DIR / "meta.log").resolve()
         return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
@@ -703,65 +737,70 @@ async def call_core_decide(
             logger.debug("call_core_decide: signature inspection failed for %r", fn)
             return set()
 
-    def _reraise_if_internal() -> None:
-        """Re-raise the current TypeError if it originated inside core_fn
-        (traceback depth > 1), rather than from a signature mismatch."""
-        import sys as _sys
-        _tb = _sys.exc_info()[2]
-        if _tb is not None and _tb.tb_next is not None:
-            raise
-        del _tb
+    def _can_bind(*args: Any, **kwargs: Any) -> bool:
+        """Return True if ``core_fn`` can accept the provided call pattern."""
+        try:
+            inspect.signature(core_fn).bind_partial(*args, **kwargs)
+            return True
+        except TypeError:
+            return False
+        except Exception:
+            return True
 
     p = _params(core_fn)
+    attempted_patterns: List[str] = []
 
     # ---- Try A: ctx/options style ----
-    try:
-        if ("ctx" in p) or ("options" in p):
-            res = core_fn(ctx=ctx, options=opts, min_evidence=min_evidence, query=query)
-            return await res if _is_awaitable(res) else res
-    except TypeError:
-        _reraise_if_internal()
+    kwargs_a = {
+        "ctx": ctx,
+        "options": opts,
+        "min_evidence": min_evidence,
+        "query": query,
+    }
+    if (("ctx" in p) or ("options" in p)) and _can_bind(**kwargs_a):
+        attempted_patterns.append("A")
+        res = core_fn(**kwargs_a)
+        return await res if _is_awaitable(res) else res
 
     # ---- Try B: context/query/alternatives style ----
-    try:
-        kw = {}
-        # context arg name
-        if "context" in p:
-            kw["context"] = ctx
-        elif "ctx" in p:
-            kw["ctx"] = ctx
-        else:
-            # fallback
-            kw["context"] = ctx
+    kw = {}
+    if "context" in p:
+        kw["context"] = ctx
+    elif "ctx" in p:
+        kw["ctx"] = ctx
+    else:
+        kw["context"] = ctx
 
-        # alternatives arg name
-        if "alternatives" in p:
-            kw["alternatives"] = opts
-        elif "options" in p:
-            kw["options"] = opts
-        else:
-            # fallback
-            kw["alternatives"] = opts
+    if "alternatives" in p:
+        kw["alternatives"] = opts
+    elif "options" in p:
+        kw["options"] = opts
+    else:
+        kw["alternatives"] = opts
 
-        if "query" in p:
-            kw["query"] = query
+    if "query" in p:
+        kw["query"] = query
 
-        if "min_evidence" in p:
-            kw["min_evidence"] = min_evidence
+    if "min_evidence" in p:
+        kw["min_evidence"] = min_evidence
 
+    if _can_bind(**kw):
+        attempted_patterns.append("B")
         res = core_fn(**kw)
         return await res if _is_awaitable(res) else res
-    except TypeError:
-        _reraise_if_internal()
 
     # ---- Try C: positional (last resort) ----
     try:
+        if not _can_bind(ctx, query, opts, min_evidence):
+            raise TypeError("pattern C signature mismatch")
+        attempted_patterns.append("C")
         res = core_fn(ctx, query, opts, min_evidence)
         return await res if _is_awaitable(res) else res
     except TypeError as e:
         raise TypeError(
             f"call_core_decide: all calling conventions failed for {core_fn!r}. "
-            f"Last error: {e}"
+            f"Attempted={attempted_patterns or ['none']}, "
+            f"kwargsB={sorted(kw.keys())}, last_error={e}"
         ) from e
 
 
@@ -828,7 +867,11 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
             ws = await ws
         return ws if isinstance(ws, dict) else None
     except Exception:  # subsystem resilience: intentionally broad
-        logger.debug("_safe_web_search failed for query=%r", query, exc_info=True)
+        logger.debug(
+            "_safe_web_search failed for query=%r",
+            _redact_text(query_text),
+            exc_info=True,
+        )
         return None
 
 

@@ -403,3 +403,73 @@ class TestToDictCircularRef:
 
         result = _to_dict(Normal())
         assert result == {"a": 1, "b": "hello"}
+
+
+# =========================================================
+# Security hardening
+# =========================================================
+
+
+class TestSecurityHardening:
+
+    @pytest.mark.asyncio
+    async def test_safe_web_search_logs_redacted_query(self, monkeypatch, caplog):
+        """Debug log should redact query text on adapter failure."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        def bad_search(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr(pipeline_mod, "web_search", bad_search, raising=False)
+        with caplog.at_level(logging.DEBUG, logger="veritas_os.core.pipeline"):
+            result = await pipeline_mod._safe_web_search("mail me at a@example.com")
+
+        assert result is None
+        messages = [record.getMessage() for record in caplog.records]
+        assert any("_safe_web_search failed for query=" in message for message in messages)
+        assert all("a@example.com" not in message for message in messages)
+
+    def test_safe_paths_rejects_external_env_dir_by_default(
+        self,
+        monkeypatch,
+        caplog,
+    ):
+        """External env paths should be ignored unless explicitly allowed."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        log_env = "/tmp/veritas_external_logs"
+        dataset_env = "/tmp/veritas_external_dataset"
+        monkeypatch.delenv("VERITAS_ALLOW_EXTERNAL_PATHS", raising=False)
+        monkeypatch.setenv("VERITAS_LOG_DIR", log_env)
+        monkeypatch.setenv("VERITAS_DATASET_DIR", dataset_env)
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.core.pipeline"):
+            log_dir, dataset_dir, _, _ = pipeline_mod._safe_paths()
+
+        assert str(log_dir) != log_env
+        assert str(dataset_dir) != dataset_env
+        assert any(
+            "[SECURITY][pipeline] Ignoring VERITAS_LOG_DIR" in record.getMessage()
+            for record in caplog.records
+        )
+        assert any(
+            "[SECURITY][pipeline] Ignoring VERITAS_DATASET_DIR" in record.getMessage()
+            for record in caplog.records
+        )
+
+    def test_safe_paths_accepts_external_env_dir_when_explicitly_allowed(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        """External env paths are allowed only with explicit opt-in."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        monkeypatch.setenv("VERITAS_ALLOW_EXTERNAL_PATHS", "1")
+        monkeypatch.setenv("VERITAS_LOG_DIR", str(tmp_path / "logs"))
+        monkeypatch.setenv("VERITAS_DATASET_DIR", str(tmp_path / "dataset"))
+
+        log_dir, dataset_dir, _, _ = pipeline_mod._safe_paths()
+
+        assert log_dir == (tmp_path / "logs").resolve()
+        assert dataset_dir == (tmp_path / "dataset").resolve()

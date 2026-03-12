@@ -137,6 +137,7 @@ class TestSafePaths:
         """Lines 337-343: fallback uses env vars when logging fails."""
         log_dir = str(tmp_path / "logs")
         ds_dir = str(tmp_path / "dataset")
+        monkeypatch.setenv("VERITAS_ALLOW_EXTERNAL_PATHS", "1")
         monkeypatch.setenv("VERITAS_LOG_DIR", log_dir)
         monkeypatch.setenv("VERITAS_DATASET_DIR", ds_dir)
 
