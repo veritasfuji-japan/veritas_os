@@ -10,14 +10,29 @@ adds CI guardrails so risky files are rejected before deployment.
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_SCAN_DIRS = [
-    REPO_ROOT / "veritas_os" / "core" / "models",
-]
 LEGACY_EXTENSIONS = frozenset({".pkl", ".joblib"})
+
+
+def _default_scan_dirs() -> list[Path]:
+    """Return runtime directories that must not contain pickle/joblib artifacts.
+
+    Includes the current MemoryOS model directory, the historical memory
+    directory used by older deployments, and optional `VERITAS_MEMORY_DIR` when
+    configured.
+    """
+    runtime_dirs = [
+        REPO_ROOT / "veritas_os" / "core" / "models",
+        REPO_ROOT / "veritas_os" / "memory",
+    ]
+    configured_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
+    if configured_memory_dir:
+        runtime_dirs.append(Path(configured_memory_dir))
+    return runtime_dirs
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
@@ -96,7 +111,7 @@ def _find_legacy_pickles(scan_dirs: list[Path]) -> tuple[list[Path], list[Path]]
 def main(argv: list[str] | None = None) -> int:
     """Run the runtime pickle artifact check and return process exit code."""
     parsed = _parse_args(argv or sys.argv[1:])
-    scan_dirs = DEFAULT_SCAN_DIRS + [Path(raw) for raw in parsed.scan_dirs]
+    scan_dirs = _default_scan_dirs() + [Path(raw) for raw in parsed.scan_dirs]
     findings, missing_dirs = _find_legacy_pickles(scan_dirs)
 
     if missing_dirs:

@@ -50,7 +50,7 @@ def test_main_returns_error_when_findings_exist(
     legacy = tmp_path / "artifact.pkl"
     legacy.write_bytes(b"legacy")
 
-    monkeypatch.setattr(checker, "DEFAULT_SCAN_DIRS", [])
+    monkeypatch.setattr(checker, "_default_scan_dirs", lambda: [])
     exit_code = checker.main(["--scan-dir", str(tmp_path)])
     output = capsys.readouterr().out
 
@@ -66,9 +66,20 @@ def test_main_returns_success_when_no_findings(
     clean_file = tmp_path / "artifact.json"
     clean_file.write_text("{}", encoding="utf-8")
 
-    monkeypatch.setattr(checker, "DEFAULT_SCAN_DIRS", [])
+    monkeypatch.setattr(checker, "_default_scan_dirs", lambda: [])
     exit_code = checker.main(["--scan-dir", str(tmp_path)])
     output = capsys.readouterr().out
 
     assert exit_code == 0
     assert "No legacy runtime pickle artifacts detected" in output
+
+
+def test_default_scan_dirs_includes_optional_veritas_memory_dir(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """Environment-configured runtime memory dir is included in scan targets."""
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(tmp_path / "runtime_memory"))
+
+    scan_dirs = checker._default_scan_dirs()
+
+    assert tmp_path / "runtime_memory" in scan_dirs
