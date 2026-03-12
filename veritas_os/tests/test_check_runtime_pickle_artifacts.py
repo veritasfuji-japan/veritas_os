@@ -8,7 +8,7 @@ from scripts.security import check_runtime_pickle_artifacts as checker
 
 
 def test_find_legacy_pickles_recursive_and_case_insensitive(tmp_path: Path) -> None:
-    """Both nested and uppercase-extension pickle files are detected."""
+    """Nested and mixed-case legacy artifact files are detected."""
     direct = tmp_path / "legacy.pkl"
     direct.write_bytes(b"legacy")
 
@@ -20,9 +20,15 @@ def test_find_legacy_pickles_recursive_and_case_insensitive(tmp_path: Path) -> N
     upper = tmp_path / "MODEL.PKL"
     upper.write_bytes(b"legacy")
 
+    joblib = tmp_path / "embedder.joblib"
+    joblib.write_bytes(b"legacy")
+
+    upper_joblib = tmp_path / "INDEX.JOBLIB"
+    upper_joblib.write_bytes(b"legacy")
+
     findings = checker._find_legacy_pickles([tmp_path])
 
-    assert findings == [upper, direct, nested]
+    assert findings == [upper_joblib, upper, joblib, direct, nested]
 
 
 def test_main_returns_error_when_findings_exist(

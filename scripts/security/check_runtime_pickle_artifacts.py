@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Fail CI when legacy pickle artifacts are found in MemoryOS runtime directories.
+"""Fail CI when legacy pickle-derived artifacts are found in runtime dirs.
 
-This check enforces the runtime policy that `.pkl` artifacts must not be placed in
-MemoryOS runtime paths because pickle deserialization can lead to arbitrary code
-execution (RCE). The runtime already blocks loading; this script adds CI guardrails
-so risky files are rejected before deployment.
+This check enforces the runtime policy that `.pkl` / `.joblib` artifacts must not
+be placed in MemoryOS runtime paths because pickle deserialization can lead to
+arbitrary code execution (RCE). The runtime already blocks loading; this script
+adds CI guardrails so risky files are rejected before deployment.
 """
 
 from __future__ import annotations
@@ -17,13 +17,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCAN_DIRS = [
     REPO_ROOT / "veritas_os" / "core" / "models",
 ]
+LEGACY_EXTENSIONS = frozenset({".pkl", ".joblib"})
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse CLI arguments for optional scan root overrides."""
     parser = argparse.ArgumentParser(
         description=(
-            "Detect legacy .pkl artifacts in MemoryOS runtime directories "
+            "Detect legacy .pkl/.joblib artifacts in MemoryOS runtime "
+            "directories "
             "and fail if any are present."
         )
     )
@@ -33,8 +35,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="append",
         default=[],
         help=(
-            "Additional directory to scan. Can be passed multiple times. "
-            "Only direct children (*.pkl) are checked to match runtime behavior."
+            "Additional directory to scan. Can be passed multiple times."
         ),
     )
     return parser.parse_args(argv)
@@ -56,10 +57,10 @@ def _iter_unique_existing_dirs(paths: list[Path]) -> list[Path]:
 
 
 def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
-    """Find `.pkl` files recursively under each scan directory.
+    """Find `.pkl`/`.joblib` files recursively under each scan directory.
 
-    The scan is case-insensitive (`.pkl` / `.PKL`) so renamed legacy artifacts
-    cannot bypass detection by filename casing alone.
+    The scan is case-insensitive (`.pkl` / `.PKL`, `.joblib` / `.JOBLIB`) so
+    renamed legacy artifacts cannot bypass detection by filename casing alone.
     """
     findings: list[Path] = []
     for directory in _iter_unique_existing_dirs(scan_dirs):
@@ -67,7 +68,7 @@ def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
             sorted(
                 path
                 for path in directory.rglob("*")
-                if path.is_file() and path.suffix.lower() == ".pkl"
+                if path.is_file() and path.suffix.lower() in LEGACY_EXTENSIONS
             )
         )
     return findings
