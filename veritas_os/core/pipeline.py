@@ -461,6 +461,11 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
     env_ds = (os.getenv("VERITAS_DATASET_DIR") or "").strip()
 
     allow_external = _to_bool(os.getenv("VERITAS_ALLOW_EXTERNAL_PATHS", "0"))
+    if allow_external:
+        logger.warning(
+            "[SECURITY][pipeline] VERITAS_ALLOW_EXTERNAL_PATHS=1 is enabled; "
+            "external log/dataset paths are permitted."
+        )
 
     def _enforce_path_policy(candidate: Path, *, source_name: str) -> Optional[Path]:
         """Validate a candidate path against the pipeline write policy.
