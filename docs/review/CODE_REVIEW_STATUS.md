@@ -336,9 +336,9 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 15. ✅ Fix get_last_hash thread safety with RLock (H-12)
 
 ### Short-term Recommendations (Next PR)
-1. Set hard deadline for pickle removal (H-8)
-2. Add deprecation warnings for pickle support
-3. Document migration path for pickle users
+1. ✅ Set hard deadline for pickle runtime block (2026-06-30) in MemoryOS runtime logs
+2. ✅ Document offline migration path for pickle users: `docs/operations/MEMORY_PICKLE_MIGRATION.md`
+3. Keep CI/runtime guardrails to prevent `.pkl` artifacts in production paths
 
 ### Long-term Recommendations (Next Major Version)
 1. Refactor module initialization to lazy pattern (H-4, M-2)
