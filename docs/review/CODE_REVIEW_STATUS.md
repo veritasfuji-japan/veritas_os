@@ -31,14 +31,14 @@ updated_at: 2026-03-12
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **62% (28/45)** | CRITICAL は 100% 解消 |
+| 完了率（件数ベース） | **64% (29/45)** | CRITICAL は 100% 解消 |
 | 統合品質評価 | **70%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中28件を対応（62%）。
+1. 指摘45件中29件を対応（64%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -63,9 +63,9 @@ updated_at: 2026-03-12
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
 | HIGH     | 12    | 10    | 2                   | 83%       |
-| MEDIUM   | 20    | 12    | 8                   | 60%       |
+| MEDIUM   | 20    | 13    | 7                   | 65%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 28    | 17                  | **62%**   |
+| **TOTAL**| 45    | 29    | 16                  | **64%**   |
 
 ---
 
@@ -92,7 +92,7 @@ updated_at: 2026-03-12
 - ✅ **H-11**: H-7 + H-12 の組合せで `rotate.py` 競合経路を封止。
 - ✅ **H-12**: `logging/trust_log.py:get_last_hash()` に `_trust_log_lock` を適用。
 
-### MEDIUM (12 Fixed / 8 Deferred or Accepted)
+### MEDIUM (13 Fixed / 7 Deferred or Accepted)
 
 - ✅ **M-1**: `core/atomic_io.py` rename 後の directory fsync を追加。
 - ⏸️ **M-2 (Deferred)**: `logging/paths.py` import-time side effect。
@@ -102,7 +102,7 @@ updated_at: 2026-03-12
 - ✅ **M-6**: trust log append を canonical 実装に一本化。
 - ⏸️ **M-7 (Accepted)**: `schemas.py` coercion は外部入力互換のため維持。
 - ⏸️ **M-8 (Deferred)**: SHA-256 補助関数の重複整理。
-- ⏸️ **M-9 (Deferred)**: `scripts/reason.py` のハードコードパス。
+- ✅ **M-9**: `core/reason.py` のハードコードログパスを共通設定 (`logging.paths.LOG_DIR`) に統合。
 - ⏸️ **M-10 (Accepted)**: `predict_gate_label()` の 0.5 fallback。
 - ⏸️ **M-11 (Deferred)**: `critique.py` mutable default パターン改善。
 - ⏸️ **M-12 (Deferred)**: `core/self_healing.py` budget 永続化。

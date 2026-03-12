@@ -10,6 +10,17 @@ from typing import Any, Dict
 import pytest
 
 import veritas_os.core.reason as reason
+from veritas_os.logging.paths import LOG_DIR as SHARED_LOG_DIR
+
+
+# ------------------------------
+# path configuration
+# ------------------------------
+
+
+def test_log_dir_uses_shared_logging_paths_config():
+    """Reason モジュールが共通ログ設定を利用していることを検証する。"""
+    assert reason.LOG_DIR == SHARED_LOG_DIR
 
 
 # ------------------------------

@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from veritas_os.logging.paths import LOG_DIR as SHARED_LOG_DIR
+
 from . import llm_client
 
 logger = logging.getLogger(__name__)
@@ -20,8 +22,8 @@ logger = logging.getLogger(__name__)
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 
-# ここでは VERITAS_LOG_DIR を無視して固定パスにする
-LOG_DIR = SCRIPTS_DIR / "logs"
+# M-9 対応: 固定パスを廃止し、共通ログ設定を利用する
+LOG_DIR = SHARED_LOG_DIR
 
 def _ensure_log_dir() -> None:
     """LOG_DIR を遅延的に作成する（import 時の副作用を回避）。"""
@@ -302,4 +304,3 @@ async def generate_reflection_template(
         logger.debug("[ReasonOS] reflection_template meta_log skipped: %s", e)
 
     return tmpl
-
