@@ -8,406 +8,194 @@ updated_at: 2026-03-12
 
 # VERITAS OS - Code Review Status Update
 
-**Date**: 2026-03-12 (Updated)
-**Status**: Single source of truth for review status (active)
+**Date**: 2026-03-12
+**Status**: Active (single source of truth)
 **PR**: copilot/review-all-code-improvements
 
 ---
 
-## Review Document Navigation
+## 1. Document Policy (Single Source of Truth)
+
+- 本ファイルをレビュー進捗の一次情報として運用する。
+- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md` は履歴アーカイブ扱い。
+- 最新判定は本書へ統合し、重複更新を禁止する。
+
+### Navigation
 
 - 文書整理ガイド: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
-- 現行の一次情報: `docs/review/CODE_REVIEW_STATUS.md` + `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
+- ランタイム確認: `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
 
 ---
 
-## Consolidated Status Policy
-
-- この文書を**唯一のステータス一次情報**として運用する。
-- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md` は履歴アーカイブとして扱う。
-- 最新判定は本書に統合し、重複更新を禁止する。
-
-## Latest Assessment (Integrated)
-
-- **統合時点の全体完成度判定: 70%**
-- 根拠:
-  1. 指摘45件中28件対応（ベースライン62%）。
-  2. `ruff check veritas_os` 通過。
-  3. `test_code_review_fixes*.py` 系統の代表テスト通過（25件）。
-  4. Deferred項目（import時副作用・設計改善系）が残るため上限評価を抑制。
-
-### Executive Snapshot (2026-03-12)
+## 2. Executive Snapshot (2026-03-12)
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | 62% (28/45) | CRITICAL は 100% 解消 |
-| 統合品質評価 | 70% | Deferred の構造課題を加味 |
-| 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | 0 件 | 継続監視対象は別表に集約 |
-| 運用上の最大注意点 | 旧 `.pkl` 資産 | 任意コード実行リスクのため本番配置禁止 |
+| 完了率（件数ベース） | **62% (28/45)** | CRITICAL は 100% 解消 |
+| 統合品質評価 | **70%** | Deferred の構造課題を反映 |
+| 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
+| 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
-### Scope and Ownership Guardrail
+### Consolidated Assessment Basis
 
-- 本レビューの改善方針は、以下の責務境界を越えないことを前提とする。
-  - Planner: 計画生成とJSON抽出の堅牢化（M-4）
-  - Kernel/Fuji: ポリシーホットリロード整合性（H-9）
-  - MemoryOS: 永続化/インデックス/pickle廃止対応（H-8, H-10, M-3, M-17）
-- 境界横断の大規模改修（例: import時副作用の全面再設計）は Deferred とし、次期メジャーで扱う。
-
----
-
-## Summary
-
-This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
-
-### Overall Progress
-
-| Severity | Total | Fixed | Deferred | % Complete |
-|----------|-------|-------|----------|-----------|
-| CRITICAL | 3     | 3     | 0        | 100%      |
-| HIGH     | 12    | 10    | 2        | 83%       |
-| MEDIUM   | 20    | 12    | 8        | 60%       |
-| LOW      | 10    | 3     | 7        | 30%       |
-| **TOTAL**| 45    | 28    | 17       | **62%**   |
+1. 指摘45件中28件を対応（62%）。
+2. `ruff check veritas_os` 通過。
+3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
+4. import 時副作用・設計再編などの Deferred が残存。
 
 ---
 
-## CRITICAL Severity Issues - Status
+## 3. Scope and Ownership Guardrail
 
-### ✅ C-1: Race Condition in dataset_writer.py - Concurrent Appends Can Corrupt Data
-**Status**: FIXED
-**Location**: `logging/dataset_writer.py`
-**Fix**: Added `_dataset_lock = threading.RLock()` and wrapped all file operations with `with _dataset_lock:`
+以下の責務境界を超える改修は禁止し、該当項目は Deferred とする。
 
-### ✅ C-2: Missing fsync in atomic_write_npz Causes Data Corruption Risk
-**Status**: FIXED
-**Location**: `core/atomic_io.py:186-187`
-**Fix**: Added `os.fsync()` after `np.savez()` and before `os.replace()`, plus directory fsync
+- **Planner**: 計画生成と JSON 抽出の堅牢化（M-4）
+- **Kernel/Fuji**: ポリシーホットリロード整合性（H-9）
+- **MemoryOS**: 永続化/インデックス/pickle 廃止対応（H-8, H-10, M-3, M-17）
 
-### ✅ C-3: Missing FastAPI Request Body Size Limit (DoS vulnerability)
-**Status**: FIXED
-**Location**: `api/server.py:406-435`
-**Fix**: Added `limit_body_size` middleware with configurable `MAX_REQUEST_BODY_SIZE` (default 10MB)
+> 大規模な境界横断リファクタ（例: import時副作用の全面再設計）は次期メジャー対象。
 
 ---
 
-## HIGH Severity Issues - Status
+## 4. Progress by Severity
 
-### ✅ H-1: `builtins.MEM` global namespace pollution
-**Status**: FIXED (prior to this PR)
-**Location**: `core/memory.py:1351`
-**Fix**: Assignment removed, documented with comment
-
-### ✅ H-2: Non-atomic file write in `value_core.py`
-**Status**: FIXED (prior to this PR)
-**Location**: `core/value_core.py:129-131`
-**Fix**: Now uses `atomic_write_json()` from `veritas_os.core.atomic_io`
-
-### ✅ H-3: Duplicate `append_trust_log` function
-**Status**: FIXED (prior to this PR)
-**Location**: `core/value_core.py:345-378`
-**Fix**: Now delegates to canonical `logging.trust_log.append_trust_log()`
-
-### ⏸️ H-4: Module-level heavy side effects
-**Status**: DEFERRED (requires large refactoring)
-**Location**: `core/memory.py:1343-1349`
-**Reason**: Would require lazy initialization pattern across multiple modules. Risk vs benefit analysis suggests deferring until next major refactor.
-
-### ✅ H-5: Trust log hash chain inconsistency
-**Status**: FIXED (prior to this PR)
-**Location**: `logging/trust_log.py:181`
-**Fix**: Now uses `get_last_hash()` to read from JSONL instead of JSON
-
-### ✅ H-6: Wrong import fallback in `strategy.py`
-**Status**: FIXED (prior to this PR)
-**Location**: `core/strategy.py:15-16`
-**Fix**: Changed `veritas.core` to `veritas_os.core`
-
-### ✅ H-7: `rotate.py` context manager atomicity
-**Status**: DOCUMENTED (this PR)
-**Location**: `logging/rotate.py:45-52`
-**Fix**: Documented that the function is protected by `_trust_log_lock` in the calling code. The atomicity is guaranteed by the lock held in `trust_log.py`.
-
-### ✅ H-8: Pickle deserialization still permitted
-**Status**: FIXED (2026-03-12)
-**Location**: `core/memory.py`
-**Fix**:
-- Runtimeでのpickle/joblib読込を廃止し、`joblib_load = None` を明示。
-- レガシー `.pkl` インデックス/モデル検出時はロードせず、`[SECURITY]` ログを出して安全停止。
-- 永続化フォーマットをJSONへ統一し、移行はオフライン手順に限定。
-
-> ⚠️ **Security warning**: 過去バージョン由来の `.pkl` ファイルは任意コード実行リスクがあります。運用環境へ配置しないでください。
-
-### ✅ H-9: TOCTOU Race Condition in Policy Hot Reload
-**Status**: FIXED (2026-02-08)
-**Location**: `core/fuji.py:463-497`
-**Fix**: Added `_policy_reload_lock` (threading.Lock) and changed to file-descriptor-based approach: `os.open()` + `os.fstat()` + `os.fdopen()` read ensures mtime check and file read use the same fd, eliminating the TOCTOU window. Added `_load_policy_from_str()` to parse content already read into memory.
-
-### ✅ H-10: Race Condition in Global MEM_VEC Access
-**Status**: FIXED (2026-02-08)
-**Location**: `core/memory.py` (multiple sites)
-**Fix**: Added `_mem_vec_lock` (threading.Lock) for write operations (rebuild_vector_index). For read paths (put_episode, add, ingest_document, search), applied local-variable snapshot pattern (`_vec = MEM_VEC; if _vec is not None: _vec.add(...)`) to prevent TOCTOU between `if` check and method call.
-
-### ✅ H-11: Race Condition in rotate.py
-**Status**: FIXED (via prior H-7 documentation + this PR's H-12 lock)
-**Location**: `logging/rotate.py:45-60`
-**Fix**: Already documented in H-7 (prior PR) that `open_trust_log_for_append` must be called under `_trust_log_lock`. This PR's H-12 fix ensures `get_last_hash()` also acquires the lock, completing the thread safety coverage.
-
-### ✅ H-12: Missing get_last_hash Thread Safety
-**Status**: FIXED (2026-02-08)
-**Location**: `logging/trust_log.py:85-115`
-**Fix**: Wrapped the function body with `with _trust_log_lock:` so external callers are protected from reading partial/incomplete JSON lines during concurrent writes. Uses RLock so internal calls from `append_trust_log()` (which already holds the lock) do not deadlock.
+| Severity | Total | Fixed | Deferred / Accepted | % Complete |
+|----------|-------|-------|---------------------|-----------|
+| CRITICAL | 3     | 3     | 0                   | 100%      |
+| HIGH     | 12    | 10    | 2                   | 83%       |
+| MEDIUM   | 20    | 12    | 8                   | 60%       |
+| LOW      | 10    | 3     | 7                   | 30%       |
+| **TOTAL**| 45    | 28    | 17                  | **62%**   |
 
 ---
 
-## MEDIUM Severity Issues - Status
+## 5. Severity Status Detail
 
-### ✅ M-1: No directory fsync after rename
-**Status**: FIXED (this PR)
-**Location**: `core/atomic_io.py:72-85`
-**Fix**: Added directory fsync after `os.replace()` to ensure rename durability on ext4
+### CRITICAL (3/3 Fixed)
 
-### ⏸️ M-2: Side effects at import time in `paths.py`
-**Status**: DEFERRED (requires architectural changes)
-**Location**: `logging/paths.py:72-73, 82-83, 96`
-**Reason**: Would require lazy initialization pattern for all path resolution. Consider for next major version.
+- ✅ **C-1**: `logging/dataset_writer.py` の並行 append 競合を `threading.RLock` で保護。
+- ✅ **C-2**: `core/atomic_io.py` で `np.savez()` 後 + rename 後の fsync を整備。
+- ✅ **C-3**: `api/server.py` に request body 上限ミドルウェア（既定10MB）を追加。
 
-### ✅ M-3: Hardcoded `BASE_DIR` in `memory/store.py`
-**Status**: FIXED (this PR)
-**Location**: `memory/store.py:9-12`
-**Fix**: Made configurable via `VERITAS_MEMORY_DIR` environment variable
+### HIGH (10 Fixed / 2 Deferred)
 
-### ✅ M-4: Brute-force JSON extraction in `planner.py`
-**Status**: FIXED (2026-02-16)
-**Location**: `core/planner.py`
-**Fix**: Reworked the JSON rescue path to iterate `json.JSONDecoder().raw_decode()` candidates and prefer objects that include `steps`, preventing early capture of unrelated leading JSON objects while keeping decode-attempt limits for DoS resistance. Added a regression test for noisy-prefix payloads in `tests/test_planner.py`.
+- ✅ **H-1**: `builtins.MEM` 汚染を除去。
+- ✅ **H-2**: `core/value_core.py` を `atomic_write_json()` へ統一。
+- ✅ **H-3**: `append_trust_log` 重複実装を単一経路へ統合。
+- ⏸️ **H-4 (Deferred)**: `core/memory.py` の import 時副作用（次期メジャーで再設計）。
+- ✅ **H-5**: trust hash chain 読み取り起点を `get_last_hash()` に統一。
+- ✅ **H-6**: `core/strategy.py` の fallback import を `veritas_os.core` に修正。
+- ✅ **H-7**: `logging/rotate.py` の lock 前提を明文化。
+- ✅ **H-8**: runtime pickle/joblib 読込を廃止、`.pkl` 検出時は安全停止。
+- ✅ **H-9**: `core/fuji.py` の hot reload を fd ベース読込へ変更し TOCTOU を解消。
+- ✅ **H-10**: `core/memory.py` の `MEM_VEC` を lock + ローカルスナップショットで保護。
+- ✅ **H-11**: H-7 + H-12 の組合せで `rotate.py` 競合経路を封止。
+- ✅ **H-12**: `logging/trust_log.py:get_last_hash()` に `_trust_log_lock` を適用。
 
-### ⏸️ M-5: Lazy state initialization race conditions
-**Status**: DEFERRED (acceptable with GIL)
-**Location**: `api/server.py`
-**Reason**: Python's GIL provides sufficient protection for the current pattern. Consider explicit locking only if moving to a non-GIL environment.
+### MEDIUM (12 Fixed / 8 Deferred or Accepted)
 
-### ✅ M-6: Non-atomic trust log append in `value_core.py`
-**Status**: FIXED (prior to this PR)
-**Location**: `core/value_core.py:373-374`
-**Fix**: Now delegates to canonical `append_trust_log()` which uses atomic operations
+- ✅ **M-1**: `core/atomic_io.py` rename 後の directory fsync を追加。
+- ⏸️ **M-2 (Deferred)**: `logging/paths.py` import-time side effect。
+- ✅ **M-3**: `memory/store.py` を `VERITAS_MEMORY_DIR` で設定可能化。
+- ✅ **M-4**: `core/planner.py` の JSON rescue を `raw_decode()` ベースに再設計。
+- ⏸️ **M-5 (Deferred)**: lazy state 初期化の明示 lock 化（現状 GIL 前提）。
+- ✅ **M-6**: trust log append を canonical 実装に一本化。
+- ⏸️ **M-7 (Accepted)**: `schemas.py` coercion は外部入力互換のため維持。
+- ⏸️ **M-8 (Deferred)**: SHA-256 補助関数の重複整理。
+- ⏸️ **M-9 (Deferred)**: `scripts/reason.py` のハードコードパス。
+- ⏸️ **M-10 (Accepted)**: `predict_gate_label()` の 0.5 fallback。
+- ⏸️ **M-11 (Deferred)**: `critique.py` mutable default パターン改善。
+- ⏸️ **M-12 (Deferred)**: `core/self_healing.py` budget 永続化。
+- ✅ **M-13**: `/status` の内部エラー詳細を debug mode 時のみ公開。
+- ✅ **M-14**: HTTP security headers を追加。
+- ✅ **M-15**: `web_search` の `max_results` 上限を 100 に制限。
+- ✅ **M-16**: LLM Safety API 呼び出し JSON シリアライズ不備を修正。
+- ✅ **M-17**: `memory/embedder.py` に入力長/バッチ上限を追加。
+- ✅ **M-18**: `memory/index_cosine.py` の silent except をログ化。
+- ✅ **M-19**: `atomic_append_line()` 生成ファイル権限を 0o600 へ強化。
+- ✅ **M-20**: `world.py` lock file 権限を 0o600 へ強化。
 
-### ⏸️ M-7: Complex coercion logic in `schemas.py`
-**Status**: ACCEPTED (intentional design)
-**Reason**: The coercion provides robustness for external API input. Consider adding type-strict internal variants if needed.
+### LOW (3 Fixed / 7 Deferred or Accepted)
 
-### ⏸️ M-8: Redundant SHA-256 functions
-**Status**: DEFERRED (code quality)
-**Location**: `logging/trust_log.py`
-**Reason**: Low priority - consolidation would be nice but not critical
-
-### ⏸️ M-9: Hardcoded log path in `reason.py`
-**Status**: DEFERRED (code quality)
-**Location**: `scripts/reason.py:22-23`
-**Reason**: Low impact - reason logs are separate from trust logs by design
-
-### ⏸️ M-10: `predict_gate_label()` returns hardcoded 0.5
-**Status**: ACCEPTED (graceful degradation)
-**Reason**: Intentional fallback when ML model unavailable
-
-### ⏸️ M-11: Mutable default pattern in `critique.py`
-**Status**: DEFERRED (code quality)
-**Reason**: Current pattern is safe (uses `or {}`). Refactor to dataclass would be nice but not critical.
-
-### ⏸️ M-12: Budget tracking not persisted
-**Status**: DEFERRED (feature enhancement)
-**Location**: `core/self_healing.py`
-**Reason**: Would require persistence layer design. Consider for future version.
-
-### ✅ M-13: Internal Error Details Exposed in /status Endpoint
-**Status**: FIXED (2026-02-08)
-**Location**: `api/server.py`
-**Fix**: Internal error details (`cfg_error`, `pipeline_error`) are now only exposed when `VERITAS_DEBUG_MODE` is enabled. In production, only a boolean (has error / no error) is returned.
-
-### ✅ M-14: Missing HTTP Security Headers
-**Status**: FIXED (2026-02-08)
-**Location**: `api/server.py`
-**Fix**: Added `add_security_headers` middleware that sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Referrer-Policy: strict-origin-when-cross-origin`, and `Cache-Control: no-store`.
-
-### ✅ M-15: Unbounded max_results in web_search
-**Status**: FIXED (2026-02-08)
-**Location**: `tools/web_search.py`
-**Fix**: Added upper bound check `if mr > 100: mr = 100` to prevent resource exhaustion.
-
-### ✅ M-16: Invalid JSON serialization in LLM Safety API Call
-**Status**: FIXED (2026-02-08)
-**Location**: `tools/llm_safety.py:213`
-**Fix**: Changed `{user_payload}` (Python repr) to `{json.dumps(user_payload, ensure_ascii=False)}` for proper JSON serialization.
-
-### ✅ M-17: Denial of Service - Unbounded Memory Allocation in HashEmbedder
-**Status**: FIXED (2026-02-08)
-**Location**: `memory/embedder.py`
-**Fix**: Added `MAX_TEXT_LENGTH = 100,000` and `MAX_BATCH_SIZE = 10,000` limits with `ValueError` on exceeding.
-
-### ✅ M-18: Silent Error Handling Hides Index Loading Failures
-**Status**: FIXED (2026-02-08)
-**Location**: `memory/index_cosine.py:80-81, 100-101`
-**Fix**: Replaced bare `except Exception: pass` with `logger.debug()` and `logger.warning()` calls to log the exception details.
+- ⏸️ **L-1 (Deferred)**: timestamp 形式の統一。
+- ✅ **L-2**: `api/evolver.py` の `print()` を logger へ置換。
+- ⏸️ **L-3 (Accepted)**: `rsi.py` は sample 実装として維持。
+- ✅ **L-4 (Accepted)**: `core/reflection.py` の forward-compat `hasattr()` 分岐は意図的。
+- ⏸️ **L-5 (Deferred)**: bare except の段階的削減。
+- ⏸️ **L-6 (Deferred)**: `MemoryStore` 名称衝突。
+- ⏸️ **L-7 (Deferred)**: 未使用 import / dead code 整理。
+- ✅ **L-8**: `value_core.py` のコメントインデント不整合を修正。
 
 ---
 
-## LOW Severity Issues - Status
+## 6. Security Watchlist and Alerts
 
-### ⏸️ L-1: Inconsistent timestamp formats
-**Status**: DEFERRED (code quality)
-**Reason**: Would require coordinated change across many modules. Consider standardizing in next major version.
+### Remaining Watchlist
 
-### ✅ L-2: `evolver.py` uses `print()` for logging
-**Status**: FIXED (this PR)
-**Location**: `api/evolver.py:27, 55`
-**Fix**: Replaced `print()` with `logger.warning()` and `logger.error()`
+- 現在、**CRITICAL/HIGH で未解決の直接セキュリティ欠陥は 0 件**。
+- ただし、以下は継続監視対象。
+  - H-4: import時の重い副作用（初期化順序依存）
+  - M-2: `paths.py` import-time side effect
+  - L-5: bare `except` 残存
 
-### ⏸️ L-3: `rsi.py` stub implementation
-**Status**: ACCEPTED (documented as sample)
-**Reason**: Documented as sample implementation. Not a bug.
-
-### ✅ L-4: References non-existent `adjust_weights` method
-**Status**: ACCEPTED (intentional forward-compat)
-**Location**: `core/reflection.py:95-99`
-**Reason**: Has `hasattr()` guard and comment explaining it's intentional forward-compatibility pattern
-
-### ⏸️ L-5: Various bare except patterns
-**Status**: DEFERRED (code quality)
-**Reason**: Provides resilience. Consider adding DEBUG logging in future.
-
-### ⏸️ L-6: Name collision: `MemoryStore` in two files
-**Status**: DEFERRED (architectural)
-**Reason**: Different purposes. Consider renaming in major refactor.
-
-### ⏸️ L-7: Unused imports and dead code
-**Status**: DEFERRED (code quality)
-**Reason**: Low priority cleanup
-
----
-
-## Remaining Security-Risk Watchlist
-
-- **現在、CRITICAL/HIGHで未解決の直接的セキュリティ欠陥はなし。**
-- ただし以下は将来的にセキュリティ/信頼性へ波及し得るため継続監視する。
-  - H-4: module import時の重い副作用（初期化順序依存による誤動作リスク）
-  - M-2: `paths.py` の import-time side effect（設定不整合時の予期せぬパス解決）
-  - L-5: bare `except` の残存（障害兆候の見逃し）
-
-### Security Alerts (Operational)
+### Operational Security Alerts
 
 1. ⚠️ **Legacy `.pkl` artifacts are prohibited in runtime paths.**
-   - 理由: pickle は任意コード実行リスクを持つため。
-   - 対応: オフライン移行手順を使用し、実行系は JSON 形式に限定する。
+   - 理由: pickle は任意コード実行リスクを持つ。
+   - 対応: オフライン移行手順を利用し、実行系は JSON 限定とする。
 2. ⚠️ **Deferred import-time side effects can become latent availability risks.**
-   - 理由: 初期化順序の揺れにより障害再現性が低下するため。
-   - 対応: 次期メジャーで lazy init 方針を統一し、段階移行する。
+   - 理由: 初期化順序の揺れで障害再現性が低下する。
+   - 対応: 次期メジャーで lazy init 方針を統一する。
 
 ---
 
-## Security Summary
+## 7. Recommendations
 
-✅ **CodeQL Analysis**: No security vulnerabilities detected
-✅ **Code Review**: No critical security issues in changed files
-✅ **Data Integrity**: Fixed directory fsync issue (M-1) for crash safety
-✅ **Hash Chain Integrity**: Already fixed in prior commits (H-5); thread safety added to `get_last_hash()` (H-12)
-✅ **DoS Protection**: Request body size limit added (C-3)
-✅ **Security Headers**: HTTP security headers middleware added (M-14)
-✅ **Information Disclosure**: Internal error details gated behind debug mode (M-13)
-✅ **Input Validation**: max_results bounded (M-15), embedder input limits (M-17)
-✅ **JSON Serialization**: LLM safety payload properly serialized (M-16)
-✅ **File Permissions**: Restrictive permissions (0o600) for atomic append and lock files (M-19, M-20)
-✅ **TOCTOU Prevention**: Policy hot reload uses fd-based approach (H-9); MEM_VEC uses local snapshots (H-10)
-✅ **Thread Safety**: `get_last_hash()` now protected by RLock (H-12); `rebuild_vector_index()` under `_mem_vec_lock` (H-10)
+### Short-term (next PR cycle)
 
----
+1. ✅ pickle runtime block の運用期限（2026-06-30）をランタイムログへ明示。
+2. ✅ オフライン移行手順 `docs/operations/MEMORY_PICKLE_MIGRATION.md` を継続更新。
+3. ✅ `.pkl` 混入検知を `scripts/security/check_runtime_pickle_artifacts.py` で CI/運用へ組み込み。
 
-## New Findings (2026-02-08 - Follow-up Review)
+### Long-term (next major)
 
-### ✅ M-19: World-Readable File Permissions in atomic_append_line
-**Status**: FIXED
-**File**: `core/atomic_io.py:238`
-**Problem**: `atomic_append_line()` creates files with `0o644` (world-readable). Trust logs and dataset files contain sensitive decision data that should not be readable by other system users.
-**Fix**: Changed to `0o600` (owner read/write only).
-
-### ✅ M-20: World-Readable Lock File in world.py
-**Status**: FIXED
-**File**: `core/world.py:262`
-**Problem**: Lock file created with `0o644` permissions. Lock files should be restricted to the owner.
-**Fix**: Changed to `0o600`.
-
-### ✅ L-8: Misindented Comment in value_core.py
-**Status**: FIXED
-**File**: `core/value_core.py:342`
-**Problem**: Comment block `# ==============================` was accidentally indented inside `rebalance_from_trust_log()` function body while the rest of the comment block was at module level.
-**Fix**: Moved comment to module level (consistent indentation).
+1. H-4/M-2 対応として module 初期化を lazy pattern へ再設計。
+2. L-1 対応として timestamp 形式を全体統一。
+3. M-8/L-7 対応として重複ユーティリティと dead code を整理。
+4. M-5 対応として lazy state 初期化に明示 lock を導入。
 
 ---
 
-## Recommendations
+## 8. Documentation Governance Checklist
 
-### Immediate Action Items (Done)
-1. ✅ Add directory fsync in atomic_io.py (M-1)
-2. ✅ Make memory directory configurable (M-3)
-3. ✅ Replace print with logging in evolver.py (L-2)
-4. ✅ Add HTTP security headers middleware (M-14)
-5. ✅ Gate internal error details behind debug mode (M-13)
-6. ✅ Add upper bound to web_search max_results (M-15)
-7. ✅ Fix JSON serialization in LLM safety (M-16)
-8. ✅ Add input size limits to HashEmbedder (M-17)
-9. ✅ Add error logging to index_cosine.py (M-18)
-10. ✅ Restrict file permissions for atomic append (M-19)
-11. ✅ Restrict lock file permissions (M-20)
-12. ✅ Fix misindented comment in value_core.py (L-8)
-13. ✅ Fix TOCTOU race in policy hot reload (H-9)
-14. ✅ Fix MEM_VEC thread safety with local snapshots + lock (H-10)
-15. ✅ Fix get_last_hash thread safety with RLock (H-12)
+本ファイル更新時は以下を必須チェックとする。
 
-### Short-term Recommendations (Next PR)
-1. ✅ Set hard deadline for pickle runtime block (2026-06-30) in MemoryOS runtime logs
-2. ✅ Document offline migration path for pickle users: `docs/operations/MEMORY_PICKLE_MIGRATION.md`
-3. ✅ Add CI/runtime guardrails to prevent `.pkl` artifacts in production paths (`scripts/security/check_runtime_pickle_artifacts.py`)
-
-### Long-term Recommendations (Next Major Version)
-1. Refactor module initialization to lazy pattern (H-4, M-2)
-2. Standardize timestamp format across codebase (L-1)
-3. Consolidate redundant utility functions (M-8, L-7)
-4. Add explicit thread locking for lazy initialization (M-5)
-
-### Documentation Governance
-
-- このファイルを更新する場合、以下を必須チェックとする。
-  1. 対応件数（Fixed/Deferred/Accepted）と完了率テーブルを同時更新する。
-  2. セキュリティ影響がある変更は `Remaining Security-Risk Watchlist` と `Security Alerts` の両方に反映する。
-  3. 責務境界（Planner / Kernel / Fuji / MemoryOS）を越える提案は、実装方針ではなく「Deferred理由」として記録する。
+1. Fixed/Deferred/Accepted 件数と完了率テーブルを同時更新。
+2. セキュリティ影響変更を watchlist と security alerts の両方へ反映。
+3. Planner / Kernel / Fuji / MemoryOS の責務境界を越える提案は Deferred 理由として記録。
 
 ---
 
-## Testing Status
+## 9. Validation Snapshot
 
-- ✅ atomic_io tests: All 11 tests pass
-- ✅ Code review: No issues found
-- ✅ CodeQL security scan: No alerts
-- ✅ Full test suite: 1079 passed (0 failed, excluding unrelated async test)
+- ✅ atomic_io tests: 11 passed
+- ✅ code review checks: no blocker
+- ✅ CodeQL security scan: no alert
+- ✅ full test summary (recorded): 1079 passed, 0 failed（非関連 async test 除外）
 
 ---
 
-## Conclusion
+## 10. Conclusion
 
-This PR successfully addresses all CRITICAL issues, 9 of 12 HIGH severity issues, and 12 of 20 MEDIUM severity issues identified in the code review. The remaining deferred issues are either architectural (requiring large refactoring) or acceptable given the current design constraints.
+本レビュー改善は、CRITICAL を全解消し、HIGH/MEDIUM の主要な安全性・整合性課題を実運用可能な水準まで引き上げた。
 
-The codebase is now more robust with:
-- Improved crash safety through directory fsync
-- Better configurability for deployment flexibility  
-- Improved logging hygiene
-- Continued hash chain integrity
-- HTTP security headers for web protection
-- DoS protection via request body size limits
-- Input validation for resource exhaustion prevention
-- Proper JSON serialization in LLM safety calls
-- Error logging instead of silent swallowing in index operations
-- Internal error details gated behind debug mode
-- Restrictive file permissions (0o600) for sensitive files
-- TOCTOU prevention in policy hot reload via fd-based approach (H-9)
-- Thread-safe MEM_VEC access via local-variable snapshots and lock (H-10)
-- Thread-safe `get_last_hash()` for external callers (H-12)
+特に、以下の防御面が強化された。
 
-The deferred issues should be addressed in future PRs as part of planned architectural improvements.
+- 永続化の耐障害性（fsync と atomicity）
+- ポリシー再読込・ベクトルアクセスの競合耐性（TOCTOU/thread safety）
+- API 公開情報とヘッダの安全化（情報漏えい・ブラウザ保護）
+- 入力サイズ上限制御による DoS 耐性
+- ファイル権限強化（0o600）
+- pickle 実行経路の封鎖
+
+未解決項目は、主にアーキテクチャ再編が必要な Deferred 領域であり、責務境界を守りつつ次期メジャーでの計画的な解消が妥当。
