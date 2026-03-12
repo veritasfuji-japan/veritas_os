@@ -56,11 +56,19 @@ def _iter_unique_existing_dirs(paths: list[Path]) -> list[Path]:
 
 
 def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
-    """Find direct-child `.pkl` files under each scan directory."""
+    """Find `.pkl` files recursively under each scan directory.
+
+    The scan is case-insensitive (`.pkl` / `.PKL`) so renamed legacy artifacts
+    cannot bypass detection by filename casing alone.
+    """
     findings: list[Path] = []
     for directory in _iter_unique_existing_dirs(scan_dirs):
         findings.extend(
-            sorted(path for path in directory.glob("*.pkl") if path.is_file())
+            sorted(
+                path
+                for path in directory.rglob("*")
+                if path.is_file() and path.suffix.lower() == ".pkl"
+            )
         )
     return findings
 
