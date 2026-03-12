@@ -496,6 +496,38 @@ def test_resolve_memory_dir_accepts_allowlisted_path_in_production(
     assert str(allowed_dir.resolve(strict=False)) in caplog.text
 
 
+def test_resolve_memory_dir_rejects_relative_path(memory_env, monkeypatch, caplog, tmp_path):
+    """相対パスの VERITAS_MEMORY_DIR は安全上の理由で拒否する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", "relative/memory")
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+
+    caplog.set_level("WARNING")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == default_dir
+    assert "[SECURITY]" in caplog.text
+
+
+def test_resolve_memory_dir_rejects_path_traversal(memory_env, monkeypatch, caplog, tmp_path):
+    """`..` を含む VERITAS_MEMORY_DIR はパストラバーサル対策で拒否する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", "/tmp/../unsafe")
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+
+    caplog.set_level("WARNING")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == default_dir
+    assert "[SECURITY]" in caplog.text
+
+
 # ---------------------------------------------------------
 # put_episode: kind="episodic" で put に委譲
 # ---------------------------------------------------------
