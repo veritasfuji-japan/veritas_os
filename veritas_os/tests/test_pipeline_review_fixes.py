@@ -429,18 +429,33 @@ class TestSecurityHardening:
         assert any("_safe_web_search failed for query=" in message for message in messages)
         assert all("a@example.com" not in message for message in messages)
 
-    def test_safe_paths_rejects_external_env_dir_by_default(self, monkeypatch):
+    def test_safe_paths_rejects_external_env_dir_by_default(
+        self,
+        monkeypatch,
+        caplog,
+    ):
         """External env paths should be ignored unless explicitly allowed."""
         import veritas_os.core.pipeline as pipeline_mod
 
+        log_env = "/tmp/veritas_external_logs"
+        dataset_env = "/tmp/veritas_external_dataset"
         monkeypatch.delenv("VERITAS_ALLOW_EXTERNAL_PATHS", raising=False)
-        monkeypatch.setenv("VERITAS_LOG_DIR", "/tmp/veritas_external_logs")
-        monkeypatch.setenv("VERITAS_DATASET_DIR", "/tmp/veritas_external_dataset")
+        monkeypatch.setenv("VERITAS_LOG_DIR", log_env)
+        monkeypatch.setenv("VERITAS_DATASET_DIR", dataset_env)
 
-        log_dir, dataset_dir, _, _ = pipeline_mod._safe_paths()
+        with caplog.at_level(logging.WARNING, logger="veritas_os.core.pipeline"):
+            log_dir, dataset_dir, _, _ = pipeline_mod._safe_paths()
 
-        assert str(log_dir).startswith(str(pipeline_mod.REPO_ROOT))
-        assert str(dataset_dir).startswith(str(pipeline_mod.REPO_ROOT))
+        assert str(log_dir) != log_env
+        assert str(dataset_dir) != dataset_env
+        assert any(
+            "[SECURITY][pipeline] Ignoring VERITAS_LOG_DIR" in record.getMessage()
+            for record in caplog.records
+        )
+        assert any(
+            "[SECURITY][pipeline] Ignoring VERITAS_DATASET_DIR" in record.getMessage()
+            for record in caplog.records
+        )
 
     def test_safe_paths_accepts_external_env_dir_when_explicitly_allowed(
         self,
