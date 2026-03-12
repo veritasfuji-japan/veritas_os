@@ -26,9 +26,21 @@ def test_find_legacy_pickles_recursive_and_case_insensitive(tmp_path: Path) -> N
     upper_joblib = tmp_path / "INDEX.JOBLIB"
     upper_joblib.write_bytes(b"legacy")
 
-    findings = checker._find_legacy_pickles([tmp_path])
+    findings, missing_dirs = checker._find_legacy_pickles([tmp_path])
 
     assert findings == [upper_joblib, upper, joblib, direct, nested]
+    assert missing_dirs == []
+
+
+
+def test_find_legacy_pickles_reports_missing_scan_dirs(tmp_path: Path) -> None:
+    """Missing scan paths are reported separately from findings."""
+    missing = tmp_path / "does_not_exist"
+
+    findings, missing_dirs = checker._find_legacy_pickles([missing])
+
+    assert findings == []
+    assert missing_dirs == [missing.resolve(strict=False)]
 
 
 def test_main_returns_error_when_findings_exist(
