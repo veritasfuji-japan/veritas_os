@@ -36,6 +36,23 @@ updated_at: 2026-03-12
   3. `test_code_review_fixes*.py` 系統の代表テスト通過（25件）。
   4. Deferred項目（import時副作用・設計改善系）が残るため上限評価を抑制。
 
+### Executive Snapshot (2026-03-12)
+
+| 項目 | 現在値 | 補足 |
+|---|---:|---|
+| 完了率（件数ベース） | 62% (28/45) | CRITICAL は 100% 解消 |
+| 統合品質評価 | 70% | Deferred の構造課題を加味 |
+| 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | 0 件 | 継続監視対象は別表に集約 |
+| 運用上の最大注意点 | 旧 `.pkl` 資産 | 任意コード実行リスクのため本番配置禁止 |
+
+### Scope and Ownership Guardrail
+
+- 本レビューの改善方針は、以下の責務境界を越えないことを前提とする。
+  - Planner: 計画生成とJSON抽出の堅牢化（M-4）
+  - Kernel/Fuji: ポリシーホットリロード整合性（H-9）
+  - MemoryOS: 永続化/インデックス/pickle廃止対応（H-8, H-10, M-3, M-17）
+- 境界横断の大規模改修（例: import時副作用の全面再設計）は Deferred とし、次期メジャーで扱う。
+
 ---
 
 ## Summary
@@ -275,6 +292,15 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
   - M-2: `paths.py` の import-time side effect（設定不整合時の予期せぬパス解決）
   - L-5: bare `except` の残存（障害兆候の見逃し）
 
+### Security Alerts (Operational)
+
+1. ⚠️ **Legacy `.pkl` artifacts are prohibited in runtime paths.**
+   - 理由: pickle は任意コード実行リスクを持つため。
+   - 対応: オフライン移行手順を使用し、実行系は JSON 形式に限定する。
+2. ⚠️ **Deferred import-time side effects can become latent availability risks.**
+   - 理由: 初期化順序の揺れにより障害再現性が低下するため。
+   - 対応: 次期メジャーで lazy init 方針を統一し、段階移行する。
+
 ---
 
 ## Security Summary
@@ -345,6 +371,13 @@ This document tracks the status of issues identified in `CODE_REVIEW_REPORT.md`.
 2. Standardize timestamp format across codebase (L-1)
 3. Consolidate redundant utility functions (M-8, L-7)
 4. Add explicit thread locking for lazy initialization (M-5)
+
+### Documentation Governance
+
+- このファイルを更新する場合、以下を必須チェックとする。
+  1. 対応件数（Fixed/Deferred/Accepted）と完了率テーブルを同時更新する。
+  2. セキュリティ影響がある変更は `Remaining Security-Risk Watchlist` と `Security Alerts` の両方に反映する。
+  3. 責務境界（Planner / Kernel / Fuji / MemoryOS）を越える提案は、実装方針ではなく「Deferred理由」として記録する。
 
 ---
 
