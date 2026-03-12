@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Fail CI when legacy pickle artifacts are found in MemoryOS runtime directories.
+
+This check enforces the runtime policy that `.pkl` artifacts must not be placed in
+MemoryOS runtime paths because pickle deserialization can lead to arbitrary code
+execution (RCE). The runtime already blocks loading; this script adds CI guardrails
+so risky files are rejected before deployment.
+"""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SCAN_DIRS = [
+    REPO_ROOT / "veritas_os" / "core" / "models",
+]
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    """Parse CLI arguments for optional scan root overrides."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Detect legacy .pkl artifacts in MemoryOS runtime directories "
+            "and fail if any are present."
+        )
+    )
+    parser.add_argument(
+        "--scan-dir",
+        dest="scan_dirs",
+        action="append",
+        default=[],
+        help=(
+            "Additional directory to scan. Can be passed multiple times. "
+            "Only direct children (*.pkl) are checked to match runtime behavior."
+        ),
+    )
+    return parser.parse_args(argv)
+
+
+def _iter_unique_existing_dirs(paths: list[Path]) -> list[Path]:
+    """Return deduplicated, existing directories preserving first-seen order."""
+    unique_dirs: list[Path] = []
+    seen: set[Path] = set()
+
+    for path in paths:
+        resolved = path.resolve(strict=False)
+        if resolved in seen or not resolved.exists() or not resolved.is_dir():
+            continue
+        seen.add(resolved)
+        unique_dirs.append(resolved)
+
+    return unique_dirs
+
+
+def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
+    """Find direct-child `.pkl` files under each scan directory."""
+    findings: list[Path] = []
+    for directory in _iter_unique_existing_dirs(scan_dirs):
+        findings.extend(
+            sorted(path for path in directory.glob("*.pkl") if path.is_file())
+        )
+    return findings
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Run the runtime pickle artifact check and return process exit code."""
+    parsed = _parse_args(argv or sys.argv[1:])
+    scan_dirs = DEFAULT_SCAN_DIRS + [Path(raw) for raw in parsed.scan_dirs]
+    findings = _find_legacy_pickles(scan_dirs)
+
+    if not findings:
+        print("No legacy runtime pickle artifacts detected in scanned directories.")
+        return 0
+
+    print("[SECURITY] Legacy runtime pickle artifacts detected:")
+    for file_path in findings:
+        try:
+            relative = file_path.relative_to(REPO_ROOT)
+        except ValueError:
+            relative = file_path
+        print(f"- {relative}")
+
+    print(
+        "\nRemove these files before deployment. Runtime pickle/joblib loading is "
+        "disabled due to RCE risk. See docs/operations/MEMORY_PICKLE_MIGRATION.md"
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
