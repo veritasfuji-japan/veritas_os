@@ -7,20 +7,22 @@ from pathlib import Path
 from scripts.security import check_runtime_pickle_artifacts as checker
 
 
-def test_find_legacy_pickles_direct_children_only(tmp_path: Path) -> None:
-    """Direct `.pkl` files are detected while nested files are ignored."""
+def test_find_legacy_pickles_recursive_and_case_insensitive(tmp_path: Path) -> None:
+    """Both nested and uppercase-extension pickle files are detected."""
     direct = tmp_path / "legacy.pkl"
     direct.write_bytes(b"legacy")
 
     nested_dir = tmp_path / "nested"
     nested_dir.mkdir()
-    nested = nested_dir / "ignored.pkl"
+    nested = nested_dir / "detected.pkl"
     nested.write_bytes(b"legacy")
+
+    upper = tmp_path / "MODEL.PKL"
+    upper.write_bytes(b"legacy")
 
     findings = checker._find_legacy_pickles([tmp_path])
 
-    assert findings == [direct]
-    assert nested not in findings
+    assert findings == [upper, direct, nested]
 
 
 def test_main_returns_error_when_findings_exist(
