@@ -63,6 +63,27 @@ def _emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
     )
 
 
+def _warn_for_legacy_pickle_artifacts(scan_roots: List[Path]) -> None:
+    """Emit security warnings when legacy pickle artifacts are present.
+
+    This runtime guardrail does not deserialize any pickle payloads.
+    It only scans direct children of known MemoryOS runtime directories and
+    emits migration guidance so operators can remove risky artifacts.
+    """
+    checked_roots = set()
+    for raw_root in scan_roots:
+        root = raw_root.resolve(strict=False)
+        if root in checked_roots or not root.exists() or not root.is_dir():
+            continue
+        checked_roots.add(root)
+
+        for legacy_file in root.glob("*.pkl"):
+            _emit_legacy_pickle_runtime_blocked(
+                path=legacy_file,
+                artifact_name="runtime artifact",
+            )
+
+
 # OS 判定
 IS_WIN = os.name == "nt"
 
@@ -543,6 +564,12 @@ if MEM_VEC_EXTERNAL is not None and MEM_VEC_EXTERNAL.__class__.__name__ == "Simp
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "core" / "models"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+runtime_scan_roots = [MODELS_DIR]
+configured_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
+if configured_memory_dir:
+    runtime_scan_roots.append(Path(configured_memory_dir))
+_warn_for_legacy_pickle_artifacts(runtime_scan_roots)
 
 MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.onnx"
 VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.json"

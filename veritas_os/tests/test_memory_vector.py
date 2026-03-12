@@ -242,6 +242,39 @@ def test_vector_memory_add_and_search_performance():
     assert search_time < 5.0
 
 
+
+
+def test_warn_for_legacy_pickle_artifacts_scans_direct_children(tmp_path: Path, caplog):
+    """ランタイムディレクトリ直下の .pkl を検知して警告ログを出す。"""
+    import logging
+
+    root = tmp_path / "runtime"
+    root.mkdir()
+    direct = root / "legacy.pkl"
+    nested = root / "nested" / "ignored.pkl"
+    nested.parent.mkdir()
+    direct.write_bytes(b"x")
+    nested.write_bytes(b"x")
+
+    with caplog.at_level(logging.ERROR, logger="veritas_os.core.memory"):
+        memory._warn_for_legacy_pickle_artifacts([root, root])
+
+    assert "Legacy runtime artifact pickle detected" in caplog.text
+    assert str(direct) in caplog.text
+    assert str(nested) not in caplog.text
+
+
+def test_warn_for_legacy_pickle_artifacts_ignores_missing_paths(caplog):
+    """存在しないパスやファイルパスを渡しても例外にならない。"""
+    import logging
+
+    missing = Path("/tmp/veritas_missing_pickle_dir")
+    file_path = Path(__file__)
+
+    with caplog.at_level(logging.ERROR, logger="veritas_os.core.memory"):
+        memory._warn_for_legacy_pickle_artifacts([missing, file_path])
+
+    assert caplog.text == ""
 def test_legacy_pickle_migration_disabled_by_default(tmp_path: Path, monkeypatch):
     """オプトインなしではレガシーpickleを読み込まないことを確認する。"""
     import numpy as np
