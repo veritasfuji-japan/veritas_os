@@ -480,6 +480,27 @@ class TestSecurityHardening:
         assert log_dir == (tmp_path / "logs").resolve()
         assert dataset_dir == (tmp_path / "dataset").resolve()
 
+    def test_safe_paths_warns_when_external_paths_enabled(
+        self,
+        monkeypatch,
+        caplog,
+        tmp_path,
+    ):
+        """Enabling external paths must emit an explicit security warning."""
+        import veritas_os.core.pipeline as pipeline_mod
+
+        monkeypatch.setenv("VERITAS_ALLOW_EXTERNAL_PATHS", "1")
+        monkeypatch.setenv("VERITAS_LOG_DIR", str(tmp_path / "logs"))
+        monkeypatch.setenv("VERITAS_DATASET_DIR", str(tmp_path / "dataset"))
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.core.pipeline"):
+            pipeline_mod._safe_paths()
+
+        assert any(
+            "VERITAS_ALLOW_EXTERNAL_PATHS=1 is enabled" in record.getMessage()
+            for record in caplog.records
+        )
+
     def test_safe_paths_rejects_external_lp_file_targets_by_default(
         self,
         monkeypatch,
