@@ -67,8 +67,8 @@ def _warn_for_legacy_pickle_artifacts(scan_roots: List[Path]) -> None:
     """Emit security warnings when legacy pickle artifacts are present.
 
     This runtime guardrail does not deserialize any pickle payloads.
-    It only scans direct children of known MemoryOS runtime directories and
-    emits migration guidance so operators can remove risky artifacts.
+    It scans recursively under known MemoryOS runtime directories and emits
+    migration guidance so operators can remove risky artifacts.
     """
     checked_roots = set()
     for raw_root in scan_roots:
@@ -77,9 +77,15 @@ def _warn_for_legacy_pickle_artifacts(scan_roots: List[Path]) -> None:
             continue
         checked_roots.add(root)
 
-        for legacy_file in root.glob("*.pkl"):
+        for candidate in root.rglob("*"):
+            if not candidate.is_file():
+                continue
+
+            if candidate.suffix.lower() not in {".pkl", ".joblib"}:
+                continue
+
             _emit_legacy_pickle_runtime_blocked(
-                path=legacy_file,
+                path=candidate,
                 artifact_name="runtime artifact",
             )
 

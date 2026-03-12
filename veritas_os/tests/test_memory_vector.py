@@ -244,24 +244,27 @@ def test_vector_memory_add_and_search_performance():
 
 
 
-def test_warn_for_legacy_pickle_artifacts_scans_direct_children(tmp_path: Path, caplog):
-    """ランタイムディレクトリ直下の .pkl を検知して警告ログを出す。"""
+def test_warn_for_legacy_pickle_artifacts_scans_recursively(tmp_path: Path, caplog):
+    """ランタイム配下を再帰走査して危険拡張子を検知する。"""
     import logging
 
     root = tmp_path / "runtime"
     root.mkdir()
     direct = root / "legacy.pkl"
-    nested = root / "nested" / "ignored.pkl"
+    nested = root / "nested" / "detected.pkl"
+    legacy_joblib = root / "nested" / "model.joblib"
     nested.parent.mkdir()
     direct.write_bytes(b"x")
     nested.write_bytes(b"x")
+    legacy_joblib.write_bytes(b"x")
 
     with caplog.at_level(logging.ERROR, logger="veritas_os.core.memory"):
         memory._warn_for_legacy_pickle_artifacts([root, root])
 
     assert "Legacy runtime artifact pickle detected" in caplog.text
     assert str(direct) in caplog.text
-    assert str(nested) not in caplog.text
+    assert str(nested) in caplog.text
+    assert str(legacy_joblib) in caplog.text
 
 
 def test_warn_for_legacy_pickle_artifacts_ignores_missing_paths(caplog):
