@@ -99,8 +99,6 @@ def _ensure_secure_permissions(path: Path) -> None:
 
 # ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う
 LOG_ROOT = _resolve_log_root()
-LOG_ROOT.mkdir(parents=True, exist_ok=True)
-_ensure_secure_permissions(LOG_ROOT)
 
 # trust_log など通常ログ
 LOG_DIR = LOG_ROOT
@@ -109,8 +107,6 @@ LOG_JSONL = LOG_DIR / "trust_log.jsonl"
 
 # decide_* や shadow 用
 DASH_DIR = LOG_ROOT / "DASH"
-DASH_DIR.mkdir(parents=True, exist_ok=True)
-_ensure_secure_permissions(DASH_DIR)
 
 # doctor/shadow decide 用ディレクトリ
 SHADOW_DIR = DASH_DIR
@@ -123,13 +119,27 @@ DATASET_DIR = DASH_DIR
 # プロジェクト直下 .../veritas_clean_test2/data
 PROJECT_ROOT = REPO_ROOT.parent
 DATA_DIR = PROJECT_ROOT / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ValueCore のEMA等
 VAL_JSON = DATA_DIR / "value_stats.json"
 
 # ReasonOS メタログ
 META_LOG = LOG_DIR / "meta_log.jsonl"
+
+
+def ensure_log_directories() -> None:
+    """Create and harden runtime log/data directories on demand.
+
+    This function intentionally centralizes side effects that were previously
+    executed at import time so read-only or test-only imports remain safe.
+    """
+    LOG_ROOT.mkdir(parents=True, exist_ok=True)
+    _ensure_secure_permissions(LOG_ROOT)
+
+    DASH_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_secure_permissions(DASH_DIR)
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 __all__ = [
     "REPO_ROOT",
@@ -145,4 +155,5 @@ __all__ = [
     "DATA_DIR",
     "VAL_JSON",
     "META_LOG",
+    "ensure_log_directories",
 ]

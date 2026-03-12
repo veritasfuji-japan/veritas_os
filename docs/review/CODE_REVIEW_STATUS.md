@@ -31,14 +31,14 @@ updated_at: 2026-03-12
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **62% (28/45)** | CRITICAL は 100% 解消 |
+| 完了率（件数ベース） | **67% (30/45)** | CRITICAL は 100% 解消 |
 | 統合品質評価 | **70%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中28件を対応（62%）。
+1. 指摘45件中30件を対応（67%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -62,10 +62,10 @@ updated_at: 2026-03-12
 | Severity | Total | Fixed | Deferred / Accepted | % Complete |
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
-| HIGH     | 12    | 10    | 2                   | 83%       |
-| MEDIUM   | 20    | 12    | 8                   | 60%       |
+| HIGH     | 12    | 11    | 1                   | 92%       |
+| MEDIUM   | 20    | 13    | 7                   | 65%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 28    | 17                  | **62%**   |
+| **TOTAL**| 45    | 30    | 15                  | **67%**   |
 
 ---
 
@@ -77,12 +77,12 @@ updated_at: 2026-03-12
 - ✅ **C-2**: `core/atomic_io.py` で `np.savez()` 後 + rename 後の fsync を整備。
 - ✅ **C-3**: `api/server.py` に request body 上限ミドルウェア（既定10MB）を追加。
 
-### HIGH (10 Fixed / 2 Deferred)
+### HIGH (11 Fixed / 1 Deferred)
 
 - ✅ **H-1**: `builtins.MEM` 汚染を除去。
 - ✅ **H-2**: `core/value_core.py` を `atomic_write_json()` へ統一。
 - ✅ **H-3**: `append_trust_log` 重複実装を単一経路へ統合。
-- ⏸️ **H-4 (Deferred)**: `core/memory.py` の import 時副作用（次期メジャーで再設計）。
+- ✅ **H-4**: `core/memory.py` の重い初期化（モデル読込・スキャン）を lazy 初期化へ移行。
 - ✅ **H-5**: trust hash chain 読み取り起点を `get_last_hash()` に統一。
 - ✅ **H-6**: `core/strategy.py` の fallback import を `veritas_os.core` に修正。
 - ✅ **H-7**: `logging/rotate.py` の lock 前提を明文化。
@@ -92,10 +92,10 @@ updated_at: 2026-03-12
 - ✅ **H-11**: H-7 + H-12 の組合せで `rotate.py` 競合経路を封止。
 - ✅ **H-12**: `logging/trust_log.py:get_last_hash()` に `_trust_log_lock` を適用。
 
-### MEDIUM (12 Fixed / 8 Deferred or Accepted)
+### MEDIUM (13 Fixed / 7 Deferred or Accepted)
 
 - ✅ **M-1**: `core/atomic_io.py` rename 後の directory fsync を追加。
-- ⏸️ **M-2 (Deferred)**: `logging/paths.py` import-time side effect。
+- ✅ **M-2**: `logging/paths.py` の import-time side effect を `ensure_log_directories()` に集約。
 - ✅ **M-3**: `memory/store.py` を `VERITAS_MEMORY_DIR` で設定可能化。
 - ✅ **M-4**: `core/planner.py` の JSON rescue を `raw_decode()` ベースに再設計。
 - ⏸️ **M-5 (Deferred)**: lazy state 初期化の明示 lock 化（現状 GIL 前提）。
@@ -134,8 +134,6 @@ updated_at: 2026-03-12
 
 - 現在、**CRITICAL/HIGH で未解決の直接セキュリティ欠陥は 0 件**。
 - ただし、以下は継続監視対象。
-  - H-4: import時の重い副作用（初期化順序依存）
-  - M-2: `paths.py` import-time side effect
   - L-5: bare `except` 残存
 
 ### Operational Security Alerts
@@ -143,7 +141,7 @@ updated_at: 2026-03-12
 1. ⚠️ **Legacy `.pkl` artifacts are prohibited in runtime paths.**
    - 理由: pickle は任意コード実行リスクを持つ。
    - 対応: オフライン移行手順を利用し、実行系は JSON 限定とする。
-2. ⚠️ **Deferred import-time side effects can become latent availability risks.**
+2. ⚠️ **Remaining import-time side effects can become latent availability risks.**
    - 理由: 初期化順序の揺れで障害再現性が低下する。
    - 対応: 次期メジャーで lazy init 方針を統一する。
 
@@ -159,7 +157,7 @@ updated_at: 2026-03-12
 
 ### Long-term (next major)
 
-1. H-4/M-2 対応として module 初期化を lazy pattern へ再設計。
+1. ✅ H-4/M-2 対応として module 初期化の lazy pattern 化を実施。
 2. L-1 対応として timestamp 形式を全体統一。
 3. M-8/L-7 対応として重複ユーティリティと dead code を整理。
 4. M-5 対応として lazy state 初期化に明示 lock を導入。

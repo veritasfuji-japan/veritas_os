@@ -19,6 +19,7 @@ def test_dataset_dir_is_path_and_exists(tmp_path, monkeypatch):
 
     # env 変更を反映させるために再読み込み
     importlib.reload(paths)
+    paths.ensure_log_directories()
 
     assert isinstance(paths.DATASET_DIR, Path)
 
@@ -49,8 +50,28 @@ def test_log_root_permissions(tmp_path, monkeypatch):
     monkeypatch.delenv("VERITAS_REQUIRE_ENCRYPTED_LOG_DIR", raising=False)
 
     module = importlib.reload(paths)
+    module.ensure_log_directories()
     log_mode = stat.S_IMODE(module.LOG_DIR.stat().st_mode)
     dash_mode = stat.S_IMODE(module.DASH_DIR.stat().st_mode)
 
     assert log_mode == 0o700
     assert dash_mode == 0o700
+
+
+def test_paths_import_has_no_mkdir_side_effects(tmp_path, monkeypatch):
+    """Importing paths should not create directories until explicitly requested."""
+    log_root = tmp_path / "logs"
+    monkeypatch.setenv("VERITAS_LOG_ROOT", str(log_root))
+    monkeypatch.delenv("VERITAS_DATA_DIR", raising=False)
+    monkeypatch.delenv("VERITAS_ENCRYPTED_LOG_ROOT", raising=False)
+    monkeypatch.delenv("VERITAS_REQUIRE_ENCRYPTED_LOG_DIR", raising=False)
+
+    module = importlib.reload(paths)
+
+    assert not module.LOG_ROOT.exists()
+    assert not module.DASH_DIR.exists()
+
+    module.ensure_log_directories()
+
+    assert module.LOG_ROOT.exists()
+    assert module.DASH_DIR.exists()

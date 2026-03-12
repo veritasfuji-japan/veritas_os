@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from veritas_os.logging.paths import LOG_DIR
+from veritas_os.logging.paths import LOG_DIR, ensure_log_directories
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
 from veritas_os.logging.encryption import encrypt as _encrypt_line, is_encryption_enabled
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
@@ -38,6 +38,8 @@ except Exception as _import_err:  # pragma: no cover
     )
 
 logger = logging.getLogger(__name__)
+
+ensure_log_directories()
 
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 

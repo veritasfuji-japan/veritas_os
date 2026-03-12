@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import importlib
 import json
 import time
 from typing import Any, Dict, List
@@ -606,3 +607,11 @@ def test_predict_gate_label_default(monkeypatch):
     monkeypatch.setattr(memory, "MODEL", None)
     label = memory.predict_gate_label("anything")
     assert label["allow"] == 0.5
+
+
+def test_memory_runtime_is_lazy_initialized():
+    """Heavy MemoryOS runtime should remain uninitialized until first access."""
+    module = importlib.reload(memory)
+    assert module._memory_runtime_initialized is False
+    _ = module._get_mem_vec_snapshot()
+    assert module._memory_runtime_initialized is True
