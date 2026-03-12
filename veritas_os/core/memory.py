@@ -28,6 +28,9 @@ from .config import capability_cfg, emit_capability_manifest
 
 logger = logging.getLogger(__name__)
 
+PICKLE_RUNTIME_BLOCK_DEADLINE = "2026-06-30"
+PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
+
 
 DEFAULT_RETENTION_CLASS = "standard"
 ALLOWED_RETENTION_CLASSES = {
@@ -44,6 +47,20 @@ def _is_explicitly_enabled(env_key: str) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
+    """Log a security warning for legacy pickle artifacts blocked at runtime."""
+    logger.error(
+        "[SECURITY] Legacy %s pickle detected at %s. "
+        "Runtime pickle/joblib loading is disabled and will not be restored "
+        "after %s. Migrate artifacts offline using %s. "
+        "Never place untrusted .pkl files in runtime directories (RCE risk).",
+        artifact_name,
+        path,
+        PICKLE_RUNTIME_BLOCK_DEADLINE,
+        PICKLE_MIGRATION_GUIDE_PATH,
+    )
 
 
 # OS 判定
@@ -192,10 +209,9 @@ class VectorMemory:
 
             # 2) 旧pickle形式は runtime では読み込まない
             if legacy_pkl_path.exists() and legacy_pkl_path.suffix == ".pkl":
-                logger.error(
-                    "[SECURITY] Legacy pickle index detected at %s. "
-                    "Runtime migration has been removed; use offline migration.",
-                    legacy_pkl_path,
+                _emit_legacy_pickle_runtime_blocked(
+                    path=legacy_pkl_path,
+                    artifact_name="vector index",
                 )
                 return
 
@@ -536,10 +552,9 @@ logger.info("[MemoryModel] module loaded from: %s", __file__)
 MODEL = None
 legacy_model_path = MODELS_DIR / "memory_model.pkl"
 if legacy_model_path.exists():
-    logger.error(
-        "[SECURITY] Legacy model pickle detected at %s. "
-        "Runtime loading has been removed; export to ONNX for deployment.",
-        legacy_model_path,
+    _emit_legacy_pickle_runtime_blocked(
+        path=legacy_model_path,
+        artifact_name="model",
     )
 elif MEMORY_MODEL_PATH.exists():
     logger.info(

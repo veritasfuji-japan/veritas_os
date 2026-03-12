@@ -279,9 +279,26 @@ def test_legacy_pickle_migration_opt_in(tmp_path: Path, monkeypatch):
     assert not idx_path.with_suffix(".json").exists()
 
 
+def test_legacy_pickle_detection_log_includes_migration_guidance(
+    tmp_path: Path, caplog
+):
+    """レガシーpickle検知ログに期限と移行ガイドを含むことを確認する。"""
+    import logging
+    import numpy as np
 
+    idx_path = tmp_path / "legacy_index.pkl"
+    documents = [
+        {"id": "doc_1", "kind": "semantic", "text": "legacy doc", "tags": []},
+    ]
+    embeddings = np.ones((1, 4), dtype="float32")
+    _write_legacy_pickle(idx_path, documents, embeddings)
 
+    with caplog.at_level(logging.ERROR, logger="veritas_os.core.memory"):
+        _new_vector_memory(index_path=idx_path, dim=4)
 
+    assert "[SECURITY] Legacy vector index pickle detected" in caplog.text
+    assert memory.PICKLE_RUNTIME_BLOCK_DEADLINE in caplog.text
+    assert memory.PICKLE_MIGRATION_GUIDE_PATH in caplog.text
 
 
 def test_load_model_is_thread_safe(monkeypatch):
