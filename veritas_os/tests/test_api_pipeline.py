@@ -211,6 +211,27 @@ async def test_safe_web_search_sanitizes_max_results(monkeypatch):
     assert calls == [20, 5]
 
 
+@pytest.mark.anyio
+async def test_safe_web_search_sanitizes_query_and_rejects_empty(monkeypatch):
+    calls: List[str] = []
+
+    def fake_ws(query: str, max_results: int = 5) -> Dict[str, Any]:
+        calls.append(query)
+        return {"ok": True, "results": []}
+
+    monkeypatch.setattr(api_pipeline, "web_search", fake_ws, raising=False)
+
+    assert await api_pipeline._safe_web_search("   ") is None
+
+    long_query = ("a" * 520) + "\x00\x1f"
+    await api_pipeline._safe_web_search(long_query)
+
+    assert len(calls) == 1
+    assert len(calls[0]) == 512
+    assert "\x00" not in calls[0]
+    assert "\x1f" not in calls[0]
+
+
 # =========================================================
 # run_decide_pipeline のためのダミー型
 # =========================================================
@@ -1101,7 +1122,6 @@ async def test_run_decide_pipeline_trustlog_and_shadow_exception_swallowed(monke
     assert isinstance(metrics, dict)
     assert "effective_risk" in metrics
     assert "gate" in payload
-
 
 
 

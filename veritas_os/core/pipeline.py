@@ -797,6 +797,18 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     """
     import sys
 
+    query_text = str(query or "").strip()
+    if not query_text:
+        return None
+    if len(query_text) > 512:
+        query_text = query_text[:512]
+
+    # Block control characters to reduce risk of log injection /
+    # unsafe propagation into external adapters.
+    query_text = re.sub(r"[\x00-\x1f\x7f]", "", query_text)
+    if not query_text:
+        return None
+
     try:
         max_results_int = int(max_results)
     except (TypeError, ValueError):
@@ -811,7 +823,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         return None
 
     try:
-        ws = fn(query, max_results=max_results_int)  # type: ignore[misc]
+        ws = fn(query_text, max_results=max_results_int)  # type: ignore[misc]
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
