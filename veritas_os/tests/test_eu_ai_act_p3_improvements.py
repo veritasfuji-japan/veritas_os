@@ -146,6 +146,20 @@ class TestEncryption:
             else:
                 os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
 
+    def test_invalid_base64_key_is_rejected(self) -> None:
+        """Invalid Base64 should disable encryption instead of being tolerated."""
+        old = os.environ.get("VERITAS_ENCRYPTION_KEY")
+        os.environ["VERITAS_ENCRYPTION_KEY"] = "%%%not-base64%%%"
+        try:
+            assert is_encryption_enabled() is False
+            plaintext = '{"security": "check"}'
+            assert encrypt(plaintext) == plaintext
+        finally:
+            if old is not None:
+                os.environ["VERITAS_ENCRYPTION_KEY"] = old
+            else:
+                os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
+
 
 # =====================================================================
 # P3-3: Continuous risk monitoring (GAP-15, Art. 9)
