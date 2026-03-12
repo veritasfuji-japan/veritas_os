@@ -41,29 +41,48 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _iter_unique_existing_dirs(paths: list[Path]) -> list[Path]:
-    """Return deduplicated, existing directories preserving first-seen order."""
+def _iter_unique_existing_dirs(
+    paths: list[Path],
+) -> tuple[list[Path], list[Path]]:
+    """Return unique existing dirs and non-existing path inputs.
+
+    Returns:
+        tuple[list[Path], list[Path]]: Existing directories in first-seen order
+        and paths that do not exist.
+    """
     unique_dirs: list[Path] = []
+    missing_dirs: list[Path] = []
     seen: set[Path] = set()
 
     for path in paths:
         resolved = path.resolve(strict=False)
-        if resolved in seen or not resolved.exists() or not resolved.is_dir():
+        if resolved in seen:
+            continue
+        if not resolved.exists():
+            missing_dirs.append(resolved)
+            seen.add(resolved)
+            continue
+        if not resolved.is_dir():
+            seen.add(resolved)
             continue
         seen.add(resolved)
         unique_dirs.append(resolved)
 
-    return unique_dirs
+    return unique_dirs, missing_dirs
 
 
-def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
+def _find_legacy_pickles(scan_dirs: list[Path]) -> tuple[list[Path], list[Path]]:
     """Find `.pkl`/`.joblib` files recursively under each scan directory.
 
     The scan is case-insensitive (`.pkl` / `.PKL`, `.joblib` / `.JOBLIB`) so
     renamed legacy artifacts cannot bypass detection by filename casing alone.
     """
     findings: list[Path] = []
-    for directory in _iter_unique_existing_dirs(scan_dirs):
+    missing_dirs: list[Path] = []
+    directories, missing = _iter_unique_existing_dirs(scan_dirs)
+    missing_dirs.extend(missing)
+
+    for directory in directories:
         findings.extend(
             sorted(
                 path
@@ -71,14 +90,24 @@ def _find_legacy_pickles(scan_dirs: list[Path]) -> list[Path]:
                 if path.is_file() and path.suffix.lower() in LEGACY_EXTENSIONS
             )
         )
-    return findings
+    return findings, missing_dirs
 
 
 def main(argv: list[str] | None = None) -> int:
     """Run the runtime pickle artifact check and return process exit code."""
     parsed = _parse_args(argv or sys.argv[1:])
     scan_dirs = DEFAULT_SCAN_DIRS + [Path(raw) for raw in parsed.scan_dirs]
-    findings = _find_legacy_pickles(scan_dirs)
+    findings, missing_dirs = _find_legacy_pickles(scan_dirs)
+
+    if missing_dirs:
+        print("[SECURITY] Scan target not found (check deployment path):")
+        for missing in missing_dirs:
+            try:
+                relative = missing.relative_to(REPO_ROOT)
+            except ValueError:
+                relative = missing
+            print(f"- {relative}")
+        print("Proceeding with remaining existing directories.\n")
 
     if not findings:
         print("No legacy runtime pickle artifacts detected in scanned directories.")
