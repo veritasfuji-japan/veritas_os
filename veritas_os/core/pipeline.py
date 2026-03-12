@@ -459,6 +459,33 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
     env_log = (os.getenv("VERITAS_LOG_DIR") or "").strip()
     env_ds = (os.getenv("VERITAS_DATASET_DIR") or "").strip()
 
+    allow_external = _to_bool(os.getenv("VERITAS_ALLOW_EXTERNAL_PATHS", "0"))
+
+    def _enforce_path_policy(candidate: Path, *, source_name: str) -> Optional[Path]:
+        """Validate a candidate path against the pipeline write policy.
+
+        Security policy:
+        - By default, only paths under ``REPO_ROOT`` are accepted.
+        - External paths can be explicitly allowed by setting
+          ``VERITAS_ALLOW_EXTERNAL_PATHS=1``.
+        """
+        resolved = candidate.resolve()
+        if allow_external:
+            return resolved
+
+        try:
+            resolved.relative_to(REPO_ROOT)
+            return resolved
+        except ValueError:
+            logger.warning(
+                "[SECURITY][pipeline] Ignoring %s=%r outside REPO_ROOT (%s). "
+                "Set VERITAS_ALLOW_EXTERNAL_PATHS=1 to allow explicitly.",
+                source_name,
+                str(candidate),
+                REPO_ROOT,
+            )
+            return None
+
     def _resolve_within_repo(path_text: str, *, env_name: str) -> Optional[Path]:
         """Resolve and validate environment override directory.
 
@@ -470,23 +497,7 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
         if not path_text:
             return None
 
-        candidate = Path(path_text).resolve()
-        allow_external = _to_bool(os.getenv("VERITAS_ALLOW_EXTERNAL_PATHS", "0"))
-        if allow_external:
-            return candidate
-
-        try:
-            candidate.relative_to(REPO_ROOT)
-            return candidate
-        except ValueError:
-            logger.warning(
-                "[SECURITY][pipeline] Ignoring %s=%r outside REPO_ROOT (%s). "
-                "Set VERITAS_ALLOW_EXTERNAL_PATHS=1 to allow explicitly.",
-                env_name,
-                path_text,
-                REPO_ROOT,
-            )
-            return None
+        return _enforce_path_policy(Path(path_text), source_name=env_name)
 
     try:
         from veritas_os.logging import paths as lp  # type: ignore
@@ -494,8 +505,20 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
         env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
         env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
 
-        LOG_DIR = env_log_path or Path(getattr(lp, "LOG_DIR")).resolve()
-        DATASET_DIR = env_ds_path or Path(getattr(lp, "DATASET_DIR")).resolve()
+        default_log_dir = _enforce_path_policy(
+            Path(getattr(lp, "LOG_DIR")),
+            source_name="logging.paths.LOG_DIR",
+        )
+        default_dataset_dir = _enforce_path_policy(
+            Path(getattr(lp, "DATASET_DIR")),
+            source_name="logging.paths.DATASET_DIR",
+        )
+        LOG_DIR = env_log_path or default_log_dir or (REPO_ROOT / "logs").resolve()
+        DATASET_DIR = (
+            env_ds_path
+            or default_dataset_dir
+            or (REPO_ROOT / "dataset").resolve()
+        )
         VAL_JSON = Path(getattr(lp, "VAL_JSON")).resolve()
         META_LOG = Path(getattr(lp, "META_LOG")).resolve()
         return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
@@ -721,6 +744,11 @@ async def call_core_decide(
     A) decide(ctx=..., options=..., min_evidence=..., query=...)
     B) decide(context=..., query=..., alternatives=..., min_evidence=...)
     C) decide(context, query, alternatives, min_evidence=?)
+
+    Security/Reliability note:
+    - 署名不一致は ``inspect.Signature.bind_partial`` で事前判定する。
+    - 実際の呼び出しで発生した ``TypeError`` は内部例外として再送出し、
+      フォールバックで握りつぶさない。
     """
 
     ctx = dict(context or {})
@@ -790,18 +818,16 @@ async def call_core_decide(
         return await res if _is_awaitable(res) else res
 
     # ---- Try C: positional (last resort) ----
-    try:
-        if not _can_bind(ctx, query, opts, min_evidence):
-            raise TypeError("pattern C signature mismatch")
+    if _can_bind(ctx, query, opts, min_evidence):
         attempted_patterns.append("C")
         res = core_fn(ctx, query, opts, min_evidence)
         return await res if _is_awaitable(res) else res
-    except TypeError as e:
-        raise TypeError(
-            f"call_core_decide: all calling conventions failed for {core_fn!r}. "
-            f"Attempted={attempted_patterns or ['none']}, "
-            f"kwargsB={sorted(kw.keys())}, last_error={e}"
-        ) from e
+
+    raise TypeError(
+        f"call_core_decide: all calling conventions failed for {core_fn!r}. "
+        f"Attempted={attempted_patterns or ['none']}, "
+        f"kwargsB={sorted(kw.keys())}, last_error=pattern C signature mismatch"
+    )
 
 
 # =========================================================
