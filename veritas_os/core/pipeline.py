@@ -519,8 +519,16 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
             or default_dataset_dir
             or (REPO_ROOT / "dataset").resolve()
         )
-        VAL_JSON = Path(getattr(lp, "VAL_JSON")).resolve()
-        META_LOG = Path(getattr(lp, "META_LOG")).resolve()
+        default_val_json = _enforce_path_policy(
+            Path(getattr(lp, "VAL_JSON")),
+            source_name="logging.paths.VAL_JSON",
+        )
+        default_meta_log = _enforce_path_policy(
+            Path(getattr(lp, "META_LOG")),
+            source_name="logging.paths.META_LOG",
+        )
+        VAL_JSON = default_val_json or (LOG_DIR / "value_ema.json").resolve()
+        META_LOG = default_meta_log or (LOG_DIR / "meta.log").resolve()
         return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
     except (ImportError, AttributeError, OSError) as e:
         _warn(f"[WARN][pipeline] logging.paths import failed -> fallback: {repr(e)}")
@@ -777,6 +785,7 @@ async def call_core_decide(
 
     p = _params(core_fn)
     attempted_patterns: List[str] = []
+    diagnostic_rows: List[str] = []
 
     # ---- Try A: ctx/options style ----
     kwargs_a = {
@@ -785,7 +794,11 @@ async def call_core_decide(
         "min_evidence": min_evidence,
         "query": query,
     }
-    if (("ctx" in p) or ("options" in p)) and _can_bind(**kwargs_a):
+    can_bind_a = (("ctx" in p) or ("options" in p)) and _can_bind(**kwargs_a)
+    diagnostic_rows.append(
+        f"A(can_bind={can_bind_a},keys={sorted(kwargs_a.keys())})"
+    )
+    if can_bind_a:
         attempted_patterns.append("A")
         res = core_fn(**kwargs_a)
         return await res if _is_awaitable(res) else res
@@ -812,21 +825,31 @@ async def call_core_decide(
     if "min_evidence" in p:
         kw["min_evidence"] = min_evidence
 
-    if _can_bind(**kw):
+    can_bind_b = _can_bind(**kw)
+    diagnostic_rows.append(f"B(can_bind={can_bind_b},keys={sorted(kw.keys())})")
+    if can_bind_b:
         attempted_patterns.append("B")
         res = core_fn(**kw)
         return await res if _is_awaitable(res) else res
 
     # ---- Try C: positional (last resort) ----
-    if _can_bind(ctx, query, opts, min_evidence):
+    can_bind_c = _can_bind(ctx, query, opts, min_evidence)
+    diagnostic_rows.append("C(can_bind=%s,keys=%s)" % (can_bind_c, ["args"]))
+    if can_bind_c:
         attempted_patterns.append("C")
         res = core_fn(ctx, query, opts, min_evidence)
         return await res if _is_awaitable(res) else res
 
+    logger.error(
+        "call_core_decide failed signature negotiation: fn=%r diagnostics=%s",
+        core_fn,
+        "; ".join(diagnostic_rows),
+    )
     raise TypeError(
         f"call_core_decide: all calling conventions failed for {core_fn!r}. "
         f"Attempted={attempted_patterns or ['none']}, "
-        f"kwargsB={sorted(kw.keys())}, last_error=pattern C signature mismatch"
+        f"kwargsB={sorted(kw.keys())}, diagnostics={diagnostic_rows}, "
+        "last_error=pattern C signature mismatch"
     )
 
 
