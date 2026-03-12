@@ -30,7 +30,7 @@
   - `VERITAS_ALLOW_EXTERNAL_PATHS=1` 時のみ明示的に外部パスを許可。
   - 監査観点では、拒否ログに生の入力値を残しすぎない設計が望ましい。
 - 推奨（改善済み方針）:
-  - 警告ログの候補パスを `_redact_text()` でマスク。
+  - 警告ログにフルパスを出さず、`<redacted_path:...>` 形式で最小限表示。
   - 起動時に「外部パス許可中」の明示ログを出し、運用監査しやすくする。
 
 ### 3) [Medium][Reliability] `call_core_decide()` の TypeError 判定
@@ -61,3 +61,12 @@
 1. `_safe_web_search()` 失敗ログを `query_redacted + query_sha256_12` 形式へ統一。
 2. `_safe_paths()` の拒否ログで候補パスをマスクし、監査漏えいリスクを低減。
 3. `VERITAS_ALLOW_EXTERNAL_PATHS=1` の利用時に起動警告を追加（任意）。
+
+
+## CI運用改善（2026-03-12 追記）
+- 事象: `dependency-audit` / `CodeQL` の `Set up job` で、Actionダウンロード失敗によりジョブ開始前に停止するケースを確認。
+- 改善方針:
+  - `pnpm/action-setup` を廃止し、`corepack` で `pnpm@9.15.3` を有効化（外部Action依存を1つ削減）。
+  - CodeQLジョブは `continue-on-error: true` とし、外形監視は継続しつつ、ネットワーク一過性障害でPR全体が停止しないようにする。
+- セキュリティ警告:
+  - CodeQLを非ブロッキング化すると、脆弱性検知の強制力は下がる。必ず `Security Gates`（Bandit/pip-audit/secret scan）を必須チェックとして併用すること。
