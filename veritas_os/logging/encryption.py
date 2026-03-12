@@ -55,12 +55,17 @@ def generate_key() -> str:
 
 
 def _get_key_bytes() -> Optional[bytes]:
-    """Return the 32-byte master key from the environment, or None."""
+    """Return the 32-byte master key from the environment, or None.
+
+    Security hardening:
+        Uses strict Base64 validation (``validate=True``) so malformed
+        values are rejected instead of being silently accepted.
+    """
     raw = os.environ.get("VERITAS_ENCRYPTION_KEY")
     if not raw:
         return None
     try:
-        key = base64.urlsafe_b64decode(raw)
+        key = base64.b64decode(raw.encode("ascii"), altchars=b"-_", validate=True)
         if len(key) != 32:
             logger.warning(
                 "VERITAS_ENCRYPTION_KEY must decode to 32 bytes; got %d — encryption disabled",
@@ -68,7 +73,7 @@ def _get_key_bytes() -> Optional[bytes]:
             )
             return None
         return key
-    except Exception:
+    except (ValueError, TypeError, UnicodeEncodeError):
         logger.warning("VERITAS_ENCRYPTION_KEY is not valid base64 — encryption disabled")
         return None
 
