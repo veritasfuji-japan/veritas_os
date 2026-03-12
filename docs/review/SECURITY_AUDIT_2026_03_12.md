@@ -46,6 +46,10 @@
 | F-07 | `veritas_os/core/debate.py:876` / `veritas_os/core/kernel.py:788,795` / `veritas_os/core/planner.py:1073` | debate/kernel/planner | すべての判定結果に `"source": "openai_llm"` がハードコード | debate結果、planner結果が常に `openai_llm` と記録される。実際にはfallbackでローカル判定の場合もあり、監査ログが不正確。 | **High** |
 | F-08 | `veritas_os/core/value_core.py:186` | `evaluate()` | ValueCoreのevaluateにfail-safe未設定 | ValueCore評価が例外を投げた場合の動作がevaluate内で定義されていない。呼び出し元依存。 | **Medium** |
 | F-09 | `veritas_os/core/llm_client.py:88` | `LLM_MODEL` | デフォルトモデルが `gpt-4.1-mini` にハードコード | 環境変数未設定時にOpenAI固定。マルチプロバイダー対応を謳いながら実質OpenAI単一依存。 | **Medium** |
+| F-10 | `veritas_os/core/fuji.py:579-588` | policy load failure | **ポリシーYAML読込失敗時にfail-permissive** | `VERITAS_FUJI_STRICT_POLICY_LOAD=0`（デフォルト）の場合、YAML破損時に `_DEFAULT_POLICY` へfallback。strict denyではなくpermissiveなデフォルトポリシーが適用される。 | **High** |
+| F-11 | `veritas_os/core/fuji.py:109-115,1159` | PoC mode 無効時の evidence チェック | **本番モードで evidence不足チェックが無効** | `_ENV_POC_MODE=False`（デフォルト）の場合、low_evidence でも deny/hold が発動せず `allow` される。evidence不足の意思決定が本番で素通りする。 | **High** |
+| F-12 | `veritas_os/core/fuji.py:371-396` | 環境変数によるポリシー上書き | `VERITAS_FUJI_POLICY`, `VERITAS_SAFETY_MODE` で安全挙動を外部から変更可能 | ポリシーファイルパスや安全モードが環境変数で上書き可能。変更が監査ログに記録されない。整合性チェック（HMAC等）もない。 | **Medium** |
+| F-13 | `veritas_os/core/fuji.py:832` | LLM failure時の `decision_status` | LLM失敗でリスク0.30に引上げるが `decision_status` は変更しない | `safety_head_error` カテゴリは追加されるが、`decision_status` が明示的に `hold` にならない。監査時にLLM障害下の判定を特定しにくい。 | **Medium** |
 
 ---
 
@@ -175,9 +179,18 @@ Phase 3: trustlog_signed.py のスタンドアロンファイルを廃止。
 2. fuji.py run_safety_head():
    - LLMエラー時のリスクフロアを 0.30 → 0.50 に引き上げ
    - stakes >= 0.7 の場合はリスクフロアを 0.70（deny強制）に設定
+   - safety_head_error カテゴリ検出時に decision_status を "hold" に強制
 
 3. kernel.py FUJI gate 例外ハンドラ:
    - catch対象に OSError, TimeoutError を追加
+
+4. fuji.py policy load:
+   - VERITAS_FUJI_STRICT_POLICY_LOAD のデフォルトを 1 (strict deny) に変更
+   - ポリシーファイルの変更を TrustLog に記録
+
+5. fuji.py evidence enforcement:
+   - 本番モードでも min_evidence 未満時に decision_status="hold" を発動
+   - PoC mode 限定のガードを撤廃し、常時有効に
 ```
 
 #### 3.3.3 監査ログの判定ソース明確化
@@ -205,6 +218,8 @@ Phase 3: trustlog_signed.py のスタンドアロンファイルを廃止。
 | heuristic強化 | なし（stricterなだけ） | false positiveが増加する可能性 | 閾値チューニング必要 |
 | LLM failureリスクフロア変更 | あり（0.30→0.50） | LLM障害時にholdされる判定が増加 | オペレーション周知 |
 | sourceフィールド値変更 | あり | "openai_llm"を前提としたテスト・ダッシュボード | テスト修正、ダッシュボード修正 |
+| policy load default strict化 | あり（fail-permissive→fail-deny） | YAML不在/破損時にシステム停止 | 正しいYAMLの配置を保証する必要 |
+| evidence enforcement常時有効 | あり | evidence不足時のallow判定が減少 | API利用者への周知、evidence付与の義務化 |
 
 ---
 
@@ -283,3 +298,7 @@ Task 2 (暗号化) → Task 3 (Redaction) → Task 4 (Safety二層化) → Task 
 | docs/notes/TRUSTLOG_VERIFICATION_REPORT.md | 「🔴 sha256_prevがハッシュ計算に使用されていない」 | trust_log.py:390 で sha256_prev を結合している（**修正済み**） | **一致（修正完了）** |
 | eu_ai_act/risk_assessment.md | 「RR-05: OpenAI API availability → 許容」理由:「意思決定支援であり自律決定ではない」 | FUJI Safety Headが完全にLLM依存。heuristic fallbackは17ワードのみ | **過小評価** |
 | MEMORY_PICKLE_MIGRATION.md | 「Runtimeでのpickle読み込みは禁止」 | 実装と一致。ただし deadline が残存 | **概ね一致** |
+| eu_ai_act/risk_assessment.md | 「RR-05: OpenAI API availability → 許容（意思決定支援であり自律決定ではない）」 | FUJI Gate が LLM 不在時に heuristic 17ワードにfallback。Policy Engine の閾値判定もLLM由来のrisk_scoreに依存 | **過小評価（安全性を確保できる根拠が実装にない）** |
+| eu_ai_act_compliance_review.md | 「PoC Gate でエビデンス不足時にhold/deny」 | `_ENV_POC_MODE=False`（デフォルト）では evidence チェックが無効。本番モードでは低エビデンスでも allow | **不一致（PoC限定であることが未記載）** |
+| fuji_error_codes.md | 「安全系 (F-4xxx) は原則自己修復しない → HUMAN_REVIEW」 | 実装と一致 | **一致** |
+| docs/self_healing_loop.md | 「安全性と監査性を最優先」 | self-healing ガードレールは実装済み。ただし FUJI Gate 自体の safety head がLLM依存 | **部分的一致** |
