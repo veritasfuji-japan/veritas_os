@@ -426,7 +426,11 @@ class TestSecurityHardening:
 
         assert result is None
         messages = [record.getMessage() for record in caplog.records]
-        assert any("_safe_web_search failed for query=" in message for message in messages)
+        assert any(
+            "_safe_web_search failed for query_redacted=" in message
+            for message in messages
+        )
+        assert any("query_sha256_12=" in message for message in messages)
         assert all("a@example.com" not in message for message in messages)
 
     def test_safe_paths_rejects_external_env_dir_by_default(
@@ -456,6 +460,8 @@ class TestSecurityHardening:
             "[SECURITY][pipeline] Ignoring VERITAS_DATASET_DIR" in record.getMessage()
             for record in caplog.records
         )
+        assert all(log_env not in record.getMessage() for record in caplog.records)
+        assert all(dataset_env not in record.getMessage() for record in caplog.records)
 
     def test_safe_paths_accepts_external_env_dir_when_explicitly_allowed(
         self,
