@@ -282,7 +282,15 @@ def score_alternatives(
         vc_compute = getattr(value_core, "compute_value_score", None)
         OptionScore = getattr(value_core, "OptionScore", None)
         has_value_core = callable(vc_compute) and OptionScore is not None
-    except Exception:
+        if not has_value_core:
+            log.debug(
+                "value_core API unavailable in score_alternatives: "
+                "compute_value_score=%s OptionScore=%s",
+                callable(vc_compute),
+                OptionScore is not None,
+            )
+    except Exception as e:
+        log.debug("value_core import unavailable in score_alternatives: %s", e)
         has_value_core = False
         vc_compute = None
         OptionScore = None
@@ -290,7 +298,8 @@ def score_alternatives(
     # adapt モジュール
     try:
         from . import adapt
-    except Exception:
+    except Exception as e:
+        log.debug("adapt import unavailable in score_alternatives: %s", e)
         adapt = None
 
     def _kw_hit(title: str, kws: List[str]) -> bool:
@@ -357,7 +366,11 @@ def score_alternatives(
                 if math.isfinite(vscore):
                     base *= vscore
             except Exception:
-                pass
+                log.debug(
+                    "value_core scoring failed for alternative id=%s",
+                    a.get("id"),
+                    exc_info=True,
+                )
 
         a["score_raw"] = _safe_float(a.get("score"), 1.0)
         a["score"] = round(base, 4)

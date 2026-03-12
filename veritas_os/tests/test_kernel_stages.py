@@ -203,6 +203,54 @@ class TestRunEnvironmentTools:
 class TestScoreAlternativesDetailed:
     """score_alternatives 関数の詳細テスト"""
 
+    def test_logs_when_value_core_api_is_unavailable(self, caplog):
+        """value_core API 不足時に debug ログを残すか"""
+        from veritas_os.core.kernel_stages import score_alternatives
+
+        with caplog.at_level("DEBUG", logger="veritas_os.core.kernel_stages"):
+            score_alternatives(
+                intent="plan",
+                query="test",
+                alternatives=[{"id": "1", "title": "test", "score": 1.0}],
+                telos_score=0.5,
+                stakes=0.5,
+                persona_bias=None,
+            )
+
+        assert "value_core API unavailable in score_alternatives" in caplog.text
+
+    def test_logs_when_value_core_scoring_fails(self, caplog):
+        """value_core スコア計算失敗時に debug ログを残すか"""
+        from veritas_os.core.kernel_stages import score_alternatives
+        import veritas_os.core.value_core as value_core
+
+        class DummyOptionScore:
+            """テスト用 OptionScore 互換オブジェクト。"""
+
+            def __init__(self, **kwargs):
+                self.payload = kwargs
+
+        def broken_value_score(_):
+            raise RuntimeError("simulated value scoring failure")
+
+        with patch.object(
+            value_core,
+            "compute_value_score",
+            broken_value_score,
+            create=True,
+        ), patch.object(value_core, "OptionScore", DummyOptionScore, create=True):
+            with caplog.at_level("DEBUG", logger="veritas_os.core.kernel_stages"):
+                score_alternatives(
+                    intent="plan",
+                    query="test",
+                    alternatives=[{"id": "opt-1", "title": "test", "score": 1.0}],
+                    telos_score=0.5,
+                    stakes=0.5,
+                    persona_bias=None,
+                )
+
+        assert "value_core scoring failed for alternative id=opt-1" in caplog.text
+
     def test_weather_intent_bonus(self):
         """weather intent のボーナスが適用されるか"""
         from veritas_os.core.kernel_stages import score_alternatives
