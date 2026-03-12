@@ -569,13 +569,6 @@ if MEM_VEC_EXTERNAL is not None and MEM_VEC_EXTERNAL.__class__.__name__ == "Simp
 # モデル関連（旧: memory_model.pkl）
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "core" / "models"
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
-
-runtime_scan_roots = [MODELS_DIR]
-configured_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
-if configured_memory_dir:
-    runtime_scan_roots.append(Path(configured_memory_dir))
-_warn_for_legacy_pickle_artifacts(runtime_scan_roots)
 
 MEMORY_MODEL_PATH = MODELS_DIR / "memory_model.onnx"
 VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.json"
@@ -583,59 +576,89 @@ VECTOR_INDEX_PATH = MODELS_DIR / "vector_index.json"
 logger.info("[MemoryModel] module loaded from: %s", __file__)
 
 MODEL = None
-legacy_model_path = MODELS_DIR / "memory_model.pkl"
-if legacy_model_path.exists():
-    _emit_legacy_pickle_runtime_blocked(
-        path=legacy_model_path,
-        artifact_name="model",
-    )
-elif MEMORY_MODEL_PATH.exists():
-    logger.info(
-        "[MemoryModel] ONNX model detected at %s but runtime loader is not "
-        "enabled in this module.",
-        MEMORY_MODEL_PATH,
-    )
-else:
-    logger.info("[MemoryModel] model file not found: %s", MEMORY_MODEL_PATH)
 
 # VectorMemory インスタンスの初期化
 # ★ 修正 (H-10): MEM_VEC へのアクセスをスレッドセーフにするためのロック
 _mem_vec_lock = threading.Lock()
 MEM_VEC = None
-try:
-    # 外部 MEM_VEC を使うかどうかの判定
-    use_external = False
-    if MEM_VEC_EXTERNAL is not None:
-        ext_model = getattr(MEM_VEC_EXTERNAL, "model", None)
+_runtime_guard_checked = False
 
-        # 「ちゃんと埋め込みモデルが載っている」場合だけ採用
-        if ext_model is not None:
-            use_external = True
-        else:
-            logger.info(
-                "[VectorMemory] External MEM_VEC found "
-                f"({MEM_VEC_EXTERNAL.__class__.__name__}), "
-                "but model is None → ignore and use built-in VectorMemory"
+
+def _run_runtime_pickle_guard_once() -> None:
+    """Run legacy pickle detection once at first runtime MemoryOS access."""
+    global _runtime_guard_checked
+
+    if _runtime_guard_checked:
+        return
+
+    with _mem_vec_lock:
+        if _runtime_guard_checked:
+            return
+
+        MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        runtime_scan_roots = [MODELS_DIR]
+        configured_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
+        if configured_memory_dir:
+            runtime_scan_roots.append(Path(configured_memory_dir))
+        _warn_for_legacy_pickle_artifacts(runtime_scan_roots)
+
+        legacy_model_path = MODELS_DIR / "memory_model.pkl"
+        if legacy_model_path.exists():
+            _emit_legacy_pickle_runtime_blocked(
+                path=legacy_model_path,
+                artifact_name="model",
             )
+        elif MEMORY_MODEL_PATH.exists():
+            logger.info(
+                "[MemoryModel] ONNX model detected at %s but runtime loader is not "
+                "enabled in this module.",
+                MEMORY_MODEL_PATH,
+            )
+        else:
+            logger.info("[MemoryModel] model file not found: %s", MEMORY_MODEL_PATH)
 
-    if use_external:
-        MEM_VEC = MEM_VEC_EXTERNAL
-        logger.info(
-            "[VectorMemory] Using external MEM_VEC implementation "
-            f"({MEM_VEC_EXTERNAL.__class__.__name__})"
-        )
-    else:
-        # デフォルトは組み込み VectorMemory
-        MEM_VEC = VectorMemory(index_path=VECTOR_INDEX_PATH)
-        logger.info("[VectorMemory] Using built-in VectorMemory implementation")
+        _runtime_guard_checked = True
 
-except (OSError, TypeError, ValueError, RuntimeError) as e:
-    # RuntimeError を追加: VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 かつ
-    # sentence_transformers 未インストール時に _load_model() が RuntimeError を
-    # 送出するため、モジュールレベル初期化では MEM_VEC = None に graceful degradation
-    # する。個別インスタンス化時（test / explicit use）は RuntimeError が伝播する。
-    logger.error("[VectorMemory] Initialization failed: %s", e)
-    MEM_VEC = None
+
+def _get_mem_vec() -> Any:
+    """Get MEM_VEC lazily to reduce import-time side effects."""
+    global MEM_VEC
+
+    _run_runtime_pickle_guard_once()
+    with _mem_vec_lock:
+        if MEM_VEC is not None:
+            return MEM_VEC
+
+        try:
+            use_external = False
+            if MEM_VEC_EXTERNAL is not None:
+                ext_model = getattr(MEM_VEC_EXTERNAL, "model", None)
+                if ext_model is not None:
+                    use_external = True
+                else:
+                    logger.info(
+                        "[VectorMemory] External MEM_VEC found "
+                        f"({MEM_VEC_EXTERNAL.__class__.__name__}), "
+                        "but model is None → ignore and use built-in VectorMemory"
+                    )
+
+            if use_external:
+                MEM_VEC = MEM_VEC_EXTERNAL
+                logger.info(
+                    "[VectorMemory] Using external MEM_VEC implementation "
+                    f"({MEM_VEC_EXTERNAL.__class__.__name__})"
+                )
+            else:
+                MEM_VEC = VectorMemory(index_path=VECTOR_INDEX_PATH)
+                logger.info(
+                    "[VectorMemory] Using built-in VectorMemory implementation"
+                )
+
+        except (OSError, TypeError, ValueError, RuntimeError) as exc:
+            logger.error("[VectorMemory] Initialization failed: %s", exc)
+            MEM_VEC = None
+
+        return MEM_VEC
 
 
 def predict_decision_status(query_text: str) -> str:
@@ -1331,18 +1354,17 @@ class MemoryStore:
         # ベクトルインデックスにも追加
         # ★ 修正 (H-10): ローカル変数でスナップショットし、
         #   チェックと使用の間で MEM_VEC が None になる競合を防止
-        with _mem_vec_lock:
-            _vec = MEM_VEC
-            if _vec is not None:
-                try:
-                    _vec.add(
+        _vec = _get_mem_vec()
+        if _vec is not None:
+            try:
+                _vec.add(
                         kind="episodic",
                         text=text,
                         tags=tags or [],
                         meta=meta or {},
                     )
-                except Exception as e:
-                    logger.warning("[MemoryOS] put_episode MEM_VEC.add error: %s", e)
+            except Exception as e:
+                logger.warning("[MemoryOS] put_episode MEM_VEC.add error: %s", e)
 
         return key
 
@@ -1580,18 +1602,17 @@ def add(
 
     # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
     # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
-    with _mem_vec_lock:
-        _vec = MEM_VEC
-        if _vec is not None:
-            try:
-                _vec.add(
-                    kind=kind,
-                    text=text,
-                    tags=tags or [],
-                    meta=entry_meta,
-                )
-            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
-                logger.warning("[MemoryOS.add] MEM_VEC.add error: %s", e)
+    _vec = _get_mem_vec()
+    if _vec is not None:
+        try:
+            _vec.add(
+                kind=kind,
+                text=text,
+                tags=tags or [],
+                meta=entry_meta,
+            )
+        except (AttributeError, TypeError, ValueError, RuntimeError) as e:
+            logger.warning("[MemoryOS.add] MEM_VEC.add error: %s", e)
 
     return record
 
@@ -1624,16 +1645,15 @@ def put(*args, **kwargs) -> bool:
 
         # ベクトルインデックスに追加
         # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
-        with _mem_vec_lock:
-            _vec = MEM_VEC
-            if _vec is not None:
-                try:
-                    base_text = text or json.dumps(doc, ensure_ascii=False)
-                    success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
-                    if success:
-                        logger.debug("[MemoryOS] Added to vector index: %s", kind)
-                except (AttributeError, TypeError, ValueError, RuntimeError) as e:
-                    logger.warning("[MemoryOS] MEM_VEC.add error (fallback to KVS): %s", e)
+        _vec = _get_mem_vec()
+        if _vec is not None:
+            try:
+                base_text = text or json.dumps(doc, ensure_ascii=False)
+                success = _vec.add(kind=kind, text=base_text, tags=tags, meta=meta)
+                if success:
+                    logger.debug("[MemoryOS] Added to vector index: %s", kind)
+            except (AttributeError, TypeError, ValueError, RuntimeError) as e:
+                logger.warning("[MemoryOS] MEM_VEC.add error (fallback to KVS): %s", e)
 
         # KVSにも保存
         user_id = meta.get("user_id", kind)
@@ -1730,7 +1750,7 @@ def search(
     # 1) ベクトル検索（優先）
     # ===========================
     # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
-    _vec = MEM_VEC
+    _vec = _get_mem_vec()
     if _vec is not None:
         try:
             raw = _vec.search(
@@ -2055,56 +2075,53 @@ def rebuild_vector_index() -> None:
         from veritas_os.core import memory
         memory.rebuild_vector_index()
     """
-    # ★ 修正 (H-10): _mem_vec_lock で排他制御し、
-    #   リビルド中に他スレッドが MEM_VEC を使用しないようにする
-    with _mem_vec_lock:
-        _vec = MEM_VEC
+    _vec = _get_mem_vec()
 
-        if _vec is None:
-            logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
-            return
+    if _vec is None:
+        logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
+        return
 
-        if not hasattr(_vec, "rebuild_index"):
-            logger.error(
-                "[MemoryOS] Cannot rebuild index: MEM_VEC has no rebuild_index()"
-            )
-            return
+    if not hasattr(_vec, "rebuild_index"):
+        logger.error(
+            "[MemoryOS] Cannot rebuild index: MEM_VEC has no rebuild_index()"
+        )
+        return
 
-        logger.info("[MemoryOS] Starting vector index rebuild...")
+    logger.info("[MemoryOS] Starting vector index rebuild...")
 
-        # memory.jsonから全データを読み込み
-        all_data = MEM.list_all()
+    # memory.jsonから全データを読み込み
+    all_data = MEM.list_all()
 
-        # ベクトル化可能なドキュメントを抽出
-        documents: List[Dict[str, Any]] = []
-        for record in all_data:
-            value = record.get("value")
-            if not isinstance(value, dict):
-                continue
+    # ベクトル化可能なドキュメントを抽出
+    documents: List[Dict[str, Any]] = []
+    for record in all_data:
+        value = record.get("value")
+        if not isinstance(value, dict):
+            continue
 
-            text = value.get("text", "")
-            if not text or not text.strip():
-                continue
+        text = value.get("text", "")
+        if not text or not text.strip():
+            continue
 
-            meta = value.get("meta", {}) or {}
-            meta = {
-                "user_id": record.get("user_id"),
-                "created_at": record.get("ts"),
-                **meta,
+        meta = value.get("meta", {}) or {}
+        meta = {
+            "user_id": record.get("user_id"),
+            "created_at": record.get("ts"),
+            **meta,
+        }
+
+        documents.append(
+            {
+                "kind": value.get("kind", "episodic"),
+                "text": text,
+                "tags": value.get("tags", []),
+                "meta": meta,
             }
+        )
 
-            documents.append(
-                {
-                    "kind": value.get("kind", "episodic"),
-                    "text": text,
-                    "tags": value.get("tags", []),
-                    "meta": meta,
-                }
-            )
+    logger.info("[MemoryOS] Found %d documents to index", len(documents))
 
-        logger.info("[MemoryOS] Found %d documents to index", len(documents))
+    # インデックス再構築
+    _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
-        # インデックス再構築
-        _vec.rebuild_index(documents)  # type: ignore[arg-type]
-
-        logger.info("[MemoryOS] Vector index rebuild complete")
+    logger.info("[MemoryOS] Vector index rebuild complete")
