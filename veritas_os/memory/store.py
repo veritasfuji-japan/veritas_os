@@ -39,7 +39,17 @@ def _resolve_memory_dir() -> Path:
         logger.info("[MemoryStore] memory directory resolved to %s", resolved_default)
         return default_path
 
-    candidate = Path(env_memory_dir)
+    candidate = Path(env_memory_dir).expanduser()
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        logger.warning(
+            "[SECURITY] VERITAS_MEMORY_DIR=%s rejected because only "
+            "absolute non-traversal paths are allowed. "
+            "Falling back to default path=%s",
+            env_memory_dir,
+            default_path.resolve(strict=False),
+        )
+        return default_path
+
     resolved_candidate = candidate.resolve(strict=False)
 
     if is_production:
