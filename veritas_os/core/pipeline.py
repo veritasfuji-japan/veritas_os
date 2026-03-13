@@ -175,7 +175,7 @@ except (ImportError, ModuleNotFoundError):
     pass
 
 
-Request: Any = Any  # fallback: tests may import pipeline without fastapi installed
+Request: Any = None  # fallback: tests may import pipeline without fastapi installed
 try:
     from fastapi import Request
 except (ImportError, ModuleNotFoundError):
@@ -302,8 +302,8 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 # Safe imports (API schemas / persona)
 # =========================================================
 
-DecideRequest: Any = Any
-DecideResponse: Any = Any
+DecideRequest: Any = None
+DecideResponse: Any = None
 try:
     from veritas_os.api.schemas import DecideRequest, DecideResponse
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
