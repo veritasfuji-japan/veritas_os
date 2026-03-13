@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import hashlib
 import re
+import builtins
 from typing import Any, Dict
 
 from datetime import datetime
@@ -103,6 +104,21 @@ def test_calc_sha256_handles_unserializable_objects():
     payload = {"x": {1, 2, 3}}
     h = trust_log.calc_sha256(payload)
     assert re.fullmatch(r"[0-9a-f]{64}", h)
+
+
+def test_load_mask_pii_raises_runtime_error_on_unexpected_import_failure(monkeypatch):
+    """Unexpected import failures should not be swallowed silently."""
+    original_import = builtins.__import__
+
+    def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "veritas_os.core.sanitize":
+            raise RuntimeError("unexpected import failure")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded_import)
+
+    with pytest.raises(RuntimeError, match="unexpected import failure"):
+        trust_log._load_mask_pii()
 
 
 # ============================
@@ -443,4 +459,3 @@ def test_write_shadow_decide_falls_back_to_context_query_and_none_fuji(temp_log_
     assert rec["request_id"] == request_id
     assert rec["query"] == "from context"
     assert rec["fuji"] is None
-
