@@ -1,9 +1,9 @@
-
 # VERITAS OS v2.0 — Auditable Decision OS for LLM Agents (Proto-AGI Skeleton)
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
@@ -17,7 +17,7 @@
 **Release Status**: In Development  
 **Author**: Takeshi Fujishita
 
-VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline**.
+VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility.
 
 > Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
 
@@ -28,40 +28,45 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safet
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
-- **Japanese README**: `README_JP.md` (if present)
+- **Japanese README**: [`README_JP.md`](README_JP.md)
 - **Code review document map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 
 ## Contents
 
 - [Why VERITAS?](#why-veritas)
 - [What It Does](#what-it-does)
+- [Project Structure](#project-structure)
+- [Frontend — Mission Control Dashboard](#frontend--mission-control-dashboard)
 - [API Overview](#api-overview)
 - [Quickstart](#quickstart)
-- [Security Notes (Important)](#security-notes-important)
-- [Docker (GHCR)](#docker-ghcr)
+- [Docker Compose (Full Stack)](#docker-compose-full-stack)
+- [Docker (Backend Only)](#docker-backend-only)
 - [Architecture (High-Level)](#architecture-high-level)
 - [TrustLog (Hash-Chained Audit Log)](#trustlog-hash-chained-audit-log)
 - [Tests](#tests)
+- [Security Notes (Important)](#security-notes-important)
 - [Roadmap (Near-Term)](#roadmap-near-term)
 - [License](#license)
+- [Citation (BibTeX)](#citation-bibtex)
 
 ---
 
 ## Why VERITAS?
 
-Most “agent frameworks” optimize autonomy and tool use.
+Most "agent frameworks" optimize autonomy and tool use.
 VERITAS optimizes for **governance**:
 
-- **Safety & compliance** enforced by a final gate (**FUJI Gate**)
-- **Reproducible decision pipeline** (fixed stages, structured outputs)
-- **Auditability** via a **hash-chained TrustLog** (tamper-evident decision history)
-- **Memory & world state** as first-class inputs (MemoryOS + WorldModel)
-- **Operational visibility** (Doctor dashboard for health & risk distribution)
+- **Safety & compliance** enforced by a final gate (**FUJI Gate**) with PII detection, harmful content blocking, prompt injection defense, and policy-driven rules
+- **Reproducible decision pipeline** (20+ stages, structured outputs, deterministic replay)
+- **Auditability** via a **hash-chained TrustLog** (tamper-evident, Ed25519-signed, WORM-mirrored decision history)
+- **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
+- **Operational visibility** via a full-stack **Mission Control dashboard** (Next.js) with real-time event streaming, risk analytics, and governance policy management
+- **EU AI Act compliance** — built-in compliance reporting, audit export, and deployment readiness checks
 
 **Target users**
 - AI safety / agent researchers
 - Teams operating LLMs in regulated or high-stakes environments
-- Governance / compliance teams building “policy-driven” LLM systems
+- Governance / compliance teams building "policy-driven" LLM systems
 
 ---
 
@@ -77,53 +82,196 @@ Key fields (simplified):
 |---|---|
 | `chosen` | Selected action + rationale, uncertainty, utility, risk |
 | `alternatives[]` | Other candidate actions |
-| `evidence[]` | Evidence used (MemoryOS / WorldModel / optional tools) |
+| `evidence[]` | Evidence used (MemoryOS / WorldModel / web search) |
 | `critique[]` | Self-critique & weaknesses |
 | `debate[]` | Pro/con/third-party viewpoints |
 | `telos_score` | Alignment score vs ValueCore |
 | `fuji` | FUJI Gate result (allow / modify / rejected) |
 | `gate.decision_status` | Normalized final status (`DecisionStatus`) |
 | `trust_log` | Hash-chained TrustLog entry (`sha256_prev`) |
+| `extras.metrics` | Per-stage latency, memory hits, web hits |
 
-Pipeline mental model:
+Pipeline stages:
 
 ```text
-Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
+Input → Normalize → Fallback Alternatives → Memory Retrieval → Web Search
+  → Core Execute → Model Boost → Debate → Critique → Value Learning (EMA)
+  → Compute Metrics → Evidence Hardening → FUJI Precheck → ValueCore
+  → Gate Decision → Assemble Response → Finalize Evidence
+  → Persist Audit Log → Persist Memory → Persist World State → Build Replay Snapshot
 ```
 
 Bundled subsystems:
 
-* **MemoryOS** — episodic/semantic memory & retrieval
-* **WorldModel** — world state, projects, progress snapshots
-* **ValueCore** — value function & Value EMA
-* **FUJI Gate** — safety / ethics / compliance gate
-* **TrustLog** — hash-chained audit log (JSONL)
-* **Doctor** — diagnostics & dashboard
+| Subsystem | Purpose |
+|---|---|
+| **MemoryOS** | Episodic/semantic/procedural/affective memory with vector search (sentence-transformers), retention classes, legal hold, and PII masking |
+| **WorldModel** | World state snapshots, causal transitions, project scoping, hypothetical simulation |
+| **ValueCore** | Value function with 9 weighted dimensions, online learning via EMA, auto-rebalancing from TrustLog feedback |
+| **FUJI Gate** | Multi-layer safety gate — PII detection, harmful content blocking, sensitive domain filtering, prompt injection defense, confusable character detection, LLM safety head, and policy-driven YAML rules |
+| **TrustLog** | Append-only hash-chained audit log (JSONL) with SHA-256 integrity, Ed25519 signatures, and WORM mirror support |
+| **Debate** | Multi-viewpoint reasoning (pro/con/third-party) for transparent decision rationale |
+| **Critique** | Self-critique generation with severity-ranked issues and fix suggestions |
+| **Planner** | Action plan generation with step-by-step execution strategies |
+| **Replay Engine** | Deterministic replay of past decisions with diff reporting for audit verification |
+| **Compliance** | EU AI Act compliance reports, internal governance reports, and deployment readiness checks |
+
+---
+
+## Project Structure
+
+```text
+veritas_os/                  ← Monorepo root
+├── veritas_os/              ← Python backend (FastAPI)
+│   ├── api/                 ← REST API server, schemas, governance
+│   │   ├── server.py        ← FastAPI app with 30+ endpoints
+│   │   ├── schemas.py       ← Pydantic v2 request/response models
+│   │   └── governance.py    ← Policy management with audit trail
+│   ├── core/                ← Decision engine
+│   │   ├── kernel.py        ← Decision computation engine
+│   │   ├── pipeline.py      ← 20+ stage orchestrator
+│   │   ├── fuji.py          ← FUJI safety gate
+│   │   ├── value_core.py    ← Value alignment & online learning
+│   │   ├── memory.py        ← MemoryOS (vector search)
+│   │   ├── world.py         ← WorldModel (state management)
+│   │   ├── llm_client.py    ← Multi-provider LLM gateway
+│   │   ├── debate.py        ← Debate mechanism
+│   │   ├── critique.py      ← Critique generation
+│   │   ├── planner.py       ← Action planning
+│   │   └── sanitize.py      ← PII masking & content safety
+│   ├── logging/             ← TrustLog, dataset writer, rotation
+│   ├── audit/               ← Signed audit log (Ed25519)
+│   ├── compliance/          ← EU AI Act report engine
+│   ├── security/            ← SHA-256 hashing, Ed25519 signing
+│   ├── tools/               ← Web search, GitHub search, LLM safety
+│   ├── replay/              ← Deterministic replay engine
+│   └── tests/               ← 3000+ Python tests
+├── frontend/                ← Next.js 15 Mission Control dashboard
+│   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
+│   ├── components/          ← Shared React components
+│   ├── features/console/    ← Decision Console feature module
+│   ├── lib/                 ← API client, validators, utilities
+│   ├── locales/             ← i18n (Japanese / English)
+│   └── e2e/                 ← Playwright E2E tests
+├── packages/
+│   ├── types/               ← Shared TypeScript types & runtime validators
+│   └── design-system/       ← Card, Button, AppShell components
+├── spec/                    ← OpenAPI specification (MIT)
+├── sdk/                     ← SDK interface layer (MIT)
+├── cli/                     ← CLI interface layer (MIT)
+├── policies/                ← Policy templates (examples are MIT)
+├── openapi.yaml             ← OpenAPI 3.x specification
+├── docker-compose.yml       ← Full-stack orchestration
+├── Makefile                 ← Dev/test/deploy commands
+└── pyproject.toml           ← Python project config
+```
+
+---
+
+## Frontend — Mission Control Dashboard
+
+The frontend is a **Next.js 15** (React 18, TypeScript) dashboard that provides operational visibility into the decision pipeline.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 15.5 (App Router) |
+| Language | TypeScript 5.7 |
+| Styling | Tailwind CSS 3.4 + CVA (class-variance-authority) |
+| Icons | Lucide React |
+| Testing | Vitest + Testing Library (unit), Playwright + axe-core (E2E + accessibility) |
+| i18n | Custom React Context (Japanese default, English) |
+| Security | CSP with per-request nonce, httpOnly BFF cookies, HSTS, X-Frame-Options |
+| Design System | `@veritas/design-system` (Card, Button, AppShell) |
+| Shared Types | `@veritas/types` with runtime type guards |
+
+### Pages
+
+| Route | Page | Description |
+|---|---|---|
+| `/` | **Command Dashboard** | Live event stream (FUJI rejects, policy updates, chain breaks), global health summary, critical rail metrics, operational priorities |
+| `/console` | **Decision Console** | Interactive decision pipeline — enter a query, watch 8-stage pipeline execute in real-time, view FUJI gate decision, chosen/alternatives/rejected, cost-benefit analysis, replay diff |
+| `/audit` | **TrustLog Explorer** | Browse hash-chained audit trail, verify chain integrity (verified/broken/missing/orphan), stage filtering, regulatory report export (JSON/CSV with PII redaction) |
+| `/governance` | **Governance Control** | Edit FUJI rules (8 safety gates), risk thresholds, auto-stop circuit breaker, log retention. Standard and EU AI Act modes. Draft → approval workflow with diff viewer and version history |
+| `/risk` | **Risk Dashboard** | 24-hour streaming risk/uncertainty chart, severity clustering, flagged request drilldown, anomaly pattern analysis |
+
+### Architecture
+
+- **BFF (Backend-for-Frontend)** pattern: all API requests proxied through Next.js (`/api/veritas/*`), browser never sees API credentials
+- **httpOnly session cookie** (`__veritas_bff`) for authentication, scoped to `/api/veritas/*`
+- **Runtime type guards** validate every API response before rendering (`isDecideResponse`, `isTrustLogsResponse`, `validateGovernancePolicyResponse`, etc.)
+- **SSE + WebSocket** for real-time event streaming (live FUJI rejects, trust log updates, risk bursts)
+- **XSS defense** via `sanitizeText()` on all API response rendering
 
 ---
 
 ## API Overview
 
-All protected endpoints require `X-API-Key`.
+All protected endpoints require `X-API-Key`. The full list of endpoints:
 
-| Method | Path                  | Description                       |
-| ------ | --------------------- | --------------------------------- |
-| GET    | `/health`             | Health check                      |
-| POST   | `/v1/decide`          | Full decision loop                |
-| POST   | `/v1/fuji/validate`   | Validate a single action via FUJI |
-| POST   | `/v1/replay/{decision_id}` | Re-run a stored decision and persist replay report |
-| POST   | `/v1/memory/put`      | Persist memory                    |
-| GET    | `/v1/memory/get`      | Retrieve memory                   |
-| GET    | `/v1/logs/trust/{id}` | TrustLog entry by ID              |
+### Decision
 
----
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/decide` | Full decision pipeline |
+| POST | `/v1/fuji/validate` | Validate a single action via FUJI Gate |
+| POST | `/v1/replay/{decision_id}` | Deterministic replay with diff report |
+| POST | `/v1/decision/replay/{decision_id}` | Alternative replay with mock support |
 
+### Memory
 
-## Replay
+| Method | Path | Description |
+|---|---|---|
+| POST | `/v1/memory/put` | Store memory (episodic/semantic/procedural/affective) |
+| POST | `/v1/memory/get` | Retrieve memory by key |
+| POST | `/v1/memory/search` | Vector search with user_id filtering |
+| POST | `/v1/memory/erase` | Erase user memories (legal hold protected) |
 
-`POST /v1/replay/{decision_id}` re-executes a stored decision using the original recorded inputs and writes a replay artifact to `REPLAY_REPORT_DIR` (`audit/replay_reports` by default) as:
+### Trust & Audit
 
-- `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json`
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/trust/logs` | List trust log entries |
+| GET | `/v1/trust/{request_id}` | Get single trust log entry |
+| POST | `/v1/trust/feedback` | User satisfaction feedback on decisions |
+| GET | `/v1/trust/stats` | Trust log statistics |
+| GET | `/v1/trustlog/verify` | Verify hash chain integrity |
+| GET | `/v1/trustlog/export` | Export signed trustlog |
+
+### Governance
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/governance/policy` | Retrieve current governance policy |
+| PUT | `/v1/governance/policy` | Update governance policy (hot-reload) |
+| GET | `/v1/governance/policy/history` | Policy change audit trail |
+| GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
+
+### Compliance & Reporting
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/v1/report/eu_ai_act/{decision_id}` | EU AI Act compliance report |
+| GET | `/v1/report/governance` | Internal governance report |
+| GET | `/v1/compliance/deployment-readiness` | Pre-deployment compliance check |
+
+### System
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/health`, `/v1/health` | Health check |
+| GET | `/status`, `/v1/status` | Extended status with pipeline/config health |
+| GET | `/v1/metrics` | Operational metrics |
+| GET | `/v1/events` | SSE stream for real-time UI updates |
+| WS | `/v1/ws/trustlog` | WebSocket for live trust log streaming |
+| POST | `/v1/system/halt` | Emergency halt (persists halt state) |
+| POST | `/v1/system/resume` | Resume after halt |
+| GET | `/v1/system/halt-status` | Current halt state |
+
+### Replay
+
+`POST /v1/replay/{decision_id}` re-executes a stored decision using the original recorded inputs and writes a replay artifact to `REPLAY_REPORT_DIR` (`audit/replay_reports` by default) as `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json`.
 
 When `VERITAS_REPLAY_STRICT=1`, replay enforces deterministic settings (`temperature=0`, fixed seed, and mocked external retrieval side effects).
 
@@ -160,7 +308,27 @@ EU AI Act report generation already reads `replay_{decision_id}_*.json`, so invo
 
 ## Quickstart
 
-### 1) Install
+### Option A: Docker Compose (Recommended)
+
+Start both backend and frontend with a single command:
+
+```bash
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
+
+# Copy and edit environment variables
+cp .env.example .env
+# Edit .env — set OPENAI_API_KEY, VERITAS_API_KEY, VERITAS_API_SECRET
+
+docker compose up --build
+```
+
+- Backend: `http://localhost:8000` (Swagger UI at `/docs`)
+- Frontend: `http://localhost:3000` (Mission Control dashboard)
+
+### Option B: Local Development
+
+#### Backend
 
 ```bash
 git clone https://github.com/veritasfuji-japan/veritas_os.git
@@ -168,7 +336,6 @@ cd veritas_os
 
 python3.11 -m venv .venv
 source .venv/bin/activate
-
 pip install -r requirements.txt
 ```
 
@@ -176,7 +343,7 @@ pip install -r requirements.txt
 > Avoid placing secrets directly in shell history. Prefer a `.env` file (git-ignored) or a
 > secrets manager for production environments.
 
-### 2) Set env vars
+Set environment variables (or use a `.env` file):
 
 ```bash
 export OPENAI_API_KEY="YOUR_OPENAI_API_KEY"
@@ -184,22 +351,39 @@ export VERITAS_API_KEY="your-secret-api-key"
 export VERITAS_API_SECRET="your-long-random-secret"
 export LLM_PROVIDER="openai"
 export LLM_MODEL="gpt-4.1-mini"
-export VERITAS_MAX_REQUEST_BODY_SIZE="10485760"
 ```
 
-### 3) Start server
+Start the backend:
 
 ```bash
 python -m uvicorn veritas_os.api.server:app --reload --port 8000
 ```
 
-### 4) Try Swagger UI
+#### Frontend
 
-* Open: `http://127.0.0.1:8000/docs`
-* Authorize with header: `X-API-Key: $VERITAS_API_KEY`
-* Run: `POST /v1/decide`
+```bash
+# From the repository root (requires Node.js 20+ and pnpm)
+corepack enable
+pnpm install --frozen-lockfile
+pnpm ui:dev
+```
 
-Example payload:
+The frontend starts at `http://localhost:3000`.
+
+Set `NEXT_PUBLIC_API_BASE_URL` if the backend is not at `http://localhost:8000`.
+
+#### Makefile shortcuts
+
+```bash
+make setup         # Initialize environment
+make dev           # Start backend (port 8000)
+make dev-frontend  # Start frontend (port 3000)
+make dev-all       # Start both
+```
+
+### Try the API
+
+Open Swagger UI at `http://127.0.0.1:8000/docs`, authorize with `X-API-Key`, and run `POST /v1/decide`:
 
 ```json
 {
@@ -215,7 +399,36 @@ Example payload:
 
 ---
 
-## Docker (GHCR)
+## Docker Compose (Full Stack)
+
+`docker-compose.yml` orchestrates both services:
+
+| Service | Port | Description |
+|---|---|---|
+| `backend` | 8000 | FastAPI server (built from `Dockerfile`) with health check |
+| `frontend` | 3000 | Next.js dev server (Node.js 20), waits for backend to be healthy |
+
+```bash
+docker compose up --build   # Start
+docker compose down         # Stop
+docker compose logs -f      # Follow logs
+```
+
+Environment variables (set in `.env` or shell):
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | — | OpenAI API key (required) |
+| `VERITAS_API_KEY` | — | Backend API authentication key |
+| `VERITAS_API_SECRET` | `change-me` | HMAC signing secret (32+ chars recommended) |
+| `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORS allow-list |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://backend:8000` | Frontend → backend URL |
+| `LLM_PROVIDER` | `openai` | LLM provider |
+| `LLM_MODEL` | `gpt-4.1-mini` | LLM model name |
+
+---
+
+## Docker (Backend Only)
 
 Pull the latest image:
 
@@ -223,7 +436,7 @@ Pull the latest image:
 docker pull ghcr.io/veritasfuji-japan/veritas_os:latest
 ```
 
-Run the API server (equivalent to the uvicorn command above):
+Run the API server:
 
 ```bash
 docker run --rm -p 8000:8000 \
@@ -241,22 +454,94 @@ Dockerfile `CMD` accordingly before building the image.
 
 ## Architecture (High-Level)
 
+```text
+┌──────────────────────────────────────────────────────┐
+│  Frontend (Next.js 15 / React 18 / TypeScript)       │
+│  ┌────────┬──────────┬───────────┬──────────┬──────┐ │
+│  │  Home  │ Console  │   Audit   │Governance│ Risk │ │
+│  └────┬───┴────┬─────┴─────┬─────┴────┬─────┴──┬───┘ │
+│       │ BFF Proxy (httpOnly cookie, CSP nonce)  │     │
+│       └─────────────────┬───────────────────────┘     │
+└─────────────────────────┼─────────────────────────────┘
+                          │ /api/veritas/*
+┌─────────────────────────┼─────────────────────────────┐
+│  Backend (FastAPI / Python 3.11+)                      │
+│       ┌─────────────────┴─────────────────────┐       │
+│       │           API Server (server.py)       │       │
+│       │   Auth · Rate Limit · CORS · PII mask  │       │
+│       └────┬──────┬──────┬──────┬──────┬──────┘       │
+│            │      │      │      │      │              │
+│  ┌─────────┴┐ ┌───┴───┐ ┌┴─────┐ ┌────┴──┐ ┌────────┴┐│
+│  │ Pipeline ││Govern- ││Memory││Trust  ││Compli-  ││
+│  │Orchestr. ││ ance   ││ API  ││ API   ││ ance    ││
+│  └────┬─────┘└────────┘└──┬───┘└───┬───┘└─────────┘│
+│       │                    │       │               │
+│  ┌────┴────────────────────┴───────┴────────────┐  │
+│  │            Core Decision Engine               │  │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
+│  │  │ Kernel │ │ Debate │ │Critique│ │Planner │ │  │
+│  │  └────┬───┘ └────────┘ └────────┘ └────────┘ │  │
+│  │       │                                       │  │
+│  │  ┌────┴───┐ ┌────────┐ ┌────────┐ ┌────────┐ │  │
+│  │  │  FUJI  │ │Value   │ │MemoryOS│ │ World  │ │  │
+│  │  │  Gate  │ │ Core   │ │(Vector)│ │ Model  │ │  │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘ │  │
+│  └──────────────────┬───────────────────────────┘  │
+│                     │                              │
+│  ┌──────────────────┴───────────────────────────┐  │
+│  │  Infrastructure                               │  │
+│  │  LLM Client · TrustLog · Replay · Sanitize   │  │
+│  │  Atomic I/O · Signing · Tools (Web/GitHub)    │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+```
+
 ### Core execution path
 
-* `veritas_os/core/kernel.py` — orchestrates `/v1/decide`
-* `veritas_os/core/pipeline.py` — defines stage order + metrics (`latency_ms` + `stage_latency`)
-* `veritas_os/core/llm_client.py` — **single** gateway for LLM calls (`chat_completion`)
+| Module | Responsibility |
+|---|---|
+| `veritas_os/core/kernel.py` | Decision computation — intent detection, option generation, alternative scoring |
+| `veritas_os/core/pipeline.py` | 20+ stage orchestrator for `/v1/decide` — validation through audit persistence |
+| `veritas_os/core/llm_client.py` | Multi-provider LLM gateway with connection pooling, circuit breaker, retry with backoff |
 
 ### Safety & governance
 
-* `veritas_os/core/fuji.py` — FUJI Gate (allow/modify/reject)
-* `veritas_os/core/value_core.py` — Value function + Value EMA
-* `veritas_os/logging/trust_log.py` (or equivalent) — hash-chain TrustLog
+| Module | Responsibility |
+|---|---|
+| `veritas_os/core/fuji.py` | Multi-layer safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, policy rules |
+| `veritas_os/core/value_core.py` | Value function with 9 weighted dimensions, online learning via EMA, auto-rebalance from TrustLog |
+| `veritas_os/api/governance.py` | Policy CRUD with hot-reload, change callbacks, audit trail, value drift monitoring |
+| `veritas_os/logging/trust_log.py` | Hash-chain TrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` with thread-safe append |
+| `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with WORM mirror support |
 
 ### Memory & world state
 
-* `veritas_os/core/memory.py` — MemoryOS frontend
-* `veritas_os/core/world.py` — World state snapshots
+| Module | Responsibility |
+|---|---|
+| `veritas_os/core/memory.py` | Unified episodic/semantic/procedural/affective memory with vector search (sentence-transformers, 384-dim), retention classes, legal hold, PII masking |
+| `veritas_os/core/world.py` | World state snapshots, causal transitions, project scoping, hypothetical simulation |
+
+### Reasoning
+
+| Module | Responsibility |
+|---|---|
+| `veritas_os/core/debate.py` | Multi-viewpoint debate (pro/con/third-party) |
+| `veritas_os/core/critique.py` | Self-critique with severity-ranked issues and fix suggestions |
+| `veritas_os/core/planner.py` | Action plan generation |
+
+### LLM Client
+
+Supports multiple providers via `LLM_PROVIDER` environment variable:
+
+| Provider | Model | Status |
+|---|---|---|
+| `openai` | GPT-4.1-mini (default) | Production |
+| `anthropic` | Claude | Planned |
+| `google` | Gemini | Planned |
+| `ollama` | Local models | Planned |
+| `openrouter` | Aggregator | Planned |
+
+Features: shared `httpx.Client` with connection pooling (`LLM_POOL_MAX_CONNECTIONS=20`), retry with configurable backoff (`LLM_MAX_RETRIES=3`), response size guard (16 MB), monkeypatchable for testing.
 
 ---
 
@@ -270,11 +555,23 @@ h_t = SHA256(h_{t-1} || r_t)
 
 This enables integrity verification and tamper-evident audit trails.
 
+Key features:
+
+- **Cryptographic chain** — RFC 8785 canonical JSON, deterministic SHA-256
+- **Thread-safe** — RLock protection with atomic file writes
+- **Dual persistence** — in-memory cache (max 2000 items) + persistent JSONL ledger
+- **Signed export** — Ed25519 digital signatures for tamper-proof distribution
+- **Chain verification** — `GET /v1/trustlog/verify` validates the full chain
+- **PII masking** — optional shadow log with PII redacted
+- **Frontend visualization** — TrustLog Explorer at `/audit` with chain integrity status (verified/broken/missing/orphan)
+
 ---
 
 ## Tests
 
-Recommended (reproducible):
+### Backend (Python)
+
+Recommended (reproducible via `uv`):
 
 ```bash
 make test
@@ -297,13 +594,31 @@ make test TEST_ARGS="-q veritas_os/tests/test_time_utils.py"
 make test PYTHON_VERSION=3.11
 ```
 
+### Frontend (TypeScript)
+
+```bash
+# Unit tests (Vitest + Testing Library)
+pnpm ui:test
+
+# Type checking
+pnpm ui:typecheck
+
+# E2E tests (Playwright + axe-core accessibility)
+pnpm --filter frontend e2e:install
+pnpm --filter frontend e2e
+```
+
 ### CI / Quality Gate
 
-* GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix.
-* Coverage artifacts are stored as **XML/HTML** outputs.
-* CI enforces a minimum coverage gate (`--cov-fail-under`) currently set to **85%**.
-* The coverage badge is currently a documentation snapshot value from `docs/COVERAGE_REPORT.md` (planned: automatic update from CI artifacts).
-* The CI job fails if tests fail, acting as a quality gate.
+- GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix
+- CI enforces a minimum coverage gate (`--cov-fail-under`) currently set to **85%**
+- **CodeQL** scans for security vulnerabilities
+- **SBOM** generated nightly
+- **Security gates** workflow for additional security checks
+- Coverage artifacts are stored as **XML/HTML** outputs
+- The coverage badge is a documentation snapshot value from `docs/COVERAGE_REPORT.md` (planned: automatic update from CI artifacts)
+
+---
 
 ## Security Notes (Important)
 
@@ -319,9 +634,13 @@ make test PYTHON_VERSION=3.11
 ### API and browser-facing protections
 
 - **CORS safety**: avoid wildcard origins (`*`) when `allow_credentials` is enabled.
-  Configure explicit trusted origins only.
-- **CORS and API key must be set**: configure `VERITAS_CORS_ALLOW_ORIGINS` and
-  `VERITAS_API_KEY` to avoid unsafe defaults.
+  Configure explicit trusted origins only via `VERITAS_CORS_ALLOW_ORIGINS`.
+- **Content Security Policy (CSP)**: the frontend middleware injects per-request nonce-based CSP headers. `connect-src 'self'` restricts XHR/fetch to same origin.
+- **BFF session cookie**: `__veritas_bff` is httpOnly, Secure, SameSite=strict in production. Browser never sees API credentials.
+- **Security headers**: HSTS (1-year, preload), X-Frame-Options DENY, X-Content-Type-Options nosniff, Permissions-Policy (camera/mic/geo disabled).
+- **Rate limiting & auth failure tracking**: per-key rate limits with exponential backoff on repeated auth failures.
+- **Nonce replay protection**: critical operations protected by HMAC-signed nonces with TTL cleanup.
+- **Request body size limit**: configurable via `VERITAS_MAX_REQUEST_BODY_SIZE` (default 10 MB).
 
 ### Data safety and persistence
 
@@ -340,14 +659,17 @@ make test PYTHON_VERSION=3.11
 
 - **Legacy pickle migration is risky**: if you enable legacy pickle migration for
   MemoryOS, treat it as a short-lived migration path and disable it afterward.
+  Legacy pickle/joblib loading is blocked at runtime to prevent RCE.
 
 ---
 
 ## Roadmap (Near-Term)
 
-* CI (GitHub Actions): pytest + coverage + artifact reports
-* Security hardening: input validation & secret/log hygiene
-* Policy-as-Code: **Policy → ValueCore/FUJI rules → generated tests** (compiler layer)
+- CI (GitHub Actions): pytest + coverage + artifact reports
+- Security hardening: input validation & secret/log hygiene
+- Policy-as-Code: **Policy → ValueCore/FUJI rules → generated tests** (compiler layer)
+- Multi-provider LLM support (Anthropic, Google, Ollama, OpenRouter)
+- Automatic coverage badge update from CI artifacts
 
 ---
 
