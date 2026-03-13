@@ -131,6 +131,7 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加3)**: `logging/dataset_writer.py` の `append_dataset_record()` / `_sha256_dict()` で broad `except` を `OSError` / `TypeError` / `ValueError` / `OverflowError` へ縮小し、想定外の `RuntimeError` 握りつぶしを防止。
 - ✅ **L-1 Completed**: `core/reason.py` / `core/value_core.py` の timestamp を `utc_now_iso_z(timespec="seconds")` に統一。
 - ✅ **L-5 Partial**: `core/reason.py` の `reflect()` でログ書き込み時の broad `except` を `OSError` 捕捉へ縮小。
 - ✅ **L-5 Partial (追加)**: `logging/trust_log.py` の `_recover_last_hash_from_rotated_log()` / `get_last_hash()` / `iter_trust_log()` / `verify_trust_log()` などで broad `except` を `OSError` / `JSONDecodeError` へ段階縮小。

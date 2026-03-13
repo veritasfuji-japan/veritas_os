@@ -17,6 +17,7 @@ import tempfile
 from datetime import datetime, timezone
 
 import pytest
+import veritas_os.logging.dataset_writer as dataset_writer
 
 from veritas_os.logging.dataset_writer import (
     build_dataset_record,
@@ -396,6 +397,20 @@ class TestAppendDatasetRecord:
             assert path.parent.exists()
             assert path.exists()
 
+    def test_append_dataset_record_propagates_unexpected_errors(self, monkeypatch):
+        """想定外例外は握りつぶさず呼び出し元へ送出する。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "dataset.jsonl"
+            record = {"test": "data"}
+
+            def raise_runtime_error(*_args, **_kwargs):
+                raise RuntimeError("unexpected failure")
+
+            monkeypatch.setattr(dataset_writer, "atomic_append_line", raise_runtime_error)
+
+            with pytest.raises(RuntimeError, match="unexpected failure"):
+                append_dataset_record(record, path=path, validate=False)
+
 
 # =========================
 # 統計取得テスト
@@ -724,4 +739,3 @@ class TestDatasetWriterIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
