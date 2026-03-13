@@ -166,6 +166,37 @@ def test_memory_lazy_initialization(tmp_path: Path):
     assert module.MEM._obj is not None
 
 
+def test_mem_vec_is_lazy_initialized(monkeypatch: pytest.MonkeyPatch):
+    """MEM_VEC should be initialized only on first use, not at import time."""
+    import importlib
+
+    module = importlib.reload(memory)
+    module.MEM_VEC = None
+    module._runtime_guard_checked = False
+
+    call_count = {"count": 0}
+
+    class _DummyVector:
+        def __init__(self, index_path: Path):
+            call_count["count"] += 1
+            self.index_path = index_path
+
+        def add(self, **kwargs: Any) -> bool:
+            return True
+
+    monkeypatch.setattr(module, "VectorMemory", _DummyVector)
+    monkeypatch.setattr(module, "MEM_VEC_EXTERNAL", None)
+
+    assert call_count["count"] == 0
+    vec = module._get_mem_vec()
+    assert vec is not None
+    assert call_count["count"] == 1
+
+    vec2 = module._get_mem_vec()
+    assert vec2 is vec
+    assert call_count["count"] == 1
+
+
 # -------------------------------------------------
 # 2. MemoryStore: 旧形式 dict → list へのマイグレーション
 # -------------------------------------------------
