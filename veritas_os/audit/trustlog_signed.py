@@ -7,6 +7,7 @@ structured decision audit logs.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import uuid
@@ -30,6 +31,7 @@ PRIVATE_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_private.key"
 PUBLIC_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_public.key"
 
 _lock = threading.RLock()
+_logger = logging.getLogger(__name__)
 
 
 class SignedTrustLogWriteError(RuntimeError):
@@ -124,11 +126,19 @@ def _read_all_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
 
     entries: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as file:
-        for line in file:
+        for line_no, line in enumerate(file, 1):
             line = line.strip()
             if not line:
                 continue
-            entries.append(json.loads(line))
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                _logger.warning(
+                    "Skipping corrupt TrustLog entry at %s line %d: %s",
+                    path,
+                    line_no,
+                    exc,
+                )
     return entries
 
 
