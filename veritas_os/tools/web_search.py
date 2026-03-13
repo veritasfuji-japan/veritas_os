@@ -1126,7 +1126,12 @@ def web_search(query: str, max_results: int = 5) -> Dict[str, Any]:
             ),
         }
 
-    except Exception as e:
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        requests.RequestException,
+    ) as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
         # 詳細はログに記録し、クライアントには汎用的なエラーメッセージのみ返す
         logger.warning(

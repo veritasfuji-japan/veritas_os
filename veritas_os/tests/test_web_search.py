@@ -642,14 +642,14 @@ def test_web_search_agi_query_no_agi_like_results(monkeypatch, _bypass_ssrf) -> 
 
 
 def test_web_search_handles_request_exception(monkeypatch, _bypass_ssrf) -> None:
-    """requests.post で例外が出た場合に、エラーとしてハンドリングされること"""
+    """requests.post で通信例外が出た場合に、エラーとしてハンドリングされること。"""
     monkeypatch.setattr(
         web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
     )
     monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
 
     def fake_post(*args, **kwargs):
-        raise RuntimeError("network failure")
+        raise web_search_mod.requests.RequestException("network failure")
 
     monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
 
@@ -658,6 +658,25 @@ def test_web_search_handles_request_exception(monkeypatch, _bypass_ssrf) -> None
     assert resp["ok"] is False
     assert resp["results"] == []
     assert "WEBSEARCH_API error" in resp["error"]
+
+
+def test_web_search_does_not_swallow_unexpected_runtime_error(
+    monkeypatch,
+    _bypass_ssrf,
+) -> None:
+    """想定外の実行時例外は握りつぶさずに送出する。"""
+    monkeypatch.setattr(
+        web_search_mod, "WEBSEARCH_URL", "https://example.com/serper", raising=False
+    )
+    monkeypatch.setattr(web_search_mod, "WEBSEARCH_KEY", "dummy-key", raising=False)
+
+    def fake_post(*_args: Any, **_kwargs: Any):
+        raise RuntimeError("unexpected failure")
+
+    monkeypatch.setattr(web_search_mod.requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="unexpected failure"):
+        web_search_mod.web_search("some query", max_results=2)
 
 
 def test_web_search_rejects_non_json_content_type(monkeypatch, _bypass_ssrf) -> None:
