@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from veritas_os.logging.paths import LOG_DIR as SHARED_LOG_DIR
 
 from . import llm_client
+from .time_utils import utc_now_iso_z
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
         boost = -0.1
 
     out = {
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%SZ"),
+        "ts": utc_now_iso_z(timespec="seconds"),
         "query": q[:200],
         "chosen_title": chosen.get("title"),
         "status": status,
@@ -105,7 +106,7 @@ def reflect(decision: Dict[str, Any]) -> Dict[str, Any]:
         _ensure_log_dir()
         with open(META_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(out, ensure_ascii=False) + "\n")
-    except Exception as e:
+    except OSError as e:
         # ログ書き込み失敗は本体ロジックに影響させない
         logger.debug("meta_log write skipped: %s", e)
 

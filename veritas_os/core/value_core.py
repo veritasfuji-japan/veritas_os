@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Any
@@ -13,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # 共通ユーティリティをインポート
 from .utils import _to_float, _clip01
+from .time_utils import utc_now_iso_z
 
 
 def _normalize_weights(w: Dict[str, Any]) -> Dict[str, float]:
@@ -294,7 +294,7 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
                 j = json.loads(line)
                 if "score" in j:
                     scores.append(float(j["score"]))
-            except Exception:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 continue
 
     if not scores:
@@ -319,7 +319,10 @@ def rebalance_from_trust_log(log_path: str = str(TRUST_LOG_PATH)) -> None:
 
     prof.weights = _normalize_weights(w)
     prof.save()
-    logger.info("ValueCore rebalanced successfully at %s", time.strftime('%Y-%m-%d %H:%M:%S'))
+    logger.info(
+        "ValueCore rebalanced successfully at %s",
+        utc_now_iso_z(timespec="seconds"),
+    )
 
 # ==============================
 #   Trust Log への1行追記

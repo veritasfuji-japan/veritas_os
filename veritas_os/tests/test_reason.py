@@ -57,6 +57,8 @@ def test_reflect_basic_and_log_written(tmp_path, monkeypatch):
 
     row = json.loads(lines[0])
     assert row["query"] == "hello world"
+    assert row["ts"].endswith("Z")
+    assert "T" in row["ts"]
     assert "next_value_boost" in row
 
 
