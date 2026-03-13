@@ -13,7 +13,7 @@
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
-**Version**: 2.0.0-alpha  
+**Version**: 2.0.0  
 **Release Status**: In Development  
 **Author**: Takeshi Fujishita
 
@@ -94,11 +94,12 @@ Key fields (simplified):
 Pipeline stages:
 
 ```text
-Input → Normalize → Fallback Alternatives → Memory Retrieval → Web Search
-  → Core Execute → Model Boost → Debate → Critique → Value Learning (EMA)
-  → Compute Metrics → Evidence Hardening → FUJI Precheck → ValueCore
-  → Gate Decision → Assemble Response → Finalize Evidence
-  → Persist Audit Log → Persist Memory → Persist World State → Build Replay Snapshot
+Input Normalize → Memory Retrieval → Web Search → Options Normalize
+  → Core Execute → Absorb Results → Fallback Alternatives → Model Boost
+  → Debate → Critique → FUJI Precheck → ValueCore → Gate Decision
+  → Value Learning (EMA) → Compute Metrics → Evidence Hardening
+  → Response Assembly → Persist (Audit + Memory + World) → Finalize Evidence
+  → Build Replay Snapshot
 ```
 
 Bundled subsystems:
@@ -107,7 +108,7 @@ Bundled subsystems:
 |---|---|
 | **MemoryOS** | Episodic/semantic/procedural/affective memory with vector search (sentence-transformers), retention classes, legal hold, and PII masking |
 | **WorldModel** | World state snapshots, causal transitions, project scoping, hypothetical simulation |
-| **ValueCore** | Value function with 9 weighted dimensions, online learning via EMA, auto-rebalancing from TrustLog feedback |
+| **ValueCore** | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalancing from TrustLog feedback |
 | **FUJI Gate** | Multi-layer safety gate — PII detection, harmful content blocking, sensitive domain filtering, prompt injection defense, confusable character detection, LLM safety head, and policy-driven YAML rules |
 | **TrustLog** | Append-only hash-chained audit log (JSONL) with SHA-256 integrity, Ed25519 signatures, and WORM mirror support |
 | **Debate** | Multi-viewpoint reasoning (pro/con/third-party) for transparent decision rationale |
@@ -336,7 +337,7 @@ cd veritas_os
 
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 > [!WARNING]
@@ -509,7 +510,7 @@ Dockerfile `CMD` accordingly before building the image.
 | Module | Responsibility |
 |---|---|
 | `veritas_os/core/fuji.py` | Multi-layer safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, policy rules |
-| `veritas_os/core/value_core.py` | Value function with 9 weighted dimensions, online learning via EMA, auto-rebalance from TrustLog |
+| `veritas_os/core/value_core.py` | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalance from TrustLog |
 | `veritas_os/api/governance.py` | Policy CRUD with hot-reload, change callbacks, audit trail, value drift monitoring |
 | `veritas_os/logging/trust_log.py` | Hash-chain TrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` with thread-safe append |
 | `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with WORM mirror support |
