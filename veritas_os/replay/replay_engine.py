@@ -44,6 +44,12 @@ def _strict_mode_enabled() -> bool:
 
 
 def _pipeline_version() -> str:
+    """Return the current git short SHA when available.
+
+    Security note:
+        We intentionally do not swallow arbitrary exceptions here so that
+        unexpected runtime errors are surfaced during diagnostics.
+    """
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -53,7 +59,7 @@ def _pipeline_version() -> str:
         version = out.strip()
         if version:
             return version
-    except Exception:
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
         return "unknown"
     return "unknown"
 
@@ -240,4 +246,3 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
         diff=diff,
         diff_summary=_diff_summary(diff),
     )
-
