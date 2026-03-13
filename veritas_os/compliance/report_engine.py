@@ -57,7 +57,7 @@ def _iter_decision_logs() -> Iterable[Dict[str, Any]]:
     for path in sorted(log_dir.glob("decide_*.json"), reverse=True):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, json.JSONDecodeError):
             continue
         if isinstance(payload, dict):
             payload["_source_path"] = str(path)
@@ -96,7 +96,7 @@ def _latest_replay_result(decision_id: str) -> Dict[str, Any]:
 
     try:
         payload = json.loads(candidates[0].read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         return {"available": False, "result": "unreadable"}
 
     if not isinstance(payload, dict):

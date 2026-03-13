@@ -131,3 +131,36 @@ def test_report_governance_invalid_date(monkeypatch):
     )
     assert response.status_code == 400
     assert response.json()["ok"] is False
+
+
+def test_iter_decision_logs_reraises_unexpected_json_error(monkeypatch, tmp_path: Path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir(parents=True)
+    _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.7)
+    monkeypatch.setattr(report_engine, "LOG_DIR", log_dir)
+
+    def _raise_runtime_error(_: str):
+        raise RuntimeError("unexpected parser failure")
+
+    monkeypatch.setattr(report_engine.json, "loads", _raise_runtime_error)
+
+    with pytest.raises(RuntimeError, match="unexpected parser failure"):
+        list(report_engine._iter_decision_logs())
+
+
+def test_latest_replay_result_reraises_unexpected_json_error(
+    monkeypatch,
+    tmp_path: Path,
+):
+    replay_dir = tmp_path / "replay"
+    replay_dir.mkdir(parents=True)
+    replay_dir.joinpath("replay_dec-001_1.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(report_engine, "REPLAY_REPORT_DIR", replay_dir)
+
+    def _raise_runtime_error(_: str):
+        raise RuntimeError("unexpected parser failure")
+
+    monkeypatch.setattr(report_engine.json, "loads", _raise_runtime_error)
+
+    with pytest.raises(RuntimeError, match="unexpected parser failure"):
+        report_engine._latest_replay_result("dec-001")
