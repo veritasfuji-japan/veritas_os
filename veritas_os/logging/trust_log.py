@@ -136,7 +136,7 @@ def _compute_sha256(payload: dict) -> str:
     """
     try:
         s = _canonical_json(payload)
-    except Exception:
+    except (TypeError, ValueError):
         logger.debug("_compute_sha256: canonical JSON failed, using safe fallback", exc_info=True)
         s = json.dumps(payload, sort_keys=True, separators=(",", ":"),
                        ensure_ascii=False, default=str).encode("utf-8")
@@ -220,7 +220,7 @@ def _recover_last_hash_from_rotated_log() -> str | None:
                 if start == 0:
                     return None
                 start = max(0, start - 65536)
-    except Exception:
+    except OSError:
         logger.warning("Failed to recover last hash from rotated trust log", exc_info=True)
     return None
 
@@ -279,7 +279,7 @@ def get_last_hash() -> str | None:
                     if start == 0:
                         return None
                     start = max(0, start - 65536)
-        except Exception as exc:
+        except OSError as exc:
             logger.warning("get_last_hash failed: %s", exc)
         return None
 
@@ -318,7 +318,7 @@ def _load_logs_json() -> list:
         return [x for x in items if isinstance(x, dict)]
     except FileNotFoundError:
         return []
-    except Exception:
+    except (OSError, json.JSONDecodeError):
         logger.warning("_load_logs_json: failed to load %s", LOG_JSON, exc_info=True)
         return []
 
@@ -535,7 +535,7 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
                     yield json.loads(line)
                 except json.JSONDecodeError:
                     continue
-    except Exception as e:
+    except OSError as e:
         logger.warning("trust_log iterate failed: %s", e)
         return
 
@@ -773,7 +773,7 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
             "broken_reason": None,
         }
 
-    except Exception as e:
+    except OSError as e:
         logger.warning("verify_trust_log failed: %s", e)
         return {
             "ok": False,
