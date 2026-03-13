@@ -26,7 +26,10 @@ from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
 from veritas_os.logging.encryption import encrypt as _encrypt_line, is_encryption_enabled
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
-from veritas_os.audit.trustlog_signed import append_signed_decision
+from veritas_os.audit.trustlog_signed import (
+    SignedTrustLogWriteError,
+    append_signed_decision,
+)
 from veritas_os.security.hash import sha256_hex
 
 try:
@@ -414,7 +417,7 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             # break the existing decision pipeline.
             try:
                 append_signed_decision(entry)
-            except Exception:
+            except SignedTrustLogWriteError:
                 logger.warning(
                     "append_signed_decision failed; continuing with legacy trust log",
                     exc_info=True,

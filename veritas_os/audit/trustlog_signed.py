@@ -32,6 +32,10 @@ PUBLIC_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_public.key"
 _lock = threading.RLock()
 
 
+class SignedTrustLogWriteError(RuntimeError):
+    """Raised when signed TrustLog append fails for expected runtime reasons."""
+
+
 def _worm_mirror_path() -> Optional[Path]:
     """Resolve optional immutable mirror destination for TrustLog JSONL.
 
@@ -129,30 +133,43 @@ def _read_all_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
 
 
 def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Append a signed decision entry to append-only TrustLog JSONL."""
-    _ensure_signing_keys()
-    with _lock:
-        entries = _read_all_entries(SIGNED_TRUSTLOG_JSONL)
-        previous_hash = _entry_chain_hash(entries[-1]) if entries else None
-        payload_hash = sha256_of_canonical_json(decision_payload)
-        signature = sign_payload_hash(payload_hash, PRIVATE_KEY_PATH)
+    """Append a signed decision entry to append-only TrustLog JSONL.
 
-        entry = {
-            "decision_id": _uuid7(),
-            "timestamp": _utc_now_iso8601(),
-            "previous_hash": previous_hash,
-            "decision_payload": decision_payload,
-            "payload_hash": payload_hash,
-            "signature": signature,
-            "signature_key_fingerprint": public_key_fingerprint(PUBLIC_KEY_PATH),
-        }
+    Raises:
+        SignedTrustLogWriteError: If signing/write fails due to expected
+            runtime errors (filesystem, serialization, or value issues).
+    """
+    try:
+        _ensure_signing_keys()
+        with _lock:
+            entries = _read_all_entries(SIGNED_TRUSTLOG_JSONL)
+            previous_hash = _entry_chain_hash(entries[-1]) if entries else None
+            payload_hash = sha256_of_canonical_json(decision_payload)
+            signature = sign_payload_hash(payload_hash, PRIVATE_KEY_PATH)
 
-        line = json.dumps(entry, ensure_ascii=False) + "\n"
-        _append_line(SIGNED_TRUSTLOG_JSONL, line)
-        mirror = _mirror_to_worm(line)
-        entry["worm_mirror"] = mirror
+            entry = {
+                "decision_id": _uuid7(),
+                "timestamp": _utc_now_iso8601(),
+                "previous_hash": previous_hash,
+                "decision_payload": decision_payload,
+                "payload_hash": payload_hash,
+                "signature": signature,
+                "signature_key_fingerprint": public_key_fingerprint(PUBLIC_KEY_PATH),
+            }
 
-    return entry
+            line = json.dumps(entry, ensure_ascii=False) + "\n"
+            _append_line(SIGNED_TRUSTLOG_JSONL, line)
+            mirror = _mirror_to_worm(line)
+            entry["worm_mirror"] = mirror
+
+        return entry
+    except (
+        OSError,
+        ValueError,
+        TypeError,
+        json.JSONDecodeError,
+    ) as exc:
+        raise SignedTrustLogWriteError("signed trust log append failed") from exc
 
 
 def verify_signature(entry: Dict[str, Any]) -> bool:
