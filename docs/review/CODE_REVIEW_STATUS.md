@@ -31,14 +31,14 @@ updated_at: 2026-03-12
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **67% (30/45)** | CRITICAL は 100% 解消 |
+| 完了率（件数ベース） | **69% (31/45)** | CRITICAL は 100% 解消 |
 | 統合品質評価 | **70%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中30件を対応（67%）。
+1. 指摘45件中31件を対応（69%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -63,9 +63,9 @@ updated_at: 2026-03-12
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
 | HIGH     | 12    | 11    | 1                   | 92%       |
-| MEDIUM   | 20    | 13    | 7                   | 65%       |
+| MEDIUM   | 20    | 14    | 6                   | 70%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 30    | 15                  | **67%**   |
+| **TOTAL**| 45    | 31    | 14                  | **69%**   |
 
 ---
 
@@ -98,7 +98,7 @@ updated_at: 2026-03-12
 - ⏸️ **M-2 (Deferred)**: `logging/paths.py` import-time side effect。
 - ✅ **M-3**: `memory/store.py` を `VERITAS_MEMORY_DIR` で設定可能化。
 - ✅ **M-4**: `core/planner.py` の JSON rescue を `raw_decode()` ベースに再設計。
-- ⏸️ **M-5 (Deferred)**: lazy state 初期化の明示 lock 化（現状 GIL 前提）。
+- ✅ **M-5**: `core/memory.py:_LazyMemoryStore` の初期化を lock で直列化し、同時アクセス時の多重初期化を防止。
 - ✅ **M-6**: trust log append を canonical 実装に一本化。
 - ⏸️ **M-7 (Accepted)**: `schemas.py` coercion は外部入力互換のため維持。
 - ⏸️ **M-8 (Deferred)**: SHA-256 補助関数の重複整理。

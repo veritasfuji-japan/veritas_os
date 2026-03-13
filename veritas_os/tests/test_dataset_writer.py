@@ -376,11 +376,24 @@ class TestAppendDatasetRecord:
         """バリデーションなしの追記が動作することを確認"""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "dataset.jsonl"
-            
+
             # 不完全なレコードでもvalidate=Falseなら追記可能
             record = {"test": "data"}
             append_dataset_record(record, path=path, validate=False)
-            
+
+            assert path.exists()
+
+    def test_append_creates_missing_parent_directory(self):
+        """親ディレクトリ未作成でも append が自動作成できることを確認。"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "nested" / "dir" / "dataset.jsonl"
+            record = {"test": "data"}
+
+            assert not path.parent.exists()
+
+            append_dataset_record(record, path=path, validate=False)
+
+            assert path.parent.exists()
             assert path.exists()
 
 

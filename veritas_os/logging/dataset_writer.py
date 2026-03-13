@@ -37,8 +37,6 @@ logger = logging.getLogger(__name__)
 
 # config 側で一元管理された dataset_dir を採用
 DATASET_DIR: Path = cfg.dataset_dir
-DATASET_DIR.mkdir(parents=True, exist_ok=True)
-
 DATASET_JSONL: Path = DATASET_DIR / "dataset.jsonl"
 
 # ★ C-1 修正: スレッドセーフ化のためのロック
@@ -52,6 +50,12 @@ MAX_DATASET_STATS_SIZE = 100 * 1024 * 1024  # 100 MB
 # ==========================
 # ヘルパー関数
 # ==========================
+
+
+def _ensure_dataset_parent(path: Path) -> None:
+    """Ensure parent directory exists before dataset file operations."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+
 
 def _sha256_dict(d: Dict[str, Any]) -> str:
     """辞書を安定化JSONにして SHA-256 ハッシュ化"""
@@ -257,6 +261,7 @@ def append_dataset_record(
     try:
         # ★ スレッドセーフ: ロックを取得して排他制御
         with _dataset_lock:
+            _ensure_dataset_parent(path)
             atomic_append_line(path, json.dumps(record, ensure_ascii=False))
     except Exception as e:
         logger.warning("append_dataset_record failed: %s", e)
