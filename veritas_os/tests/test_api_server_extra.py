@@ -166,7 +166,7 @@ def test_replay_api_endpoint_with_hmac_headers(monkeypatch):
             "X-VERITAS-SIGNATURE": signature,
             "Content-Type": "application/json",
         },
-        data=body,
+        content=body,
     )
 
     assert response.status_code == 200
@@ -205,7 +205,7 @@ def test_replay_api_endpoint_not_found_hides_exception(monkeypatch):
             "X-VERITAS-SIGNATURE": signature,
             "Content-Type": "application/json",
         },
-        data=body,
+        content=body,
     )
 
     assert response.status_code == 404
