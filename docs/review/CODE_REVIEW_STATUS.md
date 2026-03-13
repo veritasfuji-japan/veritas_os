@@ -131,6 +131,7 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加12 / 優先対応)**: `tools/web_search.py:_normalize_str()` の broad `except Exception` を `TypeError` / `ValueError` に縮小し、想定外 `RuntimeError` を握りつぶさないよう改善。`test_web_search_extra.py` に回帰テストを追加して異常系挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加11 / 優先対応)**: `core/experiments.py` の `_to_int()` および `VERITAS_EXPERIMENTS_PER_DAY` 読込で broad `except Exception` を `TypeError` / `ValueError` / `OverflowError` に縮小し、想定外 `RuntimeError` の握りつぶしを防止。`test_experiments.py` に異常系テストを追加して挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加10 / 優先対応)**: `tools/coverage_map_pipeline.py` の broad `except` を `TypeError` / `ValueError` / `OverflowError` / `OSError` / `JSONDecodeError` / `SyntaxError` などへ縮小し、想定外 `RuntimeError` を握りつぶさないよう改善。`test_coverage_map_extra.py` に異常系テストを追加して挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加9 / 優先対応)**: `replay/replay_engine.py:_pipeline_version()` の broad `except Exception` を `subprocess.CalledProcessError` / `FileNotFoundError` / `OSError` に縮小し、想定外の `RuntimeError` を握りつぶさないよう改善。`test_replay_engine.py` に異常系テストを追加して挙動を固定（改善済み）。

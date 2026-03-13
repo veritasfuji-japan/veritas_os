@@ -258,7 +258,7 @@ RE_BUREAUVERITAS = re.compile(r"(^|\.)bureauveritas\.[a-z]{2,}$", re.IGNORECASE)
 def _normalize_str(x: Any, *, limit: int = 4000) -> str:
     try:
         s = "" if x is None else str(x)
-    except Exception:
+    except (TypeError, ValueError):
         s = repr(x)
     if limit and len(s) > limit:
         return s[:limit]

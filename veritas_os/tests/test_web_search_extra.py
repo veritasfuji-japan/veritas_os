@@ -60,6 +60,14 @@ class TestNormalizeStr:
         result = web_search_mod._normalize_str(BadStr())
         assert "BadStr" in result  # repr fallback
 
+    def test_unexpected_exception_in_str_conversion_is_raised(self):
+        class RuntimeBadStr:
+            def __str__(self):
+                raise RuntimeError("unexpected")
+
+        with pytest.raises(RuntimeError, match="unexpected"):
+            web_search_mod._normalize_str(RuntimeBadStr())
+
 
 class TestSafeIntHelpers:
     """Tests for integer environment helper functions."""
