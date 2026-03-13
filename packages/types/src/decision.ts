@@ -53,9 +53,9 @@ export type StageHealth = "ok" | "warning" | "failed" | "unknown";
  * Source of truth: veritas_os/api/schemas.py — Context
  */
 export interface Context {
-  user_id?: string;
+  user_id: string;
   session_id?: string;
-  query?: string;
+  query: string;
   goals?: string[];
   constraints?: string[];
   tools_allowed?: string[];
