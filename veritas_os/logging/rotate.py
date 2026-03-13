@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -96,8 +97,6 @@ def save_last_hash_marker(trust_log: Path) -> None:
     ★ ハッシュチェーン連続性: ローテーション後の新しいファイルで
     チェーンを継続できるよう、最終ハッシュを保存する。
     """
-    import json as _json
-
     marker = _get_last_hash_marker_path(trust_log)
     try:
         if not trust_log.exists():
@@ -105,11 +104,11 @@ def save_last_hash_marker(trust_log: Path) -> None:
         last_line = _read_last_nonempty_line(trust_log)
         if not last_line:
             return
-        last = _json.loads(last_line)
-        last_hash = last.get("sha256")
+        last = json.loads(last_line)
+        last_hash = last.get("sha256") if isinstance(last, dict) else None
         if last_hash:
             marker.write_text(last_hash, encoding="utf-8")
-    except Exception:
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
         logger.debug("save_last_hash_marker failed for %s", trust_log, exc_info=True)
 
 
@@ -124,7 +123,7 @@ def load_last_hash_marker(trust_log: Path) -> "str | None":
         if marker.exists():
             val = marker.read_text(encoding="utf-8").strip()
             return val if val else None
-    except Exception:
+    except OSError:
         logger.debug("load_last_hash_marker failed for %s", trust_log, exc_info=True)
     return None
 

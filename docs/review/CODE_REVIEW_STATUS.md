@@ -121,12 +121,18 @@ updated_at: 2026-03-13
 - ✅ **L-2**: `api/evolver.py` の `print()` を logger へ置換。
 - ⏸️ **L-3 (Accepted)**: `rsi.py` は sample 実装として維持。
 - ✅ **L-4 (Accepted)**: `core/reflection.py` の forward-compat `hasattr()` 分岐は意図的。
-- ⏸️ **L-5 (Deferred)**: bare except の段階的削減。
+- ⏸️ **L-5 (Deferred/Partial)**: bare except の段階的削減（`logging/rotate.py` の marker 処理は `OSError`/JSON系へ限定化を改善済み）。
 - ⏸️ **L-6 (Deferred)**: `MemoryStore` 名称衝突。
 - ⏸️ **L-7 (Deferred)**: 未使用 import / dead code 整理。
 - ✅ **L-8**: `value_core.py` のコメントインデント不整合を修正。
 
 ---
+
+
+### Recent Updates (2026-03-13)
+
+- ✅ **L-5 Partial**: `logging/rotate.py` の marker 保存/読込で broad `except Exception` を縮小し、予期しない例外を顕在化。
+- ✅ **Status Note Updated**: 本書に「改善済み（部分対応）」として追記。
 
 ## 6. Security Watchlist and Alerts
 

@@ -1,7 +1,6 @@
 # veritas_os/tests/test_logging_rotate.py
 # -*- coding: utf-8 -*-
 
-import os
 from pathlib import Path
 
 from veritas_os.logging import rotate
@@ -110,3 +109,38 @@ def test_open_trust_log_for_append_creates_file_and_appends(tmp_path, monkeypatc
         f.write("second\n")
 
     assert rotate.count_lines(log_path) == 2
+
+
+
+def test_save_last_hash_marker_handles_invalid_json(tmp_path, monkeypatch):
+    """不正JSON行が末尾でも例外を投げずに処理を継続する。"""
+    log_path = _setup_tmp_trust_log(tmp_path, monkeypatch, max_lines=3)
+    marker_path = tmp_path / ".last_hash"
+    log_path.write_text('{"sha256": "ok"}\n{broken\n', encoding='utf-8')
+
+    rotate.save_last_hash_marker(log_path)
+
+    assert not marker_path.exists()
+
+
+def test_load_last_hash_marker_raises_unexpected_error(tmp_path, monkeypatch):
+    """OSError 以外は握りつぶさずに顕在化させる。"""
+    log_path = _setup_tmp_trust_log(tmp_path, monkeypatch, max_lines=3)
+    marker_path = tmp_path / ".last_hash"
+    marker_path.write_text('hash-value', encoding='utf-8')
+
+    original_read_text = Path.read_text
+
+    def _raise_runtime_error(self, *args, **kwargs):
+        if self == marker_path:
+            raise RuntimeError('unexpected failure')
+        return original_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'read_text', _raise_runtime_error)
+
+    try:
+        rotate.load_last_hash_marker(log_path)
+    except RuntimeError as exc:
+        assert 'unexpected failure' in str(exc)
+    else:
+        raise AssertionError('RuntimeError was not raised')
