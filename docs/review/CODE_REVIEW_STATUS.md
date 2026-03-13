@@ -131,6 +131,7 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加9 / 優先対応)**: `replay/replay_engine.py:_pipeline_version()` の broad `except Exception` を `subprocess.CalledProcessError` / `FileNotFoundError` / `OSError` に縮小し、想定外の `RuntimeError` を握りつぶさないよう改善。`test_replay_engine.py` に異常系テストを追加して挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加8 / 優先対応・互換調整済み)**: `core/reason.py` の `generate_reason()` / `generate_reflection_template()` は、CI 互換性（`kernel.decide()` の graceful fallback 契約）を優先して LLM 呼び出し例外を継続捕捉する実装へ調整。`test_reason.py` / `test_coverage_boost.py` / `kernel*` 系テストで回帰なしを確認。今後は `llm_client` 側で例外型を細分化したうえで再度段階縮小を行う。
 - ✅ **L-5 Partial (追加7 / 優先対応)**: `core/reason.py` の `generate_reflection_template()` で broad `except` を `JSONDecodeError` / `(TypeError, ValueError)` / `OSError` に縮小し、想定外 `RuntimeError` などの握りつぶしを抑止。対応テストにより既存挙動を維持確認。
 - ✅ **L-5 Partial (追加6 / 優先対応)**: `compliance/report_engine.py` の `_iter_decision_logs()` / `_latest_replay_result()` で broad `except` を `OSError` / `JSONDecodeError` に縮小し、想定外の `RuntimeError` を握りつぶさないよう改善。回帰テストを追加して異常系挙動を固定。

@@ -1,11 +1,31 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from veritas_os.replay import replay_engine
+
+
+def test_pipeline_version_returns_unknown_on_expected_subprocess_failures(monkeypatch) -> None:
+    def _raise_called_process_error(*_args, **_kwargs):
+        raise subprocess.CalledProcessError(1, ["git"])
+
+    monkeypatch.setattr(replay_engine.subprocess, "check_output", _raise_called_process_error)
+
+    assert replay_engine._pipeline_version() == "unknown"
+
+
+def test_pipeline_version_does_not_swallow_unexpected_errors(monkeypatch) -> None:
+    def _raise_runtime_error(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(replay_engine.subprocess, "check_output", _raise_runtime_error)
+
+    with pytest.raises(RuntimeError):
+        replay_engine._pipeline_version()
 
 
 @pytest.mark.asyncio
