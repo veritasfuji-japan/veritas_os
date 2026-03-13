@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import time
 from unittest import mock
+
+import pytest
 
 from veritas_os.core import self_healing
 from veritas_os.core.fuji_codes import FujiAction
@@ -15,9 +18,13 @@ from veritas_os.core.self_healing import (
     budget_remaining,
     build_healing_input,
     check_guardrails,
+    clear_healing_state,
     decide_healing_action,
     diff_summary,
+    healing_state_path,
     is_healing_enabled,
+    load_healing_state,
+    persist_healing_state,
 )
 
 
@@ -167,3 +174,56 @@ def test_safe_float_invalid_value() -> None:
     with mock.patch.dict(os.environ, {"VERITAS_TEST_FLOAT": "notafloat"}):
         result = self_healing._env_float("VERITAS_TEST_FLOAT", 3.14)
         assert result == 3.14
+
+
+# ── healing state persistence ───────────────────────────────────────
+
+def test_healing_state_roundtrip(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(self_healing, "HEALING_STATE_DIR", tmp_path)
+    state = HealingState(
+        attempt=2,
+        steps_used=3,
+        start_time=1234.5,
+        last_error_code="F-1002",
+        same_error_count=2,
+        last_input_signature="sig",
+    )
+
+    persist_healing_state("req-1", state)
+    loaded = load_healing_state("req-1")
+
+    assert loaded.attempt == 2
+    assert loaded.steps_used == 3
+    assert loaded.start_time == 1234.5
+    assert loaded.last_error_code == "F-1002"
+    assert loaded.same_error_count == 2
+    assert loaded.last_input_signature == "sig"
+
+
+def test_healing_state_invalid_request_id(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(self_healing, "HEALING_STATE_DIR", tmp_path)
+    with pytest.raises(ValueError):
+        healing_state_path("../invalid")
+
+
+def test_clear_healing_state_deletes_file(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(self_healing, "HEALING_STATE_DIR", tmp_path)
+    persist_healing_state("req-clear", HealingState(attempt=1))
+    path = healing_state_path("req-clear")
+    assert path.exists()
+
+    clear_healing_state("req-clear")
+
+    assert not path.exists()
+
+
+def test_load_healing_state_corrupt_file(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(self_healing, "HEALING_STATE_DIR", tmp_path)
+    path = healing_state_path("req-corrupt")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("not-json", encoding="utf-8")
+
+    loaded = load_healing_state("req-corrupt")
+
+    assert loaded.attempt == 0
+    assert loaded.steps_used == 0

@@ -56,7 +56,7 @@ async def stage_core_execute(
         core_decide = None
 
     healing_enabled = self_healing.is_healing_enabled(ctx.context or {})
-    healing_state = self_healing.HealingState()
+    healing_state = self_healing.load_healing_state(ctx.request_id)
     healing_budget = self_healing.HealingBudget()
     prev_healing_input: Optional[Dict[str, Any]] = None
 
@@ -159,6 +159,7 @@ async def stage_core_execute(
 
             if stop_reason:
                 ctx.healing_stop_reason = stop_reason
+                self_healing.clear_healing_state(ctx.request_id)
                 break
 
             self_healing.advance_state(
@@ -166,6 +167,7 @@ async def stage_core_execute(
                 error_code=str(error_code),
                 input_signature=input_signature,
             )
+            self_healing.persist_healing_state(ctx.request_id, healing_state)
 
             current_context = dict(core_context)
             current_context["healing"] = {
@@ -187,6 +189,7 @@ async def stage_core_execute(
             except Exception as e:  # subsystem resilience: intentionally broad
                 _warn(f"[self_healing] retry failed: {repr(e)}")
                 ctx.healing_stop_reason = "retry_execution_failed"
+                self_healing.persist_healing_state(ctx.request_id, healing_state)
                 break
 
         if ctx.healing_attempts:
@@ -200,3 +203,5 @@ async def stage_core_execute(
                         "input": latest_healing_input,
                     }
                 )
+            if ctx.healing_stop_reason is None:
+                self_healing.clear_healing_state(ctx.request_id)
