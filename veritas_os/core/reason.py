@@ -253,7 +253,7 @@ async def generate_reflection_template(
     # LLM 出力を JSON として解釈
     try:
         data = json.loads(text)
-    except Exception as e:
+    except json.JSONDecodeError as e:
         logger.warning("[ReasonOS] reflection_template json parse failed: %s", e)
         return {}
 
@@ -273,7 +273,7 @@ async def generate_reflection_template(
 
     try:
         priority = float(priority)
-    except Exception:
+    except (TypeError, ValueError):
         priority = 0.5
 
     # クリップ
@@ -301,7 +301,7 @@ async def generate_reflection_template(
         }
         with open(META_LOG, "a", encoding="utf-8") as f:
             f.write(json.dumps(meta, ensure_ascii=False) + "\n")
-    except Exception as e:
+    except OSError as e:
         logger.debug("[ReasonOS] reflection_template meta_log skipped: %s", e)
 
     return tmpl
