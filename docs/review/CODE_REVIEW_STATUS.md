@@ -31,14 +31,14 @@ updated_at: 2026-03-13
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **80% (36/45)** | CRITICAL/HIGH は 100% 解消 |
-| 統合品質評価 | **80%** | Deferred の構造課題を反映 |
+| 完了率（件数ベース） | **82% (37/45)** | CRITICAL/HIGH は 100% 解消 |
+| 統合品質評価 | **82%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中36件を対応（80%）。
+1. 指摘45件中37件を対応（82%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -64,8 +64,8 @@ updated_at: 2026-03-13
 | CRITICAL | 3     | 3     | 0                   | 100%      |
 | HIGH     | 12    | 12    | 0                   | 100%      |
 | MEDIUM   | 20    | 17    | 3                   | 85%       |
-| LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 36    | 9                   | **80%**   |
+| LOW      | 10    | 4     | 6                   | 40%       |
+| **TOTAL**| 45    | 37    | 8                   | **82%**   |
 
 ---
 
@@ -115,9 +115,9 @@ updated_at: 2026-03-13
 - ✅ **M-19**: `atomic_append_line()` 生成ファイル権限を 0o600 へ強化。
 - ✅ **M-20**: `world.py` lock file 権限を 0o600 へ強化。
 
-### LOW (3 Fixed / 7 Deferred or Accepted)
+### LOW (4 Fixed / 6 Deferred or Accepted)
 
-- ⏸️ **L-1 (Deferred)**: timestamp 形式の統一。
+- ✅ **L-1**: `core/reason.py` / `core/value_core.py` の時刻出力を `core/time_utils.utc_now_iso_z()` に寄せ、UTC ISO8601 (`Z`) へ統一。
 - ✅ **L-2**: `api/evolver.py` の `print()` を logger へ置換。
 - ⏸️ **L-3 (Accepted)**: `rsi.py` は sample 実装として維持。
 - ✅ **L-4 (Accepted)**: `core/reflection.py` の forward-compat `hasattr()` 分岐は意図的。
@@ -131,8 +131,10 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-1 Completed**: `core/reason.py` / `core/value_core.py` の timestamp を `utc_now_iso_z(timespec="seconds")` に統一。
+- ✅ **L-5 Partial**: `core/reason.py` の `reflect()` でログ書き込み時の broad `except` を `OSError` 捕捉へ縮小。
 - ✅ **H-Status Integrity**: HIGH 集計の不整合（11 Fixed / 1 Deferred 表記）を解消し、実態に合わせて **12/12 Fixed** へ更新。
-- ✅ **Progress Metrics Sync**: 完了率・統合品質評価・Severity集計テーブルを **80% (36/45)** に同期。
+- ✅ **Progress Metrics Sync**: 完了率・統合品質評価・Severity集計テーブルを **82% (37/45)** に同期。
 - ✅ **Status Note Updated**: 本書に「改善済み（集計反映済み）」として追記。
 
 ### Earlier Updates (2026-03-13)

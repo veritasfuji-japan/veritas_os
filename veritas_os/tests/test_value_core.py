@@ -268,6 +268,25 @@ monkeypatch):
     assert dummy.weights["efficiency"] >= 0.6
 
 
+def test_rebalance_from_trust_log_skips_invalid_rows(tmp_path, monkeypatch):
+    dummy = _DummyProfileForRebalance()
+    monkeypatch.setattr(
+        value_core.ValueProfile,
+        "load",
+        classmethod(lambda cls: dummy),
+    )
+
+    log_path = tmp_path / "trust_log_mixed.jsonl"
+    with log_path.open("w", encoding="utf-8") as f:
+        f.write("not-json\n")
+        f.write(json.dumps({"score": "oops"}) + "\n")
+        f.write(json.dumps({"score": 0.9}) + "\n")
+
+    value_core.rebalance_from_trust_log(str(log_path))
+
+    assert dummy.saved is True
+
+
 # ============
 # append_trust_log
 # ============
@@ -308,4 +327,3 @@ def test_append_trust_log_writes_jsonl(tmp_path, monkeypatch):
     # ★ 正規trust_logに委譲されたため、sha256ハッシュチェーンも付与される
     assert "sha256" in rec
     assert rec["type"] == "trust_feedback"
-
