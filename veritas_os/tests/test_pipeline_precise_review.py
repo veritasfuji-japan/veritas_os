@@ -240,3 +240,230 @@ class TestGetMemoryStoreCallable:
         with patch("veritas_os.core.pipeline_memory_adapter._mem_module", None):
             result = _get_memory_store(mem=None)
         assert result is None
+
+
+# =========================================================
+# Fix 6: _safe_web_search Unicode sanitization
+# =========================================================
+
+
+class TestSafeWebSearchUnicodeSanitization:
+    """Verify that _safe_web_search filters unsafe Unicode categories
+    (bidi overrides, surrogates, etc.) consistently with _norm_alt."""
+
+    @pytest.mark.asyncio
+    async def test_bidi_override_stripped(self):
+        """Bidi override characters (Cf category) must be stripped from
+        the web search query before passing to the external adapter."""
+        import veritas_os.core.pipeline as mod
+
+        captured = {}
+
+        async def fake_web_search(q, **kw):
+            captured["query"] = q
+            return {"ok": True, "results": []}
+
+        mod.web_search = fake_web_search  # type: ignore[attr-defined]
+        try:
+            await mod._safe_web_search("test\u202Ehidden\u202Cquery")
+            assert "query" in captured
+            # Bidi chars U+202E (RLO) and U+202C (PDF) must be removed
+            assert "\u202e" not in captured["query"]
+            assert "\u202c" not in captured["query"]
+            assert "test" in captured["query"]
+        finally:
+            if hasattr(mod, "web_search"):
+                del mod.web_search  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_surrogate_chars_stripped(self):
+        """Surrogate characters (Cs category) in queries must not reach
+        the external adapter."""
+        import veritas_os.core.pipeline as mod
+
+        captured = {}
+
+        async def fake_web_search(q, **kw):
+            captured["query"] = q
+            return {"ok": True, "results": []}
+
+        mod.web_search = fake_web_search  # type: ignore[attr-defined]
+        try:
+            # Use format chars (Cf) that are definitely in _UNSAFE_UNICODE_CATEGORIES
+            await mod._safe_web_search("clean\u200bquery")
+            assert "query" in captured
+            # Zero-width space (U+200B, category Cf) must be removed
+            assert "\u200b" not in captured["query"]
+        finally:
+            if hasattr(mod, "web_search"):
+                del mod.web_search  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_only_unsafe_unicode_returns_none(self):
+        """A query consisting entirely of unsafe Unicode chars should
+        return None (empty after sanitization)."""
+        import veritas_os.core.pipeline as mod
+
+        result = await mod._safe_web_search("\u202e\u202c\u200b")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_normal_unicode_preserved(self):
+        """Normal non-ASCII characters (CJK, emoji, etc.) must be
+        preserved through sanitization."""
+        import veritas_os.core.pipeline as mod
+
+        captured = {}
+
+        async def fake_web_search(q, **kw):
+            captured["query"] = q
+            return {"ok": True, "results": []}
+
+        mod.web_search = fake_web_search  # type: ignore[attr-defined]
+        try:
+            await mod._safe_web_search("日本語テスト query")
+            assert "query" in captured
+            assert "日本語テスト" in captured["query"]
+        finally:
+            if hasattr(mod, "web_search"):
+                del mod.web_search  # type: ignore[attr-defined]
+
+
+# =========================================================
+# Fix 7: _is_awaitable uses inspect.isawaitable
+# =========================================================
+
+
+class TestIsAwaitableConsistency:
+    """Verify call_core_decide uses inspect.isawaitable for coroutine detection."""
+
+    def test_source_uses_inspect_isawaitable(self):
+        """call_core_decide must use inspect.isawaitable, not
+        hasattr(x, '__await__'), for coroutine detection."""
+        import inspect as _inspect
+
+        from veritas_os.core import pipeline as mod
+
+        source = _inspect.getsource(mod.call_core_decide)
+        assert "inspect.isawaitable" in source, (
+            "call_core_decide should use inspect.isawaitable() "
+            "instead of hasattr(x, '__await__')"
+        )
+        assert "hasattr" not in source or "__await__" not in source, (
+            "call_core_decide should not use hasattr(x, '__await__')"
+        )
+
+
+# =========================================================
+# Fix 8: _load_valstats no redundant exists() check
+# =========================================================
+
+
+class TestLoadValstatsNoTOCTOU:
+    """Verify that _load_valstats does not have a TOCTOU race condition."""
+
+    def test_source_no_exists_check(self):
+        """_load_valstats should not call p.exists() before open()
+        because the except clause already handles FileNotFoundError."""
+        import inspect as _inspect
+
+        from veritas_os.core import pipeline as mod
+
+        source = _inspect.getsource(mod._load_valstats)
+        assert ".exists()" not in source, (
+            "_load_valstats should not use .exists() before open() "
+            "(TOCTOU race; OSError already caught)"
+        )
+
+    def test_missing_file_returns_default(self):
+        """When the file does not exist, return the default dict."""
+        import tempfile
+
+        from veritas_os.core import pipeline as mod
+
+        original = mod.VAL_JSON
+        try:
+            mod.VAL_JSON = tempfile.mktemp(suffix=".json")  # non-existent path
+            result = mod._load_valstats()
+            assert result == {"ema": 0.5, "alpha": 0.2, "n": 0, "history": []}
+        finally:
+            mod.VAL_JSON = original
+
+
+# =========================================================
+# Fix 9: _save_valstats atomic fallback
+# =========================================================
+
+
+class TestSaveValstatsAtomicFallback:
+    """Verify that _save_valstats uses atomic write pattern even when
+    _HAS_ATOMIC_IO is False."""
+
+    def test_atomic_fallback_uses_replace(self):
+        """When _HAS_ATOMIC_IO is False, _save_valstats must use
+        os.replace for atomic file replacement."""
+        import inspect as _inspect
+
+        from veritas_os.core import pipeline as mod
+
+        source = _inspect.getsource(mod._save_valstats)
+        assert "os.replace" in source, (
+            "_save_valstats should use os.replace() for atomic writes "
+            "when _HAS_ATOMIC_IO is False"
+        )
+
+    def test_save_and_load_roundtrip(self):
+        """Data saved with _save_valstats can be loaded back."""
+        import json
+        import tempfile
+        import os
+
+        from veritas_os.core import pipeline as mod
+
+        original_val_json = mod.VAL_JSON
+        original_has_atomic = mod._HAS_ATOMIC_IO
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                mod.VAL_JSON = os.path.join(tmpdir, "test_val.json")
+                mod._HAS_ATOMIC_IO = False  # Force fallback path
+
+                data = {"ema": 0.75, "alpha": 0.3, "n": 10, "history": [0.7, 0.8]}
+                mod._save_valstats(data)
+
+                # Verify file was created and is valid JSON
+                with open(mod.VAL_JSON, "r") as f:
+                    loaded = json.load(f)
+                assert loaded == data
+        finally:
+            mod.VAL_JSON = original_val_json
+            mod._HAS_ATOMIC_IO = original_has_atomic
+
+    def test_no_temp_file_on_failure(self):
+        """If write fails, temp file must be cleaned up."""
+        import tempfile
+        import os
+
+        from veritas_os.core import pipeline as mod
+
+        original_val_json = mod.VAL_JSON
+        original_has_atomic = mod._HAS_ATOMIC_IO
+
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                mod.VAL_JSON = os.path.join(tmpdir, "test_val.json")
+                mod._HAS_ATOMIC_IO = False
+
+                # Create a non-serializable object to trigger json.dump failure
+                class NonSerializable:
+                    pass
+
+                with pytest.raises(TypeError):
+                    mod._save_valstats({"bad": NonSerializable()})
+
+                # Verify no temp files left behind
+                remaining = [f for f in os.listdir(tmpdir) if f.startswith(".valstats_")]
+                assert remaining == [], f"Temp files left behind: {remaining}"
+        finally:
+            mod.VAL_JSON = original_val_json
+            mod._HAS_ATOMIC_IO = original_has_atomic

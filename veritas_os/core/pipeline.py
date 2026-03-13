@@ -690,30 +690,45 @@ def _allow_prob(text: str) -> float:
 def _load_valstats() -> Dict[str, Any]:
     try:
         p = Path(VAL_JSON)
-        if p.exists():
-            with open(p, "r", encoding="utf-8") as f:
-                obj = json.load(f)
-            if isinstance(obj, dict):
-                return obj
+        with open(p, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        if isinstance(obj, dict):
+            return obj
     except (OSError, json.JSONDecodeError, ValueError):
         pass
     return {"ema": 0.5, "alpha": 0.2, "n": 0, "history": []}
 
 
 def _save_valstats(d: Dict[str, Any]) -> None:
+    import tempfile
+
     try:
         p = Path(VAL_JSON)
         p.parent.mkdir(parents=True, exist_ok=True)
         if _HAS_ATOMIC_IO and _atomic_write_json is not None:
             _atomic_write_json(p, d, indent=2)
         else:
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(d, f, ensure_ascii=False, indent=2)
-                f.flush()
+            # Atomic write via temp-file + rename to prevent data
+            # corruption if the process crashes mid-write.
+            fd, tmp_path = tempfile.mkstemp(
+                dir=str(p.parent), suffix=".tmp", prefix=".valstats_"
+            )
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    json.dump(d, f, ensure_ascii=False, indent=2)
+                    f.flush()
+                    try:
+                        os.fsync(f.fileno())
+                    except OSError:
+                        pass
+                os.replace(tmp_path, str(p))
+            except BaseException:
+                # Clean up the temp file on any failure.
                 try:
-                    os.fsync(f.fileno())
+                    os.unlink(tmp_path)
                 except OSError:
                     pass
+                raise
     except OSError as e:
         logger.warning("_save_valstats failed: %s", e)
 
@@ -771,7 +786,7 @@ async def call_core_decide(
     opts = list(alternatives or [])
 
     def _is_awaitable(x: Any) -> bool:
-        return hasattr(x, "__await__")
+        return inspect.isawaitable(x)
 
     def _params(fn) -> Set[str]:
         try:
@@ -898,9 +913,15 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     if len(query_text) > 512:
         query_text = query_text[:512]
 
-    # Block control characters to reduce risk of log injection /
-    # unsafe propagation into external adapters.
+    # Block control characters and unsafe Unicode categories (bidi
+    # overrides, surrogates, etc.) to reduce risk of log injection /
+    # unsafe propagation into external adapters.  Consistent with the
+    # sanitization applied in ``_norm_alt`` for alternative IDs.
     query_text = re.sub(r"[\x00-\x1f\x7f]", "", query_text)
+    query_text = "".join(
+        ch for ch in query_text
+        if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
+    )
     if not query_text:
         return None
 
