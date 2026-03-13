@@ -243,7 +243,7 @@ class TestGetMemoryStoreCallable:
 
 
 # =========================================================
-# Fix 6: _safe_web_search Unicode sanitization
+# Fix 6: _safe_web_search Unicode sanitization (PR fix #1)
 # =========================================================
 
 
@@ -330,7 +330,7 @@ class TestSafeWebSearchUnicodeSanitization:
 
 
 # =========================================================
-# Fix 7: _is_awaitable uses inspect.isawaitable
+# Fix 7: _is_awaitable uses inspect.isawaitable (PR fix #2)
 # =========================================================
 
 
@@ -355,7 +355,7 @@ class TestIsAwaitableConsistency:
 
 
 # =========================================================
-# Fix 8: _load_valstats no redundant exists() check
+# Fix 8: _load_valstats no redundant exists() check (PR fix #3)
 # =========================================================
 
 
@@ -378,12 +378,17 @@ class TestLoadValstatsNoTOCTOU:
     def test_missing_file_returns_default(self):
         """When the file does not exist, return the default dict."""
         import tempfile
+        import os
+        from uuid import uuid4
 
         from veritas_os.core import pipeline as mod
 
         original = mod.VAL_JSON
         try:
-            mod.VAL_JSON = tempfile.mktemp(suffix=".json")  # non-existent path
+            # Use a safe non-existent path (no race condition)
+            mod.VAL_JSON = os.path.join(
+                tempfile.gettempdir(), f"nonexistent_{uuid4().hex}.json"
+            )
             result = mod._load_valstats()
             assert result == {"ema": 0.5, "alpha": 0.2, "n": 0, "history": []}
         finally:
@@ -391,7 +396,7 @@ class TestLoadValstatsNoTOCTOU:
 
 
 # =========================================================
-# Fix 9: _save_valstats atomic fallback
+# Fix 9: _save_valstats atomic fallback (PR fix #4)
 # =========================================================
 
 
