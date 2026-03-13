@@ -25,7 +25,7 @@ def utc_now() -> datetime:
 def _to_int(x: Any, default: int = 0) -> int:
     try:
         return int(x)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -146,7 +146,7 @@ def propose_experiments_for_today(
     # 返す件数（環境変数で調整可）
     try:
         target_n = int(os.getenv("VERITAS_EXPERIMENTS_PER_DAY", "3"))
-    except Exception:
+    except (TypeError, ValueError):
         target_n = 3
     target_n = max(2, min(6, target_n))
 
@@ -259,5 +259,4 @@ def propose_experiments_for_today(
 
     # target_n に揃える（最低2、最大6）
     return exps[:target_n]
-
 
