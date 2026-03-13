@@ -414,6 +414,30 @@ def filter_by_severity(
 
 _MAX_MIN_ITEMS = 100  # Hard cap to prevent memory exhaustion
 
+_DEFAULT_PAD_CRITIQUES: tuple[dict[str, Any], ...] = (
+    {
+        "issue": "根拠の一次性・独立性が未検証",
+        "severity": "med",
+        "details": {"hint": "一次ソース/独立ソース2件/引用箇所紐付け"},
+        "fix": "一次ソース + 独立ソース2件以上で裏取りし、根拠を決定ログに紐付けてください。",
+        "code": "CRITIQUE_EVIDENCE_PRIMARY",
+    },
+    {
+        "issue": "前提条件・スコープが未固定",
+        "severity": "med",
+        "details": {"hint": "ゴール/KPI/制約/禁止事項/対象範囲"},
+        "fix": "目的・KPI・スコープ・制約・禁止事項を明文化し、contextに固定してください。",
+        "code": "CRITIQUE_SCOPE_UNSPECIFIED",
+    },
+    {
+        "issue": "代替案の比較が不足",
+        "severity": "med",
+        "details": {"hint": "少なくとも2案比較/トレードオフ"},
+        "fix": "少なくとも2つの代替案を比較し、採用/不採用理由を明示してください。",
+        "code": "CRITIQUE_ALTERNATIVES_WEAK",
+    },
+)
+
 
 def ensure_min_items(
     critiques: List[Dict[str, Any]],
@@ -431,34 +455,19 @@ def ensure_min_items(
     except (TypeError, ValueError):
         min_items = min(3, _MAX_MIN_ITEMS)
 
-    defaults = [
-        _crit(
-            issue="根拠の一次性・独立性が未検証",
-            severity="med",
-            details={"hint": "一次ソース/独立ソース2件/引用箇所紐付け"},
-            fix="一次ソース + 独立ソース2件以上で裏取りし、根拠を決定ログに紐付けてください。",
-            code="CRITIQUE_EVIDENCE_PRIMARY",
-        ),
-        _crit(
-            issue="前提条件・スコープが未固定",
-            severity="med",
-            details={"hint": "ゴール/KPI/制約/禁止事項/対象範囲"},
-            fix="目的・KPI・スコープ・制約・禁止事項を明文化し、contextに固定してください。",
-            code="CRITIQUE_SCOPE_UNSPECIFIED",
-        ),
-        _crit(
-            issue="代替案の比較が不足",
-            severity="med",
-            details={"hint": "少なくとも2案比較/トレードオフ"},
-            fix="少なくとも2つの代替案を比較し、採用/不採用理由を明示してください。",
-            code="CRITIQUE_ALTERNATIVES_WEAK",
-        ),
-    ]
-
     out = list(critiques or [])
     i = 0
     while len(out) < int(min_items):
-        out.append(dict(defaults[i % len(defaults)]))
+        template = _DEFAULT_PAD_CRITIQUES[i % len(_DEFAULT_PAD_CRITIQUES)]
+        out.append(
+            _crit(
+                issue=str(template["issue"]),
+                severity=_norm_severity(template["severity"]),
+                details=dict(template["details"]),
+                fix=str(template["fix"]),
+                code=str(template["code"]),
+            )
+        )
         i += 1
     return out
 
@@ -591,4 +600,3 @@ if __name__ == "__main__":
     summary = summarize_critiques(result1)
     print(summary)
     print("\n=== Self-Test Finished ===")
-
