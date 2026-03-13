@@ -168,8 +168,10 @@ class TestReadAllEntriesResilience:
             result = trustlog_signed._read_all_entries(log_file)
 
         assert len(result) == 2
-        assert any("corrupt" in msg.lower() or "skipping" in msg.lower()
-                    for msg in caplog.messages)
+        assert any(
+            "corrupt" in msg.lower() or "skipping" in msg.lower()
+            for msg in caplog.messages
+        )
 
     def test_all_corrupt_returns_empty(self, tmp_path: Path):
         """If all lines are corrupt, should return empty list."""
