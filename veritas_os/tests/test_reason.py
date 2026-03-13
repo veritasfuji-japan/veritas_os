@@ -293,36 +293,38 @@ def test_generate_reflection_template_llm_error(monkeypatch):
     assert tmpl == {}
 
 
-def test_generate_reason_unexpected_error_is_raised(monkeypatch):
-    """想定外例外(RuntimeError)は握りつぶさず送出する。"""
+def test_generate_reason_runtime_error_falls_back(monkeypatch):
+    """RuntimeError 発生時も ReasonOS は安全にフォールバックする。"""
 
     def stub_chat(*args, **kwargs):
         raise RuntimeError("unexpected")
 
     monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
 
-    with pytest.raises(RuntimeError, match="unexpected"):
-        reason.generate_reason(query="error test")
+    res = reason.generate_reason(query="error test")
+
+    assert res == {"text": "", "source": "error"}
 
 
-def test_generate_reflection_template_unexpected_error_is_raised(monkeypatch):
-    """想定外例外(RuntimeError)は握りつぶさず送出する。"""
+def test_generate_reflection_template_runtime_error_falls_back(monkeypatch):
+    """RuntimeError 発生時も空辞書へ安全にフォールバックする。"""
 
     def stub_chat(*args, **kwargs):
         raise RuntimeError("unexpected")
 
     monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
 
-    with pytest.raises(RuntimeError, match="unexpected"):
-        asyncio.run(
-            reason.generate_reflection_template(
-                query="テスト",
-                chosen={"title": "X"},
-                gate={"risk": 0.1, "decision_status": "allow"},
-                values={"total": 0.5, "ema": 0.5},
-                planner={},
-            )
+    tmpl = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
         )
+    )
+
+    assert tmpl == {}
 
 
 def test_generate_reflection_template_bad_json(monkeypatch, tmp_path):
