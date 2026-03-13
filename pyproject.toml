@@ -61,6 +61,5 @@ veritas_os = [
 
 [tool.pytest.ini_options]
 filterwarnings = [
-  "ignore:\"content=<...>\" is deprecated\\. Use 'data=<...>' instead:DeprecationWarning:httpx\\..*",
   "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",
 ]
