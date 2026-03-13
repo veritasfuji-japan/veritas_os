@@ -121,7 +121,7 @@ updated_at: 2026-03-13
 - ✅ **L-2**: `api/evolver.py` の `print()` を logger へ置換。
 - ⏸️ **L-3 (Accepted)**: `rsi.py` は sample 実装として維持。
 - ✅ **L-4 (Accepted)**: `core/reflection.py` の forward-compat `hasattr()` 分岐は意図的。
-- ⏸️ **L-5 (Deferred/Partial)**: bare except の段階的削減（`logging/rotate.py` の marker 処理に加え、`logging/trust_log.py` の署名付き追記フォールバックを `SignedTrustLogWriteError` のみ捕捉する形へ改善済み）。
+- ⏸️ **L-5 (Deferred/Partial)**: bare except の段階的削減（`logging/rotate.py` の marker 処理、`logging/trust_log.py` の署名付き追記フォールバック限定、`tools/coverage_map_pipeline.py` の型変換/JSON読込/AST解析の捕捉縮小まで改善済み）。
 - ⏸️ **L-6 (Deferred)**: `MemoryStore` 名称衝突。
 - ⏸️ **L-7 (Deferred)**: 未使用 import / dead code 整理。
 - ✅ **L-8**: `value_core.py` のコメントインデント不整合を修正。
@@ -131,6 +131,7 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加10 / 優先対応)**: `tools/coverage_map_pipeline.py` の broad `except` を `TypeError` / `ValueError` / `OverflowError` / `OSError` / `JSONDecodeError` / `SyntaxError` などへ縮小し、想定外 `RuntimeError` を握りつぶさないよう改善。`test_coverage_map_extra.py` に異常系テストを追加して挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加9 / 優先対応)**: `replay/replay_engine.py:_pipeline_version()` の broad `except Exception` を `subprocess.CalledProcessError` / `FileNotFoundError` / `OSError` に縮小し、想定外の `RuntimeError` を握りつぶさないよう改善。`test_replay_engine.py` に異常系テストを追加して挙動を固定（改善済み）。
 - ✅ **L-5 Partial (追加8 / 優先対応・互換調整済み)**: `core/reason.py` の `generate_reason()` / `generate_reflection_template()` は、CI 互換性（`kernel.decide()` の graceful fallback 契約）を優先して LLM 呼び出し例外を継続捕捉する実装へ調整。`test_reason.py` / `test_coverage_boost.py` / `kernel*` 系テストで回帰なしを確認。今後は `llm_client` 側で例外型を細分化したうえで再度段階縮小を行う。
 - ✅ **L-5 Partial (追加7 / 優先対応)**: `core/reason.py` の `generate_reflection_template()` で broad `except` を `JSONDecodeError` / `(TypeError, ValueError)` / `OSError` に縮小し、想定外 `RuntimeError` などの握りつぶしを抑止。対応テストにより既存挙動を維持確認。

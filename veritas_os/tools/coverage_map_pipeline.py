@@ -66,7 +66,7 @@ class CovFileEntry:
                 s = str(x).strip()
                 if s.lstrip("-").isdigit():
                     ml2.append(int(float(s)))
-            except Exception:
+            except (TypeError, ValueError, OverflowError):
                 continue
 
         mb2: List[List[int]] = []
@@ -74,7 +74,7 @@ class CovFileEntry:
             if isinstance(arc, (list, tuple)) and len(arc) == 2:
                 try:
                     mb2.append([int(arc[0]), int(arc[1])])
-                except Exception:
+                except (TypeError, ValueError, OverflowError):
                     continue
 
         eb2: List[List[int]] = []
@@ -82,7 +82,7 @@ class CovFileEntry:
             if isinstance(arc, (list, tuple)) and len(arc) == 2:
                 try:
                     eb2.append([int(arc[0]), int(arc[1])])
-                except Exception:
+                except (TypeError, ValueError, OverflowError):
                     continue
 
         return cls(missing_lines=ml2, missing_branches=mb2, executed_branches=eb2)
@@ -113,7 +113,7 @@ def _resolve_cov_json() -> Optional[Path]:
             p0r = (Path.cwd() / p0).resolve()
             if p0r.exists():
                 return p0r
-    except Exception:
+    except (TypeError, ValueError, OSError):
         pass
 
     # 2) env
@@ -131,7 +131,7 @@ def _resolve_cov_json() -> Optional[Path]:
             try:
                 if c.exists():
                     return c
-            except Exception:
+            except OSError:
                 continue
 
     return None
@@ -160,7 +160,7 @@ def load_cov() -> Dict[str, Any]:
 
     try:
         return json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as e:
         _eprint(
             f"[coverage_map_pipeline] failed to parse coverage.json: {p}  err={repr(e)[:160]}"
         )
@@ -197,7 +197,7 @@ def find_target_file(cov: Dict[str, Any], target_suffix: str = TARGET_SUFFIX) ->
 def _safe_read_text(path: Path) -> Optional[str]:
     try:
         return path.read_text(encoding="utf-8")
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
         _eprint(f"[coverage_map_pipeline] cannot read source: {path} err={repr(e)[:160]}")
         return None
 
@@ -270,7 +270,7 @@ def _parse_target_suffix(argv: List[str]) -> str:
         try:
             i = argv.index("--target")
             target_suffix = argv[i + 1].strip()
-        except Exception:
+        except (ValueError, IndexError, AttributeError):
             _eprint(
                 "[coverage_map_pipeline] invalid --target usage. example: --target veritas_os/core/pipeline.py"
             )
@@ -328,7 +328,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         try:
             tree = ast.parse(src)
             defs = index_defs(tree)
-        except Exception as e:
+        except (SyntaxError, ValueError, TypeError) as e:
             _eprint(
                 f"[coverage_map_pipeline] AST parse failed for {target}: {repr(e)[:160]}"
             )
@@ -386,7 +386,6 @@ def main(argv: Optional[List[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
 
 
