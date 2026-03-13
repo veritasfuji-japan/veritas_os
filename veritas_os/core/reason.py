@@ -167,7 +167,7 @@ def generate_reason(
             temperature=0.3,
             max_tokens=800,
         )
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         logger.error("[ReasonOS] generate_reason LLM error: %s", e)
         return {"text": "", "source": "error"}
 
@@ -237,7 +237,7 @@ async def generate_reflection_template(
                 max_tokens=600,
             ),
         )
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         logger.error("[ReasonOS] generate_reflection_template LLM error: %s", e)
         return {}
 
