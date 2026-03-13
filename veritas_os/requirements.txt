@@ -14,7 +14,6 @@ orjson==3.11.6
 PyYAML==6.0.1
 
 # --- Model / Decision Engine ---
-joblib==1.4.2
 scikit-learn==1.5.2
 sentence-transformers==3.0.1
 

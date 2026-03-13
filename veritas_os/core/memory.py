@@ -28,7 +28,6 @@ from .config import capability_cfg, emit_capability_manifest
 
 logger = logging.getLogger(__name__)
 
-PICKLE_RUNTIME_BLOCK_DEADLINE = "2026-06-30"
 PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
 
 
@@ -50,15 +49,19 @@ def _is_explicitly_enabled(env_key: str) -> bool:
 
 
 def _emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
-    """Log a security warning for legacy pickle artifacts blocked at runtime."""
+    """Log a security error for legacy pickle artifacts blocked at runtime.
+
+    Pickle/joblib deserialization is permanently removed due to arbitrary code
+    execution (RCE) risk.  Use the offline migration CLI to convert legacy
+    artifacts:  ``python -m veritas_os.scripts.migrate_pickle``
+    """
     logger.error(
         "[SECURITY] Legacy %s pickle detected at %s. "
-        "Runtime pickle/joblib loading is disabled and will not be restored "
-        "after %s. Migrate artifacts offline using %s. "
-        "Never place untrusted .pkl files in runtime directories (RCE risk).",
+        "Runtime pickle/joblib loading is permanently disabled (RCE risk). "
+        "Migrate artifacts offline: python -m veritas_os.scripts.migrate_pickle  "
+        "See %s for details.",
         artifact_name,
         path,
-        PICKLE_RUNTIME_BLOCK_DEADLINE,
         PICKLE_MIGRATION_GUIDE_PATH,
     )
 
@@ -81,7 +84,7 @@ def _warn_for_legacy_pickle_artifacts(scan_roots: List[Path]) -> None:
             if not candidate.is_file():
                 continue
 
-            if candidate.suffix.lower() not in {".pkl", ".joblib"}:
+            if candidate.suffix.lower() not in {".pkl", ".joblib", ".pickle"}:
                 continue
 
             _emit_legacy_pickle_runtime_blocked(
@@ -98,16 +101,11 @@ if not IS_WIN and capability_cfg.enable_memory_posix_file_lock:
 else:
     fcntl = None  # type: ignore
 
-# Backward-compatibility shim for tests/consumers that introspect this symbol.
-# Runtime pickle/joblib loading is intentionally decommissioned for security.
-joblib_load = None
-
 if capability_cfg.emit_manifest_on_import:
     emit_capability_manifest(
         component="memory",
         manifest={
             "posix_file_lock": bool(not IS_WIN and fcntl is not None),
-            "joblib_model": False,
             "sentence_transformers": (
                 capability_cfg.enable_memory_sentence_transformers
             ),
@@ -566,7 +564,7 @@ if MEM_VEC_EXTERNAL is not None and MEM_VEC_EXTERNAL.__class__.__name__ == "Simp
     )
     MEM_VEC_EXTERNAL = None
 
-# モデル関連（旧: memory_model.pkl）
+# モデル関連（ONNX / JSON のみ — pickle は完全廃止済み）
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "core" / "models"
 
