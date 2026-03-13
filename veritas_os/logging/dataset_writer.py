@@ -61,7 +61,7 @@ def _sha256_dict(d: Dict[str, Any]) -> str:
     """辞書を安定化JSONにして SHA-256 ハッシュ化"""
     try:
         return sha256_of_canonical_json(d)
-    except Exception:
+    except (TypeError, ValueError, OverflowError):
         logger.debug("_sha256_dict: JSON serialization failed, using default=str fallback", exc_info=True)
         fallback_json = json.dumps(
             d,
@@ -269,7 +269,7 @@ def append_dataset_record(
         with _dataset_lock:
             _ensure_dataset_parent(path)
             atomic_append_line(path, json.dumps(record, ensure_ascii=False))
-    except Exception as e:
+    except (OSError, TypeError, ValueError) as e:
         logger.warning("append_dataset_record failed: %s", e)
 
 
