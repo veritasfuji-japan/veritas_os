@@ -104,6 +104,26 @@ DecideResponse スキーマを全フィールド含む形に更新。
 - `EvidenceItem`: `source`（500）、`uri`（2000）、`title`（1000）、`snippet`（50000）
 - `Option`: `id`（500）、`title`（1000）、`description`（20000）、`text`（1000）
 
+### 20. ~~OpenAPI の `/v1/system/halt` リクエストスキーマに `operator` フィールドが欠如~~ ✅ 修正済み (本 PR)
+
+バックエンド `SystemHaltRequest`（`server.py`）には `reason`（必須、max_length=500）と `operator`（必須、max_length=200）の両フィールドが定義されていたが、OpenAPI 仕様には `reason` のみが記載されていた。`operator` フィールドと `required` 制約、`minLength`/`maxLength` 制約を追加。
+
+### 21. ~~OpenAPI の `/v1/system/resume` リクエストスキーマが不正~~ ✅ 修正済み (本 PR)
+
+バックエンド `SystemResumeRequest`（`server.py`）には `operator`（必須、max_length=200）と `comment`（任意、default=""、max_length=500）が定義されていたが、OpenAPI 仕様には存在しないフィールド `reason` のみが記載されていた。正しいフィールド `operator`（必須）と `comment`（任意）に修正し、`minLength`/`maxLength` 制約を追加。
+
+### 22. ~~OpenAPI の `/v1/compliance/config` PUT リクエストスキーマが未定義~~ ✅ 修正済み (本 PR)
+
+バックエンド `ComplianceConfigBody`（`server.py`）には `eu_ai_act_mode`（bool、default=false）と `safety_threshold`（float、default=0.8、ge=0.0、le=1.0）が定義されていたが、OpenAPI では `additionalProperties: true` のみとなっていた。正式なプロパティ定義に更新。
+
+### 23. ~~フロントエンド `MemoryPutRequest.kind` が `string` 型~~ ✅ 修正済み (本 PR)
+
+バックエンドの `VALID_MEMORY_KINDS`（`constants.py`）には `"semantic" | "episodic" | "skills" | "doc" | "plan"` の5種が定義されており、フロントエンドにも `MemoryKind` リテラル型が存在するにもかかわらず、`MemoryPutRequest.kind` は汎用 `string` 型だった。`MemoryKind` に修正。
+
+### 24. ~~フロントエンド `MemorySearchRequest.kinds` が `string` 型~~ ✅ 修正済み (本 PR)
+
+`MemorySearchRequest.kinds` が `string | string[] | null` と汎用型で定義されていたが、バックエンドの検証に合わせて `MemoryKind | MemoryKind[] | null` に修正。
+
 ---
 
 ## 整合性マトリクス（更新版）
@@ -127,6 +147,11 @@ DecideResponse スキーマを全フィールド含む形に更新。
 | ガバナンスポリシースキーマ | OK | OK | OK |
 | TrustFeedbackRequest | OK | OK | OK |
 | 入力フィールド制約（maxLength） | OK | OK | OK |
+| SystemHaltRequest | OK | OK | OK |
+| SystemResumeRequest | OK | OK | OK |
+| ComplianceConfigBody | OK | OK | OK |
+| MemoryPutRequest.kind 型 | OK | OK | OK |
+| MemorySearchRequest.kinds 型 | OK | OK | OK |
 
 ---
 

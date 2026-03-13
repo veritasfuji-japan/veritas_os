@@ -660,7 +660,7 @@ export interface MemoryPutRequest {
   text?: string;
   tags?: string[];
   value?: unknown;
-  kind?: string;
+  kind?: MemoryKind;
   retention_class?: RetentionClass | null;
   meta?: Record<string, unknown>;
   expires_at?: number | null;
@@ -724,7 +724,7 @@ export interface MemorySearchRequest {
   query?: string;
   k?: number;
   min_sim?: number;
-  kinds?: string | string[] | null;
+  kinds?: MemoryKind | MemoryKind[] | null;
   [key: string]: unknown;
 }
 
