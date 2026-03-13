@@ -7,6 +7,7 @@ that can be tested in isolation.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, List
@@ -143,6 +144,40 @@ class TestLazyMemoryStore:
             _ = lazy.path
         with pytest.raises(RuntimeError, match="MemoryStore load failed"):
             _ = lazy.path
+
+    def test_single_initialization_under_concurrency(self, tmp_path):
+        """Concurrent access should initialize MemoryStore exactly once."""
+        path = tmp_path / "mem.json"
+        calls = {"count": 0}
+        call_lock = threading.Lock()
+        start_gate = threading.Event()
+
+        def loader():
+            with call_lock:
+                calls["count"] += 1
+            start_gate.wait(timeout=1.0)
+            return memory.MemoryStore(path)
+
+        lazy = memory._LazyMemoryStore(loader)
+        errors = []
+
+        def access_path():
+            try:
+                _ = lazy.path
+            except (OSError, ValueError, RuntimeError) as exc:
+                errors.append(exc)
+
+        workers = [threading.Thread(target=access_path) for _ in range(6)]
+        for worker in workers:
+            worker.start()
+
+        start_gate.set()
+
+        for worker in workers:
+            worker.join()
+
+        assert not errors
+        assert calls["count"] == 1
 
 
 # =========================================================
