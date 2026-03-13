@@ -1312,7 +1312,15 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
+              properties:
+                eu_ai_act_mode:
+                  type: boolean
+                  default: false
+                safety_threshold:
+                  type: number
+                  default: 0.8
+                  minimum: 0.0
+                  maximum: 1.0
       responses:
         "200":
           description: Updated config
@@ -1349,9 +1357,16 @@ paths:
           application/json:
             schema:
               type: object
+              required: [reason, operator]
               properties:
                 reason:
                   type: string
+                  minLength: 1
+                  maxLength: 500
+                operator:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
       responses:
         "200":
           description: System halted
@@ -1373,9 +1388,16 @@ paths:
           application/json:
             schema:
               type: object
+              required: [operator]
               properties:
-                reason:
+                operator:
                   type: string
+                  minLength: 1
+                  maxLength: 200
+                comment:
+                  type: string
+                  default: ""
+                  maxLength: 500
       responses:
         "200":
           description: System resumed
