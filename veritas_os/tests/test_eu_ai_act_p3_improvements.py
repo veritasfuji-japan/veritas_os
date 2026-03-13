@@ -23,6 +23,7 @@ from veritas_os.core.eu_ai_act_compliance_module import (
     get_retention_config,
 )
 from veritas_os.logging.encryption import (
+    decrypt,
     encrypt,
     generate_key,
     get_encryption_status,
@@ -154,6 +155,34 @@ class TestEncryption:
             assert is_encryption_enabled() is False
             plaintext = '{"security": "check"}'
             assert encrypt(plaintext) == plaintext
+        finally:
+            if old is not None:
+                os.environ["VERITAS_ENCRYPTION_KEY"] = old
+            else:
+                os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
+
+    def test_encrypt_returns_input_for_non_string_payload(self) -> None:
+        """Unexpected payload type should fail closed without swallowing all exceptions."""
+        key = generate_key()
+        old = os.environ.get("VERITAS_ENCRYPTION_KEY")
+        os.environ["VERITAS_ENCRYPTION_KEY"] = key
+        try:
+            non_string_payload = 12345
+            assert encrypt(non_string_payload) == non_string_payload
+        finally:
+            if old is not None:
+                os.environ["VERITAS_ENCRYPTION_KEY"] = old
+            else:
+                os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
+
+    def test_decrypt_returns_input_for_invalid_base64_ciphertext(self) -> None:
+        """Malformed ciphertext should safely return the original input."""
+        key = generate_key()
+        old = os.environ.get("VERITAS_ENCRYPTION_KEY")
+        os.environ["VERITAS_ENCRYPTION_KEY"] = key
+        try:
+            malformed = "ENC:###"
+            assert decrypt(malformed) == malformed
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old

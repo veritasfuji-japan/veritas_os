@@ -147,7 +147,7 @@ def encrypt(plaintext: str) -> str:
         tag = hmac.new(hmac_key, payload, hashlib.sha256).digest()
 
         return "ENC:" + base64.urlsafe_b64encode(tag + payload).decode("ascii")
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         logger.warning("Encryption failed; returning plaintext", exc_info=True)
         return plaintext
 
@@ -187,7 +187,7 @@ def decrypt(ciphertext: str) -> str:
         # the forward mapping, which is handled by the cryptography backend.
         return ciphertext
 
-    except Exception:
+    except (AttributeError, TypeError, ValueError):
         logger.warning("Decryption failed", exc_info=True)
         return ciphertext
 
