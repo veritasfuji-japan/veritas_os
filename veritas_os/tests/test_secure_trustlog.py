@@ -125,7 +125,7 @@ class TestNoPlaintextStorage:
         })
 
         raw_content = temp_log_env["jsonl"].read_text(encoding="utf-8")
-        lines = [l for l in raw_content.strip().split("\n") if l.strip()]
+        lines = [ln for ln in raw_content.strip().split("\n") if ln.strip()]
 
         for line in lines:
             assert line.startswith("ENC:"), (

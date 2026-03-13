@@ -116,7 +116,7 @@ def _hmac_ctr_keystream(enc_key: bytes, iv: bytes, length: int) -> bytes:
 
 def _xor_bytes(a: bytes, b: bytes) -> bytes:
     """XOR two byte strings of equal length."""
-    return bytes(x ^ y for x, y in zip(a, b))
+    return bytes(x ^ y for x, y in zip(a, b, strict=True))
 
 
 # ---------------------------------------------------------------------------
