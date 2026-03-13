@@ -147,10 +147,13 @@ SENSITIVE_KEYWORDS_FALLBACK = {
 }
 
 # ざっくり PII 検出（fallback 用）
-_RE_PHONE  = re.compile(r'(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})')
-_RE_EMAIL  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-_RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
-_RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
+# globals() を使わず辞書で管理し、ポリシーリロード時も安全に更新できるようにする
+_PII_RE: Dict[str, re.Pattern[str]] = {
+    "phone":          re.compile(r'(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})'),
+    "email":          re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'),
+    "address_jp":     re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d'),
+    "person_name_jp": re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)'),
+}
 
 
 # PoC向け：高リスクっぽい業務ドメイン判定（テキスト含意）
@@ -327,13 +330,13 @@ def _redact_text_for_trust_log(text: str, policy: Dict[str, Any]) -> str:
 
     redact_kinds = pii_cfg.get("redact_kinds") or {}
     if redact_kinds.get("phone", True):
-        text_value = _RE_PHONE.sub(mask_token * 4, text_value)
+        text_value = _PII_RE["phone"].sub(mask_token * 4, text_value)
     if redact_kinds.get("email", True):
-        text_value = _RE_EMAIL.sub(mask_token * 4, text_value)
+        text_value = _PII_RE["email"].sub(mask_token * 4, text_value)
     if redact_kinds.get("address_jp", True):
-        text_value = _RE_ADDRJP.sub(mask_token * 4, text_value)
+        text_value = _PII_RE["address_jp"].sub(mask_token * 4, text_value)
     if redact_kinds.get("person_name_jp", False):
-        text_value = _RE_NAMEJP.sub(mask_token * 2, text_value)
+        text_value = _PII_RE["person_name_jp"].sub(mask_token * 2, text_value)
 
     return text_value
 
@@ -636,12 +639,11 @@ def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
 
     - _PROMPT_INJECTION_PATTERNS: プロンプトインジェクション検出パターン
     - _CONFUSABLE_ASCII_MAP: Unicode 同形異体文字の正規化マップ
-    - _RE_PHONE / _RE_EMAIL / _RE_ADDRJP / _RE_NAMEJP: PII 検出パターン
+    - _PII_RE: PII 検出パターン辞書（phone, email, address_jp, person_name_jp）
 
     パースエラーや不正値は警告ログを出して無視し、既存のハードコード値を維持する。
     """
     global _PROMPT_INJECTION_PATTERNS, _CONFUSABLE_ASCII_MAP
-    global _RE_PHONE, _RE_EMAIL, _RE_ADDRJP, _RE_NAMEJP
 
     # ---- プロンプトインジェクションパターン ----
     pi_section = policy.get("prompt_injection") or {}
@@ -674,17 +676,11 @@ def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
     if not isinstance(pii_pats, dict):
         return
 
-    _re_map = {
-        "phone":         "_RE_PHONE",
-        "email":         "_RE_EMAIL",
-        "address_jp":    "_RE_ADDRJP",
-        "person_name_jp": "_RE_NAMEJP",
-    }
-    for key, var_name in _re_map.items():
+    for key in ("phone", "email", "address_jp", "person_name_jp"):
         pattern_str = pii_pats.get(key)
         if pattern_str and isinstance(pattern_str, str):
             try:
-                globals()[var_name] = re.compile(pattern_str)
+                _PII_RE[key] = re.compile(pattern_str)
             except re.error as exc:
                 _logger.warning("[FUJI] pii.patterns.%s invalid regex: %s", key, exc)
 
@@ -741,6 +737,7 @@ def _check_policy_hot_reload() -> None:
                     # fd is now owned and closed by os.fdopen
                     fd = -1
                     POLICY = _load_policy_from_str(content, path)
+                    _build_runtime_patterns_from_policy(POLICY)
                     _POLICY_MTIME = current_mtime
             finally:
                 if fd >= 0:
@@ -766,14 +763,14 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
         rationale_parts.append(f"危険・違法系キーワード検出: {', '.join(sorted(set(hits)))}")
 
     pii_hits: List[str] = []
-    if _RE_PHONE.search(text):
+    if _PII_RE["phone"].search(text):
         pii_hits.append("phone")
-    if _RE_EMAIL.search(text):
+    if _PII_RE["email"].search(text):
         pii_hits.append("email")
-    if _RE_ADDRJP.search(text):
+    if _PII_RE["address_jp"].search(text):
         pii_hits.append("address")
 
-    # _RE_NAMEJP は誤検出が多いので PII 判定に使わない
+    # person_name_jp は誤検出が多いので PII 判定に使わない
     if pii_hits:
         categories.append("PII")
         risk = max(risk, 0.35)
