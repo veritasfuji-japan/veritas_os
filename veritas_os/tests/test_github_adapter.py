@@ -1,6 +1,8 @@
 # veritas_os/tests/test_github_adapter.py
 # -*- coding: utf-8 -*-
 
+import pytest
+
 from veritas_os.tools import github_adapter
 
 
@@ -121,7 +123,7 @@ def test_github_search_repos_handles_api_error(monkeypatch):
     monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
 
     def fake_get(*args, **kwargs):
-        raise RuntimeError("boom")
+        raise github_adapter.requests.exceptions.Timeout("boom")
 
     monkeypatch.setattr(github_adapter.requests, "get", fake_get)
 
@@ -131,6 +133,20 @@ def test_github_search_repos_handles_api_error(monkeypatch):
     assert res["results"] == []
     assert "GitHub API error:" in res["error"]
 
+
+
+
+def test_github_search_repos_raises_unexpected_runtime_error(monkeypatch):
+    """想定外例外は握りつぶさずに顕在化させる。"""
+    monkeypatch.setenv("VERITAS_GITHUB_TOKEN", "dummy-token")
+
+    def fake_get_with_retry(*args, **kwargs):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(github_adapter, "_get_with_retry", fake_get_with_retry)
+
+    with pytest.raises(RuntimeError, match="unexpected"):
+        github_adapter.github_search_repos("veritas_os")
 
 def test_github_search_repos_retries_on_timeout(monkeypatch):
     """一時的なタイムアウト時に再試行する。"""

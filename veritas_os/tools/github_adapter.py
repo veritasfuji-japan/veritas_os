@@ -364,7 +364,7 @@ def github_search_repos(query: str, max_results: int = 5) -> dict:
     try:
         r = _get_with_retry(url, headers=headers, params=params, timeout=20)
         data = r.json()
-    except Exception as e:
+    except (requests.RequestException, ValueError, TypeError) as e:
         # ★ セキュリティ修正: 内部例外の詳細をレスポンスに含めない
         logger.warning("GitHub API error: %s: %s", type(e).__name__, e)
         return {
