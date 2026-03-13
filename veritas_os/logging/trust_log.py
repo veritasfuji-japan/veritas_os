@@ -27,6 +27,7 @@ from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_
 from veritas_os.logging.encryption import encrypt as _encrypt_line, is_encryption_enabled
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import append_signed_decision
+from veritas_os.security.hash import sha256_hex
 
 try:
     from veritas_os.core.sanitize import mask_pii as _mask_pii
@@ -84,11 +85,7 @@ def iso_now() -> str:
 
 def _sha256(data: Any) -> str:
     """UTF-8 / bytes から SHA-256 ハッシュを生成"""
-    if isinstance(data, bytes):
-        raw = data
-    else:
-        raw = str(data).encode("utf-8")
-    return hashlib.sha256(raw).hexdigest()
+    return sha256_hex(data if isinstance(data, bytes) else str(data))
 
 
 def _canonical_json(obj: Any) -> bytes:
@@ -140,7 +137,7 @@ def _compute_sha256(payload: dict) -> str:
         logger.debug("_compute_sha256: canonical JSON failed, using safe fallback", exc_info=True)
         s = json.dumps(payload, sort_keys=True, separators=(",", ":"),
                        ensure_ascii=False, default=str).encode("utf-8")
-    return hashlib.sha256(s).hexdigest()
+    return sha256_hex(s)
 
 
 def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:

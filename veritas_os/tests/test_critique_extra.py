@@ -53,6 +53,21 @@ class TestEnsureMinItems:
         assert len(result) == 5
         # Should have cycled (3 defaults, cycle through again)
 
+    def test_padded_items_do_not_share_nested_details(self):
+        """Padded findings should not share nested mutable references."""
+        result = crit_mod.ensure_min_items([], min_items=2)
+        result[0]["details"]["hint"] = "modified"
+
+        assert result[1]["details"]["hint"] != "modified"
+
+    def test_multiple_calls_do_not_share_default_templates(self):
+        """Mutations from one call should not leak into another call."""
+        first = crit_mod.ensure_min_items([], min_items=1)
+        first[0]["details"]["hint"] = "leaked"
+
+        second = crit_mod.ensure_min_items([], min_items=1)
+        assert second[0]["details"]["hint"] != "leaked"
+
 
 class TestToFindings:
     """Tests for _to_findings function."""

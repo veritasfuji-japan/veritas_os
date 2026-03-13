@@ -31,14 +31,14 @@ updated_at: 2026-03-12
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **69% (31/45)** | CRITICAL は 100% 解消 |
-| 統合品質評価 | **70%** | Deferred の構造課題を反映 |
+| 完了率（件数ベース） | **76% (34/45)** | CRITICAL は 100% 解消 |
+| 統合品質評価 | **76%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中31件を対応（69%）。
+1. 指摘45件中34件を対応（76%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -63,9 +63,9 @@ updated_at: 2026-03-12
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
 | HIGH     | 12    | 11    | 1                   | 92%       |
-| MEDIUM   | 20    | 14    | 6                   | 70%       |
+| MEDIUM   | 20    | 16    | 4                   | 80%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 31    | 14                  | **69%**   |
+| **TOTAL**| 45    | 34    | 11                  | **76%**   |
 
 ---
 
@@ -92,19 +92,19 @@ updated_at: 2026-03-12
 - ✅ **H-11**: H-7 + H-12 の組合せで `rotate.py` 競合経路を封止。
 - ✅ **H-12**: `logging/trust_log.py:get_last_hash()` に `_trust_log_lock` を適用。
 
-### MEDIUM (13 Fixed / 7 Deferred or Accepted)
+### MEDIUM (16 Fixed / 4 Deferred or Accepted)
 
 - ✅ **M-1**: `core/atomic_io.py` rename 後の directory fsync を追加。
-- ⏸️ **M-2 (Deferred)**: `logging/paths.py` import-time side effect。
+- ✅ **M-2**: `logging/paths.py` の import-time side effect を解消し、明示的な `ensure_runtime_dirs()` 呼び出し時のみディレクトリ作成を実施。
 - ✅ **M-3**: `memory/store.py` を `VERITAS_MEMORY_DIR` で設定可能化。
 - ✅ **M-4**: `core/planner.py` の JSON rescue を `raw_decode()` ベースに再設計。
 - ✅ **M-5**: `core/memory.py:_LazyMemoryStore` の初期化を lock で直列化し、同時アクセス時の多重初期化を防止。
 - ✅ **M-6**: trust log append を canonical 実装に一本化。
 - ⏸️ **M-7 (Accepted)**: `schemas.py` coercion は外部入力互換のため維持。
-- ⏸️ **M-8 (Deferred)**: SHA-256 補助関数の重複整理。
+- ✅ **M-8**: SHA-256 補助関数を `veritas_os.security.hash` へ集約し、`trust_log.py` / `dataset_writer.py` の重複実装を削減。
 - ✅ **M-9**: `core/reason.py` のハードコードログパスを共通設定 (`logging.paths.LOG_DIR`) に統合。
 - ⏸️ **M-10 (Accepted)**: `predict_gate_label()` の 0.5 fallback。
-- ⏸️ **M-11 (Deferred)**: `critique.py` mutable default パターン改善。
+- ✅ **M-11**: `critique.py` のパディングテンプレートを不変化し、ネスト dict の参照共有を防止。
 - ⏸️ **M-12 (Deferred)**: `core/self_healing.py` budget 永続化。
 - ✅ **M-13**: `/status` の内部エラー詳細を debug mode 時のみ公開。
 - ✅ **M-14**: HTTP security headers を追加。
@@ -134,7 +134,6 @@ updated_at: 2026-03-12
 
 - 現在、**CRITICAL/HIGH で未解決の直接セキュリティ欠陥は 0 件**。
 - ただし、以下は継続監視対象。
-  - M-2: `paths.py` import-time side effect
   - L-5: bare `except` 残存
 
 ### Operational Security Alerts
@@ -142,9 +141,9 @@ updated_at: 2026-03-12
 1. ⚠️ **Legacy `.pkl` artifacts are prohibited in runtime paths.**
    - 理由: pickle は任意コード実行リスクを持つ。
    - 対応: オフライン移行手順を利用し、実行系は JSON 限定とする。
-2. ⚠️ **Deferred import-time side effects can become latent availability risks.**
-   - 理由: 初期化順序の揺れで障害再現性が低下する。
-   - 対応: 次期メジャーで lazy init 方針を統一する。
+2. ⚠️ **bare `except` の残存は障害の根本原因分析を難化させる。**
+   - 理由: 例外種別が失われることで、セキュリティイベント検知と障害解析が遅延しうる。
+   - 対応: 次期メジャーで `except Exception as exc` + 構造化ログへ段階置換する。
 
 ---
 
@@ -158,10 +157,10 @@ updated_at: 2026-03-12
 
 ### Long-term (next major)
 
-1. M-2 対応として module 初期化を lazy pattern へ再設計。
-2. L-1 対応として timestamp 形式を全体統一。
-3. M-8/L-7 対応として重複ユーティリティと dead code を整理。
-4. M-5 対応として lazy state 初期化に明示 lock を導入。
+1. L-1 対応として timestamp 形式を全体統一。
+2. L-5 対応として bare except を段階的に削減。
+3. L-7 対応として dead code / 未使用 import を整理。
+4. M-12 対応として self-healing budget の永続化設計を導入。
 
 ---
 

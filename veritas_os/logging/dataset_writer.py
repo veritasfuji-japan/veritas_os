@@ -13,7 +13,6 @@ VERITAS Dataset Writer（拡張版）
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import time
@@ -28,6 +27,7 @@ from veritas_os.core.decision_status import (
     normalize_status,
 )
 from veritas_os.core.atomic_io import atomic_append_line
+from veritas_os.security.hash import sha256_hex, sha256_of_canonical_json
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +60,17 @@ def _ensure_dataset_parent(path: Path) -> None:
 def _sha256_dict(d: Dict[str, Any]) -> str:
     """辞書を安定化JSONにして SHA-256 ハッシュ化"""
     try:
-        s = json.dumps(d, ensure_ascii=False, sort_keys=True)
+        return sha256_of_canonical_json(d)
     except Exception:
         logger.debug("_sha256_dict: JSON serialization failed, using default=str fallback", exc_info=True)
-        s = json.dumps(d, ensure_ascii=False, sort_keys=True, default=str)
-    return hashlib.sha256(s.encode("utf-8")).hexdigest()
+        fallback_json = json.dumps(
+            d,
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+            separators=(",", ":"),
+        )
+        return sha256_hex(fallback_json)
 
 
 def _f2(x: Any, default: float = 0.0) -> float:
