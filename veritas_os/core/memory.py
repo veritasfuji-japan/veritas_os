@@ -2075,7 +2075,12 @@ def rebuild_vector_index() -> None:
         from veritas_os.core import memory
         memory.rebuild_vector_index()
     """
-    _vec = _get_mem_vec()
+    # NOTE:
+    #   rebuild は明示運用コマンドのため、MEM_VEC が未初期化(None)なら
+    #   ここでは暗黙初期化せずに即 return する。
+    #   これにより「MEM_VEC が None のときは何もしない」という既存契約を維持する。
+    with _mem_vec_lock:
+        _vec = MEM_VEC
 
     if _vec is None:
         logger.error("[MemoryOS] Cannot rebuild index: MEM_VEC is None")
