@@ -166,18 +166,20 @@ from .pipeline_replay import (
     replay_decision as _replay_decision_impl,
 )
 
+_atomic_write_json: Any = None
+_HAS_ATOMIC_IO = False
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
     _HAS_ATOMIC_IO = True
 except (ImportError, ModuleNotFoundError):
-    _atomic_write_json = None  # type: ignore
-    _HAS_ATOMIC_IO = False
+    pass
 
 
+Request: Any = None  # fallback: tests may import pipeline without fastapi installed
 try:
     from fastapi import Request
-except (ImportError, ModuleNotFoundError):  # tests may import pipeline without fastapi installed
-    Request = Any  # type: ignore
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 # =========================================================
@@ -247,52 +249,52 @@ def _check_required_modules() -> None:
 
 
 # ---- kernel (REQUIRED) ----
+veritas_core: Any = None
 try:
-    from . import kernel as veritas_core  # type: ignore
+    from . import kernel as veritas_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    veritas_core = None  # type: ignore
     _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
 
 # ---- fuji (REQUIRED) ----
+fuji_core: Any = None
 try:
-    from . import fuji as fuji_core  # type: ignore
+    from . import fuji as fuji_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    fuji_core = None  # type: ignore
     _warn(f"[ERROR][pipeline] fuji import failed (REQUIRED): {repr(e)}")
 
 # ---- memory (RECOMMENDED) ----
+mem: Any = None
 try:
-    from . import memory as mem  # type: ignore
+    from . import memory as mem
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    mem = None  # type: ignore
     _warn(f"[WARN][pipeline] memory import failed (RECOMMENDED): {repr(e)}")
 
 # ---- value_core (RECOMMENDED) ----
+value_core: Any = None
 try:
-    from . import value_core  # type: ignore
+    from . import value_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    value_core = None  # type: ignore
     _warn(f"[WARN][pipeline] value_core import failed (RECOMMENDED): {repr(e)}")
 
 # ---- world model (RECOMMENDED) ----
+world_model: Any = None
 try:
-    from . import world as world_model  # type: ignore
+    from . import world as world_model
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    world_model = None  # type: ignore
     _warn(f"[WARN][pipeline] world import failed (RECOMMENDED): {repr(e)}")
 
 # ---- reason (OPTIONAL) ----
+reason_core: Any = None
 try:
-    from . import reason as reason_core  # type: ignore
+    from . import reason as reason_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    reason_core = None  # type: ignore
     _warn(f"[INFO][pipeline] reason import failed (OPTIONAL): {repr(e)}")
 
 # ---- debate (RECOMMENDED) ----
+debate_core: Any = None
 try:
-    from . import debate as debate_core  # type: ignore
+    from . import debate as debate_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    debate_core = None  # type: ignore
     _warn(f"[WARN][pipeline] debate import failed (RECOMMENDED): {repr(e)}")
 
 
@@ -300,25 +302,31 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 # Safe imports (API schemas / persona)
 # =========================================================
 
+DecideRequest: Any = None
+DecideResponse: Any = None
 try:
-    from veritas_os.api.schemas import DecideRequest, DecideResponse  # type: ignore
+    from veritas_os.api.schemas import DecideRequest, DecideResponse
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    DecideRequest = Any  # type: ignore
-    DecideResponse = Any  # type: ignore
     _warn(f"[WARN][pipeline] api.schemas import failed: {repr(e)}")
 
-try:
-    from veritas_os.api.evolver import load_persona  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    def load_persona() -> dict:  # type: ignore
-        return {"name": "fallback", "mode": "minimal"}
 
+def _fallback_load_persona() -> dict:
+    return {"name": "fallback", "mode": "minimal"}
+
+
+load_persona: Any = _fallback_load_persona
 try:
-    from veritas_os.core.sanitize import mask_pii as _mask_pii  # type: ignore
+    from veritas_os.api.evolver import load_persona
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
+    pass
+
+_mask_pii: Any = None
+_HAS_SANITIZE = False
+try:
+    from veritas_os.core.sanitize import mask_pii as _mask_pii
     _HAS_SANITIZE = True
 except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    _mask_pii = None  # type: ignore
-    _HAS_SANITIZE = False
+    pass
 
 
 # =========================================================
@@ -335,12 +343,12 @@ def _to_dict(o: Any) -> Dict[str, Any]:
         return o
     if hasattr(o, "model_dump"):
         try:
-            return o.model_dump(exclude_none=True)  # type: ignore
+            return o.model_dump(exclude_none=True)
         except (TypeError, ValueError, RuntimeError):
             logger.debug("_to_dict: model_dump() failed for %r", type(o).__name__, exc_info=True)
     if hasattr(o, "dict"):
         try:
-            return o.dict()  # type: ignore
+            return o.dict()
         except (TypeError, ValueError, RuntimeError):
             logger.debug("_to_dict: dict() failed for %r", type(o).__name__, exc_info=True)
     try:
@@ -507,7 +515,7 @@ def _safe_paths() -> Tuple[Path, Path, Path, Path]:
         return _enforce_path_policy(Path(path_text), source_name=env_name)
 
     try:
-        from veritas_os.logging import paths as lp  # type: ignore
+        from veritas_os.logging import paths as lp
 
         env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
         env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
@@ -603,36 +611,50 @@ async def replay_decision(
 # Safe dataset writer (optional)
 # =========================================================
 
+
+def _fallback_build_dataset_record(
+    *, req_payload: dict, res_payload: dict, meta: dict, eval_meta: dict,
+) -> dict:
+    return {"req": req_payload, "res": res_payload, "meta": meta, "eval": eval_meta}
+
+
+def _fallback_append_dataset_record(_rec: dict) -> None:
+    return None
+
+
+build_dataset_record: Any = _fallback_build_dataset_record
+append_dataset_record: Any = _fallback_append_dataset_record
 try:
-    from veritas_os.logging.dataset_writer import build_dataset_record, append_dataset_record  # type: ignore
+    from veritas_os.logging.dataset_writer import build_dataset_record, append_dataset_record
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] dataset_writer import failed: {repr(e)}")
-
-    def build_dataset_record(*, req_payload: dict, res_payload: dict, meta: dict, eval_meta: dict) -> dict:  # type: ignore
-        return {"req": req_payload, "res": res_payload, "meta": meta, "eval": eval_meta}
-
-    def append_dataset_record(_rec: dict) -> None:  # type: ignore
-        return None
 
 
 # =========================================================
 # Trust log (optional; fallback-safe)
 # =========================================================
 
-try:
-    from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide  # type: ignore
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    def append_trust_log(_entry: dict) -> None:  # type: ignore
-        return None
 
-    def write_shadow_decide(  # type: ignore
-        request_id: str,
-        body: dict,
-        chosen: dict,
-        telos_score: float,
-        fuji: dict,
-    ) -> None:
-        return None
+def _fallback_append_trust_log(_entry: dict) -> None:
+    return None
+
+
+def _fallback_write_shadow_decide(
+    request_id: str,
+    body: dict,
+    chosen: dict,
+    telos_score: float,
+    fuji: dict,
+) -> None:
+    return None
+
+
+append_trust_log: Any = _fallback_append_trust_log
+write_shadow_decide: Any = _fallback_write_shadow_decide
+try:
+    from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide
+except (ImportError, ModuleNotFoundError):  # pragma: no cover
+    pass
 
 
 # =========================================================
@@ -649,7 +671,7 @@ def predict_gate_label(_text: str) -> Dict[str, float]:
 
 def _mem_model_path() -> str:
     try:
-        from veritas_os.core.models import memory_model as mm  # type: ignore
+        from veritas_os.core.models import memory_model as mm
         for k in ("MODEL_FILE", "MODEL_PATH"):
             if hasattr(mm, k):
                 return str(getattr(mm, k))
@@ -659,13 +681,13 @@ def _mem_model_path() -> str:
 
 
 try:
-    from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
+    from veritas_os.core.models import memory_model as memory_model_core
 
     MEM_VEC = getattr(memory_model_core, "MEM_VEC", None)
     MEM_CLF = getattr(memory_model_core, "MEM_CLF", None)
 
     if hasattr(memory_model_core, "predict_gate_label"):
-        from veritas_os.core.models.memory_model import predict_gate_label as _pgl  # type: ignore
+        from veritas_os.core.models.memory_model import predict_gate_label as _pgl
 
         def predict_gate_label(text: str) -> Dict[str, float]:
             try:
@@ -751,7 +773,7 @@ def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     # Prefer kernel helper if present
     try:
         if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
-            result = veritas_core._dedupe_alts(alts)  # type: ignore
+            result = veritas_core._dedupe_alts(alts)
             if isinstance(result, list):
                 return result
             logger.debug("_dedupe_alts: kernel helper returned %s, expected list", type(result).__name__)
@@ -886,12 +908,11 @@ async def call_core_decide(
 # Optional: WebSearch adapter (do not crash import)
 # =========================================================
 
-_tool_web_search = None
+_tool_web_search: Any = None
 try:
-    from veritas_os.tools.web_search import web_search as _tool_web_search  # type: ignore
+    from veritas_os.tools.web_search import web_search as _tool_web_search
 except (ImportError, ModuleNotFoundError):
-    # optional dependency / env missing in CI or local
-    _tool_web_search = None
+    pass  # optional dependency / env missing in CI or local
 
 
 async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
@@ -943,7 +964,7 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     ).hexdigest()[:12]
 
     try:
-        ws = fn(query_text, max_results=max_results_int)  # type: ignore[misc]
+        ws = fn(query_text, max_results=max_results_int)
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
@@ -962,10 +983,10 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
 # =========================================================
 # evidence.py -> pipeline item
 # =========================================================
+evidence_core: Any = None
 try:
-    from veritas_os.core import evidence as evidence_core  # type: ignore
+    from veritas_os.core import evidence as evidence_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    evidence_core = None  # type: ignore
     _warn(f"[WARN][pipeline] evidence import failed (OPTIONAL): {repr(e)}")
 
 # _norm_evidence_item_simple, _evidencepy_to_pipeline_item ->

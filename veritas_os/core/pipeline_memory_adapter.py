@@ -17,10 +17,10 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 # ---- memory (RECOMMENDED) ----
+_mem_module: Any = None
 try:
-    from . import memory as _mem_module  # type: ignore
+    from . import memory as _mem_module
 except Exception as e:  # pragma: no cover
-    _mem_module = None  # type: ignore
     logger.warning("[pipeline_memory_adapter] memory import failed: %s", repr(e))
 
 
@@ -102,15 +102,15 @@ def _memory_search(store: Any, **kwargs: Any) -> Any:
     k = kwargs.get("k", 8)
 
     try:
-        return fn(query=q, k=k)  # type: ignore
+        return fn(query=q, k=k)
     except Exception:
         logger.debug("[_memory_search] fn(query=q, k=k) failed, trying positional args", exc_info=True)
 
     try:
-        return fn(q, k)  # type: ignore
+        return fn(q, k)
     except Exception:
         logger.debug("[_memory_search] fn(q, k) failed, trying fn(query=q)", exc_info=True)
-        return fn(query=q)  # type: ignore
+        return fn(query=q)
 
 
 # =========================================================
@@ -133,17 +133,17 @@ def _memory_put(store: Any, user_id: Any, *, key: str, value: Any, meta: Any = N
         logger.debug("[_memory_put] accepted_kwargs call failed, trying explicit signature", exc_info=True)
 
     try:
-        fn(user_id, key=key, value=value, meta=meta)  # type: ignore
+        fn(user_id, key=key, value=value, meta=meta)
         return None
     except Exception:
         logger.debug("[_memory_put] fn(user_id, key=, value=, meta=) failed", exc_info=True)
     try:
-        fn(user_id, key, value)  # type: ignore
+        fn(user_id, key, value)
         return None
     except Exception:
         logger.debug("[_memory_put] fn(user_id, key, value) failed", exc_info=True)
     try:
-        fn(key, value)  # type: ignore
+        fn(key, value)
         return None
     except Exception:
         logger.debug("[_memory_put] all put signatures exhausted", exc_info=True)
@@ -161,7 +161,7 @@ def _memory_add_usage(store: Any, user_id: Any, cited_ids: List[str]) -> None:
     except Exception:
         logger.debug("[_memory_add_usage] accepted_kwargs call failed, trying positional", exc_info=True)
     try:
-        fn(user_id, cited_ids)  # type: ignore
+        fn(user_id, cited_ids)
     except Exception:
         logger.debug("[_memory_add_usage] all add_usage signatures exhausted", exc_info=True)
         return None
