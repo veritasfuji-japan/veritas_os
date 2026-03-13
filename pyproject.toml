@@ -25,7 +25,6 @@ dependencies = [
   "python-dotenv==1.0.1",
   "orjson==3.11.6",
   "PyYAML==6.0.1",
-  "joblib==1.4.2",
   "scikit-learn==1.5.2",
   "sentence-transformers==3.0.1",
   "openai==1.51.0",

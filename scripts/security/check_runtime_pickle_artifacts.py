@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LEGACY_EXTENSIONS = frozenset({".pkl", ".joblib"})
+LEGACY_EXTENSIONS = frozenset({".pkl", ".joblib", ".pickle"})
 
 
 def _default_scan_dirs() -> list[Path]:

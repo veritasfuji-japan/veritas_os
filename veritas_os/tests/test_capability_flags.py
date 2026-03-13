@@ -72,13 +72,11 @@ def test_fuji_tool_bridge_flag_blocks_call_tool(monkeypatch):
         assert "VERITAS_CAP_FUJI_TOOL_BRIDGE" in str(exc)
 
 
-def test_memory_joblib_flag_disables_loader(monkeypatch):
-    """Memory module disables joblib model loading via capability flag."""
-    monkeypatch.setenv("VERITAS_CAP_MEMORY_JOBLIB_MODEL", "0")
-
+def test_memory_joblib_removed(monkeypatch):
+    """Memory module no longer exposes joblib_load (pickle fully removed)."""
     _, memory_mod = _reload_config_and("veritas_os.core.memory")
 
-    assert memory_mod.joblib_load is None
+    assert not hasattr(memory_mod, "joblib_load")
 
 
 def test_fuji_yaml_flag_requires_pyyaml(monkeypatch):

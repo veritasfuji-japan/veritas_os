@@ -333,7 +333,7 @@ def test_legacy_pickle_detection_log_includes_migration_guidance(
         _new_vector_memory(index_path=idx_path, dim=4)
 
     assert "[SECURITY] Legacy vector index pickle detected" in caplog.text
-    assert memory.PICKLE_RUNTIME_BLOCK_DEADLINE in caplog.text
+    assert "permanently disabled" in caplog.text
     assert memory.PICKLE_MIGRATION_GUIDE_PATH in caplog.text
 
 
