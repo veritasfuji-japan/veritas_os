@@ -32,14 +32,28 @@ from veritas_os.audit.trustlog_signed import (
 )
 from veritas_os.security.hash import sha256_hex
 
-try:
-    from veritas_os.core.sanitize import mask_pii as _mask_pii
-except Exception as _import_err:  # pragma: no cover
-    _mask_pii = None  # type: ignore[assignment]
-    logging.getLogger(__name__).warning(
-        "sanitize.mask_pii unavailable; shadow log PII masking disabled: %s",
-        _import_err,
-    )
+
+def _load_mask_pii():
+    """Load `sanitize.mask_pii` with narrow fallback handling.
+
+    Returns:
+        Callable mask function when available, otherwise ``None``.
+
+    Raises:
+        RuntimeError: Propagated for unexpected import-time failures.
+    """
+    try:
+        from veritas_os.core.sanitize import mask_pii
+    except (ImportError, AttributeError) as import_err:  # pragma: no cover
+        logging.getLogger(__name__).warning(
+            "sanitize.mask_pii unavailable; shadow log PII masking disabled: %s",
+            import_err,
+        )
+        return None
+    return mask_pii
+
+
+_mask_pii = _load_mask_pii()
 
 logger = logging.getLogger(__name__)
 

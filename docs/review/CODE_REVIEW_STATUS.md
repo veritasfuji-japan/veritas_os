@@ -131,6 +131,7 @@ updated_at: 2026-03-13
 
 ### Recent Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加5 / 優先対応)**: `logging/trust_log.py` の `mask_pii` import フォールバックを `ImportError` / `AttributeError` に限定し、想定外の import-time 例外 (`RuntimeError` 等) を握りつぶさないよう改善。テストで異常系を固定。
 - ✅ **L-5 Partial (追加4 / 優先対応)**: `logging/encryption.py` の `encrypt()` / `decrypt()` で broad `except Exception` を `AttributeError` / `TypeError` / `ValueError` に縮小し、想定外例外の握りつぶしを防止。異常系テストを追加して挙動を固定。
 - ✅ **L-5 Partial (追加3)**: `logging/dataset_writer.py` の `append_dataset_record()` / `_sha256_dict()` で broad `except` を `OSError` / `TypeError` / `ValueError` / `OverflowError` へ縮小し、想定外の `RuntimeError` 握りつぶしを防止。
 - ✅ **L-1 Completed**: `core/reason.py` / `core/value_core.py` の timestamp を `utc_now_iso_z(timespec="seconds")` に統一。
