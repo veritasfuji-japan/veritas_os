@@ -197,7 +197,7 @@ def test_generate_reason_llm_error(monkeypatch):
     """LLM 呼び出し例外時に error ソースで空文字を返す。"""
 
     def stub_chat(*args, **kwargs):
-        raise RuntimeError("boom")
+        raise ValueError("boom")
 
     monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
 
@@ -276,7 +276,41 @@ def test_generate_reflection_template_llm_error(monkeypatch):
     """
 
     def stub_chat(*args, **kwargs):
-        raise RuntimeError("LLM error")
+        raise ValueError("LLM error")
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    tmpl = asyncio.run(
+        reason.generate_reflection_template(
+            query="テスト",
+            chosen={"title": "X"},
+            gate={"risk": 0.1, "decision_status": "allow"},
+            values={"total": 0.5, "ema": 0.5},
+            planner={},
+        )
+    )
+
+    assert tmpl == {}
+
+
+def test_generate_reason_runtime_error_fallback(monkeypatch):
+    """LLM RuntimeError は互換維持のためフォールバック処理する。"""
+
+    def stub_chat(*args, **kwargs):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
+
+    res = reason.generate_reason(query="error test")
+
+    assert res == {"text": "", "source": "error"}
+
+
+def test_generate_reflection_template_runtime_error_fallback(monkeypatch):
+    """LLM RuntimeError は互換維持のためフォールバック処理する。"""
+
+    def stub_chat(*args, **kwargs):
+        raise RuntimeError("unexpected")
 
     monkeypatch.setattr(reason.llm_client, "chat", stub_chat)
 
