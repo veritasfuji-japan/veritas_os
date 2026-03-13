@@ -132,6 +132,9 @@ def encrypt(plaintext: str, *, _allow_plaintext: bool = False) -> str:
 
     Returns ``ENC:`` prefixed base64 ciphertext when a key is available.
     """
+    if not isinstance(plaintext, str):
+        raise TypeError(f"encrypt() requires a str, got {type(plaintext).__name__}")
+
     key = _get_key_bytes()
     if key is None:
         if _allow_plaintext:
@@ -162,9 +165,13 @@ def decrypt(ciphertext: str) -> str:
             "Cannot decrypt: VERITAS_ENCRYPTION_KEY not set"
         )
 
-    if _USE_REAL_AES:
-        return _decrypt_aesgcm(ciphertext, key)
-    return _decrypt_hmac_ctr(ciphertext, key)
+    try:
+        if _USE_REAL_AES:
+            return _decrypt_aesgcm(ciphertext, key)
+        return _decrypt_hmac_ctr(ciphertext, key)
+    except (ValueError, Exception):
+        logger.warning("Decryption failed for malformed ciphertext — returning original input")
+        return ciphertext
 
 
 # ---------------------------------------------------------------------------
