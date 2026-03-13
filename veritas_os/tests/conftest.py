@@ -1,14 +1,19 @@
-"""Pytest configuration for asynchronous test execution.
+"""Pytest configuration for asynchronous test execution and TrustLog encryption.
 
 This project includes ``@pytest.mark.asyncio`` tests but does not require an
 external async pytest plugin in all environments. The hook below executes
 coroutine test functions with ``asyncio.run`` so async tests remain portable.
+
+TrustLog is secure-by-default and requires ``VERITAS_ENCRYPTION_KEY``.
+A session-scoped autouse fixture injects a test key so that all tests
+can write to TrustLog without manual key setup.
 """
 
 from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 from typing import Any
 
 import pytest
@@ -27,6 +32,26 @@ def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> bool | None:
     }
     asyncio.run(test_function(**fixture_args))
     return True
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _ensure_encryption_key():
+    """Provide a test encryption key for TrustLog secure-by-default.
+
+    TrustLog raises ``EncryptionKeyMissing`` when no key is configured.
+    This session-scoped fixture injects a deterministic test key so that
+    every test can call ``append_trust_log`` without extra setup.
+
+    The key is only set when the environment variable is absent, so
+    production-like CI runs that set a real key are not overridden.
+    """
+    if not os.environ.get("VERITAS_ENCRYPTION_KEY"):
+        from veritas_os.logging.encryption import generate_key
+
+        os.environ["VERITAS_ENCRYPTION_KEY"] = generate_key()
+    yield
+    # cleanup is intentionally omitted — the key is harmless and
+    # removing it mid-session could break teardown logging.
 
 
 def pytest_configure(config: pytest.Config) -> None:

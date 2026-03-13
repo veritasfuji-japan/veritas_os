@@ -28,7 +28,12 @@ def temp_log_env(tmp_path, monkeypatch):
     - LOG_JSON
     - LOG_JSONL
     - open_trust_log_for_append
+    - VERITAS_ENCRYPTION_KEY（secure-by-default に必須）
     """
+    # ★ secure-by-default: テスト用の暗号鍵を設定
+    from veritas_os.logging.encryption import generate_key
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+
     # LOG_DIR を差し替え
     monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path, raising=False)
 
@@ -330,12 +335,10 @@ def test_append_trust_log_chain_integrity_and_jsonl_json(temp_log_env):
     assert second["sha256"] == expected_h2
 
     # JSONL 側も2行あり、最後の sha256 が second と一致しているはず
-    with open(temp_log_env["jsonl"], "r", encoding="utf-8") as f:
-        lines = f.readlines()
-    assert len(lines) == 2
-
-    last = json.loads(lines[-1])
-    assert last["sha256"] == second["sha256"]
+    # ★ JSONL は暗号化されているので iter_trust_log 経由で検証
+    entries = list(trust_log.iter_trust_log(reverse=False))
+    assert len(entries) == 2
+    assert entries[-1]["sha256"] == second["sha256"]
 
     # get_last_hash も同じ値を返すこと
     assert trust_log.get_last_hash() == second["sha256"]

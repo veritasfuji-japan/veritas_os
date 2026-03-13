@@ -98,12 +98,15 @@ class TestEncryption:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old
 
-    def test_encrypt_passthrough_without_key(self) -> None:
+    def test_encrypt_raises_without_key(self) -> None:
+        """secure-by-default: encrypt raises EncryptionKeyMissing without key."""
+        from veritas_os.logging.encryption import EncryptionKeyMissing
+
         old = os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
         try:
             plaintext = '{"request_id": "test", "sha256": "abc123"}'
-            result = encrypt(plaintext)
-            assert result == plaintext
+            with pytest.raises(EncryptionKeyMissing):
+                encrypt(plaintext)
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old
@@ -140,7 +143,7 @@ class TestEncryption:
         try:
             status = get_encryption_status()
             assert status["encryption_enabled"] is True
-            assert "HMAC" in status["algorithm"]
+            assert status["algorithm"] in ("AES-256-GCM", "HMAC-SHA256 CTR-mode")
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old
@@ -148,27 +151,30 @@ class TestEncryption:
                 os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
 
     def test_invalid_base64_key_is_rejected(self) -> None:
-        """Invalid Base64 should disable encryption instead of being tolerated."""
+        """Invalid Base64 should disable encryption and raise EncryptionKeyMissing."""
+        from veritas_os.logging.encryption import EncryptionKeyMissing
+
         old = os.environ.get("VERITAS_ENCRYPTION_KEY")
         os.environ["VERITAS_ENCRYPTION_KEY"] = "%%%not-base64%%%"
         try:
             assert is_encryption_enabled() is False
             plaintext = '{"security": "check"}'
-            assert encrypt(plaintext) == plaintext
+            with pytest.raises(EncryptionKeyMissing):
+                encrypt(plaintext)
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old
             else:
                 os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
 
-    def test_encrypt_returns_input_for_non_string_payload(self) -> None:
-        """Unexpected payload type should fail closed without swallowing all exceptions."""
+    def test_encrypt_raises_for_non_string_payload(self) -> None:
+        """Unexpected payload type should fail closed with TypeError."""
         key = generate_key()
         old = os.environ.get("VERITAS_ENCRYPTION_KEY")
         os.environ["VERITAS_ENCRYPTION_KEY"] = key
         try:
-            non_string_payload = 12345
-            assert encrypt(non_string_payload) == non_string_payload
+            with pytest.raises(TypeError, match="requires a str"):
+                encrypt(12345)
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old

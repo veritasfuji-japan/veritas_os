@@ -1,12 +1,15 @@
 # veritas_os/logging/trust_log.py
 # 正規TrustLog実装: 論文の式 hₜ = SHA256(hₜ₋₁ || rₜ) に完全準拠
 #
+# ★ secure-by-default: 保存前に必ず redact → canonicalize → encrypt
+#   平文保存はデフォルトで禁止。暗号鍵なしでは書き込みが失敗する。
+#
 # このモジュールがVERITASの唯一のTrustLog実装です。
 # 他のモジュールはここをインポートして使用してください。
 #
 # 機能:
-# - append_trust_log: ハッシュチェーン付きでエントリを追記
-# - iter_trust_log: ログをイテレート
+# - append_trust_log: redact → hash chain → encrypt → append
+# - iter_trust_log: decrypt → parse → yield
 # - load_trust_log: 最近のエントリをまとめて取得
 # - get_trust_log_entry: request_id で単一エントリを取得
 # - verify_trust_log: ハッシュチェーンの整合性を検証
@@ -24,7 +27,13 @@ from typing import Any, Dict, Iterable, List, Optional
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.logging.rotate import open_trust_log_for_append, load_last_hash_marker
-from veritas_os.logging.encryption import encrypt as _encrypt_line, is_encryption_enabled
+from veritas_os.logging.encryption import (
+    encrypt as _encrypt_line,
+    decrypt as _decrypt_line,
+    is_encryption_enabled,
+    EncryptionKeyMissing,
+)
+from veritas_os.logging.redact import redact_entry as _redact_entry
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import (
     SignedTrustLogWriteError,
@@ -166,6 +175,8 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
     returns the most recent decodable JSON object containing a string ``sha256``
     field.
 
+    ★ 暗号化された行は自動復号してからパースする。
+
     Security:
         Canonical SHA-256 hex values are preferred. If no canonical value is
         present, this function falls back to the newest non-empty string for
@@ -177,8 +188,10 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
         if not line:
             continue
         try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
+            # ★ 暗号化行の復号
+            decoded_line = _decrypt_line(line)
+            payload = json.loads(decoded_line)
+        except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
             continue
 
         sha = payload.get("sha256") if isinstance(payload, dict) else None
@@ -346,22 +359,15 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     """
     決定ごとの監査ログ（軽量）を JSONL + JSON に保存。
 
-    論文の式に従った実装:
+    ★ secure-by-default パイプライン:
+        1. redact   — PII / secret を自動マスキング
+        2. canonicalize — RFC 8785 canonical JSON 化
+        3. chain hash — hₜ = SHA256(hₜ₋₁ || rₜ)
+        4. encrypt  — 暗号化（鍵未設定時はエラー）
+        5. append   — JSONL に追記
+
+    論文の式:
         hₜ = SHA256(hₜ₋₁ || rₜ)
-
-    where:
-        hₜ₋₁ = 直前のハッシュ値 (sha256_prev)
-        rₜ   = 現在のエントリ (JSON化、sha256とsha256_prevを除外)
-        ||   = 文字列連結
-        hₜ   = 現在のハッシュ値 (sha256)
-
-    実装詳細:
-        1. 直前のハッシュ値 (sha256_prev) を取得
-        2. 現在のエントリに sha256_prev をセット
-        3. エントリから sha256 と sha256_prev を除外してJSON化 (rₜ)
-        4. sha256_prev + rₜ を連結
-        5. SHA-256ハッシュを計算して sha256 にセット
-        6. JSONLとJSONファイルに保存
 
     - JSONL は 5000 行でローテーション（rotate.py 側）
     - trust_log.json は最新 MAX_JSON_ITEMS 件だけ保持
@@ -369,10 +375,11 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
     ★ スレッドセーフ: RLock で全操作を保護（ハッシュチェーンの整合性保証）
 
     Returns:
-        sha256, sha256_prev が付与されたエントリ（渡された entry も更新される）
+        sha256, sha256_prev が付与された *redacted* エントリ
 
     Raises:
-        OSError: ファイル I/O（mkdir/open/fsync/rename 等）に失敗した場合。
+        EncryptionKeyMissing: 暗号鍵が未設定の場合。
+        OSError: ファイル I/O に失敗した場合。
         TypeError: エントリが JSON へシリアライズ不能な型を含む場合。
         ValueError: 不正なエントリ値や JSON 変換エラーが発生した場合。
     """
@@ -384,9 +391,6 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
 
             # ---- 直前ハッシュの取得（JSONL 側を正とする）----
-            # ★ 修正: JSON (MAX_JSON_ITEMS 件に制限) ではなく JSONL (全件) から
-            #   直前ハッシュを取得する。JSON が 2000 件で切られている場合、
-            #   JSON の末尾と JSONL の末尾が乖離してチェーンが壊れる問題を修正。
             sha256_prev = get_last_hash()
 
             items = _load_logs_json()
@@ -396,6 +400,10 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
             entry["sha256_prev"] = sha256_prev
 
+            # ★ Step 1: redact — PII / secret を自動マスキング
+            entry = _redact_entry(entry)
+
+            # ★ Step 2: canonicalize + Step 3: chain hash
             # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
             entry_json = _normalize_entry_for_hash(entry)
 
@@ -403,17 +411,16 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             if sha256_prev:
                 combined = sha256_prev + entry_json
             else:
-                # 最初のエントリの場合は rₜ のみ
                 combined = entry_json
 
             # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
             entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
 
-            # ---- JSONL に1行追記 (with fsync for durability) ----
-            # P3-2: Optionally encrypt the line before writing
+            # ★ Step 4: encrypt (mandatory by default)
             line = json.dumps(entry, ensure_ascii=False)
-            if is_encryption_enabled():
-                line = _encrypt_line(line)
+            line = _encrypt_line(line)
+
+            # ★ Step 5: append to JSONL (with fsync for durability)
             with open_trust_log_for_append() as f:
                 f.write(line + "\n")
                 f.flush()
@@ -442,7 +449,7 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
 
             return entry
 
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, TypeError, ValueError, json.JSONDecodeError, EncryptionKeyMissing):
         with _append_stats_lock:
             global _append_failure_count
             _append_failure_count += 1
@@ -501,6 +508,23 @@ def write_shadow_decide(
 # TrustLog 読み出し系
 # =============================================================================
 
+def _decode_line(raw_line: str) -> Optional[Dict[str, Any]]:
+    """Decrypt (if needed) and JSON-parse a single JSONL line.
+
+    Returns None for lines that cannot be decoded (blank, corrupt, or
+    missing decryption key).
+    """
+    line = raw_line.strip()
+    if not line:
+        return None
+    try:
+        # ★ 暗号化されている行は ENC: プレフィックス付き → 復号
+        line = _decrypt_line(line)
+        return json.loads(line)
+    except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
+        return None
+
+
 def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
     """
     TrustLog を1行ずつイテレートするジェネレータ
@@ -509,9 +533,9 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
         reverse: True の場合、末尾から逆順に返す
 
     Yields:
-        dict: 個々のログエントリ
+        dict: 個々のログエントリ（暗号化行は自動復号される）
 
-    ★ スレッドセーフ: reverse=True の場合、ファイル読み込みをロック下で行い、
+    ★ スレッドセーフ: ファイル読み込みをロック下で行い、
       書き込み中の不完全な行を読み込むリスクを排除する。
     """
     if not LOG_JSONL.exists():
@@ -519,35 +543,21 @@ def iter_trust_log(reverse: bool = False) -> Iterable[Dict[str, Any]]:
 
     try:
         if reverse:
-            # ★ 修正: _trust_log_lock 下でファイルを一括読み込み
-            # concurrent な append_trust_log() が途中行を書き込んでいても
-            # ロック取得後に完全なデータを読める
             with _trust_log_lock:
                 with LOG_JSONL.open("rb") as f:
-                    lines = f.readlines()
-            for line in reversed(lines):
-                line_str = line.decode("utf-8").strip()
-                if not line_str:
-                    continue
-                try:
-                    yield json.loads(line_str)
-                except json.JSONDecodeError:
-                    continue
+                    raw_lines = f.readlines()
+            for line in reversed(raw_lines):
+                entry = _decode_line(line.decode("utf-8", errors="replace"))
+                if entry is not None:
+                    yield entry
         else:
-            # ★ Bug fix: forward iteration もロック下でファイルを一括読み込み。
-            # concurrent な append_trust_log() が途中行を書き込んでいても
-            # ロック取得後に完全なデータを読める。
             with _trust_log_lock:
                 with LOG_JSONL.open("r", encoding="utf-8") as f:
-                    lines = f.readlines()
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    yield json.loads(line)
-                except json.JSONDecodeError:
-                    continue
+                    raw_lines = f.readlines()
+            for line in raw_lines:
+                entry = _decode_line(line)
+                if entry is not None:
+                    yield entry
     except OSError as e:
         logger.warning("trust_log iterate failed: %s", e)
         return
@@ -690,6 +700,8 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
     TrustLog 全体（または先頭から max_entries 件）について
     ハッシュチェーンの整合性を検証する。
 
+    ★ 暗号化された行は自動復号してからハッシュチェーンを検証する。
+
     Returns:
         {
           "ok": bool,
@@ -713,7 +725,6 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
 
     try:
         # ★ スレッドセーフ修正: ロック下でファイルを一括読み込み
-        # concurrent な append_trust_log() による不完全な行の読み込みを防止
         with _trust_log_lock:
             with LOG_JSONL.open("r", encoding="utf-8") as f:
                 all_lines = f.readlines()
@@ -727,8 +738,10 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                 continue
 
             try:
+                # ★ 暗号化行は復号してからパース
+                line = _decrypt_line(line)
                 entry = json.loads(line)
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
                 return {
                     "ok": False,
                     "checked": checked,
@@ -742,7 +755,6 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
             if prev_hash is None:
                 # 最初のエントリ: sha256_prev が None なら新規チェーン。
                 # 非 None ならログローテーション後の継続チェーンであり正常。
-                # いずれの場合も、以降のエントリは自身の sha256 から検証する。
                 pass
             else:
                 if actual_prev != prev_hash:
@@ -755,9 +767,6 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                     }
 
             # sha256 の再計算チェック
-            # ★ ログローテーション後の最初のエントリでは prev_hash がまだ None だが、
-            #   エントリ自身の sha256_prev にはローテーション前の最終ハッシュが入っている。
-            #   ハッシュ再計算にはその値を使う必要がある。
             expected_prev = prev_hash if prev_hash is not None else actual_prev
             entry_json = _normalize_entry_for_hash(entry)
             if expected_prev:
@@ -818,6 +827,7 @@ __all__ = [
     "trust_log_lock",
     "LOG_JSON",
     "LOG_JSONL",
+    "EncryptionKeyMissing",
 ]
 
 
