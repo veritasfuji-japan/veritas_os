@@ -347,6 +347,37 @@ def test_append_trust_log_max_items_rotation(temp_log_env, monkeypatch):
 # ============================
 
 
+
+
+def test_append_trust_log_increments_failure_count_on_oserror(temp_log_env, monkeypatch):
+    monkeypatch.setattr(trust_log, "_append_failure_count", 0, raising=False)
+
+    def _raise_oserror(*_args, **_kwargs):
+        raise OSError("disk-full")
+
+    monkeypatch.setattr(trust_log, "_save_json", _raise_oserror, raising=False)
+
+    with pytest.raises(OSError):
+        trust_log.append_trust_log({"request_id": "req-oserr"})
+
+    stats = trust_log.get_trust_log_stats()
+    assert stats["append_failure"] >= 1
+
+
+def test_append_trust_log_does_not_swallow_unexpected_runtime_error(temp_log_env, monkeypatch):
+    monkeypatch.setattr(trust_log, "_append_failure_count", 0, raising=False)
+
+    def _raise_runtime_error(*_args, **_kwargs):
+        raise RuntimeError("unexpected")
+
+    monkeypatch.setattr(trust_log, "_save_json", _raise_runtime_error, raising=False)
+
+    with pytest.raises(RuntimeError):
+        trust_log.append_trust_log({"request_id": "req-runtime"})
+
+    stats = trust_log.get_trust_log_stats()
+    assert stats["append_failure"] == 0
+
 def test_write_shadow_decide_creates_snapshot_file(temp_log_env):
     # LOG_DIR を tmp にした状態で write_shadow_decide を呼ぶ
     request_id = "req-123"
