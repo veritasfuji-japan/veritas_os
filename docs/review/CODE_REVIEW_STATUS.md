@@ -150,6 +150,7 @@ updated_at: 2026-03-13
 
 ### Earlier Updates (2026-03-13)
 
+- ✅ **L-5 Partial (追加8 / 優先対応)**: `tools/web_search.py:web_search()` の外側 broad `except Exception` を `requests.RequestException` / `OSError` / `TypeError` / `ValueError` へ縮小し、想定外 `RuntimeError` の握りつぶしを防止。`test_web_search.py` に回帰テストを追加し、通信例外は従来どおり安全側でハンドリングしつつ、予期しない実行時例外は顕在化することを確認。
 - ✅ **L-5 Partial**: `logging/rotate.py` の marker 保存/読込で broad `except Exception` を縮小し、予期しない例外を顕在化。
 - ✅ **L-5 Partial (追加)**: `logging/trust_log.py` で `append_signed_decision()` のフォールバック捕捉を `SignedTrustLogWriteError` に限定し、想定外例外の握りつぶしを防止。
 - ✅ **Status Note Updated**: 本書に「改善済み（部分対応）」として追記。
