@@ -43,6 +43,9 @@ jobs:
       - name: Responsibility boundary check
         run: python scripts/architecture/check_responsibility_boundaries.py --report-format json
 
+      - name: httpx raw upload deprecation check
+        run: python scripts/security/check_httpx_raw_upload_usage.py
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \
@@ -54,7 +57,6 @@ jobs:
 
   dependency-audit:
     name: dependency-audit
-    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

@@ -53,9 +53,9 @@ export type StageHealth = "ok" | "warning" | "failed" | "unknown";
  * Source of truth: veritas_os/api/schemas.py — Context
  */
 export interface Context {
-  user_id?: string;
+  user_id: string;
   session_id?: string;
-  query?: string;
+  query: string;
   goals?: string[];
   constraints?: string[];
   tools_allowed?: string[];
@@ -660,7 +660,7 @@ export interface MemoryPutRequest {
   text?: string;
   tags?: string[];
   value?: unknown;
-  kind?: string;
+  kind?: MemoryKind;
   retention_class?: RetentionClass | null;
   meta?: Record<string, unknown>;
   expires_at?: number | null;
@@ -724,7 +724,7 @@ export interface MemorySearchRequest {
   query?: string;
   k?: number;
   min_sim?: number;
-  kinds?: string | string[] | null;
+  kinds?: MemoryKind | MemoryKind[] | null;
   [key: string]: unknown;
 }
 
