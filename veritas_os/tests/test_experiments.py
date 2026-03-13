@@ -178,3 +178,19 @@ def test_propose_experiments_value_ema_not_high_keeps_risk() -> None:
     assert pytest.approx(usecase.risk) == 0.15
 
 
+def test_to_int_overflow_returns_default() -> None:
+    """_to_int は OverflowError を安全に default へフォールバックする。"""
+    assert exp_module._to_int(float("inf"), default=7) == 7
+
+
+def test_target_n_env_invalid_falls_back_to_default(monkeypatch) -> None:
+    """環境変数が数値化できない場合、target_n は既定値 3 を使う。"""
+    monkeypatch.setenv("VERITAS_EXPERIMENTS_PER_DAY", "invalid")
+
+    exps = propose_experiments_for_today(
+        user_id="user-env",
+        world_state=None,
+        value_ema=0.5,
+    )
+
+    assert len(exps) == 3
