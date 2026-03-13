@@ -13,10 +13,14 @@ from dataclasses import dataclass, field
 import json
 import logging
 import os
+from pathlib import Path
+import re
 import time
 from typing import Any, Dict, Optional
 
+from .atomic_io import atomic_write_json
 from .fuji_codes import FujiAction
+from veritas_os.logging.paths import LOG_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +50,8 @@ MAX_HEALING_ATTEMPTS = _env_int("VERITAS_MAX_HEALING_ATTEMPTS", 3)
 MAX_HEALING_STEPS = _env_int("VERITAS_HEALING_MAX_STEPS", 6)
 MAX_HEALING_SECONDS = _env_float("VERITAS_HEALING_MAX_SECONDS", 20.0)
 MAX_CONSECUTIVE_SAME_ERROR = _env_int("VERITAS_HEALING_MAX_SAME_ERROR", 2)
+HEALING_STATE_DIR = LOG_DIR / "self_healing"
+_REQUEST_ID_SAFE_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
 
 @dataclass(frozen=True)
@@ -77,6 +83,74 @@ class HealingDecision:
     allow: bool
     reason: str
     stop_reason: Optional[str] = None
+
+
+def _validate_request_id(request_id: str) -> str:
+    """Validate request_id before using it in persistent state paths."""
+    rid = str(request_id or "").strip()
+    if not _REQUEST_ID_SAFE_PATTERN.fullmatch(rid):
+        raise ValueError("invalid request_id for self-healing persistence")
+    return rid
+
+
+def healing_state_path(request_id: str) -> Path:
+    """Return the persistence path for a self-healing state snapshot."""
+    safe_request_id = _validate_request_id(request_id)
+    return HEALING_STATE_DIR / f"{safe_request_id}.json"
+
+
+def load_healing_state(request_id: str) -> HealingState:
+    """Load persisted self-healing state; return defaults when unavailable."""
+    path = healing_state_path(request_id)
+    if not path.exists():
+        return HealingState()
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning("failed to load self-healing state: %s", exc)
+        return HealingState()
+
+    if not isinstance(payload, dict):
+        return HealingState()
+
+    return HealingState(
+        attempt=int(payload.get("attempt", 0) or 0),
+        steps_used=int(payload.get("steps_used", 0) or 0),
+        start_time=float(payload.get("start_time", time.monotonic())),
+        last_error_code=payload.get("last_error_code"),
+        same_error_count=int(payload.get("same_error_count", 0) or 0),
+        last_input_signature=payload.get("last_input_signature"),
+    )
+
+
+def persist_healing_state(request_id: str, state: HealingState) -> None:
+    """Persist the mutable self-healing state as JSON."""
+    path = healing_state_path(request_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(
+        path,
+        {
+            "attempt": int(state.attempt),
+            "steps_used": int(state.steps_used),
+            "start_time": float(state.start_time),
+            "last_error_code": state.last_error_code,
+            "same_error_count": int(state.same_error_count),
+            "last_input_signature": state.last_input_signature,
+        },
+        sort_keys=True,
+    )
+
+
+def clear_healing_state(request_id: str) -> None:
+    """Delete persisted self-healing state if present."""
+    path = healing_state_path(request_id)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        logger.warning("failed to clear self-healing state: %s", exc)
 
 
 def is_healing_enabled(context: Dict[str, Any]) -> bool:
@@ -309,4 +383,3 @@ def build_healing_trust_log_entry(
     if stop_reason:
         entry["stop_reason"] = stop_reason
     return entry
-

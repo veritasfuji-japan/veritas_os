@@ -3,12 +3,12 @@ title: VERITAS OS - Code Review Status Update
 doc_type: review_status
 latest: true
 lifecycle: active
-updated_at: 2026-03-12
+updated_at: 2026-03-13
 ---
 
 # VERITAS OS - Code Review Status Update
 
-**Date**: 2026-03-12
+**Date**: 2026-03-13
 **Status**: Active (single source of truth)
 **PR**: copilot/review-all-code-improvements
 
@@ -31,14 +31,14 @@ updated_at: 2026-03-12
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **76% (34/45)** | CRITICAL は 100% 解消 |
-| 統合品質評価 | **76%** | Deferred の構造課題を反映 |
+| 完了率（件数ベース） | **78% (35/45)** | CRITICAL は 100% 解消 |
+| 統合品質評価 | **78%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中34件を対応（76%）。
+1. 指摘45件中35件を対応（78%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -63,9 +63,9 @@ updated_at: 2026-03-12
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
 | HIGH     | 12    | 11    | 1                   | 92%       |
-| MEDIUM   | 20    | 16    | 4                   | 80%       |
+| MEDIUM   | 20    | 17    | 3                   | 85%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 34    | 11                  | **76%**   |
+| **TOTAL**| 45    | 35    | 10                  | **78%**   |
 
 ---
 
@@ -92,7 +92,7 @@ updated_at: 2026-03-12
 - ✅ **H-11**: H-7 + H-12 の組合せで `rotate.py` 競合経路を封止。
 - ✅ **H-12**: `logging/trust_log.py:get_last_hash()` に `_trust_log_lock` を適用。
 
-### MEDIUM (16 Fixed / 4 Deferred or Accepted)
+### MEDIUM (17 Fixed / 3 Deferred or Accepted)
 
 - ✅ **M-1**: `core/atomic_io.py` rename 後の directory fsync を追加。
 - ✅ **M-2**: `logging/paths.py` の import-time side effect を解消し、明示的な `ensure_runtime_dirs()` 呼び出し時のみディレクトリ作成を実施。
@@ -105,7 +105,7 @@ updated_at: 2026-03-12
 - ✅ **M-9**: `core/reason.py` のハードコードログパスを共通設定 (`logging.paths.LOG_DIR`) に統合。
 - ⏸️ **M-10 (Accepted)**: `predict_gate_label()` の 0.5 fallback。
 - ✅ **M-11**: `critique.py` のパディングテンプレートを不変化し、ネスト dict の参照共有を防止。
-- ⏸️ **M-12 (Deferred)**: `core/self_healing.py` budget 永続化。
+- ✅ **M-12**: `core/self_healing.py` の self-healing budget/state を request_id 単位で永続化。
 - ✅ **M-13**: `/status` の内部エラー詳細を debug mode 時のみ公開。
 - ✅ **M-14**: HTTP security headers を追加。
 - ✅ **M-15**: `web_search` の `max_results` 上限を 100 に制限。
@@ -160,7 +160,6 @@ updated_at: 2026-03-12
 1. L-1 対応として timestamp 形式を全体統一。
 2. L-5 対応として bare except を段階的に削減。
 3. L-7 対応として dead code / 未使用 import を整理。
-4. M-12 対応として self-healing budget の永続化設計を導入。
 
 ---
 
