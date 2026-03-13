@@ -134,6 +134,7 @@ updated_at: 2026-03-13
 - ✅ **L-1 Completed**: `core/reason.py` / `core/value_core.py` の timestamp を `utc_now_iso_z(timespec="seconds")` に統一。
 - ✅ **L-5 Partial**: `core/reason.py` の `reflect()` でログ書き込み時の broad `except` を `OSError` 捕捉へ縮小。
 - ✅ **L-5 Partial (追加)**: `logging/trust_log.py` の `_recover_last_hash_from_rotated_log()` / `get_last_hash()` / `iter_trust_log()` / `verify_trust_log()` などで broad `except` を `OSError` / `JSONDecodeError` へ段階縮小。
+- ✅ **L-5 Partial (追加2)**: `logging/trust_log.py:append_trust_log()` の外側例外捕捉を broad `except` から `OSError` / `TypeError` / `ValueError` / `JSONDecodeError` へ縮小し、想定外 `RuntimeError` の握りつぶしを防止。
 - ✅ **H-Status Integrity**: HIGH 集計の不整合（11 Fixed / 1 Deferred 表記）を解消し、実態に合わせて **12/12 Fixed** へ更新。
 - ✅ **Progress Metrics Sync**: 完了率・統合品質評価・Severity集計テーブルを **82% (37/45)** に同期。
 - ✅ **Status Note Updated**: 本書に「改善済み（集計反映済み）」として追記。

@@ -356,6 +356,11 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
 
     Returns:
         sha256, sha256_prev が付与されたエントリ（渡された entry も更新される）
+
+    Raises:
+        OSError: ファイル I/O（mkdir/open/fsync/rename 等）に失敗した場合。
+        TypeError: エントリが JSON へシリアライズ不能な型を含む場合。
+        ValueError: 不正なエントリ値や JSON 変換エラーが発生した場合。
     """
     import os
 
@@ -376,12 +381,6 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             entry = dict(entry)
             entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
             entry["sha256_prev"] = sha256_prev
-
-            # ✅ 論文の式に準拠: hₜ = SHA256(hₜ₋₁ || rₜ)
-            # エントリから sha256 と sha256_prev を除外（これが rₜ）
-            hash_payload = dict(entry)
-            hash_payload.pop("sha256", None)
-            hash_payload.pop("sha256_prev", None)  # ⚠️ 重要: sha256_prev をハッシュ計算から除外
 
             # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
             entry_json = _normalize_entry_for_hash(entry)
@@ -429,7 +428,7 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
 
             return entry
 
-    except Exception:
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
         with _append_stats_lock:
             global _append_failure_count
             _append_failure_count += 1
