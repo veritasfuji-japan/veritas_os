@@ -36,12 +36,13 @@ def test_append_signed_decision_wraps_oserror(monkeypatch):
 
 def test_append_trust_log_continues_on_signed_log_runtime_error(monkeypatch, tmp_path):
     """Primary TrustLog append continues when signed append hits handled errors."""
+    from veritas_os.logging.encryption import generate_key
 
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
     monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path)
     monkeypatch.setattr(trust_log, "LOG_JSON", tmp_path / "trust_log.json")
     monkeypatch.setattr(trust_log, "LOG_JSONL", tmp_path / "trust_log.jsonl")
     monkeypatch.setattr(trust_log, "get_last_hash", lambda: None)
-    monkeypatch.setattr(trust_log, "is_encryption_enabled", lambda: False)
     monkeypatch.setattr(
         trust_log,
         "open_trust_log_for_append",
@@ -61,9 +62,6 @@ def test_append_trust_log_continues_on_signed_log_runtime_error(monkeypatch, tmp
     assert result["sha256"]
     assert (tmp_path / "trust_log.jsonl").exists()
 
-    entries = [
-        json.loads(line)
-        for line in (tmp_path / "trust_log.jsonl").read_text(encoding="utf-8").splitlines()
-        if line
-    ]
+    # ★ JSONL は暗号化されているので iter_trust_log 経由で検証
+    entries = list(trust_log.iter_trust_log(reverse=False))
     assert len(entries) == 1

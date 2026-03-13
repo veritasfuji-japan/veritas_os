@@ -547,13 +547,41 @@ Features: shared `httpx.Client` with connection pooling (`LLM_POOL_MAX_CONNECTIO
 
 ## TrustLog (Hash-Chained Audit Log)
 
-The TrustLog is append-only JSONL. Each entry includes a hash pointer:
+TrustLog is a **secure-by-default**, encrypted, hash-chained audit log.
+
+### Security pipeline (per entry)
 
 ```text
-h_t = SHA256(h_{t-1} || r_t)
+entry → redact(PII + secrets) → canonicalize(RFC 8785) → chain hash → encrypt → append
 ```
 
-This enables integrity verification and tamper-evident audit trails.
+1. **Redact** — PII (email, phone, address) and secrets (API keys, bearer tokens) are
+   automatically masked before any persistence.
+2. **Canonicalize** — RFC 8785 canonical JSON ensures deterministic hashing.
+3. **Chain hash** — `h_t = SHA256(h_{t-1} || r_t)` provides tamper-evident linking.
+4. **Encrypt** — Mandatory at-rest encryption (AES-256-GCM or HMAC-SHA256 CTR-mode).
+   Plaintext storage is **not possible** without explicitly opting out.
+5. **Append** — Encrypted line written to JSONL with fsync for durability.
+
+### Setup
+
+```bash
+# Generate an encryption key (required)
+python -c "from veritas_os.logging.encryption import generate_key; print(generate_key())"
+
+# Set the key (required for TrustLog to function)
+export VERITAS_ENCRYPTION_KEY="<generated-key>"
+```
+
+> **Warning**: Without `VERITAS_ENCRYPTION_KEY`, TrustLog writes will fail with
+> `EncryptionKeyMissing`. This is by design — plaintext audit logs are prohibited.
+
+### Verification
+
+```bash
+# Verify hash chain integrity (requires decryption key)
+python -m veritas_os.scripts.verify_trust_log
+```
 
 Key features:
 
@@ -644,13 +672,14 @@ pnpm --filter frontend e2e
 
 ### Data safety and persistence
 
-- **TrustLog data**: TrustLog is append-only JSONL. If your payloads can contain PII or
-  sensitive data, ensure you have access controls, retention policies, and (if needed)
-  encryption at rest.
-- **Force PII masking before persisting TrustLog/Memory**: apply `redact()` prior to
-  storage to reduce leakage risk.
-- **Encryption at rest (optional)**: TrustLog/Memory are stored in plaintext; consider
-  encryption or KMS integration based on requirements.
+- **TrustLog data**: TrustLog is **encrypted by default** (secure-by-default). All
+  entries are automatically redacted for PII/secrets and encrypted before persistence.
+  `VERITAS_ENCRYPTION_KEY` must be set; without it, writes fail.
+- **Automatic PII/secret redaction**: Email, phone, address, API keys, bearer tokens,
+  and secret-like strings are masked before storage — no manual `redact()` call required.
+- **Encryption at rest (mandatory)**: Set `VERITAS_ENCRYPTION_KEY` (base64-encoded
+  32-byte key). Use `generate_key()` to create one. Store keys in a vault/KMS, never in
+  source control.
 - **Operational logs are excluded from Git**: runtime logs (for example,
   `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live
   under `veritas_os/sample_data/memory/`.
