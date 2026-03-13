@@ -31,14 +31,14 @@ updated_at: 2026-03-13
 
 | 項目 | 現在値 | 補足 |
 |---|---:|---|
-| 完了率（件数ベース） | **78% (35/45)** | CRITICAL は 100% 解消 |
-| 統合品質評価 | **78%** | Deferred の構造課題を反映 |
+| 完了率（件数ベース） | **80% (36/45)** | CRITICAL/HIGH は 100% 解消 |
+| 統合品質評価 | **80%** | Deferred の構造課題を反映 |
 | 未解決 CRITICAL/HIGH の直接セキュリティ欠陥 | **0 件** | 継続監視項目は watchlist で管理 |
 | 運用上の最大注意点 | **旧 `.pkl` 資産** | 任意コード実行リスクのため本番配置禁止 |
 
 ### Consolidated Assessment Basis
 
-1. 指摘45件中35件を対応（78%）。
+1. 指摘45件中36件を対応（80%）。
 2. `ruff check veritas_os` 通過。
 3. `test_code_review_fixes*.py` 代表テスト群（25件）通過。
 4. import 時副作用・設計再編などの Deferred が残存。
@@ -62,10 +62,10 @@ updated_at: 2026-03-13
 | Severity | Total | Fixed | Deferred / Accepted | % Complete |
 |----------|-------|-------|---------------------|-----------|
 | CRITICAL | 3     | 3     | 0                   | 100%      |
-| HIGH     | 12    | 11    | 1                   | 92%       |
+| HIGH     | 12    | 12    | 0                   | 100%      |
 | MEDIUM   | 20    | 17    | 3                   | 85%       |
 | LOW      | 10    | 3     | 7                   | 30%       |
-| **TOTAL**| 45    | 35    | 10                  | **78%**   |
+| **TOTAL**| 45    | 36    | 9                   | **80%**   |
 
 ---
 
@@ -77,7 +77,7 @@ updated_at: 2026-03-13
 - ✅ **C-2**: `core/atomic_io.py` で `np.savez()` 後 + rename 後の fsync を整備。
 - ✅ **C-3**: `api/server.py` に request body 上限ミドルウェア（既定10MB）を追加。
 
-### HIGH (11 Fixed / 1 Deferred)
+### HIGH (12/12 Fixed)
 
 - ✅ **H-1**: `builtins.MEM` 汚染を除去。
 - ✅ **H-2**: `core/value_core.py` を `atomic_write_json()` へ統一。
@@ -130,6 +130,12 @@ updated_at: 2026-03-13
 
 
 ### Recent Updates (2026-03-13)
+
+- ✅ **H-Status Integrity**: HIGH 集計の不整合（11 Fixed / 1 Deferred 表記）を解消し、実態に合わせて **12/12 Fixed** へ更新。
+- ✅ **Progress Metrics Sync**: 完了率・統合品質評価・Severity集計テーブルを **80% (36/45)** に同期。
+- ✅ **Status Note Updated**: 本書に「改善済み（集計反映済み）」として追記。
+
+### Earlier Updates (2026-03-13)
 
 - ✅ **L-5 Partial**: `logging/rotate.py` の marker 保存/読込で broad `except Exception` を縮小し、予期しない例外を顕在化。
 - ✅ **L-5 Partial (追加)**: `logging/trust_log.py` で `append_signed_decision()` のフォールバック捕捉を `SignedTrustLogWriteError` に限定し、想定外例外の握りつぶしを防止。
