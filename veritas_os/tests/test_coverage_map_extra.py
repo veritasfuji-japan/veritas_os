@@ -71,6 +71,18 @@ class TestCovFileEntryEdgeCases:
         assert result.executed_branches == []
 
 
+    def test_missing_lines_unexpected_runtime_error_propagates(self):
+        """Unexpected RuntimeError should not be swallowed."""
+
+        class _BadStr:
+            def __str__(self) -> str:
+                raise RuntimeError("boom")
+
+        entry = {"missing_lines": [_BadStr()]}
+        with pytest.raises(RuntimeError, match="boom"):
+            m.CovFileEntry.from_cov(entry)
+
+
 class TestResolveCovJson:
     """Test _resolve_cov_json edge cases."""
 
@@ -157,6 +169,18 @@ class TestLoadCov:
 
         captured = capsys.readouterr()
         assert "failed to parse" in captured.err
+
+
+    def test_load_cov_unexpected_runtime_error_propagates(self, monkeypatch, tmp_path):
+        """Unexpected RuntimeError from read_text should propagate."""
+
+        class _BadPath:
+            def read_text(self, encoding: str = "utf-8") -> str:
+                raise RuntimeError("unexpected")
+
+        monkeypatch.setattr(m, "_resolve_cov_json", lambda: _BadPath())
+        with pytest.raises(RuntimeError, match="unexpected"):
+            m.load_cov()
 
 
 class TestFindTargetFile:
