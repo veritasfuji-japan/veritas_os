@@ -52,6 +52,11 @@ jobs:
       - name: subprocess shell usage check
         run: python scripts/security/check_subprocess_shell_usage.py
 
+      - name: replay pipeline-version unknown-rate check
+        run: |
+          python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
+            --max-unknown-rate 0.0
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \

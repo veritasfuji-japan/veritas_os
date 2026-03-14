@@ -62,3 +62,10 @@
   既存のセキュリティゲートと同列で継続監視する運用に強化。
 - 回帰防止として `veritas_os/tests/test_check_subprocess_shell_usage.py` を追加し、
   検知・非検知・許可マーカー・除外ディレクトリの挙動を単体テストで固定化。
+- 追加改善（Low-1運用監視の自動化）: `scripts/quality/check_replay_pipeline_version_unknown_rate.py`
+  を追加し、`replay_*.json` の `meta.pipeline_version == "unknown"` 比率を閾値監視できるようにした。
+  閾値超過時は非0終了し、監査トレーサビリティ低下をセキュリティ警告として明示する。
+- CI (`.github/workflows/main.yml`) の lint ジョブへ同チェッカーを追加し、
+  `--max-unknown-rate 0.0` で継続的に `unknown` 混入を検出する運用に強化。
+- 回帰防止として `veritas_os/tests/test_check_replay_pipeline_version_unknown_rate.py` を追加し、
+  比率計算・閾値判定・欠損ディレクトリ・不正閾値・不正JSONスキップ挙動を単体テストで固定化。
