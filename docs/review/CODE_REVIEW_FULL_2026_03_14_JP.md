@@ -45,3 +45,15 @@
 ## 結論
 - 現行コードベースは、今回実施した責務境界・セキュリティ・Lint・関連テストの観点で健全。
 - 次フェーズは、運用監視（`unknown` 版情報率）と `subprocess` ガードレールの継続が妥当。
+
+## 対応状況（2026-03-14 追記）
+- High優先度の追加改善として、`replay_engine` のパイプライン版情報取得に
+  `VERITAS_PIPELINE_VERSION` 環境変数オーバーライドを追加。
+  Gitメタデータが取得できない実行環境でも、CI注入値で `unknown` を回避可能。
+- CI (`.github/workflows/main.yml`) に `VERITAS_PIPELINE_VERSION: ${{ github.sha }}` を追加し、
+  監査トレーサビリティを強化。
+- 回帰防止として `veritas_os/tests/test_replay_engine.py` に環境変数優先の単体テストを追加。
+- 追加改善（CI安定化）: `VERITAS_PIPELINE_VERSION` が常時注入されるCI環境で
+  `test_replay_engine` が環境依存で失敗しないよう、該当テストで環境変数を明示的に解除して
+  判定条件を固定化。
+
