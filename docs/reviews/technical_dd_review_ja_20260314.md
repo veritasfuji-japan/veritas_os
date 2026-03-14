@@ -137,7 +137,8 @@
 - ✅ #3 対応: Replay スナップショットに `retrieval_snapshot_checksum` を追加し、再実行時に整合性検証を実施。
 - ✅ #4 対応: Replay 実行時に `model_version` の一致検証を追加（`VERITAS_REPLAY_ENFORCE_MODEL_VERSION=1` で有効）。
 - ✅ #5 対応: TrustLog の WORM ミラーに hard-fail モード（`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`）を追加。
-- ⚠️ #6, #7 は本変更では未着手（組織承認フローおよび API 境界ガードは別PRで実施予定）。
+- ✅ #6 対応: `/v1/governance/policy` 更新時に **4-eyes 承認（2名・重複不可署名）** を必須化。デフォルト有効で `VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES=0` の場合のみ無効化。
+- ⚠️ #7 は本変更では未着手（Pipeline 外 API に対する追加ガードは別PRで実施予定）。
 
 ## 17. Final Verdict
 - **B. serious engineering foundation**

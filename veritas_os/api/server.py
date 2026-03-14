@@ -54,7 +54,13 @@ from veritas_os.api.schemas import (
     MemorySearchRequest,
     TrustFeedbackRequest,
 )
-from veritas_os.api.governance import get_policy, get_policy_history, get_value_drift, update_policy
+from veritas_os.api.governance import (
+    enforce_four_eyes_approval,
+    get_policy,
+    get_policy_history,
+    get_value_drift,
+    update_policy,
+)
 from veritas_os.compliance.report_engine import (
     generate_eu_ai_act_report,
     generate_internal_governance_report,
@@ -3194,12 +3200,19 @@ def governance_get():
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     try:
+        enforce_four_eyes_approval(body)
         updated = update_policy(body)
         _publish_event(
             "governance.updated",
             {"updated_by": updated.get("updated_by", "api")},
         )
         return {"ok": True, "policy": updated}
+    except PermissionError as e:
+        logger.warning("governance_put rejected: %s", e)
+        return JSONResponse(
+            status_code=403,
+            content={"ok": False, "error": str(e)},
+        )
     except Exception as e:
         logger.error("governance_put failed: %s", e)
         return JSONResponse(

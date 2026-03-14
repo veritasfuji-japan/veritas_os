@@ -17,6 +17,16 @@ client = TestClient(srv.app)
 HEADERS = {"X-API-Key": "test-governance-key"}
 
 
+def _approved(payload: dict | None = None) -> dict:
+    """Attach a valid 4-eyes approval block to a governance payload."""
+    base = payload.copy() if payload else {}
+    base["approvals"] = [
+        {"reviewer": "alice", "signature": "sig-alice"},
+        {"reviewer": "bob", "signature": "sig-bob"},
+    ]
+    return base
+
+
 @pytest.fixture(autouse=True)
 def _temp_policy(tmp_path: Path, monkeypatch):
     """Use a temporary governance.json for every test."""
@@ -58,7 +68,7 @@ class TestPutPolicy:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"fuji_rules": {"pii_check": False}},
+            json=_approved({"fuji_rules": {"pii_check": False}}),
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -71,7 +81,7 @@ class TestPutPolicy:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"risk_thresholds": {"allow_upper": 0.50}},
+            json=_approved({"risk_thresholds": {"allow_upper": 0.50}}),
         )
         assert resp.status_code == 200
         assert resp.json()["policy"]["risk_thresholds"]["allow_upper"] == 0.50
@@ -80,7 +90,7 @@ class TestPutPolicy:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"auto_stop": {"enabled": False, "max_risk_score": 0.70}},
+            json=_approved({"auto_stop": {"enabled": False, "max_risk_score": 0.70}}),
         )
         body = resp.json()
         assert body["policy"]["auto_stop"]["enabled"] is False
@@ -90,7 +100,7 @@ class TestPutPolicy:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"log_retention": {"retention_days": 180, "audit_level": "summary"}},
+            json=_approved({"log_retention": {"retention_days": 180, "audit_level": "summary"}}),
         )
         body = resp.json()
         assert body["policy"]["log_retention"]["retention_days"] == 180
@@ -100,12 +110,37 @@ class TestPutPolicy:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"fuji_rules": {"pii_check": True}},
+            json=_approved({"fuji_rules": {"pii_check": True}}),
         )
         body = resp.json()
         assert body["policy"]["updated_at"] != ""
         assert body["policy"]["updated_by"] == "api"
 
+
+
+    def test_put_rejects_without_four_eyes_approval(self):
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json={"fuji_rules": {"pii_check": False}},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["ok"] is False
+
+    def test_put_rejects_duplicate_reviewer_in_approvals(self):
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json={
+                "fuji_rules": {"pii_check": False},
+                "approvals": [
+                    {"reviewer": "alice", "signature": "sig-a"},
+                    {"reviewer": "alice", "signature": "sig-b"},
+                ],
+            },
+        )
+        assert resp.status_code == 403
+        assert resp.json()["ok"] is False
     def test_put_requires_api_key(self):
         resp = client.put("/v1/governance/policy", json={})
         assert resp.status_code in (401, 500)
@@ -114,7 +149,7 @@ class TestPutPolicy:
         client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"risk_thresholds": {"warn_upper": 0.55}},
+            json=_approved({"risk_thresholds": {"warn_upper": 0.55}}),
         )
         resp = client.get("/v1/governance/policy", headers=HEADERS)
         assert resp.json()["policy"]["risk_thresholds"]["warn_upper"] == 0.55
@@ -127,7 +162,7 @@ class TestGovernanceModule:
         assert "fuji_rules" in result
 
     def test_update_policy_merges(self):
-        result = gov_mod.update_policy({"fuji_rules": {"pii_check": False}})
+        result = gov_mod.update_policy(_approved({"fuji_rules": {"pii_check": False}}))
         assert result["fuji_rules"]["pii_check"] is False
         assert result["fuji_rules"]["self_harm_block"] is True
 
@@ -159,7 +194,7 @@ class TestGovernanceModule:
         p = tmp_path / "gov.json"
         p.write_text(json.dumps({"fuji_rules": "broken", "version": "v0"}))
         with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", p):
-            result = gov_mod.update_policy({"fuji_rules": {"pii_check": False}})
+            result = gov_mod.update_policy(_approved({"fuji_rules": {"pii_check": False}}))
         assert result["fuji_rules"]["pii_check"] is False
 
     def test_get_value_drift_with_no_data(self, tmp_path):
@@ -185,18 +220,18 @@ class TestGovernanceModule:
         p = tmp_path / "gov.json"
         p.write_text(json.dumps(gov_mod.GovernancePolicy().model_dump()))
         with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", p):
-            result = gov_mod.update_policy({"version": "custom_v9"})
+            result = gov_mod.update_policy(_approved({"version": "custom_v9"}))
         assert result["version"] == "custom_v9"
 
     def test_update_policy_rejects_non_object_nested_patch(self):
         """Nested governance sections must be provided as objects."""
         with pytest.raises(ValueError, match="fuji_rules must be an object"):
-            gov_mod.update_policy({"fuji_rules": True})
+            gov_mod.update_policy(_approved({"fuji_rules": True}))
 
     def test_update_policy_validates_merged_nested_patch(self):
         """Merged nested section is validated before assignment and save."""
         with pytest.raises(ValidationError):
-            gov_mod.update_policy({"risk_thresholds": {"allow_upper": 1.5}})
+            gov_mod.update_policy(_approved({"risk_thresholds": {"allow_upper": 1.5}}))
 
 
 
@@ -250,7 +285,7 @@ class TestGovernanceServerErrors:
         resp = client.put(
             "/v1/governance/policy",
             headers=HEADERS,
-            json={"fuji_rules": {}},
+            json=_approved({"fuji_rules": {}}),
         )
         assert resp.status_code == 500
         body = resp.json()

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from collections import deque
 from copy import deepcopy
@@ -332,6 +333,46 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     _notify_policy_update(result)
 
     return result
+
+
+def enforce_four_eyes_approval(payload: Dict[str, Any]) -> None:
+    """Enforce 4-eyes approval for governance policy updates.
+
+    This control is enabled by default and can be disabled explicitly for
+    development with ``VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES=0``.
+
+    Required payload shape:
+
+    - ``approvals``: list of exactly two objects
+    - each object must include non-empty ``reviewer`` and ``signature``
+    - reviewers and signatures must be distinct
+    """
+    enforce = os.getenv("VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES", "1").strip().lower()
+    if enforce in {"0", "false", "no", "off"}:
+        return
+
+    approvals = payload.get("approvals")
+    if not isinstance(approvals, list) or len(approvals) != 2:
+        raise PermissionError("governance update requires exactly two approvals")
+
+    reviewers: set[str] = set()
+    signatures: set[str] = set()
+    for approval in approvals:
+        if not isinstance(approval, dict):
+            raise PermissionError("approval entries must be objects")
+
+        reviewer = str(approval.get("reviewer", "")).strip()
+        signature = str(approval.get("signature", "")).strip()
+        if not reviewer or not signature:
+            raise PermissionError("approval entries require reviewer and signature")
+
+        reviewers.add(reviewer)
+        signatures.add(signature)
+
+    if len(reviewers) != 2:
+        raise PermissionError("approvals must be from two distinct reviewers")
+    if len(signatures) != 2:
+        raise PermissionError("approvals must include two distinct signatures")
 
 
 def get_policy_history(limit: int = 50) -> List[Dict[str, Any]]:
