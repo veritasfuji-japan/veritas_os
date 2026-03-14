@@ -69,3 +69,8 @@
   `--max-unknown-rate 0.0` で継続的に `unknown` 混入を検出する運用に強化。
 - 回帰防止として `veritas_os/tests/test_check_replay_pipeline_version_unknown_rate.py` を追加し、
   比率計算・閾値判定・欠損ディレクトリ・不正閾値・不正JSONスキップ挙動を単体テストで固定化。
+
+- 追加改善（優先アクション継続）: `scripts/quality/check_warning_allowlist.py` の実行結果に合わせ、
+  `config/test_warning_allowlist.json` から未使用の `httpx` DeprecationWarning 例外ルールを削除。
+  `pyproject.toml` の `filterwarnings` と allowlist の整合性を回復し、
+  stale 例外の温存による警告ガバナンス形骸化リスクを低減。

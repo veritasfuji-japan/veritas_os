@@ -1,12 +1,6 @@
 {
   "entries": [
     {
-      "rule": "ignore:\"content=<...>\" is deprecated\\. Use 'data=<...>' instead:DeprecationWarning:httpx\\..*",
-      "expires_on": "2026-09-30",
-      "owner": "platform-backend",
-      "reason": "httpx upstream deprecation migration window"
-    },
-    {
       "rule": "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",
       "expires_on": "2026-09-30",
       "owner": "ml-platform",
