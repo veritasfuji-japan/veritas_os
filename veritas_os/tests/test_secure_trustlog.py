@@ -110,6 +110,29 @@ class TestPIIRedaction:
         assert "sk-1234567890abcdef1234567890" not in safe["query"]
 
 
+    def test_data_classification_includes_pii_and_identifier(self):
+        """Classification metadata should tag identifier and PII fields."""
+        safe = redact_entry({
+            "request_id": "r100",
+            "query": "user@example.com",
+        })
+        classification = safe["_data_classification"]
+        assert classification["contains_pii"] is True
+        assert classification["contains_secret"] is False
+        assert classification["fields"]["request_id"] == "identifier"
+        assert classification["fields"]["query"] == "pii"
+
+    def test_data_classification_includes_secret(self):
+        """Classification metadata should tag secret-bearing fields."""
+        safe = redact_entry({
+            "request_id": "r101",
+            "config": "api_secret=TopSecret123456",
+        })
+        classification = safe["_data_classification"]
+        assert classification["contains_secret"] is True
+        assert classification["fields"]["config"] == "secret"
+
+
 # ---------------------------------------------------------------------------
 # 2. Stored file is NOT plaintext JSON
 # ---------------------------------------------------------------------------

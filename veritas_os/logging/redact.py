@@ -86,6 +86,27 @@ try:
 except (ImportError, AttributeError):
     _mask_pii = None  # type: ignore[assignment]
 
+try:
+    from veritas_os.core.sanitize import detect_pii as _detect_pii
+except (ImportError, AttributeError):
+    _detect_pii = None  # type: ignore[assignment]
+
+
+_CLASSIFICATION_FIELD = "_data_classification"
+_CLASS_PUBLIC = "public"
+_CLASS_IDENTIFIER = "identifier"
+_CLASS_PII = "pii"
+_CLASS_SECRET = "secret"
+
+_IDENTIFIER_FIELDS = frozenset({
+    "request_id",
+    "decision_id",
+    "user_id",
+    "session_id",
+    "tenant_id",
+    "trace_id",
+})
+
 
 def _redact_secrets(text: str) -> str:
     """Replace API keys, bearer tokens, and secret-like strings in *text*."""
@@ -106,6 +127,89 @@ def _redact_string(value: str) -> str:
     if _mask_pii is not None:
         result = _mask_pii(result)
     return result
+
+
+def _contains_secret(value: str) -> bool:
+    """Return True when *value* matches known secret/token patterns."""
+    return bool(
+        _RE_BEARER.search(value)
+        or _RE_API_KEY.search(value)
+        or _RE_SECRET_KV.search(value)
+        or _RE_SECRET_HEX.search(value)
+        or _RE_SECRET_B64.search(value)
+    )
+
+
+def _contains_pii(value: str) -> bool:
+    """Return True when PII markers are detected in *value*."""
+    if _detect_pii is None:
+        return False
+    try:
+        return len(_detect_pii(value)) > 0
+    except (ValueError, TypeError):
+        logger.warning("PII classification failed for trust-log field", exc_info=True)
+        return False
+
+
+def _classify_scalar(field_name: str, value: Any) -> str:
+    """Classify a scalar value for audit metadata."""
+    if field_name in _IDENTIFIER_FIELDS:
+        return _CLASS_IDENTIFIER
+    if not isinstance(value, str):
+        return _CLASS_PUBLIC
+    if _contains_secret(value):
+        return _CLASS_SECRET
+    if _contains_pii(value):
+        return _CLASS_PII
+    return _CLASS_PUBLIC
+
+
+def _collect_field_classification(
+    value: Any,
+    *,
+    path: str,
+    field_map: Dict[str, str],
+) -> None:
+    """Collect per-field classification labels recursively."""
+    if isinstance(value, dict):
+        for child_key, child_value in value.items():
+            child_path = f"{path}.{child_key}" if path else str(child_key)
+            _collect_field_classification(
+                child_value,
+                path=child_path,
+                field_map=field_map,
+            )
+        return
+
+    if isinstance(value, list):
+        for idx, item in enumerate(value):
+            child_path = f"{path}[{idx}]"
+            _collect_field_classification(
+                item,
+                path=child_path,
+                field_map=field_map,
+            )
+        return
+
+    field_name = path.split(".")[-1] if path else ""
+    field_map[path] = _classify_scalar(field_name, value)
+
+
+def _build_data_classification(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Build data-classification metadata for a TrustLog entry."""
+    field_map: Dict[str, str] = {}
+    for key, value in entry.items():
+        if key == _CLASSIFICATION_FIELD:
+            continue
+        _collect_field_classification(value, path=key, field_map=field_map)
+
+    labels = set(field_map.values())
+    return {
+        "schema_version": "1.0",
+        "fields": field_map,
+        "contains_pii": _CLASS_PII in labels,
+        "contains_secret": _CLASS_SECRET in labels,
+    }
 
 
 def _redact_value(value: Any) -> Any:
@@ -132,12 +236,14 @@ def redact_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         A **new** dict with sensitive values replaced by placeholders.
     """
+    classification = _build_data_classification(entry)
     result: Dict[str, Any] = {}
     for key, value in entry.items():
         if key in _STRUCTURAL_FIELDS:
             result[key] = value
         else:
             result[key] = _redact_value(value)
+    result[_CLASSIFICATION_FIELD] = classification
     return result
 
 
