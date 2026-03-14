@@ -18,6 +18,19 @@ def test_pipeline_version_returns_unknown_on_expected_subprocess_failures(monkey
     assert replay_engine._pipeline_version() == "unknown"
 
 
+
+
+def test_pipeline_version_prefers_env_override(monkeypatch) -> None:
+    """Environment override should be used before git command lookup."""
+    monkeypatch.setenv("VERITAS_PIPELINE_VERSION", "ci-sha-123")
+
+    def _raise_runtime_error(*_args, **_kwargs):
+        raise RuntimeError("should_not_run")
+
+    monkeypatch.setattr(replay_engine.subprocess, "check_output", _raise_runtime_error)
+
+    assert replay_engine._pipeline_version() == "ci-sha-123"
+
 def test_pipeline_version_does_not_swallow_unexpected_errors(monkeypatch) -> None:
     def _raise_runtime_error(*_args, **_kwargs):
         raise RuntimeError("boom")

@@ -49,7 +49,15 @@ def _pipeline_version() -> str:
     Security note:
         We intentionally do not swallow arbitrary exceptions here so that
         unexpected runtime errors are surfaced during diagnostics.
+
+    Operational note:
+        CI can inject ``VERITAS_PIPELINE_VERSION`` to avoid ``unknown`` when
+        Git metadata is unavailable in runtime environments.
     """
+    injected_version = (os.getenv("VERITAS_PIPELINE_VERSION") or "").strip()
+    if injected_version:
+        return injected_version
+
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "--short", "HEAD"],

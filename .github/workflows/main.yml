@@ -13,6 +13,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
+
 # ============================================================
 # Lint & Security (fast-fail — テストより先に回す)
 # ============================================================
