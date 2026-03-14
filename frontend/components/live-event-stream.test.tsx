@@ -14,6 +14,14 @@ function createReadableStream(chunks: string[]): ReadableStream<Uint8Array> {
   });
 }
 
+function createPersistentReadableStream(): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start() {
+      // Keep the stream open so reconnection side effects do not race tests.
+    },
+  });
+}
+
 describe("LiveEventStream", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -22,13 +30,15 @@ describe("LiveEventStream", () => {
   });
 
   it("renders seeded operations events with required fields", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createReadableStream([]) }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createPersistentReadableStream() }));
 
     render(
       <I18nProvider>
         <LiveEventStream />
       </I18nProvider>,
     );
+
+    await screen.findByText(/Connected|接続済み/);
 
     expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
     expect(screen.getByText("FUJI reject")).toBeInTheDocument();
@@ -40,13 +50,15 @@ describe("LiveEventStream", () => {
   });
 
   it("supports acknowledge mute and pin controls", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createReadableStream([]) }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createPersistentReadableStream() }));
 
     render(
       <I18nProvider>
         <LiveEventStream />
       </I18nProvider>,
     );
+
+    await screen.findByText(/Connected|接続済み/);
 
     const ackButton = screen.getAllByRole("button", { name: "acknowledge" })[0];
     fireEvent.click(ackButton);
