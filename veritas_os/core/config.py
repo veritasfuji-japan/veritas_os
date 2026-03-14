@@ -78,6 +78,11 @@ def _parse_bool(env_key: str, default: bool = False) -> bool:
     return default
 
 
+def _parse_str(env_key: str, default: str = "") -> str:
+    """環境変数から文字列を取得し、前後空白を除去して返す。"""
+    return (os.getenv(env_key, default) or "").strip()
+
+
 # =============================================================================
 # スコアリング設定（kernel.py から外部化）
 # =============================================================================
@@ -304,6 +309,12 @@ class VeritasConfig:
             "",
         )
     )
+    secret_provider: str = field(
+        default_factory=lambda: _parse_str("VERITAS_SECRET_PROVIDER", "")
+    )
+    api_secret_ref: str = field(
+        default_factory=lambda: _parse_str("VERITAS_API_SECRET_REF", "")
+    )
     api_header: str = "X-API-Key"
     api_key: str = ""  # alias
 
@@ -397,6 +408,47 @@ class VeritasConfig:
             "Refusing to start without a configured API secret."
         )
 
+    def validate_secret_manager_integration(self) -> None:
+        """Validate secret manager integration when strict mode is enabled.
+
+        Strict mode is controlled by ``VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER``.
+        When enabled, the deployment must provide both:
+        - ``VERITAS_SECRET_PROVIDER``: the provider identifier
+        - ``VERITAS_API_SECRET_REF``: external secret reference name/path
+
+        Raises:
+            ValueError: When strict mode is on and required metadata is missing.
+        """
+        if not _parse_bool("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", False):
+            return
+
+        allowed_providers = {
+            "vault",
+            "aws_secrets_manager",
+            "gcp_secret_manager",
+            "azure_key_vault",
+            "kms",
+        }
+        provider = self.secret_provider.strip().lower()
+        if provider not in allowed_providers:
+            raise ValueError(
+                "VERITAS_SECRET_PROVIDER must be one of "
+                f"{sorted(allowed_providers)} when "
+                "VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1."
+            )
+
+        if not self.api_secret_ref:
+            raise ValueError(
+                "VERITAS_API_SECRET_REF must be set when "
+                "VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1."
+            )
+
+        if not self.api_secret_configured:
+            raise ValueError(
+                "VERITAS_API_SECRET must be injected at runtime from the configured "
+                "external secret manager."
+            )
+
     @staticmethod
     def should_enforce_api_secret_validation() -> bool:
         """Return whether startup should fail on missing API secret.
@@ -472,6 +524,8 @@ def validate_startup_config() -> None:
     """
     if cfg.should_enforce_api_secret_validation():
         cfg.validate_api_secret_non_empty()
+
+    cfg.validate_secret_manager_integration()
 
 
 # サブ設定インスタンス（各モジュールからインポート可能）
