@@ -57,6 +57,20 @@ def _worm_hard_fail_enabled() -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _transparency_log_path() -> Optional[Path]:
+    """Resolve optional transparency log destination for TrustLog anchors."""
+    anchor_path = os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "").strip()
+    if not anchor_path:
+        return None
+    return Path(anchor_path)
+
+
+def _transparency_required_enabled() -> bool:
+    """Return whether transparency anchoring failures must abort writes."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED") or "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def _append_line(path: Path, line: str) -> None:
     """Append a line to ``path``, creating parent directories when required."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +95,39 @@ def _mirror_to_worm(line: str) -> Dict[str, Any]:
         }
 
     return {"configured": True, "ok": True, "path": str(path)}
+
+
+def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
+    """Best-effort append of the latest chain hash to a transparency log.
+
+    The transparency log can be a local spool file that is shipped to an
+    external append-only system by infrastructure.
+    """
+    path = _transparency_log_path()
+    if path is None:
+        return {"configured": False, "ok": False, "path": None}
+
+    payload = {
+        "timestamp": _utc_now_iso8601(),
+        "entry_hash": entry_hash,
+    }
+    line = json.dumps(payload, ensure_ascii=False) + "\n"
+    try:
+        _append_line(path, line)
+    except OSError as exc:
+        return {
+            "configured": True,
+            "ok": False,
+            "path": str(path),
+            "error": f"{exc.__class__.__name__}: {exc}",
+        }
+
+    return {
+        "configured": True,
+        "ok": True,
+        "path": str(path),
+        "entry_hash": entry_hash,
+    }
 
 
 @dataclass
@@ -180,6 +227,15 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
                 raise SignedTrustLogWriteError("worm_mirror_write_failed")
             entry["worm_mirror"] = mirror
 
+            transparency_anchor = _append_transparency_anchor(_entry_chain_hash(entry))
+            if (
+                _transparency_required_enabled()
+                and transparency_anchor.get("configured")
+                and not transparency_anchor.get("ok")
+            ):
+                raise SignedTrustLogWriteError("transparency_anchor_write_failed")
+            entry["transparency_anchor"] = transparency_anchor
+
         return entry
     except (
         OSError,
@@ -240,6 +296,17 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
             "entries": len(_read_all_entries(worm_path)) if worm_path.exists() else 0,
         })
 
+    transparency_path = _transparency_log_path()
+    transparency_status: Dict[str, Any] = {
+        "configured": transparency_path is not None,
+        "required": _transparency_required_enabled(),
+    }
+    if transparency_path is not None:
+        transparency_status.update({
+            "path": str(transparency_path),
+            "exists": transparency_path.exists(),
+        })
+
     key_meta: Dict[str, Any] = {"public_key_present": PUBLIC_KEY_PATH.exists()}
     if PUBLIC_KEY_PATH.exists():
         key_meta["fingerprint"] = public_key_fingerprint(PUBLIC_KEY_PATH)
@@ -249,6 +316,7 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
         "entries_checked": len(entries),
         "issues": [issue.__dict__ for issue in issues],
         "worm_mirror": worm_status,
+        "transparency_anchor": transparency_status,
         "key_management": key_meta,
     }
 

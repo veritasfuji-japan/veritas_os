@@ -65,3 +65,62 @@ def test_append_trust_log_continues_on_signed_log_runtime_error(monkeypatch, tmp
     # ★ JSONL は暗号化されているので iter_trust_log 経由で検証
     entries = list(trust_log.iter_trust_log(reverse=False))
     assert len(entries) == 1
+
+
+def test_append_signed_decision_adds_transparency_anchor(monkeypatch, tmp_path):
+    """Signed append records transparency anchor when configured."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+    anchor_path = tmp_path / "transparency.jsonl"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
+    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
+    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
+    monkeypatch.setattr(
+        trustlog_signed,
+        "sha256_of_canonical_json",
+        lambda _payload: "h" * 64,
+    )
+    monkeypatch.setattr(trustlog_signed, "sign_payload_hash", lambda *_args, **_kwargs: "sig")
+    monkeypatch.setattr(trustlog_signed, "public_key_fingerprint", lambda _path: "fp")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(anchor_path))
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "req-transparency"})
+
+    assert entry["transparency_anchor"]["configured"] is True
+    assert entry["transparency_anchor"]["ok"] is True
+    assert entry["transparency_anchor"]["path"] == str(anchor_path)
+    assert anchor_path.exists()
+    lines = anchor_path.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    payload = json.loads(lines[0])
+    assert payload["entry_hash"] == entry["transparency_anchor"]["entry_hash"]
+
+
+def test_append_signed_decision_raises_when_transparency_required(monkeypatch, tmp_path):
+    """Required transparency anchor mode fails closed on write errors."""
+    trustlog_path = tmp_path / "trustlog.jsonl"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
+    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
+    monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
+    monkeypatch.setattr(
+        trustlog_signed,
+        "sha256_of_canonical_json",
+        lambda _payload: "h" * 64,
+    )
+    monkeypatch.setattr(trustlog_signed, "sign_payload_hash", lambda *_args, **_kwargs: "sig")
+    monkeypatch.setattr(trustlog_signed, "public_key_fingerprint", lambda _path: "fp")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(tmp_path / "tp.jsonl"))
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
+
+    original_append_line = trustlog_signed._append_line
+
+    def _append_line_fail_for_anchor(path, line):
+        if str(path).endswith("tp.jsonl"):
+            raise OSError("anchor fs readonly")
+        original_append_line(path, line)
+
+    monkeypatch.setattr(trustlog_signed, "_append_line", _append_line_fail_for_anchor)
+
+    with pytest.raises(trustlog_signed.SignedTrustLogWriteError):
+        trustlog_signed.append_signed_decision({"request_id": "req-anchor-hard-fail"})
