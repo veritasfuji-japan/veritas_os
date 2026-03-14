@@ -811,7 +811,10 @@ def run_safety_head(
         rat = res.get("rationale") or ""
         model = res.get("model") or "llm_safety_unknown"
 
-        return SafetyHeadResult(
+        # セキュリティ監査 F-01 対応: LLM fallback 検出時の追加ペナルティ
+        llm_fallback = bool(res.get("llm_fallback"))
+
+        result = SafetyHeadResult(
             risk_score=max(0.0, min(1.0, risk)),
             categories=[str(c) for c in cats],
             rationale=str(rat),
@@ -819,14 +822,50 @@ def run_safety_head(
             raw=res,
         )
 
+        if llm_fallback:
+            result.raw["llm_fallback"] = True
+            # LLM が利用不能だった場合のリスクフロア引き上げ
+            # セキュリティ監査 F-03/F-04 対応
+            # deterministic layer がリスクありと判定した場合のみ強化ペナルティ
+            _has_risk_cats = any(
+                c for c in result.categories
+                if c not in ("safety_head_error",)
+            )
+            if _has_risk_cats:
+                stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
+                if stakes >= 0.7:
+                    result.risk_score = max(result.risk_score, 0.70)
+                    result.rationale += " / [deterministic_layer] LLM unavailable + high stakes → risk floor 0.70"
+                else:
+                    result.risk_score = max(result.risk_score, 0.50)
+                    result.rationale += " / [deterministic_layer] LLM unavailable → risk floor 0.50"
+
+        return result
+
     except (TypeError, ValueError, RuntimeError, OSError) as e:
         fb = _fallback_safety_head(text)
         fb.categories.append("safety_head_error")
         fb.rationale += f" / safety_head error: {repr(e)[:120]}"
         fb.raw.setdefault("safety_head_error", repr(e))
-        # ★ 不確実性を反映: LLM エラー時はベースリスクを 0.30 に引き上げ
-        # 理由: LLM が評価できなかった = 安全性を確認できていない
-        fb.risk_score = max(fb.risk_score, 0.30)
+        fb.raw["llm_fallback"] = True
+        # セキュリティ監査 F-03 対応: LLM エラー時のリスクフロア引き上げ
+        # ただし、deterministic layer がリスクなしと判定した場合はペナルティを緩和
+        _has_risk_cats = any(
+            c for c in fb.categories
+            if c not in ("safety_head_error",)
+        )
+        if _has_risk_cats:
+            stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
+            if stakes >= 0.7:
+                fb.risk_score = max(fb.risk_score, 0.70)
+                fb.rationale += " / [deterministic_layer] LLM error + high stakes → risk floor 0.70"
+            else:
+                fb.risk_score = max(fb.risk_score, 0.50)
+                fb.rationale += " / [deterministic_layer] LLM error → risk floor 0.50"
+        else:
+            # リスク検出なしでもLLMエラーの不確実性として 0.30 を保持
+            fb.risk_score = max(fb.risk_score, 0.30)
+            fb.rationale += " / [deterministic_layer] LLM error → baseline risk floor 0.30"
         return fb
 
 
@@ -1028,6 +1067,48 @@ def fuji_core_decide(
             reasons.append(f"policy_action_pre_poc={pre}")
 
         reasons.append(f"final_gate={final_gate}")
+
+    # --- Deterministic Safety Layer: LLM非依存のリスクフロア ---
+    # セキュリティ監査 2026-03-12 §3.3.1 対応:
+    # deterministicルール検出時にLLMスコアに関係なく最低リスクを保証する
+    _det_raw = safety_head.raw or {}
+    _is_llm_fallback = bool(_det_raw.get("llm_fallback") or _det_raw.get("fallback"))
+    _det_reasons: List[str] = []
+
+    if "illicit" in categories:
+        # deterministic rule で illicit 検出 → risk >= 0.70 (deny 閾値到達)
+        if risk < 0.70:
+            risk = 0.70
+            _det_reasons.append("deterministic_illicit_floor=0.70")
+
+    if "self_harm" in categories:
+        # self_harm 検出 → risk >= 0.80
+        if risk < 0.80:
+            risk = 0.80
+            _det_reasons.append("deterministic_self_harm_floor=0.80")
+
+    if "PII" in categories and not safe_applied:
+        # PII 検出 (未マスク時) → risk >= 0.50
+        if risk < 0.50:
+            risk = 0.50
+            _det_reasons.append("deterministic_pii_floor=0.50")
+
+    # LLM unavailable penalty: only when deterministic layer detected risk signals
+    # (categories present besides safety_head_error/low_evidence).
+    # If the heuristic confirms text is clean, no penalty needed.
+    _risk_categories = [c for c in categories if c not in ("safety_head_error", "low_evidence", "prompt_injection")]
+    if _is_llm_fallback and _risk_categories:
+        # LLM unavailable + risk signals detected → risk += 0.20 ペナルティ
+        risk = min(1.0, risk + 0.20)
+        _det_reasons.append("deterministic_llm_unavailable_penalty")
+
+    if _det_reasons:
+        base_reasons.extend(_det_reasons)
+        guidance = (guidance or "").rstrip()
+        guidance += (
+            "\n\n[Deterministic Safety Layer] "
+            + "; ".join(_det_reasons)
+        )
 
     # --- heuristic_fallback の name_like-only PII を無害化（テスト要件保険） ---
     if safety_head.model == "heuristic_fallback":
@@ -1315,6 +1396,21 @@ def fuji_gate(
         followups = _build_followups(text, ctx)
 
     # ---------- 3) TrustLog ----------
+    # セキュリティ監査 §3.3.3 対応: judgment_source / llm_available フィールド追加
+    _sh_raw = sh.raw or {}
+    _is_llm_fallback = bool(
+        _sh_raw.get("llm_fallback")
+        or _sh_raw.get("fallback")
+        or _sh_raw.get("safety_head_error")
+    )
+    if sh.model and sh.model not in ("heuristic_fallback", "llm_safety_unknown"):
+        _judgment_source = "llm"
+    elif _sh_raw.get("safety_head_error"):
+        _judgment_source = "deterministic_fallback"
+    else:
+        _judgment_source = "deterministic_rule"
+    _llm_available = not _is_llm_fallback
+
     try:
         redacted_preview = _redact_text_for_trust_log(text, POLICY)
         event = {
@@ -1334,6 +1430,8 @@ def fuji_gate(
             "safe_applied": safe_applied,
             "latency_ms": latency_ms,
             "safety_head_model": sh.model,
+            "judgment_source": _judgment_source,
+            "llm_available": _llm_available,
             "violation_details": violation_details,
             "followups_count": len(followups),
             "meta": {
@@ -1377,6 +1475,9 @@ def fuji_gate(
     meta.setdefault("poc_mode", bool(poc_mode))
     meta.setdefault("enforce_low_evidence", bool(enforce_low_evidence))
     meta["latency_ms"] = latency_ms
+    # セキュリティ監査 §3.3.3 対応
+    meta["judgment_source"] = _judgment_source
+    meta["llm_available"] = _llm_available
 
     # 不変条件（ここでも固定）
     if status == "deny" and decision_status != "deny":

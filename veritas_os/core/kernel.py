@@ -846,7 +846,7 @@ async def decide(
             evidence=evidence,
             alternatives=alts,
         )
-    except (TypeError, ValueError, RuntimeError) as e:
+    except (TypeError, ValueError, RuntimeError, OSError, TimeoutError) as e:
         logger.error("FUJI gate evaluation failed, defaulting to deny: %s", repr(e))
         fuji_result = {
             "status": "deny",
