@@ -52,7 +52,7 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+    fireEvent.change(screen.getByLabelText("メッセージ"), {
       target: { value: "A/B test" },
     });
 
@@ -64,8 +64,8 @@ describe("DecisionConsolePage", () => {
       expect(screen.getByText("Cost-Benefit Analytics")).toBeInTheDocument();
       expect(screen.getByText("Total Token Cost")).toBeInTheDocument();
       expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
-      expect(screen.getByText("user")).toBeInTheDocument();
-      expect(screen.getByText("assistant")).toBeInTheDocument();
+      expect(screen.getByText("ユーザー")).toBeInTheDocument();
+      expect(screen.getByText("アシスタント")).toBeInTheDocument();
     });
   });
 
@@ -106,7 +106,7 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+    fireEvent.change(screen.getByLabelText("メッセージ"), {
       target: { value: "governance drift" },
     });
 
@@ -168,7 +168,7 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+    fireEvent.change(screen.getByLabelText("メッセージ"), {
       target: { value: "A/B test" },
     });
 
@@ -218,7 +218,7 @@ describe("DecisionConsolePage", () => {
     } as Response);
 
     render(<DecisionConsolePage />);
-    fireEvent.change(screen.getByPlaceholderText("メッセージを入力"), {
+    fireEvent.change(screen.getByLabelText("メッセージ"), {
       target: { value: "step expansion" },
     });
 
