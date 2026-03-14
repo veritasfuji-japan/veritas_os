@@ -141,6 +141,7 @@
 - ✅ #7 対応: `/v1/fuji/validate` にガバナンス境界ガードを追加し、`VERITAS_ENABLE_DIRECT_FUJI_API=1` を明示設定しない限り `403` で拒否（標準経路 `/v1/decide` 利用を強制）。
 - ✅ #8 対応: TrustLog チェーンハッシュを外部連携可能な Transparency log へアンカーする仕組みを追加（`VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH`）。必須化は `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1` で fail-closed 運用可能。
 - ✅ #9 対応: Replay スナップショットに `external_dependency_versions`（Python実行環境・主要依存パッケージ版本）を記録し、Replay レポート `meta` へ証跡を出力するよう改善。
+- ✅ #10 対応: Safety判定のキャリブレーション自動レポート生成スクリプト `scripts/quality/generate_safety_calibration_report.py` を追加。JSONL評価データから Brier score / ECE / バケット別乖離を JSON+Markdown で出力し、入力不足時は `SECURITY WARNING` で失敗する fail-closed 監視を実装。
 
 ## 17. Final Verdict
 - **B. serious engineering foundation**
