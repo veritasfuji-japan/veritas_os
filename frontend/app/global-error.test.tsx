@@ -1,20 +1,32 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import GlobalFatalErrorPage from "./global-error";
 
+function renderGlobalFatalErrorPage(error: Error, reset: () => void) {
+  document.documentElement.innerHTML = "";
+
+  return render(
+    <GlobalFatalErrorPage
+      error={error}
+      reset={reset}
+    />,
+    {
+      baseElement: document.documentElement,
+      container: document.documentElement,
+    },
+  );
+}
+
 describe("GlobalFatalErrorPage", () => {
   it("renders fatal fallback UI and calls reset on reload", () => {
+    const consoleErrorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     const reset = vi.fn();
+    const rendered = renderGlobalFatalErrorPage(new Error("fatal"), reset);
 
-    render(
-      <GlobalFatalErrorPage
-        error={new Error("fatal")}
-        reset={reset}
-      />
-    );
-
-    expect(screen.getByText("重大な問題が発生しました")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "再読み込み" }));
+    expect(rendered.getByText("重大な問題が発生しました")).toBeTruthy();
+    fireEvent.click(rendered.getByRole("button", { name: "再読み込み" }));
     expect(reset).toHaveBeenCalledTimes(1);
   });
 
@@ -24,12 +36,7 @@ describe("GlobalFatalErrorPage", () => {
       .mockImplementation(() => undefined);
     const error = new Error("fatal route failure");
 
-    render(
-      <GlobalFatalErrorPage
-        error={error}
-        reset={vi.fn()}
-      />
-    );
+    renderGlobalFatalErrorPage(error, vi.fn());
 
     expect(consoleErrorSpy).toHaveBeenCalledWith("Unhandled fatal app error:", error);
   });
