@@ -104,3 +104,20 @@ def test_worm_mirror_and_verify_metadata(monkeypatch, tmp_path):
     assert verify_result["worm_mirror"]["entries"] == 1
     assert verify_result["key_management"]["public_key_present"] is True
     assert verify_result["key_management"]["fingerprint"]
+
+
+def test_worm_hard_fail_mode_raises_when_mirror_write_fails(monkeypatch, tmp_path):
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+    read_only_dir = tmp_path / "mirror_dir"
+    read_only_dir.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", str(read_only_dir))
+    monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_HARD_FAIL", "1")
+
+    with pytest.raises(trustlog_signed.SignedTrustLogWriteError, match="worm_mirror_write_failed"):
+        trustlog_signed.append_signed_decision({"request_id": "r-hard-fail", "decision": "allow"})
