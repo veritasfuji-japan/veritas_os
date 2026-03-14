@@ -15,9 +15,11 @@ Handles:
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 import logging
 import os
+import platform
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,6 +29,28 @@ from .utils import utc_now, utc_now_iso_z, redact_payload
 from .pipeline_helpers import _warn
 
 logger = logging.getLogger(__name__)
+
+
+def _collect_external_dependency_evidence() -> Dict[str, Any]:
+    """Collect runtime dependency versions used for replay audit evidence."""
+    package_names = (
+        "openai",
+        "anthropic",
+        "httpx",
+        "pydantic",
+    )
+    packages: Dict[str, str] = {}
+    for package_name in package_names:
+        try:
+            packages[package_name] = importlib.metadata.version(package_name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[package_name] = "not_installed"
+
+    return {
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "packages": packages,
+    }
 
 
 def _stable_checksum(payload: Any) -> str:
@@ -508,6 +532,7 @@ def build_replay_snapshot(
             "web_search": bool(should_run_web and not ctx.mock_external_apis),
             "web_search_mocked": bool(should_run_web and ctx.mock_external_apis),
         },
+        "external_dependency_versions": _collect_external_dependency_evidence(),
         "stage_outputs": {
             "planner": ctx.response_extras.get("planner"),
             "retrieval": ctx.retrieved,

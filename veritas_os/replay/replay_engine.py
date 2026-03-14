@@ -117,6 +117,25 @@ def _stable_checksum(payload: Any) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _normalize_external_dependency_evidence(value: Any) -> Dict[str, Any]:
+    """Return a sanitized dependency evidence map for replay reporting."""
+    if not isinstance(value, dict):
+        return {}
+
+    packages = value.get("packages") if isinstance(value.get("packages"), dict) else {}
+    normalized_packages = {
+        str(name): str(version)
+        for name, version in packages.items()
+    }
+
+    normalized = {
+        "python_version": str(value.get("python_version") or ""),
+        "platform": str(value.get("platform") or ""),
+        "packages": normalized_packages,
+    }
+    return normalized
+
+
 def _sort_evidence(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     def _key(item: Dict[str, Any]) -> str:
         return str(
@@ -238,6 +257,10 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
         if str(expected_retrieval_checksum) != actual_retrieval_checksum:
             raise ValueError("replay_retrieval_snapshot_checksum_mismatch")
 
+    replay_dependency_evidence = _normalize_external_dependency_evidence(
+        replay_meta.get("external_dependency_versions")
+    )
+
     req_body = replay_meta.get("request_body") if isinstance(replay_meta.get("request_body"), dict) else {}
     req_body = dict(req_body)
 
@@ -282,6 +305,7 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
             "created_at": _iso_now(),
             "pipeline_version": _pipeline_version(),
             "notes": "strict mode reuses deterministic replay snapshot and disables external tools.",
+            "external_dependency_versions": replay_dependency_evidence,
         },
     }
 

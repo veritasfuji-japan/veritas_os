@@ -344,3 +344,28 @@ class TestFinalizeEvidence:
         finalize_evidence(payload, web_evidence=web_ev, evidence_max=50)
         sources = [e.get("source") for e in payload["evidence"]]
         assert "web" in sources
+
+
+def test_build_replay_snapshot_includes_external_dependency_versions() -> None:
+    from veritas_os.core.pipeline_persist import build_replay_snapshot
+    from veritas_os.core.pipeline_types import PipelineContext
+
+    ctx = PipelineContext(
+        request_id="req-1",
+        query="q",
+        body={"temperature": 0},
+        context={},
+    )
+    ctx.retrieved = []
+    ctx.response_extras = {"web_search": None}
+    ctx.seed = 123
+
+    payload = {"meta": {}, "evidence": []}
+    build_replay_snapshot(ctx, payload, should_run_web=False)
+
+    replay = payload.get("deterministic_replay")
+    assert isinstance(replay, dict)
+    deps = replay.get("external_dependency_versions")
+    assert isinstance(deps, dict)
+    assert isinstance(deps.get("packages"), dict)
+    assert "python_version" in deps
