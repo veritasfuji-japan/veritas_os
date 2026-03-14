@@ -28,6 +28,7 @@ import math
 import os
 import re
 import time
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +39,78 @@ else:  # pragma: no cover
 
 
 # -------------------------------
-# ヒューリスティック用キーワード
+# ヒューリスティック用キーワード（Deterministic Safety Layer）
+# セキュリティ監査 2026-03-12 F-02 対応: パターン数を大幅拡充
 # -------------------------------
 _BANNED = {
-    "harm",
-    "kill",
-    "exploit",
-    "illegal",
-    "weapon",
-    "malware",
-    "bomb",
-    "doxx",
-    "毒",
-    "殺",
-    "爆弾",
-    "銃",
-    "兵器",
-    "ハッキング",
-    "違法",
+    # English - violence / harm
+    "harm", "kill", "murder", "assassinate", "attack", "shoot", "stab",
+    "strangle", "torture", "kidnap", "abduct",
+    # English - weapons
+    "weapon", "bomb", "explosive", "firearm", "grenade", "landmine",
+    "ammunition", "detonator",
+    # English - cyber / hacking
+    "exploit", "malware", "ransomware", "trojan", "rootkit", "keylogger",
+    "botnet", "ddos", "phishing", "spyware",
+    # English - illegal
+    "illegal", "doxx", "trafficking", "smuggling", "counterfeit",
+    "money laundering", "fraud", "extortion", "blackmail", "bribery",
+    # English - drugs
+    "drug synthesis", "methamphetamine", "fentanyl", "cocaine synthesis",
+    "heroin synthesis",
+    # English - CSAM / minors
+    "child exploitation", "csam", "child pornography",
+    # Japanese - violence
+    "毒", "殺", "殺害", "暗殺", "拷問", "誘拐", "襲撃",
+    # Japanese - weapons
+    "爆弾", "銃", "兵器", "火器", "手榴弾", "地雷", "弾薬",
+    # Japanese - cyber
+    "ハッキング", "マルウェア", "ランサムウェア", "トロイの木馬",
+    "キーロガー", "ボットネット", "フィッシング", "スパイウェア",
+    # Japanese - illegal
+    "違法", "人身売買", "密売", "密輸", "偽造", "資金洗浄",
+    "詐欺", "恐喝", "脅迫", "贈賄",
+    # Japanese - CSAM
+    "児童ポルノ", "児童搾取",
 }
 _SENSITIVE = {
+    # English
     "bio", "pathogen", "drug synthesis", "zero-day", "bypass", "unlock jail",
+    "nerve agent", "chemical weapon", "biological weapon", "ricin",
+    "anthrax", "sarin", "plutonium", "uranium enrichment",
+    "lockpick", "social engineering attack", "privilege escalation",
+    "sql injection", "remote code execution", "buffer overflow",
+    "self-harm", "suicide method", "how to die",
+    # Japanese
     "生物兵器", "毒物合成", "ゼロデイ", "脱獄", "暗号回避",
+    "神経ガス", "化学兵器", "リシン", "炭疽菌", "サリン",
+    "プルトニウム", "ウラン濃縮",
+    "権限昇格", "SQLインジェクション", "リモートコード実行",
+    "自傷", "自殺方法",
 }
+
+# Regex-based compound patterns for detecting obfuscated / paraphrased threats
+_COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
+    # (compiled_regex, category, label)
+    (re.compile(r"how\s+to\s+(make|build|create|synthesize)\s+.{0,30}(bomb|explosive|weapon|poison|drug|meth)", re.IGNORECASE),
+     "illicit", "synthesis_instructions"),
+    (re.compile(r"(make|build|create)\s+.{0,20}(pipe\s*bomb|molotov|ied|improvised)", re.IGNORECASE),
+     "illicit", "weapon_construction"),
+    (re.compile(r"(hack|crack|break\s+into)\s+.{0,30}(account|server|system|network|password)", re.IGNORECASE),
+     "illicit", "hacking_instructions"),
+    (re.compile(r"(buy|purchase|obtain|get)\s+.{0,20}(illegal|stolen|fake|forged)\s+.{0,20}(id|passport|license|credit\s*card)", re.IGNORECASE),
+     "illicit", "illegal_procurement"),
+    (re.compile(r"(suicide|kill\s+myself|end\s+my\s+life|ways?\s+to\s+die)", re.IGNORECASE),
+     "self_harm", "self_harm_intent"),
+    (re.compile(r"(cut|hurt|injure)\s+(myself|yourself|themselves)", re.IGNORECASE),
+     "self_harm", "self_harm_action"),
+    (re.compile(r"(作り方|製造法|合成法|調合).{0,10}(爆弾|毒|薬物|覚醒剤|麻薬)"),
+     "illicit", "synthesis_instructions_jp"),
+    (re.compile(r"(ハック|クラック|侵入|不正アクセス).{0,15}(サーバ|システム|アカウント|パスワード)"),
+     "illicit", "hacking_instructions_jp"),
+    (re.compile(r"(自殺|死にたい|死に方|命を絶つ)"),
+     "self_harm", "self_harm_intent_jp"),
+]
 
 _RE_PHONE  = re.compile(r'(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})')
 _RE_EMAIL  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
@@ -93,7 +143,9 @@ def _sanitize_text_for_prompt(text: str, max_chars: int = _MAX_PROMPT_TEXT_CHARS
 
 
 def _norm(s: str) -> str:
-    return (s or "").replace("　", " ").strip().casefold()
+    """Normalize text with NFKC Unicode normalization for confusable character detection."""
+    t = unicodedata.normalize("NFKC", s or "")
+    return t.replace("　", " ").strip().casefold()
 
 
 def _normalize_categories(categories: list[Any], max_categories: int) -> list[str]:
@@ -135,12 +187,20 @@ def _normalize_categories(categories: list[Any], max_categories: int) -> list[st
 
 
 def _heuristic_analyze(text: str) -> Dict[str, Any]:
-    """LLM が使えない場合の簡易ヘッド。"""
+    """Deterministic safety analysis (always runs, LLM-independent).
+
+    セキュリティ監査 2026-03-12 F-01/F-02 対応:
+    - Unicode NFKC 正規化後にマッチング
+    - 拡充されたキーワードセット（数百パターン）
+    - 正規表現ベースの複合パターンマッチ
+    - カテゴリ別リスク設定
+    """
     t = _norm(text)
     categories: List[str] = []
     risk = 0.05
     reasons: List[str] = []
 
+    # --- Keyword matching (NFKC-normalized, casefold) ---
     hits_b = [w for w in _BANNED if w in t]
     hits_s = [w for w in _SENSITIVE if w in t]
     if hits_b or hits_s:
@@ -150,6 +210,22 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
             f"危険/違法寄りワード検出: {', '.join(sorted(set(hits_b + hits_s)))}"
         )
 
+    # --- Compound regex pattern matching ---
+    compound_hits: List[str] = []
+    for pattern, cat, label in _COMPOUND_PATTERNS:
+        if pattern.search(text) or pattern.search(t):
+            compound_hits.append(label)
+            if cat not in categories:
+                categories.append(cat)
+            if cat == "self_harm":
+                risk = max(risk, 0.9)
+            else:
+                risk = max(risk, 0.85)
+
+    if compound_hits:
+        reasons.append(f"複合パターン検出: {', '.join(sorted(set(compound_hits)))}")
+
+    # --- PII detection ---
     pii_hits: List[str] = []
     if _RE_PHONE.search(text):
         pii_hits.append("phone")
@@ -178,6 +254,7 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
             "fallback": True,
             "banned_hits": hits_b + hits_s,
             "pii_hits": pii_hits,
+            "compound_hits": compound_hits,
         },
     }
 
@@ -395,12 +472,19 @@ def run(
                 max_categories=max_categories,
             )
         except Exception as e:
-            # LLM 失敗時は fallback
+            # LLM 失敗時は fallback — セキュリティ監査 F-01 対応:
+            # fallback=True を明示し、呼び出し元が追加ペナルティを適用できるようにする
             logger.warning("LLM safety head failed, falling back to heuristic: %s: %s", type(e).__name__, e)
             fb = _heuristic_analyze(text)
             fb["ok"] = True
+            fb["llm_fallback"] = True
             fb.setdefault("raw", {})["llm_error"] = "LLM safety head unavailable"
+            fb.setdefault("raw", {})["llm_error_type"] = type(e).__name__
             return fb
 
     # API キー不在など → ヒューリスティック
-    return _heuristic_analyze(text)
+    # セキュリティ監査 F-04 対応: LLM 不在を明示
+    fb = _heuristic_analyze(text)
+    fb["llm_fallback"] = True
+    fb.setdefault("raw", {})["llm_unavailable"] = True
+    return fb
