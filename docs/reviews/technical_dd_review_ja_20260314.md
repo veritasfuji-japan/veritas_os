@@ -139,6 +139,7 @@
 - ✅ #5 対応: TrustLog の WORM ミラーに hard-fail モード（`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`）を追加。
 - ✅ #6 対応: `/v1/governance/policy` 更新時に **4-eyes 承認（2名・重複不可署名）** を必須化。デフォルト有効で `VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES=0` の場合のみ無効化。加えて承認失敗時の API 応答は固定文言へ統一し、例外詳細の外部露出を抑止。
 - ✅ #7 対応: `/v1/fuji/validate` にガバナンス境界ガードを追加し、`VERITAS_ENABLE_DIRECT_FUJI_API=1` を明示設定しない限り `403` で拒否（標準経路 `/v1/decide` 利用を強制）。
+- ✅ #8 対応: TrustLog チェーンハッシュを外部連携可能な Transparency log へアンカーする仕組みを追加（`VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH`）。必須化は `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1` で fail-closed 運用可能。
 - ✅ #9 対応: Replay スナップショットに `external_dependency_versions`（Python実行環境・主要依存パッケージ版本）を記録し、Replay レポート `meta` へ証跡を出力するよう改善。
 
 ## 17. Final Verdict
