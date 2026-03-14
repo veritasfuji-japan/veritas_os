@@ -2099,6 +2099,20 @@ def _is_debug_mode() -> bool:
     return normalized_flag in debug_truthy_values
 
 
+def _is_direct_fuji_api_enabled() -> bool:
+    """Return whether direct FUJI API access is explicitly allowed.
+
+    Security note:
+        `/v1/fuji/validate` can bypass the standard `/v1/decide` governance
+        pipeline. This endpoint therefore defaults to disabled and must be
+        explicitly enabled with `VERITAS_ENABLE_DIRECT_FUJI_API=1`.
+    """
+    flag = os.getenv("VERITAS_ENABLE_DIRECT_FUJI_API", "")
+    normalized_flag = flag.strip().lower()
+    truthy_values = {"1", "true", "yes", "on"}
+    return normalized_flag in truthy_values
+
+
 @app.get("/")
 def root() -> Dict[str, Any]:
     return {"ok": True, "service": "veritas-api", "server_time": utc_now_iso_z()}
@@ -2544,6 +2558,17 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
     dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)],
 )
 def fuji_validate(payload: dict):
+    if not _is_direct_fuji_api_enabled():
+        return JSONResponse(
+            status_code=403,
+            content={
+                "detail": (
+                    "direct_fuji_api_disabled: use /v1/decide pipeline or set "
+                    "VERITAS_ENABLE_DIRECT_FUJI_API=1"
+                )
+            },
+        )
+
     fc = get_fuji_core()
     if fc is None:
         logger.warning("fuji_validate: fuji_core unavailable: %s", _fuji_state.err)

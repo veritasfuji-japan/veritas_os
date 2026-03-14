@@ -918,6 +918,8 @@ def test_fuji_validate_uses_validate_action(monkeypatch):
     """
     fuji_core.validate_action がある場合、その経路が使われる
     """
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
+
     calls = []
 
     class DummyFuji:
@@ -946,6 +948,8 @@ def test_fuji_validate_falls_back_to_validate(monkeypatch):
     validate_action が無く validate だけある場合、validate 経由になる
     """
 
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
+
     class DummyFuji:
         @staticmethod
         def validate(action, context):
@@ -968,6 +972,8 @@ def test_fuji_validate_no_impl_raises_500(monkeypatch):
     """
     validate_action も validate も無い場合は 500 を返す
     """
+
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
 
     class DummyFuji:
         pass

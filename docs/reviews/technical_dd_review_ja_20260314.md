@@ -138,7 +138,7 @@
 - ✅ #4 対応: Replay 実行時に `model_version` の一致検証を追加（`VERITAS_REPLAY_ENFORCE_MODEL_VERSION=1` で有効）。
 - ✅ #5 対応: TrustLog の WORM ミラーに hard-fail モード（`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`）を追加。
 - ✅ #6 対応: `/v1/governance/policy` 更新時に **4-eyes 承認（2名・重複不可署名）** を必須化。デフォルト有効で `VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES=0` の場合のみ無効化。加えて承認失敗時の API 応答は固定文言へ統一し、例外詳細の外部露出を抑止。
-- ⚠️ #7 は本変更では未着手（Pipeline 外 API に対する追加ガードは別PRで実施予定）。
+- ✅ #7 対応: `/v1/fuji/validate` にガバナンス境界ガードを追加し、`VERITAS_ENABLE_DIRECT_FUJI_API=1` を明示設定しない限り `403` で拒否（標準経路 `/v1/decide` 利用を強制）。
 
 ## 17. Final Verdict
 - **B. serious engineering foundation**
