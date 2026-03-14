@@ -356,6 +356,8 @@ class TestFUJIValidation:
         """
         安全なアクションがallowされることを確認
         """
+        monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
+
         def fake_validate_action(action, context):
             """モック：安全なアクションを返す"""
             assert action == "safe_operation"
@@ -392,6 +394,8 @@ class TestFUJIValidation:
         """
         危険なアクションがrejectedされることを確認
         """
+        monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
+
         def fake_validate_action(action, context):
             """モック：危険なアクションを返す"""
             return {
@@ -420,6 +424,19 @@ class TestFUJIValidation:
         
         assert data["status"] == "rejected"
         assert len(data["violations"]) > 0
+
+    def test_fuji_validate_blocked_without_direct_api_opt_in(self, client, monkeypatch):
+        """Pipeline bypass endpoint is blocked by default for governance safety."""
+        monkeypatch.delenv("VERITAS_ENABLE_DIRECT_FUJI_API", raising=False)
+
+        response = client.post(
+            "/v1/fuji/validate",
+            headers={"X-API-Key": "test-key"},
+            json={"action": "safe_operation", "context": {}},
+        )
+
+        assert response.status_code == 403
+        assert "direct_fuji_api_disabled" in response.json()["detail"]
 
 
 # =========================
