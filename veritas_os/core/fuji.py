@@ -824,17 +824,21 @@ def run_safety_head(
 
         if llm_fallback:
             result.raw["llm_fallback"] = True
-            # LLM が利用不能だった場合: リスクフロアを 0.50 に引き上げ
+            # LLM が利用不能だった場合のリスクフロア引き上げ
             # セキュリティ監査 F-03/F-04 対応
-            stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
-            if stakes >= 0.7:
-                result.risk_score = max(result.risk_score, 0.70)
-                result.rationale += " / [deterministic_layer] LLM unavailable + high stakes → risk floor 0.70"
-            else:
-                result.risk_score = max(result.risk_score, 0.50)
-                result.rationale += " / [deterministic_layer] LLM unavailable → risk floor 0.50"
-            if "safety_head_error" not in result.categories:
-                result.categories.append("safety_head_error")
+            # deterministic layer がリスクありと判定した場合のみ強化ペナルティ
+            _has_risk_cats = any(
+                c for c in result.categories
+                if c not in ("safety_head_error",)
+            )
+            if _has_risk_cats:
+                stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
+                if stakes >= 0.7:
+                    result.risk_score = max(result.risk_score, 0.70)
+                    result.rationale += " / [deterministic_layer] LLM unavailable + high stakes → risk floor 0.70"
+                else:
+                    result.risk_score = max(result.risk_score, 0.50)
+                    result.rationale += " / [deterministic_layer] LLM unavailable → risk floor 0.50"
 
         return result
 
@@ -844,15 +848,24 @@ def run_safety_head(
         fb.rationale += f" / safety_head error: {repr(e)[:120]}"
         fb.raw.setdefault("safety_head_error", repr(e))
         fb.raw["llm_fallback"] = True
-        # セキュリティ監査 F-03 対応: LLM エラー時のリスクフロアを 0.30 → 0.50 に引き上げ
-        # high-stakes の場合は 0.70（deny 強制）
-        stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
-        if stakes >= 0.7:
-            fb.risk_score = max(fb.risk_score, 0.70)
-            fb.rationale += " / [deterministic_layer] LLM error + high stakes → risk floor 0.70"
+        # セキュリティ監査 F-03 対応: LLM エラー時のリスクフロア引き上げ
+        # ただし、deterministic layer がリスクなしと判定した場合はペナルティを緩和
+        _has_risk_cats = any(
+            c for c in fb.categories
+            if c not in ("safety_head_error",)
+        )
+        if _has_risk_cats:
+            stakes = _safe_float(ctx.get("stakes", 0.5), 0.5)
+            if stakes >= 0.7:
+                fb.risk_score = max(fb.risk_score, 0.70)
+                fb.rationale += " / [deterministic_layer] LLM error + high stakes → risk floor 0.70"
+            else:
+                fb.risk_score = max(fb.risk_score, 0.50)
+                fb.rationale += " / [deterministic_layer] LLM error → risk floor 0.50"
         else:
-            fb.risk_score = max(fb.risk_score, 0.50)
-            fb.rationale += " / [deterministic_layer] LLM error → risk floor 0.50"
+            # リスク検出なしでもLLMエラーの不確実性として 0.30 を保持
+            fb.risk_score = max(fb.risk_score, 0.30)
+            fb.rationale += " / [deterministic_layer] LLM error → baseline risk floor 0.30"
         return fb
 
 
@@ -1080,9 +1093,13 @@ def fuji_core_decide(
             risk = 0.50
             _det_reasons.append("deterministic_pii_floor=0.50")
 
-    if _is_llm_fallback and risk < 0.50:
-        # LLM unavailable → risk += 0.20 ペナルティ (最低 0.50)
-        risk = max(risk + 0.20, 0.50)
+    # LLM unavailable penalty: only when deterministic layer detected risk signals
+    # (categories present besides safety_head_error/low_evidence).
+    # If the heuristic confirms text is clean, no penalty needed.
+    _risk_categories = [c for c in categories if c not in ("safety_head_error", "low_evidence", "prompt_injection")]
+    if _is_llm_fallback and _risk_categories:
+        # LLM unavailable + risk signals detected → risk += 0.20 ペナルティ
+        risk = min(1.0, risk + 0.20)
         _det_reasons.append("deterministic_llm_unavailable_penalty")
 
     if _det_reasons:
