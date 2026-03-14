@@ -143,6 +143,7 @@
 - ✅ #9 対応: Replay スナップショットに `external_dependency_versions`（Python実行環境・主要依存パッケージ版本）を記録し、Replay レポート `meta` へ証跡を出力するよう改善。
 - ✅ #10 対応: Safety判定のキャリブレーション自動レポート生成スクリプト `scripts/quality/generate_safety_calibration_report.py` を追加。JSONL評価データから Brier score / ECE / バケット別乖離を JSON+Markdown で出力し、入力不足時は `SECURITY WARNING` で失敗する fail-closed 監視を実装。
 - ✅ #11 対応: STRIDE/LINDDUN ベースの脅威モデル文書 `docs/reviews/THREAT_MODEL_STRIDE_LINDDUN_20260314.md` を追加し、資産・境界・脅威・優先対策・運用ルールを明文化。
+- ✅ #12 対応: Secret 管理を Vault/KMS 前提に統合するため、`VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1` 時は `VERITAS_SECRET_PROVIDER`（`vault` / `aws_secrets_manager` / `gcp_secret_manager` / `azure_key_vault` / `kms`）と `VERITAS_API_SECRET_REF` を必須化し、未設定・不正値・ランタイム注入失敗時は起動検証で fail-closed（`ValueError`）となるよう強化。
 
 ## 17. Final Verdict
 - **B. serious engineering foundation**

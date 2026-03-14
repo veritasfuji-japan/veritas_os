@@ -18,6 +18,7 @@ from veritas_os.core.config import (
     _parse_cors_origins,
     _parse_float,
     _parse_int,
+    _parse_str,
     ScoringConfig,
     FujiConfig,
     PipelineConfig,
@@ -150,6 +151,21 @@ def test_parse_bool_invalid_logs_warning(monkeypatch, caplog):
 
     assert _parse_bool("TEST_BOOL_KEY", True) is True
     assert "Invalid bool for TEST_BOOL_KEY" in caplog.text
+
+
+# ============================================================
+# _parse_str
+# ============================================================
+
+
+def test_parse_str_default(monkeypatch):
+    monkeypatch.delenv("TEST_STR_KEY", raising=False)
+    assert _parse_str("TEST_STR_KEY", "default") == "default"
+
+
+def test_parse_str_trim(monkeypatch):
+    monkeypatch.setenv("TEST_STR_KEY", "  value  ")
+    assert _parse_str("TEST_STR_KEY") == "value"
 
 
 # ============================================================
@@ -376,3 +392,51 @@ def test_should_enforce_api_secret_validation_disabled(monkeypatch):
     monkeypatch.setenv("VERITAS_ENFORCE_API_SECRET", "0")
     monkeypatch.setenv("VERITAS_ENFORCE_API_SECRET_IN_TESTS", "1")
     assert VeritasConfig.should_enforce_api_secret_validation() is False
+
+
+def test_validate_secret_manager_integration_disabled_by_default():
+    cfg = VeritasConfig(api_secret="real_secret_123")
+    cfg.validate_secret_manager_integration()
+
+
+def test_validate_secret_manager_integration_requires_valid_provider(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", "1")
+    cfg = VeritasConfig(
+        api_secret="real_secret_123",
+        secret_provider="invalid_provider",
+        api_secret_ref="path/to/secret",
+    )
+    with pytest.raises(ValueError, match="VERITAS_SECRET_PROVIDER"):
+        cfg.validate_secret_manager_integration()
+
+
+def test_validate_secret_manager_integration_requires_secret_ref(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", "1")
+    cfg = VeritasConfig(
+        api_secret="real_secret_123",
+        secret_provider="vault",
+        api_secret_ref="",
+    )
+    with pytest.raises(ValueError, match="VERITAS_API_SECRET_REF"):
+        cfg.validate_secret_manager_integration()
+
+
+def test_validate_secret_manager_integration_requires_runtime_secret(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", "1")
+    cfg = VeritasConfig(
+        api_secret="",
+        secret_provider="vault",
+        api_secret_ref="secret/veritas/api",
+    )
+    with pytest.raises(ValueError, match="VERITAS_API_SECRET"):
+        cfg.validate_secret_manager_integration()
+
+
+def test_validate_secret_manager_integration_accepts_supported_provider(monkeypatch):
+    monkeypatch.setenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", "1")
+    cfg = VeritasConfig(
+        api_secret="real_secret_123",
+        secret_provider="aws_secrets_manager",
+        api_secret_ref="prod/veritas/api_secret",
+    )
+    cfg.validate_secret_manager_integration()
