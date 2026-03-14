@@ -53,4 +53,7 @@
 - CI (`.github/workflows/main.yml`) に `VERITAS_PIPELINE_VERSION: ${{ github.sha }}` を追加し、
   監査トレーサビリティを強化。
 - 回帰防止として `veritas_os/tests/test_replay_engine.py` に環境変数優先の単体テストを追加。
+- 追加改善（CI安定化）: `VERITAS_PIPELINE_VERSION` が常時注入されるCI環境で
+  `test_replay_engine` が環境依存で失敗しないよう、該当テストで環境変数を明示的に解除して
+  判定条件を固定化。
 
