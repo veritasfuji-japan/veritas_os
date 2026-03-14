@@ -2,7 +2,7 @@ import { type PipelineStageName } from "./constants";
 
 export interface ChatMessage {
   id: number;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
 }
 

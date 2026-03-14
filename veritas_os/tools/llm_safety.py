@@ -42,52 +42,72 @@ else:  # pragma: no cover
 # ヒューリスティック用キーワード（Deterministic Safety Layer）
 # セキュリティ監査 2026-03-12 F-02 対応: パターン数を大幅拡充
 # -------------------------------
-_BANNED = {
-    # English - violence / harm
+# --- English single-word keywords: matched with word boundaries to avoid
+#     false positives (e.g. "kill" in "skill", "harm" in "pharmacy"). ---
+_BANNED_EN_WORDS: set[str] = {
+    # violence / harm
     "harm", "kill", "murder", "assassinate", "attack", "shoot", "stab",
     "strangle", "torture", "kidnap", "abduct",
-    # English - weapons
+    # weapons
     "weapon", "bomb", "explosive", "firearm", "grenade", "landmine",
     "ammunition", "detonator",
-    # English - cyber / hacking
+    # cyber / hacking
     "exploit", "malware", "ransomware", "trojan", "rootkit", "keylogger",
     "botnet", "ddos", "phishing", "spyware",
-    # English - illegal
+    # illegal
     "illegal", "doxx", "trafficking", "smuggling", "counterfeit",
-    "money laundering", "fraud", "extortion", "blackmail", "bribery",
-    # English - drugs
-    "drug synthesis", "methamphetamine", "fentanyl", "cocaine synthesis",
-    "heroin synthesis",
-    # English - CSAM / minors
+    "fraud", "extortion", "blackmail", "bribery",
+}
+# --- English multi-word phrases: safe for substring matching ---
+_BANNED_EN_PHRASES: set[str] = {
+    "money laundering", "drug synthesis", "methamphetamine", "fentanyl",
+    "cocaine synthesis", "heroin synthesis",
     "child exploitation", "csam", "child pornography",
-    # Japanese - violence
+}
+# --- Japanese keywords: substring matching is correct for Japanese ---
+_BANNED_JP: set[str] = {
+    # violence
     "毒", "殺", "殺害", "暗殺", "拷問", "誘拐", "襲撃",
-    # Japanese - weapons
+    # weapons
     "爆弾", "銃", "兵器", "火器", "手榴弾", "地雷", "弾薬",
-    # Japanese - cyber
+    # cyber
     "ハッキング", "マルウェア", "ランサムウェア", "トロイの木馬",
     "キーロガー", "ボットネット", "フィッシング", "スパイウェア",
-    # Japanese - illegal
+    # illegal
     "違法", "人身売買", "密売", "密輸", "偽造", "資金洗浄",
     "詐欺", "恐喝", "脅迫", "贈賄",
-    # Japanese - CSAM
+    # CSAM
     "児童ポルノ", "児童搾取",
 }
-_SENSITIVE = {
-    # English
-    "bio", "pathogen", "drug synthesis", "zero-day", "bypass", "unlock jail",
-    "nerve agent", "chemical weapon", "biological weapon", "ricin",
-    "anthrax", "sarin", "plutonium", "uranium enrichment",
-    "lockpick", "social engineering attack", "privilege escalation",
+
+_SENSITIVE_EN_WORDS: set[str] = {
+    "pathogen", "ricin", "anthrax", "sarin", "plutonium", "lockpick",
+}
+_SENSITIVE_EN_PHRASES: set[str] = {
+    "drug synthesis", "zero-day", "unlock jail",
+    "nerve agent", "chemical weapon", "biological weapon",
+    "uranium enrichment",
+    "social engineering attack", "privilege escalation",
     "sql injection", "remote code execution", "buffer overflow",
     "self-harm", "suicide method", "how to die",
-    # Japanese
+}
+_SENSITIVE_JP: set[str] = {
     "生物兵器", "毒物合成", "ゼロデイ", "脱獄", "暗号回避",
     "神経ガス", "化学兵器", "リシン", "炭疽菌", "サリン",
     "プルトニウム", "ウラン濃縮",
     "権限昇格", "SQLインジェクション", "リモートコード実行",
     "自傷", "自殺方法",
 }
+
+# Compiled word-boundary regexes for English single words (built once at import)
+_BANNED_EN_WORD_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in sorted(_BANNED_EN_WORDS)) + r")\b",
+    re.IGNORECASE,
+)
+_SENSITIVE_EN_WORD_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(w) for w in sorted(_SENSITIVE_EN_WORDS)) + r")\b",
+    re.IGNORECASE,
+)
 
 # Regex-based compound patterns for detecting obfuscated / paraphrased threats
 _COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
@@ -201,8 +221,16 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
     reasons: List[str] = []
 
     # --- Keyword matching (NFKC-normalized, casefold) ---
-    hits_b = [w for w in _BANNED if w in t]
-    hits_s = [w for w in _SENSITIVE if w in t]
+    # English single words: word-boundary regex to avoid false positives
+    hits_b: List[str] = _BANNED_EN_WORD_RE.findall(t)
+    # English multi-word phrases + Japanese: substring match (safe)
+    hits_b += [w for w in _BANNED_EN_PHRASES if w in t]
+    hits_b += [w for w in _BANNED_JP if w in t]
+
+    hits_s: List[str] = _SENSITIVE_EN_WORD_RE.findall(t)
+    hits_s += [w for w in _SENSITIVE_EN_PHRASES if w in t]
+    hits_s += [w for w in _SENSITIVE_JP if w in t]
+
     if hits_b or hits_s:
         categories.append("illicit")
         risk = max(risk, 0.8)
@@ -211,16 +239,20 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
         )
 
     # --- Compound regex pattern matching ---
+    # Always search the NFKC-normalized text to ensure consistent matching
     compound_hits: List[str] = []
     for pattern, cat, label in _COMPOUND_PATTERNS:
-        if pattern.search(text) or pattern.search(t):
+        if pattern.search(t) or pattern.search(text):
             compound_hits.append(label)
             if cat not in categories:
                 categories.append(cat)
+            # Initial scores kept moderate; the deterministic safety layer in
+            # fuji_core_decide will apply category-specific floors and LLM
+            # unavailable penalties on top of these.
             if cat == "self_harm":
-                risk = max(risk, 0.9)
+                risk = max(risk, 0.75)
             else:
-                risk = max(risk, 0.85)
+                risk = max(risk, 0.65)
 
     if compound_hits:
         reasons.append(f"複合パターン検出: {', '.join(sorted(set(compound_hits)))}")

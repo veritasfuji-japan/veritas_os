@@ -16,7 +16,9 @@ interface ChatPanelProps {
 }
 
 function getRoleLabel(role: ChatMessage["role"], tk: (key: LocaleKey) => string): string {
-  return role === "user" ? tk("chatRoleUser") : tk("chatRoleAssistant");
+  if (role === "user") return tk("chatRoleUser");
+  if (role === "system") return tk("chatRoleSystem");
+  return tk("chatRoleAssistant");
 }
 
 export function ChatPanel({

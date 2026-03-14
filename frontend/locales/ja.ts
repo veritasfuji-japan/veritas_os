@@ -12,6 +12,7 @@ export const ja = {
   noMessagesYet: "まだメッセージはありません。",
   chatRoleUser: "ユーザー",
   chatRoleAssistant: "アシスタント",
+  chatRoleSystem: "システム",
   messageLabel: "メッセージ",
   messagePlaceholder: "メッセージを入力",
   dangerPresets: "危険プリセット（安全拒否確認用）",
