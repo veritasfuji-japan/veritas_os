@@ -60,7 +60,7 @@ describe("ChatPanel", () => {
   it("calls setQuery on textarea change", () => {
     const setQuery = vi.fn();
     renderPanel({ setQuery });
-    fireEvent.change(screen.getByPlaceholderText("messagePlaceholder"), {
+    fireEvent.change(screen.getByLabelText("messageLabel"), {
       target: { value: "new text" },
     });
     expect(setQuery).toHaveBeenCalledWith("new text");

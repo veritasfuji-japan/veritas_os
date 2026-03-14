@@ -15,6 +15,10 @@ interface ChatPanelProps {
   runDecision: (nextQuery?: string) => Promise<void>;
 }
 
+function getRoleLabel(role: ChatMessage["role"], tk: (key: LocaleKey) => string): string {
+  return role === "user" ? tk("chatRoleUser") : tk("chatRoleAssistant");
+}
+
 export function ChatPanel({
   t,
   tk,
@@ -42,7 +46,9 @@ export function ChatPanel({
                     : "mr-auto border border-border bg-background text-foreground"
                 }`}
               >
-                <p className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">{message.role}</p>
+                <p className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">
+                  {getRoleLabel(message.role, tk)}
+                </p>
                 {sanitizeText(message.content)}
               </li>
             ))}
@@ -60,12 +66,13 @@ export function ChatPanel({
         className="space-y-3"
       >
         <label className="block space-y-1 text-xs">
-          <span className="font-medium">message</span>
+          <span className="font-medium">{tk("messageLabel")}</span>
           <textarea
             className="min-h-28 w-full rounded-md border border-border bg-background px-2 py-2"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={tk("messagePlaceholder")}
+            aria-label={tk("messageLabel")}
           />
         </label>
 
