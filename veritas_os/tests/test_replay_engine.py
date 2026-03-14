@@ -97,6 +97,11 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
         "request_id": "dec-200",
         "query": "hello",
         "deterministic_replay": {
+            "external_dependency_versions": {
+                "python_version": "3.12.0",
+                "platform": "linux-x",
+                "packages": {"openai": "1.0.0"},
+            },
             "request_body": {"query": "hello", "context": {}},
             "final_output": {
                 "decision": {"output": "allow", "answer": "ok"},
@@ -131,6 +136,7 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
     assert payload["decision_id"] == "dec-200"
     assert "meta" in payload
     assert "pipeline_version" in payload["meta"]
+    assert payload["meta"]["external_dependency_versions"]["packages"]["openai"] == "1.0.0"
 
 
 @pytest.mark.asyncio
@@ -186,3 +192,15 @@ async def test_run_replay_rejects_retrieval_checksum_mismatch(monkeypatch, tmp_p
 
     with pytest.raises(ValueError, match="replay_retrieval_snapshot_checksum_mismatch"):
         await replay_engine.run_replay("dec-301", strict=True)
+
+
+def test_normalize_external_dependency_evidence_handles_invalid_shape() -> None:
+    normalized = replay_engine._normalize_external_dependency_evidence(["bad"])
+    assert normalized == {}
+
+    normalized2 = replay_engine._normalize_external_dependency_evidence(
+        {"python_version": 3.12, "platform": None, "packages": {"openai": 1}}
+    )
+    assert normalized2["python_version"] == "3.12"
+    assert normalized2["platform"] == ""
+    assert normalized2["packages"]["openai"] == "1"
