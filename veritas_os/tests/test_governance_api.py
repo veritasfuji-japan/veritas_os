@@ -141,6 +141,25 @@ class TestPutPolicy:
         )
         assert resp.status_code == 403
         assert resp.json()["ok"] is False
+
+    def test_put_does_not_expose_permission_error_detail(self, monkeypatch):
+        """Permission errors are sanitized before returning to API clients."""
+
+        def sensitive_error(_body):
+            raise PermissionError("secret stack trace details")
+
+        monkeypatch.setattr(srv, "enforce_four_eyes_approval", sensitive_error)
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json={"fuji_rules": {"pii_check": False}},
+        )
+        assert resp.status_code == 403
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["error"] == "governance approval validation failed"
+        assert "secret" not in json.dumps(body)
+
     def test_put_requires_api_key(self):
         resp = client.put("/v1/governance/policy", json={})
         assert resp.status_code in (401, 500)

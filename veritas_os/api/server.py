@@ -3211,7 +3211,7 @@ def governance_put(body: dict):
         logger.warning("governance_put rejected: %s", e)
         return JSONResponse(
             status_code=403,
-            content={"ok": False, "error": str(e)},
+            content={"ok": False, "error": "governance approval validation failed"},
         )
     except Exception as e:
         logger.error("governance_put failed: %s", e)
