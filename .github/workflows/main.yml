@@ -49,6 +49,9 @@ jobs:
       - name: httpx raw upload deprecation check
         run: python scripts/security/check_httpx_raw_upload_usage.py
 
+      - name: subprocess shell usage check
+        run: python scripts/security/check_subprocess_shell_usage.py
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \
