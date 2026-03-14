@@ -318,6 +318,7 @@ class TestGovernanceServerErrors:
 class TestFujiValidateErrorPaths:
     def test_runtime_error_returns_error_structure(self, monkeypatch):
         """Non-impl RuntimeError in fuji_validate → 200 with error."""
+        monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
         fake = type("F", (), {"validate_action": None, "validate": None})()
         monkeypatch.setattr(srv, "get_fuji_core", lambda: fake)
         monkeypatch.setattr(
@@ -332,6 +333,7 @@ class TestFujiValidateErrorPaths:
 
     def test_general_exception_returns_error_structure(self, monkeypatch):
         """General exception in fuji_validate → 200 with error."""
+        monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "1")
         fake = type("F", (), {"validate_action": None, "validate": None})()
         monkeypatch.setattr(srv, "get_fuji_core", lambda: fake)
         monkeypatch.setattr(
