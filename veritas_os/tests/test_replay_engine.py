@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -130,3 +131,58 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
     assert payload["decision_id"] == "dec-200"
     assert "meta" in payload
     assert "pipeline_version" in payload["meta"]
+
+
+@pytest.mark.asyncio
+async def test_run_replay_rejects_model_version_mismatch(monkeypatch, tmp_path: Path) -> None:
+    snapshot = {
+        "request_id": "dec-300",
+        "query": "hello",
+        "deterministic_replay": {
+            "model_version": "gpt-4.1-mini",
+            "request_body": {"query": "hello", "context": {}},
+            "final_output": {},
+        },
+    }
+
+    async def _fake_run(_req, _request):
+        return {}
+
+    monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
+    monkeypatch.setattr(replay_engine.pipeline, "run_decide_pipeline", _fake_run)
+    monkeypatch.setattr(replay_engine.pipeline, "REPLAY_REPORT_DIR", tmp_path)
+    monkeypatch.setenv("VERITAS_MODEL_NAME", "gpt-5-thinking")
+
+    with pytest.raises(ValueError, match="replay_model_version_mismatch"):
+        await replay_engine.run_replay("dec-300", strict=True)
+
+
+@pytest.mark.asyncio
+async def test_run_replay_rejects_retrieval_checksum_mismatch(monkeypatch, tmp_path: Path) -> None:
+    retrieval_snapshot = {"retrieved": [{"source": "memory"}], "web": {"hits": 1}}
+    checksum = hashlib.sha256(
+        json.dumps(retrieval_snapshot, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    snapshot = {
+        "request_id": "dec-301",
+        "query": "hello",
+        "deterministic_replay": {
+            "model_version": "gpt-4.1-mini",
+            "retrieval_snapshot": retrieval_snapshot,
+            "retrieval_snapshot_checksum": checksum + "x",
+            "request_body": {"query": "hello", "context": {}},
+            "final_output": {},
+        },
+    }
+
+    async def _fake_run(_req, _request):
+        return {}
+
+    monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
+    monkeypatch.setattr(replay_engine.pipeline, "run_decide_pipeline", _fake_run)
+    monkeypatch.setattr(replay_engine.pipeline, "REPLAY_REPORT_DIR", tmp_path)
+    monkeypatch.setenv("VERITAS_MODEL_NAME", "gpt-4.1-mini")
+
+    with pytest.raises(ValueError, match="replay_retrieval_snapshot_checksum_mismatch"):
+        await replay_engine.run_replay("dec-301", strict=True)

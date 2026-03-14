@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -72,6 +73,34 @@ def _pipeline_version() -> str:
     return "unknown"
 
 
+def _is_model_version_enforcement_enabled() -> bool:
+    """Return whether replay must enforce snapshot model/version constraints."""
+    raw = (os.getenv("VERITAS_REPLAY_ENFORCE_MODEL_VERSION") or "1").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _assert_model_version(snapshot_model: str | None) -> None:
+    """Raise ValueError when current configured model differs from snapshot."""
+    if not _is_model_version_enforcement_enabled():
+        return
+    expected = (snapshot_model or "").strip()
+    require_declared = (
+        (os.getenv("VERITAS_REPLAY_REQUIRE_MODEL_VERSION") or "0").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
+    if not expected:
+        if require_declared:
+            raise ValueError("replay_model_version_missing")
+        return
+
+    current = (
+        os.getenv("VERITAS_MODEL_NAME")
+        or os.getenv("LLM_MODEL")
+        or ""
+    ).strip()
+    if current and current != expected:
+        raise ValueError(f"replay_model_version_mismatch: expected={expected} current={current}")
+
 def _iso_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -80,6 +109,12 @@ def _replay_file_name(decision_id: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     safe_id = _safe_filename_id(decision_id)
     return f"replay_{safe_id}_{stamp}.json"
+
+
+def _stable_checksum(payload: Any) -> str:
+    """Return deterministic SHA-256 over canonicalized payload."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _sort_evidence(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -194,6 +229,15 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
         raise ValueError(f"decision_not_found: {decision_id}")
 
     replay_meta = snapshot.get("deterministic_replay") if isinstance(snapshot.get("deterministic_replay"), dict) else {}
+    _assert_model_version(replay_meta.get("model_version"))
+
+    expected_retrieval_checksum = replay_meta.get("retrieval_snapshot_checksum")
+    if expected_retrieval_checksum:
+        retrieval_snapshot = replay_meta.get("retrieval_snapshot") if isinstance(replay_meta.get("retrieval_snapshot"), dict) else {}
+        actual_retrieval_checksum = _stable_checksum(retrieval_snapshot)
+        if str(expected_retrieval_checksum) != actual_retrieval_checksum:
+            raise ValueError("replay_retrieval_snapshot_checksum_mismatch")
+
     req_body = replay_meta.get("request_body") if isinstance(replay_meta.get("request_body"), dict) else {}
     req_body = dict(req_body)
 

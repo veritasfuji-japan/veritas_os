@@ -14,6 +14,7 @@ Handles:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -26,6 +27,12 @@ from .utils import utc_now, utc_now_iso_z, redact_payload
 from .pipeline_helpers import _warn
 
 logger = logging.getLogger(__name__)
+
+
+def _stable_checksum(payload: Any) -> str:
+    """Return a deterministic SHA-256 checksum for replay snapshots."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def persist_audit_log(
@@ -475,11 +482,19 @@ def build_replay_snapshot(
     payload_for_replay = dict(payload)
     payload_for_replay.pop("deterministic_replay", None)
 
+    evidence_snapshot = (
+        payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
+    )
+    retrieval_snapshot = {
+        "retrieved": ctx.retrieved if isinstance(ctx.retrieved, list) else [],
+        "web": ctx.response_extras.get("web_search"),
+    }
+
     replay_snapshot = {
         "input_prompt": ctx.query,
-        "evidence_snapshot": (
-            payload.get("evidence") if isinstance(payload.get("evidence"), list) else []
-        ),
+        "evidence_snapshot": evidence_snapshot,
+        "retrieval_snapshot": retrieval_snapshot,
+        "retrieval_snapshot_checksum": _stable_checksum(retrieval_snapshot),
         "policy_snapshot": {
             "min_evidence": ctx.min_ev,
             "fast_mode": ctx.fast_mode,

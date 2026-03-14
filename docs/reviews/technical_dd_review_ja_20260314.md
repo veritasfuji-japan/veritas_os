@@ -131,6 +131,14 @@
 |19| multi-tenant RBAC/ABAC をAPI層に追加 | H | エンタープライズ適合 | P2 |
 |20| 重要設定変更のリアルタイムアラート強化 | L | 運用安全性向上 | P2 |
 
+### Improvement Roadmap TOP20 対応状況（2026-03-14 追記）
+- ✅ #1 対応: `stage_fuji_precheck` の例外・未実装時フォールバックを **fail-closed (`rejected`)** に変更し、`risk=1.0` と明示理由を記録するよう改善。
+- ✅ #2 部分対応: 安全系の広域 `except Exception` を段階的に縮小し、`pipeline_policy` の FUJI/ValueCore 評価では想定例外へ限定。
+- ✅ #3 対応: Replay スナップショットに `retrieval_snapshot_checksum` を追加し、再実行時に整合性検証を実施。
+- ✅ #4 対応: Replay 実行時に `model_version` の一致検証を追加（`VERITAS_REPLAY_ENFORCE_MODEL_VERSION=1` で有効）。
+- ✅ #5 対応: TrustLog の WORM ミラーに hard-fail モード（`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`）を追加。
+- ⚠️ #6, #7 は本変更では未着手（組織承認フローおよび API 境界ガードは別PRで実施予定）。
+
 ## 17. Final Verdict
 - **B. serious engineering foundation**
 - 研究プロトタイプを超える実装密度はあるが、production-grade governance infrastructure を名乗るには fail-closed / 外部不変監査 / 組織的承認制御が未充足。

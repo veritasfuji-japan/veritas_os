@@ -472,3 +472,23 @@ class TestSaveValstatsAtomicFallback:
         finally:
             mod.VAL_JSON = original_val_json
             mod._HAS_ATOMIC_IO = original_has_atomic
+
+
+def test_stage_fuji_precheck_fail_closed_on_exception():
+    """FUJI precheck exceptions must fail closed (rejected/high risk)."""
+    from veritas_os.core.pipeline_policy import stage_fuji_precheck
+    from veritas_os.core.pipeline_types import PipelineContext
+
+    ctx = PipelineContext(body={"query": "test"}, query="test", user_id="u", request_id="r")
+
+    class _BrokenFuji:
+        @staticmethod
+        def validate_action(_query, _context):
+            raise RuntimeError("boom")
+
+    with patch("veritas_os.core.pipeline_policy._lazy_import", return_value=_BrokenFuji()):
+        stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "rejected"
+    assert float(ctx.fuji_dict["risk"]) == 1.0
+    assert "fuji_precheck_error" in ctx.fuji_dict.get("reasons", [])

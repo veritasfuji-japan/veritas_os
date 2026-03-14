@@ -51,6 +51,12 @@ def _worm_mirror_path() -> Optional[Path]:
     return Path(mirror)
 
 
+def _worm_hard_fail_enabled() -> bool:
+    """Return whether WORM mirror failures must abort TrustLog writes."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_WORM_HARD_FAIL") or "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def _append_line(path: Path, line: str) -> None:
     """Append a line to ``path``, creating parent directories when required."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,6 +176,8 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
             line = json.dumps(entry, ensure_ascii=False) + "\n"
             _append_line(SIGNED_TRUSTLOG_JSONL, line)
             mirror = _mirror_to_worm(line)
+            if _worm_hard_fail_enabled() and mirror.get("configured") and not mirror.get("ok"):
+                raise SignedTrustLogWriteError("worm_mirror_write_failed")
             entry["worm_mirror"] = mirror
 
         return entry
@@ -221,7 +229,10 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
         previous_hash = _entry_chain_hash(entry)
 
     worm_path = _worm_mirror_path()
-    worm_status: Dict[str, Any] = {"configured": worm_path is not None}
+    worm_status: Dict[str, Any] = {
+        "configured": worm_path is not None,
+        "hard_fail": _worm_hard_fail_enabled(),
+    }
     if worm_path is not None:
         worm_status.update({
             "path": str(worm_path),

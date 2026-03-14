@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any, Dict
+from typing import Any
 
 from .pipeline_types import (
     PipelineContext,
@@ -29,6 +29,17 @@ from .pipeline_evidence import _norm_evidence_item
 logger = logging.getLogger(__name__)
 
 
+def _build_fail_closed_fuji_precheck(reason: str) -> dict[str, Any]:
+    """Return a fail-closed FUJI payload used when safety evaluation fails."""
+    return {
+        "status": "rejected",
+        "reasons": [reason],
+        "violations": ["fuji_precheck_unavailable"],
+        "risk": 1.0,
+        "modifications": [],
+    }
+
+
 def stage_fuji_precheck(ctx: PipelineContext) -> None:
     """Run FUJI policy pre‑check and merge with existing fuji_dict."""
     fuji_core = (
@@ -36,16 +47,15 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
         or _lazy_import("veritas_os.core", "fuji")
     )
 
+    fuji_pre = _build_fail_closed_fuji_precheck("fuji_precheck_missing")
     try:
         if fuji_core is not None and hasattr(fuji_core, "validate_action"):
             fuji_pre = fuji_core.validate_action(ctx.query, ctx.context)  # type: ignore
         elif fuji_core is not None and hasattr(fuji_core, "validate"):
             fuji_pre = fuji_core.validate(ctx.query, ctx.context)  # type: ignore
-        else:
-            fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
-    except Exception as e:  # subsystem resilience: intentionally broad
-        _warn(f"[fuji] error: {e}")
-        fuji_pre = {"status": "allow", "reasons": [], "violations": [], "risk": 0.0}
+    except (RuntimeError, ValueError, TypeError, AttributeError) as e:
+        _warn(f"[fuji] error (fail-closed): {e}")
+        fuji_pre = _build_fail_closed_fuji_precheck("fuji_precheck_error")
 
     status_map = {
         "ok": "allow",
@@ -59,11 +69,11 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
     try:
         if isinstance(fuji_pre, dict):
             fuji_pre["status"] = status_map.get(
-                str(fuji_pre.get("status", "allow")).lower(), "allow"
+                str(fuji_pre.get("status", "rejected")).lower(), "rejected"
             )
     except (KeyError, TypeError, AttributeError):
         if isinstance(fuji_pre, dict):
-            fuji_pre["status"] = "allow"
+            fuji_pre["status"] = "rejected"
 
     ctx.fuji_dict = {
         **(ctx.fuji_dict if isinstance(ctx.fuji_dict, dict) else {}),
@@ -122,7 +132,7 @@ def stage_value_core(
                 "top_factors": [],
                 "rationale": "value_core missing",
             }
-    except Exception as e:  # subsystem resilience: intentionally broad
+    except (RuntimeError, ValueError, TypeError, AttributeError) as e:
         _warn(f"[value_core] evaluation error: {e}")
         ctx.values_payload = {
             "scores": {},
