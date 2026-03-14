@@ -56,4 +56,9 @@
 - 追加改善（CI安定化）: `VERITAS_PIPELINE_VERSION` が常時注入されるCI環境で
   `test_replay_engine` が環境依存で失敗しないよう、該当テストで環境変数を明示的に解除して
   判定条件を固定化。
-
+- 追加改善（Low-2対応）: `scripts/security/check_subprocess_shell_usage.py` を追加し、
+  `subprocess` の `shell=True` 利用と文字列コマンド実行を静的検知するガードレールを実装。
+- CI (`.github/workflows/main.yml`) の lint ジョブへ同チェッカー実行を追加し、
+  既存のセキュリティゲートと同列で継続監視する運用に強化。
+- 回帰防止として `veritas_os/tests/test_check_subprocess_shell_usage.py` を追加し、
+  検知・非検知・許可マーカー・除外ディレクトリの挙動を単体テストで固定化。
