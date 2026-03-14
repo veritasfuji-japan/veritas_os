@@ -1508,19 +1508,61 @@ def _allow_sse_query_api_key() -> bool:
 
 
 def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
-    """Authenticate WebSocket using query-string API key.
+    """Authenticate WebSocket API key with header-first policy.
 
-    Security warning:
-        Query API keys can leak via URL logs/history. Prefer short-lived keys and
-        TLS (wss://) in production.
+    Security:
+        - ``X-API-Key`` header is preferred because URL query parameters are
+          commonly captured by access logs, browser history, and monitoring
+          tooling.
+        - Query authentication is disabled by default. It can be enabled only
+          with dual opt-in flags during migration windows.
     """
     expected = (_get_expected_api_key() or "").strip()
     if not expected:
         return False
-    candidate = (websocket.query_params.get("api_key") or "").strip()
-    if not candidate:
+
+    header_candidate = (websocket.headers.get("X-API-Key") or "").strip()
+    if header_candidate:
+        return secrets.compare_digest(header_candidate, expected)
+
+    query_candidate = (websocket.query_params.get("api_key") or "").strip()
+    if not query_candidate:
         return False
-    return secrets.compare_digest(candidate, expected)
+    if not _allow_ws_query_api_key():
+        return False
+
+    logger.warning(
+        "WebSocket auth accepted query api_key due to VERITAS_ALLOW_WS_QUERY_API_KEY=1. "
+        "This mode increases credential exposure risk.",
+    )
+    return secrets.compare_digest(query_candidate, expected)
+
+
+def _allow_ws_query_api_key() -> bool:
+    """Return True only when dual opt-in flags allow WebSocket query auth.
+
+    Security note:
+        Query-string API keys can leak through logs and browser history.
+        To reduce accidental exposure, enabling this mode requires both
+        ``VERITAS_ALLOW_WS_QUERY_API_KEY`` and
+        ``VERITAS_ACK_WS_QUERY_API_KEY_RISK``.
+    """
+    allow_raw = (os.getenv("VERITAS_ALLOW_WS_QUERY_API_KEY") or "").strip().lower()
+    allow_query_auth = allow_raw in {"1", "true", "yes", "on"}
+    if not allow_query_auth:
+        return False
+
+    ack_raw = (os.getenv("VERITAS_ACK_WS_QUERY_API_KEY_RISK") or "").strip().lower()
+    acknowledged = ack_raw in {"1", "true", "yes", "on"}
+    if not acknowledged:
+        logger.warning(
+            "WebSocket query api_key enable flag ignored because "
+            "VERITAS_ACK_WS_QUERY_API_KEY_RISK is not set. "
+            "Set both flags only for temporary migration windows.",
+        )
+        return False
+
+    return True
 
 
 # ---- HMAC signature / replay (optional) ----

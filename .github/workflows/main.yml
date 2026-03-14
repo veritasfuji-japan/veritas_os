@@ -13,6 +13,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
+
 # ============================================================
 # Lint & Security (fast-fail — テストより先に回す)
 # ============================================================
@@ -45,6 +48,14 @@ jobs:
 
       - name: httpx raw upload deprecation check
         run: python scripts/security/check_httpx_raw_upload_usage.py
+
+      - name: subprocess shell usage check
+        run: python scripts/security/check_subprocess_shell_usage.py
+
+      - name: replay pipeline-version unknown-rate check
+        run: |
+          python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
+            --max-unknown-rate 0.0
 
       - name: Bandit security scan
         run: |

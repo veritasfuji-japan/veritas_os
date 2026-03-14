@@ -7,6 +7,7 @@ import os
 import time
 import hmac
 import hashlib
+from types import SimpleNamespace
 
 # ★ テスト用APIキーを設定（認証付きエンドポイントのテスト用）
 # server import 前に設定して、起動時の警告を抑制
@@ -1711,6 +1712,56 @@ def test_events_rejects_query_api_key_without_risk_ack(monkeypatch):
             api_key=_TEST_API_KEY,
         )
     assert exc.value.status_code == 401
+
+
+def test_websocket_auth_prefers_header_api_key(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+
+    ws = SimpleNamespace(
+        headers={"X-API-Key": _TEST_API_KEY},
+        query_params={},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is True
+
+
+def test_websocket_auth_rejects_query_api_key_by_default(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.delenv("VERITAS_ALLOW_WS_QUERY_API_KEY", raising=False)
+    monkeypatch.delenv("VERITAS_ACK_WS_QUERY_API_KEY_RISK", raising=False)
+
+    ws = SimpleNamespace(
+        headers={},
+        query_params={"api_key": _TEST_API_KEY},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is False
+
+
+def test_websocket_auth_accepts_query_api_key_only_when_dual_flags_enabled(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_ALLOW_WS_QUERY_API_KEY", "1")
+    monkeypatch.setenv("VERITAS_ACK_WS_QUERY_API_KEY_RISK", "true")
+
+    ws = SimpleNamespace(
+        headers={},
+        query_params={"api_key": _TEST_API_KEY},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is True
+
+
+def test_websocket_auth_rejects_query_api_key_without_risk_ack(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_ALLOW_WS_QUERY_API_KEY", "1")
+    monkeypatch.delenv("VERITAS_ACK_WS_QUERY_API_KEY_RISK", raising=False)
+
+    ws = SimpleNamespace(
+        headers={},
+        query_params={"api_key": _TEST_API_KEY},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is False
 
 
 def test_decide_failure_publishes_sse_event(monkeypatch):
