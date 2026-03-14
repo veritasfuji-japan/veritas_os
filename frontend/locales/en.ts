@@ -14,6 +14,7 @@ export const en: Record<LocaleKey, string> = {
   noMessagesYet: "No messages yet.",
   chatRoleUser: "User",
   chatRoleAssistant: "Assistant",
+  chatRoleSystem: "System",
   messageLabel: "Message",
   messagePlaceholder: "Enter a message",
   dangerPresets: "Danger presets (for safety rejection checks)",
