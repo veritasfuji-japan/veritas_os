@@ -227,7 +227,12 @@ export function LiveEventStream(): JSX.Element {
             if (!dataLine) {
               continue;
             }
-            const parsed = toLiveEvent(JSON.parse(dataLine.slice(5).trim()));
+            let parsed: LiveEvent | null;
+            try {
+              parsed = toLiveEvent(JSON.parse(dataLine.slice(5).trim()));
+            } catch {
+              continue;
+            }
             if (!parsed) {
               continue;
             }
@@ -330,65 +335,57 @@ export function LiveEventStream(): JSX.Element {
             const isPinned = pinnedIds.has(event.id);
 
             return (
-              <a
+              <div
                 key={event.id}
-                href={link}
-                className="block rounded-lg border border-border/60 bg-background/70 p-3 transition-colors hover:bg-background"
+                className="rounded-lg border border-border/60 bg-background/70 p-3 transition-colors hover:bg-background"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className={["rounded border px-1.5 py-0.5 font-semibold", SEVERITY_STYLE[event.severity]].join(" ")}>
-                        {event.severity}
-                      </span>
-                      <span className={["rounded px-1.5 py-0.5 text-[10px] font-semibold", STAGE_STYLE[event.stage]].join(" ")}>
-                        {STAGE_LABEL[event.stage]}
-                      </span>
-                      <span className="font-semibold">{EVENT_TYPE_LABEL[event.type]}</span>
+                <a href={link} className="block">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className={["rounded border px-1.5 py-0.5 font-semibold", SEVERITY_STYLE[event.severity]].join(" ")}>
+                          {event.severity}
+                        </span>
+                        <span className={["rounded px-1.5 py-0.5 text-[10px] font-semibold", STAGE_STYLE[event.stage]].join(" ")}>
+                          {STAGE_LABEL[event.stage]}
+                        </span>
+                        <span className="font-semibold">{EVENT_TYPE_LABEL[event.type]}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{event.summary}</p>
+                      <p className="font-mono text-[10px] text-muted-foreground">
+                        request_id:{event.request_id} / decision_id:{event.decision_id}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">{event.summary}</p>
-                    <p className="font-mono text-[10px] text-muted-foreground">
-                      request_id:{event.request_id} / decision_id:{event.decision_id}
-                    </p>
+                    <div className="text-right text-[10px] text-muted-foreground">
+                      <p>Owner: {event.owner}</p>
+                      <p>{new Date(event.occurred_at).toLocaleTimeString()}</p>
+                    </div>
                   </div>
-                  <div className="text-right text-[10px] text-muted-foreground">
-                    <p>Owner: {event.owner}</p>
-                    <p>{new Date(event.occurred_at).toLocaleTimeString()}</p>
-                  </div>
-                </div>
+                </a>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
                   <button
                     type="button"
-                    onClick={(targetEvent) => {
-                      targetEvent.preventDefault();
-                      toggle(setAckedIds, event.id);
-                    }}
+                    onClick={() => toggle(setAckedIds, event.id)}
                     className="rounded border border-border px-2 py-1"
                   >
                     {isAcked ? "acknowledged" : "acknowledge"}
                   </button>
                   <button
                     type="button"
-                    onClick={(targetEvent) => {
-                      targetEvent.preventDefault();
-                      toggle(setMutedIds, event.id);
-                    }}
+                    onClick={() => toggle(setMutedIds, event.id)}
                     className="rounded border border-border px-2 py-1"
                   >
                     mute
                   </button>
                   <button
                     type="button"
-                    onClick={(targetEvent) => {
-                      targetEvent.preventDefault();
-                      toggle(setPinnedIds, event.id);
-                    }}
+                    onClick={() => toggle(setPinnedIds, event.id)}
                     className="rounded border border-border px-2 py-1"
                   >
                     {isPinned ? "pinned" : "pin"}
                   </button>
                 </div>
-              </a>
+              </div>
             );
           })
         )}

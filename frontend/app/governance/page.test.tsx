@@ -161,11 +161,11 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "apply" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument();
     });
 
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
-    expect(screen.getByRole("button", { name: "apply" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "適用" })).toBeDisabled();
     expect(screen.getByText("RBAC: apply/rollback は admin のみ実行可能です。")).toBeInTheDocument();
   });
 
@@ -188,11 +188,11 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "dry-run" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "ドライラン" })).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
-    fireEvent.click(screen.getByRole("button", { name: "dry-run" }));
+    fireEvent.click(screen.getByRole("button", { name: "ドライラン" }));
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent("Dry-run を完了しました。適用はされていません。");

@@ -1,5 +1,5 @@
 import { fireEvent, render } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import GlobalFatalErrorPage from "./global-error";
 
 function renderGlobalFatalErrorPage(error: Error, reset: () => void) {
@@ -18,6 +18,10 @@ function renderGlobalFatalErrorPage(error: Error, reset: () => void) {
 }
 
 describe("GlobalFatalErrorPage", () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, "language", { value: "ja", configurable: true });
+  });
+
   it("renders fatal fallback UI and calls reset on reload", () => {
     const consoleErrorSpy = vi
       .spyOn(console, "error")

@@ -1,10 +1,7 @@
 import type {
   AuditLevel,
-  AutoStop,
-  FujiRules,
   GovernancePolicy,
   GovernancePolicyResponse,
-  LogRetention,
   RiskThresholds,
   TrustLog,
 } from "@veritas/types";
