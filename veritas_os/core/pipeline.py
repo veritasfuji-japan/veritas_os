@@ -824,7 +824,12 @@ async def call_core_decide(
             return True
         except TypeError:
             return False
-        except Exception:
+        except Exception:  # subsystem resilience: intentionally broad
+            logger.debug(
+                "call_core_decide: bind_partial inspection failed for %r",
+                core_fn,
+                exc_info=True,
+            )
             return True
 
     p = _params(core_fn)
