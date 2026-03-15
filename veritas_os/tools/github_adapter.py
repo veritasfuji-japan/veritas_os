@@ -49,7 +49,7 @@ GITHUB_API_MAX_PER_PAGE = 100
 logger = logging.getLogger(__name__)
 
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-_RE_BIDI_CONTROL_CHARS = re.compile(r"[\u202A-\u202E\u2066-\u2069]")
+_RE_BIDI_CONTROL_CHARS = re.compile(r"[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]")
 _TRUSTED_GITHUB_HOSTS = {"github.com", "www.github.com"}
 _RE_REPO_PATH = re.compile(r"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$")
 _RESERVED_GITHUB_PATH_ROOTS = {

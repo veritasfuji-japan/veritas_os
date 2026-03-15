@@ -50,6 +50,10 @@ class EncryptionKeyMissing(RuntimeError):
     """Raised when encryption is required but no key is configured."""
 
 
+class DecryptionError(RuntimeError):
+    """Raised when decryption fails (fail-closed principle)."""
+
+
 # ---------------------------------------------------------------------------
 # Optional real AES backend
 # ---------------------------------------------------------------------------
@@ -124,11 +128,11 @@ def _xor_bytes(a: bytes, b: bytes) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def encrypt(plaintext: str, *, _allow_plaintext: bool = False) -> str:
+def encrypt(plaintext: str) -> str:
     """Encrypt a plaintext string.
 
-    If no key is configured and ``_allow_plaintext`` is False (default),
-    raises :class:`EncryptionKeyMissing` to enforce secure-by-default.
+    Raises :class:`EncryptionKeyMissing` when no key is configured
+    to enforce secure-by-default (fail-closed).
 
     Returns ``ENC:`` prefixed base64 ciphertext when a key is available.
     """
@@ -137,8 +141,6 @@ def encrypt(plaintext: str, *, _allow_plaintext: bool = False) -> str:
 
     key = _get_key_bytes()
     if key is None:
-        if _allow_plaintext:
-            return plaintext
         raise EncryptionKeyMissing(
             "VERITAS_ENCRYPTION_KEY is not set. "
             "TrustLog requires encryption. Set the environment variable or "
@@ -169,9 +171,10 @@ def decrypt(ciphertext: str) -> str:
         if _USE_REAL_AES:
             return _decrypt_aesgcm(ciphertext, key)
         return _decrypt_hmac_ctr(ciphertext, key)
-    except (ValueError, Exception):
-        logger.warning("Decryption failed for malformed ciphertext — returning original input")
-        return ciphertext
+    except (ValueError, TypeError, KeyError) as exc:
+        raise DecryptionError(
+            f"Decryption failed for malformed ciphertext: {exc}"
+        ) from exc
 
 
 # ---------------------------------------------------------------------------

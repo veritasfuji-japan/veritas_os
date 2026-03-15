@@ -181,14 +181,16 @@ class TestEncryption:
             else:
                 os.environ.pop("VERITAS_ENCRYPTION_KEY", None)
 
-    def test_decrypt_returns_input_for_invalid_base64_ciphertext(self) -> None:
-        """Malformed ciphertext should safely return the original input."""
+    def test_decrypt_raises_on_invalid_base64_ciphertext(self) -> None:
+        """Malformed ciphertext should raise DecryptionError (fail-closed)."""
+        from veritas_os.logging.encryption import DecryptionError
         key = generate_key()
         old = os.environ.get("VERITAS_ENCRYPTION_KEY")
         os.environ["VERITAS_ENCRYPTION_KEY"] = key
         try:
             malformed = "ENC:###"
-            assert decrypt(malformed) == malformed
+            with pytest.raises(DecryptionError):
+                decrypt(malformed)
         finally:
             if old is not None:
                 os.environ["VERITAS_ENCRYPTION_KEY"] = old

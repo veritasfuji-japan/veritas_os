@@ -306,20 +306,51 @@ risk = max(risk, 0.8)  # Line 762
 ## 7. 推奨改善ロードマップ
 
 ### Phase 1 (即座): Critical 修正
-1. 暗号化バイパス経路の封鎖 (`encryption.py`)
-2. TrustLog 暗号化強制検証の追加 (`trust_log.py`)
+1. ✅ **完了** 暗号化バイパス経路の封鎖 (`encryption.py`)
+   - `_allow_plaintext` パラメータを削除（暗号化バイパス経路の完全封鎖）
+   - 復号失敗時に `DecryptionError` を送出するよう変更（fail-closed 原則の適用）
+   - 平文返却パスを完全排除
+2. ✅ **完了** TrustLog 暗号化強制検証の追加 (`trust_log.py`)
+   - `_encrypt_line()` 後に `ENC:` プレフィクスの存在確認を追加
+   - 暗号化有効時に平文書き込みが検知された場合 `EncryptionKeyMissing` を送出
+   - `DecryptionError` を全復号パスで捕捉するよう更新
 
 ### Phase 2 (次回リリース): High 修正
-3. FUJI グローバル状態のスレッド安全化
-4. NaN/Inf 浮動小数点ガードの全モジュール適用
-5. 例外処理パターンの統一 (`pipeline_policy.py` 基準)
-6. セーフティヘッド障害ロギングの追加
-7. シンボリックリンクパストラバーサル防御
+3. ✅ **完了** FUJI グローバル状態のスレッド安全化
+   - `_PROMPT_INJECTION_PATTERNS` を immutable tuple に変更
+   - `_build_runtime_patterns_from_policy()` で atomic swap パターンを採用
+   - パターン読み取り中の書き換え競合を排除
+4. ✅ **完了** NaN/Inf 浮動小数点ガードの全モジュール適用
+   - `pipeline_policy.py`: `math.isfinite()` ガードを追加（fail-closed: NaN/Inf → risk=1.0）
+   - `fuji.py` `fuji_core_decide()`: risk_score の NaN/Inf チェックを追加
+   - `fuji.py` `_apply_policy()`: `risk_upper` の NaN/Inf チェックを追加
+5. ✅ **完了** 例外処理パターンの統一 (`pipeline_policy.py` 基準)
+   - `kernel.py`: `except Exception` → `(TypeError, ValueError, RuntimeError, OSError, AttributeError)`
+   - `pipeline_execute.py`: import 時の例外を `(ImportError, ModuleNotFoundError, AttributeError, TypeError)` に限定。LLM 呼び出しパスは `except Exception` を維持（`LLMError` 等の非標準例外に対するサブシステム耐障害性を確保）し、コメントで理由を明記
+   - `pipeline_persist.py`: audit/dataset 書き込みを `(OSError, RuntimeError, TypeError, ValueError, AttributeError, KeyError)` に限定。LLM/WorldModel 呼び出しパスは `except Exception` を維持し、コメントで理由を明記
+   - `pipeline.py`: web search の `except Exception` → `(RuntimeError, TypeError, ValueError, OSError, TimeoutError, ConnectionError)`
+   - **方針**: I/O 境界でない純粋ロジック部分は具体的例外タプルに絞り、外部サブシステム（LLM, WorldModel 等）を呼ぶ部分では `except Exception` を維持して非標準例外（`LLMError` 等）の漏れを防止
+6. ✅ **完了** セーフティヘッド障害ロギングの追加
+   - `fuji.py`: safety head 例外ハンドラに `_logger.error()` + `exc_info=True` を追加
+   - 運用監視で LLM→ヒューリスティクスフォールバックを検知可能に
+7. ✅ **完了** シンボリックリンクパストラバーサル防御
+   - `pipeline.py`: `REPO_ROOT` は `Path(__file__).resolve()` 経由で既に解決済みであることを確認・明文化
+   - `_enforce_path_policy()` の `relative_to()` チェックが安全に機能することを確認
 
 ### Phase 3 (継続改善): Medium + Low
-8. 型安全性の段階的強化
-9. テストの内部実装依存解消
-10. 暗号実装のモダナイズ (AES-GCM デフォルト化)
+8. ✅ **完了** 型安全性の段階的強化
+   - `kernel.py`: strategy scoring の `o.get("id")` に `isinstance(o, dict)` ガードを追加
+   - `pipeline_response.py`: `DecideResponse.model_validate()` で `pydantic.ValidationError` を捕捉
+   - `trust_log.py`: `verify_trust_log()` で `json.loads()` 結果の `isinstance(entry, dict)` チェックを追加
+9. 🔲 **未着手** テストの内部実装依存解消（段階的移行が必要なため今回のスコープ外）
+10. 🔲 **未着手** 暗号実装のモダナイズ — AES-GCM デフォルト化（`cryptography` パッケージ依存のため別タスク）
+
+### Phase 3 追加修正 (本レビューで実施)
+11. ✅ **完了** BIDI 制御文字カバレッジの拡張 (`github_adapter.py`)
+    - `_RE_BIDI_CONTROL_CHARS` に `\u061C` (ARABIC LETTER MARK), `\u200E` (LRM), `\u200F` (RLM) を追加
+12. ✅ **完了** Self-healing 無限ループガードの追加 (`pipeline_execute.py`)
+    - `while True` → `for _ in range(_MAX_HEALING_ITERATIONS)` に変更（上限: 20回）
+    - 最大反復到達時に `max_iterations_exceeded` 停止理由を設定
 
 ---
 
@@ -327,10 +358,12 @@ risk = max(risk, 0.8)  # Line 762
 
 VERITAS OS v2.0 は技術DD評価 82/100 (A-) にふさわしい堅牢な基盤を持つ。本レビューで特定した改善点は、既存のアーキテクチャ原則（fail-closed、kernel/pipeline 分離、hash-chain 不変性）を維持したまま適用可能な局所修正である。
 
-特に **暗号化バイパス経路** と **NaN/Inf 浮動小数点汚染** は、システムの fail-closed 原則と矛盾する箇所であり、整合性維持の観点から優先的に修正すべきである。
+**2026-03-15 改善実施結果**: Phase 1～Phase 3 の主要改善項目（12件中10件）を実施完了。特に **暗号化バイパス経路の完全封鎖** と **NaN/Inf 浮動小数点ガード** により、fail-closed 原則との整合性が全モジュールで確保された。未着手の2件（テスト内部実装依存解消、AES-GCM デフォルト化）は段階的移行が必要なため別タスクとして管理する。
 
 ---
 
 *レビュー実施日: 2026-03-15*
 *レビュー手法: 全ソースコード精読 + アーキテクチャ整合性検証*
 *対象バージョン: v2.0.0 (commit 9e395b5)*
+*改善実施日: 2026-03-15*
+*改善実施範囲: Phase 1 (Critical) + Phase 2 (High) + Phase 3 (Medium) 主要項目*
