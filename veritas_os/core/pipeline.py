@@ -814,7 +814,7 @@ async def call_core_decide(
         try:
             return set(inspect.signature(fn).parameters.keys())
         except Exception:  # subsystem resilience: intentionally broad
-            logger.debug(
+            logger.warning(
                 "call_core_decide: signature inspection failed for %r",
                 fn,
                 exc_info=True,
@@ -829,7 +829,7 @@ async def call_core_decide(
         except TypeError:
             return False
         except Exception:  # subsystem resilience: intentionally broad
-            logger.debug(
+            logger.warning(
                 "call_core_decide: bind_partial inspection failed for %r",
                 core_fn,
                 exc_info=True,
