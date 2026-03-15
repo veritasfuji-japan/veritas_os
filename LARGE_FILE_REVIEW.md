@@ -319,6 +319,62 @@ pipeline/
 3. **`core/fuji.py`** — 安全性に関わるコードは分離テストの恩恵が最大
 4. **`core/eu_ai_act_compliance_module.py`** — 規制関連コードは明確に分離すべき
 5. **`frontend/app/audit/page.tsx`** — 標準的なReactコンポーネント分割
-6. **`tools/web_search.py`** — セキュリティ上重要なSSRFロジックを分離すべき
-7. **`core/planner.py`** — JSON解析が支配的; 直接的な抽出が可能
+6. ~~**`tools/web_search.py`** — セキュリティ上重要なSSRFロジックを分離すべき~~ **完了**
+7. ~~**`core/planner.py`** — JSON解析が支配的; 直接的な抽出が可能~~ **完了**
 8. **`core/pipeline.py`** — 既にサブモジュールへの部分的委譲あり
+
+---
+
+## 実施済み改善 (2026-03-15)
+
+### 7. `core/planner.py` — JSON解析モジュール分離
+
+**変更内容:** JSON解析・救出ロジック（~274行）を `core/planner_json.py` に抽出
+
+| 項目 | 変更前 | 変更後 |
+|------|-------:|-------:|
+| `planner.py` | 1,407行 | 1,133行 |
+| `planner_json.py` | — | 304行 |
+
+**抽出した関数:**
+- `_truncate_json_extract_input()` — BOM/NUL除去、サイズ制限
+- `_safe_parse()` — dict/list/str 統一パーサ（fenced JSON対応）
+- `_safe_json_extract_core()` — LLM出力からのJSON救出エンジン（4段階フォールバック）
+- `_safe_json_extract()` — 後方互換ラッパー
+- 関連定数: `_MAX_JSON_EXTRACT_CHARS`, `_MAX_JSON_DECODE_ATTEMPTS` 等
+
+**後方互換性:** `planner.py` が `planner_json` から全シンボルを再インポートするため、既存のインポートパスは変更不要。
+
+---
+
+### 6. `tools/web_search.py` — SSRFセキュリティモジュール分離
+
+**変更内容:** SSRF/DNS rebinding防御ロジック（~214行）を `tools/web_search_security.py` に抽出
+
+| 項目 | 変更前 | 変更後 |
+|------|-------:|-------:|
+| `web_search.py` | 1,306行 | 1,120行 |
+| `web_search_security.py` | — | 294行 |
+
+**抽出した関数:**
+- `_sanitize_websearch_url()` — HTTPS強制、埋め込み資格情報禁止
+- `_extract_hostname()` / `_canonicalize_hostname()` — ホスト名正規化
+- `_is_obviously_private_or_local_host()` — 文字列ベースのプライベートホスト検出
+- `_resolve_host_infos()` — LRUキャッシュ付きDNS解決
+- `_is_private_or_local_host()` — DNS解決ベースのSSRF検出
+- `_resolve_public_ips_uncached()` — リクエスト時DNS解決（rebindingガード用）
+- `_extract_public_ips_for_url()` / `_validate_rebinding_guard()` — DNS rebinding防御
+- `_is_hostname_exact_or_subdomain()` — サブドメイン判定
+
+**後方互換性:** テストが `web_search_mod` 経由で monkeypatch するパターンに対応するため、`_is_allowed_websearch_url()` と `_validate_rebinding_guard()` は `web_search.py` にローカルラッパーとして維持。全107テスト（test_web_search.py: 45, test_web_search_extra.py: 62）パス。
+
+---
+
+### 改善効果サマリ
+
+| メトリクス | 変更前 | 変更後 | 削減率 |
+|-----------|-------:|-------:|-------:|
+| `planner.py` 行数 | 1,407 | 1,133 | -19.5% |
+| `web_search.py` 行数 | 1,306 | 1,120 | -14.2% |
+| セキュリティコード分離 | 未分離 | 独立モジュール | — |
+| JSON解析分離 | 未分離 | 独立モジュール | — |
