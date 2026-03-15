@@ -326,9 +326,10 @@ risk = max(risk, 0.8)  # Line 762
    - `fuji.py` `_apply_policy()`: `risk_upper` の NaN/Inf チェックを追加
 5. ✅ **完了** 例外処理パターンの統一 (`pipeline_policy.py` 基準)
    - `kernel.py`: `except Exception` → `(TypeError, ValueError, RuntimeError, OSError, AttributeError)`
-   - `pipeline_execute.py`: 3箇所の `except Exception` を具体的例外タプルに変更
-   - `pipeline_persist.py`: 6箇所の `except Exception` を操作固有の例外タプルに変更
+   - `pipeline_execute.py`: import 時の例外を `(ImportError, ModuleNotFoundError, AttributeError, TypeError)` に限定。LLM 呼び出しパスは `except Exception` を維持（`LLMError` 等の非標準例外に対するサブシステム耐障害性を確保）し、コメントで理由を明記
+   - `pipeline_persist.py`: audit/dataset 書き込みを `(OSError, RuntimeError, TypeError, ValueError, AttributeError, KeyError)` に限定。LLM/WorldModel 呼び出しパスは `except Exception` を維持し、コメントで理由を明記
    - `pipeline.py`: web search の `except Exception` → `(RuntimeError, TypeError, ValueError, OSError, TimeoutError, ConnectionError)`
+   - **方針**: I/O 境界でない純粋ロジック部分は具体的例外タプルに絞り、外部サブシステム（LLM, WorldModel 等）を呼ぶ部分では `except Exception` を維持して非標準例外（`LLMError` 等）の漏れを防止
 6. ✅ **完了** セーフティヘッド障害ロギングの追加
    - `fuji.py`: safety head 例外ハンドラに `_logger.error()` + `exc_info=True` を追加
    - 運用監視で LLM→ヒューリスティクスフォールバックを検知可能に

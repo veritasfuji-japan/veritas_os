@@ -262,7 +262,7 @@ def persist_reason_and_reflection(
                         stage_latency["llm"] = max(
                             0, int((time.time() - llm_stage_started_at) * 1000)
                         )
-        except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e2:
+        except Exception as e2:  # reason_core.generate_reason delegates to LLM; may raise LLMError etc.
             _warn(f"[ReasonOS] LLM reason failed: {e2}")
             tips = reflection.get("improvement_tips") or []
             payload["reason"] = {
@@ -279,7 +279,7 @@ def persist_reason_and_reflection(
                         stage_latency["llm"] = max(
                             0, int((time.time() - llm_stage_started_at) * 1000)
                         )
-    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
+    except Exception as e:  # ReasonOS delegates to LLM subsystems; must not crash decide
         _warn(f"[ReasonOS] final fallback failed: {e}")
         payload["reason"] = {"note": "reflection/LLM both failed"}
 
@@ -482,7 +482,7 @@ def persist_world_state(
                 latency_ms=int(latency_ms3) if isinstance(latency_ms3, (int, float)) else None,
             )
             _warn(f"[WorldModel] state updated for {uid_world}")
-    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
+    except Exception as e:  # world_model.update may raise arbitrary subsystem errors
         _warn(f"[WorldModel] update_from_decision skipped: {e}")
 
     # AGI hint
@@ -492,7 +492,7 @@ def persist_world_state(
             extras2 = payload.setdefault("extras", {})
             if isinstance(extras2, dict):
                 extras2["veritas_agi"] = agi_info
-    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
+    except Exception as e:  # world_model hint may raise arbitrary subsystem errors
         _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
 
 

@@ -83,7 +83,7 @@ async def stage_core_execute(
                 min_evidence=ctx.min_ev,
             )
             ctx.raw = raw0 if isinstance(raw0, dict) else {}
-        except (RuntimeError, TypeError, ValueError, OSError, AttributeError) as e:
+        except Exception as e:  # core_decide delegates to LLM subsystems that may raise LLMError etc.
             _warn(f"[decide] core error: {e}")
             ctx.raw = {}
 
@@ -187,7 +187,7 @@ async def stage_core_execute(
                     min_evidence=ctx.min_ev,
                 )
                 ctx.raw = raw0 if isinstance(raw0, dict) else {}
-            except (RuntimeError, TypeError, ValueError, OSError, AttributeError) as e:
+            except Exception as e:  # retry delegates to LLM subsystems that may raise LLMError etc.
                 _warn(f"[self_healing] retry failed: {repr(e)}")
                 ctx.healing_stop_reason = "retry_execution_failed"
                 self_healing.persist_healing_state(ctx.request_id, healing_state)

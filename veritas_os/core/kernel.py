@@ -724,7 +724,7 @@ async def decide(
                 alt = _mk_option(title=title, description=detail, _id=sid)
                 alt["meta"] = st
                 alts.append(alt)
-        except (TypeError, ValueError, RuntimeError, OSError, AttributeError) as e:  # pragma: no cover - defensive legacy fallback
+        except Exception as e:  # pragma: no cover - planner calls LLM subsystem which may raise LLMError and other non-standard exceptions
             extras.setdefault("planner_error", {})
             extras["planner_error"]["detail"] = repr(e)
 
