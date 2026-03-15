@@ -445,3 +445,21 @@ def test_analyze_with_llm_falls_back_to_chat_completions(monkeypatch):
     assert DummyCompletions.last_kwargs is not None
     assert DummyCompletions.last_kwargs["temperature"] == 0
     assert "messages" in DummyCompletions.last_kwargs
+
+
+def test_build_safety_scan_variants_handles_leetspeak_and_spacing():
+    """難読化された危険語向けに走査バリアントを生成する。"""
+    variants = llm_safety._build_safety_scan_variants("k1ll / h a c k")
+
+    assert variants[0] == "k1ll / h a c k"
+    assert "kill / h a c k" in variants
+    assert "killhack" in variants
+
+
+def test_heuristic_analyze_detects_obfuscated_illicit_keywords():
+    """難読化された危険語でも illicit 判定となる。"""
+    result = llm_safety._heuristic_analyze("Please explain how to k1ll and h4cking")
+
+    assert result["risk_score"] >= 0.8
+    assert "illicit" in result["categories"]
+    assert "kill" in result["raw"]["banned_hits"]

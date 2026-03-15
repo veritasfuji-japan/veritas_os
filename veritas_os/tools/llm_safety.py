@@ -141,6 +141,21 @@ _RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
 _RE_NAMEJP = re.compile(r'[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)')
 _RE_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 _MAX_PROMPT_TEXT_CHARS = 8000
+_LEETSPEAK_TRANSLATION = str.maketrans(
+    {
+        "0": "o",
+        "1": "i",
+        "3": "e",
+        "4": "a",
+        "5": "s",
+        "7": "t",
+        "8": "b",
+        "9": "g",
+        "@": "a",
+        "$": "s",
+        "!": "i",
+    }
+)
 
 
 def _sanitize_text_for_prompt(text: str, max_chars: int = _MAX_PROMPT_TEXT_CHARS) -> str:
@@ -166,6 +181,33 @@ def _norm(s: str) -> str:
     """Normalize text with NFKC Unicode normalization for confusable character detection."""
     t = unicodedata.normalize("NFKC", s or "")
     return t.replace("　", " ").strip().casefold()
+
+
+def _build_safety_scan_variants(text: str) -> list[str]:
+    """Build obfuscation-resistant variants for deterministic safety scanning.
+
+    The first element is always the canonical NFKC-normalized text. Extra
+    variants target adversarial prompts such as ``k1ll``, ``k.i.l.l``, and
+    character-spaced keywords.
+
+    Args:
+        text: User supplied content.
+
+    Returns:
+        Ordered unique variants used by keyword and regex checks.
+    """
+    base = _norm(text)
+    variants: list[str] = [base]
+
+    leet = base.translate(_LEETSPEAK_TRANSLATION)
+    if leet not in variants:
+        variants.append(leet)
+
+    compact = re.sub(r"[^a-z0-9\u3040-\u30ff\u3400-\u9fff]+", "", leet)
+    if compact and compact not in variants:
+        variants.append(compact)
+
+    return variants
 
 
 def _normalize_categories(categories: list[Any], max_categories: int) -> list[str]:
@@ -215,21 +257,25 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
     - 正規表現ベースの複合パターンマッチ
     - カテゴリ別リスク設定
     """
-    t = _norm(text)
+    scan_variants = _build_safety_scan_variants(text)
+    t = scan_variants[0]
     categories: List[str] = []
     risk = 0.05
     reasons: List[str] = []
 
     # --- Keyword matching (NFKC-normalized, casefold) ---
     # English single words: word-boundary regex to avoid false positives
-    hits_b: List[str] = _BANNED_EN_WORD_RE.findall(t)
-    # English multi-word phrases + Japanese: substring match (safe)
-    hits_b += [w for w in _BANNED_EN_PHRASES if w in t]
-    hits_b += [w for w in _BANNED_JP if w in t]
+    hits_b: List[str] = []
+    hits_s: List[str] = []
+    for variant in scan_variants:
+        hits_b += _BANNED_EN_WORD_RE.findall(variant)
+        # English multi-word phrases + Japanese: substring match (safe)
+        hits_b += [w for w in _BANNED_EN_PHRASES if w in variant]
+        hits_b += [w for w in _BANNED_JP if w in variant]
 
-    hits_s: List[str] = _SENSITIVE_EN_WORD_RE.findall(t)
-    hits_s += [w for w in _SENSITIVE_EN_PHRASES if w in t]
-    hits_s += [w for w in _SENSITIVE_JP if w in t]
+        hits_s += _SENSITIVE_EN_WORD_RE.findall(variant)
+        hits_s += [w for w in _SENSITIVE_EN_PHRASES if w in variant]
+        hits_s += [w for w in _SENSITIVE_JP if w in variant]
 
     if hits_b or hits_s:
         categories.append("illicit")
@@ -242,7 +288,7 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
     # Always search the NFKC-normalized text to ensure consistent matching
     compound_hits: List[str] = []
     for pattern, cat, label in _COMPOUND_PATTERNS:
-        if pattern.search(t) or pattern.search(text):
+        if pattern.search(text) or any(pattern.search(v) for v in scan_variants):
             compound_hits.append(label)
             if cat not in categories:
                 categories.append(cat)
