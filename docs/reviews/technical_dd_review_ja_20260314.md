@@ -145,6 +145,7 @@
 - ✅ #11 対応: STRIDE/LINDDUN ベースの脅威モデル文書 `docs/reviews/THREAT_MODEL_STRIDE_LINDDUN_20260314.md` を追加し、資産・境界・脅威・優先対策・運用ルールを明文化。
 - ✅ #12 対応: Secret 管理を Vault/KMS 前提に統合するため、`VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1` 時は `VERITAS_SECRET_PROVIDER`（`vault` / `aws_secrets_manager` / `gcp_secret_manager` / `azure_key_vault` / `kms`）と `VERITAS_API_SECRET_REF` を必須化し、未設定・不正値・ランタイム注入失敗時は起動検証で fail-closed（`ValueError`）となるよう強化。
 - ✅ #13 対応: TrustLog エントリへ `_data_classification`（schema_version/contains_pii/contains_secret/fields）を追加し、`request_id` 等の識別子・PII・secret を項目単位で自動分類して監査証跡へ記録するよう改善。
+- ✅ #14 対応: 分散ロック/認証ストア一貫性の **chaos テスト** を追加（`veritas_os/tests/test_auth_store_consistency_chaos.py`）。共有 Redis 相当バックエンドを模擬し、ワーカー跨ぎ nonce 再利用拒否・分散レート制限の整合性・障害時 fail-open/fail-closed ポリシーを検証。
 
 ## 17. Final Verdict
 - **B. serious engineering foundation**
