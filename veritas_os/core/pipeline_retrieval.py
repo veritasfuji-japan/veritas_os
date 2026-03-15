@@ -157,6 +157,7 @@ def stage_memory_retrieval(
                 pass
 
         except Exception as e:  # subsystem resilience: intentionally broad
+            logger.exception("memory retrieval failed in stage_memory_retrieval")
             _warn(f"[AGI-Retrieval] memory retrieval error: {repr(e)}")
             ctx.response_extras.setdefault("env_tools", {})
             ctx.response_extras["env_tools"]["memory_error"] = repr(e)
@@ -237,6 +238,7 @@ async def stage_web_search_async(
             ws0 = await _safe_web_search(ctx.query, max_results=web_max)
             ws = _normalize_web_payload(ws0)
         except Exception as e:  # subsystem resilience: intentionally broad
+            logger.exception("web search execution failed in stage_web_search_async")
             ctx.response_extras.setdefault("env_tools", {})
             if isinstance(ctx.response_extras["env_tools"], dict):
                 ctx.response_extras["env_tools"]["web_search_error"] = repr(e)

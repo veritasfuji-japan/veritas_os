@@ -178,10 +178,21 @@
 | 9 | ガバナンス経路バイパス | **解消**: デフォルト 403 拒否 | Low |
 | 10 | 分散 fallback 一貫性 | **改善**: chaos テスト追加。実環境検証は残存 | Med |
 
+
+### 追加改善（2026-03-15 実施）
+
+Critical Risks の優先度（Med-High → Med → Low-Med）に沿って、以下を実装した。
+
+1. **#6 外部検索の毒性検証（最優先）**: `web_search.py` に retrieval poisoning / prompt injection 文字列ヒューリスティックを追加し、疑わしい検索結果を自動除外。`meta` に `toxicity_filter_applied` と `toxicity_blocked_count` を追加して監査可能化。
+2. **#2 広域例外の可観測性不足**: `pipeline_retrieval.py` の意図的 broad exception に `logger.exception(...)` を追加し、握りつぶしではなくスタックトレース付きで運用観測できるよう改善。
+3. **#3/運用安全補強**: 毒性フィルタは `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER=0` でのみ無効化可能とし、デフォルト fail-closed（有効）を維持。
+
+> セキュリティ注意: 毒性フィルタはヒューリスティックであり、adversarial retrieval attack を完全防御するものではない。高保証運用では allowlist ソース制限・引用検証・人手承認を併用すべき。
+
 ### 新規・残存 Critical Risks
 
 1. **LLM 応答の非決定性**（構造的制約）: モデルバージョン検証は入ったが、同一バージョンでも温度 0 で微差が出る可能性あり。Replay は「高再現性再実行 + 差分検知」として位置付けるのが正確。
-2. **外部 Web 検索結果の毒性フィルタ**: 体系的な入力毒性検証（adversarial retrieval augmentation attack）への対応が限定的。
+2. **外部 Web 検索結果の毒性フィルタ**: ヒューリスティック除外は実装済みだが、体系的な入力毒性検証（adversarial retrieval augmentation attack）としては依然限定的。
 3. **pipeline.py の広域 except Exception**: 意図的設計だが、予期しない例外の握りつぶしリスクは残存。段階的な Structured logging 強化が望ましい。
 4. **実環境分散一貫性**: chaos テストはモック環境。実 Redis/分散ストア障害時の挙動は本番検証が必要。
 5. **Multi-tenant RBAC の成熟度**: `X-Role` ヘッダーベースの簡易実装。本格的な IdP 連携/JWT 検証/スコープ管理は今後の課題。
