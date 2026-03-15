@@ -42,6 +42,8 @@ export function useDecide({
   const activeControllerRef = useRef<AbortController | null>(null);
   const requestSequenceRef = useRef(0);
   const latestRequestIdRef = useRef(0);
+  const messageIdRef = useRef(0);
+  const nextMessageId = (): number => ++messageIdRef.current;
 
   useEffect(() => {
     return () => {
@@ -59,7 +61,7 @@ export function useDecide({
       return;
     }
 
-    setChatMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: queryToUse }]);
+    setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "user", content: queryToUse }]);
     activeControllerRef.current?.abort();
     const controller = new AbortController();
     activeControllerRef.current = controller;
@@ -94,7 +96,7 @@ export function useDecide({
         setChatMessages((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: nextMessageId(),
             role: "assistant",
             content: tk("authErrorAssistant"),
           },
@@ -109,7 +111,7 @@ export function useDecide({
         setChatMessages((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: nextMessageId(),
             role: "assistant",
             content: tk("serviceUnavailableAssistant"),
           },
