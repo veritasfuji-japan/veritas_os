@@ -65,6 +65,7 @@ from veritas_os.compliance.report_engine import (
     generate_eu_ai_act_report,
     generate_internal_governance_report,
 )
+from veritas_os.reporting.exporters import build_w3c_prov_document
 from veritas_os.replay.replay_engine import run_replay
 from veritas_os.api.constants import (
     DECISION_ALLOW,
@@ -3189,11 +3190,127 @@ def trustlog_export() -> Dict[str, Any]:
         )
 
 
+@app.get("/v1/trust/{request_id}/prov", dependencies=[Depends(require_api_key), Depends(enforce_rate_limit)])
+def trust_prov_export(request_id: str) -> Dict[str, Any]:
+    """Export one decision trace as W3C PROV JSON for external audit tooling."""
+    try:
+        entries = get_trust_logs_by_request(request_id)
+        if not entries:
+            return JSONResponse(
+                status_code=404,
+                content={"ok": False, "error": "trust trace not found"},
+            )
+
+        latest = entries[-1]
+        prov = build_w3c_prov_document(
+            request_id=request_id,
+            decision_status=str(latest.get("decision_status") or latest.get("status") or "unknown"),
+            risk=_parse_risk_from_trust_entry(latest),
+            timestamp=str(latest.get("ts") or latest.get("timestamp") or utc_now_iso_z()),
+            actor=_prov_actor_for_entry(latest),
+        )
+        return {"ok": True, "request_id": request_id, "prov": prov}
+    except Exception as e:
+        logger.error("trust_prov_export failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to export PROV trace"},
+        )
+
+
+
+def _governance_rbac_enabled() -> bool:
+    """Return True when governance RBAC/ABAC guard is enabled."""
+    return (os.getenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "1").strip().lower()
+            not in {"0", "false", "no", "off"})
+
+
+def _resolve_governance_allowed_roles() -> set[str]:
+    """Resolve allowed governance roles from env or safe defaults."""
+    raw = (os.getenv("VERITAS_GOVERNANCE_ALLOWED_ROLES") or "admin,compliance_owner").strip()
+    roles = {item.strip().lower() for item in raw.split(",") if item.strip()}
+    return roles or {"admin", "compliance_owner"}
+
+
+def require_governance_access(
+    x_role: Optional[str] = Header(default=None, alias="X-Role"),
+    x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-Id"),
+) -> bool:
+    """Enforce governance RBAC/ABAC constraints for admin endpoints.
+
+    Security warning:
+        If ``VERITAS_GOVERNANCE_ENFORCE_RBAC=0`` this guard is disabled and
+        governance APIs rely only on API-key authentication.
+    """
+    if not _governance_rbac_enabled():
+        logger.warning(
+            "SECURITY WARNING: governance RBAC/ABAC is disabled by "
+            "VERITAS_GOVERNANCE_ENFORCE_RBAC=0"
+        )
+        return True
+
+    role = (x_role or "").strip().lower()
+    if role not in _resolve_governance_allowed_roles():
+        raise HTTPException(status_code=403, detail="Insufficient governance role")
+
+    expected_tenant = (os.getenv("VERITAS_GOVERNANCE_TENANT_ID") or "").strip()
+    if expected_tenant and (x_tenant_id or "").strip() != expected_tenant:
+        raise HTTPException(status_code=403, detail="Tenant scope mismatch")
+
+    return True
+
+
+def _emit_governance_change_alert(previous: Dict[str, Any], updated: Dict[str, Any]) -> None:
+    """Emit a realtime alert event when high-impact governance settings change."""
+    critical_keys = ("fuji_rules", "risk_thresholds", "auto_stop")
+    changed = [key for key in critical_keys if previous.get(key) != updated.get(key)]
+    if not changed:
+        return
+
+    _publish_event(
+        "governance.alert",
+        {
+            "severity": "high",
+            "changed_fields": changed,
+            "updated_by": updated.get("updated_by", "api"),
+        },
+    )
+
+
+def _parse_risk_from_trust_entry(entry: Dict[str, Any]) -> float | None:
+    """Extract risk score from trust-log payload in a backward compatible way."""
+    if not isinstance(entry, dict):
+        return None
+
+    candidates = (
+        entry.get("risk"),
+        (entry.get("gate") or {}).get("risk") if isinstance(entry.get("gate"), dict) else None,
+        (entry.get("fuji") or {}).get("risk") if isinstance(entry.get("fuji"), dict) else None,
+    )
+    for item in candidates:
+        try:
+            if item is None:
+                continue
+            return float(item)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _prov_actor_for_entry(entry: Dict[str, Any]) -> str:
+    """Resolve PROV agent label from trust entry metadata."""
+    for key in ("updated_by", "actor", "user_id", "request_user_id"):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return "veritas_api"
+
+
 # ==============================
 # Governance Policy API
 # ==============================
 
-@app.get("/v1/governance/value-drift", dependencies=[Depends(require_api_key)])
+@app.get("/v1/governance/value-drift", dependencies=[Depends(require_api_key), Depends(require_governance_access)])
 def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le=1.0)):
     """Return ValueCore drift metrics against a Telos baseline."""
     try:
@@ -3207,7 +3324,7 @@ def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le
         )
 
 
-@app.get("/v1/governance/policy", dependencies=[Depends(require_api_key)])
+@app.get("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(require_governance_access)])
 def governance_get():
     """Return the current governance policy."""
     try:
@@ -3221,16 +3338,18 @@ def governance_get():
         )
 
 
-@app.put("/v1/governance/policy", dependencies=[Depends(require_api_key)])
+@app.put("/v1/governance/policy", dependencies=[Depends(require_api_key), Depends(require_governance_access)])
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     try:
         enforce_four_eyes_approval(body)
+        previous = get_policy()
         updated = update_policy(body)
         _publish_event(
             "governance.updated",
             {"updated_by": updated.get("updated_by", "api")},
         )
+        _emit_governance_change_alert(previous=previous, updated=updated)
         return {"ok": True, "policy": updated}
     except PermissionError as e:
         logger.warning("governance_put rejected: %s", e)
@@ -3246,7 +3365,7 @@ def governance_put(body: dict):
         )
 
 
-@app.get("/v1/governance/policy/history", dependencies=[Depends(require_api_key)])
+@app.get("/v1/governance/policy/history", dependencies=[Depends(require_api_key), Depends(require_governance_access)])
 def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
     """Return recent governance policy change history (newest first).
 

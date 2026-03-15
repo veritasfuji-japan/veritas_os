@@ -14,7 +14,7 @@ from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
 
 client = TestClient(srv.app)
-HEADERS = {"X-API-Key": "test-governance-key"}
+HEADERS = {"X-API-Key": "test-governance-key", "X-Role": "admin"}
 
 
 def _approved(payload: dict | None = None) -> dict:
@@ -344,3 +344,22 @@ class TestFujiValidateErrorPaths:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "error"
+
+
+
+def test_get_rejects_without_governance_role() -> None:
+    """Governance API should reject requests without RBAC role header."""
+    resp = client.get("/v1/governance/policy", headers={"X-API-Key": "test-governance-key"})
+    assert resp.status_code == 403
+
+
+def test_put_rejects_tenant_mismatch(monkeypatch) -> None:
+    """Governance API should enforce tenant ABAC when configured."""
+    monkeypatch.setenv("VERITAS_GOVERNANCE_TENANT_ID", "tenant-a")
+    headers = {"X-API-Key": "test-governance-key", "X-Role": "admin", "X-Tenant-Id": "tenant-b"}
+    resp = client.put(
+        "/v1/governance/policy",
+        headers=headers,
+        json=_approved({"fuji_rules": {"pii_check": False}}),
+    )
+    assert resp.status_code == 403

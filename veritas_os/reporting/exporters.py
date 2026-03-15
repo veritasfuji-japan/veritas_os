@@ -9,6 +9,68 @@ from typing import Any, Dict
 from veritas_os.core.atomic_io import atomic_write_json
 
 
+def build_w3c_prov_document(
+    *,
+    request_id: str,
+    decision_status: str,
+    risk: float | None,
+    timestamp: str,
+    actor: str,
+    source: str = "veritas_os.pipeline",
+) -> Dict[str, Any]:
+    """Build a compact W3C PROV JSON document for one decision trace.
+
+    The output follows PROV-JSON style keys so audit systems can ingest the
+    decision lineage without binding to internal VERITAS schemas.
+    """
+    risk_value = 0.0 if risk is None else max(0.0, min(1.0, float(risk)))
+    activity_id = f"activity:decision:{request_id}"
+    entity_id = f"entity:decision:{request_id}"
+    agent_id = f"agent:{actor or 'unknown'}"
+
+    return {
+        "prefix": {
+            "prov": "http://www.w3.org/ns/prov#",
+            "veritas": "https://veritas-os.example/ns#",
+        },
+        "entity": {
+            entity_id: {
+                "prov:type": "veritas:Decision",
+                "veritas:request_id": request_id,
+                "veritas:decision_status": decision_status,
+                "veritas:risk": risk_value,
+                "prov:generatedAtTime": timestamp,
+                "veritas:source": source,
+            }
+        },
+        "activity": {
+            activity_id: {
+                "prov:type": "veritas:DecisionEvaluation",
+                "prov:startedAtTime": timestamp,
+                "prov:endedAtTime": timestamp,
+            }
+        },
+        "agent": {
+            agent_id: {
+                "prov:type": "prov:SoftwareAgent",
+                "prov:label": actor,
+            }
+        },
+        "wasGeneratedBy": {
+            f"wgb:{request_id}": {
+                "prov:entity": entity_id,
+                "prov:activity": activity_id,
+            }
+        },
+        "wasAssociatedWith": {
+            f"waw:{request_id}": {
+                "prov:activity": activity_id,
+                "prov:agent": agent_id,
+            }
+        },
+    }
+
+
 def _escape_pdf_text(value: str) -> str:
     """Escape PDF text operators for literal text rendering."""
     return (

@@ -277,6 +277,62 @@ def _parse_target_suffix(argv: List[str]) -> str:
     return target_suffix
 
 
+
+
+def _parse_risk_weights(argv: List[str]) -> Dict[str, float]:
+    """Parse optional risk weight JSON file.
+
+    The file should map owner names to weights in ``[0.0, 1.0]``.
+    Unknown/invalid entries are ignored for fail-safe operation.
+    """
+    if "--risk-weights" not in argv:
+        return {}
+
+    try:
+        idx = argv.index("--risk-weights")
+        path = Path(argv[idx + 1].strip())
+    except (ValueError, IndexError, AttributeError):
+        _eprint("[coverage_map_pipeline] invalid --risk-weights usage")
+        return {}
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as err:
+        _eprint(f"[coverage_map_pipeline] failed to parse risk weights: {repr(err)[:120]}")
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    out: Dict[str, float] = {}
+    for key, value in payload.items():
+        if not isinstance(key, str):
+            continue
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            continue
+        out[key] = max(0.0, min(1.0, v))
+    return out
+
+
+def _compute_weighted_gap(by_owner: Dict[str, List[int]], risk_weights: Dict[str, float]) -> float:
+    """Compute risk-weighted uncovered-line ratio from owner-level missing lines."""
+    if not by_owner:
+        return 0.0
+
+    weighted_missing = 0.0
+    weighted_total = 0.0
+    for owner_name, lines in by_owner.items():
+        line_count = float(len(set(lines)))
+        weight = float(risk_weights.get(owner_name, 0.5))
+        weighted_missing += line_count * weight
+        weighted_total += line_count
+
+    if weighted_total <= 0.0:
+        return 0.0
+    return weighted_missing / weighted_total
+
 # =========================================================
 # Main
 # =========================================================
@@ -290,6 +346,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     """
     argv = argv or sys.argv[1:]
     target_suffix = _parse_target_suffix(argv)
+    risk_weights = _parse_risk_weights(argv)
 
     cov = load_cov()
     if not cov:
@@ -363,6 +420,10 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"- {name}: {len(uniq)} lines  [{_preview_ints(uniq)}]")
     else:
         print("[top owners] (none)")
+
+    if risk_weights:
+        weighted_gap = _compute_weighted_gap(by_owner=by_owner, risk_weights=risk_weights)
+        print(f"\n[pipeline] risk_weighted_missing_ratio={weighted_gap:.3f}")
 
     # Missing exit arcs
     exits = _exit_arcs(missing_branches)
