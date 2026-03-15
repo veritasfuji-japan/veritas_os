@@ -38,6 +38,18 @@ import unicodedata
 
 _logger = logging.getLogger(__name__)
 
+# =========================================================
+# リスク閾値定数（FujiConfig で一元管理）
+# =========================================================
+RISK_BASELINE = 0.05  # 安全テキストのベースラインリスク
+RISK_FLOOR_PII = 0.35  # PII 検出時の最低リスク
+RISK_FLOOR_PII_UNMASKED = 0.50  # PII 未マスク時の最低リスク
+RISK_FLOOR_ILLICIT = 0.70  # illicit 検出時の最低リスク (deny 閾値)
+RISK_FLOOR_ILLICIT_HEURISTIC = 0.80  # illicit キーワードヒューリスティクス検出時
+RISK_FLOOR_SELF_HARM = 0.80  # self_harm 検出時の最低リスク
+RISK_FLOOR_FLAG = 0.20  # uncertainty/evidence 不足時のフラグリスク
+RISK_DENY_THRESHOLD = 0.70  # deny 判定の閾値
+
 from .types import (
     FujiInternalStatus,
     FujiDecisionStatus,
@@ -417,7 +429,7 @@ def _is_high_risk_context(*, risk: float, stakes: float, categories: List[str], 
     """
     if stakes >= 0.7:
         return True
-    if risk >= 0.7:
+    if risk >= RISK_DENY_THRESHOLD:
         return True
 
     cats = {str(c).strip().lower() for c in (categories or [])}
@@ -754,14 +766,14 @@ def _check_policy_hot_reload() -> None:
 def _fallback_safety_head(text: str) -> SafetyHeadResult:
     t = _normalize_text(text)
     categories: List[str] = []
-    risk = 0.05
+    risk = RISK_BASELINE
     rationale_parts: List[str] = []
 
     hard_block, sensitive = _policy_blocked_keywords(POLICY)
     hits = [w for w in hard_block if w in t] + [w for w in sensitive if w in t]
     if hits:
         categories.append("illicit")
-        risk = max(risk, 0.8)
+        risk = max(risk, RISK_FLOOR_ILLICIT_HEURISTIC)
         rationale_parts.append(f"危険・違法系キーワード検出: {', '.join(sorted(set(hits)))}")
 
     pii_hits: List[str] = []
@@ -775,7 +787,7 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
     # person_name_jp は誤検出が多いので PII 判定に使わない
     if pii_hits:
         categories.append("PII")
-        risk = max(risk, 0.35)
+        risk = max(risk, RISK_FLOOR_PII)
         rationale_parts.append(f"PII パターン検出: {', '.join(pii_hits)}")
 
     if not categories:
@@ -1025,11 +1037,11 @@ def fuji_core_decide(
     # ★ 安全なアクセス: categories と risk_score
     categories = list(safety_head.categories or []) if safety_head.categories else []
     try:
-        risk = float(safety_head.risk_score) if safety_head.risk_score is not None else 0.05
+        risk = float(safety_head.risk_score) if safety_head.risk_score is not None else RISK_BASELINE
         if not math.isfinite(risk):
             risk = 1.0  # fail-closed: NaN/Inf は最大リスクとして扱う
     except (TypeError, ValueError):
-        risk = 0.05
+        risk = RISK_BASELINE
     base_reasons: List[str] = []
     guidance = safety_head.rationale or ""
 
@@ -1086,22 +1098,22 @@ def fuji_core_decide(
     _det_reasons: List[str] = []
 
     if "illicit" in categories:
-        # deterministic rule で illicit 検出 → risk >= 0.70 (deny 閾値到達)
-        if risk < 0.70:
-            risk = 0.70
-            _det_reasons.append("deterministic_illicit_floor=0.70")
+        # deterministic rule で illicit 検出 → risk >= RISK_FLOOR_ILLICIT (deny 閾値到達)
+        if risk < RISK_FLOOR_ILLICIT:
+            risk = RISK_FLOOR_ILLICIT
+            _det_reasons.append(f"deterministic_illicit_floor={RISK_FLOOR_ILLICIT}")
 
     if "self_harm" in categories:
-        # self_harm 検出 → risk >= 0.80
-        if risk < 0.80:
-            risk = 0.80
-            _det_reasons.append("deterministic_self_harm_floor=0.80")
+        # self_harm 検出 → risk >= RISK_FLOOR_SELF_HARM
+        if risk < RISK_FLOOR_SELF_HARM:
+            risk = RISK_FLOOR_SELF_HARM
+            _det_reasons.append(f"deterministic_self_harm_floor={RISK_FLOOR_SELF_HARM}")
 
     if "PII" in categories and not safe_applied:
-        # PII 検出 (未マスク時) → risk >= 0.50
-        if risk < 0.50:
-            risk = 0.50
-            _det_reasons.append("deterministic_pii_floor=0.50")
+        # PII 検出 (未マスク時) → risk >= RISK_FLOOR_PII_UNMASKED
+        if risk < RISK_FLOOR_PII_UNMASKED:
+            risk = RISK_FLOOR_PII_UNMASKED
+            _det_reasons.append(f"deterministic_pii_floor={RISK_FLOOR_PII_UNMASKED}")
 
     # LLM unavailable penalty: only when deterministic layer detected risk signals
     # (categories present besides safety_head_error/low_evidence).
@@ -1578,12 +1590,12 @@ def posthoc_check(
     if unc >= max_uncertainty:
         status = "flag"
         reasons.append(f"high_uncertainty({unc:.2f})")
-        risk = max(risk, 0.2)
+        risk = max(risk, RISK_FLOOR_FLAG)
 
     if len(ev) < int(min_evidence):
         status = "flag"
         reasons.append(f"insufficient_evidence({len(ev)}/{min_evidence})")
-        risk = max(risk, 0.2)
+        risk = max(risk, RISK_FLOOR_FLAG)
 
     return {
         "status": status,

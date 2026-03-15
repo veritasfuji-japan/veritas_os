@@ -348,6 +348,9 @@ class MemoryStore:
                         item = json.loads(line)
                         if item.get("id") == item_id:
                             found[item_id] = item
+                        else:
+                            # オフセット不整合（ファイルローテーション等）→ リニアスキャンにフォールバック
+                            ids_without_offset.append(item_id)
                     except (json.JSONDecodeError, OSError):
                         ids_without_offset.append(item_id)  # フォールバック対象に追加
 
