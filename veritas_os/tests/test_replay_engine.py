@@ -50,6 +50,7 @@ async def test_run_replay_strict_mode_skips_tools_and_matches(monkeypatch, tmp_p
         "request_id": "dec-100",
         "query": "hello",
         "deterministic_replay": {
+            "model_version": "gpt-5-thinking",
             "seed": 42,
             "temperature": 0,
             "request_body": {"query": "hello", "context": {"user_id": "u1"}},
@@ -97,6 +98,7 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
         "request_id": "dec-200",
         "query": "hello",
         "deterministic_replay": {
+            "model_version": "gpt-5-thinking",
             "external_dependency_versions": {
                 "python_version": "3.12.0",
                 "platform": "linux-x",
@@ -123,6 +125,7 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
     monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
     monkeypatch.setattr(replay_engine.pipeline, "run_decide_pipeline", _fake_run)
     monkeypatch.setattr(replay_engine.pipeline, "REPLAY_REPORT_DIR", tmp_path)
+    monkeypatch.setenv("VERITAS_MODEL_NAME", "gpt-5-thinking")
 
     result = await replay_engine.run_replay("dec-200", strict=False)
 
@@ -192,6 +195,30 @@ async def test_run_replay_rejects_retrieval_checksum_mismatch(monkeypatch, tmp_p
 
     with pytest.raises(ValueError, match="replay_retrieval_snapshot_checksum_mismatch"):
         await replay_engine.run_replay("dec-301", strict=True)
+
+
+@pytest.mark.asyncio
+async def test_run_replay_rejects_missing_model_version_by_default(
+    monkeypatch, tmp_path: Path,
+) -> None:
+    snapshot = {
+        "request_id": "dec-302",
+        "query": "hello",
+        "deterministic_replay": {
+            "request_body": {"query": "hello", "context": {}},
+            "final_output": {},
+        },
+    }
+
+    async def _fake_run(_req, _request):
+        return {}
+
+    monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
+    monkeypatch.setattr(replay_engine.pipeline, "run_decide_pipeline", _fake_run)
+    monkeypatch.setattr(replay_engine.pipeline, "REPLAY_REPORT_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="replay_model_version_missing"):
+        await replay_engine.run_replay("dec-302", strict=True)
 
 
 def test_normalize_external_dependency_evidence_handles_invalid_shape() -> None:

@@ -47,6 +47,7 @@ import os
 import random  # nosec B311 - jitter for retry backoff, not security-sensitive
 import re
 import time
+import base64
 import ipaddress
 import socket
 from functools import lru_cache
@@ -797,14 +798,55 @@ def _is_toxic_result(title: str, snippet: str, url: str) -> bool:
         suspicious instruction-like payloads in external search snippets.
         It should not be treated as a complete defense against RAG poisoning.
     """
-    text = f"{title}\n{snippet}\n{url}".lower()
+    raw_text = f"{title}\n{snippet}\n{url}"
+    text = raw_text.lower()
     if any(pattern.search(text) for pattern in TOXICITY_PATTERNS):
         return True
 
     compact_text = re.sub(r"[^a-z0-9]+", "", text.translate(LEETSPEAK_TRANSLATION))
     if any(marker in compact_text for marker in TOXICITY_COMPACT_MARKERS):
         return True
-    return any(pattern.search(compact_text) for pattern in TOXICITY_COMPACT_PATTERNS)
+    if any(pattern.search(compact_text) for pattern in TOXICITY_COMPACT_PATTERNS):
+        return True
+    return _contains_toxic_base64_payload(raw_text)
+
+
+def _contains_toxic_base64_payload(text: str) -> bool:
+    """Return True when base64-like payload decodes to toxic instructions.
+
+    Security note:
+        Prompt-injection payloads in search snippets are often obfuscated with
+        base64. We decode only bounded ASCII tokens and then re-apply the same
+        compact toxicity markers to reduce bypass risk while keeping CPU/memory
+        usage bounded.
+    """
+    candidates = re.findall(r"[A-Za-z0-9+/=_-]{24,}", text)
+    if not candidates:
+        return False
+
+    for token in candidates[:8]:
+        normalized = token.replace("-", "+").replace("_", "/")
+        padding = "=" * ((4 - len(normalized) % 4) % 4)
+        try:
+            decoded = base64.b64decode((normalized + padding).encode("ascii"), validate=False)
+        except (ValueError, UnicodeEncodeError):
+            continue
+
+        if not decoded:
+            continue
+
+        decoded_text = decoded.decode("utf-8", errors="ignore")
+        compact_decoded = re.sub(
+            r"[^a-z0-9]+",
+            "",
+            decoded_text.lower().translate(LEETSPEAK_TRANSLATION),
+        )
+        if any(marker in compact_decoded for marker in TOXICITY_COMPACT_MARKERS):
+            return True
+        if any(pattern.search(compact_decoded) for pattern in TOXICITY_COMPACT_PATTERNS):
+            return True
+
+    return False
 
 
 def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:

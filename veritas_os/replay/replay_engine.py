@@ -85,7 +85,7 @@ def _assert_model_version(snapshot_model: str | None) -> None:
         return
     expected = (snapshot_model or "").strip()
     require_declared = (
-        (os.getenv("VERITAS_REPLAY_REQUIRE_MODEL_VERSION") or "0").strip().lower()
+        (os.getenv("VERITAS_REPLAY_REQUIRE_MODEL_VERSION") or "1").strip().lower()
         in {"1", "true", "yes", "on"}
     )
     if not expected:
