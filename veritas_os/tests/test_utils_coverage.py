@@ -16,7 +16,7 @@ from veritas_os.core.utils import (
     _strip_code_block,
     _to_float,
     _to_text,
-    _truncate,
+    truncate,
     redact_payload,
     utc_now,
     utc_now_iso_z,
@@ -89,16 +89,16 @@ def test_get_nested_missing_key() -> None:
 
 def test_truncate_short_max_len() -> None:
     # max_len shorter than suffix length → raw slice without suffix
-    assert _truncate("abcdef", max_len=2) == "ab"
+    assert truncate("abcdef", max_len=2) == "ab"
 
 
 def test_truncate_max_len_equals_suffix() -> None:
     # max_len == len(suffix) → raw slice
-    assert _truncate("abcdef", max_len=3, suffix="...") == "abc"
+    assert truncate("abcdef", max_len=3, suffix="...") == "abc"
 
 
 def test_truncate_empty_string() -> None:
-    assert _truncate("", max_len=5) == ""
+    assert truncate("", max_len=5) == ""
 
 
 # ── _to_text dict field lookup ────────────────────────────────────────
@@ -236,7 +236,7 @@ def test_get_nested_success() -> None:
 # ── _truncate normal case ────────────────────────────────────────────
 
 def test_truncate_normal() -> None:
-    assert _truncate("abcdefghij", max_len=7) == "abcd..."
+    assert truncate("abcdefghij", max_len=7) == "abcd..."
 
 
 # ── _redact_text regex fallback (sanitize module mocked out) ──────────

@@ -2,9 +2,9 @@
 import numpy as np
 import pytest
 
-from veritas_os.core.utils import redact_payload, _truncate
+from veritas_os.core.utils import redact_payload, truncate
 from veritas_os.memory.index_cosine import CosineIndex
-from veritas_os.tools.llm_safety import _norm, _heuristic_analyze
+from veritas_os.tools.llm_safety import normalize_text, heuristic_analyze
 
 
 # ---- redact_payload: recursion depth limit ----
@@ -33,21 +33,21 @@ def test_redact_payload_normal_nesting_still_redacts():
 
 def test_truncate_negative_max_len():
     """Negative max_len should not raise or produce invalid output."""
-    result = _truncate("hello world", max_len=-5)
+    result = truncate("hello world", max_len=-5)
     assert isinstance(result, str)
     assert result == ""
 
 
 def test_truncate_zero_max_len():
     """Zero max_len should return empty string."""
-    result = _truncate("hello world", max_len=0)
+    result = truncate("hello world", max_len=0)
     assert result == ""
 
 
 def test_truncate_normal_behaviour():
     """Normal truncation should still work."""
-    assert _truncate("hello", max_len=100) == "hello"
-    assert _truncate("hello world", max_len=8) == "hello..."
+    assert truncate("hello", max_len=100) == "hello"
+    assert truncate("hello world", max_len=8) == "hello..."
 
 
 # ---- CosineIndex: similarity clipping ----
@@ -67,15 +67,15 @@ def test_cosine_search_scores_clipped():
 def test_norm_uses_casefold():
     """_norm should use casefold() for proper Unicode case folding."""
     # German sharp s: casefold converts ß → ss, lower() does not
-    result = _norm("Straße")
+    result = normalize_text("Straße")
     assert "ss" in result  # casefold result
 
-    result_upper = _norm("HELLO")
+    result_upper = normalize_text("HELLO")
     assert result_upper == "hello"
 
 
 def test_heuristic_still_detects_banned_words():
     """After casefold change, banned word detection should still work."""
-    result = _heuristic_analyze("I need to kill")
+    result = heuristic_analyze("I need to kill")
     assert result["risk_score"] >= 0.8
     assert "illicit" in result["categories"]

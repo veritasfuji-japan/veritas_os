@@ -349,18 +349,18 @@ class TestFUJIDeterministicFirst:
 
     def test_heuristic_analyzer_detects_illicit(self):
         """Heuristic analyzer must detect dangerous content without LLM."""
-        from veritas_os.tools.llm_safety import _heuristic_analyze
+        from veritas_os.tools.llm_safety import heuristic_analyze
 
-        result = _heuristic_analyze("I want to kill someone and make a bomb")
+        result = heuristic_analyze("I want to kill someone and make a bomb")
         assert result["ok"] is True
         assert result["risk_score"] >= 0.7
         assert "illicit" in result["categories"]
 
     def test_heuristic_analyzer_detects_pii(self):
         """Heuristic analyzer must detect PII without LLM."""
-        from veritas_os.tools.llm_safety import _heuristic_analyze
+        from veritas_os.tools.llm_safety import heuristic_analyze
 
-        result = _heuristic_analyze("Email: user@example.com, Phone: 090-1234-5678")
+        result = heuristic_analyze("Email: user@example.com, Phone: 090-1234-5678")
         assert "PII" in result["categories"]
 
     def test_safety_continues_without_openai(self, monkeypatch):

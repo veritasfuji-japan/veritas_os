@@ -169,7 +169,7 @@ def _get_nested(d: dict, *keys: str, default: Any = None) -> Any:
     return current
 
 
-def _truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
+def truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
     """
     文字列を指定長で切り詰める。
 
@@ -187,6 +187,10 @@ def _truncate(text: str, max_len: int = 100, suffix: str = "...") -> str:
     if max_len <= len(suffix):
         return text[:max_len]
     return text[:max_len - len(suffix)] + suffix
+
+
+# 後方互換エイリアス（テスト移行期間中に維持）
+_truncate = truncate
 
 
 def _to_text(x: Any) -> str:
@@ -365,7 +369,7 @@ __all__ = [
     "_clamp01",
     # 辞書・文字列
     "_get_nested",
-    "_truncate",
+    "truncate",
     "_to_text",
     # JSON抽出
     "_strip_code_block",

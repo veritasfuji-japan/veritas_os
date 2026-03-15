@@ -12,6 +12,11 @@ import logging
 import os
 from typing import Any, Dict
 
+try:
+    from pydantic import ValidationError as _PydanticValidationError
+except ImportError:  # pragma: no cover - pydantic is optional at core layer
+    _PydanticValidationError = None  # type: ignore[assignment,misc]
+
 from .pipeline_types import PipelineContext
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
@@ -66,14 +71,13 @@ def coerce_to_decide_response(
     DecideResponse: Any,
 ) -> Dict[str, Any]:
     """Coerce dict to DecideResponse model (best‑effort)."""
+    _exc_types: tuple = (ValueError, TypeError)
+    if _PydanticValidationError is not None:
+        _exc_types = (ValueError, TypeError, _PydanticValidationError)
     try:
         payload = DecideResponse.model_validate(res).model_dump()
-    except (ValueError, TypeError) as e:
+    except _exc_types as e:
         _warn(f"[model] decide response coerce: {e}")
-        payload = res
-    except Exception as e:
-        # pydantic.ValidationError and other model errors
-        _warn(f"[model] decide response validation: {e}")
         payload = res
     return payload
 
