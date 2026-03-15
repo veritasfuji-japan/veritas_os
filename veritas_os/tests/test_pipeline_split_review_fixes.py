@@ -113,6 +113,49 @@ class TestWebSearchDeadCodeRemoved:
         assert callable(stage_web_search_async)
 
 
+def test_stage_memory_retrieval_logs_doc_search_exception(monkeypatch) -> None:
+    """doc検索フォールバック例外で logger.exception が呼ばれることを確認する。"""
+    from veritas_os.core import pipeline_retrieval as pr
+
+    ctx = PipelineContext(
+        query="veritas os paper",
+        body={},
+        context={},
+        user_id="u1",
+        response_extras={"metrics": {"stage_latency": {}}},
+        evidence=[],
+    )
+
+    class DummyStore:
+        pass
+
+    def fake_memory_search(_store, **kwargs):
+        kinds = kwargs.get("kinds") or []
+        if kinds == ["doc"]:
+            raise RuntimeError("doc search failed")
+        return [{"id": "m1", "kind": "semantic", "text": "ok", "score": 0.8}]
+
+    calls = []
+
+    def fake_exception(message, *args, **_kwargs):
+        calls.append((message, args))
+
+    monkeypatch.setattr(pr.logger, "exception", fake_exception)
+
+    pr.stage_memory_retrieval(
+        ctx,
+        _get_memory_store=lambda: DummyStore(),
+        _memory_search=fake_memory_search,
+        _memory_put=lambda *args, **kwargs: None,
+        _memory_add_usage=lambda *args, **kwargs: None,
+        _flatten_memory_hits=lambda hits, default_kind="episodic": list(hits or []),
+        _warn=lambda _msg: None,
+        utc_now_iso_z=lambda: "2026-03-15T00:00:00Z",
+    )
+
+    assert any("doc memory retrieval failed" in message for message, _ in calls)
+
+
 # =========================================================
 # Fix 4: pipeline_inputs.py inline fallbacks
 # =========================================================

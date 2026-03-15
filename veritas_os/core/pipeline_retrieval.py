@@ -75,6 +75,7 @@ def stage_memory_retrieval(
                         memory_store, query=ctx.query, k=5, kinds=["doc"], user_id=ctx.user_id,
                     )
                 except Exception:  # subsystem resilience: intentionally broad
+                    logger.exception("doc memory retrieval failed in stage_memory_retrieval")
                     doc_hits_raw = None
 
             flat_hits: List[Dict[str, Any]] = []
