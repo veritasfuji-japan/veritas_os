@@ -265,6 +265,33 @@ TOXICITY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"jailbreak|do\s+anything\s+now", re.IGNORECASE),
 )
 
+TOXICITY_COMPACT_MARKERS: tuple[str, ...] = (
+    "ignorepreviousinstructions",
+    "systemprompt",
+    "developermessage",
+    "exfiltrate",
+    "leaksecret",
+    "jailbreak",
+    "doanythingnow",
+)
+
+TOXICITY_COMPACT_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"i[gq]n[o0]re[a-z0-9]*instruct[i1]ons", re.IGNORECASE),
+)
+
+LEETSPEAK_TRANSLATION = str.maketrans(
+    {
+        "0": "o",
+        "1": "i",
+        "3": "e",
+        "4": "a",
+        "5": "s",
+        "7": "t",
+        "@": "a",
+        "$": "s",
+    }
+)
+
 
 def _normalize_str(x: Any, *, limit: int = 4000) -> str:
     try:
@@ -771,7 +798,13 @@ def _is_toxic_result(title: str, snippet: str, url: str) -> bool:
         It should not be treated as a complete defense against RAG poisoning.
     """
     text = f"{title}\n{snippet}\n{url}".lower()
-    return any(pattern.search(text) for pattern in TOXICITY_PATTERNS)
+    if any(pattern.search(text) for pattern in TOXICITY_PATTERNS):
+        return True
+
+    compact_text = re.sub(r"[^a-z0-9]+", "", text.translate(LEETSPEAK_TRANSLATION))
+    if any(marker in compact_text for marker in TOXICITY_COMPACT_MARKERS):
+        return True
+    return any(pattern.search(compact_text) for pattern in TOXICITY_COMPACT_PATTERNS)
 
 
 def _normalize_result_item(item: Dict[str, Any]) -> Optional[Dict[str, str]]:
