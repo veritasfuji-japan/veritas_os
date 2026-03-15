@@ -48,11 +48,12 @@ import random  # nosec B311 - jitter for retry backoff, not security-sensitive
 import re
 import time
 import base64
+import unicodedata
 import ipaddress
 import socket
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import requests
 
@@ -799,7 +800,9 @@ def _is_toxic_result(title: str, snippet: str, url: str) -> bool:
         It should not be treated as a complete defense against RAG poisoning.
     """
     raw_text = f"{title}\n{snippet}\n{url}"
-    text = raw_text.lower()
+    normalized_text = unicodedata.normalize("NFKC", raw_text)
+    decoded_text = unquote(normalized_text)
+    text = decoded_text.lower()
     if any(pattern.search(text) for pattern in TOXICITY_PATTERNS):
         return True
 
@@ -808,7 +811,7 @@ def _is_toxic_result(title: str, snippet: str, url: str) -> bool:
         return True
     if any(pattern.search(compact_text) for pattern in TOXICITY_COMPACT_PATTERNS):
         return True
-    return _contains_toxic_base64_payload(raw_text)
+    return _contains_toxic_base64_payload(decoded_text)
 
 
 def _contains_toxic_base64_payload(text: str) -> bool:
