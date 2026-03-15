@@ -71,6 +71,10 @@ def coerce_to_decide_response(
     except (ValueError, TypeError) as e:
         _warn(f"[model] decide response coerce: {e}")
         payload = res
+    except Exception as e:
+        # pydantic.ValidationError and other model errors
+        _warn(f"[model] decide response validation: {e}")
+        payload = res
     return payload
 
 

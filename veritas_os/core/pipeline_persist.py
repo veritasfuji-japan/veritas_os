@@ -115,7 +115,7 @@ def persist_audit_log(
             float(ctx.telos),
             ctx.fuji_dict,
         )
-    except Exception as e:  # subsystem resilience: audit write must not crash decide
+    except (OSError, RuntimeError, TypeError, ValueError, AttributeError, KeyError) as e:
         _warn(f"[audit] log write skipped: {repr(e)}")
 
 
@@ -262,7 +262,7 @@ def persist_reason_and_reflection(
                         stage_latency["llm"] = max(
                             0, int((time.time() - llm_stage_started_at) * 1000)
                         )
-        except Exception as e2:  # subsystem resilience: reason_core may raise arbitrary errors
+        except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e2:
             _warn(f"[ReasonOS] LLM reason failed: {e2}")
             tips = reflection.get("improvement_tips") or []
             payload["reason"] = {
@@ -279,7 +279,7 @@ def persist_reason_and_reflection(
                         stage_latency["llm"] = max(
                             0, int((time.time() - llm_stage_started_at) * 1000)
                         )
-    except Exception as e:  # subsystem resilience: ReasonOS must not crash decide
+    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
         _warn(f"[ReasonOS] final fallback failed: {e}")
         payload["reason"] = {"note": "reflection/LLM both failed"}
 
@@ -322,7 +322,7 @@ def persist_dataset_record(
                 eval_meta=eval_meta,
             )
         )
-    except Exception as e:  # subsystem resilience: intentionally broad
+    except (OSError, RuntimeError, TypeError, ValueError, AttributeError, KeyError) as e:
         _warn(f"[dataset] skip: {e}")
 
 
@@ -482,7 +482,7 @@ def persist_world_state(
                 latency_ms=int(latency_ms3) if isinstance(latency_ms3, (int, float)) else None,
             )
             _warn(f"[WorldModel] state updated for {uid_world}")
-    except Exception as e:  # subsystem resilience: world_model.update may raise arbitrary errors
+    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
         _warn(f"[WorldModel] update_from_decision skipped: {e}")
 
     # AGI hint
@@ -492,7 +492,7 @@ def persist_world_state(
             extras2 = payload.setdefault("extras", {})
             if isinstance(extras2, dict):
                 extras2["veritas_agi"] = agi_info
-    except Exception as e:  # subsystem resilience: world_model hint may raise arbitrary errors
+    except (RuntimeError, TypeError, ValueError, AttributeError, OSError) as e:
         _warn(f"[WorldModel] next_hint_for_veritas_agi skipped: {e}")
 
 

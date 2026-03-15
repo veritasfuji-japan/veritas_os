@@ -52,7 +52,7 @@ async def stage_core_execute(
     try:
         if veritas_core is not None and hasattr(veritas_core, "decide"):
             core_decide = veritas_core.decide  # type: ignore[attr-defined]
-    except Exception:  # subsystem resilience: intentionally broad
+    except (ImportError, ModuleNotFoundError, AttributeError, TypeError):
         core_decide = None
 
     healing_enabled = self_healing.is_healing_enabled(ctx.context or {})
@@ -83,17 +83,18 @@ async def stage_core_execute(
                 min_evidence=ctx.min_ev,
             )
             ctx.raw = raw0 if isinstance(raw0, dict) else {}
-        except Exception as e:  # subsystem resilience: intentionally broad
+        except (RuntimeError, TypeError, ValueError, OSError, AttributeError) as e:
             _warn(f"[decide] core error: {e}")
             ctx.raw = {}
 
     # --- Self‑healing loop ---
+    _MAX_HEALING_ITERATIONS = 20  # ★ 無限ループ防止ガード
     if ctx.raw and healing_enabled:
         original_task = ctx.query
         latest_healing_input: Optional[Dict[str, Any]] = None
         current_context = dict(ctx.context or {})
 
-        while True:
+        for _healing_iter in range(_MAX_HEALING_ITERATIONS):
             rejection = _extract_rejection(ctx.raw)
             if not rejection:
                 break
@@ -186,11 +187,15 @@ async def stage_core_execute(
                     min_evidence=ctx.min_ev,
                 )
                 ctx.raw = raw0 if isinstance(raw0, dict) else {}
-            except Exception as e:  # subsystem resilience: intentionally broad
+            except (RuntimeError, TypeError, ValueError, OSError, AttributeError) as e:
                 _warn(f"[self_healing] retry failed: {repr(e)}")
                 ctx.healing_stop_reason = "retry_execution_failed"
                 self_healing.persist_healing_state(ctx.request_id, healing_state)
                 break
+        else:
+            # ★ for ループが break なしで完了 = 最大反復回数に到達
+            _warn(f"[self_healing] max iterations ({_MAX_HEALING_ITERATIONS}) reached")
+            ctx.healing_stop_reason = "max_iterations_exceeded"
 
         if ctx.healing_attempts:
             ctx.response_extras.setdefault("self_healing", {})

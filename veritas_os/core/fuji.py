@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
 from datetime import datetime, timezone
 import logging
+import math
 import threading
 import time
 import os
@@ -163,7 +164,7 @@ RISKY_KEYWORDS_POC = re.compile(
     re.IGNORECASE
 )
 
-_PROMPT_INJECTION_PATTERNS: List[tuple[re.Pattern[str], float, str]] = [
+_PROMPT_INJECTION_PATTERNS: tuple[tuple[re.Pattern[str], float, str], ...] = (
     (
         re.compile(
             r"(ignore|disregard|override).{0,40}"
@@ -200,7 +201,7 @@ _PROMPT_INJECTION_PATTERNS: List[tuple[re.Pattern[str], float, str]] = [
         0.2,
         "role_override",
     ),
-]
+)
 
 _ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060]")
 _NON_ALNUM_RE = re.compile(r"[^\w\u3040-\u30ff\u4e00-\u9fff]+", re.UNICODE)
@@ -646,6 +647,7 @@ def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
     global _PROMPT_INJECTION_PATTERNS, _CONFUSABLE_ASCII_MAP
 
     # ---- プロンプトインジェクションパターン ----
+    # ★ スレッド安全: immutable tuple に構築してから atomic swap で差し替え
     pi_section = policy.get("prompt_injection") or {}
     raw_patterns = pi_section.get("patterns") or []
     if raw_patterns:
@@ -661,7 +663,7 @@ def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
             except (re.error, KeyError, TypeError, ValueError) as exc:
                 _logger.warning("[FUJI] prompt_injection pattern skipped: %r – %s", item, exc)
         if built:
-            _PROMPT_INJECTION_PATTERNS = built
+            _PROMPT_INJECTION_PATTERNS = tuple(built)  # atomic swap with immutable
 
     # ---- Unicode 同形異体文字マップ ----
     confusables = (policy.get("unicode_normalization") or {}).get("confusables") or {}
@@ -858,6 +860,11 @@ def run_safety_head(
         return result
 
     except (TypeError, ValueError, RuntimeError, OSError) as e:
+        _logger.error(
+            "[FUJI] Safety head LLM evaluation failed; falling back to heuristics: %s",
+            repr(e),
+            exc_info=True,
+        )
         fb = _fallback_safety_head(text)
         fb.categories.append("safety_head_error")
         fb.rationale += f" / safety_head error: {repr(e)[:120]}"
@@ -944,10 +951,13 @@ def _apply_policy(
     else:
         def _act_key(item: Any) -> float:
             _, conf = item
-            return float(conf.get("risk_upper", 1.0))
+            val = float(conf.get("risk_upper", 1.0))
+            return val if math.isfinite(val) else 1.0
 
         for act, conf in sorted(actions.items(), key=_act_key):
             upper = float(conf.get("risk_upper", 1.0))
+            if not math.isfinite(upper):
+                upper = 1.0  # fail-closed: NaN/Inf → 最大閾値
             if risk <= upper:
                 final_action = act
                 break
@@ -1016,6 +1026,8 @@ def fuji_core_decide(
     categories = list(safety_head.categories or []) if safety_head.categories else []
     try:
         risk = float(safety_head.risk_score) if safety_head.risk_score is not None else 0.05
+        if not math.isfinite(risk):
+            risk = 1.0  # fail-closed: NaN/Inf は最大リスクとして扱う
     except (TypeError, ValueError):
         risk = 0.05
     base_reasons: List[str] = []

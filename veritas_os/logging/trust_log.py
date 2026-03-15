@@ -32,6 +32,7 @@ from veritas_os.logging.encryption import (
     decrypt as _decrypt_line,
     is_encryption_enabled,
     EncryptionKeyMissing,
+    DecryptionError,
 )
 from veritas_os.logging.redact import redact_entry as _redact_entry
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
@@ -191,7 +192,7 @@ def _extract_last_sha256_from_lines(lines: List[str]) -> str | None:
             # ★ 暗号化行の復号
             decoded_line = _decrypt_line(line)
             payload = json.loads(decoded_line)
-        except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
+        except (json.JSONDecodeError, ValueError, EncryptionKeyMissing, DecryptionError):
             continue
 
         sha = payload.get("sha256") if isinstance(payload, dict) else None
@@ -420,6 +421,13 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             line = json.dumps(entry, ensure_ascii=False)
             line = _encrypt_line(line)
 
+            # ★ Step 4.1: encryption enforcement verification (fail-closed)
+            if is_encryption_enabled() and not line.startswith("ENC:"):
+                raise EncryptionKeyMissing(
+                    "Plaintext write blocked by policy: encryption is enabled "
+                    "but _encrypt_line() returned non-encrypted output"
+                )
+
             # ★ Step 5: append to JSONL (with fsync for durability)
             with open_trust_log_for_append() as f:
                 f.write(line + "\n")
@@ -521,7 +529,7 @@ def _decode_line(raw_line: str) -> Optional[Dict[str, Any]]:
         # ★ 暗号化されている行は ENC: プレフィックス付き → 復号
         line = _decrypt_line(line)
         return json.loads(line)
-    except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
+    except (json.JSONDecodeError, ValueError, EncryptionKeyMissing, DecryptionError):
         return None
 
 
@@ -741,13 +749,23 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                 # ★ 暗号化行は復号してからパース
                 line = _decrypt_line(line)
                 entry = json.loads(line)
-            except (json.JSONDecodeError, ValueError, EncryptionKeyMissing):
+            except (json.JSONDecodeError, ValueError, EncryptionKeyMissing, DecryptionError):
                 return {
                     "ok": False,
                     "checked": checked,
                     "broken": True,
                     "broken_index": idx,
                     "broken_reason": "json_decode_error",
+                }
+
+            # ★ 型安全: json.loads() が dict 以外 (null, [], "string") を返す場合を防御
+            if not isinstance(entry, dict):
+                return {
+                    "ok": False,
+                    "checked": checked,
+                    "broken": True,
+                    "broken_index": idx,
+                    "broken_reason": "entry_not_dict",
                 }
 
             # sha256_prev の整合性チェック
@@ -828,6 +846,7 @@ __all__ = [
     "LOG_JSON",
     "LOG_JSONL",
     "EncryptionKeyMissing",
+    "DecryptionError",
 ]
 
 

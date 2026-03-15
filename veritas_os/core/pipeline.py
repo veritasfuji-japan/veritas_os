@@ -186,6 +186,8 @@ except (ImportError, ModuleNotFoundError):
 # repo root / time helpers
 # =========================================================
 
+# ★ セキュリティ: __file__ を resolve() 済みなので REPO_ROOT はシンボリックリンク解決済み。
+# _enforce_path_policy() での relative_to() チェックが安全に機能する。
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
@@ -977,11 +979,12 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
         if inspect.isawaitable(ws):
             ws = await ws
         return ws if isinstance(ws, dict) else None
-    except Exception:  # subsystem resilience: intentionally broad
+    except (RuntimeError, TypeError, ValueError, OSError, TimeoutError, ConnectionError) as exc:
         logger.debug(
-            "_safe_web_search failed for query_redacted=%r query_sha256_12=%s",
+            "_safe_web_search failed for query_redacted=%r query_sha256_12=%s: %s",
             _redact_text(query_text),
             query_fingerprint,
+            repr(exc),
             exc_info=True,
         )
         return None

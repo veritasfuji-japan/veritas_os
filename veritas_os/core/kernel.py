@@ -519,9 +519,11 @@ def _score_alternatives(
                     if hasattr(o, "option_id"):
                         oid = o.option_id
                         sc = getattr(o, "fusion_score", 0.0)
-                    else:
+                    elif isinstance(o, dict):
                         oid = o.get("id")
                         sc = o.get("score", o.get("fusion_score", 0.0))
+                    else:
+                        continue  # skip non-dict, non-dataclass items
                     if not oid:
                         continue
                     score_map[oid] = _safe_float(sc, 0.0)
@@ -722,7 +724,7 @@ async def decide(
                 alt = _mk_option(title=title, description=detail, _id=sid)
                 alt["meta"] = st
                 alts.append(alt)
-        except Exception as e:  # pragma: no cover - defensive legacy fallback
+        except (TypeError, ValueError, RuntimeError, OSError, AttributeError) as e:  # pragma: no cover - defensive legacy fallback
             extras.setdefault("planner_error", {})
             extras["planner_error"]["detail"] = repr(e)
 
