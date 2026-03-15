@@ -267,7 +267,7 @@ def test_run_forced_heuristic_mode(monkeypatch):
             "raw": {},
         }
 
-    monkeypatch.setattr(llm_safety, "_heuristic_analyze", fake_heuristic)
+    monkeypatch.setattr(llm_safety, "heuristic_analyze", fake_heuristic)
     # _llm_available が True だとしても無視されるはず
     monkeypatch.setattr(llm_safety, "_llm_available", lambda: True)
 
@@ -344,7 +344,7 @@ def test_run_llm_error_falls_back_to_heuristic(monkeypatch):
             "raw": {},
         }
 
-    monkeypatch.setattr(llm_safety, "_heuristic_analyze", fake_heuristic)
+    monkeypatch.setattr(llm_safety, "heuristic_analyze", fake_heuristic)
 
     res = llm_safety.run("some text")
 
@@ -375,7 +375,7 @@ def test_run_uses_heuristic_when_no_llm(monkeypatch):
             "raw": {},
         }
 
-    monkeypatch.setattr(llm_safety, "_heuristic_analyze", fake_heuristic)
+    monkeypatch.setattr(llm_safety, "heuristic_analyze", fake_heuristic)
 
     res = llm_safety.run("no llm case")
 

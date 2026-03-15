@@ -340,7 +340,7 @@ def _to_float_or(v: Any, default: float) -> float:
     return _safe_float(v, default)
 
 
-def _to_dict(o: Any) -> Dict[str, Any]:
+def to_dict(o: Any) -> Dict[str, Any]:
     if isinstance(o, dict):
         return o
     if hasattr(o, "model_dump"):
@@ -370,10 +370,13 @@ def _to_dict(o: Any) -> Dict[str, Any]:
     return {}
 
 
+# 後方互換エイリアス（テスト移行期間中に維持）
+_to_dict = to_dict
+
 # _redact_text / redact_payload は utils.py に統合済み（import 済み）
 
 
-def _get_request_params(request: Any) -> Dict[str, Any]:
+def get_request_params(request: Any) -> Dict[str, Any]:
     """
     DummyRequest 互換:
     - request.query_params (starlette)
@@ -396,6 +399,9 @@ def _get_request_params(request: Any) -> Dict[str, Any]:
     return out
 
 
+# 後方互換エイリアス（テスト移行期間中に維持）
+_get_request_params = get_request_params
+
 # _ensure_metrics_contract -> pipeline_contracts.py に移動済み（上部 import）
 
 
@@ -407,7 +413,7 @@ def _get_memory_store() -> Optional[Any]:
 
 
 def _norm_alt(o: Any) -> Dict[str, Any]:
-    d = _to_dict(o) or {}
+    d = to_dict(o) or {}
 
     # text/title/description の整形
     text = d.get("text")
@@ -1047,7 +1053,7 @@ async def run_decide_pipeline(
         req,
         request,
         _get_request_params=_get_request_params,
-        _to_dict_fn=_to_dict,
+        _to_dict_fn=to_dict,
     )
 
     # =================================================================

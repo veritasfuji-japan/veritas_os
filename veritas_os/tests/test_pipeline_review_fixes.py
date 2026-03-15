@@ -196,12 +196,12 @@ async def test_call_core_decide_logs_exc_info_on_signature_inspection_failure(
 class TestToDictDefensive:
 
     def test_dict_passthrough(self):
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
         d = {"a": 1}
-        assert _to_dict(d) is d
+        assert to_dict(d) is d
 
     def test_model_dump_failure_falls_through(self):
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
 
         class BadModel:
             def model_dump(self, **kwargs):
@@ -210,11 +210,11 @@ class TestToDictDefensive:
             def __init__(self):
                 self.x = 42
 
-        result = _to_dict(BadModel())
+        result = to_dict(BadModel())
         assert result.get("x") == 42
 
     def test_dict_method_failure_falls_through(self):
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
 
         class BadDictModel:
             def dict(self):
@@ -223,11 +223,11 @@ class TestToDictDefensive:
             def __init__(self):
                 self.y = 99
 
-        result = _to_dict(BadDictModel())
+        result = to_dict(BadDictModel())
         assert result.get("y") == 99
 
     def test_all_methods_fail_returns_empty(self):
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
 
         class AllBad:
             def model_dump(self, **kwargs):
@@ -240,7 +240,7 @@ class TestToDictDefensive:
             def __dict__(self):
                 raise TypeError("broken")
 
-        result = _to_dict(AllBad())
+        result = to_dict(AllBad())
         assert result == {}
 
 
@@ -421,7 +421,7 @@ class TestToDictCircularRef:
 
     def test_self_referencing_object(self):
         """Object with self-reference should not include the circular ref."""
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
         import json
 
         class Circular:
@@ -430,7 +430,7 @@ class TestToDictCircularRef:
                 self.self_ref = self  # circular
 
         obj = Circular()
-        result = _to_dict(obj)
+        result = to_dict(obj)
         assert result["name"] == "test"
         assert "self_ref" not in result
         # Must be JSON-serializable
@@ -438,14 +438,14 @@ class TestToDictCircularRef:
 
     def test_non_circular_object_unchanged(self):
         """Normal objects should be converted without filtering."""
-        from veritas_os.core.pipeline import _to_dict
+        from veritas_os.core.pipeline import to_dict
 
         class Normal:
             def __init__(self):
                 self.a = 1
                 self.b = "hello"
 
-        result = _to_dict(Normal())
+        result = to_dict(Normal())
         assert result == {"a": 1, "b": "hello"}
 
 

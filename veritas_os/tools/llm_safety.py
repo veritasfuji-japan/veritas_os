@@ -177,10 +177,14 @@ def _sanitize_text_for_prompt(text: str, max_chars: int = _MAX_PROMPT_TEXT_CHARS
     return cleaned[:safe_limit]
 
 
-def _norm(s: str) -> str:
+def normalize_text(s: str) -> str:
     """Normalize text with NFKC Unicode normalization for confusable character detection."""
     t = unicodedata.normalize("NFKC", s or "")
     return t.replace("　", " ").strip().casefold()
+
+
+# 後方互換エイリアス（テスト移行期間中に維持）
+_norm = normalize_text
 
 
 def _build_safety_scan_variants(text: str) -> list[str]:
@@ -248,7 +252,7 @@ def _normalize_categories(categories: list[Any], max_categories: int) -> list[st
     return normalized
 
 
-def _heuristic_analyze(text: str) -> Dict[str, Any]:
+def heuristic_analyze(text: str) -> Dict[str, Any]:
     """Deterministic safety analysis (always runs, LLM-independent).
 
     セキュリティ監査 2026-03-12 F-01/F-02 対応:
@@ -335,6 +339,10 @@ def _heuristic_analyze(text: str) -> Dict[str, Any]:
             "compound_hits": compound_hits,
         },
     }
+
+
+# 後方互換エイリアス（テスト移行期間中に維持）
+_heuristic_analyze = heuristic_analyze
 
 
 def _score_risk(
@@ -498,7 +506,7 @@ def _analyze_with_llm(
     cats = out.get("categories") or []
     rat = out.get("rationale") or ""
 
-    heuristic = _heuristic_analyze(text)
+    heuristic = heuristic_analyze(text)
     scoring = _score_risk(
         llm_risk=risk,
         llm_categories=[str(c) for c in cats],
@@ -539,7 +547,7 @@ def run(
     """
     # 強制ヒューリスティックモード（テスト・オフライン用）
     if os.getenv("VERITAS_SAFETY_MODE", "").lower() in {"heuristic", "local"}:
-        return _heuristic_analyze(text)
+        return heuristic_analyze(text)
 
     if _llm_available():
         try:
@@ -553,7 +561,7 @@ def run(
             # LLM 失敗時は fallback — セキュリティ監査 F-01 対応:
             # fallback=True を明示し、呼び出し元が追加ペナルティを適用できるようにする
             logger.warning("LLM safety head failed, falling back to heuristic: %s: %s", type(e).__name__, e)
-            fb = _heuristic_analyze(text)
+            fb = heuristic_analyze(text)
             fb["ok"] = True
             fb["llm_fallback"] = True
             fb.setdefault("raw", {})["llm_error"] = "LLM safety head unavailable"
@@ -562,7 +570,7 @@ def run(
 
     # API キー不在など → ヒューリスティック
     # セキュリティ監査 F-04 対応: LLM 不在を明示
-    fb = _heuristic_analyze(text)
+    fb = heuristic_analyze(text)
     fb["llm_fallback"] = True
     fb.setdefault("raw", {})["llm_unavailable"] = True
     return fb

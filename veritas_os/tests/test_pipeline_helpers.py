@@ -7,7 +7,7 @@ Targets:
 - _get_request_params: cover request.params path + exception swallow
 """
 
-from veritas_os.core.pipeline import _to_dict, _get_request_params
+from veritas_os.core.pipeline import to_dict, get_request_params
 
 
 def test__to_dict_uses___dict__():
@@ -16,7 +16,7 @@ def test__to_dict_uses___dict__():
             self.a = 1
             self.b = "x"
 
-    assert _to_dict(Foo()) == {"a": 1, "b": "x"}
+    assert to_dict(Foo()) == {"a": 1, "b": "x"}
 
 
 def test__to_dict___dict___conversion_error_returns_empty():
@@ -27,7 +27,7 @@ def test__to_dict___dict___conversion_error_returns_empty():
                 return 123  # dict(123) -> TypeError
             return object.__getattribute__(self, name)
 
-    assert _to_dict(Weird()) == {}
+    assert to_dict(Weird()) == {}
 
 
 def test__get_request_params_reads_params():
@@ -35,7 +35,7 @@ def test__get_request_params_reads_params():
         query_params = None
         params = {"p": "1", "q": "2"}
 
-    out = _get_request_params(Req())
+    out = get_request_params(Req())
     assert out == {"p": "1", "q": "2"}
 
 
@@ -48,5 +48,5 @@ def test__get_request_params_params_getattr_error_is_swallowed():
                 raise RuntimeError("boom")
             return object.__getattribute__(self, name)
 
-    out = _get_request_params(BadReq())
+    out = get_request_params(BadReq())
     assert out == {}
