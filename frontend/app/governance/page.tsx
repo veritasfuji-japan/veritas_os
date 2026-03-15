@@ -160,7 +160,7 @@ function collectChanges(prefix: string, a: Record<string, unknown>, b: Record<st
 }
 
 function bumpDraftVersion(version: string): string {
-  const match = version.match(/^(.+?)(\d+)$/);
+  const match = version.match(/^(.+\.)(\d+)$/);
   if (!match) return `${version}-draft.1`;
   return `${match[1]}${Number(match[2]) + 1}-draft`;
 }
@@ -574,10 +574,10 @@ export default function GovernanceControlPage(): JSX.Element {
             <div className="mt-4">
               <p className="text-xs font-semibold mb-2">Risk Thresholds</p>
               <div className="grid gap-2 md:grid-cols-2">
-                <label className="text-xs">allow_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.allow_upper.toFixed(2)})</span><input aria-label="allow_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.allow_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, allow_upper: Number(e.target.value) } }))} className="w-full" /></label>
-                <label className="text-xs">warn_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.warn_upper.toFixed(2)})</span><input aria-label="warn_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.warn_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, warn_upper: Number(e.target.value) } }))} className="w-full" /></label>
-                <label className="text-xs">human_review_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.human_review_upper.toFixed(2)})</span><input aria-label="human_review_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.human_review_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, human_review_upper: Number(e.target.value) } }))} className="w-full" /></label>
-                <label className="text-xs">deny_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.deny_upper.toFixed(2)})</span><input aria-label="deny_upper" type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.deny_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, deny_upper: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">allow_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.allow_upper.toFixed(2)})</span><input aria-label="allow_upper" aria-valuetext={`${(draft.risk_thresholds.allow_upper * 100).toFixed(0)}%`} type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.allow_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, allow_upper: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">warn_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.warn_upper.toFixed(2)})</span><input aria-label="warn_upper" aria-valuetext={`${(draft.risk_thresholds.warn_upper * 100).toFixed(0)}%`} type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.warn_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, warn_upper: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">human_review_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.human_review_upper.toFixed(2)})</span><input aria-label="human_review_upper" aria-valuetext={`${(draft.risk_thresholds.human_review_upper * 100).toFixed(0)}%`} type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.human_review_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, human_review_upper: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">deny_upper <span className="font-mono text-muted-foreground">({draft.risk_thresholds.deny_upper.toFixed(2)})</span><input aria-label="deny_upper" aria-valuetext={`${(draft.risk_thresholds.deny_upper * 100).toFixed(0)}%`} type="range" min={0} max={1} step={0.05} value={draft.risk_thresholds.deny_upper} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, risk_thresholds: { ...prev.risk_thresholds, deny_upper: Number(e.target.value) } }))} className="w-full" /></label>
               </div>
             </div>
 
@@ -585,14 +585,14 @@ export default function GovernanceControlPage(): JSX.Element {
               <p className="text-xs font-semibold mb-2">Auto-Stop / Escalation</p>
               <div className="grid gap-2 md:grid-cols-2">
                 <ToggleRow label="Auto-Stop Enabled" checked={draft.auto_stop.enabled} disabled={selectedRole === "viewer"} onChange={(v) => updateDraft((prev) => ({ ...prev, auto_stop: { ...prev.auto_stop, enabled: v } }))} />
-                <label className="text-xs">max_risk_score <span className="font-mono text-muted-foreground">({draft.auto_stop.max_risk_score.toFixed(2)})</span><input aria-label="max_risk_score" type="range" min={0} max={1} step={0.05} value={draft.auto_stop.max_risk_score} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, auto_stop: { ...prev.auto_stop, max_risk_score: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">max_risk_score <span className="font-mono text-muted-foreground">({draft.auto_stop.max_risk_score.toFixed(2)})</span><input aria-label="max_risk_score" aria-valuetext={`${(draft.auto_stop.max_risk_score * 100).toFixed(0)}%`} type="range" min={0} max={1} step={0.05} value={draft.auto_stop.max_risk_score} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, auto_stop: { ...prev.auto_stop, max_risk_score: Number(e.target.value) } }))} className="w-full" /></label>
               </div>
             </div>
 
             <div className="mt-4">
               <p className="text-xs font-semibold mb-2">Log Retention / Audit</p>
               <div className="grid gap-2 md:grid-cols-2">
-                <label className="text-xs">retention_days <span className="font-mono text-muted-foreground">({draft.log_retention.retention_days})</span><input aria-label="retention_days" type="range" min={1} max={365} step={1} value={draft.log_retention.retention_days} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, log_retention: { ...prev.log_retention, retention_days: Number(e.target.value) } }))} className="w-full" /></label>
+                <label className="text-xs">retention_days <span className="font-mono text-muted-foreground">({draft.log_retention.retention_days})</span><input aria-label="retention_days" aria-valuetext={`${draft.log_retention.retention_days} ${t("日", "days")}`} type="range" min={1} max={365} step={1} value={draft.log_retention.retention_days} disabled={selectedRole === "viewer"} onChange={(e) => updateDraft((prev) => ({ ...prev, log_retention: { ...prev.log_retention, retention_days: Number(e.target.value) } }))} className="w-full" /></label>
                 <ToggleRow label="Redact Before Log" checked={draft.log_retention.redact_before_log} disabled={selectedRole === "viewer"} onChange={(v) => updateDraft((prev) => ({ ...prev, log_retention: { ...prev.log_retention, redact_before_log: v } }))} />
               </div>
             </div>
@@ -624,10 +624,10 @@ export default function GovernanceControlPage(): JSX.Element {
           {/* ── Apply Flow ── */}
           <Card title="Apply Flow" titleSize="md" variant="elevated">
             <div className="flex flex-wrap gap-2">
-              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("apply")} disabled={!hasChanges || saving || !canApply}>apply</button>
-              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("dry-run")} disabled={!hasChanges || saving || !canOperate}>dry-run</button>
-              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("shadow")} disabled={saving || !canOperate}>shadow mode</button>
-              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={rollback} disabled={saving || !hasChanges || !canApply}>rollback</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("apply")} disabled={!hasChanges || saving || !canApply}>{t("適用", "apply")}</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("dry-run")} disabled={!hasChanges || saving || !canOperate}>{t("ドライラン", "dry-run")}</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={() => void applyPolicy("shadow")} disabled={saving || !canOperate}>{t("シャドウモード", "shadow mode")}</button>
+              <button type="button" className="rounded border px-3 py-2 text-sm" onClick={rollback} disabled={saving || !hasChanges || !canApply}>{t("ロールバック", "rollback")}</button>
             </div>
             {!canApply ? <p className="mt-2 text-xs text-warning">{t("RBAC: apply/rollback は admin のみ実行可能です。", "RBAC: apply/rollback requires admin role.")}</p> : null}
             {hasChanges && draftApprovalStatus !== "approved" ? <p className="mt-2 text-xs text-info">{t("apply するには先に承認が必要です。dry-run / shadow は承認前でも実行できます。", "Approval is required before apply. dry-run / shadow can be executed before approval.")}</p> : null}

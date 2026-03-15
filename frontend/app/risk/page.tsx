@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -238,28 +238,35 @@ function pointFill(cluster: ClusterKind): string {
 
 export default function RiskIntelligencePage(): JSX.Element {
   const { t, language } = useI18n();
-  const [points, setPoints] = useState<RiskPoint[]>(() => createInitialPoints(Date.now()));
-  const [now, setNow] = useState<number>(Date.now());
+  const [points, setPoints] = useState<RiskPoint[]>([]);
+  const [now, setNow] = useState<number>(0);
+
+  useEffect(() => {
+    const initial = Date.now();
+    setNow(initial);
+    setPoints(createInitialPoints(initial));
+  }, []);
   const [timeWindowHours, setTimeWindowHours] = useState<number>(24);
   const [selectedCluster, setSelectedCluster] = useState<"all" | "critical" | "risky" | "uncertain">("all");
   const [selectedPointId, setSelectedPointId] = useState<string | null>(null);
   const [hoveredPointId, setHoveredPointId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const tick = Date.now();
-      setNow(tick);
-      setPoints((previous) => {
-        return [...previous, createStreamPoint(tick)]
-          .filter((point) => tick - point.timestamp <= STREAM_WINDOW_MS)
-          .slice(-MAX_POINTS);
-      });
-    }, STREAM_TICK_MS);
+  const tickCallback = useCallback(() => {
+    const tick = Date.now();
+    setNow(tick);
+    setPoints((previous) => {
+      return [...previous, createStreamPoint(tick)]
+        .filter((point) => tick - point.timestamp <= STREAM_WINDOW_MS)
+        .slice(-MAX_POINTS);
+    });
+  }, []);
 
+  useEffect(() => {
+    const timer = window.setInterval(tickCallback, STREAM_TICK_MS);
     return () => {
       window.clearInterval(timer);
     };
-  }, []);
+  }, [tickCallback]);
 
   /* ---------- derived data ---------- */
 
@@ -425,9 +432,15 @@ export default function RiskIntelligencePage(): JSX.Element {
                         fill={fill}
                         opacity={cluster === "critical" ? 0.95 : cluster === "risky" ? 0.85 : 0.72}
                         className="cursor-pointer"
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`${cluster} point: Risk ${point.risk.toFixed(2)}, Uncertainty ${point.uncertainty.toFixed(2)}`}
                         onClick={() => setSelectedPointId(point.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedPointId(point.id); } }}
                         onMouseEnter={() => setHoveredPointId(point.id)}
                         onMouseLeave={() => setHoveredPointId(null)}
+                        onFocus={() => setHoveredPointId(point.id)}
+                        onBlur={() => setHoveredPointId(null)}
                       >
                         <title>{`ID: ${point.id}\nRisk: ${point.risk.toFixed(2)} | Uncertainty: ${point.uncertainty.toFixed(2)}\nCluster: ${cluster}`}</title>
                       </circle>

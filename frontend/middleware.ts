@@ -103,7 +103,6 @@ export function middleware(request: NextRequest): NextResponse {
     }
   });
 
-  response.headers.set('x-veritas-nonce', nonce);
   response.headers.set('Content-Security-Policy', cspEnforced);
   response.headers.set('Content-Security-Policy-Report-Only', cspReportOnly);
 
@@ -122,5 +121,7 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: '/:path*'
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico).*)',
+  ],
 };

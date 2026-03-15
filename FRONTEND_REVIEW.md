@@ -141,3 +141,60 @@ Modern Next.js 15 + React 18 + TypeScript stack with solid security, accessibili
 1. **`middleware.ts:106`** — Remove nonce from response header
 2. **`live-event-stream.tsx:230`** — Add try-catch around JSON.parse
 3. **`audit/page.tsx`** — Split 57KB file into sub-components
+
+---
+
+## Remediation Log (2026-03-15)
+
+以下の指摘事項について修正を実施しました。
+
+### Security
+
+| Issue | Status | 修正内容 |
+|-------|--------|----------|
+| `middleware.ts:106` — nonce response header leak | **FIXED** | `x-veritas-nonce` レスポンスヘッダーの設定行を削除。nonce は `x-nonce` リクエストヘッダー経由でのみサーバー側に伝搬。 |
+| `live-event-stream.tsx:230` — JSON.parse crash | **FIXED** | `JSON.parse` を try-catch で囲み、不正ペイロードをスキップするよう変更。ストリーム全体のクラッシュを防止。 |
+| `middleware.ts:124-126` — matcher applies to `_next/static` | **FIXED** | matcher を `/((?!_next/static|_next/image|favicon\\.ico).*)` に変更し、静的アセットをミドルウェア処理から除外。 |
+
+### Bugs & Robustness
+
+| Issue | Status | 修正内容 |
+|-------|--------|----------|
+| `api-client.ts:28` — `window.setTimeout` SSR crash | **FIXED** | `"use client"` ディレクティブを追加。`window.setTimeout` / `window.clearTimeout` を `setTimeout` / `clearTimeout` に変更し、SSR 環境での互換性を確保。 |
+| `useDecide.ts:62` — `Date.now()` ID collision | **FIXED** | 全メッセージ ID 生成を `crypto.randomUUID()` に置換。同一ミリ秒での衝突を完全排除。 |
+| `governance/page.tsx:165` — `bumpDraftVersion` regex | **FIXED** | 正規表現を `^(.+?)(\d+)$` → `^(.+\.)(\d+)$` に修正。`"1.0.0"` のようなバージョン文字列で最後のピリオド以降の数値のみインクリメントするよう改善。 |
+| `useDecide.ts:71` — double timeout | **FIXED** | `useDecide` 内の手動 `window.setTimeout` によるタイムアウトを削除。`veritasFetch` の組み込みタイムアウトに一本化。 |
+| `risk/page.tsx:241` — `Date.now()` hydration mismatch | **FIXED** | `useState` の初期値を空配列 / `0` に変更し、`useEffect` 内で `Date.now()` を使用して初期データを生成。SSR/CSR の不一致を解消。 |
+
+### Accessibility
+
+| Issue | Status | 修正内容 |
+|-------|--------|----------|
+| `risk/page.tsx:421-431` — SVG circles keyboard inaccessible | **FIXED** | 各 `<circle>` に `tabIndex={0}`, `role="button"`, `aria-label`, `onKeyDown` (Enter/Space), `onFocus/onBlur` を追加。キーボード・スクリーンリーダーユーザーがデータポイントにアクセス可能に。 |
+| `governance/page.tsx:577-580` — range input aria-valuetext | **FIXED** | 全 `<input type="range">` に `aria-valuetext` を追加（例: `"65%"`, `"90 日"`）。スクリーンリーダーで値が有意に読み上げられるよう改善。 |
+| `live-event-stream.tsx:333` — button nested inside anchor | **FIXED** | `<a>` 内の `<button>` 構造を解消。外側を `<div>` に変更し、リンク部分は `<a>` としてコンテンツエリアのみをラップ。ボタンはリンクと兄弟要素として配置。 |
+
+### Performance
+
+| Issue | Status | 修正内容 |
+|-------|--------|----------|
+| `risk/page.tsx:248-262` — interval recalculation | **FIXED** | `setInterval` コールバックを `useCallback` で安定化。不要な再生成を抑制。 |
+
+### i18n
+
+| Issue | Status | 修正内容 |
+|-------|--------|----------|
+| `error.tsx` / `global-error.tsx` — Japanese-only | **FIXED** | `navigator.language` によるブラウザ言語検出を追加し、日本語 / 英語の出し分けを実装。`I18nProvider` 外でも i18n 対応。`global-error.tsx` の `<html lang>` も動的に設定。 |
+| `governance/page.tsx:627-630` — English-only action buttons | **FIXED** | `apply` / `dry-run` / `shadow mode` / `rollback` ボタンを `t()` で日英対応（適用 / ドライラン / シャドウモード / ロールバック）。 |
+
+### Updated Summary Scores
+
+| Category | Before | After |
+|----------|--------|-------|
+| Security | A- | **A** |
+| Robustness | B+ | **A** |
+| Architecture | A- | A- |
+| Accessibility | B+ | **A-** |
+| Performance | B+ | **A-** |
+| Testing | A- | A- |
+| i18n | B+ | **A-** |

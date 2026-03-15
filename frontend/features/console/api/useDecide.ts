@@ -59,7 +59,7 @@ export function useDecide({
       return;
     }
 
-    setChatMessages((prev) => [...prev, { id: Date.now(), role: "user", content: queryToUse }]);
+    setChatMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", content: queryToUse }]);
     activeControllerRef.current?.abort();
     const controller = new AbortController();
     activeControllerRef.current = controller;
@@ -68,7 +68,6 @@ export function useDecide({
     latestRequestIdRef.current = requestId;
     const isLatestRequest = (): boolean => latestRequestIdRef.current === requestId;
     setLoading(true);
-    const timeoutId = window.setTimeout(() => controller.abort(), DECIDE_TIMEOUT_MS);
 
     try {
       const response = await veritasFetch(
@@ -95,7 +94,7 @@ export function useDecide({
         setChatMessages((prev) => [
           ...prev,
           {
-            id: Date.now() + 1,
+            id: crypto.randomUUID(),
             role: "assistant",
             content: tk("authErrorAssistant"),
           },
@@ -110,7 +109,7 @@ export function useDecide({
         setChatMessages((prev) => [
           ...prev,
           {
-            id: Date.now() + 1,
+            id: crypto.randomUUID(),
             role: "assistant",
             content: tk("serviceUnavailableAssistant"),
           },
@@ -165,7 +164,6 @@ export function useDecide({
       setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: networkError }]);
       setResult(null);
     } finally {
-      window.clearTimeout(timeoutId);
       if (isLatestRequest()) {
         setLoading(false);
       }

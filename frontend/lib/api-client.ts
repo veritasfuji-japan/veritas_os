@@ -11,6 +11,8 @@
  * and credential handling are consistent.
  */
 
+"use client";
+
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 /**
@@ -25,7 +27,7 @@ export async function veritasFetch(
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     return await fetch(input, {
@@ -34,6 +36,6 @@ export async function veritasFetch(
       signal: controller.signal,
     });
   } finally {
-    window.clearTimeout(timeoutId);
+    clearTimeout(timeoutId);
   }
 }
