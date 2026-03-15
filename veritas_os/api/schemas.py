@@ -24,6 +24,11 @@ MAX_SNIPPET_LENGTH = 50000  # Max characters for evidence snippets
 MAX_DESCRIPTION_LENGTH = 20000  # Max characters for descriptions
 MAX_TITLE_LENGTH = 1000  # Max characters for titles
 MAX_LIST_ITEMS = 100  # Max items in lists (alternatives, evidence, etc.)
+MAX_ID_LENGTH = 500  # Max characters for ID fields (user_id, session_id, etc.)
+MAX_URI_LENGTH = 2000  # Max characters for URI fields
+MAX_SOURCE_LENGTH = 500  # Max characters for source fields
+MAX_ACTOR_LENGTH = 200  # Max characters for actor/source type fields
+MAX_KIND_LENGTH = 50  # Max characters for kind/retention_class fields
 
 # Shared decision status literal used across FujiDecision, Gate, DecideResponse
 DecisionStatusLiteral = Literal["allow", "modify", "rejected", "block", "abstain"]
@@ -88,8 +93,8 @@ def _coerce_context(v: Any) -> Dict[str, Any]:
 class Context(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    user_id: str = Field(..., max_length=500)
-    session_id: Optional[str] = Field(default=None, max_length=500)
+    user_id: str = Field(..., max_length=MAX_ID_LENGTH)
+    session_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     query: str = Field(..., max_length=MAX_QUERY_LENGTH)
 
     goals: Optional[List[str]] = Field(default=None)
@@ -118,7 +123,7 @@ class Context(BaseModel):
 class Option(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: Optional[str] = Field(default=None, max_length=500)
+    id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     score: Optional[float] = None
@@ -157,8 +162,8 @@ class EvidenceItem(BaseModel):
     """
     model_config = ConfigDict(extra="allow")
 
-    source: str = Field(default="unknown", max_length=500)
-    uri: Optional[str] = Field(default=None, max_length=2000)
+    source: str = Field(default="unknown", max_length=MAX_SOURCE_LENGTH)
+    uri: Optional[str] = Field(default=None, max_length=MAX_URI_LENGTH)
     title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     snippet: str = Field(default="", max_length=MAX_SNIPPET_LENGTH)
     confidence: float = 0.7
@@ -284,7 +289,7 @@ class TrustLog(BaseModel):
 class AltItem(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    id: Optional[str] = Field(default=None, max_length=500)
+    id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     title: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     text: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)  # 互換（title の別名）
     description: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
@@ -885,7 +890,7 @@ class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     message: str = Field(..., max_length=MAX_QUERY_LENGTH)
-    session_id: Optional[str] = Field(default=None, max_length=500)
+    session_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     memory_auto_put: bool = True
     persona_evolve: bool = True
 
@@ -905,13 +910,13 @@ class MemoryPutRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    user_id: Optional[str] = Field(default=None, max_length=500)
-    key: Optional[str] = Field(default=None, max_length=500)
+    user_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    key: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     text: str = Field(default="", max_length=MAX_MEMORY_TEXT_LENGTH)
     tags: List[str] = Field(default_factory=list)
     value: Any = Field(default_factory=dict)
-    kind: str = Field(default="semantic", max_length=50)
-    retention_class: Optional[str] = Field(default=None, max_length=50)
+    kind: str = Field(default="semantic", max_length=MAX_KIND_LENGTH)
+    retention_class: Optional[str] = Field(default=None, max_length=MAX_KIND_LENGTH)
     meta: Dict[str, Any] = Field(default_factory=dict)
     expires_at: Optional[int] = None
     legal_hold: bool = False
@@ -955,8 +960,8 @@ class MemoryPutRequest(BaseModel):
 class MemoryGetRequest(BaseModel):
     """Typed request body for POST /v1/memory/get."""
 
-    user_id: Optional[str] = Field(default=None, max_length=500)
-    key: str = Field(..., max_length=500)
+    user_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    key: str = Field(..., max_length=MAX_ID_LENGTH)
 
 
 class MemorySearchRequest(BaseModel):
@@ -964,7 +969,7 @@ class MemorySearchRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    user_id: Optional[str] = Field(default=None, max_length=500)
+    user_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     query: str = Field(default="", max_length=MAX_QUERY_LENGTH)
     k: int = Field(default=8, ge=1, le=100)
     min_sim: float = Field(default=0.25, ge=0.0, le=1.0)
@@ -1010,18 +1015,18 @@ class MemorySearchRequest(BaseModel):
 class MemoryEraseRequest(BaseModel):
     """Typed request body for POST /v1/memory/erase."""
 
-    user_id: Optional[str] = Field(default=None, max_length=500)
-    reason: str = Field(default="user_request", max_length=500)
-    actor: str = Field(default="api", max_length=200)
+    user_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    reason: str = Field(default="user_request", max_length=MAX_SOURCE_LENGTH)
+    actor: str = Field(default="api", max_length=MAX_ACTOR_LENGTH)
 
 
 class TrustFeedbackRequest(BaseModel):
     """Typed request body for POST /v1/trust/feedback."""
 
-    user_id: Optional[str] = Field(default=None, max_length=500)
+    user_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     score: float = Field(default=0.5, ge=0.0, le=1.0)
     note: str = Field(default="", max_length=MAX_NOTE_LENGTH)
-    source: str = Field(default="manual", max_length=200)
+    source: str = Field(default="manual", max_length=MAX_ACTOR_LENGTH)
 
     @field_validator("score", mode="before")
     @classmethod

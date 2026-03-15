@@ -544,10 +544,18 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
                         depth -= 1
                     if depth == 0 and buf_start is not None:
                         s = text[buf_start : i + 1]
-                        try:
-                            objs.append(json.loads(s))
-                        except Exception:
-                            pass
+                        # 累積複雑度チェック: ネスト構造文字数が過大ならスキップ（DoS軽減）
+                        _nesting = s.count("{") + s.count("[")
+                        if _nesting > max_depth:
+                            logger.warning(
+                                "DebateOS: object cumulative nesting complexity %d exceeds limit %d, skipping",
+                                _nesting, max_depth,
+                            )
+                        else:
+                            try:
+                                objs.append(json.loads(s))
+                            except Exception:
+                                pass
                         buf_start = None
                         if len(objs) >= max_objects:
                             break
