@@ -814,7 +814,11 @@ async def call_core_decide(
         try:
             return set(inspect.signature(fn).parameters.keys())
         except Exception:  # subsystem resilience: intentionally broad
-            logger.debug("call_core_decide: signature inspection failed for %r", fn)
+            logger.debug(
+                "call_core_decide: signature inspection failed for %r",
+                fn,
+                exc_info=True,
+            )
             return set()
 
     def _can_bind(*args: Any, **kwargs: Any) -> bool:

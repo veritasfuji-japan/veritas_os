@@ -22,6 +22,7 @@ from veritas_os.core.pipeline import (
     _dedupe_alts,
     _get_request_params,
     _mem_model_path,
+    call_core_decide,
 )
 
 
@@ -144,6 +145,49 @@ class TestDebugLoggingOnExceptions:
         finally:
             pipeline_mod.veritas_core = original
 
+
+# =========================================================
+# call_core_decide signature inspection logging
+# =========================================================
+
+
+@pytest.mark.asyncio
+async def test_call_core_decide_logs_exc_info_on_signature_inspection_failure(
+    monkeypatch,
+    caplog,
+):
+    """call_core_decide should include exc_info when signature inspection fails."""
+    import veritas_os.core.pipeline as pipeline_mod
+
+    original_signature = pipeline_mod.inspect.signature
+
+    def broken_signature(_fn):
+        raise RuntimeError("inspect signature failure")
+
+    monkeypatch.setattr(pipeline_mod.inspect, "signature", broken_signature)
+
+    def core_fn(**_kwargs):
+        return {"ok": True}
+
+    with caplog.at_level(logging.DEBUG, logger="veritas_os.core.pipeline"):
+        result = await call_core_decide(
+            core_fn,
+            context={"user_id": "u1"},
+            query="query",
+            alternatives=[],
+            min_evidence=1,
+        )
+
+    monkeypatch.setattr(pipeline_mod.inspect, "signature", original_signature)
+
+    assert result.get("ok") is True
+    matching_records = [
+        record
+        for record in caplog.records
+        if "signature inspection failed" in record.getMessage()
+    ]
+    assert matching_records
+    assert any(record.exc_info for record in matching_records)
 
 # =========================================================
 # _to_dict defensive try-except on model_dump / dict
