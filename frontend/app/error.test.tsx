@@ -1,8 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import GlobalErrorPage from "./error";
 
 describe("GlobalErrorPage", () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, "language", { value: "ja", configurable: true });
+  });
+
   it("renders recovery UI and calls reset on retry", () => {
     const reset = vi.fn();
 

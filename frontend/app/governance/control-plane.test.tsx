@@ -66,9 +66,9 @@ describe("Governance control plane", () => {
     render(<GovernanceControlPage />);
     fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "apply" })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("button", { name: "適用" })).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
-    expect(screen.getByRole("button", { name: "apply" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "適用" })).toBeDisabled();
   });
 });

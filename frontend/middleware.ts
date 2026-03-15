@@ -105,6 +105,7 @@ export function middleware(request: NextRequest): NextResponse {
 
   response.headers.set('Content-Security-Policy', cspEnforced);
   response.headers.set('Content-Security-Policy-Report-Only', cspReportOnly);
+  response.headers.set('x-veritas-nonce', nonce);
 
   // Set httpOnly BFF session cookie when configured and not already present.
   const sessionToken = process.env[BFF_SESSION_TOKEN_ENV] ?? '';
