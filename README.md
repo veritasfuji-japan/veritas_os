@@ -17,9 +17,24 @@
 **Release Status**: In Development  
 **Author**: Takeshi Fujishita
 
-VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility.
+VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-closed safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility.
 
 > Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
+
+### Independent Technical DD Score
+
+| Category | Score |
+|---|---|
+| Architecture | 82 |
+| Code Quality | 83 |
+| Security | 80 |
+| Testing | 88 |
+| Production Readiness | 80 |
+| Governance | 82 |
+| **Overall** | **82 / 100** |
+| **Verdict** | **A- (production-approaching governance infrastructure)** |
+
+> Evaluated by independent technical due diligence review (2026-03-15). Full report: `docs/reviews/technical_dd_review_ja_20260315.md`
 
 ---
 
@@ -56,9 +71,10 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **deterministic, safet
 Most "agent frameworks" optimize autonomy and tool use.
 VERITAS optimizes for **governance**:
 
-- **Safety & compliance** enforced by a final gate (**FUJI Gate**) with PII detection, harmful content blocking, prompt injection defense, and policy-driven rules
-- **Reproducible decision pipeline** (20+ stages, structured outputs, deterministic replay)
-- **Auditability** via a **hash-chained TrustLog** (tamper-evident, Ed25519-signed, WORM-mirrored decision history)
+- **Fail-closed safety & compliance** enforced by a final gate (**FUJI Gate**) with PII detection, harmful content blocking, prompt injection defense, toxicity filtering for web search results, and policy-driven rules — all safety paths return `rejected` / `risk=1.0` on exception (fail-closed)
+- **High-fidelity reproducible decision pipeline** (20+ stages, structured outputs, replay with divergence detection, retrieval snapshot checksum, model version verification)
+- **Auditability** via a **hash-chained TrustLog** (tamper-evident, Ed25519-signed, WORM hard-fail mirror, **Transparency log anchor**, **W3C PROV export**)
+- **Enterprise governance** — **4-eyes approval** for policy changes, **RBAC/ABAC** access control, **SSE real-time governance alerts**, external secret manager enforcement
 - **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
 - **Operational visibility** via a full-stack **Mission Control dashboard** (Next.js) with real-time event streaming, risk analytics, and governance policy management
 - **EU AI Act compliance** — built-in compliance reporting, audit export, and deployment readiness checks
@@ -110,11 +126,11 @@ Bundled subsystems:
 | **WorldModel** | World state snapshots, causal transitions, project scoping, hypothetical simulation |
 | **ValueCore** | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalancing from TrustLog feedback |
 | **FUJI Gate** | Multi-layer safety gate — PII detection, harmful content blocking, sensitive domain filtering, prompt injection defense, confusable character detection, LLM safety head, and policy-driven YAML rules |
-| **TrustLog** | Append-only hash-chained audit log (JSONL) with SHA-256 integrity, Ed25519 signatures, and WORM mirror support |
+| **TrustLog** | Append-only hash-chained audit log (JSONL) with SHA-256 integrity, Ed25519 signatures, WORM hard-fail mirror, Transparency log anchor, and automatic PII data classification |
 | **Debate** | Multi-viewpoint reasoning (pro/con/third-party) for transparent decision rationale |
 | **Critique** | Self-critique generation with severity-ranked issues and fix suggestions |
 | **Planner** | Action plan generation with step-by-step execution strategies |
-| **Replay Engine** | Deterministic replay of past decisions with diff reporting for audit verification |
+| **Replay Engine** | High-fidelity reproducible replay of past decisions with diff reporting, retrieval snapshot checksum, model version verification, and dependency version tracking for audit verification |
 | **Compliance** | EU AI Act compliance reports, internal governance reports, and deployment readiness checks |
 
 ---
@@ -146,7 +162,7 @@ veritas_os/                  ← Monorepo root
 │   ├── security/            ← SHA-256 hashing, Ed25519 signing
 │   ├── tools/               ← Web search, GitHub search, LLM safety
 │   ├── replay/              ← Deterministic replay engine
-│   └── tests/               ← 3000+ Python tests
+│   └── tests/               ← 3200+ Python tests
 ├── frontend/                ← Next.js 15 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -239,13 +255,14 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | GET | `/v1/trust/stats` | Trust log statistics |
 | GET | `/v1/trustlog/verify` | Verify hash chain integrity |
 | GET | `/v1/trustlog/export` | Export signed trustlog |
+| GET | `/v1/trust/{request_id}/prov` | W3C PROV-JSON export for audit interoperability |
 
 ### Governance
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/v1/governance/policy` | Retrieve current governance policy |
-| PUT | `/v1/governance/policy` | Update governance policy (hot-reload) |
+| PUT | `/v1/governance/policy` | Update governance policy (hot-reload, **4-eyes approval required**) |
 | GET | `/v1/governance/policy/history` | Policy change audit trail |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
 
@@ -273,6 +290,10 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 ### Replay
 
 `POST /v1/replay/{decision_id}` re-executes a stored decision using the original recorded inputs and writes a replay artifact to `REPLAY_REPORT_DIR` (`audit/replay_reports` by default) as `replay_{decision_id}_{YYYYMMDD_HHMMSS}.json`.
+
+Replay snapshots include `retrieval_snapshot_checksum` (SHA-256 deterministic hash), `external_dependency_versions`, and `model_version` for reproducibility verification. Model version mismatch is checked by default; snapshots without `model_version` are rejected by default (`VERITAS_REPLAY_REQUIRE_MODEL_VERSION=1`).
+
+> **Note**: LLM responses are inherently non-deterministic even at `temperature=0`. VERITAS Replay is designed as **high-fidelity reproducible re-execution with divergence detection**, not strict deterministic replay.
 
 When `VERITAS_REPLAY_STRICT=1`, replay enforces deterministic settings (`temperature=0`, fixed seed, and mocked external retrieval side effects).
 
@@ -509,11 +530,11 @@ Dockerfile `CMD` accordingly before building the image.
 
 | Module | Responsibility |
 |---|---|
-| `veritas_os/core/fuji.py` | Multi-layer safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, policy rules |
+| `veritas_os/core/fuji.py` | Multi-layer **fail-closed** safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, LLM safety head, policy rules. All exceptions return `rejected` / `risk=1.0` |
 | `veritas_os/core/value_core.py` | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalance from TrustLog |
-| `veritas_os/api/governance.py` | Policy CRUD with hot-reload, change callbacks, audit trail, value drift monitoring |
+| `veritas_os/api/governance.py` | Policy CRUD with hot-reload, **4-eyes approval** (2 approvers, no duplicates), change callbacks, audit trail, value drift monitoring, **RBAC/ABAC** access control |
 | `veritas_os/logging/trust_log.py` | Hash-chain TrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` with thread-safe append |
-| `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with WORM mirror support |
+| `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with **WORM hard-fail** mirror, **Transparency log anchor**, automatic **PII data classification** |
 
 ### Memory & world state
 
@@ -591,7 +612,10 @@ Key features:
 - **Dual persistence** — in-memory cache (max 2000 items) + persistent JSONL ledger
 - **Signed export** — Ed25519 digital signatures for tamper-proof distribution
 - **Chain verification** — `GET /v1/trustlog/verify` validates the full chain
-- **PII masking** — optional shadow log with PII redacted
+- **Transparency log anchor** — external log integration for independent audit verification (`VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1` for fail-closed operation)
+- **WORM hard-fail** — write failures to WORM mirror raise `SignedTrustLogWriteError` (`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`)
+- **W3C PROV export** — `GET /v1/trust/{request_id}/prov` returns PROV-JSON for audit tool interoperability
+- **PII masking & classification** — automatic PII/secret redaction with data classification tagging (18 PII patterns including email, credit card, phone, address, IP, passport)
 - **Frontend visualization** — TrustLog Explorer at `/audit` with chain integrity status (verified/broken/missing/orphan)
 
 ---
@@ -684,6 +708,15 @@ pnpm --filter frontend e2e
 - **Operational logs are excluded from Git**: runtime logs (for example,
   `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live
   under `veritas_os/sample_data/memory/`.
+
+### Fail-closed safety pipeline
+
+- **FUJI Gate fail-closed**: all safety judgment exceptions return `status=rejected`, `risk=1.0`. No silent pass-through on error.
+- **Governance boundary guard**: `/v1/fuji/validate` returns 403 by default — explicit opt-in required (`VERITAS_ENABLE_DIRECT_FUJI_API=1`).
+- **4-eyes approval**: governance policy updates require 2 distinct approvers (no duplicates, enabled by default).
+- **RBAC/ABAC**: `require_governance_access` guard on governance management endpoints with role + tenant verification.
+- **External secret manager enforcement**: `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER=1` blocks startup without Vault/KMS integration.
+- **Web search toxicity filter**: retrieval poisoning / prompt injection heuristics with NFKC normalization, URL decode, base64 decode, and leet-speak detection. Enabled by default (fail-closed); disable with `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER=0`.
 
 ### Migration safety
 
