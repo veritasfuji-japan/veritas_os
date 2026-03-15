@@ -421,3 +421,24 @@ class TestOwnerFunction:
     def test_owner_empty_defs(self):
         """Test owner with empty defs."""
         assert m.owner([], 5) == "<module-level>"
+
+class TestRiskWeightedCoverage:
+    """Tests for risk-weighted coverage helpers."""
+
+    def test_parse_risk_weights_valid_file(self, tmp_path) -> None:
+        """Risk weight parser should clamp values to [0, 1]."""
+        weights = tmp_path / "weights.json"
+        weights.write_text('{"A": 0.2, "B": 2.0, "C": -1.0}', encoding="utf-8")
+
+        parsed = m._parse_risk_weights(["--risk-weights", str(weights)])
+        assert parsed["A"] == 0.2
+        assert parsed["B"] == 1.0
+        assert parsed["C"] == 0.0
+
+    def test_compute_weighted_gap(self) -> None:
+        """Weighted gap should use owner weights and default to 0.5."""
+        by_owner = {"A": [1, 2], "B": [10]}
+        weights = {"A": 1.0}
+        got = m._compute_weighted_gap(by_owner=by_owner, risk_weights=weights)
+        # ((2 * 1.0) + (1 * 0.5)) / 3
+        assert round(got, 4) == round(2.5 / 3.0, 4)

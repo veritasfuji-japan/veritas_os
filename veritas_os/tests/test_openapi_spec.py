@@ -10,6 +10,8 @@ from pathlib import Path
 
 import yaml
 
+from veritas_os.api import server as srv
+
 
 def _load_openapi_spec() -> dict:
     """Load and parse the repository OpenAPI YAML document."""
@@ -43,3 +45,21 @@ def test_health_endpoint_has_no_auth_requirement() -> None:
     operation = spec["paths"]["/health"]["get"]
 
     assert operation.get("security") == []
+
+
+def test_openapi_includes_runtime_audit_and_governance_routes() -> None:
+    """OpenAPI should include critical runtime routes used for governance/audit."""
+    spec = _load_openapi_spec()
+    paths = spec.get("paths", {})
+    runtime_paths = {route.path for route in srv.app.routes}
+
+    critical = {
+        "/v1/governance/policy",
+        "/v1/governance/policy/history",
+        "/v1/trustlog/verify",
+        "/v1/trust/{request_id}/prov",
+    }
+
+    for path in critical:
+        assert path in runtime_paths
+        assert path in paths

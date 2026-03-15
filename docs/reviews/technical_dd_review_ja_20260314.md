@@ -148,6 +148,12 @@
 - ✅ #14 対応: 分散ロック/認証ストア一貫性の **chaos テスト** を追加（`veritas_os/tests/test_auth_store_consistency_chaos.py`）。共有 Redis 相当バックエンドを模擬し、ワーカー跨ぎ nonce 再利用拒否・分散レート制限の整合性・障害時 fail-open/fail-closed ポリシーを検証。
 - ✅ #15 対応: Safety regression suite（敵対プロンプト）を拡充し、`llm_safety` の難読化攻撃（leet/記号分割）検知テストを追加。`k1ll` や `h a c k` のような入力でも決定論ヒューリスティックで `illicit` 判定となることを検証。
 
+- ✅ #16 対応: `veritas_os/tools/coverage_map_pipeline.py` に `--risk-weights` を追加し、オーナー単位の未カバレッジ行を重み付けした `risk_weighted_missing_ratio` を算出可能に改善（機能リスク重み付きカバレッジ指標）。
+- ✅ #17 対応: OpenAPI と実装差分の検証を強化し、`veritas_os/tests/test_openapi_spec.py` で **実ランタイムの重要経路**（governance/trustlog/prov）と `openapi.yaml` の整合性を自動検証するよう改善。
+- ✅ #18 対応: Decision trace の W3C PROV 輸出 API `GET /v1/trust/{request_id}/prov` を追加。監査ツール連携向けに PROV-JSON 形式（entity/activity/agent/wasGeneratedBy）を返却。
+- ✅ #19 対応: API 層に governance 管理系向け RBAC/ABAC ガード `require_governance_access` を追加。`X-Role` によるロール制御と `VERITAS_GOVERNANCE_TENANT_ID` による tenant 属性制約を実装。
+- ✅ #20 対応: 重要設定（`fuji_rules`/`risk_thresholds`/`auto_stop`）変更時に `governance.alert` SSE イベントを発火するリアルタイムアラートを追加し、運用検知を強化。
+
 ## 17. Final Verdict
 - **B. serious engineering foundation**
 - 研究プロトタイプを超える実装密度はあるが、production-grade governance infrastructure を名乗るには fail-closed / 外部不変監査 / 組織的承認制御が未充足。

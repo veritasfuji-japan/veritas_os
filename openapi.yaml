@@ -1199,6 +1199,25 @@ paths:
                 type: object
                 additionalProperties: true
 
+
+  /v1/trust/{request_id}/prov:
+    get:
+      summary: Decision trace export as W3C PROV JSON
+      parameters:
+        - in: path
+          name: request_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: PROV export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /v1/events:
     get:
       summary: SSE event stream
@@ -1225,6 +1244,17 @@ paths:
   /v1/governance/value-drift:
     get:
       summary: Value drift metrics
+      parameters:
+        - in: header
+          name: X-Role
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Tenant-Id
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Value drift data
@@ -1237,6 +1267,17 @@ paths:
   /v1/governance/policy:
     get:
       summary: Governance policy read
+      parameters:
+        - in: header
+          name: X-Role
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Tenant-Id
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Governance policy
@@ -1246,6 +1287,17 @@ paths:
                 $ref: '#/components/schemas/GovernancePolicyResponse'
     put:
       summary: Governance policy update
+      parameters:
+        - in: header
+          name: X-Role
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Tenant-Id
+          required: false
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -1263,6 +1315,17 @@ paths:
   /v1/governance/policy/history:
     get:
       summary: Governance policy change history
+      parameters:
+        - in: header
+          name: X-Role
+          required: false
+          schema:
+            type: string
+        - in: header
+          name: X-Tenant-Id
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Policy change history
