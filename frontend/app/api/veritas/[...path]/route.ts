@@ -10,14 +10,17 @@ import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
 import { resolveApiBaseUrl } from "./route-config";
 
-const API_BASE = resolveApiBaseUrl();
 const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
 /** Max request body size for proxied requests (1MB). */
 const MAX_PROXY_BODY_BYTES = 1 * 1024 * 1024;
 
-function buildTargetUrl(pathSegments: string[], searchParams: URLSearchParams): URL {
-  const baseUrl = API_BASE.replace(/\/$/, "");
+function buildTargetUrl(
+  apiBaseUrl: string,
+  pathSegments: string[],
+  searchParams: URLSearchParams,
+): URL {
+  const baseUrl = apiBaseUrl.replace(/\/$/, "");
   const safePath = pathSegments.map(encodeURIComponent).join("/");
   return new URL(`${baseUrl}/${safePath}?${searchParams.toString()}`);
 }
@@ -60,6 +63,23 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
     );
   }
 
+  const apiBaseUrl = resolveApiBaseUrl();
+  if (!apiBaseUrl) {
+    return NextResponse.json(
+      {
+        error: "server_misconfigured",
+        detail: "VERITAS_API_BASE_URL must be configured in production.",
+        trace_id: traceId,
+      },
+      {
+        status: 503,
+        headers: {
+          [TRACE_ID_HEADER_NAME]: traceId,
+        },
+      },
+    );
+  }
+
   if (!API_KEY.trim()) {
     return NextResponse.json(
       {
@@ -76,7 +96,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
     );
   }
 
-  const targetUrl = buildTargetUrl(pathSegments, request.nextUrl.searchParams);
+  const targetUrl = buildTargetUrl(apiBaseUrl, pathSegments, request.nextUrl.searchParams);
   const upstreamHeaders = new Headers();
   upstreamHeaders.set("X-API-Key", API_KEY.trim());
   upstreamHeaders.set(TRACE_ID_HEADER_NAME, traceId);
