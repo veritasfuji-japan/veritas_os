@@ -54,7 +54,6 @@ class SafetyHeadResult:
 # Tool bridge wrappers (local, avoids importing from fuji.py)
 # =========================================================
 from veritas_os.tools import call_tool as _call_tool
-from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
 
 
 def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:

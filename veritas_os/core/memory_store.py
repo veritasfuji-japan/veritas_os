@@ -269,7 +269,11 @@ class MemoryStore:
         if retention_class not in ALLOWED_RETENTION_CLASSES:
             retention_class = DEFAULT_RETENTION_CLASS
 
-        legal_hold = bool(meta.get("legal_hold", False))
+        raw_hold = meta.get("legal_hold", False)
+        if isinstance(raw_hold, str):
+            legal_hold = raw_hold.strip().lower() in ("true", "1", "yes")
+        else:
+            legal_hold = bool(raw_hold)
         normalized_expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
 
         meta["retention_class"] = retention_class
@@ -290,7 +294,9 @@ class MemoryStore:
         if not isinstance(meta, dict):
             return False
 
-        if bool(meta.get("legal_hold", False)):
+        raw_hold = meta.get("legal_hold", False)
+        hold = raw_hold.strip().lower() in ("true", "1", "yes") if isinstance(raw_hold, str) else bool(raw_hold)
+        if hold:
             return False
 
         expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
