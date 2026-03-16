@@ -25,10 +25,15 @@ import logging
 import base64
 
 from .config import capability_cfg, emit_capability_manifest
+from .memory_security import (
+    PICKLE_MIGRATION_GUIDE_PATH,
+    emit_legacy_pickle_runtime_blocked,
+    is_explicitly_enabled,
+    warn_for_legacy_pickle_artifacts,
+)
 
 logger = logging.getLogger(__name__)
 
-PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
 
 
 DEFAULT_RETENTION_CLASS = "standard"
@@ -41,56 +46,18 @@ ALLOWED_RETENTION_CLASSES = {
 
 
 def _is_explicitly_enabled(env_key: str) -> bool:
-    """Return True when the capability env var is explicitly set to a truthy value."""
-    value = os.getenv(env_key)
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    """Backward-compatible wrapper for memory security env parsing."""
+    return is_explicitly_enabled(env_key)
 
 
 def _emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
-    """Log a security error for legacy pickle artifacts blocked at runtime.
-
-    Pickle/joblib deserialization is permanently removed due to arbitrary code
-    execution (RCE) risk.  Use the offline migration CLI to convert legacy
-    artifacts:  ``python -m veritas_os.scripts.migrate_pickle``
-    """
-    logger.error(
-        "[SECURITY] Legacy %s pickle detected at %s. "
-        "Runtime pickle/joblib loading is permanently disabled (RCE risk). "
-        "Migrate artifacts offline: python -m veritas_os.scripts.migrate_pickle  "
-        "See %s for details.",
-        artifact_name,
-        path,
-        PICKLE_MIGRATION_GUIDE_PATH,
-    )
+    """Backward-compatible wrapper for legacy pickle security logging."""
+    emit_legacy_pickle_runtime_blocked(path=path, artifact_name=artifact_name)
 
 
 def _warn_for_legacy_pickle_artifacts(scan_roots: List[Path]) -> None:
-    """Emit security warnings when legacy pickle artifacts are present.
-
-    This runtime guardrail does not deserialize any pickle payloads.
-    It scans recursively under known MemoryOS runtime directories and emits
-    migration guidance so operators can remove risky artifacts.
-    """
-    checked_roots = set()
-    for raw_root in scan_roots:
-        root = raw_root.resolve(strict=False)
-        if root in checked_roots or not root.exists() or not root.is_dir():
-            continue
-        checked_roots.add(root)
-
-        for candidate in root.rglob("*"):
-            if not candidate.is_file():
-                continue
-
-            if candidate.suffix.lower() not in {".pkl", ".joblib", ".pickle"}:
-                continue
-
-            _emit_legacy_pickle_runtime_blocked(
-                path=candidate,
-                artifact_name="runtime artifact",
-            )
+    """Backward-compatible wrapper for runtime legacy pickle scanning."""
+    warn_for_legacy_pickle_artifacts(scan_roots=scan_roots)
 
 
 # OS 判定
