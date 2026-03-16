@@ -567,46 +567,31 @@ cfg = get_cfg()
 
 def _should_fail_fast_startup(profile: Optional[str] = None) -> bool:
     """Return whether startup validation failures should stop app boot."""
-    resolved_profile = (
-        profile if profile is not None else os.getenv("VERITAS_ENV", "")
-    )
-    normalized_profile = resolved_profile.strip().lower()
-    return normalized_profile in {"prod", "production"}
+    from veritas_os.api.startup_health import should_fail_fast_startup
+
+    return should_fail_fast_startup(profile)
 
 
 def _run_startup_config_validation() -> None:
     """Validate startup configuration with environment-specific strictness."""
-    try:
-        validator = globals().get("validate_startup_config")
-        if validator is None:
-            from veritas_os.core.config import validate_startup_config as validator
+    from veritas_os.api.startup_health import run_startup_config_validation
 
-        validator()
-    except Exception:
-        fail_fast = _should_fail_fast_startup()
-        logger.warning(
-            "startup config validation failed (fail_fast=%s)",
-            fail_fast,
-            exc_info=True,
-        )
-        if fail_fast:
-            raise
+    run_startup_config_validation(
+        logger=logger,
+        should_fail_fast=_should_fail_fast_startup,
+        validator=globals().get("validate_startup_config"),
+    )
 
 
 def _check_runtime_feature_health() -> None:
     """Warn about degraded runtime features so operators are never silently misled."""
-    if not _HAS_SANITIZE:
-        logger.warning(
-            "[SECURITY] PII masking is DISABLED (sanitize module failed to load). "
-            "Sensitive data may appear in shadow logs. "
-            "Fix the import error and restart to restore full protection."
-        )
-    if not _HAS_ATOMIC_IO:
-        logger.warning(
-            "[RELIABILITY] Atomic I/O is DISABLED (atomic_io module failed to load). "
-            "Trust log writes are less crash-safe (using direct file I/O). "
-            "Fix the import error and restart to restore full protection."
-        )
+    from veritas_os.api.startup_health import check_runtime_feature_health
+
+    check_runtime_feature_health(
+        logger=logger,
+        has_sanitize=_HAS_SANITIZE,
+        has_atomic_io=_HAS_ATOMIC_IO,
+    )
 
 
 # ==============================
