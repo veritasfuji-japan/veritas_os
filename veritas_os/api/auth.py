@@ -320,8 +320,10 @@ def _resolve_expected_api_key_with_source() -> tuple[str, str]:
         return default_key, "api_key_default"
 
     # Late import to avoid circular dependency
+    # Check srv.cfg first (tests monkeypatch server.cfg directly),
+    # then fall back to srv.get_cfg() which returns _cfg_state.obj.
     from veritas_os.api import server as srv
-    cfg = srv.get_cfg()
+    cfg = getattr(srv, "cfg", None) or srv.get_cfg()
     config_key = (getattr(cfg, "api_key", "") or "").strip()
     if config_key:
         return config_key, "config"
