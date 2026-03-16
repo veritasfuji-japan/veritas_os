@@ -109,6 +109,31 @@ from .pipeline_contracts import (
     _deep_merge_dict,
     _merge_extras_preserving_contract,
 )
+from .pipeline_persistence import (
+    REPO_ROOT,
+    _UNSAFE_UNICODE_CATEGORIES,
+    _SAFE_FILENAME_RE,
+    _safe_paths,
+    _fallback_build_dataset_record,
+    _fallback_append_dataset_record,
+    load_dataset_writer as _load_dataset_writer,
+    _fallback_append_trust_log,
+    _fallback_write_shadow_decide,
+    load_trust_log as _load_trust_log,
+    _EVIDENCE_MAX_UPPER,
+    resolve_evidence_max as _resolve_evidence_max,
+)
+from .pipeline_gate import (
+    MEM_VEC,
+    MEM_CLF,
+    predict_gate_label,
+    _mem_model_path,
+    _allow_prob,
+    _load_valstats as _load_valstats_impl,
+    _save_valstats as _save_valstats_impl,
+    _dedupe_alts_fallback,
+    _dedupe_alts as _dedupe_alts_impl,
+)
 
 # ---- Stage modules (responsibility-separated) ----
 from .pipeline_types import (  # noqa: F401 – re-exported for backward compat
@@ -186,14 +211,8 @@ except (ImportError, ModuleNotFoundError):
 # repo root / time helpers
 # =========================================================
 
-# ★ セキュリティ: __file__ を resolve() 済みなので REPO_ROOT はシンボリックリンク解決済み。
-# _enforce_path_policy() での relative_to() チェックが安全に機能する。
-REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
-
+# REPO_ROOT, _UNSAFE_UNICODE_CATEGORIES -> pipeline_persistence.py に移動済み（上部 import）
 # utc_now / utc_now_iso_z は utils.py に統合済み（import 済み）
-
-# Unicode categories unsafe for use in ID strings (control, format, separators)
-_UNSAFE_UNICODE_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Zl", "Zp"})
 
 
 # =========================================================
@@ -461,126 +480,15 @@ def _clip01(x: float) -> float:
     return _clip01_base(x)
 
 
-# =========================================================
-# Safe logging paths (do not crash import)
-# =========================================================
-
-def _safe_paths() -> Tuple[Path, Path, Path, Path]:
-    """
-    Return (LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG) safely.
-    Prefer veritas_os.logging.paths if available; else fallback to repo-local dirs.
-    Also allow env overrides:
-      - VERITAS_LOG_DIR
-      - VERITAS_DATASET_DIR
-    """
-    env_log = (os.getenv("VERITAS_LOG_DIR") or "").strip()
-    env_ds = (os.getenv("VERITAS_DATASET_DIR") or "").strip()
-
-    allow_external = _to_bool(os.getenv("VERITAS_ALLOW_EXTERNAL_PATHS", "0"))
-    if allow_external:
-        logger.warning(
-            "[SECURITY][pipeline] VERITAS_ALLOW_EXTERNAL_PATHS=1 is enabled; "
-            "external log/dataset paths are permitted."
-        )
-
-    def _enforce_path_policy(candidate: Path, *, source_name: str) -> Optional[Path]:
-        """Validate a candidate path against the pipeline write policy.
-
-        Security policy:
-        - By default, only paths under ``REPO_ROOT`` are accepted.
-        - External paths can be explicitly allowed by setting
-          ``VERITAS_ALLOW_EXTERNAL_PATHS=1``.
-        """
-        resolved = candidate.resolve()
-        if allow_external:
-            return resolved
-
-        try:
-            resolved.relative_to(REPO_ROOT)
-            return resolved
-        except ValueError:
-            masked_candidate = f"<redacted_path:{candidate.name or 'path'}>"
-            logger.warning(
-                "[SECURITY][pipeline] Ignoring %s=%r outside REPO_ROOT (%s). "
-                "Set VERITAS_ALLOW_EXTERNAL_PATHS=1 to allow explicitly.",
-                source_name,
-                masked_candidate,
-                REPO_ROOT,
-            )
-            return None
-
-    def _resolve_within_repo(path_text: str, *, env_name: str) -> Optional[Path]:
-        """Resolve and validate environment override directory.
-
-        Security policy:
-        - By default, only paths under ``REPO_ROOT`` are accepted.
-        - External paths can be explicitly allowed by setting
-          ``VERITAS_ALLOW_EXTERNAL_PATHS=1``.
-        """
-        if not path_text:
-            return None
-
-        return _enforce_path_policy(Path(path_text), source_name=env_name)
-
-    try:
-        from veritas_os.logging import paths as lp
-
-        env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
-        env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
-
-        default_log_dir = _enforce_path_policy(
-            Path(getattr(lp, "LOG_DIR")),
-            source_name="logging.paths.LOG_DIR",
-        )
-        default_dataset_dir = _enforce_path_policy(
-            Path(getattr(lp, "DATASET_DIR")),
-            source_name="logging.paths.DATASET_DIR",
-        )
-        LOG_DIR = env_log_path or default_log_dir or (REPO_ROOT / "logs").resolve()
-        DATASET_DIR = (
-            env_ds_path
-            or default_dataset_dir
-            or (REPO_ROOT / "dataset").resolve()
-        )
-        default_val_json = _enforce_path_policy(
-            Path(getattr(lp, "VAL_JSON")),
-            source_name="logging.paths.VAL_JSON",
-        )
-        default_meta_log = _enforce_path_policy(
-            Path(getattr(lp, "META_LOG")),
-            source_name="logging.paths.META_LOG",
-        )
-        VAL_JSON = default_val_json or (LOG_DIR / "value_ema.json").resolve()
-        META_LOG = default_meta_log or (LOG_DIR / "meta.log").resolve()
-        return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
-    except (ImportError, AttributeError, OSError) as e:
-        _warn(f"[WARN][pipeline] logging.paths import failed -> fallback: {repr(e)}")
-        env_log_path = _resolve_within_repo(env_log, env_name="VERITAS_LOG_DIR")
-        env_ds_path = _resolve_within_repo(env_ds, env_name="VERITAS_DATASET_DIR")
-        LOG_DIR = env_log_path or (REPO_ROOT / "logs").resolve()
-        DATASET_DIR = env_ds_path or (REPO_ROOT / "dataset").resolve()
-        VAL_JSON = (LOG_DIR / "value_ema.json").resolve()
-        META_LOG = (LOG_DIR / "meta.log").resolve()
-        return LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG
-
-
-LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths()
+# _safe_paths, EVIDENCE_MAX, _SAFE_FILENAME_RE -> pipeline_persistence.py に移動済み
+LOG_DIR, DATASET_DIR, VAL_JSON, META_LOG = _safe_paths(_warn=_warn)
 REPLAY_REPORT_DIR = (REPO_ROOT / "audit" / "replay_reports").resolve()
-_EVIDENCE_MAX_UPPER = 10000  # Upper bound for EVIDENCE_MAX to prevent unreasonable memory usage
-try:
-    EVIDENCE_MAX = int(os.getenv("VERITAS_EVIDENCE_MAX", "50"))
-except (ValueError, TypeError):
-    logger.warning("VERITAS_EVIDENCE_MAX=%r is not a valid integer, using default 50", os.getenv("VERITAS_EVIDENCE_MAX"))
-    EVIDENCE_MAX = 50
-if not (1 <= EVIDENCE_MAX <= _EVIDENCE_MAX_UPPER):
-    logger.warning("VERITAS_EVIDENCE_MAX=%d out of bounds [1,%d], using default 50", EVIDENCE_MAX, _EVIDENCE_MAX_UPPER)
-    EVIDENCE_MAX = 50
+EVIDENCE_MAX = _resolve_evidence_max()
 
 # ★ Replay functions moved to pipeline_replay.py.
 # _safe_filename_id, _sanitize_for_diff, _build_replay_diff,
 # _load_persisted_decision, _ReplayRequest are imported above for backward compat.
-# _SAFE_FILENAME_RE kept here only for direct-access backward compat.
-_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9_\-]")
+# _SAFE_FILENAME_RE imported from pipeline_persistence for direct-access backward compat.
 
 
 def _load_persisted_decision(decision_id: str) -> Optional[Dict[str, Any]]:
@@ -616,178 +524,36 @@ async def replay_decision(
 
 
 # =========================================================
-# Safe dataset writer (optional)
+# Safe dataset writer (optional) -> pipeline_persistence.py に移動済み
 # =========================================================
-
-
-def _fallback_build_dataset_record(
-    *, req_payload: dict, res_payload: dict, meta: dict, eval_meta: dict,
-) -> dict:
-    return {"req": req_payload, "res": res_payload, "meta": meta, "eval": eval_meta}
-
-
-def _fallback_append_dataset_record(_rec: dict) -> None:
-    return None
-
-
-build_dataset_record: Any = _fallback_build_dataset_record
-append_dataset_record: Any = _fallback_append_dataset_record
-try:
-    from veritas_os.logging.dataset_writer import build_dataset_record, append_dataset_record
-except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
-    _warn(f"[WARN][pipeline] dataset_writer import failed: {repr(e)}")
+build_dataset_record, append_dataset_record = _load_dataset_writer(_warn=_warn)
 
 
 # =========================================================
-# Trust log (optional; fallback-safe)
+# Trust log (optional; fallback-safe) -> pipeline_persistence.py に移動済み
 # =========================================================
-
-
-def _fallback_append_trust_log(_entry: dict) -> None:
-    return None
-
-
-def _fallback_write_shadow_decide(
-    request_id: str,
-    body: dict,
-    chosen: dict,
-    telos_score: float,
-    fuji: dict,
-) -> None:
-    return None
-
-
-append_trust_log: Any = _fallback_append_trust_log
-write_shadow_decide: Any = _fallback_write_shadow_decide
-try:
-    from veritas_os.logging.trust_log import append_trust_log, write_shadow_decide
-except (ImportError, ModuleNotFoundError):  # pragma: no cover
-    pass
+append_trust_log, write_shadow_decide = _load_trust_log()
 
 
 # =========================================================
-# Optional: MemoryModel (classifier/vec) for boosting
+# MemoryModel / gate / valstats / dedup -> pipeline_gate.py に移動済み
+# MEM_VEC, MEM_CLF, predict_gate_label, _mem_model_path, _allow_prob,
+# _dedupe_alts_fallback are imported above for backward compat.
 # =========================================================
 
-MEM_VEC = None
-MEM_CLF = None
-
-
-def predict_gate_label(_text: str) -> Dict[str, float]:
-    return {"allow": 0.5}
-
-
-def _mem_model_path() -> str:
-    try:
-        from veritas_os.core.models import memory_model as mm
-        for k in ("MODEL_FILE", "MODEL_PATH"):
-            if hasattr(mm, k):
-                return str(getattr(mm, k))
-    except Exception:  # subsystem resilience: intentionally broad
-        logger.debug("_mem_model_path: import/attr lookup failed", exc_info=True)
-    return ""
-
-
-try:
-    from veritas_os.core.models import memory_model as memory_model_core
-
-    MEM_VEC = getattr(memory_model_core, "MEM_VEC", None)
-    MEM_CLF = getattr(memory_model_core, "MEM_CLF", None)
-
-    if hasattr(memory_model_core, "predict_gate_label"):
-        from veritas_os.core.models.memory_model import predict_gate_label as _pgl
-
-        def predict_gate_label(text: str) -> Dict[str, float]:
-            try:
-                d = _pgl(text)
-                return d if isinstance(d, dict) else {"allow": 0.5}
-            except Exception:  # subsystem resilience: intentionally broad
-                logger.debug("predict_gate_label failed", exc_info=True)
-                return {"allow": 0.5}
-
-except Exception:  # subsystem resilience: intentionally broad
-    logger.debug("memory_model import failed", exc_info=True)
-
-
-def _allow_prob(text: str) -> float:
-    d = predict_gate_label(text)
-    try:
-        return float(d.get("allow", 0.0))
-    except (ValueError, TypeError, AttributeError):
-        return 0.0
+# Wrapper functions that close over module-level VAL_JSON / _HAS_ATOMIC_IO
 
 
 def _load_valstats() -> Dict[str, Any]:
-    try:
-        p = Path(VAL_JSON)
-        with open(p, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-        if isinstance(obj, dict):
-            return obj
-    except (OSError, json.JSONDecodeError, ValueError):
-        pass
-    return {"ema": 0.5, "alpha": 0.2, "n": 0, "history": []}
+    return _load_valstats_impl(VAL_JSON)
 
 
 def _save_valstats(d: Dict[str, Any]) -> None:
-    import tempfile
-
-    try:
-        p = Path(VAL_JSON)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        if _HAS_ATOMIC_IO and _atomic_write_json is not None:
-            _atomic_write_json(p, d, indent=2)
-        else:
-            # Atomic write via temp-file + rename to prevent data
-            # corruption if the process crashes mid-write.
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(p.parent), suffix=".tmp", prefix=".valstats_"
-            )
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(d, f, ensure_ascii=False, indent=2)
-                    f.flush()
-                    try:
-                        os.fsync(f.fileno())
-                    except OSError:
-                        pass
-                os.replace(tmp_path, str(p))
-            except BaseException:
-                # Clean up the temp file on any failure.
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise
-    except OSError as e:
-        logger.warning("_save_valstats failed: %s", e)
-
-
-def _dedupe_alts_fallback(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    seen: Set[Tuple[str, str]] = set()
-    out: List[Dict[str, Any]] = []
-    for a in alts or []:
-        if not isinstance(a, dict):
-            continue
-        key = (str(a.get("title") or "").strip(), str(a.get("description") or "").strip())
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(a)
-    return out
+    _save_valstats_impl(d, VAL_JSON, _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json)
 
 
 def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    # Prefer kernel helper if present
-    try:
-        if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
-            result = veritas_core._dedupe_alts(alts)
-            if isinstance(result, list):
-                return result
-            logger.debug("_dedupe_alts: kernel helper returned %s, expected list", type(result).__name__)
-    except Exception:  # subsystem resilience: kernel._dedupe_alts may raise arbitrary errors
-        logger.debug("_dedupe_alts: kernel helper failed, using fallback", exc_info=True)
-    return _dedupe_alts_fallback(alts)
+    return _dedupe_alts_impl(alts, veritas_core=veritas_core)
 
 
 async def call_core_decide(
