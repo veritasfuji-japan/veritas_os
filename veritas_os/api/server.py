@@ -758,21 +758,9 @@ app = FastAPI(title="VERITAS Public API", version="1.0.3", lifespan=_app_lifespa
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 def _resolve_cors_settings(origins: Any) -> tuple[list[str], bool]:
     """Resolve safe CORS settings from config values."""
-    if not isinstance(origins, (list, tuple, set)):
-        return [], False
+    from veritas_os.api.cors_settings import resolve_cors_settings
 
-    normalized_origins = [str(origin).strip() for origin in origins if isinstance(origin, str) and origin.strip()]
-    if not normalized_origins:
-        return [], False
-
-    if "*" in normalized_origins:
-        logger.warning(
-            "Insecure CORS config detected: wildcard origin with credentials is disallowed. "
-            "Falling back to allow_credentials=False.",
-        )
-        return ["*"], False
-
-    return normalized_origins, True
+    return resolve_cors_settings(origins=origins, logger=logger)
 
 
 _cors_origins, _cors_allow_credentials = _resolve_cors_settings(
