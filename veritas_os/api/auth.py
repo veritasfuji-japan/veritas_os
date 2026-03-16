@@ -237,7 +237,17 @@ def _get_effective_auth_store():
 
 
 def _auth_store_failure_mode() -> str:
-    """Return auth store failure policy: ``open`` or ``closed``."""
+    """Return auth store failure policy: ``open`` or ``closed``.
+
+    Security hardening:
+        Production profiles always resolve to ``closed`` even if operators
+        misconfigure ``VERITAS_AUTH_STORE_FAILURE_MODE=open``. This prevents
+        nonce/auth/rate-limit store outages from silently degrading security.
+    """
+    profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
+    if profile in {"prod", "production"}:
+        return "closed"
+
     raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
     if raw in {"open", "closed"}:
         return raw

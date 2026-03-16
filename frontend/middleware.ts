@@ -13,10 +13,17 @@ export function generateNonce(): string {
 /**
  * Returns whether enforced CSP should require script nonce tokens.
  *
- * Nonce enforcement is an explicit rollout flag. Keep compatibility mode
- * until runtime validation confirms all inline script dependencies are removed.
+ * Security behavior:
+ * - Strict nonce CSP is enabled by explicit rollout flag.
+ * - Production override is scoped to VERITAS_ENV only so that generic
+ *   NODE_ENV=production builds (for CI/E2E) do not unintentionally break
+ *   Next.js bootstrap scripts before nonce compatibility validation completes.
  */
 export function shouldEnforceNonceCsp(): boolean {
+  const veritasEnv = (process.env.VERITAS_ENV ?? '').toLowerCase();
+  if (veritasEnv === 'prod' || veritasEnv === 'production') {
+    return true;
+  }
   return process.env[ENFORCE_NONCE_ENV] === 'true';
 }
 
