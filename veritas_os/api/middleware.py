@@ -153,10 +153,18 @@ async def add_rate_limit_headers(request: Request, call_next):
 
 
 async def track_inflight_requests(request: Request, call_next):
-    """Track in-flight requests for graceful shutdown draining."""
-    global _inflight_count
+    """Track in-flight requests for graceful shutdown draining.
 
-    if _shutting_down:
+    Note: reads ``_shutting_down`` from the ``server`` module so that tests
+    which set ``server._shutting_down`` directly still take effect. The lifespan
+    also writes to the server module attribute.
+    """
+    global _inflight_count
+    # Read from server module — tests set server._shutting_down directly
+    from veritas_os.api import server as _srv
+    shutting_down = getattr(_srv, "_shutting_down", _shutting_down)
+
+    if shutting_down:
         return JSONResponse(
             status_code=503,
             content={"ok": False, "error": "Server is shutting down"},
@@ -175,13 +183,16 @@ async def track_inflight_requests(request: Request, call_next):
 
 async def limit_body_size(request: Request, call_next):
     """★ C-3 修正: リクエストボディサイズ制限ミドルウェア"""
+    # Read from server module to support test monkeypatching
+    from veritas_os.api import server as _srv
+    effective_limit = getattr(_srv, "MAX_REQUEST_BODY_SIZE", MAX_REQUEST_BODY_SIZE)
     content_length = request.headers.get("content-length")
     if content_length:
         try:
-            if int(content_length) > MAX_REQUEST_BODY_SIZE:
+            if int(content_length) > effective_limit:
                 return JSONResponse(
                     status_code=413,
-                    content={"detail": f"Request body too large. Max size: {MAX_REQUEST_BODY_SIZE} bytes"}
+                    content={"detail": f"Request body too large. Max size: {effective_limit} bytes"}
                 )
         except (ValueError, TypeError):
             return JSONResponse(
