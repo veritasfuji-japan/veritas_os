@@ -50,12 +50,22 @@ describe('middleware CSP', () => {
     expect(scriptDirective).not.toContain("'unsafe-inline'");
   });
 
-  it('defaults nonce enforcement flag to false', () => {
+  it('defaults nonce enforcement flag to false in non-production profile', () => {
+    vi.stubEnv('VERITAS_ENV', 'development');
+
     expect(shouldEnforceNonceCsp()).toBe(false);
   });
 
   it('enables nonce enforcement only when explicitly opted in', () => {
     vi.stubEnv('VERITAS_CSP_ENFORCE_NONCE', 'true');
+
+    expect(shouldEnforceNonceCsp()).toBe(true);
+  });
+
+
+
+  it('enables nonce enforcement in production profile by default', () => {
+    vi.stubEnv('VERITAS_ENV', 'production');
 
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
