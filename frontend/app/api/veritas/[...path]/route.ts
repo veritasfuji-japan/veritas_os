@@ -8,13 +8,7 @@ import {
 import { getBodySizeBytes } from "./body-size";
 import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
-export function resolveApiBaseUrl(): string {
-  const apiBaseUrl = process.env.VERITAS_API_BASE_URL?.trim();
-  if (apiBaseUrl) {
-    return apiBaseUrl;
-  }
-  return "http://localhost:8000";
-}
+import { resolveApiBaseUrl } from "./route-config";
 
 const API_BASE = resolveApiBaseUrl();
 const API_KEY = process.env.VERITAS_API_KEY ?? "";

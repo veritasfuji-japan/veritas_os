@@ -8,9 +8,7 @@ import {
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
 import { resolveTraceId } from "./trace-id";
-import { resolveApiBaseUrl } from "./route";
-
-
+import { resolveApiBaseUrl } from "./route-config";
 
 afterEach(() => {
   vi.unstubAllEnvs();
