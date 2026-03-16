@@ -128,7 +128,6 @@ from .pipeline_gate import (
     MEM_CLF,
     predict_gate_label,
     _mem_model_path,
-    _allow_prob,
     _load_valstats as _load_valstats_impl,
     _save_valstats as _save_valstats_impl,
     _dedupe_alts_fallback,
