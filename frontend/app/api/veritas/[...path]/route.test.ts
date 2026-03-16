@@ -28,6 +28,13 @@ describe("resolveApiBaseUrl", () => {
 
     expect(resolveApiBaseUrl()).toBe("http://localhost:8000");
   });
+
+  it("returns null in production when VERITAS_API_BASE_URL is missing", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("VERITAS_API_BASE_URL", "");
+
+    expect(resolveApiBaseUrl()).toBeNull();
+  });
 });
 
 describe("veritas bff route auth and authorization", () => {
