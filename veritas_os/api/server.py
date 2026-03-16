@@ -98,6 +98,13 @@ from veritas_os.audit.trustlog_signed import (
     verify_trustlog_chain,
 )
 
+from veritas_os.api.trust_log_io import (
+    append_trust_log_entry,
+    load_logs_json,
+    save_json,
+    secure_chmod,
+    write_shadow_decide_snapshot,
+)
 
 # ---- アトミック I/O（信頼性向上）----
 try:
@@ -864,31 +871,12 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
       - _load_logs_json() を引数なしで呼ばれても動く
       - LOG_DIR だけ patch されても追随（effective paths）
     """
-    try:
-        if path is None:
-            _, log_json, _ = _effective_log_paths()
-            path = log_json
-
-        if not path.exists():
-            return []
-
-        # Security: Check file size before loading to prevent memory exhaustion
-        file_size = path.stat().st_size
-        if file_size > MAX_LOG_FILE_SIZE:
-            logger.warning("Log file too large (%d bytes), skipping load", file_size)
-            return []
-
-        with open(path, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-
-        if isinstance(obj, dict):
-            return obj.get("items", [])
-        if isinstance(obj, list):
-            return obj
-        return []
-    except Exception:
-        logger.debug("_load_logs_json: failed to load %s", path, exc_info=True)
-        return []
+    return load_logs_json(
+        path,
+        max_log_file_size=MAX_LOG_FILE_SIZE,
+        effective_log_paths=_effective_log_paths,
+        logger=logger,
+    )
 
 
 # ★ スレッドセーフな Trust Log ロック
@@ -900,63 +888,34 @@ except ImportError:
 
 def _secure_chmod(path: Path) -> None:
     """Set restrictive 0o600 permissions on a sensitive file."""
-    try:
-        os.chmod(path, 0o600)
-    except Exception as e:
-        logger.debug("chmod 0o600 failed for %s: %s", path, _errstr(e))
+    secure_chmod(path, logger=logger, errstr=_errstr)
 
 
 def _save_json(path: Path, items: list) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    is_new = not path.exists()
-    if _HAS_ATOMIC_IO:
-        atomic_write_json(path, {"items": items}, indent=2)
-    else:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"items": items}, f, ensure_ascii=False, indent=2)
-    if is_new:
-        _secure_chmod(path)
+    save_json(
+        path,
+        items,
+        has_atomic_io=_HAS_ATOMIC_IO,
+        atomic_write_json=atomic_write_json,
+        secure_chmod_fn=_secure_chmod,
+    )
 
 
 def append_trust_log(entry: Dict[str, Any]) -> None:
-    """
-    server 単体でも最低限 trust log が書けるフォールバック。
-    """
-    log_dir, log_json, log_jsonl = _effective_log_paths()
-
-    try:
-        log_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        logger.warning("LOG_DIR mkdir failed: %s", _errstr(e))
-        return
-
-    with _trust_log_lock:
-        # JSONL への追記
-        try:
-            jsonl_is_new = not log_jsonl.exists()
-            if _HAS_ATOMIC_IO:
-                atomic_append_line(log_jsonl, json.dumps(entry, ensure_ascii=False))
-            else:
-                with open(log_jsonl, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-                    f.flush()
-                    os.fsync(f.fileno())
-            if jsonl_is_new:
-                _secure_chmod(log_jsonl)
-        except Exception as e:
-            logger.warning("write trust_log.jsonl failed: %s", _errstr(e))
-
-        # JSON への追記
-        items = _load_logs_json(log_json)
-        items.append(entry)
-        try:
-            _save_json(log_json, items)
-            _publish_event(
-                "trustlog.appended",
-                {"request_id": entry.get("request_id"), "kind": entry.get("kind")},
-            )
-        except Exception as e:
-            logger.warning("write trust_log.json failed: %s", _errstr(e))
+    """server 単体でも最低限 trust log が書けるフォールバック。"""
+    append_trust_log_entry(
+        entry,
+        effective_log_paths=_effective_log_paths,
+        has_atomic_io=_HAS_ATOMIC_IO,
+        atomic_append_line=atomic_append_line,
+        load_logs_json_fn=_load_logs_json,
+        save_json_fn=_save_json,
+        secure_chmod_fn=_secure_chmod,
+        publish_event=_publish_event,
+        logger=logger,
+        errstr=_errstr,
+        trust_log_lock=_trust_log_lock,
+    )
 
 
 def write_shadow_decide(
@@ -966,34 +925,19 @@ def write_shadow_decide(
     telos_score: float,
     fuji: Optional[Dict[str, Any]],
 ) -> None:
-    shadow_dir = _effective_shadow_dir()
-
-    try:
-        shadow_dir.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        logger.warning("SHADOW_DIR mkdir failed: %s", _errstr(e))
-        return
-
-    now_utc = datetime.now(timezone.utc)
-    ts = now_utc.strftime("%Y%m%d_%H%M%S_%f")[:-3]
-    out = shadow_dir / f"decide_{ts}.json"
-    rec = {
-        "request_id": request_id,
-        "created_at": now_utc.isoformat(timespec="seconds").replace("+00:00", "Z"),
-        "query": (body.get("query") or (body.get("context") or {}).get("query") or ""),
-        "chosen": chosen,
-        "telos_score": float(telos_score or 0.0),
-        "fuji": (fuji or {}).get("status"),
-    }
-    try:
-        if _HAS_ATOMIC_IO:
-            atomic_write_json(out, rec, indent=2)
-        else:
-            with open(out, "w", encoding="utf-8") as f:
-                json.dump(rec, f, ensure_ascii=False, indent=2)
-        _secure_chmod(out)
-    except Exception as e:
-        logger.warning("write shadow decide failed: %s", _errstr(e))
+    write_shadow_decide_snapshot(
+        request_id,
+        body,
+        chosen,
+        telos_score,
+        fuji,
+        effective_shadow_dir=_effective_shadow_dir,
+        has_atomic_io=_HAS_ATOMIC_IO,
+        atomic_write_json=atomic_write_json,
+        secure_chmod_fn=_secure_chmod,
+        logger=logger,
+        errstr=_errstr,
+    )
 
 
 # ==============================
