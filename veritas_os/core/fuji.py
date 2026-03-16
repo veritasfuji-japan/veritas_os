@@ -34,7 +34,6 @@ import threading
 import time
 import os
 import re
-import unicodedata
 
 _logger = logging.getLogger(__name__)
 
@@ -64,6 +63,11 @@ from .types import (
 )
 from .utils import _safe_float, _to_text
 from .fuji_codes import build_fuji_rejection
+from .fuji_injection import (
+    _build_injection_patterns_from_policy,
+    _detect_prompt_injection as _detect_prompt_injection_impl,
+    _normalize_injection_text as _normalize_injection_text_impl,
+)
 from .config import capability_cfg, emit_capability_manifest
 from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
 from veritas_os.tools import call_tool as _call_tool
@@ -176,48 +180,6 @@ RISKY_KEYWORDS_POC = re.compile(
     re.IGNORECASE
 )
 
-_PROMPT_INJECTION_PATTERNS: tuple[tuple[re.Pattern[str], float, str], ...] = (
-    (
-        re.compile(
-            r"(ignore|disregard|override).{0,40}"
-            r"(system|previous|developer|safety|policy)",
-            re.IGNORECASE,
-        ),
-        0.4,
-        "override_instructions",
-    ),
-    (
-        re.compile(
-            r"(reveal|show|leak).{0,40}"
-            r"(system prompt|developer message|policy)",
-            re.IGNORECASE,
-        ),
-        0.4,
-        "reveal_system",
-    ),
-    (
-        re.compile(r"\b(jailbreak|dan|prompt injection)\b", re.IGNORECASE),
-        0.5,
-        "jailbreak_keyword",
-    ),
-    (
-        re.compile(
-            r"(bypass|disable).{0,30}(safety|guard|policy|filter)",
-            re.IGNORECASE,
-        ),
-        0.5,
-        "bypass_safety",
-    ),
-    (
-        re.compile(r"(act as|roleplay).{0,30}(system|developer|root)", re.IGNORECASE),
-        0.2,
-        "role_override",
-    ),
-)
-
-_ZERO_WIDTH_RE = re.compile(r"[\u200b\u200c\u200d\ufeff\u2060]")
-_NON_ALNUM_RE = re.compile(r"[^\w\u3040-\u30ff\u4e00-\u9fff]+", re.UNICODE)
-
 # よく使われる同形異体文字（Cyrillic / Greek）の最小マップ。
 # すべてを網羅するものではないが、悪用されやすい文字を優先的に吸収する。
 if capability_cfg.emit_manifest_on_import:
@@ -229,31 +191,6 @@ if capability_cfg.emit_manifest_on_import:
             "yaml_policy": capability_cfg.enable_fuji_yaml_policy,
         },
     )
-
-_CONFUSABLE_ASCII_MAP = str.maketrans(
-    {
-        "а": "a",  # Cyrillic
-        "е": "e",  # Cyrillic
-        "і": "i",  # Cyrillic
-        "о": "o",  # Cyrillic
-        "р": "p",  # Cyrillic
-        "с": "c",  # Cyrillic
-        "у": "y",  # Cyrillic
-        "х": "x",  # Cyrillic
-        "Α": "a",  # Greek
-        "Β": "b",  # Greek
-        "Ε": "e",  # Greek
-        "Ι": "i",  # Greek
-        "Κ": "k",  # Greek
-        "Μ": "m",  # Greek
-        "Ν": "n",  # Greek
-        "Ο": "o",  # Greek
-        "Ρ": "p",  # Greek
-        "Τ": "t",  # Greek
-        "Χ": "x",  # Greek
-    }
-)
-
 
 # =========================================================
 # データ構造
@@ -483,29 +420,7 @@ def _detect_prompt_injection(text: str) -> Dict[str, Any]:
     安全ヘッド自体をハックしようとする試行に対する防御層として、
     ルールベースでシグナルを抽出しスコア化する。
     """
-    score = 0.0
-    signals: List[str] = []
-    if not text:
-        return {"score": 0.0, "signals": signals}
-
-    normalized = _normalize_injection_text(text)
-    compact = _NON_ALNUM_RE.sub("", normalized)
-
-    for pattern, weight, label in _PROMPT_INJECTION_PATTERNS:
-        if pattern.search(normalized) or pattern.search(compact):
-            score += weight
-            signals.append(label)
-
-    compact_keyword_rules = (
-        ("jailbreak", 0.5, "jailbreak_keyword"),
-        ("promptinjection", 0.5, "jailbreak_keyword"),
-    )
-    for keyword, weight, label in compact_keyword_rules:
-        if keyword in compact and label not in signals:
-            score += weight
-            signals.append(label)
-
-    return {"score": min(1.0, score), "signals": signals}
+    return _detect_prompt_injection_impl(text)
 
 
 def _normalize_injection_text(text: str) -> str:
@@ -517,11 +432,7 @@ def _normalize_injection_text(text: str) -> str:
         spacing, but it does not provide complete protection against all prompt
         injection variants.
     """
-    normalized = unicodedata.normalize("NFKC", text or "")
-    normalized = _ZERO_WIDTH_RE.sub("", normalized)
-    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
-    normalized = re.sub(r"\s+", " ", normalized)
-    return normalized.strip().lower()
+    return _normalize_injection_text_impl(text)
 
 
 # ---------------------------------------------------------
@@ -650,40 +561,11 @@ def _build_runtime_patterns_from_policy(policy: Dict[str, Any]) -> None:
     ポリシーロード時・リロード時に呼び出すことで、
     モジュールトップレベルのハードコード変数をポリシー定義で上書きする。
 
-    - _PROMPT_INJECTION_PATTERNS: プロンプトインジェクション検出パターン
-    - _CONFUSABLE_ASCII_MAP: Unicode 同形異体文字の正規化マップ
     - _PII_RE: PII 検出パターン辞書（phone, email, address_jp, person_name_jp）
 
     パースエラーや不正値は警告ログを出して無視し、既存のハードコード値を維持する。
     """
-    global _PROMPT_INJECTION_PATTERNS, _CONFUSABLE_ASCII_MAP
-
-    # ---- プロンプトインジェクションパターン ----
-    # ★ スレッド安全: immutable tuple に構築してから atomic swap で差し替え
-    pi_section = policy.get("prompt_injection") or {}
-    raw_patterns = pi_section.get("patterns") or []
-    if raw_patterns:
-        built: List[tuple[re.Pattern[str], float, str]] = []
-        for item in raw_patterns:
-            if not isinstance(item, dict):
-                continue
-            try:
-                compiled = re.compile(item["pattern"], re.IGNORECASE)
-                weight = float(item.get("weight", 0.4))
-                label = str(item.get("label", "unknown"))
-                built.append((compiled, weight, label))
-            except (re.error, KeyError, TypeError, ValueError) as exc:
-                _logger.warning("[FUJI] prompt_injection pattern skipped: %r – %s", item, exc)
-        if built:
-            _PROMPT_INJECTION_PATTERNS = tuple(built)  # atomic swap with immutable
-
-    # ---- Unicode 同形異体文字マップ ----
-    confusables = (policy.get("unicode_normalization") or {}).get("confusables") or {}
-    if confusables and isinstance(confusables, dict):
-        try:
-            _CONFUSABLE_ASCII_MAP = str.maketrans(confusables)
-        except (TypeError, ValueError) as exc:
-            _logger.warning("[FUJI] unicode_normalization.confusables invalid: %s", exc)
+    _build_injection_patterns_from_policy(policy)
 
     # ---- PII 正規表現パターン ----
     pii_pats = (policy.get("pii") or {}).get("patterns") or {}
