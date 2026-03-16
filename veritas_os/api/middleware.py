@@ -18,6 +18,11 @@ from veritas_os.api.rate_limiting import _rate_lock, _rate_bucket, _RATE_LIMIT, 
 import logging
 logger = logging.getLogger(__name__)
 
+# When rate limiting is handled by Redis, the in-process _rate_bucket is never
+# updated so X-RateLimit-* headers would be stale/misleading.  Detect once at
+# import time so we can skip those headers in redis mode.
+_AUTH_STORE_MODE = (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower() or "memory"
+
 # ★ C-3 継続改善: リクエストボディサイズ制限 (DoS対策)
 DEFAULT_MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024
 PROFILE_MAX_REQUEST_BODY_SIZE = {
@@ -125,8 +130,14 @@ async def add_response_time(request: Request, call_next):
 
 
 async def add_rate_limit_headers(request: Request, call_next):
-    """Expose rate limit state via standard X-RateLimit-* response headers."""
+    """Expose rate limit state via standard X-RateLimit-* response headers.
+
+    When ``VERITAS_AUTH_SECURITY_STORE=redis`` the in-process ``_rate_bucket``
+    is never updated, so we skip emitting headers to avoid misleading clients.
+    """
     response = await call_next(request)
+    if _AUTH_STORE_MODE != "memory":
+        return response
     api_key = (request.headers.get("X-API-Key") or "").strip()
     if api_key:
         with _rate_lock:

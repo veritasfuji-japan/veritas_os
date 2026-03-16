@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { veritasFetch } from "../../../lib/api-client";
 import {
   isRequestLogResponse,
@@ -45,7 +45,7 @@ export interface AuditDataState {
   stageFilter: string;
   setStageFilter: (v: string) => void;
   crossSearch: CrossSearchParams;
-  setCrossSearch: React.Dispatch<React.SetStateAction<CrossSearchParams>>;
+  setCrossSearch: Dispatch<SetStateAction<CrossSearchParams>>;
   selectedDecisionId: string;
   setSelectedDecisionId: (v: string) => void;
   verificationMessage: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import { type Dispatch, type SetStateAction } from "react";
 import { Card } from "@veritas/design-system";
 import type { RequestLogResponse } from "../../../lib/api-validators";
 import { useI18n } from "../../../components/i18n-provider";
@@ -18,7 +19,7 @@ interface SearchPanelProps {
 
   /* cross-search */
   crossSearch: CrossSearchParams;
-  onCrossSearchChange: React.Dispatch<React.SetStateAction<CrossSearchParams>>;
+  onCrossSearchChange: Dispatch<SetStateAction<CrossSearchParams>>;
   filteredCount: number;
 
   /* connection */

@@ -48,7 +48,12 @@ class MemoryStore:
         self._cache_data: Optional[List[Dict[str, Any]]] = None
         self._cache_mtime: float = 0.0
         self._cache_loaded_at: float = 0.0
-        self._cache_ttl: float = float(os.getenv("VERITAS_MEMORY_CACHE_TTL", "5.0"))
+        _raw_ttl = os.getenv("VERITAS_MEMORY_CACHE_TTL", "5.0")
+        try:
+            self._cache_ttl: float = float(_raw_ttl)
+        except (ValueError, TypeError):
+            logger.warning("Invalid VERITAS_MEMORY_CACHE_TTL=%r, using default 5.0", _raw_ttl)
+            self._cache_ttl = 5.0
         self._cache_lock = threading.RLock()
 
         # 初期ファイル生成
