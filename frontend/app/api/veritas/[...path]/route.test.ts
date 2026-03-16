@@ -35,6 +35,14 @@ describe("resolveApiBaseUrl", () => {
 
     expect(resolveApiBaseUrl()).toBeNull();
   });
+
+  it("returns null when NODE_ENV is production and VERITAS_API_BASE_URL is missing", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("VERITAS_API_BASE_URL", "");
+
+    expect(resolveApiBaseUrl()).toBeNull();
+  });
 });
 
 describe("veritas bff route auth and authorization", () => {

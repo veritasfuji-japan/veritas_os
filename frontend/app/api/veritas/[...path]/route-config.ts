@@ -14,7 +14,11 @@ export function resolveApiBaseUrl(): string | null {
   }
 
   const veritasEnv = (process.env.VERITAS_ENV ?? "").trim().toLowerCase();
-  const isProduction = veritasEnv === "prod" || veritasEnv === "production";
+  const nodeEnv = (process.env.NODE_ENV ?? "").trim().toLowerCase();
+  const isProduction =
+    veritasEnv === "prod" ||
+    veritasEnv === "production" ||
+    nodeEnv === "production";
   if (isProduction) {
     return null;
   }
