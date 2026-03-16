@@ -20,7 +20,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, MutableMapping
 
-from veritas_os.core.eu_ai_act_prohibited import EUComplianceConfig  # noqa: F811 — will be moved
+from veritas_os.core.eu_ai_act_compliance_module import EUComplianceConfig
 
 logger = logging.getLogger(__name__)
 

@@ -541,7 +541,19 @@ append_trust_log, write_shadow_decide = _load_trust_log()
 # _dedupe_alts_fallback are imported above for backward compat.
 # =========================================================
 
-# Wrapper functions that close over module-level VAL_JSON / _HAS_ATOMIC_IO
+# Wrapper functions that close over module-level state.
+# Tests monkeypatch module-level variables (e.g. predict_gate_label,
+# veritas_core, VAL_JSON), so these wrappers must reference the
+# module-level names at *call time*, not import time.
+
+
+def _allow_prob(text: str) -> float:
+    """Wrapper that uses module-level predict_gate_label (patchable by tests)."""
+    d = predict_gate_label(text)
+    try:
+        return float(d.get("allow", 0.0))
+    except (ValueError, TypeError, AttributeError):
+        return 0.0
 
 
 def _load_valstats() -> Dict[str, Any]:
@@ -549,11 +561,34 @@ def _load_valstats() -> Dict[str, Any]:
 
 
 def _save_valstats(d: Dict[str, Any]) -> None:
+    """Save value stats to VAL_JSON.
+
+    Uses atomic_write_json when available, otherwise falls back to
+    tempfile + os.replace for crash-safe persistence.
+    """
     _save_valstats_impl(d, VAL_JSON, _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json)
 
 
 def _dedupe_alts(alts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return _dedupe_alts_impl(alts, veritas_core=veritas_core)
+    """Wrapper that passes module-level veritas_core (patchable by tests).
+
+    Re-implements the kernel-first logic here so that debug logs go to
+    the ``veritas_os.core.pipeline`` logger (expected by existing tests).
+    """
+    try:
+        if veritas_core is not None and hasattr(veritas_core, "_dedupe_alts"):
+            result = veritas_core._dedupe_alts(alts)
+            if isinstance(result, list):
+                return result
+            logger.debug(
+                "_dedupe_alts: kernel helper returned %s, expected list",
+                type(result).__name__,
+            )
+    except Exception:
+        logger.debug(
+            "_dedupe_alts: kernel helper failed, using fallback", exc_info=True
+        )
+    return _dedupe_alts_fallback(alts)
 
 
 async def call_core_decide(
