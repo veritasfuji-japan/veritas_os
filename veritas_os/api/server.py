@@ -343,12 +343,6 @@ except ValueError:
     update_runtime_config(eu_ai_act_mode=bool(eu_ai_act_cfg.eu_ai_act_mode), safety_threshold=0.8)
 
 
-class ComplianceConfigBody(BaseModel):
-    """Runtime compliance config payload."""
-
-    eu_ai_act_mode: bool = Field(default=False)
-    safety_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
-
 
 # ==============================
 # Imported utility functions (backward-compat re-exports)
