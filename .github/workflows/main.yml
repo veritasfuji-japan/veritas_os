@@ -293,7 +293,6 @@ jobs:
 
       - name: Run frontend quality gate (${{ matrix.gate }})
         id: frontend_gate
-        continue-on-error: true
         working-directory: frontend
         run: |
           set -euxo pipefail
@@ -314,7 +313,7 @@ jobs:
           esac
 
       - name: Upload Playwright artifacts on failure
-        if: always() && matrix.gate == 'e2e' && steps.frontend_gate.outcome == 'failure'
+        if: failure() && matrix.gate == 'e2e'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-failure-artifacts
@@ -323,6 +322,3 @@ jobs:
             frontend/test-results
           if-no-files-found: warn
 
-      - name: Fail job if frontend quality gate failed
-        if: steps.frontend_gate.outcome == 'failure'
-        run: exit 1

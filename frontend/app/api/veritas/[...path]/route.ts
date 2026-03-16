@@ -8,10 +8,9 @@ import {
 import { getBodySizeBytes } from "./body-size";
 import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
-const API_BASE =
-  process.env.VERITAS_API_BASE_URL ??
-  process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL ??
-  "http://localhost:8000";
+import { resolveApiBaseUrl } from "./route-config";
+
+const API_BASE = resolveApiBaseUrl();
 const API_KEY = process.env.VERITAS_API_KEY ?? "";
 
 /** Max request body size for proxied requests (1MB). */

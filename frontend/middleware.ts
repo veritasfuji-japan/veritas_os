@@ -17,6 +17,10 @@ export function generateNonce(): string {
  * until runtime validation confirms all inline script dependencies are removed.
  */
 export function shouldEnforceNonceCsp(): boolean {
+  const profile = (process.env.VERITAS_ENV ?? process.env.NODE_ENV ?? '').toLowerCase();
+  if (profile === 'prod' || profile === 'production') {
+    return true;
+  }
   return process.env[ENFORCE_NONCE_ENV] === 'true';
 }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   authenticateRoleFromHeaders,
@@ -8,6 +8,27 @@ import {
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
 import { resolveTraceId } from "./trace-id";
+import { resolveApiBaseUrl } from "./route-config";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("resolveApiBaseUrl", () => {
+  it("uses server-only VERITAS_API_BASE_URL when provided", () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+
+    expect(resolveApiBaseUrl()).toBe("http://internal-api:8000");
+  });
+
+  it("falls back to localhost when VERITAS_API_BASE_URL is not set", () => {
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+    vi.stubEnv("VERITAS_API_BASE_URL", "");
+
+    expect(resolveApiBaseUrl()).toBe("http://localhost:8000");
+  });
+});
 
 describe("veritas bff route auth and authorization", () => {
   it("parses valid token-to-role config", () => {
