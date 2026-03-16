@@ -79,14 +79,25 @@ _nonce_store: Dict[str, float] = {}
 _nonce_lock = threading.Lock()
 
 
+def _effective_nonce_max() -> int:
+    """Resolve _NONCE_MAX, checking server module for test overrides."""
+    try:
+        from veritas_os.api import server as srv
+        v = getattr(srv, "_NONCE_MAX", _NONCE_MAX)
+        return v if isinstance(v, int) else _NONCE_MAX
+    except Exception:
+        return _NONCE_MAX
+
+
 def _cleanup_nonces_unsafe() -> None:
     """内部用: ロック取得済み前提のクリーンアップ"""
     now = time.time()
     expired_keys = [k for k, until in _nonce_store.items() if now > until]
     for k in expired_keys:
         _nonce_store.pop(k, None)
-    if len(_nonce_store) > _NONCE_MAX:
-        overflow = len(_nonce_store) - _NONCE_MAX
+    nonce_max = _effective_nonce_max()
+    if len(_nonce_store) > nonce_max:
+        overflow = len(_nonce_store) - nonce_max
         for k in list(_nonce_store.keys())[:overflow]:
             _nonce_store.pop(k, None)
 

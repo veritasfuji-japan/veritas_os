@@ -224,6 +224,18 @@ def _create_auth_security_store() -> AuthSecurityStore:
 _AUTH_SECURITY_STORE = _create_auth_security_store()
 
 
+def _get_effective_auth_store():
+    """Return the auth store, checking server module for test monkeypatches."""
+    try:
+        from veritas_os.api import server as srv
+        store = getattr(srv, "_AUTH_SECURITY_STORE", None)
+        if store is not None and store is not _AUTH_SECURITY_STORE:
+            return store
+    except Exception:
+        pass
+    return _AUTH_SECURITY_STORE
+
+
 def _auth_store_failure_mode() -> str:
     """Return auth store failure policy: ``open`` or ``closed``."""
     raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
@@ -235,7 +247,7 @@ def _auth_store_failure_mode() -> str:
 def _auth_store_register_nonce(nonce: str, ttl_sec: float) -> bool:
     """Register nonce with explicit fail-open/fail-closed fallback policy."""
     try:
-        return _AUTH_SECURITY_STORE.register_nonce(nonce=nonce, ttl_sec=ttl_sec)
+        return _get_effective_auth_store().register_nonce(nonce=nonce, ttl_sec=ttl_sec)
     except Exception as exc:
         mode = _auth_store_failure_mode()
         logger.warning("Auth nonce store failure (%s), mode=%s", _errstr(exc), mode)
@@ -248,7 +260,7 @@ def _auth_store_register_nonce(nonce: str, ttl_sec: float) -> bool:
 def _auth_store_increment_auth_failure(client_ip: str, limit: int, window_sec: float) -> bool:
     """Increment auth failure counter with explicit fail-open/fail-closed policy."""
     try:
-        return _AUTH_SECURITY_STORE.increment_auth_failure(
+        return _get_effective_auth_store().increment_auth_failure(
             client_ip=client_ip,
             limit=limit,
             window_sec=window_sec,
@@ -263,7 +275,7 @@ def _auth_store_increment_auth_failure(client_ip: str, limit: int, window_sec: f
 def _auth_store_increment_rate_limit(api_key: str, limit: int, window_sec: float) -> bool:
     """Increment request rate counter with explicit fail-open/fail-closed policy."""
     try:
-        return _AUTH_SECURITY_STORE.increment_rate_limit(
+        return _get_effective_auth_store().increment_rate_limit(
             api_key=api_key,
             limit=limit,
             window_sec=window_sec,
@@ -295,13 +307,23 @@ def _resolve_expected_api_key_with_source() -> tuple[str, str]:
     if env_key:
         return env_key, "env"
 
+    # Check server module first (tests monkeypatch server.API_KEY_DEFAULT)
+    try:
+        from veritas_os.api import server as srv
+        srv_default = getattr(srv, "API_KEY_DEFAULT", "")
+        if isinstance(srv_default, str) and srv_default.strip():
+            return srv_default.strip(), "api_key_default"
+    except Exception:
+        pass
     default_key = API_KEY_DEFAULT.strip()
     if default_key:
         return default_key, "api_key_default"
 
-    # Late import to get current cfg value
-    from veritas_os.api.config import get_cfg
-    cfg = get_cfg()
+    # Late import to avoid circular dependency
+    # Check srv.cfg first (tests monkeypatch server.cfg directly),
+    # then fall back to srv.get_cfg() which returns _cfg_state.obj.
+    from veritas_os.api import server as srv
+    cfg = getattr(srv, "cfg", None) or srv.get_cfg()
     config_key = (getattr(cfg, "api_key", "") or "").strip()
     if config_key:
         return config_key, "config"
@@ -539,6 +561,14 @@ def _is_placeholder_secret(secret: str) -> bool:
 def _get_api_secret() -> bytes:
     """★ セキュリティ修正: APIシークレットを毎回環境変数から取得。"""
     global API_SECRET
+    # Check server module first (tests monkeypatch server.API_SECRET)
+    try:
+        from veritas_os.api import server as srv
+        srv_secret = getattr(srv, "API_SECRET", b"")
+        if srv_secret:
+            return srv_secret
+    except Exception:
+        pass
     if API_SECRET:
         return API_SECRET
     env_secret = (os.getenv("VERITAS_API_SECRET") or "").strip()
@@ -624,7 +654,7 @@ async def verify_signature(
 
 def _check_multiworker_auth_store() -> None:
     """Warn when in-memory auth store is used in a multi-worker environment."""
-    if isinstance(_AUTH_SECURITY_STORE, RedisAuthSecurityStore):
+    if isinstance(_get_effective_auth_store(), RedisAuthSecurityStore):
         return
 
     web_concurrency = (os.getenv("WEB_CONCURRENCY") or "").strip()
