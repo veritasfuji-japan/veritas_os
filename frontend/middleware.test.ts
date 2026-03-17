@@ -69,19 +69,19 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("does not enforce nonce only from NODE_ENV=production", () => {
+  it("enforces nonce when NODE_ENV=production", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
-    expect(shouldEnforceNonceCsp()).toBe(false);
+    expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("warn helper returns true when NODE_ENV=production without strict nonce config", () => {
+  it("warn helper returns false when NODE_ENV=production because strict nonce is default", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
 
-    expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
+    expect(shouldWarnInsecureProductionCspConfig()).toBe(false);
   });
 
   it("warn helper returns false when VERITAS production profile is set", () => {
@@ -114,7 +114,7 @@ describe("middleware CSP", () => {
     expect(forwardedNonce).toBe(nonce);
   });
 
-  it("emits a security warning when production runtime does not enforce nonce CSP", () => {
+  it("does not emit a security warning when production runtime enforces nonce CSP", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
@@ -124,7 +124,6 @@ describe("middleware CSP", () => {
 
     middleware({ headers: new Headers() } as never);
 
-    expect(warnSpy).toHaveBeenCalledOnce();
-    expect(warnSpy.mock.calls[0]?.[0]).toContain("[security-warning]");
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });

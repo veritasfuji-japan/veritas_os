@@ -17,13 +17,16 @@ export function generateNonce(): string {
  *
  * Security behavior:
  * - Strict nonce CSP is enabled by explicit rollout flag.
- * - Production override is scoped to VERITAS_ENV only so that generic
- *   NODE_ENV=production builds (for CI/E2E) do not unintentionally break
- *   Next.js bootstrap scripts before nonce compatibility validation completes.
+ * - Production override is enabled for VERITAS_ENV and NODE_ENV profiles to
+ *   fail closed in production-like deployments.
  */
 export function shouldEnforceNonceCsp(): boolean {
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
+  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
   if (veritasEnv === "prod" || veritasEnv === "production") {
+    return true;
+  }
+  if (nodeEnv === "production") {
     return true;
   }
   return process.env[ENFORCE_NONCE_ENV] === "true";
@@ -32,9 +35,8 @@ export function shouldEnforceNonceCsp(): boolean {
 /**
  * Returns whether runtime should emit a security warning for CSP rollout.
  *
- * This warns when generic production runtime is enabled (`NODE_ENV=production`)
- * but VERITAS profile is not set to production and nonce enforcement flag is
- * not explicitly enabled.
+ * Strict CSP is now default for production runtime, so this helper currently
+ * keeps warning output disabled.
  */
 export function shouldWarnInsecureProductionCspConfig(): boolean {
   const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
@@ -47,7 +49,7 @@ export function shouldWarnInsecureProductionCspConfig(): boolean {
     return false;
   }
 
-  return process.env[ENFORCE_NONCE_ENV] !== "true";
+  return false;
 }
 
 /**
