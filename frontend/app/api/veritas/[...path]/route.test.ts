@@ -22,7 +22,7 @@ afterEach(() => {
 describe("resolveApiBaseUrl", () => {
   it("uses server-only VERITAS_API_BASE_URL when provided", () => {
     vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
-    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "");
 
     expect(resolveApiBaseUrl()).toBe("http://internal-api:8000");
   });
@@ -49,6 +49,14 @@ describe("resolveApiBaseUrl", () => {
     expect(resolveApiBaseUrl()).toBeNull();
   });
 
+  it("returns null in production when NEXT_PUBLIC_VERITAS_API_BASE_URL is set", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+
+    expect(resolveApiBaseUrl()).toBeNull();
+  });
+
   it("emits security warning once when NEXT_PUBLIC_VERITAS_API_BASE_URL is set", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
@@ -59,6 +67,18 @@ describe("resolveApiBaseUrl", () => {
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
     expect(warnSpy.mock.calls[0]?.[0]).toContain("[security-warning]");
+  });
+
+  it("emits a blocking warning when NEXT_PUBLIC_VERITAS_API_BASE_URL is set in production", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+
+    resolveApiBaseUrl();
+
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy.mock.calls[1]?.[0]).toContain("must be unset in production");
   });
 
 });
