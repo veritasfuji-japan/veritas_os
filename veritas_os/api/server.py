@@ -1,7 +1,6 @@
 # veritas_os/api/server.py
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import heapq
 import hmac
@@ -9,7 +8,6 @@ import importlib
 import json
 import logging
 import math
-import os
 import queue
 import re
 import secrets
@@ -664,44 +662,21 @@ from veritas_os.api.middleware import (  # noqa: E402,F401
 @asynccontextmanager
 async def _app_lifespan(_: FastAPI):
     """Manage startup/shutdown actions using FastAPI lifespan API."""
-    import veritas_os.api.middleware as _mw
-    import veritas_os.api.server as _self
-    _mw._shutting_down = False
-    _mw._inflight_count = 0
-    _self._shutting_down = False
-    _self._inflight_count = 0
-    _run_startup_config_validation()
-    _check_runtime_feature_health()
-    _check_multiworker_auth_store()
-    _start_nonce_cleanup_scheduler()
-    _start_rate_cleanup_scheduler()
-    try:
+    from veritas_os.api.lifespan import run_lifespan
+
+    async with run_lifespan(
+        app=app,
+        startup_validation=_run_startup_config_validation,
+        runtime_health_check=_check_runtime_feature_health,
+        check_multiworker_auth_store=_check_multiworker_auth_store,
+        start_nonce_cleanup_scheduler=_start_nonce_cleanup_scheduler,
+        start_rate_cleanup_scheduler=_start_rate_cleanup_scheduler,
+        stop_nonce_cleanup_scheduler=_stop_nonce_cleanup_scheduler,
+        stop_rate_cleanup_scheduler=_stop_rate_cleanup_scheduler,
+        close_llm_pool=_close_llm_pool,
+        logger=logger,
+    ):
         yield
-    finally:
-        _mw._shutting_down = True
-        _self._shutting_down = True
-        # Drain in-flight requests (up to _SHUTDOWN_DRAIN_SEC seconds)
-        _drain_sec = float(os.getenv("VERITAS_SHUTDOWN_DRAIN_SEC", "10"))
-        deadline = time.monotonic() + _drain_sec
-        while time.monotonic() < deadline:
-            with _mw._inflight_lock:
-                if _mw._inflight_count <= 0:
-                    break
-            await asyncio.sleep(0.25)
-        with _mw._inflight_lock:
-            remaining = _mw._inflight_count
-        if remaining > 0:
-            logger.warning(
-                "Shutting down with %d in-flight request(s) after %.0fs drain timeout",
-                remaining,
-                _drain_sec,
-            )
-        else:
-            logger.info("All in-flight requests drained, shutting down cleanly")
-        _stop_nonce_cleanup_scheduler()
-        _stop_rate_cleanup_scheduler()
-        if _close_llm_pool is not None:
-            _close_llm_pool()
 
 
 app = FastAPI(title="VERITAS Public API", version="1.0.3", lifespan=_app_lifespan)
