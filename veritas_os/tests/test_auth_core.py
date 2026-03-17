@@ -151,6 +151,17 @@ class TestAuthStoreFailureMode:
         ):
             assert _auth_store_failure_mode() == "closed"
 
+    def test_node_env_production_forces_closed(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "NODE_ENV": "production",
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+            },
+            clear=True,
+        ):
+            assert _auth_store_failure_mode() == "closed"
+
 
 class TestEnvIntSafe:
     def test_default(self):
