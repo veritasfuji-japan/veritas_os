@@ -10,6 +10,7 @@ import pytest
 from veritas_os.api.auth import (
     InMemoryAuthSecurityStore,
     _auth_store_failure_mode,
+    _warn_auth_store_fail_open_once,
     _check_and_register_nonce,
     _cleanup_auth_fail_bucket_unsafe,
     _derive_api_user_id,
@@ -109,6 +110,9 @@ class TestResolveClientIp:
 
 
 class TestAuthStoreFailureMode:
+    def setup_method(self):
+        _warn_auth_store_fail_open_once.cache_clear()
+
     def test_default_closed(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("VERITAS_AUTH_STORE_FAILURE_MODE", None)
@@ -117,6 +121,21 @@ class TestAuthStoreFailureMode:
     def test_open(self):
         with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "open"}):
             assert _auth_store_failure_mode() == "open"
+
+    def test_open_emits_security_warning_once(self, caplog):
+        caplog.set_level("WARNING")
+        with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "open"}):
+            assert _auth_store_failure_mode() == "open"
+            assert _auth_store_failure_mode() == "open"
+
+        assert (
+            "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled."
+            in caplog.text
+        )
+        warning_count = caplog.text.count(
+            "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled."
+        )
+        assert warning_count == 1
 
     def test_invalid_falls_back(self):
         with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "bad"}):
