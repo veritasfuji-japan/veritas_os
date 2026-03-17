@@ -7,7 +7,28 @@
  * - In production (`VERITAS_ENV=prod|production`), fail closed when
  *   `VERITAS_API_BASE_URL` is missing instead of silently using localhost.
  */
+let hasWarnedPublicApiBaseUrl = false;
+
+function warnPublicApiBaseUrlEnvOnce(): void {
+  if (hasWarnedPublicApiBaseUrl) {
+    return;
+  }
+
+  const publicApiBaseUrl = process.env.NEXT_PUBLIC_VERITAS_API_BASE_URL?.trim();
+  if (!publicApiBaseUrl) {
+    return;
+  }
+
+  hasWarnedPublicApiBaseUrl = true;
+  console.warn(
+    "[security-warning] NEXT_PUBLIC_VERITAS_API_BASE_URL is set. " +
+      "Use server-only VERITAS_API_BASE_URL for BFF routing.",
+  );
+}
+
 export function resolveApiBaseUrl(): string | null {
+  warnPublicApiBaseUrlEnvOnce();
+
   const apiBaseUrl = process.env.VERITAS_API_BASE_URL?.trim();
   if (apiBaseUrl) {
     return apiBaseUrl;
@@ -24,4 +45,8 @@ export function resolveApiBaseUrl(): string | null {
   }
 
   return "http://localhost:8000";
+}
+
+export function resetApiBaseUrlWarningStateForTest(): void {
+  hasWarnedPublicApiBaseUrl = false;
 }
