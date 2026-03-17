@@ -110,6 +110,10 @@ from veritas_os.api.sse_hub import (
     format_sse_message,
     publish_event_best_effort,
 )
+from veritas_os.api.log_path_resolver import (
+    effective_log_paths,
+    effective_shadow_dir,
+)
 
 # ---- アトミック I/O（信頼性向上）----
 try:
@@ -187,36 +191,26 @@ SHADOW_DIR: Path = _DEFAULT_SHADOW_DIR
 
 
 def _effective_log_paths() -> Tuple[Path, Path, Path]:
-    """
-    tests が LOG_DIR だけ patch した場合でも LOG_JSON/LOG_JSONL が追随するようにする。
-    tests が LOG_JSON/LOG_JSONL を明示 patch した場合はそれを尊重。
-    """
-    global LOG_DIR, LOG_JSON, LOG_JSONL
-
-    log_dir = LOG_DIR
-    log_json = LOG_JSON
-    log_jsonl = LOG_JSONL
-
-    if log_json == _DEFAULT_LOG_JSON and log_dir != _DEFAULT_LOG_DIR:
-        log_json = log_dir / "trust_log.json"
-    if log_jsonl == _DEFAULT_LOG_JSONL and log_dir != _DEFAULT_LOG_DIR:
-        log_jsonl = log_dir / "trust_log.jsonl"
-
-    return log_dir, log_json, log_jsonl
+    """Backward-compatible wrapper for trust-log path resolution."""
+    return effective_log_paths(
+        log_dir=LOG_DIR,
+        log_json=LOG_JSON,
+        log_jsonl=LOG_JSONL,
+        default_log_dir=_DEFAULT_LOG_DIR,
+        default_log_json=_DEFAULT_LOG_JSON,
+        default_log_jsonl=_DEFAULT_LOG_JSONL,
+    )
 
 
 def _effective_shadow_dir() -> Path:
-    """
-    tests が LOG_DIR だけ patch した場合でも SHADOW_DIR が追随するようにする。
-    tests が SHADOW_DIR を明示 patch した場合はそれを尊重。
-    """
-    global SHADOW_DIR
+    """Backward-compatible wrapper for shadow directory resolution."""
     log_dir, _, _ = _effective_log_paths()
-
-    shadow = SHADOW_DIR
-    if shadow == _DEFAULT_SHADOW_DIR and log_dir != _DEFAULT_LOG_DIR:
-        shadow = log_dir / "DASH"
-    return shadow
+    return effective_shadow_dir(
+        shadow_dir=SHADOW_DIR,
+        log_dir=log_dir,
+        default_shadow_dir=_DEFAULT_SHADOW_DIR,
+        default_log_dir=_DEFAULT_LOG_DIR,
+    )
 
 
 # ==============================
