@@ -38,6 +38,11 @@ from .memory_lifecycle import (
     parse_expires_at,
     should_cascade_delete_semantic,
 )
+from .memory_evidence import (
+    get_evidence_for_decision as _get_evidence_for_decision_impl,
+    get_evidence_for_query as _get_evidence_for_query_impl,
+    hits_to_evidence as _hits_to_evidence_impl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1308,26 +1313,7 @@ def _hits_to_evidence(
     source_prefix: str = "memory",
 ) -> List[Dict[str, Any]]:
     """検索結果をEvidence形式に変換"""
-    evidence: List[Dict[str, Any]] = []
-    for h in hits:
-        if not isinstance(h, dict):
-            continue
-
-        text = str(h.get("text") or "")
-        if not text:
-            continue
-
-        evidence.append(
-            {
-                "source": f"{source_prefix}:{h.get('id', 'unknown')}",
-                "text": text,
-                "score": h.get("score", 0.0),
-                "tags": h.get("tags", []),
-                "meta": h.get("meta", {}),
-            }
-        )
-
-    return evidence
+    return _hits_to_evidence_impl(hits, source_prefix=source_prefix)
 
 
 def get_evidence_for_decision(
@@ -1337,35 +1323,12 @@ def get_evidence_for_decision(
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """決定のためのエビデンスを取得"""
-    q = (
-        decision.get("query")
-        or (decision.get("chosen") or {}).get("query")
-        or (decision.get("chosen") or {}).get("title")
-        or (decision.get("chosen") or {}).get("description")
-        or ""
+    return _get_evidence_for_decision_impl(
+        decision,
+        search_fn=search,
+        user_id=user_id,
+        top_k=top_k,
     )
-    q = str(q).strip()
-    if not q:
-        return []
-
-    ctx = decision.get("context") or {}
-    uid = (
-        user_id
-        or ctx.get("user_id")
-        or ctx.get("user")
-        or ctx.get("session_id")
-        or None
-    )
-
-    hits = search(
-        query=q,
-        k=top_k,
-        user_id=uid,
-    )
-    if not hits or not isinstance(hits, list):
-        return []
-
-    return _hits_to_evidence(hits, source_prefix="memory")
 
 
 def get_evidence_for_query(
@@ -1375,15 +1338,12 @@ def get_evidence_for_query(
     top_k: int = 5,
 ) -> List[Dict[str, Any]]:
     """クエリのためのエビデンスを取得"""
-    query = (query or "").strip()
-    if not query:
-        return []
-
-    hits = search(query=query, k=top_k, user_id=user_id)
-    if not hits or not isinstance(hits, list):
-        return []
-
-    return _hits_to_evidence(hits, source_prefix="memory")
+    return _get_evidence_for_query_impl(
+        query,
+        search_fn=search,
+        user_id=user_id,
+        top_k=top_k,
+    )
 
 
 class _LazyMemoryStore:
