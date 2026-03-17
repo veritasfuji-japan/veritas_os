@@ -1,13 +1,15 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from "next/server";
 
 const NONCE_BYTES = 16;
-const ENFORCE_NONCE_ENV = 'VERITAS_CSP_ENFORCE_NONCE';
+const ENFORCE_NONCE_ENV = "VERITAS_CSP_ENFORCE_NONCE";
 
 /**
  * Generates a CSP nonce for the current response.
  */
 export function generateNonce(): string {
-  return Buffer.from(crypto.getRandomValues(new Uint8Array(NONCE_BYTES))).toString('base64');
+  return Buffer.from(
+    crypto.getRandomValues(new Uint8Array(NONCE_BYTES)),
+  ).toString("base64");
 }
 
 /**
@@ -20,11 +22,32 @@ export function generateNonce(): string {
  *   Next.js bootstrap scripts before nonce compatibility validation completes.
  */
 export function shouldEnforceNonceCsp(): boolean {
-  const veritasEnv = (process.env.VERITAS_ENV ?? '').toLowerCase();
-  if (veritasEnv === 'prod' || veritasEnv === 'production') {
+  const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
+  if (veritasEnv === "prod" || veritasEnv === "production") {
     return true;
   }
-  return process.env[ENFORCE_NONCE_ENV] === 'true';
+  return process.env[ENFORCE_NONCE_ENV] === "true";
+}
+
+/**
+ * Returns whether runtime should emit a security warning for CSP rollout.
+ *
+ * This warns when generic production runtime is enabled (`NODE_ENV=production`)
+ * but VERITAS profile is not set to production and nonce enforcement flag is
+ * not explicitly enabled.
+ */
+export function shouldWarnInsecureProductionCspConfig(): boolean {
+  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+  if (nodeEnv !== "production") {
+    return false;
+  }
+
+  const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
+  if (veritasEnv === "prod" || veritasEnv === "production") {
+    return false;
+  }
+
+  return process.env[ENFORCE_NONCE_ENV] !== "true";
 }
 
 /**
@@ -50,9 +73,9 @@ export function buildCspEnforced(nonce: string, enforceNonce: boolean): string {
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",
-    'upgrade-insecure-requests',
-    'block-all-mixed-content'
-  ].join('; ');
+    "upgrade-insecure-requests",
+    "block-all-mixed-content",
+  ].join("; ");
 }
 
 /**
@@ -70,22 +93,22 @@ export function buildCspReportOnly(nonce: string): string {
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",
-    'upgrade-insecure-requests',
-    'block-all-mixed-content'
-  ].join('; ');
+    "upgrade-insecure-requests",
+    "block-all-mixed-content",
+  ].join("; ");
 }
 
 /**
  * Name of the httpOnly cookie used for BFF session auth.
  * Must match the constant in route-auth.ts.
  */
-const BFF_SESSION_COOKIE = '__veritas_bff';
+const BFF_SESSION_COOKIE = "__veritas_bff";
 
 /**
  * Server-side env var holding the default BFF token for browser sessions.
  * This token must be a key present in VERITAS_BFF_AUTH_TOKENS_JSON.
  */
-const BFF_SESSION_TOKEN_ENV = 'VERITAS_BFF_SESSION_TOKEN';
+const BFF_SESSION_TOKEN_ENV = "VERITAS_BFF_SESSION_TOKEN";
 
 /**
  * Attaches nonce-based CSP headers and BFF session cookie for every request.
@@ -97,31 +120,38 @@ const BFF_SESSION_TOKEN_ENV = 'VERITAS_BFF_SESSION_TOKEN';
  * requests to `/api/veritas/*` without exposing tokens in client bundles.
  */
 export function middleware(request: NextRequest): NextResponse {
+  if (shouldWarnInsecureProductionCspConfig()) {
+    console.warn(
+      "[security-warning] CSP nonce strict mode is disabled under NODE_ENV=production. " +
+        "Set VERITAS_ENV=production (preferred) or VERITAS_CSP_ENFORCE_NONCE=true after compatibility validation.",
+    );
+  }
+
   const nonce = generateNonce();
   const cspEnforced = buildCspEnforced(nonce, shouldEnforceNonceCsp());
   const cspReportOnly = buildCspReportOnly(nonce);
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set("x-nonce", nonce);
 
   const response = NextResponse.next({
     request: {
-      headers: requestHeaders
-    }
+      headers: requestHeaders,
+    },
   });
 
-  response.headers.set('Content-Security-Policy', cspEnforced);
-  response.headers.set('Content-Security-Policy-Report-Only', cspReportOnly);
-  response.headers.set('x-veritas-nonce', nonce);
+  response.headers.set("Content-Security-Policy", cspEnforced);
+  response.headers.set("Content-Security-Policy-Report-Only", cspReportOnly);
+  response.headers.set("x-veritas-nonce", nonce);
 
   // Set httpOnly BFF session cookie when configured and not already present.
-  const sessionToken = process.env[BFF_SESSION_TOKEN_ENV] ?? '';
+  const sessionToken = process.env[BFF_SESSION_TOKEN_ENV] ?? "";
   if (sessionToken && !request.cookies.get(BFF_SESSION_COOKIE)) {
     response.cookies.set(BFF_SESSION_COOKIE, sessionToken, {
       httpOnly: true,
-      secure: request.nextUrl.protocol === 'https:',
-      sameSite: 'strict',
-      path: '/api/veritas',
+      secure: request.nextUrl.protocol === "https:",
+      sameSite: "strict",
+      path: "/api/veritas",
     });
   }
 
@@ -129,7 +159,5 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon\\.ico).*)',
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 };
