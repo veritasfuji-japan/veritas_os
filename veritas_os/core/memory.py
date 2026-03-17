@@ -31,6 +31,13 @@ from .memory_security import (
     is_explicitly_enabled,
     warn_for_legacy_pickle_artifacts,
 )
+from .memory_lifecycle import (
+    is_record_expired,
+    is_record_legal_hold,
+    normalize_lifecycle,
+    parse_expires_at,
+    should_cascade_delete_semantic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -955,27 +962,7 @@ class MemoryStore:
     @staticmethod
     def _parse_expires_at(expires_at: Any) -> Optional[str]:
         """Normalize expires_at to UTC ISO8601 string, or None."""
-        if expires_at in (None, ""):
-            return None
-
-        if isinstance(expires_at, (int, float)):
-            dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
-            return dt.isoformat()
-
-        if isinstance(expires_at, str):
-            raw = expires_at.strip()
-            if not raw:
-                return None
-            iso = raw.replace("Z", "+00:00")
-            try:
-                dt = datetime.fromisoformat(iso)
-            except ValueError:
-                return None
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc).isoformat()
-
-        return None
+        return parse_expires_at(expires_at)
 
     @staticmethod
     def _normalize_lifecycle(value: Any) -> Any:
@@ -987,57 +974,21 @@ class MemoryStore:
         - Lifecycle normalization is applied only when the value looks like a
           MemoryOS document (has any of ``text/kind/tags/meta`` keys).
         """
-        if not isinstance(value, dict):
-            return value
-
-        lifecycle_target_keys = {"text", "kind", "tags", "meta"}
-        if not any(key in value for key in lifecycle_target_keys):
-            return value
-
-        normalized = dict(value)
-        meta = dict(normalized.get("meta") or {})
-
-        retention_class = str(
-            meta.get("retention_class") or DEFAULT_RETENTION_CLASS
-        ).strip().lower()
-        if retention_class not in ALLOWED_RETENTION_CLASSES:
-            retention_class = DEFAULT_RETENTION_CLASS
-
-        legal_hold = bool(meta.get("legal_hold", False))
-        normalized_expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
-
-        meta["retention_class"] = retention_class
-        meta["legal_hold"] = legal_hold
-        meta["expires_at"] = normalized_expires_at
-
-        normalized["meta"] = meta
-        return normalized
+        return normalize_lifecycle(
+            value=value,
+            default_retention_class=DEFAULT_RETENTION_CLASS,
+            allowed_retention_classes=ALLOWED_RETENTION_CLASSES,
+            parse_expires_at_fn=MemoryStore._parse_expires_at,
+        )
 
     @staticmethod
     def _is_record_expired(record: Dict[str, Any], now_ts: Optional[float] = None) -> bool:
         """Return True if record has passed expires_at and is not on legal hold."""
-        value = record.get("value") or {}
-        if not isinstance(value, dict):
-            return False
-
-        meta = value.get("meta") or {}
-        if not isinstance(meta, dict):
-            return False
-
-        if bool(meta.get("legal_hold", False)):
-            return False
-
-        expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
-        if not expires_at:
-            return False
-
-        try:
-            expire_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        except ValueError:
-            return False
-
-        now = now_ts if now_ts is not None else time.time()
-        return expire_dt.timestamp() <= float(now)
+        return is_record_expired(
+            record=record,
+            parse_expires_at_fn=MemoryStore._parse_expires_at,
+            now_ts=now_ts,
+        )
 
     def erase_user(
         self,
@@ -1121,13 +1072,7 @@ class MemoryStore:
     @staticmethod
     def _is_record_legal_hold(record: Dict[str, Any]) -> bool:
         """Return True when record carries legal hold metadata."""
-        value = record.get("value") or {}
-        if not isinstance(value, dict):
-            return False
-        meta = value.get("meta") or {}
-        if not isinstance(meta, dict):
-            return False
-        return bool(meta.get("legal_hold", False))
+        return is_record_legal_hold(record)
 
     @staticmethod
     def _should_cascade_delete_semantic(
@@ -1136,31 +1081,11 @@ class MemoryStore:
         erased_keys: set[str],
     ) -> bool:
         """Check semantic distill lineage and decide cascade deletion."""
-        if not erased_keys:
-            return False
-
-        value = record.get("value") or {}
-        if not isinstance(value, dict):
-            return False
-
-        if str(value.get("kind") or "") != "semantic":
-            return False
-
-        meta = value.get("meta") or {}
-        if not isinstance(meta, dict):
-            return False
-
-        if str(meta.get("user_id") or "") != user_id:
-            return False
-
-        if bool(meta.get("legal_hold", False)):
-            return False
-
-        source_keys = meta.get("source_episode_keys") or []
-        if not isinstance(source_keys, list):
-            return False
-
-        return any(str(key) in erased_keys for key in source_keys)
+        return should_cascade_delete_semantic(
+            record=record,
+            user_id=user_id,
+            erased_keys=erased_keys,
+        )
 
     def append_history(self, user_id: str, record: Dict[str, Any]) -> bool:
         """履歴を追加"""
