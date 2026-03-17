@@ -250,8 +250,23 @@ def _auth_store_failure_mode() -> str:
 
     raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
     if raw in {"open", "closed"}:
+        if raw == "open":
+            _warn_auth_store_fail_open_once()
         return raw
     return "closed"
+
+
+@lru_cache(maxsize=1)
+def _warn_auth_store_fail_open_once() -> None:
+    """Warn once when auth store fallback mode is fail-open.
+
+    Fail-open helps local debugging but weakens nonce and rate-limit protection
+    during auth store outages.
+    """
+    logger.warning(
+        "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled. "
+        "Use closed in production to avoid auth bypass during store failures."
+    )
 
 
 def _auth_store_register_nonce(nonce: str, ttl_sec: float) -> bool:
