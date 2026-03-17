@@ -11,10 +11,8 @@ import math
 import queue
 import re
 import secrets
-import threading
 import time
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
@@ -113,6 +111,7 @@ from veritas_os.api.log_path_resolver import (
     effective_shadow_dir,
 )
 from veritas_os.api.dependency_resolver import (
+    LazyState,
     resolve_cfg,
     resolve_decision_pipeline,
     resolve_fuji_core,
@@ -270,15 +269,9 @@ MEMORY_STORE: Any = SimpleNamespace(
 # Lazy import helpers / caches
 # ==============================
 
-@dataclass
-class _LazyState:
-    obj: Any = None
-    err: Optional[str] = None
-    attempted: bool = False
-    lock: threading.Lock = None  # type: ignore[assignment]
+class _LazyState(LazyState):
+    """Backward-compatible alias for dependency_resolver.LazyState."""
 
-    def __post_init__(self) -> None:
-        self.lock = threading.Lock()
 
 
 _cfg_state = _LazyState()

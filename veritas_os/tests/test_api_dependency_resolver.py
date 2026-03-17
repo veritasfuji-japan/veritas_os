@@ -98,3 +98,13 @@ def test_resolve_memory_store_uses_module_when_mem_missing(monkeypatch):
     assert resolved is module_like_memory
     assert updated is module_like_memory
     assert state.err is None
+
+
+def test_lazy_state_defaults_are_thread_safe():
+    first = dependency_resolver.LazyState()
+    second = dependency_resolver.LazyState()
+
+    assert first.obj is None
+    assert first.err is None
+    assert first.attempted is False
+    assert first.lock is not second.lock

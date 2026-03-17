@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib
+import threading
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Callable, Optional, Tuple
 
@@ -12,6 +14,16 @@ class SupportsLazyState:
     err: Optional[str]
     attempted: bool
     lock: Any
+
+
+@dataclass
+class LazyState:
+    """Thread-safe lazy import cache state used by API dependency resolvers."""
+
+    obj: Any = None
+    err: Optional[str] = None
+    attempted: bool = False
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 def resolve_cfg(
