@@ -69,19 +69,19 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("enforces nonce when NODE_ENV=production", () => {
+  it("does not enforce nonce from NODE_ENV=production alone", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
-    expect(shouldEnforceNonceCsp()).toBe(true);
+    expect(shouldEnforceNonceCsp()).toBe(false);
   });
 
-  it("warn helper returns false when NODE_ENV=production because strict nonce is default", () => {
+  it("warn helper returns true when NODE_ENV=production without rollout or VERITAS prod profile", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
 
-    expect(shouldWarnInsecureProductionCspConfig()).toBe(false);
+    expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
 
   it("warn helper returns false when VERITAS production profile is set", () => {
@@ -114,10 +114,23 @@ describe("middleware CSP", () => {
     expect(forwardedNonce).toBe(nonce);
   });
 
-  it("does not emit a security warning when production runtime enforces nonce CSP", () => {
+  it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    middleware({ headers: new Headers() } as never);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not emit warning when explicit CSP strict rollout flag is enabled", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "true");
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);

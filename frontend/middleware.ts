@@ -17,16 +17,11 @@ export function generateNonce(): string {
  *
  * Security behavior:
  * - Strict nonce CSP is enabled by explicit rollout flag.
- * - Production override is enabled for VERITAS_ENV and NODE_ENV profiles to
- *   fail closed in production-like deployments.
+ * - VERITAS production profile always enforces nonce CSP as a fail-closed mode.
  */
 export function shouldEnforceNonceCsp(): boolean {
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
-  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
   if (veritasEnv === "prod" || veritasEnv === "production") {
-    return true;
-  }
-  if (nodeEnv === "production") {
     return true;
   }
   return process.env[ENFORCE_NONCE_ENV] === "true";
@@ -35,8 +30,8 @@ export function shouldEnforceNonceCsp(): boolean {
 /**
  * Returns whether runtime should emit a security warning for CSP rollout.
  *
- * Strict CSP is now default for production runtime, so this helper currently
- * keeps warning output disabled.
+ * Warns only when NODE_ENV=production while strict nonce rollout is still
+ * disabled outside a VERITAS production profile.
  */
 export function shouldWarnInsecureProductionCspConfig(): boolean {
   const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
@@ -49,7 +44,7 @@ export function shouldWarnInsecureProductionCspConfig(): boolean {
     return false;
   }
 
-  return false;
+  return process.env[ENFORCE_NONCE_ENV] !== "true";
 }
 
 /**
