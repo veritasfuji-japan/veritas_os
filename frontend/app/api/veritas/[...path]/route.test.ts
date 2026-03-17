@@ -8,10 +8,15 @@ import {
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
 import { resolveTraceId } from "./trace-id";
-import { resolveApiBaseUrl } from "./route-config";
+import {
+  resetApiBaseUrlWarningStateForTest,
+  resolveApiBaseUrl,
+} from "./route-config";
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+  resetApiBaseUrlWarningStateForTest();
 });
 
 describe("resolveApiBaseUrl", () => {
@@ -43,6 +48,19 @@ describe("resolveApiBaseUrl", () => {
 
     expect(resolveApiBaseUrl()).toBeNull();
   });
+
+  it("emits security warning once when NEXT_PUBLIC_VERITAS_API_BASE_URL is set", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubEnv("NEXT_PUBLIC_VERITAS_API_BASE_URL", "http://public-api:8000");
+    vi.stubEnv("VERITAS_API_BASE_URL", "");
+
+    resolveApiBaseUrl();
+    resolveApiBaseUrl();
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toContain("[security-warning]");
+  });
+
 });
 
 describe("veritas bff route auth and authorization", () => {
