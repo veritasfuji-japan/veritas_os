@@ -16,7 +16,6 @@ import secrets
 import threading
 import time
 from contextlib import asynccontextmanager
-from collections import deque
 from dataclasses import dataclass
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -104,6 +103,12 @@ from veritas_os.api.trust_log_io import (
     save_json,
     secure_chmod,
     write_shadow_decide_snapshot,
+)
+
+from veritas_os.api.sse_hub import (
+    SSEEventHub,
+    format_sse_message,
+    publish_event_best_effort,
 )
 
 # ---- アトミック I/O（信頼性向上）----
@@ -284,58 +289,25 @@ _value_core_state = _LazyState()
 _memory_store_state = _LazyState()
 
 
-class _SSEEventHub:
-    """In-memory SSE event hub with bounded history and subscriber queues."""
+class _SSEEventHub(SSEEventHub):
+    """Backward-compat wrapper expected by legacy tests."""
 
     def __init__(self, history_size: int = 128):
-        self._lock = threading.Lock()
-        self._history = deque(maxlen=history_size)
-        self._subscribers: set[queue.Queue] = set()
-        self._seq = 0
-
-    def publish(self, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Publish one event to all subscribers and keep it in short history."""
-        with self._lock:
-            self._seq += 1
-            event = {
-                "id": self._seq,
-                "type": event_type,
-                "ts": utc_now_iso_z(),
-                "payload": payload,
-            }
-            self._history.append(event)
-            subscribers = list(self._subscribers)
-
-        for subscriber in subscribers:
-            try:
-                subscriber.put_nowait(event)
-            except queue.Full:
-                logger.debug("sse queue full; dropping event for a slow subscriber")
-            except Exception:
-                logger.debug("failed to push sse event", exc_info=True)
-        return event
-
-    def register(self) -> queue.Queue:
-        """Register a subscriber queue and pre-fill it with recent history."""
-        q: queue.Queue = queue.Queue(maxsize=64)
-        with self._lock:
-            history = list(self._history)
-            self._subscribers.add(q)
-
-        for item in history:
-            try:
-                q.put_nowait(item)
-            except queue.Full:
-                break
-        return q
-
-    def unregister(self, subscriber: queue.Queue) -> None:
-        """Remove a subscriber queue safely."""
-        with self._lock:
-            self._subscribers.discard(subscriber)
+        super().__init__(timestamp_factory=utc_now_iso_z, history_size=history_size)
 
 
 _event_hub = _SSEEventHub()
+
+
+def _publish_event(event_type: str, payload: Dict[str, Any]) -> None:
+    """Best-effort SSE event publication. Must never break API handlers."""
+    publish_event_best_effort(event_hub=_event_hub, event_type=event_type, payload=payload)
+
+
+def _format_sse_message(event: Dict[str, Any]) -> str:
+    """Format one SSE event frame."""
+    return format_sse_message(event)
+
 
 try:
     update_runtime_config(
@@ -348,7 +320,6 @@ except ValueError:
         eu_ai_act_cfg.safety_threshold,
     )
     update_runtime_config(eu_ai_act_mode=bool(eu_ai_act_cfg.eu_ai_act_mode), safety_threshold=0.8)
-
 
 
 # ==============================
@@ -370,20 +341,6 @@ from veritas_os.api.utils import (  # noqa: E402,F401
     _is_debug_mode,
     _is_direct_fuji_api_enabled,
 )
-
-
-def _publish_event(event_type: str, payload: Dict[str, Any]) -> None:
-    """Best-effort SSE event publication. Must never break API handlers."""
-    try:
-        _event_hub.publish(event_type=event_type, payload=payload)
-    except Exception:
-        logger.debug("failed to publish sse event", exc_info=True)
-
-
-def _format_sse_message(event: Dict[str, Any]) -> str:
-    """Format one SSE event frame."""
-    data = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
-    return f"id: {event['id']}\nevent: {event['type']}\ndata: {data}\n\n"
 
 
 # ==============================
