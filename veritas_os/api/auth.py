@@ -245,7 +245,8 @@ def _auth_store_failure_mode() -> str:
         nonce/auth/rate-limit store outages from silently degrading security.
     """
     profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
-    if profile in {"prod", "production"}:
+    node_env = (os.getenv("NODE_ENV") or "").strip().lower()
+    if profile in {"prod", "production"} or node_env == "production":
         return "closed"
 
     raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
