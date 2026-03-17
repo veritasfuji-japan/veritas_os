@@ -119,12 +119,24 @@ class TestAuthStoreFailureMode:
             assert _auth_store_failure_mode() == "closed"
 
     def test_open(self):
-        with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "open"}):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+                "VERITAS_AUTH_ALLOW_FAIL_OPEN": "true",
+            },
+        ):
             assert _auth_store_failure_mode() == "open"
 
     def test_open_emits_security_warning_once(self, caplog):
         caplog.set_level("WARNING")
-        with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "open"}):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+                "VERITAS_AUTH_ALLOW_FAIL_OPEN": "true",
+            },
+        ):
             assert _auth_store_failure_mode() == "open"
             assert _auth_store_failure_mode() == "open"
 
@@ -136,6 +148,23 @@ class TestAuthStoreFailureMode:
             "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled."
         )
         assert warning_count == 1
+
+
+    def test_open_without_allow_flag_forces_closed(self, caplog):
+        caplog.set_level("WARNING")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+            },
+            clear=True,
+        ):
+            assert _auth_store_failure_mode() == "closed"
+
+        assert (
+            "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open was ignored."
+            in caplog.text
+        )
 
     def test_invalid_falls_back(self):
         with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "bad"}):
