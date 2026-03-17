@@ -112,6 +112,13 @@ from veritas_os.api.log_path_resolver import (
     effective_log_paths,
     effective_shadow_dir,
 )
+from veritas_os.api.dependency_resolver import (
+    resolve_cfg,
+    resolve_decision_pipeline,
+    resolve_fuji_core,
+    resolve_memory_store,
+    resolve_value_core,
+)
 
 # ---- アトミック I/O（信頼性向上）----
 try:
@@ -345,27 +352,7 @@ def get_cfg() -> Any:
     CORS設定など起動に関わるため、ここで絶対に例外を外へ出さない。
     """
     global _cfg_state
-    with _cfg_state.lock:
-        if _cfg_state.obj is not None:
-            return _cfg_state.obj
-        if _cfg_state.attempted and _cfg_state.err is not None:
-            return _cfg_state.obj
-
-        _cfg_state.attempted = True
-        try:
-            mod = importlib.import_module("veritas_os.core.config")
-            cfg = getattr(mod, "cfg")
-            _cfg_state.obj = cfg
-            _cfg_state.err = None
-            return cfg
-        except Exception as e:
-            _cfg_state.err = _errstr(e)
-            _cfg_state.obj = SimpleNamespace(
-                cors_allow_origins=[],
-                api_key="",
-            )
-            logger.warning("cfg import failed -> fallback: %s", _cfg_state.err)
-            return _cfg_state.obj
+    return resolve_cfg(_cfg_state, errstr=_errstr, logger=logger)
 
 
 def get_decision_pipeline() -> Optional[Any]:
@@ -374,23 +361,7 @@ def get_decision_pipeline() -> Optional[Any]:
     /v1/decide 呼び出し時に 503 へ変換する。
     """
     global _pipeline_state
-    with _pipeline_state.lock:
-        if _pipeline_state.obj is not None:
-            return _pipeline_state.obj
-        if _pipeline_state.attempted and _pipeline_state.err is not None:
-            return None
-
-        _pipeline_state.attempted = True
-        try:
-            p = importlib.import_module("veritas_os.core.pipeline")
-            _pipeline_state.obj = p
-            _pipeline_state.err = None
-            return p
-        except Exception as e:
-            _pipeline_state.err = _errstr(e)
-            _pipeline_state.obj = None
-            logger.warning("decision pipeline import failed: %s", _pipeline_state.err)
-            return None
+    return resolve_decision_pipeline(_pipeline_state, errstr=_errstr, logger=logger)
 
 
 def get_fuji_core() -> Optional[Any]:
@@ -401,34 +372,16 @@ def get_fuji_core() -> Optional[Any]:
     """
     global _fuji_state, fuji_core
 
-    # monkeypatch で placeholder 以外が入っていたら尊重
-    if not _is_placeholder(fuji_core):
-        return fuji_core
-
-    # placeholder 内の関数だけ差し替えられている場合も尊重
-    if getattr(fuji_core, "validate_action", None) is not _fuji_validate_stub:
-        return fuji_core
-    if getattr(fuji_core, "validate", None) is not _fuji_validate_stub:
-        return fuji_core
-
-    with _fuji_state.lock:
-        if _fuji_state.obj is not None:
-            return _fuji_state.obj
-        if _fuji_state.attempted and _fuji_state.err is not None:
-            return None
-
-        _fuji_state.attempted = True
-        try:
-            m = importlib.import_module("veritas_os.core.fuji")
-            _fuji_state.obj = m
-            _fuji_state.err = None
-            fuji_core = m
-            return m
-        except Exception as e:
-            _fuji_state.err = _errstr(e)
-            _fuji_state.obj = None
-            logger.warning("fuji_core import failed: %s", _fuji_state.err)
-            return None
+    resolved, updated_fuji_core = resolve_fuji_core(
+        _fuji_state,
+        current_fuji_core=fuji_core,
+        is_placeholder=_is_placeholder,
+        fuji_validate_stub=_fuji_validate_stub,
+        errstr=_errstr,
+        logger=logger,
+    )
+    fuji_core = updated_fuji_core
+    return resolved
 
 
 def get_value_core() -> Optional[Any]:
@@ -438,31 +391,16 @@ def get_value_core() -> Optional[Any]:
     """
     global _value_core_state, value_core
 
-    if _is_placeholder(value_core):
-        if getattr(value_core, "append_trust_log", None) is not _append_trust_log_stub:
-            return value_core
-    else:
-        if hasattr(value_core, "append_trust_log"):
-            return value_core
-
-    with _value_core_state.lock:
-        if _value_core_state.obj is not None:
-            return _value_core_state.obj
-        if _value_core_state.attempted and _value_core_state.err is not None:
-            return None
-
-        _value_core_state.attempted = True
-        try:
-            m = importlib.import_module("veritas_os.core.value_core")
-            _value_core_state.obj = m
-            _value_core_state.err = None
-            value_core = m
-            return m
-        except Exception as e:
-            _value_core_state.err = _errstr(e)
-            _value_core_state.obj = None
-            logger.warning("value_core import failed: %s", _value_core_state.err)
-            return None
+    resolved, updated_value_core = resolve_value_core(
+        _value_core_state,
+        current_value_core=value_core,
+        is_placeholder=_is_placeholder,
+        append_trust_log_stub=_append_trust_log_stub,
+        errstr=_errstr,
+        logger=logger,
+    )
+    value_core = updated_value_core
+    return resolved
 
 
 def get_memory_store() -> Optional[Any]:
@@ -472,40 +410,17 @@ def get_memory_store() -> Optional[Any]:
     """
     global _memory_store_state, MEMORY_STORE
 
-    if _is_placeholder(MEMORY_STORE):
-        if getattr(MEMORY_STORE, "search", None) is not _memory_search_stub:
-            return MEMORY_STORE
-        if getattr(MEMORY_STORE, "get", None) is not _memory_get_stub:
-            return MEMORY_STORE
-    else:
-        if any(hasattr(MEMORY_STORE, a) for a in ("search", "get", "put", "put_episode", "recent", "add_usage")):
-            return MEMORY_STORE
-
-    with _memory_store_state.lock:
-        if _memory_store_state.obj is not None:
-            return _memory_store_state.obj
-        if _memory_store_state.attempted and _memory_store_state.err is not None:
-            return None
-
-        _memory_store_state.attempted = True
-        try:
-            m = importlib.import_module("veritas_os.core.memory")
-            store = getattr(m, "MEM", None)
-            if store is None:
-                # module-style memory (search/put/get on module)
-                if any(hasattr(m, a) for a in ("search", "put", "get")):
-                    store = m
-                else:
-                    raise RuntimeError("MEM not found in veritas_os.core.memory")
-            _memory_store_state.obj = store
-            _memory_store_state.err = None
-            MEMORY_STORE = store
-            return store
-        except Exception as e:
-            _memory_store_state.err = _errstr(e)
-            _memory_store_state.obj = None
-            logger.warning("memory store import failed: %s", _memory_store_state.err)
-            return None
+    resolved, updated_memory_store = resolve_memory_store(
+        _memory_store_state,
+        current_memory_store=MEMORY_STORE,
+        is_placeholder=_is_placeholder,
+        memory_search_stub=_memory_search_stub,
+        memory_get_stub=_memory_get_stub,
+        errstr=_errstr,
+        logger=logger,
+    )
+    MEMORY_STORE = updated_memory_store
+    return resolved
 
 
 # ==============================
