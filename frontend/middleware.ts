@@ -18,6 +18,8 @@ export function generateNonce(): string {
  * Security behavior:
  * - Strict nonce CSP is enabled by explicit rollout flag.
  * - VERITAS production profile always enforces nonce CSP as a fail-closed mode.
+ * - NODE_ENV=production alone is warning-only so rollout stays compatible
+ *   with Next.js bootstrap behavior until the dedicated VERITAS profile is set.
  */
 export function shouldEnforceNonceCsp(): boolean {
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();

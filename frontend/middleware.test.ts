@@ -79,7 +79,6 @@ describe("middleware CSP", () => {
   it("warn helper returns true when NODE_ENV=production without rollout or VERITAS prod profile", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
-    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
 
     expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
@@ -117,7 +116,6 @@ describe("middleware CSP", () => {
   it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
-    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
