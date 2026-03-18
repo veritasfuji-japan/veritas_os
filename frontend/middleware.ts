@@ -110,8 +110,9 @@ const BFF_SESSION_TOKEN_ENV = "VERITAS_BFF_SESSION_TOKEN";
 /**
  * Attaches nonce-based CSP headers and BFF session cookie for every request.
  *
- * The nonce is forwarded through `x-nonce` request header so Next.js can
- * annotate nonce-aware script tags where supported.
+ * The nonce is forwarded through the internal `x-nonce` request header so
+ * Next.js can annotate nonce-aware script tags where supported without
+ * exposing the nonce back to browsers.
  *
  * The BFF session cookie provides same-origin authentication for browser
  * requests to `/api/veritas/*` without exposing tokens in client bundles.
@@ -139,7 +140,6 @@ export function middleware(request: NextRequest): NextResponse {
 
   response.headers.set("Content-Security-Policy", cspEnforced);
   response.headers.set("Content-Security-Policy-Report-Only", cspReportOnly);
-  response.headers.set("x-veritas-nonce", nonce);
 
   // Set httpOnly BFF session cookie when configured and not already present.
   const sessionToken = process.env[BFF_SESSION_TOKEN_ENV] ?? "";
