@@ -96,7 +96,7 @@ describe("middleware CSP", () => {
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     const cspReportOnly =
       response.headers.get("Content-Security-Policy-Report-Only") ?? "";
-    const nonce = response.headers.get("x-veritas-nonce") ?? "";
+    const leakedNonce = response.headers.get("x-veritas-nonce");
     const forwardedNonce =
       response.headers.get("x-middleware-request-x-nonce") ?? "";
 
@@ -107,11 +107,11 @@ describe("middleware CSP", () => {
       .split(";")
       .find((directive) => directive.trim().startsWith("script-src"));
 
-    expect(nonce).not.toBe("");
+    expect(leakedNonce).toBeNull();
     expect(scriptDirective).toContain("'unsafe-inline'");
-    expect(reportOnlyScriptDirective).toContain(`'nonce-${nonce}'`);
+    expect(forwardedNonce).not.toBe("");
+    expect(reportOnlyScriptDirective).toContain(`'nonce-${forwardedNonce}'`);
     expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
-    expect(forwardedNonce).toBe(nonce);
   });
 
   it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
