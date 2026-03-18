@@ -97,6 +97,22 @@ def test_validate_startup_security_flags_rejects_public_api_base_url_in_producti
         )
 
 
+def test_validate_startup_security_flags_warns_node_env_production_without_veritas_env(
+    monkeypatch,
+    caplog,
+):
+    """NODE_ENV-only production must warn because strict CSP defaults stay off."""
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+    monkeypatch.setenv("NODE_ENV", "production")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "NODE_ENV=production is set without VERITAS_ENV=production" in caplog.text
+
+
 def test_check_runtime_feature_health_logs_security_warning(caplog):
     """Security warning must be emitted when sanitization is unavailable."""
     with caplog.at_level(logging.WARNING):
