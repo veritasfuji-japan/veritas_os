@@ -250,8 +250,19 @@ def _auth_store_failure_mode() -> str:
         return "closed"
 
     raw = (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
+    allow_fail_open = (
+        (os.getenv("VERITAS_AUTH_ALLOW_FAIL_OPEN") or "")
+        .strip()
+        .lower() in {"1", "true", "yes", "on"}
+    )
     if raw in {"open", "closed"}:
         if raw == "open":
+            if not allow_fail_open:
+                logger.warning(
+                    "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open was ignored. "
+                    "Set VERITAS_AUTH_ALLOW_FAIL_OPEN=true only for controlled non-production testing."
+                )
+                return "closed"
             _warn_auth_store_fail_open_once()
         return raw
     return "closed"

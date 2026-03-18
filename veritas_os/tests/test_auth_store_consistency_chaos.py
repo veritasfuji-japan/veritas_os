@@ -115,5 +115,6 @@ def test_chaos_redis_failure_respects_fail_open_for_rate_limit(monkeypatch) -> N
 
     monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", _BrokenRateStore())
     monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
+    monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
 
     assert server._auth_store_increment_rate_limit("tenant-x", limit=1, window_sec=1.0) is False
