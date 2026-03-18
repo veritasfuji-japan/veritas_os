@@ -27,7 +27,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 from pathlib import Path
-from datetime import datetime, timezone
 import logging
 import math
 import threading
@@ -66,7 +65,18 @@ from .fuji_codes import build_fuji_rejection
 from .fuji_injection import (
     _build_injection_patterns_from_policy,
     _detect_prompt_injection as _detect_prompt_injection_impl,
-    _normalize_injection_text as _normalize_injection_text_impl,
+)
+from .fuji_helpers import (
+    build_followups,
+    ctx_bool,
+    is_high_risk_context,
+    normalize_injection_text,
+    normalize_text,
+    now_iso,
+    redact_text_for_trust_log,
+    resolve_trust_log_id,
+    safe_nonneg_int,
+    select_fuji_code,
 )
 from .config import capability_cfg, emit_capability_manifest
 from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
@@ -207,35 +217,15 @@ class SafetyHeadResult:
 # =========================================================
 # ユーティリティ
 # =========================================================
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _safe_nonneg_int(x: Any, default: int) -> int:
-    """安全に非負整数に変換する。負の値はデフォルト値を返す。"""
-    try:
-        v = int(x)
-        return v if v >= 0 else default
-    except (TypeError, ValueError):
-        return default
+_now_iso = now_iso
+_safe_nonneg_int = safe_nonneg_int
 
 
 # _to_text は utils.py から統合インポート済み
 
 
-def _normalize_text(s: str) -> str:
-    return (s or "").replace("　", " ").strip().lower()
-
-
-def _resolve_trust_log_id(context: Dict[str, Any]) -> str:
-    """
-    Resolve a trust_log_id from context without altering existing TrustLog behavior.
-    """
-    if context.get("trust_log_id"):
-        return str(context["trust_log_id"])
-    if context.get("request_id"):
-        return str(context["request_id"])
-    return "TL-UNKNOWN"
+_normalize_text = normalize_text
+_resolve_trust_log_id = resolve_trust_log_id
 
 
 def _policy_blocked_keywords(policy: Dict[str, Any]) -> tuple[set[str], set[str]]:
@@ -259,60 +249,10 @@ def _policy_blocked_keywords(policy: Dict[str, Any]) -> tuple[set[str], set[str]
     return hard_set, sensitive_set
 
 
-def _redact_text_for_trust_log(text: str, policy: Dict[str, Any]) -> str:
-    """
-    Redact PII in TrustLog text previews based on policy settings.
-
-    This keeps FUJI's responsibility (safety gate + audit logging) while
-    honoring the policy's redaction requirement before writing TrustLog.
-    """
-    audit_cfg = policy.get("audit") or {}
-    if not audit_cfg.get("redact_before_log", False):
-        return text
-
-    pii_cfg = policy.get("pii") or {}
-    if not pii_cfg.get("enabled", True):
-        return text
-
-    masked_markers = pii_cfg.get("masked_markers") or ["●"]
-    mask_token = str(masked_markers[0]) if masked_markers else "●"
-    text_value = text or ""
-
-    redact_kinds = pii_cfg.get("redact_kinds") or {}
-    if redact_kinds.get("phone", True):
-        text_value = _PII_RE["phone"].sub(mask_token * 4, text_value)
-    if redact_kinds.get("email", True):
-        text_value = _PII_RE["email"].sub(mask_token * 4, text_value)
-    if redact_kinds.get("address_jp", True):
-        text_value = _PII_RE["address_jp"].sub(mask_token * 4, text_value)
-    if redact_kinds.get("person_name_jp", False):
-        text_value = _PII_RE["person_name_jp"].sub(mask_token * 2, text_value)
-
-    return text_value
+_redact_text_for_trust_log = redact_text_for_trust_log
 
 
-def _select_fuji_code(
-    *,
-    violations: List[str],
-    meta: Dict[str, Any],
-) -> str:
-    """
-    Select a FUJI standard code based on FUJI gate signals.
-    """
-    prompt_injection = meta.get("prompt_injection") or {}
-    if prompt_injection.get("score", 0.0) >= 0.4 or prompt_injection.get("signals"):
-        return "F-4001"
-
-    if "PII" in violations:
-        return "F-4003"
-
-    if meta.get("low_evidence"):
-        return "F-1002"
-
-    if any(v in {"illicit", "self_harm", "violence", "minors"} for v in violations):
-        return "F-3008"
-
-    return "F-3008"
+_select_fuji_code = select_fuji_code
 
 
 def _policy_path() -> Path:
@@ -349,68 +289,9 @@ def _policy_path() -> Path:
     return root_dir / "policies" / "fuji_default.yaml"
 
 
-def _ctx_bool(ctx: Dict[str, Any], key: str, default: bool) -> bool:
-    v = ctx.get(key, default)
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, (int, float)):
-        return bool(v)
-    if isinstance(v, str):
-        return v.strip().lower() in ("1", "true", "yes", "y", "on")
-    return default
-
-
-def _is_high_risk_context(*, risk: float, stakes: float, categories: List[str], text: str) -> bool:
-    """
-    PoC用：low_evidence 時に deny へ寄せるかどうかの判定。
-    """
-    if stakes >= 0.7:
-        return True
-    if risk >= RISK_DENY_THRESHOLD:
-        return True
-
-    cats = {str(c).strip().lower() for c in (categories or [])}
-    if any(c in cats for c in ("self_harm", "illicit", "violence", "minors", "pii")):
-        return True
-
-    if RISKY_KEYWORDS_POC.search(text or ""):
-        return True
-
-    return False
-
-
-def _build_followups(text: str, context: Dict[str, Any]) -> List[FujiFollowup]:
-    """
-    PoCで「止める/補う」がレスポンスに必ず出るようにする。
-    """
-    q = (text or "").strip()
-    scope_hint = str(context.get("scope", "") or "").strip()
-    return [
-        {
-            "type": "web_search",
-            "title": "一次ソースで裏取り（独立ソース2件以上）",
-            "query": q,
-            "acceptance": "公式/一次情報 + 信頼できる独立ソースの2件以上",
-        },
-        {
-            "type": "clarify",
-            "title": "前提条件の確認（PoC要件）",
-            "questions": [
-                "PoCのゴール（監査ログ/意思決定支援/安全ゲート）の最優先は？",
-                "評価指標（正確性/再現性/説明可能性/速度）の優先順位は？",
-                f"この判断のスコープ（対象業務・対象期間・制約）は？{(' / hint: ' + scope_hint) if scope_hint else ''}",
-            ],
-        },
-        {
-            "type": "evidence_request",
-            "title": "追加エビデンス投入（社内ルール/要件）",
-            "items": [
-                "PoC要件定義（対象業務、判断ポイント、想定入力/出力）",
-                "セキュリティ/法務制約（禁止事項・承認フロー・保管要件）",
-                "成功条件（KPI、合格ライン、評価手順）",
-            ],
-        },
-    ]
+_ctx_bool = ctx_bool
+_is_high_risk_context = is_high_risk_context
+_build_followups = build_followups
 
 
 def _detect_prompt_injection(text: str) -> Dict[str, Any]:
@@ -423,16 +304,7 @@ def _detect_prompt_injection(text: str) -> Dict[str, Any]:
     return _detect_prompt_injection_impl(text)
 
 
-def _normalize_injection_text(text: str) -> str:
-    """Normalize obfuscated text before prompt-injection detection.
-
-    Security note:
-        This routine is heuristic and intentionally conservative. It reduces
-        bypasses using zero-width characters, Unicode confusables, and excessive
-        spacing, but it does not provide complete protection against all prompt
-        injection variants.
-    """
-    return _normalize_injection_text_impl(text)
+_normalize_injection_text = normalize_injection_text
 
 
 # ---------------------------------------------------------
