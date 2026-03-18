@@ -14,7 +14,7 @@ pnpm --filter frontend dev
 `frontend/.env.local` を作成し、API ベース URL を設定してください。
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+VERITAS_API_BASE_URL=http://localhost:8000
 ```
 
 ## 最低限の開発コマンド
@@ -43,6 +43,7 @@ docker compose up --build
 
 - frontend: `http://localhost:3000`
 - backend: `http://localhost:8000`
-- compose では frontend が `NEXT_PUBLIC_API_BASE_URL=http://backend:8000` を使用します。
+- compose では frontend が `VERITAS_API_BASE_URL=http://backend:8000` を使用します。
+- `NEXT_PUBLIC_*` で API 接続先を公開しないでください。production では BFF が fail-closed します。
 
 > 秘密情報は `docker-compose.yml` に直書きせず、`.env` 側で上書きしてください。
