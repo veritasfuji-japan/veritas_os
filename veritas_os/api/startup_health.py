@@ -7,6 +7,12 @@ import os
 from typing import Callable, Optional
 
 
+def _is_truthy_env(var_name: str) -> bool:
+    """Return True when the named environment variable is explicitly truthy."""
+    value = (os.getenv(var_name) or "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
     """Return whether startup validation failures should stop app boot."""
     resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
@@ -22,6 +28,7 @@ def run_startup_config_validation(
 ) -> None:
     """Validate startup configuration with environment-specific strictness."""
     try:
+        validate_startup_security_flags(logger=logger)
         effective_validator = validator
         if effective_validator is None:
             from veritas_os.core.config import validate_startup_config as effective_validator
@@ -36,6 +43,43 @@ def run_startup_config_validation(
         )
         if fail_fast:
             raise
+
+
+def validate_startup_security_flags(*, logger: logging.Logger) -> None:
+    """Validate high-risk startup flags so dangerous configs are never silent.
+
+    Security policy:
+    - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` must never be present in production.
+    - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
+      because it can leak internal routing details and triggers BFF fail-closed.
+    """
+    is_production = should_fail_fast_startup()
+    auth_fail_open_enabled = _is_truthy_env("VERITAS_AUTH_ALLOW_FAIL_OPEN")
+    public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
+
+    if auth_fail_open_enabled:
+        message = (
+            "[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is enabled. "
+            "This weakens auth-store failure protections and must stay limited "
+            "to controlled non-production testing."
+        )
+        if is_production:
+            raise RuntimeError(
+                f"{message} Refusing startup in production."
+            )
+        logger.warning("%s", message)
+
+    if public_api_base_url:
+        message = (
+            "[SECURITY] NEXT_PUBLIC_VERITAS_API_BASE_URL is set. "
+            "Public API base URLs must not be exposed in deployment "
+            "configuration because BFF routing is intended to stay server-only."
+        )
+        if is_production:
+            raise RuntimeError(
+                f"{message} Refusing startup in production."
+            )
+        logger.warning("%s", message)
 
 
 def check_runtime_feature_health(
