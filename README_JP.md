@@ -391,7 +391,7 @@ pnpm ui:dev
 
 フロントエンドは `http://localhost:3000` で起動します。
 
-バックエンドが `http://localhost:8000` でない場合は `NEXT_PUBLIC_API_BASE_URL` を設定してください。
+フロントエンドのBFFが `http://localhost:8000` 以外のバックエンドへ接続する場合は `VERITAS_API_BASE_URL` を設定してください。本番環境では `NEXT_PUBLIC_*` 系の API ベースURL変数を設定しないでください。内部ルーティング情報を露出させる恐れがあり、現在はBFFの fail-closed 動作を引き起こします。
 
 #### Makefileショートカット
 
@@ -443,7 +443,7 @@ docker compose logs -f      # ログ追跡
 | `VERITAS_API_KEY` | — | バックエンドAPI認証キー |
 | `VERITAS_API_SECRET` | `change-me` | HMAC署名シークレット（推奨32文字以上） |
 | `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORSホワイトリスト |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://backend:8000` | フロントエンド → バックエンドURL |
+| `VERITAS_API_BASE_URL` | `http://backend:8000` | フロントエンドBFF（サーバー専用）→ バックエンドURL |
 | `LLM_PROVIDER` | `openai` | LLMプロバイダ |
 | `LLM_MODEL` | `gpt-4.1-mini` | LLMモデル名 |
 
