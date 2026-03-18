@@ -392,7 +392,7 @@ pnpm ui:dev
 
 The frontend starts at `http://localhost:3000`.
 
-Set `NEXT_PUBLIC_API_BASE_URL` if the backend is not at `http://localhost:8000`.
+Set `VERITAS_API_BASE_URL` if the frontend BFF should reach a backend other than `http://localhost:8000`. Do not set `NEXT_PUBLIC_*` API base URL variables in production because they can expose internal routing details and now trigger BFF fail-closed behavior.
 
 #### Makefile shortcuts
 
@@ -444,7 +444,7 @@ Environment variables (set in `.env` or shell):
 | `VERITAS_API_KEY` | — | Backend API authentication key |
 | `VERITAS_API_SECRET` | `change-me` | HMAC signing secret (32+ chars recommended) |
 | `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORS allow-list |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://backend:8000` | Frontend → backend URL |
+| `VERITAS_API_BASE_URL` | `http://backend:8000` | Frontend BFF (server-only) → backend URL |
 | `LLM_PROVIDER` | `openai` | LLM provider |
 | `LLM_MODEL` | `gpt-4.1-mini` | LLM model name |
 
