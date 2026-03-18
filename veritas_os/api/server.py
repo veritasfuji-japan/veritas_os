@@ -11,6 +11,7 @@ import math
 import queue
 import re
 import secrets
+import threading
 import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
@@ -671,6 +672,7 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
       - _load_logs_json() を引数なしで呼ばれても動く
       - LOG_DIR だけ patch されても追随（effective paths）
     """
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
     return _trust_log_runtime.load_logs_json(path)
 
 
@@ -697,15 +699,19 @@ _trust_log_runtime = TrustLogRuntime(
 
 def _secure_chmod(path: Path) -> None:
     """Set restrictive 0o600 permissions on a sensitive file."""
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
+    _trust_log_runtime.effective_shadow_dir = _effective_shadow_dir
     _trust_log_runtime.secure_chmod(path)
 
 
 def _save_json(path: Path, items: list) -> None:
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
     _trust_log_runtime.save_json(path, items)
 
 
 def append_trust_log(entry: Dict[str, Any]) -> None:
     """server 単体でも最低限 trust log が書けるフォールバック。"""
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
     _trust_log_runtime.append_trust_log(entry)
 
 
@@ -716,6 +722,7 @@ def write_shadow_decide(
     telos_score: float,
     fuji: Optional[Dict[str, Any]],
 ) -> None:
+    _trust_log_runtime.effective_shadow_dir = _effective_shadow_dir
     _trust_log_runtime.write_shadow_decide(
         request_id,
         body,

@@ -79,3 +79,27 @@ def test_write_shadow_decide_creates_snapshot_file(tmp_path: Path) -> None:
     assert payload["request_id"] == "req-shadow"
     assert payload["query"] == "hello"
     assert payload["fuji"] == "ok"
+
+
+def test_server_wrappers_follow_monkeypatched_paths(monkeypatch, tmp_path: Path) -> None:
+    from veritas_os.api import server
+
+    shadow_dir = tmp_path / "shadow-wrapper"
+    monkeypatch.setattr(
+        server,
+        "_effective_log_paths",
+        lambda: (tmp_path, tmp_path / "wrapper.json", tmp_path / "wrapper.jsonl"),
+    )
+    monkeypatch.setattr(server, "_effective_shadow_dir", lambda: shadow_dir)
+
+    server.append_trust_log({"request_id": "req-wrapper", "kind": "decision"})
+    server.write_shadow_decide(
+        request_id="req-wrapper",
+        body={"query": "compat"},
+        chosen={"decision": "allow"},
+        telos_score=1.0,
+        fuji={"status": "ok"},
+    )
+
+    assert (tmp_path / "wrapper.jsonl").exists()
+    assert len(list(shadow_dir.glob("decide_*.json"))) == 1
