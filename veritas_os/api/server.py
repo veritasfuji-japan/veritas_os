@@ -94,14 +94,6 @@ from veritas_os.audit.trustlog_signed import (
     verify_trustlog_chain,
 )
 
-from veritas_os.api.trust_log_io import (
-    append_trust_log_entry,
-    load_logs_json,
-    save_json,
-    secure_chmod,
-    write_shadow_decide_snapshot,
-)
-
 from veritas_os.api.sse_hub import (
     SSEEventHub,
     format_sse_message,
@@ -111,6 +103,7 @@ from veritas_os.api.log_path_resolver import (
     effective_log_paths,
     effective_shadow_dir,
 )
+from veritas_os.api.trust_log_runtime import TrustLogRuntime
 from veritas_os.api.dependency_resolver import (
     LazyState,
     resolve_cfg,
@@ -679,51 +672,47 @@ def _load_logs_json(path: Optional[Path] = None) -> list:
       - _load_logs_json() を引数なしで呼ばれても動く
       - LOG_DIR だけ patch されても追随（effective paths）
     """
-    return load_logs_json(
-        path,
-        max_log_file_size=MAX_LOG_FILE_SIZE,
-        effective_log_paths=_effective_log_paths,
-        logger=logger,
-    )
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
+    return _trust_log_runtime.load_logs_json(path)
 
 
-# ★ スレッドセーフな Trust Log ロック
+# ★ スレッドセーフな Trust Log ランタイム
 try:
     from veritas_os.logging.trust_log import trust_log_lock as _trust_log_lock
-except ImportError:
-    _trust_log_lock = threading.Lock()
+except ImportError:  # pragma: no cover - defensive fallback for isolated server tests
+    _trust_log_lock = None
+
+
+_trust_log_runtime = TrustLogRuntime(
+    max_log_file_size=MAX_LOG_FILE_SIZE,
+    effective_log_paths=_effective_log_paths,
+    effective_shadow_dir=_effective_shadow_dir,
+    has_atomic_io=_HAS_ATOMIC_IO,
+    atomic_write_json=atomic_write_json,
+    atomic_append_line=atomic_append_line,
+    logger=logger,
+    errstr=_errstr,
+    trust_log_lock=_trust_log_lock,
+    publish_event=_publish_event,
+)
 
 
 def _secure_chmod(path: Path) -> None:
     """Set restrictive 0o600 permissions on a sensitive file."""
-    secure_chmod(path, logger=logger, errstr=_errstr)
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
+    _trust_log_runtime.effective_shadow_dir = _effective_shadow_dir
+    _trust_log_runtime.secure_chmod(path)
 
 
 def _save_json(path: Path, items: list) -> None:
-    save_json(
-        path,
-        items,
-        has_atomic_io=_HAS_ATOMIC_IO,
-        atomic_write_json=atomic_write_json,
-        secure_chmod_fn=_secure_chmod,
-    )
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
+    _trust_log_runtime.save_json(path, items)
 
 
 def append_trust_log(entry: Dict[str, Any]) -> None:
     """server 単体でも最低限 trust log が書けるフォールバック。"""
-    append_trust_log_entry(
-        entry,
-        effective_log_paths=_effective_log_paths,
-        has_atomic_io=_HAS_ATOMIC_IO,
-        atomic_append_line=atomic_append_line,
-        load_logs_json_fn=_load_logs_json,
-        save_json_fn=_save_json,
-        secure_chmod_fn=_secure_chmod,
-        publish_event=_publish_event,
-        logger=logger,
-        errstr=_errstr,
-        trust_log_lock=_trust_log_lock,
-    )
+    _trust_log_runtime.effective_log_paths = _effective_log_paths
+    _trust_log_runtime.append_trust_log(entry)
 
 
 def write_shadow_decide(
@@ -733,18 +722,13 @@ def write_shadow_decide(
     telos_score: float,
     fuji: Optional[Dict[str, Any]],
 ) -> None:
-    write_shadow_decide_snapshot(
+    _trust_log_runtime.effective_shadow_dir = _effective_shadow_dir
+    _trust_log_runtime.write_shadow_decide(
         request_id,
         body,
         chosen,
         telos_score,
         fuji,
-        effective_shadow_dir=_effective_shadow_dir,
-        has_atomic_io=_HAS_ATOMIC_IO,
-        atomic_write_json=atomic_write_json,
-        secure_chmod_fn=_secure_chmod,
-        logger=logger,
-        errstr=_errstr,
     )
 
 
