@@ -13,6 +13,12 @@ def _is_truthy_env(var_name: str) -> bool:
     return value in {"1", "true", "yes", "on"}
 
 
+def _is_node_env_production() -> bool:
+    """Return True when NODE_ENV indicates a production runtime."""
+    node_env = (os.getenv("NODE_ENV") or "").strip().lower()
+    return node_env == "production"
+
+
 def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
     """Return whether startup validation failures should stop app boot."""
     resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
@@ -52,10 +58,20 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
     - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` must never be present in production.
     - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
       because it can leak internal routing details and triggers BFF fail-closed.
+    - `NODE_ENV=production` without `VERITAS_ENV=production` must emit a warning
+      because frontend strict CSP defaults will not activate automatically.
     """
     is_production = should_fail_fast_startup()
+    is_node_production = _is_node_env_production()
     auth_fail_open_enabled = _is_truthy_env("VERITAS_AUTH_ALLOW_FAIL_OPEN")
     public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
+
+    if is_node_production and not is_production:
+        logger.warning(
+            "[SECURITY] NODE_ENV=production is set without VERITAS_ENV=production. "
+            "Frontend strict CSP defaults remain warning-only in this profile, so "
+            "deployments must explicitly set VERITAS_ENV=production before release."
+        )
 
     if auth_fail_open_enabled:
         message = (
