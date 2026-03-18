@@ -69,17 +69,16 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("does not enforce nonce from NODE_ENV=production alone", () => {
+  it("enforces nonce from NODE_ENV=production alone", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
-    expect(shouldEnforceNonceCsp()).toBe(false);
+    expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("warn helper returns true when NODE_ENV=production without rollout or VERITAS prod profile", () => {
+  it("warn helper returns true when NODE_ENV=production is missing VERITAS production profile", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
-    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
 
     expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
@@ -117,17 +116,22 @@ describe("middleware CSP", () => {
   it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
-    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "false");
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
 
-    middleware({ headers: new Headers() } as never);
+    const response = middleware({ headers: new Headers() } as never);
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    const scriptDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(scriptDirective).toContain("'nonce-");
+    expect(scriptDirective).not.toContain("'unsafe-inline'");
   });
 
-  it("does not emit warning when explicit CSP strict rollout flag is enabled", () => {
+  it("still warns when rollout flag is enabled but VERITAS production profile is missing", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "true");
@@ -137,6 +141,6 @@ describe("middleware CSP", () => {
 
     middleware({ headers: new Headers() } as never);
 
-    expect(warnSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });
