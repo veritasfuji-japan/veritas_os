@@ -31,17 +31,16 @@ jobs:
       - name: Generate Python SBOM (CycloneDX)
         run: cyclonedx-py requirements veritas_os/requirements.txt --output-file security/sbom/python.cdx.json
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.3
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Enable pnpm (corepack)
-        run: |
-          set -euxo pipefail
-          corepack enable
-          corepack prepare pnpm@9.15.3 --activate
-          pnpm --version
+          cache: pnpm
 
       - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
