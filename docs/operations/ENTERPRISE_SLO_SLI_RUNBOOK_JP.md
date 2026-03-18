@@ -77,7 +77,13 @@
 2. SLO 逸脱分を Error Budget 台帳へ反映
 3. アラート閾値と runbook の妥当性を再評価
 
-## 6. セキュリティ上の警告
+## 6. デプロイ前セキュリティ確認（P0）
+- backend / frontend ともに本番プロファイルでは `VERITAS_ENV=production` を明示設定する。`NODE_ENV=production` 単独では frontend の strict CSP 既定適用に乗らない。
+- production では `NEXT_PUBLIC_VERITAS_API_BASE_URL` を必ず未設定にする。残っていると BFF は安全側で `503 server_misconfigured` になり、内部 API 経路の公開リスクも生む。
+- `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` は検証専用の危険フラグであり、production へ混入させない。backend startup は fail-fast するが、環境定義から除去しておくこと。
+- デプロイ担当者はリリース前に環境変数一覧をレビューし、不要な `NEXT_PUBLIC_*` と fail-open 系フラグが含まれていないことを確認する。
+
+## 7. セキュリティ上の警告
 - `trace_id` は監査相関用であり、認可判定には使用しない。
 - 外部入力の `trace_id` は形式検証を行い、ヘッダ/ログインジェクションを防止する。
 - `trace_id` に秘密情報（APIキー、トークン、PII）を含めない。
