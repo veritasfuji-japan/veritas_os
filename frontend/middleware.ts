@@ -18,15 +18,10 @@ export function generateNonce(): string {
  * Security behavior:
  * - Strict nonce CSP is enabled by explicit rollout flag.
  * - VERITAS production profile always enforces nonce CSP as a fail-closed mode.
- * - NODE_ENV=production also enforces nonce CSP to avoid leaving
- *   `unsafe-inline` active because of profile misconfiguration.
+ * - NODE_ENV=production alone is warning-only so rollout stays compatible
+ *   with Next.js bootstrap behavior until the dedicated VERITAS profile is set.
  */
 export function shouldEnforceNonceCsp(): boolean {
-  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
-  if (nodeEnv === "production") {
-    return true;
-  }
-
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
   if (veritasEnv === "prod" || veritasEnv === "production") {
     return true;
@@ -37,9 +32,8 @@ export function shouldEnforceNonceCsp(): boolean {
 /**
  * Returns whether runtime should emit a security warning for CSP rollout.
  *
- * Warns only when production is detected without the canonical
- * VERITAS_ENV=production profile, because strict CSP is still enforced but
- * deployment metadata is inconsistent.
+ * Warns only when NODE_ENV=production while strict nonce rollout is still
+ * disabled outside a VERITAS production profile.
  */
 export function shouldWarnInsecureProductionCspConfig(): boolean {
   const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
@@ -52,7 +46,7 @@ export function shouldWarnInsecureProductionCspConfig(): boolean {
     return false;
   }
 
-  return true;
+  return process.env[ENFORCE_NONCE_ENV] !== "true";
 }
 
 /**
@@ -128,8 +122,8 @@ const BFF_SESSION_TOKEN_ENV = "VERITAS_BFF_SESSION_TOKEN";
 export function middleware(request: NextRequest): NextResponse {
   if (shouldWarnInsecureProductionCspConfig()) {
     console.warn(
-      "[security-warning] NODE_ENV=production is set without VERITAS_ENV=production. " +
-        "Strict nonce CSP is being enforced automatically, but the deployment profile should be corrected.",
+      "[security-warning] CSP nonce strict mode is disabled under NODE_ENV=production. " +
+        "Set VERITAS_ENV=production (preferred) or VERITAS_CSP_ENFORCE_NONCE=true after compatibility validation.",
     );
   }
 

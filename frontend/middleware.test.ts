@@ -69,14 +69,14 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("enforces nonce from NODE_ENV=production alone", () => {
+  it("does not enforce nonce from NODE_ENV=production alone", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
-    expect(shouldEnforceNonceCsp()).toBe(true);
+    expect(shouldEnforceNonceCsp()).toBe(false);
   });
 
-  it("warn helper returns true when NODE_ENV=production is missing VERITAS production profile", () => {
+  it("warn helper returns true when NODE_ENV=production without rollout or VERITAS prod profile", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
@@ -120,18 +120,12 @@ describe("middleware CSP", () => {
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
 
-    const response = middleware({ headers: new Headers() } as never);
-    const csp = response.headers.get("Content-Security-Policy") ?? "";
-    const scriptDirective = csp
-      .split(";")
-      .find((directive) => directive.trim().startsWith("script-src"));
+    middleware({ headers: new Headers() } as never);
 
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(scriptDirective).toContain("'nonce-");
-    expect(scriptDirective).not.toContain("'unsafe-inline'");
   });
 
-  it("still warns when rollout flag is enabled but VERITAS production profile is missing", () => {
+  it("does not emit warning when explicit CSP strict rollout flag is enabled", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
     vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "true");
@@ -141,6 +135,6 @@ describe("middleware CSP", () => {
 
     middleware({ headers: new Headers() } as never);
 
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
