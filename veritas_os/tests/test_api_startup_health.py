@@ -52,6 +52,51 @@ def test_run_startup_config_validation_raises_when_fail_fast():
         )
 
 
+def test_validate_startup_security_flags_warns_non_production_fail_open(
+    monkeypatch,
+    caplog,
+):
+    """Non-production fail-open must still emit a security warning."""
+    monkeypatch.setenv("VERITAS_ENV", "staging")
+    monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "VERITAS_AUTH_ALLOW_FAIL_OPEN=true is enabled" in caplog.text
+
+
+def test_validate_startup_security_flags_rejects_production_fail_open(
+    monkeypatch,
+):
+    """Production must fail fast when auth fail-open is explicitly enabled."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
+
+    with pytest.raises(RuntimeError, match="VERITAS_AUTH_ALLOW_FAIL_OPEN=true"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_startup_security_flags_rejects_public_api_base_url_in_production(
+    monkeypatch,
+):
+    """Production must reject leaked public API base URL configuration."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv(
+        "NEXT_PUBLIC_VERITAS_API_BASE_URL",
+        "https://internal-api.example.test",
+    )
+
+    with pytest.raises(RuntimeError, match="NEXT_PUBLIC_VERITAS_API_BASE_URL"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
 def test_check_runtime_feature_health_logs_security_warning(caplog):
     """Security warning must be emitted when sanitization is unavailable."""
     with caplog.at_level(logging.WARNING):
