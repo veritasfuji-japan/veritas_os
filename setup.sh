@@ -154,8 +154,10 @@ VERITAS_MAX_REQUEST_BODY_SIZE=10485760
 # --- CORS ---
 VERITAS_CORS_ALLOW_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 
-# --- Frontend ---
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+# --- Frontend BFF (server-only) ---
+# Keep BFF routing on the server side; do not expose API base URLs via
+# NEXT_PUBLIC_* variables.
+VERITAS_API_BASE_URL=http://localhost:8000
 ENVEOF
 
     success ".env file created with auto-generated secrets."
