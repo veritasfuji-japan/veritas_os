@@ -98,8 +98,10 @@ def test_build_remediation_guide_contains_required_columns(tmp_path: Path) -> No
 
     assert "禁止依存" in guide
     assert "代替実装先（許可依存）" in guide
+    assert "正規拡張ポイント" in guide
     assert "planner -> kernel" in guide
     assert "veritas_os.core.memory" in guide
+    assert "veritas_os.core.planner_normalization" in guide
     assert REMEDIATION_LINK in guide
 
 
