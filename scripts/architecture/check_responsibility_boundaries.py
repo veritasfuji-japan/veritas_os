@@ -97,11 +97,15 @@ RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "veritas_os.core.fuji_policy",
         "veritas_os.core.fuji_policy_rollout",
         "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
     ),
     "memory": (
         "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
         "veritas_os.core.memory_search_helpers",
         "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
     ),
 }
 
