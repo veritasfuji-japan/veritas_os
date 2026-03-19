@@ -146,7 +146,12 @@ def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> tuple[list[Pat
 def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     srv = _get_server()
     shadow_dir = srv._effective_shadow_dir()
-    _, _, log_jsonl = srv._effective_log_paths()
+    _, log_json, log_jsonl = srv._effective_log_paths()
+    trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
+    trust_json_result = None
+    if trust_log_runtime is not None:
+        trust_log_runtime.effective_log_paths = srv._effective_log_paths
+        trust_json_result = trust_log_runtime.load_logs_json_result(log_json)
 
     files, total_decide_files = _collect_recent_decide_files(shadow_dir, decide_file_limit)
     last_at = None
@@ -171,6 +176,9 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "decide_files_returned": len(files),
         "decide_files_truncated": total_decide_files > len(files),
         "trust_jsonl_lines": lines,
+        "trust_json_status": (
+            trust_json_result.status if trust_json_result is not None else "unknown"
+        ),
         "last_decide_at": last_at,
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": srv.get_decision_pipeline() is not None,
@@ -181,9 +189,15 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     if srv._is_debug_mode():
         result["pipeline_error"] = srv._pipeline_state.err
         result["cfg_error"] = srv._cfg_state.err
+        result["trust_json_error"] = (
+            None if trust_json_result is None else trust_json_result.error
+        )
     else:
         result["pipeline_error"] = bool(srv._pipeline_state.err)
         result["cfg_error"] = bool(srv._cfg_state.err)
+        result["trust_json_error"] = bool(
+            trust_json_result is not None and trust_json_result.error
+        )
     return result
 
 
