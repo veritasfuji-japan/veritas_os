@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, Optional
 from veritas_os.api.trust_log_io import (
     append_trust_log_entry,
     load_logs_json,
+    load_logs_json_result,
     save_json,
     secure_chmod,
     write_shadow_decide_snapshot,
@@ -55,6 +56,15 @@ class TrustLogRuntime:
             logger=self.logger,
         )
 
+    def load_logs_json_result(self, path: Optional[Path] = None) -> Any:
+        """Load trust-log aggregate JSON with structured degraded-state reporting."""
+        return load_logs_json_result(
+            path,
+            max_log_file_size=self.max_log_file_size,
+            effective_log_paths=self.effective_log_paths,
+            logger=self.logger,
+        )
+
     def secure_chmod(self, path: Path) -> None:
         """Apply restrictive 0600 permissions to a sensitive artifact."""
         secure_chmod(path, logger=self.logger, errstr=self.errstr)
@@ -76,6 +86,7 @@ class TrustLogRuntime:
             effective_log_paths=self.effective_log_paths,
             has_atomic_io=self.has_atomic_io,
             atomic_append_line=self.atomic_append_line,
+            load_logs_json_result_fn=self.load_logs_json_result,
             load_logs_json_fn=self.load_logs_json,
             save_json_fn=self.save_json,
             secure_chmod_fn=self.secure_chmod,
@@ -111,4 +122,3 @@ class TrustLogRuntime:
     @staticmethod
     def _noop_publish_event(_event_type: str, _payload: Dict[str, Any]) -> None:
         """Default event publisher used by tests that do not wire SSE."""
-
