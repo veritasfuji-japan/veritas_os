@@ -129,6 +129,7 @@ def test_auth_store_error_policy_fail_open(monkeypatch):
         def increment_rate_limit(self, api_key: str, limit: int, window_sec: float) -> bool:
             raise RuntimeError("broken rate")
 
+    monkeypatch.setenv("VERITAS_ENV", "local")
     monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
     monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
     monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", BrokenStore())
