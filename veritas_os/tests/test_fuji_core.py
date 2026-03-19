@@ -84,6 +84,31 @@ def test_policy_load_missing_path_uses_default(tmp_path):
     assert pol["version"]  # なにかしら version が入っている
 
 
+def test_fuji_keeps_runtime_pattern_builder_alias() -> None:
+    """fuji.py は shared policy builder を互換 alias として公開し続ける。"""
+    assert (
+        fuji._build_runtime_patterns_from_policy
+        is fuji._fuji_policy._build_runtime_patterns_from_policy
+    )
+
+
+
+def test_fuji_keeps_normalize_injection_alias() -> None:
+    """旧 private API 名も normalize helper を引き続き解決できる。"""
+    assert fuji._normalize_injection_text("HELLO​") == "hello"
+
+
+def test_reload_policy_syncs_shared_policy_module(monkeypatch):
+    """fuji.py の POLICY alias は共有ポリシーモジュールの更新に追従する。"""
+    shared_policy = {"version": "shared_sync_test"}
+    monkeypatch.setattr(fuji._fuji_policy, "reload_policy", lambda: shared_policy)
+
+    pol = fuji.reload_policy()
+
+    assert pol is shared_policy
+    assert fuji.POLICY is shared_policy
+
+
 def test_reload_policy_respects_env(tmp_path, monkeypatch):
     """
     VERITAS_FUJI_POLICY が設定されているときに reload_policy が動作するか。
