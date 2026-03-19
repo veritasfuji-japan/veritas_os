@@ -160,3 +160,14 @@ def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
     assert report["summary"]["boundary_violation"] == 1
     assert report["summary"]["permission_denied"] == 1
     assert report["summary"]["input_invalid"] == 0
+    assert report["issues"][0]["allowed_dependencies"] == [
+        "veritas_os.core.memory",
+        "veritas_os.core.world",
+        "veritas_os.core.strategy",
+    ]
+    assert report["issues"][0]["recommended_extension_points"] == [
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    ]
+    assert report["issues"][0]["remediation_link"] == REMEDIATION_LINK

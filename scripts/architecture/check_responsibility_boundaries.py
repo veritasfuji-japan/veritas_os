@@ -311,6 +311,13 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
                 "forbidden_module": issue.forbidden_module,
                 "path": str(issue.path),
                 "message": issue.message,
+                "allowed_dependencies": list(
+                    ALLOWED_DEPENDENCY_GUIDE.get(issue.source_module, ())
+                ),
+                "recommended_extension_points": list(
+                    RECOMMENDED_EXTENSION_POINTS.get(issue.source_module, ())
+                ),
+                "remediation_link": REMEDIATION_LINK,
             }
             for issue in issue_list
         ],
