@@ -61,7 +61,7 @@ DEFAULT_RULES: tuple[BoundaryRule, ...] = (
 ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
     "planner": (
         "veritas_os.core.memory",
-        "veritas_os.core.world_model",
+        "veritas_os.core.world",
         "veritas_os.core.strategy",
     ),
     "kernel": (
@@ -70,17 +70,43 @@ ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
         "veritas_os.core.memory",
     ),
     "fuji": (
-        "veritas_os.core.fuji_codes",
-        "veritas_os.core.sanitize",
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
     ),
     "memory": (
-        "veritas_os.utils.atomic_io",
-        "veritas_os.core.memory_vector",
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_security",
     ),
 }
 
 
-REMEDIATION_LINK = "docs/review/SYSTEM_SCORECARD_2026_03_02.md#実装方針責務境界を越えない範囲"
+RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
+    "planner": (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    ),
+    "kernel": (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    ),
+    "fuji": (
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+    ),
+    "memory": (
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+    ),
+}
+
+
+REMEDIATION_LINK = "docs/architecture/core_responsibility_boundaries.md"
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -229,12 +255,18 @@ def build_remediation_guide(
     """Build a CI-friendly remediation guide for boundary violations."""
     rows: list[str] = []
     for violation in violations:
-        alternatives = ", ".join(ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",)))
+        alternatives = ", ".join(
+            ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",))
+        )
+        extension_points = ", ".join(
+            RECOMMENDED_EXTENSION_POINTS.get(violation.source_module, ("N/A",))
+        )
         rows.append(
             " | ".join(
                 (
                     f"{violation.source_module} -> {violation.forbidden_module}",
                     alternatives,
+                    extension_points,
                     remediation_link,
                 )
             )
@@ -245,7 +277,7 @@ def build_remediation_guide(
 
     header = (
         "\n=== Responsibility Boundary Remediation Guide ===\n"
-        "禁止依存 | 代替実装先（許可依存） | 修正例リンク\n"
+        "禁止依存 | 代替実装先（許可依存） | 正規拡張ポイント | 修正例リンク\n"
     )
     return header + "\n".join(rows)
 
