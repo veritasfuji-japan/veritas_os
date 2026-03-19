@@ -56,6 +56,11 @@ from .memory_search_helpers import (
     filter_hits_for_user,
     normalize_store_hits,
 )
+from .memory_store_helpers import (
+    build_kvs_search_hits,
+    filter_recent_records,
+    simple_score as _simple_score_impl,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1126,47 +1131,15 @@ class MemoryStore:
         contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """最近のレコードを取得"""
-        items = self.list_all(user_id)
-        items.sort(key=lambda r: r.get("ts", 0), reverse=True)
-
-        if contains:
-            s = contains.strip()
-            filtered: List[Dict[str, Any]] = []
-            for r in items:
-                v = r.get("value")
-                if isinstance(v, dict):
-                    q = str(v.get("query") or v.get("text") or "")
-                else:
-                    q = str(v)
-                if s in q:
-                    filtered.append(r)
-            items = filtered
-
-        return items[:limit]
+        return filter_recent_records(
+            self.list_all(user_id),
+            contains=contains,
+            limit=limit,
+        )
 
     def _simple_score(self, query: str, text: str) -> float:
         """シンプルな類似度スコア計算"""
-        q = (query or "").strip().lower()
-        t = (text or "").strip().lower()
-        if not q or not t:
-            return 0.0
-
-        # 部分一致
-        if q in t or t in q:
-            base = 0.5
-        else:
-            base = 0.0
-
-        # トークン一致
-        q_tokens = set(q.split())
-        t_tokens = set(t.split())
-        if q_tokens and t_tokens:
-            inter = q_tokens & t_tokens
-            token_score = len(inter) / max(len(q_tokens), 1)
-        else:
-            token_score = 0.0
-
-        return min(1.0, base + 0.5 * token_score)
+        return _simple_score_impl(query, text)
 
     def search(
         self,
@@ -1178,57 +1151,19 @@ class MemoryStore:
         **kwargs,
     ) -> Dict[str, List[Dict[str, Any]]]:
         """KVSベースの検索（フォールバック用）"""
-        query = (query or "").strip()
-        if not query:
-            return {}
-
-        data = self._load_all(copy=True)
-        episodic: List[Dict[str, Any]] = []
-        target_user = user_id
-
-        for r in data:
-            if target_user and r.get("user_id") != target_user:
-                continue
-
-            val = r.get("value") or {}
-            if not isinstance(val, dict):
-                continue
-
-            text = str(val.get("text") or val.get("query") or "").strip()
-            if not text:
-                continue
-
-            score = self._simple_score(query, text)
-            if score < min_sim:
-                continue
-
-            tags = val.get("tags") or []
-            kind = val.get("kind", "episodic")
-
-            if kinds and kind not in kinds:
-                continue
-
-            episodic.append(
-                {
-                    "id": r.get("key"),
-                    "text": text,
-                    "score": float(score),
-                    "tags": tags,
-                    "ts": r.get("ts"),
-                    "meta": {
-                        "user_id": r.get("user_id"),
-                        "created_at": r.get("ts"),
-                        "kind": kind,
-                    },
-                }
-            )
-
-        episodic.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+        episodic = build_kvs_search_hits(
+            self._load_all(copy=True),
+            query=query,
+            k=k,
+            kinds=kinds,
+            min_sim=min_sim,
+            user_id=user_id,
+        )
         if not episodic:
             return {}
 
         logger.debug("[MemoryOS][KVS] episodic hits=%d", len(episodic))
-        return {"episodic": episodic[:k]}
+        return {"episodic": episodic}
 
     def put_episode(
         self,
