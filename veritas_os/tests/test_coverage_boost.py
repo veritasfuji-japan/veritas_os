@@ -580,6 +580,38 @@ class TestServerMemoryEndpoints:
         body = resp.json()
         assert body["ok"] is True
 
+    def test_memory_put_reports_partial_failure_when_legacy_save_fails(
+        self,
+        monkeypatch,
+    ):
+        class PartialStore:
+            def put(self, *args, **kwargs):
+                if args and args[0] == server._derive_api_user_id(_TEST_KEY):
+                    raise RuntimeError("legacy backend unavailable")
+                return "vector-id"
+
+        monkeypatch.setattr(server, "get_memory_store", lambda: PartialStore())
+        resp = _client.post(
+            "/v1/memory/put",
+            headers=_AUTH,
+            json={
+                "user_id": "u1",
+                "key": "legacy-key",
+                "value": {"hello": "world"},
+                "text": "episode text",
+                "kind": "semantic",
+            },
+        )
+
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["status"] == "partial_failure"
+        assert body["legacy"]["saved"] is False
+        assert body["vector"]["saved"] is True
+        assert body["errors"] == [
+            {"stage": "legacy", "message": "legacy save failed"}
+        ]
+
     def test_memory_search_store_unavailable(self, monkeypatch):
         monkeypatch.setattr(server, "get_memory_store", lambda: None)
         resp = _client.post("/v1/memory/search", headers=_AUTH, json={
