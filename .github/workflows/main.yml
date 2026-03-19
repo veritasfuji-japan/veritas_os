@@ -57,6 +57,12 @@ jobs:
           python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
             --max-unknown-rate 0.0
 
+      - name: deployment env template smoke check
+        run: python scripts/quality/check_deployment_env_defaults.py
+
+      - name: runtime pickle artifact check
+        run: python scripts/security/check_runtime_pickle_artifacts.py
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/core veritas_os/api veritas_os/tools \
@@ -319,4 +325,3 @@ jobs:
             frontend/playwright-report
             frontend/test-results
           if-no-files-found: warn
-
