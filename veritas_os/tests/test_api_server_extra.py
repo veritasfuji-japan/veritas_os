@@ -1178,6 +1178,69 @@ def test_memory_put_respects_kind_for_vector_store(monkeypatch):
     assert calls["item"]["meta"]["user_id"] == "anon"
 
 
+def test_memory_put_reports_partial_failure_when_vector_save_fails(monkeypatch):
+    """memory_put should expose stage-level partial failure details."""
+
+    class PartialStore:
+        def __init__(self):
+            self.legacy = {}
+
+        def put(self, *args, **kwargs):
+            if len(args) == 2 and isinstance(args[1], dict) and "text" in args[1]:
+                raise RuntimeError("vector backend offline")
+            user_id = args[0]
+            key = kwargs.get("key", args[1] if len(args) > 1 else None)
+            value = kwargs.get("value", args[2] if len(args) > 2 else None)
+            self.legacy[(user_id, key)] = value
+            return None
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: PartialStore())
+
+    res = server.memory_put(
+        MemoryPutRequest(
+            user_id="u-partial",
+            key="legacy-key",
+            value={"foo": "bar"},
+            kind="semantic",
+            text="hello",
+            tags=["t1"],
+        )
+    )
+
+    assert res["ok"] is True
+    assert res["status"] == "partial_failure"
+    assert res["legacy"]["saved"] is True
+    assert res["vector"]["saved"] is False
+    assert res["errors"] == [
+        {"stage": "vector", "message": "vector save failed"}
+    ]
+
+
+def test_memory_put_reports_failed_when_all_save_paths_fail(monkeypatch):
+    """memory_put should not mask a total write failure as success."""
+
+    class FailingStore:
+        def put(self, *args, **kwargs):
+            raise RuntimeError("backend offline")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: FailingStore())
+
+    res = server.memory_put(
+        MemoryPutRequest(
+            user_id="u-fail",
+            key="legacy-key",
+            value={"foo": "bar"},
+            kind="semantic",
+            text="hello",
+        )
+    )
+
+    assert res["ok"] is False
+    assert res["status"] == "failed"
+    assert res["error"] == "memory operation failed"
+    assert {item["stage"] for item in res["errors"]} == {"legacy", "vector"}
+
+
 def test_memory_search_filters_by_user(monkeypatch):
     """
     memory_search:

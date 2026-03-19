@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_memory_stage_error(stage: str, exc: Exception) -> Dict[str, str]:
+    """Return a sanitized stage error payload for partial MemoryOS failures."""
+    logger.warning("[MemoryOS][%s] Error: %s", stage, exc)
+    return {"stage": stage, "message": f"{stage} save failed"}
+
+
 def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
@@ -117,6 +123,7 @@ def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[st
 
 @router.post("/v1/memory/put")
 def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
+    """Store memory data and surface stage-level partial failures explicitly."""
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
@@ -125,97 +132,105 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
-        key = body.key or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-        value = body.value or {}
-
-        text = body.text.strip()
-        tags = body.tags
-        meta = body.meta or {}
-
-        retention_class = str(
-            body.retention_class or meta.get("retention_class") or "standard"
-        ).strip().lower()
-        expires_at = body.expires_at if body.expires_at is not None else meta.get("expires_at")
-        legal_hold = body.legal_hold or bool(meta.get("legal_hold", False))
-
-        legacy_saved = False
-        if value:
-            try:
-                _store_put(store, user_id, key, value)
-                legacy_saved = True
-            except Exception as e:
-                logger.warning("[MemoryOS][legacy] Error: %s", e)
-
-        kind = body.kind
-        if kind not in VALID_MEMORY_KINDS:
-            kind = "semantic"
-
-        new_id = None
-        if text:
-            try:
-                text_clean = srv.redact(text)
-                meta_for_store = dict(meta)
-                meta_for_store.setdefault("user_id", user_id)
-                meta_for_store.setdefault("kind", kind)
-                meta_for_store["retention_class"] = retention_class
-                meta_for_store["expires_at"] = expires_at
-                meta_for_store["legal_hold"] = legal_hold
-
-                if hasattr(store, "put"):
-                    vector_item = {
-                        "text": text_clean,
-                        "tags": tags,
-                        "meta": meta_for_store,
-                    }
-                    try:
-                        new_id = store.put(kind, vector_item)
-                    except TypeError:
-                        if hasattr(store, "put_episode"):
-                            new_id = store.put_episode(
-                                text=text_clean,
-                                tags=tags,
-                                meta=meta_for_store,
-                            )
-                        else:
-                            raise
-                elif hasattr(store, "put_episode"):
-                    new_id = store.put_episode(
-                        text=text_clean,
-                        tags=tags,
-                        meta=meta_for_store,
-                    )
-                else:
-                    episode_key = f"episode_{int(time.time())}"
-                    _store_put(
-                        store,
-                        user_id,
-                        episode_key,
-                        {"text": text_clean, "tags": tags, "meta": meta_for_store},
-                    )
-                    new_id = episode_key
-            except Exception as e:
-                logger.warning("[MemoryOS][vector] Error: %s", e)
-
-        return {
-            "ok": True,
-            "legacy": {"saved": legacy_saved, "key": key if legacy_saved else None},
-            "vector": {
-                "saved": bool(new_id),
-                "id": new_id,
-                "kind": kind if new_id else None,
-                "tags": tags if new_id else None,
-            },
-            "size": len(str(value)) if value else len(text),
-            "lifecycle": {
-                "retention_class": retention_class,
-                "expires_at": expires_at,
-                "legal_hold": legal_hold,
-            },
-        }
-
-    except Exception as e:
-        logger.error("[MemoryOS] Error: %s", e)
+    except Exception as exc:
+        logger.error("[MemoryOS][resolve_user] Error: %s", exc)
         return {"ok": False, "error": "memory operation failed"}
+
+    key = body.key or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    value = body.value or {}
+
+    text = body.text.strip()
+    tags = body.tags
+    meta = body.meta or {}
+
+    retention_class = str(
+        body.retention_class or meta.get("retention_class") or "standard"
+    ).strip().lower()
+    expires_at = body.expires_at if body.expires_at is not None else meta.get("expires_at")
+    legal_hold = body.legal_hold or bool(meta.get("legal_hold", False))
+
+    errors: list[Dict[str, str]] = []
+    legacy_saved = False
+    if value:
+        try:
+            _store_put(store, user_id, key, value)
+            legacy_saved = True
+        except Exception as exc:
+            errors.append(_build_memory_stage_error("legacy", exc))
+
+    kind = body.kind
+    if kind not in VALID_MEMORY_KINDS:
+        kind = "semantic"
+
+    new_id = None
+    if text:
+        try:
+            text_clean = srv.redact(text)
+            meta_for_store = dict(meta)
+            meta_for_store.setdefault("user_id", user_id)
+            meta_for_store.setdefault("kind", kind)
+            meta_for_store["retention_class"] = retention_class
+            meta_for_store["expires_at"] = expires_at
+            meta_for_store["legal_hold"] = legal_hold
+
+            if hasattr(store, "put"):
+                vector_item = {
+                    "text": text_clean,
+                    "tags": tags,
+                    "meta": meta_for_store,
+                }
+                try:
+                    new_id = store.put(kind, vector_item)
+                except TypeError:
+                    if hasattr(store, "put_episode"):
+                        new_id = store.put_episode(
+                            text=text_clean,
+                            tags=tags,
+                            meta=meta_for_store,
+                        )
+                    else:
+                        raise
+            elif hasattr(store, "put_episode"):
+                new_id = store.put_episode(
+                    text=text_clean,
+                    tags=tags,
+                    meta=meta_for_store,
+                )
+            else:
+                episode_key = f"episode_{int(time.time())}"
+                _store_put(
+                    store,
+                    user_id,
+                    episode_key,
+                    {"text": text_clean, "tags": tags, "meta": meta_for_store},
+                )
+                new_id = episode_key
+        except Exception as exc:
+            errors.append(_build_memory_stage_error("vector", exc))
+
+    ok = legacy_saved or bool(new_id) or (not value and not text)
+    response: Dict[str, Any] = {
+        "ok": ok,
+        "status": "ok" if ok and not errors else "partial_failure" if ok else "failed",
+        "legacy": {"saved": legacy_saved, "key": key if legacy_saved else None},
+        "vector": {
+            "saved": bool(new_id),
+            "id": new_id,
+            "kind": kind if new_id else None,
+            "tags": tags if new_id else None,
+        },
+        "size": len(str(value)) if value else len(text),
+        "lifecycle": {
+            "retention_class": retention_class,
+            "expires_at": expires_at,
+            "legal_hold": legal_hold,
+        },
+    }
+    if errors:
+        response["errors"] = errors
+        if not ok:
+            response["error"] = "memory operation failed"
+    return response
 
 
 @router.post("/v1/memory/search")
