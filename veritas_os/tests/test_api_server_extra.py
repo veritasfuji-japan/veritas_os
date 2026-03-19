@@ -85,6 +85,8 @@ def test_health_and_status_and_metrics(monkeypatch):
     data = r.json()
     assert "decide_files" in data
     assert "trust_jsonl_lines" in data
+    assert "trust_json_status" in data
+    assert "trust_json_error" in data
     assert "last_decide_at" in data
     assert "server_time" in data
     assert "auth_reject_reasons" in data

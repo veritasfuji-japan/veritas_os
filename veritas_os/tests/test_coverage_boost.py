@@ -801,6 +801,8 @@ class TestServerMetrics:
         body = resp.json()
         assert "decide_files" in body
         assert body["decide_files"] == 0
+        assert body["trust_json_status"] == "missing"
+        assert body["trust_json_error"] is False
 
     def test_metrics_with_files(self, monkeypatch, tmp_path):
         shadow = tmp_path / "shadow"
@@ -816,6 +818,24 @@ class TestServerMetrics:
         body = resp.json()
         assert body["decide_files"] == 1
         assert body["trust_jsonl_lines"] == 2
+        assert body["trust_json_status"] == "missing"
+
+    def test_metrics_reports_unreadable_trust_json(self, monkeypatch, tmp_path):
+        """Metrics should expose degraded aggregate trust-log readability."""
+        log_json = tmp_path / "tl.json"
+        log_json.write_text("{broken", encoding="utf-8")
+        monkeypatch.setattr(server, "_effective_shadow_dir", lambda: tmp_path)
+        monkeypatch.setattr(
+            server,
+            "_effective_log_paths",
+            lambda: (tmp_path, log_json, tmp_path / "tl.jsonl"),
+        )
+
+        resp = _client.get("/v1/metrics", headers=_AUTH)
+
+        body = resp.json()
+        assert body["trust_json_status"] == "unreadable"
+        assert body["trust_json_error"] is True
 
 
 class TestServerTrustLogs:
