@@ -4,16 +4,26 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from unittest.mock import patch
 
 import pytest
 
 from veritas_os.core import memory
+from veritas_os.core import memory_store
 
 
 # -------------------------------------------------
 # 1. MemoryStore 基本動作（put / get / list / recent）
 # -------------------------------------------------
+
+
+def test_memory_module_reuses_shared_memory_store_class() -> None:
+    """memory.py should re-export the shared MemoryStore implementation."""
+    assert memory.MemoryStore is memory_store.MemoryStore
+    assert memory.DEFAULT_RETENTION_CLASS == memory_store.DEFAULT_RETENTION_CLASS
+    assert memory.ALLOWED_RETENTION_CLASSES == memory_store.ALLOWED_RETENTION_CLASSES
+
 
 
 def test_memory_store_put_get_list_recent(tmp_path: Path):
@@ -90,6 +100,44 @@ def test_memory_store_put_preserves_generic_kvs_dict(tmp_path: Path):
 
     got = store.get("u1", "legacy")
     assert got == payload
+
+
+def test_memory_store_save_all_uses_memory_locked_memory_compat(tmp_path: Path) -> None:
+    """Shared MemoryStore should still honor memory.locked_memory monkeypatches."""
+    store = memory.MemoryStore(tmp_path / "memory.json")
+
+    with patch("veritas_os.core.memory.locked_memory") as mock_lock:
+        mock_lock.side_effect = RuntimeError("disk error")
+        assert store._save_all([{"key": "v"}]) is False
+
+
+def test_memory_store_recent_uses_memory_filter_helper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shared MemoryStore should keep `memory.filter_recent_records` patchable."""
+    store = memory.MemoryStore(tmp_path / "compat-memory.json")
+
+    monkeypatch.setattr(
+        store,
+        "list_all",
+        lambda user_id=None: [{"key": "raw", "ts": 1.0, "value": {"text": "raw"}}],
+    )
+
+    def fake_filter_recent_records(
+        records: List[Dict[str, Any]],
+        *,
+        contains: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        assert records[0]["key"] == "raw"
+        assert contains == "needle"
+        assert limit == 3
+        return [{"key": "filtered"}]
+
+    monkeypatch.setattr(memory, "filter_recent_records", fake_filter_recent_records)
+
+    assert store.recent("u1", limit=3, contains="needle") == [{"key": "filtered"}]
 
 
 def test_memory_store_erase_user_with_cascade_and_legal_hold(tmp_path: Path):
@@ -188,7 +236,7 @@ def test_memory_store_erase_user_uses_shared_compliance_helper(
             },
         )
 
-    monkeypatch.setattr(memory, "erase_user_data", fake_erase_user_data)
+    monkeypatch.setattr(memory_store, "erase_user_data", fake_erase_user_data)
 
     report = store.erase_user(user_id="u1", reason="gdpr", actor="tester")
 
