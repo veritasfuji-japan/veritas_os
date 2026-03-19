@@ -85,6 +85,7 @@ from .fuji_policy import (
     _PII_RE,
     _STRICT_DENY_POLICY,
     _apply_policy,
+    _build_runtime_patterns_from_policy,
     _check_policy_hot_reload,
     _fallback_policy,
     _policy_blocked_keywords,
@@ -173,6 +174,7 @@ _is_high_risk_context = is_high_risk_context
 _build_followups = build_followups
 _redact_text_for_trust_log = redact_text_for_trust_log
 _select_fuji_code = select_fuji_code
+_normalize_injection_text = normalize_injection_text
 
 
 def _detect_prompt_injection(text: str) -> Dict[str, Any]:
