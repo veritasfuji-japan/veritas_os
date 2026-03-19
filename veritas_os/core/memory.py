@@ -61,6 +61,7 @@ from .memory_store_helpers import (
     filter_recent_records,
     simple_score as _simple_score_impl,
 )
+from .memory_summary_helpers import build_planner_summary
 
 logger = logging.getLogger(__name__)
 
@@ -1221,33 +1222,7 @@ class MemoryStore:
         res = self.search(query=query, k=limit, user_id=user_id)
         episodic = res.get("episodic") or []
 
-        if not episodic:
-            return "MemoryOS から参照すべき重要メモは見つかりませんでした。"
-
-        lines: List[str] = []
-        lines.append("【MemoryOS 要約】最近の関連エピソード（スコア順・最大数件）")
-        for i, ep in enumerate(episodic, start=1):
-            text = str(ep.get("text") or "")
-            tags = ep.get("tags") or []
-            ts = ep.get("ts")
-            if ts:
-                try:
-                    dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-                    ts_str = dt.isoformat().replace("+00:00", "Z")
-                except Exception:
-                    ts_str = "unknown"
-            else:
-                ts_str = "unknown"
-
-            tag_str = f" tags={tags}" if tags else ""
-            if len(text) > 120:
-                text_short = text[:117] + "..."
-            else:
-                text_short = text
-
-            lines.append(f"- #{i} [{ts_str}]{tag_str} {text_short}")
-
-        return "\n".join(lines)
+        return build_planner_summary(episodic)
 
 
 # ============================
