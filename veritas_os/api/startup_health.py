@@ -87,7 +87,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
                 f"{message} Refusing startup in production."
             )
         logger.warning("%s", message)
-        if profile not in {"", "dev", "development", "local", "test"}:
+        if profile not in {"dev", "development", "local", "test"}:
             logger.warning(
                 "[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is unsupported for "
                 "VERITAS_ENV=%s and will be ignored by auth store fallback logic.",
