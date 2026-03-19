@@ -59,6 +59,23 @@ def test_load_logs_json_result_marks_unreadable_payload(tmp_path: Path) -> None:
     assert result.error
 
 
+def test_load_logs_json_result_marks_invalid_top_level_payload(tmp_path: Path) -> None:
+    logger = _LoggerStub()
+    log_json = tmp_path / "trust_log.json"
+    log_json.write_text('"corrupted"', encoding="utf-8")
+
+    result = trust_log_io.load_logs_json_result(
+        log_json,
+        max_log_file_size=1024 * 1024,
+        effective_log_paths=lambda: (tmp_path, log_json, tmp_path / "trust_log.jsonl"),
+        logger=logger,
+    )
+
+    assert result.status == "invalid"
+    assert result.error == "aggregate log payload must be a list or object"
+    assert result.items == []
+
+
 def test_append_trust_log_entry_writes_jsonl_and_json(tmp_path: Path) -> None:
     logger = _LoggerStub()
     log_json = tmp_path / "trust_log.json"

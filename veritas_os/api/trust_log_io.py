@@ -51,7 +51,11 @@ def load_logs_json_result(
         elif isinstance(obj, list):
             items = obj
         else:
-            items = []
+            return TrustLogLoadResult(
+                items=[],
+                status="invalid",
+                error="aggregate log payload must be a list or object",
+            )
 
         if not isinstance(items, list):
             return TrustLogLoadResult(
