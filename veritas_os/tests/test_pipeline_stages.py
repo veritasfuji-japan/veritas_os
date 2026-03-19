@@ -266,6 +266,50 @@ class TestStageGateDecision:
         assert "FUJI gate" in (ctx.rejection_reason or "")
 
 
+class TestStageValueCore:
+    """Value stage safety regressions."""
+
+    def test_non_finite_ema_and_risk_fail_closed(self) -> None:
+        from veritas_os.core.pipeline_policy import stage_value_core
+
+        ctx = PipelineContext(
+            query="test",
+            fuji_dict={"risk": "nan"},
+            telos=0.4,
+            input_alts=[{"score": 0.4}],
+            alternatives=[{"score": 0.6}],
+            response_extras={"metrics": {}},
+        )
+
+        stage_value_core(
+            ctx,
+            _load_valstats=lambda: {"ema": "nan"},
+            _clip01=lambda value: max(0.0, min(1.0, float(value))),
+        )
+
+        assert ctx.value_ema == 0.5
+        assert ctx.effective_risk >= 0.9
+        assert ctx.effective_risk <= 1.0
+
+    def test_non_finite_debate_risk_delta_is_ignored(self) -> None:
+        from veritas_os.core.pipeline_policy import stage_gate_decision
+
+        ctx = PipelineContext(
+            fuji_dict={"status": "allow", "risk": 0.2},
+            debate=[{"risk_delta": "nan"}],
+            effective_risk=0.2,
+            telos=0.9,
+            telos_threshold=0.2,
+            response_extras={"metrics": {"stage_latency": {"gate": 0}}},
+        )
+
+        stage_gate_decision(ctx)
+
+        assert ctx.fuji_dict["risk"] == 0.2
+        assert ctx.effective_risk == 0.2
+        assert ctx.decision_status == "allow"
+
+
 # =========================================================
 # pipeline_persist: persist_audit_log
 # =========================================================

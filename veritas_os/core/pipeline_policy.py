@@ -12,6 +12,7 @@ Handles:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from typing import Any
@@ -27,6 +28,28 @@ from .pipeline_helpers import _lazy_import, _apply_value_boost, _warn
 from .pipeline_evidence import _norm_evidence_item
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_finite_probability(
+    value: Any,
+    *,
+    default: float,
+    fail_closed: bool = False,
+) -> float:
+    """Normalize probability-like values to a finite ``[0.0, 1.0]`` float.
+
+    This prevents ``NaN`` / ``Inf`` values from silently bypassing gate logic.
+    When ``fail_closed`` is true, non-finite inputs are treated as maximum risk.
+    """
+    try:
+        numeric = float(value)
+    except (ValueError, TypeError):
+        numeric = default
+
+    if not math.isfinite(numeric):
+        numeric = 1.0 if fail_closed else default
+
+    return max(0.0, min(1.0, numeric))
 
 
 def _build_fail_closed_fuji_precheck(reason: str) -> dict[str, Any]:
@@ -81,14 +104,11 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
     }
 
     fuji_status = ctx.fuji_dict.get("status", "allow")
-    try:
-        import math as _math
-        risk_val = float(ctx.fuji_dict.get("risk", 0.0))
-        if not _math.isfinite(risk_val):
-            risk_val = 1.0  # fail-closed: NaN/Inf は最大リスクとして扱う
-        risk_val = max(0.0, min(1.0, risk_val))
-    except (ValueError, TypeError):
-        risk_val = 0.0
+    risk_val = _coerce_finite_probability(
+        ctx.fuji_dict.get("risk", 0.0),
+        default=0.0,
+        fail_closed=True,
+    )
     reasons_list = ctx.fuji_dict.get("reasons", []) or []
     viols = ctx.fuji_dict.get("violations", []) or []
 
@@ -148,7 +168,7 @@ def stage_value_core(
     # EMA
     try:
         vs = _load_valstats()
-        ctx.value_ema = float(vs.get("ema", 0.5))
+        ctx.value_ema = _coerce_finite_probability(vs.get("ema", 0.5), default=0.5)
     except (ValueError, TypeError):
         ctx.value_ema = 0.5
 
@@ -160,13 +180,16 @@ def stage_value_core(
     ctx.alternatives = _apply_value_boost(ctx.alternatives, boost)
 
     RISK_EMA_WEIGHT = float(os.getenv("VERITAS_RISK_EMA_WEIGHT", "0.15"))
-    try:
-        ctx.effective_risk = float(ctx.fuji_dict.get("risk", 0.0)) * (
-            1.0 - RISK_EMA_WEIGHT * ctx.value_ema
-        )
-    except (ValueError, TypeError):
-        ctx.effective_risk = 0.0
-    ctx.effective_risk = max(0.0, min(1.0, ctx.effective_risk))
+    base_risk = _coerce_finite_probability(
+        ctx.fuji_dict.get("risk", 0.0),
+        default=0.0,
+        fail_closed=True,
+    )
+    ctx.effective_risk = _coerce_finite_probability(
+        base_risk * (1.0 - RISK_EMA_WEIGHT * ctx.value_ema),
+        default=1.0,
+        fail_closed=True,
+    )
 
     TELOS_EMA_DELTA = float(os.getenv("VERITAS_TELOS_EMA_DELTA", "0.10"))
     ctx.telos_threshold = BASE_TELOS_THRESHOLD - TELOS_EMA_DELTA * (ctx.value_ema - 0.5) * 2.0
@@ -215,12 +238,25 @@ def stage_gate_decision(ctx: PipelineContext) -> None:
     # merge Debate risk_delta
     try:
         if isinstance(ctx.debate, list) and ctx.debate:
-            delta = float((ctx.debate[0] or {}).get("risk_delta", 0.0))
+            delta = _coerce_finite_probability(
+                (ctx.debate[0] or {}).get("risk_delta", 0.0),
+                default=0.0,
+            )
             if delta:
-                new_risk = max(0.0, min(1.0, float(ctx.fuji_dict.get("risk", 0.0)) + delta))
+                new_risk = _coerce_finite_probability(
+                    _coerce_finite_probability(
+                        ctx.fuji_dict.get("risk", 0.0),
+                        default=0.0,
+                        fail_closed=True,
+                    ) + delta,
+                    default=1.0,
+                    fail_closed=True,
+                )
                 ctx.fuji_dict["risk"] = new_risk
-                ctx.effective_risk = max(
-                    0.0, min(1.0, new_risk * (1.0 - RISK_EMA_WEIGHT * ctx.value_ema))
+                ctx.effective_risk = _coerce_finite_probability(
+                    new_risk * (1.0 - RISK_EMA_WEIGHT * ctx.value_ema),
+                    default=1.0,
+                    fail_closed=True,
                 )
     except (ValueError, TypeError) as e:
         _warn(f"[Debate→FUJI] merge failed: {e}")
