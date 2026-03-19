@@ -9,11 +9,20 @@ from typing import Any, Dict, List
 import pytest
 
 from veritas_os.core import memory
+from veritas_os.core import memory_store
 
 
 # -------------------------------------------------
 # 1. MemoryStore 基本動作（put / get / list / recent）
 # -------------------------------------------------
+
+
+def test_memory_module_reuses_shared_memory_store_class() -> None:
+    """memory.py should re-export the shared MemoryStore implementation."""
+    assert memory.MemoryStore is memory_store.MemoryStore
+    assert memory.DEFAULT_RETENTION_CLASS == memory_store.DEFAULT_RETENTION_CLASS
+    assert memory.ALLOWED_RETENTION_CLASSES == memory_store.ALLOWED_RETENTION_CLASSES
+
 
 
 def test_memory_store_put_get_list_recent(tmp_path: Path):
@@ -188,7 +197,7 @@ def test_memory_store_erase_user_uses_shared_compliance_helper(
             },
         )
 
-    monkeypatch.setattr(memory, "erase_user_data", fake_erase_user_data)
+    monkeypatch.setattr(memory_store, "erase_user_data", fake_erase_user_data)
 
     report = store.erase_user(user_id="u1", reason="gdpr", actor="tester")
 
