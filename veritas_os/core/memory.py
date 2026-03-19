@@ -63,6 +63,7 @@ from .memory_store_helpers import (
     simple_score as _simple_score_impl,
 )
 from .memory_summary_helpers import build_planner_summary
+from . import memory_store as _memory_store_module
 from .memory_store import (
     ALLOWED_RETENTION_CLASSES,
     DEFAULT_RETENTION_CLASS,
@@ -800,6 +801,14 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
 
 
 
+
+
+def _compat_locked_memory(path: Path, timeout: float = 5.0) -> Any:
+    """Route shared MemoryStore locking through memory.py for test compatibility."""
+    return locked_memory(path, timeout=timeout)
+
+
+_memory_store_module.locked_memory = _compat_locked_memory
 
 
 # ============================

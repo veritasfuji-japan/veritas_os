@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import time
 from typing import Any, Dict, List
+from unittest.mock import patch
 
 import pytest
 
@@ -99,6 +100,15 @@ def test_memory_store_put_preserves_generic_kvs_dict(tmp_path: Path):
 
     got = store.get("u1", "legacy")
     assert got == payload
+
+
+def test_memory_store_save_all_uses_memory_locked_memory_compat(tmp_path: Path) -> None:
+    """Shared MemoryStore should still honor memory.locked_memory monkeypatches."""
+    store = memory.MemoryStore(tmp_path / "memory.json")
+
+    with patch("veritas_os.core.memory.locked_memory") as mock_lock:
+        mock_lock.side_effect = RuntimeError("disk error")
+        assert store._save_all([{"key": "v"}]) is False
 
 
 def test_memory_store_erase_user_with_cascade_and_legal_hold(tmp_path: Path):
