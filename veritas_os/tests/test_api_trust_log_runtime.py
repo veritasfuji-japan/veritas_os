@@ -61,6 +61,39 @@ def test_append_trust_log_persists_jsonl_and_aggregate_json(tmp_path: Path) -> N
     ]
 
 
+def test_append_trust_log_skips_unreadable_aggregate_json(tmp_path: Path) -> None:
+    """Unreadable aggregate JSON must not be overwritten during append."""
+    recorder = _PublishRecorder()
+    runtime = _build_runtime(tmp_path, publish_event=recorder)
+    entry = {"request_id": "req-2", "kind": "decision", "status": "allow"}
+    _, log_json, log_jsonl = runtime.effective_log_paths()
+    log_json.parent.mkdir(parents=True, exist_ok=True)
+    log_json.write_text("{broken json", encoding="utf-8")
+
+    runtime.append_trust_log(entry)
+
+    assert log_json.read_text(encoding="utf-8") == "{broken json"
+    assert log_jsonl.read_text(encoding="utf-8").strip() == json.dumps(
+        entry,
+        ensure_ascii=False,
+    )
+    assert recorder.calls == []
+
+
+def test_load_logs_json_result_marks_unreadable_payload(tmp_path: Path) -> None:
+    """Structured load results must distinguish unreadable aggregate JSON."""
+    runtime = _build_runtime(tmp_path)
+    _, log_json, _ = runtime.effective_log_paths()
+    log_json.parent.mkdir(parents=True, exist_ok=True)
+    log_json.write_text("{broken json", encoding="utf-8")
+
+    result = runtime.load_logs_json_result(log_json)
+
+    assert result.status == "unreadable"
+    assert result.items == []
+    assert result.error
+
+
 def test_write_shadow_decide_creates_snapshot_file(tmp_path: Path) -> None:
     runtime = _build_runtime(tmp_path)
 
