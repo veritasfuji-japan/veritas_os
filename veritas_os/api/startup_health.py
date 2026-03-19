@@ -56,6 +56,8 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
 
     Security policy:
     - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` must never be present in production.
+    - Auth fail-open is only supported for local/test-style profiles and must
+      not remain enabled in shared staging environments.
     - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
       because it can leak internal routing details and triggers BFF fail-closed.
     - `NODE_ENV=production` without `VERITAS_ENV=production` must emit a warning
@@ -63,6 +65,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
     """
     is_production = should_fail_fast_startup()
     is_node_production = _is_node_env_production()
+    profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
     auth_fail_open_enabled = _is_truthy_env("VERITAS_AUTH_ALLOW_FAIL_OPEN")
     public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
 
@@ -84,6 +87,12 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
                 f"{message} Refusing startup in production."
             )
         logger.warning("%s", message)
+        if profile not in {"", "dev", "development", "local", "test"}:
+            logger.warning(
+                "[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is unsupported for "
+                "VERITAS_ENV=%s and will be ignored by auth store fallback logic.",
+                profile or "unset",
+            )
 
     if public_api_base_url:
         message = (
