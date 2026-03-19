@@ -51,6 +51,29 @@ def test_validate_rule_requires_server_only_api_base_url(
     ]
 
 
+def test_validate_rule_requires_production_profile_guidance(
+    monkeypatch, tmp_path
+) -> None:
+    """Operator templates must document the production hardening profile."""
+    template = tmp_path / ".env.example"
+    template.write_text(
+        "VERITAS_API_BASE_URL=http://backend:8000\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(checker, "REPO_ROOT", tmp_path)
+
+    violations = checker._validate_rule(
+        checker.TemplateRule(
+            relative_path=".env.example",
+            required_tokens=("VERITAS_ENV=production",),
+        )
+    )
+
+    assert violations == [
+        ".env.example: missing required token 'VERITAS_ENV=production'"
+    ]
+
+
 def test_main_returns_success_for_current_repo_templates(capsys) -> None:
     """Current repository templates should pass the deployment smoke check."""
     exit_code = checker.main()

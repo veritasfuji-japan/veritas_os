@@ -158,6 +158,11 @@ VERITAS_CORS_ALLOW_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 # Keep BFF routing on the server side; do not expose API base URLs via
 # NEXT_PUBLIC_* variables.
 VERITAS_API_BASE_URL=http://localhost:8000
+
+# --- Production profile hardening ---
+# In real production deployments, explicitly set:
+# VERITAS_ENV=production
+# This enables strict CSP defaults and startup fail-fast checks.
 ENVEOF
 
     success ".env file created with auto-generated secrets."
