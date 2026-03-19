@@ -139,6 +139,73 @@ def test_memory_store_erase_user_with_cascade_and_legal_hold(tmp_path: Path):
     assert any(record["user_id"] == "__audit__" for record in remaining)
 
 
+def test_memory_store_erase_user_uses_shared_compliance_helper(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    """erase_user should delegate deletion planning to memory_compliance."""
+    path = tmp_path / "memory.json"
+    store = memory.MemoryStore(path)
+    store.put("u1", "ep1", {"kind": "episodic", "text": "to be erased"})
+
+    helper_calls: List[Dict[str, Any]] = []
+
+    def fake_erase_user_data(
+        data: List[Dict[str, Any]],
+        user_id: str,
+        reason: str,
+        actor: str,
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        helper_calls.append(
+            {
+                "keys": [record["key"] for record in data],
+                "user_id": user_id,
+                "reason": reason,
+                "actor": actor,
+            }
+        )
+        return (
+            [
+                {
+                    "user_id": "__audit__",
+                    "key": "erase_u1_1",
+                    "value": {
+                        "kind": "audit",
+                        "text": "memory erase executed",
+                        "meta": {"legal_hold": True},
+                    },
+                    "ts": 1.0,
+                }
+            ],
+            {
+                "target_user_id": user_id,
+                "deleted_count": 1,
+                "cascade_deleted_count": 0,
+                "protected_by_legal_hold": 0,
+                "reason": reason,
+                "actor": actor,
+                "executed_at": "2026-03-19T00:00:00+00:00",
+            },
+        )
+
+    monkeypatch.setattr(memory, "erase_user_data", fake_erase_user_data)
+
+    report = store.erase_user(user_id="u1", reason="gdpr", actor="tester")
+
+    assert helper_calls == [
+        {
+            "keys": ["ep1"],
+            "user_id": "u1",
+            "reason": "gdpr",
+            "actor": "tester",
+        }
+    ]
+    assert report["ok"] is True
+    assert report["deleted_count"] == 1
+    remaining = store._load_all(copy=True, use_cache=False)
+    assert [record["key"] for record in remaining] == ["erase_u1_1"]
+
+
 # -------------------------------------------------
 # 1.5. Lazy MemoryStore initialization
 # -------------------------------------------------
