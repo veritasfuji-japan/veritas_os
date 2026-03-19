@@ -38,6 +38,7 @@ from .memory_lifecycle import (
     parse_expires_at,
     should_cascade_delete_semantic,
 )
+from .memory_compliance import erase_user_data
 from .memory_evidence import (
     get_evidence_for_decision as _get_evidence_for_decision_impl,
     get_evidence_for_query as _get_evidence_for_query_impl,
@@ -1020,75 +1021,14 @@ class MemoryStore:
         reason: str,
         actor: str,
     ) -> Dict[str, Any]:
-        """Erase user records while honoring legal hold, with audit trail.
-
-        Also cascades deletion to semantic memories distilled from erased
-        episodic records via ``meta.source_episode_keys`` linkage.
-        """
+        """Erase user records via shared compliance helper and persist audit."""
         data = self._load_all(copy=True, use_cache=False)
-        to_delete_keys: set[str] = set()
-        legal_hold_count = 0
-
-        for record in data:
-            if record.get("user_id") != user_id:
-                continue
-            if self._is_record_legal_hold(record):
-                legal_hold_count += 1
-                continue
-            value = record.get("value") or {}
-            if isinstance(value, dict):
-                source_keys = (value.get("meta") or {}).get("source_episode_keys")
-                if isinstance(source_keys, list) and source_keys:
-                    # semantic lineage records are deleted in cascade phase.
-                    continue
-            to_delete_keys.add(str(record.get("key") or ""))
-
-        cascade_deleted = 0
-        kept_records: List[Dict[str, Any]] = []
-        deleted_records = 0
-
-        for record in data:
-            record_user = record.get("user_id")
-            record_key = str(record.get("key") or "")
-
-            if record_user == user_id and record_key in to_delete_keys:
-                deleted_records += 1
-                continue
-
-            if self._should_cascade_delete_semantic(record, user_id, to_delete_keys):
-                cascade_deleted += 1
-                continue
-
-            kept_records.append(record)
-
-        report = {
-            "target_user_id": user_id,
-            "deleted_count": deleted_records,
-            "cascade_deleted_count": cascade_deleted,
-            "protected_by_legal_hold": legal_hold_count,
-            "reason": reason,
-            "actor": actor,
-            "executed_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-        audit_record = {
-            "user_id": "__audit__",
-            "key": f"erase_{user_id}_{int(time.time())}",
-            "value": {
-                "kind": "audit",
-                "text": "memory erase executed",
-                "meta": {
-                    "event": "memory_erase",
-                    "payload": report,
-                    "retention_class": "regulated",
-                    "legal_hold": True,
-                    "expires_at": None,
-                },
-            },
-            "ts": time.time(),
-        }
-        kept_records.append(audit_record)
-
+        kept_records, report = erase_user_data(
+            data=data,
+            user_id=user_id,
+            reason=reason,
+            actor=actor,
+        )
         saved = self._save_all(kept_records)
         report["ok"] = bool(saved)
         return report
