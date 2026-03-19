@@ -50,6 +50,12 @@ from .memory_helpers import (
     collect_episodic_records,
     extract_summary_text,
 )
+from .memory_search_helpers import (
+    collect_candidate_hits,
+    dedup_hits as _dedup_hits_impl,
+    filter_hits_for_user,
+    normalize_store_hits,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1561,28 +1567,7 @@ def _dedup_hits(hits: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
     ヒット結果を (text, user_id) 単位で去重しつつ k 件までに制限する。
     順序は元のリストの順を維持する。
     """
-    unique: List[Dict[str, Any]] = []
-    seen = set()
-
-    for h in hits:
-        if not isinstance(h, dict):
-            continue
-
-        text = str(h.get("text") or "")
-        meta = h.get("meta") or {}
-        uid = str((meta or {}).get("user_id") or "")
-
-        key = (text, uid)
-        if key in seen:
-            continue
-
-        seen.add(key)
-        unique.append(h)
-
-        if len(unique) >= k:
-            break
-
-    return unique
+    return _dedup_hits_impl(hits, k)
 
 
 def search(
@@ -1616,34 +1601,11 @@ def search(
                 kinds=kinds,
                 min_sim=min_sim,
             )
-
-            candidates: Optional[List[Dict[str, Any]]] = None
-
-            # パターンA: list[dict]
-            if isinstance(raw, list):
-                candidates = [h for h in raw if isinstance(h, dict)]
-
-            # パターンB: dict{"hits"/"episodic"/"results": list}
-            elif isinstance(raw, dict):
-                for key in ("hits", "episodic", "results"):
-                    v = raw.get(key)
-                    if isinstance(v, list):
-                        candidates = [h for h in v if isinstance(h, dict)]
-                        if candidates:
-                            break
-
+            candidates = collect_candidate_hits(raw)
             if candidates:
-                # user_id指定があればフィルタ（meta.user_id が一致 or 未指定）
-                if user_id is not None:
-                    filtered: List[Dict[str, Any]] = []
-                    for h in candidates:
-                        meta = h.get("meta") or {}
-                        uid = meta.get("user_id")
-                        if uid is None or uid == user_id:
-                            filtered.append(h)
-                    if filtered:
-                        candidates = filtered
-
+                filtered = filter_hits_for_user(candidates, user_id)
+                if filtered:
+                    candidates = filtered
                 unique = _dedup_hits(candidates, k)
                 logger.info(
                     f"[MemoryOS] Vector search returned "
@@ -1687,18 +1649,7 @@ def search(
         user_id=user_id,
         **kwargs,
     )
-
-    hits: List[Dict[str, Any]] = []
-
-    # MemoryStore.search は {"episodic": [...]} を返す想定
-    if isinstance(res, dict) and "episodic" in res:
-        episodic = res.get("episodic") or []
-        if isinstance(episodic, list):
-            hits = [h for h in episodic if isinstance(h, dict)]
-
-    # list で返ってきた場合
-    elif isinstance(res, list):
-        hits = [h for h in res if isinstance(h, dict)]
+    hits = normalize_store_hits(res)
 
     if not hits:
         return []
