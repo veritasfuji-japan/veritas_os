@@ -43,6 +43,13 @@ from .memory_evidence import (
     get_evidence_for_query as _get_evidence_for_query_impl,
     hits_to_evidence as _hits_to_evidence_impl,
 )
+from .memory_helpers import (
+    build_distill_prompt as _build_distill_prompt_impl,
+    build_semantic_memory_doc,
+    build_vector_rebuild_documents,
+    collect_episodic_records,
+    extract_summary_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1719,54 +1726,8 @@ def summarize_for_planner(
 
 
 def _build_distill_prompt(user_id: str, episodes: List[Dict[str, Any]]) -> str:
-    """
-    エピソードのリストから、LLM に投げる要約プロンプトを組み立てる。
-    """
-    lines: List[str] = []
-    lines.append(
-        "You are VERITAS OS's Memory Distill module.\n"
-        "Your job is to compress the user's recent episodic memories into a concise, "
-        "useful long-term note that VERITAS can reuse later."
-    )
-    lines.append("")
-    lines.append(f"Target user_id: {user_id}")
-    lines.append("")
-    lines.append("Here are recent episodic records (newest first):")
-
-    for i, ep in enumerate(episodes, start=1):
-        ts = ep.get("ts")
-        try:
-            ts_f = float(ts)
-            ts_str = datetime.fromtimestamp(ts_f, tz=timezone.utc).isoformat()
-        except Exception:
-            ts_str = "unknown"
-
-        text = str(ep.get("text") or "").strip()
-        tags = ep.get("tags") or []
-        tag_str = f" tags={tags}" if tags else ""
-
-        if len(text) > 300:
-            text_short = text[:297] + "..."
-        else:
-            text_short = text
-
-        lines.append(f"- #{i} [{ts_str}]{tag_str} {text_short}")
-
-    lines.append("")
-    lines.append(
-        "Please write a Japanese summary that captures:\n"
-        "1. The main topics and decisions the user is working on\n"
-        "2. Ongoing projects or threads (e.g., VERITAS, 労働紛争, 音楽制作)\n"
-        "3. Open TODOs or follow-ups that seem important\n"
-        "4. Any stable preferences or values that appear\n"
-        "\n"
-        "Format:\n"
-        "「概要」セクション: 箇条書きで3〜7行\n"
-        "「プロジェクト別ノート」セクション: VERITAS / 労働紛争 / 音楽 / その他 に分けて\n"
-        "「TODO / Next Actions」セクション: 箇条書きで3〜10行\n"
-    )
-
-    return "\n".join(lines)
+    """Backward-compatible wrapper for Memory Distill prompt assembly."""
+    return _build_distill_prompt_impl(user_id, episodes)
 
 
 def distill_memory_for_user(
@@ -1790,42 +1751,16 @@ def distill_memory_for_user(
         logger.error("[MemoryDistill] list_all failed for user=%s: %s", user_id, e)
         return None
 
-    episodic: List[Dict[str, Any]] = []
-    filter_tags = set(tags or [])
-
-    for r in all_records:
-        value = r.get("value") or {}
-        if not isinstance(value, dict):
-            continue
-
-        kind = str(value.get("kind") or "episodic")
-        if kind != "episodic":
-            continue
-
-        text = str(value.get("text") or "").strip()
-        if len(text) < min_text_len:
-            continue
-
-        ep_tags = value.get("tags") or []
-
-        # tags 指定がある場合は、そのタグを含むものだけ対象
-        if filter_tags and not (filter_tags & set(ep_tags)):
-            continue
-
-        ep = {
-            "source_key": r.get("key"),
-            "text": text,
-            "tags": ep_tags,
-            "ts": r.get("ts") or time.time(),
-        }
-        episodic.append(ep)
+    episodic = collect_episodic_records(
+        all_records,
+        min_text_len=min_text_len,
+        tags=tags,
+    )
 
     if not episodic:
         logger.info("[MemoryDistill] no episodic records for user=%s", user_id)
         return None
 
-    # 新しい順にソートして max_items までに圧縮
-    episodic.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
     target_eps = episodic[:max_items]
 
     # 2) プロンプト生成
@@ -1856,54 +1791,18 @@ def distill_memory_for_user(
         return None
 
     # 4) レスポンスからテキストを取り出す
-    summary_text = ""
-
-    if isinstance(resp, dict):
-        # 典型的な OpenAI / LLM スタイルのレスポンスも一応ハンドル
-        if "choices" in resp:
-            try:
-                summary_text = (
-                    resp["choices"][0]["message"]["content"]
-                    or ""
-                )
-            except (IndexError, KeyError, TypeError):
-                summary_text = ""
-        if not summary_text:
-            summary_text = (
-                resp.get("text")
-                or resp.get("content")
-                or resp.get("output")
-                or ""
-            )
-    elif isinstance(resp, str):
-        summary_text = resp
-    else:
-        summary_text = str(getattr(resp, "text", "") or "")
-
-    summary_text = str(summary_text).strip()
+    summary_text = extract_summary_text(resp)
     if not summary_text:
         logger.error("[MemoryDistill] empty summary_text from LLM")
         return None
 
     # 5) semantic メモリとして永続化
-    meta = {
-        "user_id": user_id,
-        "source": "distill_memory_for_user",
-        "source_episode_keys": [
-            str(ep.get("source_key"))
-            for ep in target_eps
-            if ep.get("source_key")
-        ],
-        "item_count": len(target_eps),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    doc: Dict[str, Any] = {
-        "kind": "semantic",
-        "text": summary_text,
-        "tags": (tags or []) + ["memory_distill", "summary", "long_term"],
-        "meta": meta,
-    }
+    doc = build_semantic_memory_doc(
+        user_id=user_id,
+        summary_text=summary_text,
+        episodes=target_eps,
+        tags=tags,
+    )
 
     ok = put("semantic", doc)
     if not ok:
@@ -1948,31 +1847,7 @@ def rebuild_vector_index() -> None:
     all_data = MEM.list_all()
 
     # ベクトル化可能なドキュメントを抽出
-    documents: List[Dict[str, Any]] = []
-    for record in all_data:
-        value = record.get("value")
-        if not isinstance(value, dict):
-            continue
-
-        text = value.get("text", "")
-        if not text or not text.strip():
-            continue
-
-        meta = value.get("meta", {}) or {}
-        meta = {
-            "user_id": record.get("user_id"),
-            "created_at": record.get("ts"),
-            **meta,
-        }
-
-        documents.append(
-            {
-                "kind": value.get("kind", "episodic"),
-                "text": text,
-                "tags": value.get("tags", []),
-                "meta": meta,
-            }
-        )
+    documents = build_vector_rebuild_documents(all_data)
 
     logger.info("[MemoryOS] Found %d documents to index", len(documents))
 
