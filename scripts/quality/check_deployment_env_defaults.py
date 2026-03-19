@@ -27,7 +27,7 @@ class TemplateRule:
 RULES = (
     TemplateRule(
         relative_path=".env.example",
-        required_tokens=("VERITAS_API_BASE_URL",),
+        required_tokens=("VERITAS_API_BASE_URL", "VERITAS_ENV=production"),
         forbidden_tokens=(
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
@@ -36,7 +36,10 @@ RULES = (
     ),
     TemplateRule(
         relative_path="setup.sh",
-        required_tokens=("VERITAS_API_BASE_URL=http://localhost:8000",),
+        required_tokens=(
+            "VERITAS_API_BASE_URL=http://localhost:8000",
+            "VERITAS_ENV=production",
+        ),
         forbidden_tokens=(
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
