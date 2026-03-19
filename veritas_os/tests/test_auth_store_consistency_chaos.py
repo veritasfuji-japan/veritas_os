@@ -114,6 +114,7 @@ def test_chaos_redis_failure_respects_fail_open_for_rate_limit(monkeypatch) -> N
             raise RuntimeError("rate_backend_flap")
 
     monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", _BrokenRateStore())
+    monkeypatch.setenv("VERITAS_ENV", "local")
     monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
     monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
 

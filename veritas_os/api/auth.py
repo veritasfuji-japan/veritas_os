@@ -244,7 +244,8 @@ def _auth_store_failure_mode() -> str:
         misconfigure ``VERITAS_AUTH_STORE_FAILURE_MODE=open``. This prevents
         nonce/auth/rate-limit store outages from silently degrading security.
         Fail-open is also restricted to explicit local/test profiles so shared
-        staging environments cannot accidentally weaken auth protections.
+        staging environments or unset deployment profiles cannot accidentally
+        weaken auth protections.
     """
     profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
     node_env = (os.getenv("NODE_ENV") or "").strip().lower()
@@ -265,10 +266,10 @@ def _auth_store_failure_mode() -> str:
                     "Set VERITAS_AUTH_ALLOW_FAIL_OPEN=true only for controlled non-production testing."
                 )
                 return "closed"
-            if profile not in {"", "dev", "development", "local", "test"}:
+            if profile not in {"dev", "development", "local", "test"}:
                 logger.warning(
                     "[security-warning] VERITAS_AUTH_STORE_FAILURE_MODE=open was ignored for "
-                    "VERITAS_ENV=%s. Fail-open is restricted to local/test profiles.",
+                    "VERITAS_ENV=%s. Fail-open is restricted to explicit local/test profiles.",
                     profile or "unset",
                 )
                 return "closed"

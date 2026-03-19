@@ -122,9 +122,11 @@ class TestAuthStoreFailureMode:
         with mock.patch.dict(
             os.environ,
             {
+                "VERITAS_ENV": "local",
                 "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
                 "VERITAS_AUTH_ALLOW_FAIL_OPEN": "true",
             },
+            clear=True,
         ):
             assert _auth_store_failure_mode() == "open"
 
@@ -180,7 +182,22 @@ class TestAuthStoreFailureMode:
         ):
             assert _auth_store_failure_mode() == "closed"
 
-        assert "Fail-open is restricted to local/test profiles." in caplog.text
+        assert "Fail-open is restricted to explicit local/test profiles." in caplog.text
+
+    def test_open_with_unset_profile_forces_closed(self, caplog):
+        caplog.set_level("WARNING")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+                "VERITAS_AUTH_ALLOW_FAIL_OPEN": "true",
+            },
+            clear=True,
+        ):
+            assert _auth_store_failure_mode() == "closed"
+
+        assert "VERITAS_ENV=unset" in caplog.text
+        assert "explicit local/test profiles" in caplog.text
 
     def test_invalid_falls_back(self):
         with mock.patch.dict(os.environ, {"VERITAS_AUTH_STORE_FAILURE_MODE": "bad"}):

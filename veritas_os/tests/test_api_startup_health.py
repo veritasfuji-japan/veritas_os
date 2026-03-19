@@ -84,6 +84,23 @@ def test_validate_startup_security_flags_warns_fail_open_unsupported_profile(
     assert "will be ignored by auth store fallback logic" in caplog.text
 
 
+def test_validate_startup_security_flags_warns_fail_open_when_profile_unset(
+    monkeypatch,
+    caplog,
+):
+    """Unset deployment profiles must also warn that fail-open will be ignored."""
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+    monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "VERITAS_ENV=unset" in caplog.text
+    assert "will be ignored by auth store fallback logic" in caplog.text
+
+
 def test_validate_startup_security_flags_rejects_production_fail_open(
     monkeypatch,
 ):
