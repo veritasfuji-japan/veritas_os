@@ -72,6 +72,10 @@ from .memory_store import (
 
 logger = logging.getLogger(__name__)
 
+_ORIGINAL_ERASE_USER_DATA = erase_user_data
+_ORIGINAL_FILTER_RECENT_RECORDS = filter_recent_records
+_ORIGINAL_BUILD_KVS_SEARCH_HITS = build_kvs_search_hits
+
 
 def _is_explicitly_enabled(env_key: str) -> bool:
     """Backward-compatible wrapper for memory security env parsing."""
@@ -808,7 +812,212 @@ def _compat_locked_memory(path: Path, timeout: float = 5.0) -> Any:
     return locked_memory(path, timeout=timeout)
 
 
-_memory_store_module.locked_memory = _compat_locked_memory
+def _install_memory_store_compat_hooks() -> None:
+    """Keep shared MemoryStore behavior patchable via memory.py symbols."""
+
+    def _parse_expires_at_compat(expires_at: Any) -> Optional[str]:
+        return parse_expires_at(expires_at)
+
+    def _normalize_lifecycle_compat(value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+
+        lifecycle_target_keys = {"text", "kind", "tags", "meta"}
+        if not any(key in value for key in lifecycle_target_keys):
+            return value
+
+        normalized = dict(value)
+        meta = dict(normalized.get("meta") or {})
+
+        retention_class = str(
+            meta.get("retention_class") or DEFAULT_RETENTION_CLASS
+        ).strip().lower()
+        if retention_class not in ALLOWED_RETENTION_CLASSES:
+            retention_class = DEFAULT_RETENTION_CLASS
+
+        raw_hold = meta.get("legal_hold", False)
+        if isinstance(raw_hold, str):
+            legal_hold = raw_hold.strip().lower() in ("true", "1", "yes")
+        else:
+            legal_hold = bool(raw_hold)
+        normalized_expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
+
+        meta["retention_class"] = retention_class
+        meta["legal_hold"] = legal_hold
+        meta["expires_at"] = normalized_expires_at
+        normalized["meta"] = meta
+        return normalized
+
+    def _is_record_expired_compat(
+        record: Dict[str, Any],
+        now_ts: Optional[float] = None,
+    ) -> bool:
+        value = record.get("value") or {}
+        if not isinstance(value, dict):
+            return False
+
+        meta = value.get("meta") or {}
+        if not isinstance(meta, dict):
+            return False
+
+        raw_hold = meta.get("legal_hold", False)
+        if isinstance(raw_hold, str):
+            hold = raw_hold.strip().lower() in ("true", "1", "yes")
+        else:
+            hold = bool(raw_hold)
+        if hold:
+            return False
+
+        expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
+        if not expires_at:
+            return False
+
+        try:
+            expire_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+
+        now = now_ts if now_ts is not None else time.time()
+        return expire_dt.timestamp() <= float(now)
+
+    def _erase_user_compat(
+        self: MemoryStore,
+        user_id: str,
+        reason: str,
+        actor: str,
+    ) -> Dict[str, Any]:
+        helper = _memory_store_module.erase_user_data
+        if helper is _ORIGINAL_ERASE_USER_DATA:
+            helper = erase_user_data
+        data = self._load_all(copy=True, use_cache=False)
+        kept_records, report = helper(
+            data=data,
+            user_id=user_id,
+            reason=reason,
+            actor=actor,
+        )
+        saved = self._save_all(kept_records)
+        report["ok"] = bool(saved)
+        return report
+
+    def _is_record_legal_hold_compat(record: Dict[str, Any]) -> bool:
+        return is_record_legal_hold(record)
+
+    def _should_cascade_delete_semantic_compat(
+        record: Dict[str, Any],
+        user_id: str,
+        erased_keys: set[str],
+    ) -> bool:
+        return should_cascade_delete_semantic(
+            record=record,
+            user_id=user_id,
+            erased_keys=erased_keys,
+        )
+
+    def _recent_compat(
+        self: MemoryStore,
+        user_id: str,
+        limit: int = 20,
+        contains: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        helper = _memory_store_module.filter_recent_records
+        if helper is _ORIGINAL_FILTER_RECENT_RECORDS:
+            helper = filter_recent_records
+        return helper(
+            self.list_all(user_id),
+            contains=contains,
+            limit=limit,
+        )
+
+    def _simple_score_compat(self: MemoryStore, query: str, text: str) -> float:
+        return _simple_score_impl(query, text)
+
+    def _search_compat(
+        self: MemoryStore,
+        query: str,
+        k: int = 10,
+        kinds: Optional[List[str]] = None,
+        min_sim: float = 0.0,
+        user_id: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        helper = _memory_store_module.build_kvs_search_hits
+        if helper is _ORIGINAL_BUILD_KVS_SEARCH_HITS:
+            helper = build_kvs_search_hits
+        episodic = helper(
+            self._load_all(copy=True),
+            query=query,
+            k=k,
+            kinds=kinds,
+            min_sim=min_sim,
+            user_id=user_id,
+        )
+        if not episodic:
+            return {}
+        logger.debug("[MemoryOS][KVS] episodic hits=%d", len(episodic))
+        return {"episodic": episodic}
+
+    def _put_episode_compat(
+        self: MemoryStore,
+        text: str,
+        tags: Optional[List[str]] = None,
+        meta: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
+    ) -> str:
+        record: Dict[str, Any] = {
+            "text": text,
+            "tags": tags or [],
+            "meta": meta or {},
+        }
+        for key, value in kwargs.items():
+            if key not in record:
+                record[key] = value
+        user_id = (record.get("meta") or {}).get("user_id", "episodic")
+        key = f"episode_{int(time.time())}"
+        self.put(user_id, key, record)
+        mem_vec = _get_mem_vec()
+        if mem_vec is not None:
+            try:
+                mem_vec.add(
+                    kind="episodic",
+                    text=text,
+                    tags=tags or [],
+                    meta=meta or {},
+                )
+            except Exception as exc:
+                logger.warning("[MemoryOS] put_episode MEM_VEC.add error: %s", exc)
+        return key
+
+    def _summarize_for_planner_compat(
+        self: MemoryStore,
+        user_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> str:
+        result = self.search(query=query, k=limit, user_id=user_id)
+        episodic = result.get("episodic") or []
+        return build_planner_summary(episodic)
+
+    _memory_store_module.locked_memory = _compat_locked_memory
+    _memory_store_module.erase_user_data = erase_user_data
+    _memory_store_module.filter_recent_records = filter_recent_records
+    _memory_store_module.build_kvs_search_hits = build_kvs_search_hits
+    MemoryStore._parse_expires_at = staticmethod(_parse_expires_at_compat)
+    MemoryStore._normalize_lifecycle = staticmethod(_normalize_lifecycle_compat)
+    MemoryStore._is_record_expired = staticmethod(_is_record_expired_compat)
+    MemoryStore.erase_user = _erase_user_compat
+    MemoryStore._is_record_legal_hold = staticmethod(_is_record_legal_hold_compat)
+    MemoryStore._should_cascade_delete_semantic = staticmethod(
+        _should_cascade_delete_semantic_compat
+    )
+    MemoryStore.recent = _recent_compat
+    MemoryStore._simple_score = _simple_score_compat
+    MemoryStore.search = _search_compat
+    MemoryStore.put_episode = _put_episode_compat
+    MemoryStore.summarize_for_planner = _summarize_for_planner_compat
+
+
+_install_memory_store_compat_hooks()
 
 
 # ============================
