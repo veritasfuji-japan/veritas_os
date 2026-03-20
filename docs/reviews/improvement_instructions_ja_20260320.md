@@ -166,6 +166,7 @@ fail-open は非本番でも認証保護を弱めるため、
 ## 実施記録（2026-03-20）
 
 ### 今回完了した改善
+- **Priority 1 / 指示 1-2 追加（今回）**: `veritas_os/core/fuji.py` に残っていた YAML policy fallback / load の compatibility-heavy な重複実装を、共有 helper である `veritas_os/core/fuji_policy.py` へ委譲する形に整理した。`fuji.py` 側には `_sync_fuji_policy_runtime()` を追加し、`_load_policy()` / `_load_policy_from_str()` / `_fallback_policy()` が shared policy helper を経由しても既存の capability alias と public contract を維持するようにした。`veritas_os/tests/test_fuji_core.py` に委譲経路の回帰テストを追加した。
 - **Priority 3 / 指示 3-1**: `veritas_os/api/routes_memory.py` の Memory API 失敗応答に additive な `error_code` 分類 (`validation_failure` / `backend_unavailable` / `security_policy_rejection` / `serialization_storage_failure` / `unknown_failure`) を追加し、既存の `ok / status / errors[]` 契約を維持したまま監査・運用トリアージしやすくした。`memory_put` の stage-level error と `memory_search` / `memory_get` / `memory_erase` の失敗応答で利用できる。
 - **Priority 1 / 指示 1-1**: `pipeline.py` / `kernel.py` / `fuji.py` / `memory.py` の module docstring を更新し、public contract・推奨拡張ポイント・compatibility layer の扱いを明示した。
 - **Priority 1 / 指示 1-1 の回帰防止**: `scripts/architecture/check_responsibility_boundaries.py` を拡張し、上記 4 モジュールの docstring に required marker と推奨拡張ポイントが残っているかを CI 向けに検査できるようにした。対応する回帰テストも追加した。
