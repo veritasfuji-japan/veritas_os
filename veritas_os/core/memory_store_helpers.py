@@ -188,3 +188,80 @@ def build_kvs_search_hits(
 
     hits.sort(key=lambda hit: hit.get("score", 0.0), reverse=True)
     return hits[:k]
+
+
+def erase_user_records(
+    *,
+    store: Any,
+    helper_module: Any,
+    original_helper: Callable[..., Any],
+    fallback_helper: Callable[..., Any],
+    user_id: str,
+    reason: str,
+    actor: str,
+) -> Dict[str, Any]:
+    """Erase user records while preserving monkeypatch-friendly compat routing."""
+    helper = helper_module.erase_user_data
+    if helper is original_helper:
+        helper = fallback_helper
+
+    data = store._load_all(copy=True, use_cache=False)
+    kept_records, report = helper(
+        data=data,
+        user_id=user_id,
+        reason=reason,
+        actor=actor,
+    )
+    saved = store._save_all(kept_records)
+    report["ok"] = bool(saved)
+    return report
+
+
+def recent_records_compat(
+    *,
+    store: Any,
+    helper_module: Any,
+    original_helper: Callable[..., Any],
+    fallback_helper: Callable[..., Any],
+    user_id: str,
+    limit: int = 20,
+    contains: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Return recent records via the active compat helper implementation."""
+    helper = helper_module.filter_recent_records
+    if helper is original_helper:
+        helper = fallback_helper
+    return helper(
+        store.list_all(user_id),
+        contains=contains,
+        limit=limit,
+    )
+
+
+def search_records_compat(
+    *,
+    store: Any,
+    helper_module: Any,
+    original_helper: Callable[..., Any],
+    fallback_helper: Callable[..., Any],
+    query: str,
+    k: int = 10,
+    kinds: Optional[List[str]] = None,
+    min_sim: float = 0.0,
+    user_id: Optional[str] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Run fallback KVS search while keeping compat monkeypatch points intact."""
+    helper = helper_module.build_kvs_search_hits
+    if helper is original_helper:
+        helper = fallback_helper
+    episodic = helper(
+        store._load_all(copy=True),
+        query=query,
+        k=k,
+        kinds=kinds,
+        min_sim=min_sim,
+        user_id=user_id,
+    )
+    if not episodic:
+        return {}
+    return {"episodic": episodic}

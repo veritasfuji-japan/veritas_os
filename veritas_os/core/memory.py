@@ -77,9 +77,12 @@ from .memory_search_helpers import (
 )
 from .memory_store_helpers import (
     build_kvs_search_hits,
+    erase_user_records,
     filter_recent_records,
     is_record_expired_compat as _is_record_expired_compat_impl,
     normalize_document_lifecycle as _normalize_document_lifecycle_impl,
+    recent_records_compat,
+    search_records_compat,
     simple_score as _simple_score_impl,
 )
 from .memory_summary_helpers import build_planner_summary
@@ -862,19 +865,15 @@ def _install_memory_store_compat_hooks() -> None:
         reason: str,
         actor: str,
     ) -> Dict[str, Any]:
-        helper = _memory_store_module.erase_user_data
-        if helper is _ORIGINAL_ERASE_USER_DATA:
-            helper = erase_user_data
-        data = self._load_all(copy=True, use_cache=False)
-        kept_records, report = helper(
-            data=data,
+        return erase_user_records(
+            store=self,
+            helper_module=_memory_store_module,
+            original_helper=_ORIGINAL_ERASE_USER_DATA,
+            fallback_helper=erase_user_data,
             user_id=user_id,
             reason=reason,
             actor=actor,
         )
-        saved = self._save_all(kept_records)
-        report["ok"] = bool(saved)
-        return report
 
     def _is_record_legal_hold_compat(record: Dict[str, Any]) -> bool:
         return is_record_legal_hold(record)
@@ -896,11 +895,12 @@ def _install_memory_store_compat_hooks() -> None:
         limit: int = 20,
         contains: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        helper = _memory_store_module.filter_recent_records
-        if helper is _ORIGINAL_FILTER_RECENT_RECORDS:
-            helper = filter_recent_records
-        return helper(
-            self.list_all(user_id),
+        return recent_records_compat(
+            store=self,
+            helper_module=_memory_store_module,
+            original_helper=_ORIGINAL_FILTER_RECENT_RECORDS,
+            fallback_helper=filter_recent_records,
+            user_id=user_id,
             contains=contains,
             limit=limit,
         )
@@ -917,21 +917,23 @@ def _install_memory_store_compat_hooks() -> None:
         user_id: Optional[str] = None,
         **kwargs: Any,
     ) -> Dict[str, List[Dict[str, Any]]]:
-        helper = _memory_store_module.build_kvs_search_hits
-        if helper is _ORIGINAL_BUILD_KVS_SEARCH_HITS:
-            helper = build_kvs_search_hits
-        episodic = helper(
-            self._load_all(copy=True),
+        episodic = search_records_compat(
+            store=self,
+            helper_module=_memory_store_module,
+            original_helper=_ORIGINAL_BUILD_KVS_SEARCH_HITS,
+            fallback_helper=build_kvs_search_hits,
             query=query,
             k=k,
             kinds=kinds,
             min_sim=min_sim,
             user_id=user_id,
         )
-        if not episodic:
-            return {}
-        logger.debug("[MemoryOS][KVS] episodic hits=%d", len(episodic))
-        return {"episodic": episodic}
+        if episodic:
+            logger.debug(
+                "[MemoryOS][KVS] episodic hits=%d",
+                len(episodic.get("episodic") or []),
+            )
+        return episodic
 
     def _put_episode_compat(
         self: MemoryStore,
