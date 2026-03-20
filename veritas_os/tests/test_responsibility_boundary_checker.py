@@ -264,6 +264,92 @@ def test_extract_doc_extension_points_reads_architecture_doc() -> None:
         "veritas_os.core.kernel_qa",
         "veritas_os.core.pipeline_contracts",
     )
+    assert points["fuji"] == (
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
+    )
+    assert points["memory"] == (
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
+    )
+
+
+def test_extract_doc_extension_points_tolerates_blank_line_after_marker(
+    tmp_path: Path,
+) -> None:
+    """Doc parser should ignore cosmetic blank lines before bullet lists."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+
+- `veritas_os.core.planner_normalization`
+- `veritas_os.core.planner_json`
+- `veritas_os.core.strategy`
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+
+- `veritas_os.core.kernel_stages`
+- `veritas_os.core.kernel_qa`
+- `veritas_os.core.pipeline_contracts`
+
+### FUJI (`veritas_os.core.fuji`)
+**Preferred extension points**:
+
+- `veritas_os.core.fuji_policy`
+- `veritas_os.core.fuji_policy_rollout`
+- `veritas_os.core.fuji_helpers`
+- `veritas_os.core.fuji_safety_head`
+
+### MemoryOS (`veritas_os.core.memory`)
+**Preferred extension points**:
+
+- `veritas_os.core.memory_store`
+- `veritas_os.core.memory_helpers`
+- `veritas_os.core.memory_search_helpers`
+- `veritas_os.core.memory_summary_helpers`
+- `veritas_os.core.memory_lifecycle`
+- `veritas_os.core.memory_security`
+""".strip(),
+        encoding="utf-8",
+    )
+
+    points = extract_doc_extension_points(doc_path)
+
+    assert points["planner"] == (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    )
+    assert points["kernel"] == (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    )
+    assert points["fuji"] == (
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
+    )
+    assert points["memory"] == (
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
+    )
 
 
 def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:

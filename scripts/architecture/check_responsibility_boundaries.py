@@ -369,7 +369,7 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
         r"(?P<body>.*?)(?=\n### |\Z)",
         re.DOTALL,
     )
-    marker = "**Preferred extension points**:\n"
+    marker = "**Preferred extension points**:"
     extracted: dict[str, tuple[str, ...]] = {}
 
     for match in section_pattern.finditer(document):
@@ -385,9 +385,14 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
 
         bullet_lines: list[str] = []
         for line in remainder.splitlines():
-            if not line.startswith("- "):
+            stripped_line = line.strip()
+            if not stripped_line:
+                if bullet_lines:
+                    break
+                continue
+            if not stripped_line.startswith("- "):
                 break
-            bullet_lines.append(line[2:].strip().strip("`"))
+            bullet_lines.append(stripped_line[2:].strip().strip("`"))
         extracted[module_name] = tuple(bullet_lines)
 
     return extracted
