@@ -402,6 +402,13 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
     return extracted
 
 
+def _normalize_extension_points_for_alignment(
+    extension_points: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Normalize extension-point lists for order-insensitive doc alignment."""
+    return tuple(sorted(extension_points))
+
+
 def find_doc_alignment_issues(doc_path: Path) -> list[str]:
     """Return human-readable mismatches between docs and checker guidance."""
     documented_points = extract_doc_extension_points(doc_path)
@@ -414,7 +421,9 @@ def find_doc_alignment_issues(doc_path: Path) -> list[str]:
                 f"Missing preferred extension point section for '{module_name}' in {doc_path}"
             )
             continue
-        if expected_points != configured_points:
+        if _normalize_extension_points_for_alignment(
+            expected_points
+        ) != _normalize_extension_points_for_alignment(configured_points):
             mismatches.append(
                 "Preferred extension points out of sync for "
                 f"'{module_name}': doc={list(expected_points)} "
