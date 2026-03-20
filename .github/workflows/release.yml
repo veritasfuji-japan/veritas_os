@@ -1,0 +1,37 @@
+name: Create GitHub Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [ -f "docs/releases/${TAG}.md" ]; then
+            echo "body_file=docs/releases/${TAG}.md" >> "$GITHUB_OUTPUT"
+          else
+            echo "body_file=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body_path: ${{ steps.notes.outputs.body_file || '' }}
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
+          generate_release_notes: ${{ steps.notes.outputs.body_file == '' }}
+          draft: false
