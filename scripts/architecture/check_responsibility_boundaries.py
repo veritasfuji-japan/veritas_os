@@ -49,6 +49,7 @@ class DocAlignmentIssue:
 
     source_module: str
     message: str
+    path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,30 @@ DOC_SECTION_TO_MODULE: dict[str, str] = {
     "FUJI": "fuji",
     "MemoryOS": "memory",
 }
+MODULE_DOCSTRING_REQUIRED_MARKERS: tuple[str, ...] = (
+    "Public contract:",
+    "Preferred extension points:",
+    "Compatibility guidance:",
+)
+DOCSTRING_GUARD_MODULES: tuple[str, ...] = (
+    "pipeline",
+    "kernel",
+    "fuji",
+    "memory",
+)
+MODULE_DOCSTRING_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
+    "pipeline": (
+        "veritas_os.core.pipeline_inputs",
+        "veritas_os.core.pipeline_execute",
+        "veritas_os.core.pipeline_policy",
+        "veritas_os.core.pipeline_response",
+        "veritas_os.core.pipeline_persist",
+        "veritas_os.core.pipeline_replay",
+    ),
+    "kernel": RECOMMENDED_EXTENSION_POINTS["kernel"],
+    "fuji": RECOMMENDED_EXTENSION_POINTS["fuji"],
+    "memory": RECOMMENDED_EXTENSION_POINTS["memory"],
+}
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -189,6 +214,64 @@ def _parse_imported_names(path: Path) -> set[str]:
     return _collect_imported_names(tree)
 
 
+def _load_module_docstring(path: Path) -> str:
+    """Return the module docstring for a Python source file."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    return ast.get_docstring(tree, clean=False) or ""
+
+
+def collect_module_docstring_issues(
+    core_dir: Path,
+    modules: Iterable[str] = DOCSTRING_GUARD_MODULES,
+) -> list[DocAlignmentIssue]:
+    """Validate core module docstrings keep boundary guidance visible."""
+    issues: list[DocAlignmentIssue] = []
+    for module_name in modules:
+        path = core_dir / f"{module_name}.py"
+        try:
+            docstring = _load_module_docstring(path)
+        except FileNotFoundError:
+            continue
+
+        missing_markers = [
+            marker for marker in MODULE_DOCSTRING_REQUIRED_MARKERS
+            if marker not in docstring
+        ]
+        if missing_markers:
+            issues.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        f"Module docstring guidance missing for '{module_name}': "
+                        f"{missing_markers}"
+                    ),
+                    path=path,
+                )
+            )
+
+        recommended_points = MODULE_DOCSTRING_EXTENSION_POINTS.get(module_name, ())
+        missing_points = [
+            point for point in recommended_points
+            if f"``{point.rsplit('.', maxsplit=1)[-1]}.py``" not in docstring
+            and f"``{point.rsplit('.', maxsplit=1)[-1]}``" not in docstring
+            and point not in docstring
+        ]
+        if missing_points:
+            issues.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Module docstring extension points out of sync for "
+                        f"'{module_name}': missing={missing_points}"
+                    ),
+                    path=path,
+                )
+            )
+
+    return issues
+
+
 def collect_boundary_issues(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
@@ -201,7 +284,16 @@ def collect_boundary_issues(
             BoundaryIssue(
                 code="doc_alignment_error",
                 message=issue.message,
-                path=doc_path,
+                path=issue.path or doc_path,
+                source_module=issue.source_module,
+            )
+        )
+    for issue in collect_module_docstring_issues(core_dir):
+        issues.append(
+            BoundaryIssue(
+                code="doc_alignment_error",
+                message=issue.message,
+                path=issue.path or core_dir / f"{issue.source_module}.py",
                 source_module=issue.source_module,
             )
         )

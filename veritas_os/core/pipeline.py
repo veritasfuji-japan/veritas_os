@@ -1,7 +1,5 @@
 # veritas_os/core/pipeline.py
 # -*- coding: utf-8 -*-
-from __future__ import annotations
-
 """
 VERITAS Decision Pipeline – Orchestrator (core/pipeline.py)
 
@@ -53,6 +51,8 @@ Payload contracts restored (tests / server expectations):
 - web_search payload normalized (ok/results)
 - decision saved into MemoryOS with key prefix "decision_"
 """
+
+from __future__ import annotations
 
 import inspect
 import json
