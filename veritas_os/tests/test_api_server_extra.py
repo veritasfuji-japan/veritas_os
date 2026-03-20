@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
-from veritas_os.api.schemas import MemoryPutRequest
+from veritas_os.api.schemas import MemoryPutRequest, MemorySearchRequest
 
 
 client = TestClient(server.app)
@@ -1215,7 +1215,11 @@ def test_memory_put_reports_partial_failure_when_vector_save_fails(monkeypatch):
     assert res["legacy"]["saved"] is True
     assert res["vector"]["saved"] is False
     assert res["errors"] == [
-        {"stage": "vector", "message": "vector save failed"}
+        {
+            "stage": "vector",
+            "message": "vector save failed",
+            "error_code": "backend_unavailable",
+        }
     ]
 
 
@@ -1241,7 +1245,9 @@ def test_memory_put_reports_failed_when_all_save_paths_fail(monkeypatch):
     assert res["ok"] is False
     assert res["status"] == "failed"
     assert res["error"] == "memory operation failed"
+    assert res["error_code"] == "partial_failure"
     assert {item["stage"] for item in res["errors"]} == {"legacy", "vector"}
+    assert {item["error_code"] for item in res["errors"]} == {"backend_unavailable"}
 
 
 def test_memory_search_filters_by_user(monkeypatch):
@@ -1951,3 +1957,19 @@ def test_memory_put_accepts_string_value():
     )
     assert r.status_code == 200
     assert r.json()["ok"] is True
+
+
+def test_memory_search_exposes_error_code_for_validation_failures(monkeypatch):
+    """memory_search should publish additive error codes for failure triage."""
+
+    class InvalidSearchStore:
+        def search(self, **_kwargs):
+            raise ValueError("query shape invalid")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: InvalidSearchStore())
+
+    res = server.memory_search(MemorySearchRequest(user_id="u1", query="hello"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory search failed"
+    assert res["error_code"] == "validation_failure"

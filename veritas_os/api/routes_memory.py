@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
+from json import JSONDecodeError
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Header
@@ -22,10 +23,32 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _classify_memory_failure(exc: Exception) -> str:
+    """Classify MemoryOS failures without changing the public response contract.
+
+    The returned code is additive metadata for operators and clients that need
+    finer auditability. Existing ``ok`` / ``status`` / ``errors[]`` fields remain
+    unchanged so callers can adopt the new codes incrementally.
+    """
+    if isinstance(exc, PermissionError):
+        return "security_policy_rejection"
+    if isinstance(exc, (ValueError, TypeError)):
+        return "validation_failure"
+    if isinstance(exc, (JSONDecodeError, OSError)):
+        return "serialization_storage_failure"
+    if isinstance(exc, (ConnectionError, TimeoutError, RuntimeError)):
+        return "backend_unavailable"
+    return "unknown_failure"
+
+
 def _build_memory_stage_error(stage: str, exc: Exception) -> Dict[str, str]:
     """Return a sanitized stage error payload for partial MemoryOS failures."""
     logger.warning("[MemoryOS][%s] Error: %s", stage, exc)
-    return {"stage": stage, "message": f"{stage} save failed"}
+    return {
+        "stage": stage,
+        "message": f"{stage} save failed",
+        "error_code": _classify_memory_failure(exc),
+    }
 
 
 def _get_server():
@@ -230,6 +253,9 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
         response["errors"] = errors
         if not ok:
             response["error"] = "memory operation failed"
+            response["error_code"] = (
+                errors[0].get("error_code") if len(errors) == 1 else "partial_failure"
+            )
     return response
 
 
@@ -287,7 +313,13 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
 
     except Exception as e:
         logger.error("[MemoryOS][search] Error: %s", e)
-        return {"ok": False, "error": "memory search failed", "hits": [], "count": 0}
+        return {
+            "ok": False,
+            "error": "memory search failed",
+            "error_code": _classify_memory_failure(e),
+            "hits": [],
+            "count": 0,
+        }
 
 
 @router.post("/v1/memory/get")
@@ -304,7 +336,12 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
         return {"ok": True, "value": value}
     except Exception as e:
         logger.error("memory_get failed: %s", e)
-        return {"ok": False, "error": "memory retrieval failed", "value": None}
+        return {
+            "ok": False,
+            "error": "memory retrieval failed",
+            "error_code": _classify_memory_failure(e),
+            "value": None,
+        }
 
 
 @router.post("/v1/memory/erase")
@@ -331,4 +368,8 @@ def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(def
         }
     except Exception as e:
         logger.error("memory_erase failed: %s", e)
-        return {"ok": False, "error": "memory erase failed"}
+        return {
+            "ok": False,
+            "error": "memory erase failed",
+            "error_code": _classify_memory_failure(e),
+        }
