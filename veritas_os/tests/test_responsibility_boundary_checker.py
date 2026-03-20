@@ -171,3 +171,40 @@ def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
         "veritas_os.core.strategy",
     ]
     assert report["issues"][0]["remediation_link"] == REMEDIATION_LINK
+
+
+def test_build_machine_report_includes_doc_aligned_extension_points(tmp_path: Path) -> None:
+    """Machine report should keep extension-point guidance aligned with docs."""
+    issues = [
+        BoundaryIssue(
+            code="boundary_violation",
+            message="violation",
+            path=tmp_path / "memory.py",
+            source_module="memory",
+            forbidden_module="planner",
+        ),
+        BoundaryIssue(
+            code="boundary_violation",
+            message="violation",
+            path=tmp_path / "fuji.py",
+            source_module="fuji",
+            forbidden_module="kernel",
+        ),
+    ]
+
+    report = json.loads(build_machine_report(issues))
+
+    assert report["issues"][0]["recommended_extension_points"] == [
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
+    ]
+    assert report["issues"][1]["recommended_extension_points"] == [
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
+    ]
