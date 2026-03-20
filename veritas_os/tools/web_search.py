@@ -53,9 +53,8 @@ import unicodedata
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
-import requests
-
 # ★ SSRF/DNS セキュリティロジックを web_search_security.py に分離
+from ._requests_compat import load_requests_compat
 from .web_search_security import (
     _sanitize_websearch_url,
     _extract_hostname,
@@ -68,6 +67,8 @@ from .web_search_security import (
     _clear_private_host_cache,
     _is_hostname_exact_or_subdomain,
 )
+
+requests = load_requests_compat()
 
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
 WEBSEARCH_KEY: str = os.getenv("VERITAS_WEBSEARCH_KEY", "").strip()

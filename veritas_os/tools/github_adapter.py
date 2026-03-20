@@ -14,7 +14,9 @@ import re
 import time
 from urllib.parse import urlsplit
 
-import requests
+from ._requests_compat import load_requests_compat
+
+requests = load_requests_compat()
 
 
 def _safe_int(key: str, default: int) -> int:
