@@ -352,6 +352,34 @@ def test_extract_doc_extension_points_tolerates_blank_line_after_marker(
     )
 
 
+def test_extract_doc_extension_points_tolerates_explanatory_text_before_bullets(
+    tmp_path: Path,
+) -> None:
+    """Doc parser should ignore short prose before the preferred bullet list."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+These modules should absorb new planner shaping logic before planner.py.
+- `veritas_os.core.planner_normalization`
+- `veritas_os.core.planner_json`
+- `veritas_os.core.strategy`
+""".strip(),
+        encoding="utf-8",
+    )
+
+    points = extract_doc_extension_points(doc_path)
+
+    assert points["planner"] == (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    )
+
+
 def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:
     """Checker guidance should stay aligned with the architecture source of truth."""
     issues = find_doc_alignment_issues(
