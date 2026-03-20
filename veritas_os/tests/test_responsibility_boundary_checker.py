@@ -507,6 +507,39 @@ def test_extract_doc_extension_points_accepts_asterisk_bullets(
     )
 
 
+def test_extract_doc_extension_points_accepts_crlf_sections(tmp_path: Path) -> None:
+    """Doc parser should keep working when the Markdown file uses CRLF newlines."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_bytes(
+        (
+            "# Core Responsibility Boundaries\r\n\r\n"
+            "### Planner (`veritas_os.core.planner`)\r\n"
+            "**Preferred extension points**:\r\n"
+            "- `veritas_os.core.planner_normalization`\r\n"
+            "- `veritas_os.core.planner_json`\r\n"
+            "- `veritas_os.core.strategy`\r\n\r\n"
+            "### Kernel (`veritas_os.core.kernel`)\r\n"
+            "**Preferred extension points**:\r\n"
+            "- `veritas_os.core.kernel_stages`\r\n"
+            "- `veritas_os.core.kernel_qa`\r\n"
+            "- `veritas_os.core.pipeline_contracts`\r\n"
+        ).encode("utf-8")
+    )
+
+    points = extract_doc_extension_points(doc_path)
+
+    assert points["planner"] == (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    )
+    assert points["kernel"] == (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    )
+
+
 def test_extract_doc_extension_points_accepts_plus_and_numbered_bullets(
     tmp_path: Path,
 ) -> None:

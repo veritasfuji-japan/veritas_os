@@ -388,8 +388,8 @@ def _extract_doc_extension_points_from_text(
 ) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
     """Extract doc extension points and duplicate module sections from text."""
     section_pattern = re.compile(
-        r"### (?P<section>[^\n]+?) \(`veritas_os\.core\.[^`]+`\)\n"
-        r"(?P<body>.*?)(?=\n### |\Z)",
+        r"### (?P<section>[^\r\n]+?) \(`veritas_os\.core\.[^`]+`\)\r?\n"
+        r"(?P<body>.*?)(?=\r?\n### |\Z)",
         re.DOTALL,
     )
     marker = "**Preferred extension points**:"
