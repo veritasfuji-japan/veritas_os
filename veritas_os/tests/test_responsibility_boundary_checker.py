@@ -9,6 +9,7 @@ from scripts.architecture.check_responsibility_boundaries import (
     REMEDIATION_LINK,
     BoundaryIssue,
     BoundaryRule,
+    DocAlignmentIssue,
     ViolationDetail,
     build_machine_report,
     build_remediation_guide,
@@ -231,6 +232,25 @@ def test_collect_boundary_issues_detects_doc_alignment_error(tmp_path: Path) -> 
     issues = collect_boundary_issues(core_dir=tmp_path, doc_path=doc_path)
 
     assert any(issue.code == "doc_alignment_error" for issue in issues)
+
+
+def test_collect_doc_alignment_issues_classifies_missing_doc_file(
+    tmp_path: Path,
+) -> None:
+    """Missing architecture docs should surface as structured doc errors."""
+    doc_path = tmp_path / "missing_boundaries.md"
+
+    issues = collect_doc_alignment_issues(doc_path)
+
+    assert issues == [
+        DocAlignmentIssue(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"file not found at {doc_path}"
+            ),
+            source_module="documentation",
+        )
+    ]
 
 
 def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:

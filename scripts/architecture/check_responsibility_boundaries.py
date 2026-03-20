@@ -51,6 +51,13 @@ class DocAlignmentIssue:
     message: str
 
 
+@dataclass(frozen=True)
+class DocExtractionError:
+    """Structured error raised while reading extension points from docs."""
+
+    message: str
+
+
 DEFAULT_DOC_PATH = Path("docs/architecture/core_responsibility_boundaries.md")
 
 
@@ -410,6 +417,28 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
     return extracted
 
 
+def _read_doc_extension_points(
+    doc_path: Path,
+) -> tuple[dict[str, tuple[str, ...]], DocExtractionError | None]:
+    """Read doc extension points while converting I/O failures to structured errors."""
+    try:
+        return extract_doc_extension_points(doc_path), None
+    except FileNotFoundError:
+        return {}, DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"file not found at {doc_path}"
+            )
+        )
+    except PermissionError:
+        return {}, DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"permission denied for {doc_path}"
+            )
+        )
+
+
 def _normalize_extension_points_for_alignment(
     extension_points: tuple[str, ...],
 ) -> tuple[str, ...]:
@@ -419,8 +448,16 @@ def _normalize_extension_points_for_alignment(
 
 def collect_doc_alignment_issues(doc_path: Path) -> list[DocAlignmentIssue]:
     """Return structured mismatches between docs and checker guidance."""
-    documented_points = extract_doc_extension_points(doc_path)
+    documented_points, extraction_error = _read_doc_extension_points(doc_path)
     mismatches: list[DocAlignmentIssue] = []
+    if extraction_error is not None:
+        mismatches.append(
+            DocAlignmentIssue(
+                source_module="documentation",
+                message=extraction_error.message,
+            )
+        )
+        return mismatches
 
     for module_name, configured_points in RECOMMENDED_EXTENSION_POINTS.items():
         expected_points = documented_points.get(module_name)
