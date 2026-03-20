@@ -235,6 +235,34 @@ def test_load_policy_from_str_delegates_to_shared_fuji_policy(monkeypatch):
     assert observed["capability"] is fuji.capability_cfg
 
 
+def test_check_policy_hot_reload_delegates_to_shared_fuji_policy(monkeypatch):
+    """Hot reload も shared policy helper に委譲し、module alias を同期する。"""
+    observed = {}
+    expected_policy = {"version": "hot_reload_shared"}
+
+    def _fake_check_policy_hot_reload():
+        observed["yaml"] = fuji._fuji_policy.yaml
+        observed["capability"] = fuji._fuji_policy.capability_cfg
+        fuji._fuji_policy.POLICY = expected_policy
+        fuji._fuji_policy._POLICY_MTIME = 456.0
+
+    monkeypatch.setattr(
+        fuji._fuji_policy,
+        "_check_policy_hot_reload",
+        _fake_check_policy_hot_reload,
+    )
+
+    fuji.POLICY = {"version": "stale"}
+    fuji._POLICY_MTIME = 123.0
+
+    fuji._check_policy_hot_reload()  # type: ignore[attr-defined]
+
+    assert fuji.POLICY == expected_policy
+    assert fuji._POLICY_MTIME == 456.0
+    assert observed["yaml"] is fuji.yaml
+    assert observed["capability"] is fuji.capability_cfg
+
+
 # ---------------------------------------------------------
 # fallback_safety_head
 # ---------------------------------------------------------
@@ -788,4 +816,3 @@ def test_evaluate_with_string_query(monkeypatch):
     assert called["context"]["stakes"] == 0.1
     assert called["evidence"] == []
     assert called["alternatives"] == []
-

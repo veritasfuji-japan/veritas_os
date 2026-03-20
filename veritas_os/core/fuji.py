@@ -266,31 +266,12 @@ def reload_policy() -> Dict[str, Any]:
 
 
 def _check_policy_hot_reload() -> None:
-    """Hot-reload FUJI policy and rebuild runtime patterns using local aliases."""
+    """Delegate FUJI policy hot reload to the shared policy helper."""
     global POLICY, _POLICY_MTIME
-    path = _policy_path()
-    if not path.exists():
-        return
-
-    try:
-        current_mtime = path.stat().st_mtime
-    except OSError as exc:
-        _logger.debug("policy hot reload skipped: %s", exc)
-        return
-
-    if current_mtime <= _POLICY_MTIME:
-        return
-
-    try:
-        content = path.read_text(encoding="utf-8")
-        POLICY = _load_policy_from_str(content, path)
-        _build_runtime_patterns_from_policy(POLICY)
-        _POLICY_MTIME = current_mtime
-        _fuji_policy.yaml = yaml
-        _fuji_policy.POLICY = POLICY
-        _fuji_policy._POLICY_MTIME = _POLICY_MTIME
-    except OSError as exc:
-        _logger.debug("policy hot reload skipped: %s", exc)
+    _sync_fuji_policy_runtime()
+    _fuji_policy._check_policy_hot_reload()
+    POLICY = _fuji_policy.POLICY
+    _POLICY_MTIME = getattr(_fuji_policy, "_POLICY_MTIME", _POLICY_MTIME)
 
 
 # =========================================================
