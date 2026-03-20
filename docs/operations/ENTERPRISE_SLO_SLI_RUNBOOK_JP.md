@@ -83,6 +83,48 @@
 - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` は検証専用の危険フラグであり、production へ混入させない。backend startup は fail-fast するが、環境定義から除去しておくこと。
 - デプロイ担当者はリリース前に環境変数一覧をレビューし、不要な `NEXT_PUBLIC_*` と fail-open 系フラグが含まれていないことを確認する。
 
+## 6.1 TrustLog degraded 状態 runbook
+
+### `trust_json_status` の意味
+- `unreadable`: `trust_log.json` の読込時に例外が発生し、aggregate JSON を安全側で無視した状態。JSONL 追記は継続しても aggregate JSON 更新は停止される。
+- `invalid`: `trust_log.json` が list / `{"items": [...]}` 以外で、監査集計に使えない状態。
+- `too_large`: aggregate JSON が保護上限を超え、破壊的な再読込を避けるため更新を停止した状態。
+
+### 監査上の影響
+- いずれも **自動修復ではなく degraded 保護**。既存 aggregate JSON を黙って上書きしないことで監査証跡の破壊を防ぐ。
+- JSONL 側に新規追記が残る可能性はあるため、監査時は aggregate JSON と JSONL の乖離有無を確認する。
+
+### 初動確認手順
+1. `/health` や system status で `trust_json_status` を確認する。
+2. `trust_log.json` と `trust_log.jsonl` のサイズ・更新時刻・権限差分を確認する。
+3. backend log の warning `write trust_log.json skipped: aggregate log status=...` を確認し、`unreadable|invalid|too_large` のどれかを特定する。
+
+### 復旧手順
+1. `unreadable` の場合は権限・所有者・破損ファイルの有無を確認し、読める状態へ戻す。
+2. `invalid` の場合は JSON 構造を修復し、list もしくは `{"items": [...]}` へ正規化する。
+3. `too_large` の場合はバックアップ取得後に分割・アーカイブし、上限内サイズへ縮退する。
+4. 修復後に `trust_json_status=ok` へ戻ること、かつ append warning が止まることを確認する。
+
+### 再発防止の確認項目
+- aggregate JSON を手編集しない運用に統一する。
+- 監査ジョブで `trust_json_status != ok` を検知する。
+- 大容量化しやすい環境では rotate / archive 手順を定期化する。
+
+## 6.2 fail-open 設定の検知経路
+
+### startup warning / fail-fast の確認手順
+1. backend startup log で `[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is enabled.` の warning を確認する。
+2. `VERITAS_ENV=prod|production` では startup が `RuntimeError` で fail-fast することを確認する。
+3. `VERITAS_ENV` が `dev|development|local|test` 以外の shared 環境では warning に加え、auth store fallback logic が `open` を無視して `closed` に戻すことを確認する。
+
+### CI / deployment check
+- `scripts/quality/check_deployment_env_defaults.py` の smoke check で、テンプレートに危険な public env や不足設定がないことを継続検証する。
+- 本番前レビューでは環境変数一覧に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` が残っていないことをチェックリスト化する。
+
+### 環境別ポリシー
+- production / shared staging / preview: **禁止**。残置は認証保護低下のセキュリティ事故につながる。
+- local / isolated test: 明示的な検証時のみ一時許容。終了後は必ず削除する。
+
 ## 7. セキュリティ上の警告
 - `trace_id` は監査相関用であり、認可判定には使用しない。
 - 外部入力の `trace_id` は形式検証を行い、ヘッダ/ログインジェクションを防止する。

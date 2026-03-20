@@ -5,6 +5,25 @@ from __future__ import annotations
 """
 VERITAS Decision Pipeline – Orchestrator (core/pipeline.py)
 
+Public contract:
+- ``run_decide_pipeline(req, request)`` is the stable entry-point used by
+  the API layer for ``/v1/decide``.
+- This module owns orchestration only; stage-specific shaping, gating, and
+  persistence should stay in the dedicated pipeline_* helper modules.
+
+Preferred extension points:
+- ``pipeline_inputs`` for request normalization
+- ``pipeline_execute`` for kernel execution / self-healing
+- ``pipeline_policy`` for FUJI / ValueCore policy steps
+- ``pipeline_response`` for response assembly
+- ``pipeline_persist`` and ``pipeline_replay`` for persistence / replay
+
+Compatibility guidance:
+- This file intentionally keeps compatibility imports and re-exports so older
+  call paths do not break immediately. Extend helpers first, and treat local
+  compatibility wrappers here as adapters rather than a place for new policy
+  branches or fallback-heavy logic.
+
 This module is the *single entry-point* for the /v1/decide endpoint.
 ``run_decide_pipeline(req, request)`` orchestrates the full decision flow
 by delegating to responsibility-separated stage modules:

@@ -3,6 +3,22 @@
 """
 FUJI Gate v2 (Safety Head × Policy Engine × TrustLog)
 
+Public contract:
+- ``fuji_gate()`` and the v1-compatible validation helpers provide the stable
+  policy/safety gate consumed by Kernel and API layers.
+- This module coordinates final gate decisions and audit-facing status only;
+  detailed policy loading and safety-head behavior belong in helper modules.
+
+Preferred extension points:
+- ``fuji_policy.py`` / ``fuji_policy_rollout.py`` for policy loading and rollout
+- ``fuji_helpers.py`` for normalization and compatibility helpers
+- ``fuji_safety_head.py`` for deterministic / LLM safety-head behavior
+
+Compatibility guidance:
+- This file still contains compatibility shims for older validation paths.
+  Preserve those adapters, but add new fallback, rollout, or safety logic to
+  the helper modules above so FUJI responsibility does not sprawl further.
+
 PoC仕様：
 - low_evidence のときは allow に倒さず、必ず「補う/止める」へ寄せる
   - 高リスク/高ステークス => deny
