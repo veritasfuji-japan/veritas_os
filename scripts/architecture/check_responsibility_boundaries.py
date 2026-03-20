@@ -384,15 +384,19 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
             continue
 
         bullet_lines: list[str] = []
+        bullet_collection_started = False
         for line in remainder.splitlines():
             stripped_line = line.strip()
             if not stripped_line:
-                if bullet_lines:
+                if bullet_collection_started:
                     break
                 continue
-            if not stripped_line.startswith("- "):
+            if stripped_line.startswith("- "):
+                bullet_collection_started = True
+                bullet_lines.append(stripped_line[2:].strip().strip("`"))
+                continue
+            if bullet_collection_started:
                 break
-            bullet_lines.append(stripped_line[2:].strip().strip("`"))
         extracted[module_name] = tuple(bullet_lines)
 
     return extracted

@@ -215,6 +215,27 @@ doc alignment error が発生しうる** 状態でした。
 レビューで継続課題とされた「拡張境界の見えにくさ」を支える
 文書整合性チェックの信頼性だけを上げるものです。
 
+## 2026-03-20 追加改善（説明文入り Markdown への耐性強化）
+
+上記までの自動検証を再確認したところ、boundary checker の文書抽出は
+`**Preferred extension points**:` の直後に 1 行の説明文が入ると
+箇条書き抽出を打ち切ってしまい、**文書の意図が変わっていないのに
+軽微な説明追記だけで doc alignment error が発生しうる** 状態でした。
+
+これは責務境界の見直しではなく、整合性検証の過剰敏感さの問題であるため、
+今回は checker の文書パーサだけを最小修正しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` の
+  `extract_doc_extension_points()` を修正し、marker 直後の短い説明文を許容したうえで
+  Preferred extension points の箇条書きを抽出できるように改善
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  説明文入り Markdown を直接与える回帰テストを追加し、
+  今後の軽微な文書補足で CI が誤検知しないことを固定
+
+この改善も Planner / Kernel / FUJI / MemoryOS の public contract や責務境界を変えず、
+レビューで継続課題とされた「拡張境界の見えにくさ」を支える
+文書整合性チェックの信頼性だけを上げるものです。
+
 ## 最終結論
 
 このコードベースは、監査性・安全性・再現性を強く意識して作られた高品質な基盤です。
