@@ -14,6 +14,8 @@ from scripts.architecture.check_responsibility_boundaries import (
     build_remediation_guide,
     check_boundaries,
     collect_boundary_issues,
+    extract_doc_extension_points,
+    find_doc_alignment_issues,
 )
 
 
@@ -208,3 +210,30 @@ def test_build_machine_report_includes_doc_aligned_extension_points(tmp_path: Pa
         "veritas_os.core.fuji_helpers",
         "veritas_os.core.fuji_safety_head",
     ]
+
+
+def test_extract_doc_extension_points_reads_architecture_doc() -> None:
+    """Architecture doc parser should extract module-specific extension points."""
+    points = extract_doc_extension_points(
+        Path("docs/architecture/core_responsibility_boundaries.md")
+    )
+
+    assert points["planner"] == (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    )
+    assert points["kernel"] == (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    )
+
+
+def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:
+    """Checker guidance should stay aligned with the architecture source of truth."""
+    issues = find_doc_alignment_issues(
+        Path("docs/architecture/core_responsibility_boundaries.md")
+    )
+
+    assert issues == []

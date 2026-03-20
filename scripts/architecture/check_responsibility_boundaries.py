@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -111,6 +112,12 @@ RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
 
 
 REMEDIATION_LINK = "docs/architecture/core_responsibility_boundaries.md"
+DOC_SECTION_TO_MODULE: dict[str, str] = {
+    "Planner": "planner",
+    "Kernel": "kernel",
+    "FUJI": "fuji",
+    "MemoryOS": "memory",
+}
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -327,6 +334,60 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
         ],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
+    """Extract preferred extension points from the architecture document."""
+    document = doc_path.read_text(encoding="utf-8")
+    section_pattern = re.compile(
+        r"### (?P<section>[^\n]+?) \(`veritas_os\.core\.[^`]+`\)\n"
+        r"(?P<body>.*?)(?=\n### |\Z)",
+        re.DOTALL,
+    )
+    marker = "**Preferred extension points**:\n"
+    extracted: dict[str, tuple[str, ...]] = {}
+
+    for match in section_pattern.finditer(document):
+        section_name = match.group("section").strip()
+        module_name = DOC_SECTION_TO_MODULE.get(section_name)
+        if module_name is None:
+            continue
+
+        body = match.group("body")
+        _, marker_found, remainder = body.partition(marker)
+        if not marker_found:
+            continue
+
+        bullet_lines: list[str] = []
+        for line in remainder.splitlines():
+            if not line.startswith("- "):
+                break
+            bullet_lines.append(line[2:].strip().strip("`"))
+        extracted[module_name] = tuple(bullet_lines)
+
+    return extracted
+
+
+def find_doc_alignment_issues(doc_path: Path) -> list[str]:
+    """Return human-readable mismatches between docs and checker guidance."""
+    documented_points = extract_doc_extension_points(doc_path)
+    mismatches: list[str] = []
+
+    for module_name, configured_points in RECOMMENDED_EXTENSION_POINTS.items():
+        expected_points = documented_points.get(module_name)
+        if expected_points is None:
+            mismatches.append(
+                f"Missing preferred extension point section for '{module_name}' in {doc_path}"
+            )
+            continue
+        if expected_points != configured_points:
+            mismatches.append(
+                "Preferred extension points out of sync for "
+                f"'{module_name}': doc={list(expected_points)} "
+                f"checker={list(configured_points)}"
+            )
+
+    return mismatches
 
 
 def _build_parser() -> argparse.ArgumentParser:
