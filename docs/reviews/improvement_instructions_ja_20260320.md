@@ -175,12 +175,14 @@ fail-open は非本番でも認証保護を弱めるため、
 - **Priority 3 / 指示 3-2**: `veritas_os/api/routes_memory.py` の broad exception を、通常の validation / backend / storage / policy 失敗だけを structured response に落とす限定例外タプルへ段階的に縮小した。これにより `KeyboardInterrupt` / `SystemExit` 相当の `BaseException` を握りつぶさず、既存の `ok / status / errors[] / error_code` 契約は維持した。`veritas_os/tests/test_api_server_extra.py` に回帰テストを追加した。
 - **Priority 1 / 指示 1-2**: `veritas_os/core/memory.py` 内の compatibility-heavy な `MemoryStore` lifecycle 正規化 / expiry 判定を `veritas_os/core/memory_store_helpers.py` へ抽出し、`_install_memory_store_compat_hooks()` は互換フック配線のみに寄せた。これにより MemoryOS の互換層分岐を helper 側へ逃がしつつ、既存 `MemoryStore._normalize_lifecycle` / `_is_record_expired` 契約は維持した。`veritas_os/tests/test_memory_store_core.py` に helper 経由の回帰テストを追加した。
 - **Priority 1 / 指示 1-2 追加**: `veritas_os/core/memory.py` に残っていた `MemoryStore.erase_user()` / `recent()` / `search()` の compatibility-heavy な helper 選択分岐を `veritas_os/core/memory_store_helpers.py` の `erase_user_records()` / `recent_records_compat()` / `search_records_compat()` へ移し、`_install_memory_store_compat_hooks()` をさらに「互換フック配線」中心へ寄せた。既存の monkeypatch 互換点と `MemoryStore` public contract は維持し、`veritas_os/tests/test_memory_store_core.py` に patched helper 優先の回帰テストを追加した。
+- **Priority 1 / 指示 1-2 追加（今回）**: `veritas_os/core/memory.py` の `_install_memory_store_compat_hooks()` に残っていた `MemoryStore.put_episode()` / `summarize_for_planner()` の compatibility-heavy な inline 実装を、`veritas_os/core/memory_store_helpers.py` の `put_episode_record()` / `summarize_records_for_planner()` へ移した。これにより `memory.py` 側は互換フック配線に専念しつつ、既存 `MemoryStore` public contract と vector fallback warning は維持した。`veritas_os/tests/test_memory_store_core.py` に vector fallback warning と planner summary 契約の回帰テストを追加した。
 - **Follow-up fix**: Priority 1 / 指示 1-2 の helper 抽出後、`veritas_os/core/memory.py` の `VectorMemory.add()` が引き続き `datetime.now(timezone.utc)` を参照するため、lint で検知された `datetime` import 抜けを復旧した。責務や public contract の変更はない。
 - **Priority 4 / 指示 4-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に capability profile / strict mode 推奨セクションを追加し、FUJI / MemoryOS の production 推奨設定、local/test 限定設定、strict mode 推奨箇所、fallback 観測方法を明文化した。optional dependency による capability drift を startup log と warning で追跡できるよう、`[CapabilityManifest]` と各 fallback warning の確認ポイントも追記した。
 - **Priority 4 / 指示 4-1 の回帰防止**: `scripts/quality/check_capability_profile_doc.py` を追加し、runbook に上記 capability profile 必須トークンが残っているかを CI 向けに検査できるようにした。対応する回帰テストも追加した。
 
 ### 今回あえて実施しなかった改善
 - **Priority 1 / 指示 1-2 以降** の helper 分離や、Memory API 以外の広域例外縮小は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
+- `MemoryStore` 互換フックにはなお `legal_hold` / cascade delete / score 計算などの薄い adapter が残るが、現時点では pure helper 化の効果が小さく、責務境界や互換契約を崩さずに優先して削るべき複雑度ではないため未着手とした。
 - **Priority 4 capability profile** の基礎文書化と CI チェックは今回完了したが、将来的な profile 細分化（環境別 manifest 例や dependency matrix の詳細表）は、既存運用に必要な最小差分を超えるため未着手とした。
 
 ### セキュリティ警告

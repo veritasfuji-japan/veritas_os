@@ -265,3 +265,60 @@ def search_records_compat(
     if not episodic:
         return {}
     return {"episodic": episodic}
+
+
+def put_episode_record(
+    *,
+    store: Any,
+    text: str,
+    tags: Optional[List[str]] = None,
+    meta: Optional[Dict[str, Any]] = None,
+    mem_vec: Any = None,
+    logger: Any = None,
+    time_module: Any = time,
+    **kwargs: Any,
+) -> str:
+    """Persist an episodic record while keeping optional vector fallback safe."""
+    record: Dict[str, Any] = {
+        "text": text,
+        "tags": tags or [],
+        "meta": meta or {},
+    }
+    for key, value in kwargs.items():
+        if key not in record:
+            record[key] = value
+
+    user_id = (record.get("meta") or {}).get("user_id", "episodic")
+    key = f"episode_{int(time_module.time())}"
+    store.put(user_id, key, record)
+
+    if mem_vec is not None:
+        try:
+            mem_vec.add(
+                kind="episodic",
+                text=text,
+                tags=tags or [],
+                meta=meta or {},
+            )
+        except Exception as exc:
+            if logger is not None:
+                logger.warning(
+                    "[MemoryOS] put_episode MEM_VEC.add error: %s",
+                    exc,
+                )
+
+    return key
+
+
+def summarize_records_for_planner(
+    *,
+    store: Any,
+    user_id: str,
+    query: str,
+    limit: int,
+    build_summary: Callable[[List[Dict[str, Any]]], str],
+) -> str:
+    """Build planner-facing text from MemoryStore search results."""
+    result = store.search(query=query, k=limit, user_id=user_id)
+    episodic = result.get("episodic") or []
+    return build_summary(episodic)

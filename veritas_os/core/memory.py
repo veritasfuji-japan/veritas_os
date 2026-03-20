@@ -81,9 +81,11 @@ from .memory_store_helpers import (
     filter_recent_records,
     is_record_expired_compat as _is_record_expired_compat_impl,
     normalize_document_lifecycle as _normalize_document_lifecycle_impl,
+    put_episode_record,
     recent_records_compat,
     search_records_compat,
     simple_score as _simple_score_impl,
+    summarize_records_for_planner,
 )
 from .memory_summary_helpers import build_planner_summary
 from . import memory_store as _memory_store_module
@@ -942,29 +944,16 @@ def _install_memory_store_compat_hooks() -> None:
         meta: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> str:
-        record: Dict[str, Any] = {
-            "text": text,
-            "tags": tags or [],
-            "meta": meta or {},
-        }
-        for key, value in kwargs.items():
-            if key not in record:
-                record[key] = value
-        user_id = (record.get("meta") or {}).get("user_id", "episodic")
-        key = f"episode_{int(time.time())}"
-        self.put(user_id, key, record)
-        mem_vec = _get_mem_vec()
-        if mem_vec is not None:
-            try:
-                mem_vec.add(
-                    kind="episodic",
-                    text=text,
-                    tags=tags or [],
-                    meta=meta or {},
-                )
-            except Exception as exc:
-                logger.warning("[MemoryOS] put_episode MEM_VEC.add error: %s", exc)
-        return key
+        return put_episode_record(
+            store=self,
+            text=text,
+            tags=tags,
+            meta=meta,
+            mem_vec=_get_mem_vec(),
+            logger=logger,
+            time_module=time,
+            **kwargs,
+        )
 
     def _summarize_for_planner_compat(
         self: MemoryStore,
@@ -972,9 +961,13 @@ def _install_memory_store_compat_hooks() -> None:
         query: str,
         limit: int = 8,
     ) -> str:
-        result = self.search(query=query, k=limit, user_id=user_id)
-        episodic = result.get("episodic") or []
-        return build_planner_summary(episodic)
+        return summarize_records_for_planner(
+            store=self,
+            user_id=user_id,
+            query=query,
+            limit=limit,
+            build_summary=build_planner_summary,
+        )
 
     _memory_store_module.locked_memory = _compat_locked_memory
     _memory_store_module.erase_user_data = erase_user_data

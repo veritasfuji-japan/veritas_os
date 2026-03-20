@@ -18,8 +18,10 @@ from veritas_os.core.memory_store_helpers import (
     erase_user_records,
     is_record_expired_compat,
     normalize_document_lifecycle,
+    put_episode_record,
     recent_records_compat,
     search_records_compat,
+    summarize_records_for_planner,
 )
 
 
@@ -267,6 +269,37 @@ class TestMemoryStoreCompatHelpers:
             "episodic": [{"id": "patched", "text": "hello world", "score": 1.0}]
         }
         helper_module.build_kvs_search_hits.assert_called_once()
+
+    def test_put_episode_record_logs_vector_failure_without_breaking(self, store):
+        mem_vec = mock.Mock()
+        mem_vec.add.side_effect = RuntimeError("vector down")
+        logger = mock.Mock()
+
+        key = put_episode_record(
+            store=store,
+            text="episodic note",
+            tags=["ops"],
+            meta={"user_id": "u1"},
+            mem_vec=mem_vec,
+            logger=logger,
+        )
+
+        assert key.startswith("episode_")
+        assert store.get("u1", key)["text"] == "episodic note"
+        logger.warning.assert_called_once()
+
+    def test_summarize_records_for_planner_uses_search_contract(self, store):
+        store.put("u1", "k1", {"text": "planner context", "kind": "episodic"})
+
+        result = summarize_records_for_planner(
+            store=store,
+            user_id="u1",
+            query="planner",
+            limit=3,
+            build_summary=lambda items: f"items={len(items)}",
+        )
+
+        assert result == "items=1"
 
 
 class TestSearch:
