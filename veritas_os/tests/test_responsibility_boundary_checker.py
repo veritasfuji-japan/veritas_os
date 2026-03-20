@@ -507,6 +507,44 @@ def test_extract_doc_extension_points_accepts_asterisk_bullets(
     )
 
 
+def test_extract_doc_extension_points_accepts_plus_and_numbered_bullets(
+    tmp_path: Path,
+) -> None:
+    """Doc parser should accept common Markdown plus and numbered bullets."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
++ `veritas_os.core.planner_normalization`
++ `veritas_os.core.planner_json`
++ `veritas_os.core.strategy`
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+1. `veritas_os.core.kernel_stages`
+2. `veritas_os.core.kernel_qa`
+3. `veritas_os.core.pipeline_contracts`
+""".strip(),
+        encoding="utf-8",
+    )
+
+    points = extract_doc_extension_points(doc_path)
+
+    assert points["planner"] == (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    )
+    assert points["kernel"] == (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    )
+
+
 def test_collect_doc_alignment_issues_detects_duplicate_module_sections(
     tmp_path: Path,
 ) -> None:
