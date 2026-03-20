@@ -11,6 +11,7 @@ from __future__ import annotations
 import pathlib
 import sys
 from dataclasses import dataclass
+from typing import Iterable
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 
@@ -22,6 +23,7 @@ class TemplateRule:
     relative_path: str
     required_tokens: tuple[str, ...] = ()
     forbidden_tokens: tuple[str, ...] = ()
+    forbidden_env_assignments: tuple[tuple[str, str], ...] = ()
 
 
 RULES = (
@@ -31,8 +33,8 @@ RULES = (
         forbidden_tokens=(
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
-            "VERITAS_AUTH_ALLOW_FAIL_OPEN=true",
         ),
+        forbidden_env_assignments=(("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),),
     ),
     TemplateRule(
         relative_path="setup.sh",
@@ -43,10 +45,47 @@ RULES = (
         forbidden_tokens=(
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
-            "VERITAS_AUTH_ALLOW_FAIL_OPEN=true",
         ),
+        forbidden_env_assignments=(("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),),
     ),
 )
+
+
+def _iter_env_assignments(content: str) -> Iterable[tuple[str, str]]:
+    """Yield normalized ``KEY=value`` pairs from shell-style env templates.
+
+    The parser intentionally ignores comments and optional ``export`` prefixes so
+    deployment checks catch dangerous defaults even when spacing or casing varies.
+    """
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        yield key.strip(), value.strip().strip("'\"")
+
+
+def _collect_forbidden_assignment_violations(
+    *,
+    rule: TemplateRule,
+    assignments: Iterable[tuple[str, str]],
+) -> list[str]:
+    """Return violations for forbidden env assignments in a template."""
+    normalized_assignments = {
+        key.strip(): value.strip().lower() for key, value in assignments
+    }
+    violations: list[str] = []
+    for key, value in rule.forbidden_env_assignments:
+        current_value = normalized_assignments.get(key)
+        if current_value == value.strip().lower():
+            violations.append(
+                f"{rule.relative_path}: forbidden env assignment {key}={value}"
+            )
+    return violations
 
 
 def _validate_rule(rule: TemplateRule) -> list[str]:
@@ -69,6 +108,13 @@ def _validate_rule(rule: TemplateRule) -> list[str]:
             violations.append(
                 f"{rule.relative_path}: forbidden token present {token!r}"
             )
+
+    violations.extend(
+        _collect_forbidden_assignment_violations(
+            rule=rule,
+            assignments=_iter_env_assignments(content),
+        )
+    )
 
     return violations
 

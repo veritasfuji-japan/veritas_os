@@ -170,6 +170,7 @@ fail-open は非本番でも認証保護を弱めるため、
 - **Priority 1 / 指示 1-1 の回帰防止**: `scripts/architecture/check_responsibility_boundaries.py` を拡張し、上記 4 モジュールの docstring に required marker と推奨拡張ポイントが残っているかを CI 向けに検査できるようにした。対応する回帰テストも追加した。
 - **Priority 2 / 指示 2-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に TrustLog degraded 状態 (`trust_json_status=unreadable|invalid|too_large`) の運用 runbook を追加した。
 - **Priority 2 / 指示 2-2**: 同 runbook に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` の startup warning / fail-fast / CI・deployment check / 環境別ポリシーを追記した。
+- **Priority 2 / 指示 2-2 の検知強化**: `scripts/quality/check_deployment_env_defaults.py` を強化し、`export VERITAS_AUTH_ALLOW_FAIL_OPEN = "true"` のような空白・引用符・大文字小文字ゆらぎ付きの危険設定も検知できるようにした。対応する回帰テストを追加した。
 
 ### 今回あえて実施しなかった改善
 - **Priority 1 / 指示 1-2 以降** の helper 分離や例外契約拡張は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
