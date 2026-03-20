@@ -46,14 +46,61 @@ import math
 import os
 import random  # nosec B311 - jitter for retry backoff, not security-sensitive
 import re
+import importlib.util
 import socket  # kept for test monkeypatch compatibility (web_search_mod.socket)
 import time
 import base64
 import unicodedata
+import types
 from typing import Any, Dict, List, Optional
 from urllib.parse import unquote, urlparse
 
-import requests
+def _build_requests_placeholder() -> Any:
+    """Provide a lightweight requests-compatible placeholder for test imports.
+
+    Security:
+        This placeholder keeps import-time behavior deterministic in sparse
+        environments, but any actual HTTP attempt still fails closed until the
+        real ``requests`` dependency is installed or tests monkeypatch the
+        transport entry points explicitly.
+    """
+
+    class RequestException(RuntimeError):
+        """Fallback requests base exception."""
+
+    class Timeout(RequestException):
+        """Fallback requests timeout exception."""
+
+    class HTTPError(RequestException):
+        """Fallback requests HTTP error exception."""
+
+        def __init__(self, message: str = "", response: Any = None) -> None:
+            super().__init__(message)
+            self.response = response
+
+    class Response:
+        """Fallback response type for annotations and tests."""
+
+    def _missing_transport(*_args: Any, **_kwargs: Any) -> Any:
+        raise RequestException("requests is unavailable")
+
+    return types.SimpleNamespace(
+        Response=Response,
+        RequestException=RequestException,
+        post=_missing_transport,
+        get=_missing_transport,
+        exceptions=types.SimpleNamespace(
+            RequestException=RequestException,
+            Timeout=Timeout,
+            HTTPError=HTTPError,
+        ),
+    )
+
+
+if importlib.util.find_spec("requests") is not None:
+    import requests
+else:  # pragma: no cover - exercised in sparse dependency environments
+    requests = _build_requests_placeholder()
 
 # ★ SSRF/DNS セキュリティロジックを web_search_security.py に分離
 from .web_search_security import (

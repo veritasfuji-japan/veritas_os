@@ -32,6 +32,12 @@ def test_prepare_query_basic_and_truncate():
     assert truncated3 is True
 
 
+def test_requests_placeholder_exposes_timeout_exception():
+    """Sparse envs must still expose requests-like exceptions for monkeypatching."""
+    assert hasattr(github_adapter.requests, "exceptions")
+    assert hasattr(github_adapter.requests.exceptions, "Timeout")
+
+
 def test_github_search_repos_without_token(monkeypatch):
     """
     VERITAS_GITHUB_TOKEN が設定されていない場合は

@@ -133,6 +133,12 @@ def test_sanitize_response_size_bytes_clamps_values() -> None:
     assert web_search_mod._sanitize_response_size_bytes("invalid") == 500_000
 
 
+def test_requests_placeholder_exposes_timeout_exception() -> None:
+    """Sparse envs must still expose requests-like exceptions for monkeypatching."""
+    assert hasattr(web_search_mod.requests, "exceptions")
+    assert hasattr(web_search_mod.requests.exceptions, "Timeout")
+
+
 def test_normalize_result_item_rejects_unsafe_scheme() -> None:
     """危険なスキームは正規化段階で除外する。"""
     item = {

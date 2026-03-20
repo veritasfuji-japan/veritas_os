@@ -6,15 +6,49 @@ GitHub Adapter for VERITAS Environment Tools
 - 公開リポジトリを簡易検索するヘルパー
 """
 
+from __future__ import annotations
+
+import importlib.util
 import logging
 import math
 import os
 import random  # nosec B311 - jitter for retry backoff, not security-sensitive
 import re
 import time
+import types
 from urllib.parse import urlsplit
 
-import requests
+
+def _build_requests_placeholder() -> object:
+    """Provide a lightweight requests-compatible placeholder for test imports."""
+
+    class RequestException(RuntimeError):
+        """Fallback requests base exception."""
+
+    class Timeout(RequestException):
+        """Fallback requests timeout exception."""
+
+    class Response:
+        """Fallback response type for annotations and tests."""
+
+    def _missing_transport(*_args: object, **_kwargs: object) -> object:
+        raise RequestException("requests is unavailable")
+
+    return types.SimpleNamespace(
+        Response=Response,
+        RequestException=RequestException,
+        get=_missing_transport,
+        exceptions=types.SimpleNamespace(
+            RequestException=RequestException,
+            Timeout=Timeout,
+        ),
+    )
+
+
+if importlib.util.find_spec("requests") is not None:
+    import requests
+else:  # pragma: no cover - exercised in sparse dependency environments
+    requests = _build_requests_placeholder()
 
 
 def _safe_int(key: str, default: int) -> int:
