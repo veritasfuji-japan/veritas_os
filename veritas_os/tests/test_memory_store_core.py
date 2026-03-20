@@ -15,8 +15,11 @@ from veritas_os.core.memory_store import (
     ALLOWED_RETENTION_CLASSES,
 )
 from veritas_os.core.memory_store_helpers import (
+    erase_user_records,
     is_record_expired_compat,
     normalize_document_lifecycle,
+    recent_records_compat,
+    search_records_compat,
 )
 
 
@@ -200,6 +203,70 @@ class TestMemoryStoreCompatHelpers:
             record,
             parse_expires_at=MemoryStore._parse_expires_at,
         ) is True
+
+    def test_erase_user_records_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "secret"})
+
+        helper_module = mock.Mock()
+        helper_module.erase_user_data = mock.Mock(
+            return_value=(
+                [],
+                {"deleted_count": 1, "reason": "gdpr", "actor": "tester"},
+            )
+        )
+
+        report = erase_user_records(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            user_id="u1",
+            reason="gdpr",
+            actor="tester",
+        )
+
+        assert report["ok"] is True
+        helper_module.erase_user_data.assert_called_once()
+
+    def test_recent_records_compat_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "alpha"})
+        helper_module = mock.Mock()
+        helper_module.filter_recent_records = mock.Mock(
+            return_value=[{"key": "patched"}]
+        )
+
+        result = recent_records_compat(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            user_id="u1",
+            limit=5,
+        )
+
+        assert result == [{"key": "patched"}]
+        helper_module.filter_recent_records.assert_called_once()
+
+    def test_search_records_compat_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "hello world", "kind": "episodic"})
+        helper_module = mock.Mock()
+        helper_module.build_kvs_search_hits = mock.Mock(
+            return_value=[{"id": "patched", "text": "hello world", "score": 1.0}]
+        )
+
+        result = search_records_compat(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            query="hello",
+            user_id="u1",
+        )
+
+        assert result == {
+            "episodic": [{"id": "patched", "text": "hello world", "score": 1.0}]
+        }
+        helper_module.build_kvs_search_hits.assert_called_once()
 
 
 class TestSearch:
