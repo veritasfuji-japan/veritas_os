@@ -1973,3 +1973,41 @@ def test_memory_search_exposes_error_code_for_validation_failures(monkeypatch):
     assert res["ok"] is False
     assert res["error"] == "memory search failed"
     assert res["error_code"] == "validation_failure"
+
+
+def test_memory_search_does_not_swallow_base_exceptions(monkeypatch):
+    """memory_search must not mask process-level exceptions."""
+
+    class SearchAbort(BaseException):
+        """Sentinel used to verify BaseException propagation."""
+
+    class ExplodingStore:
+        def search(self, **_kwargs):
+            raise SearchAbort("stop search")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: ExplodingStore())
+
+    with pytest.raises(SearchAbort, match="stop search"):
+        server.memory_search(MemorySearchRequest(user_id="u1", query="hello"))
+
+
+def test_memory_put_does_not_swallow_base_exceptions(monkeypatch):
+    """memory_put should preserve BaseException semantics during backend writes."""
+
+    class WriteAbort(BaseException):
+        """Sentinel used to verify BaseException propagation."""
+
+    class ExplodingStore:
+        def put(self, *args, **kwargs):
+            raise WriteAbort("stop write")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: ExplodingStore())
+
+    with pytest.raises(WriteAbort, match="stop write"):
+        server.memory_put(
+            MemoryPutRequest(
+                user_id="u1",
+                key="k1",
+                value={"foo": "bar"},
+            )
+        )
