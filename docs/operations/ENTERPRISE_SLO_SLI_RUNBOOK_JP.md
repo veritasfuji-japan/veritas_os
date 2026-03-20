@@ -125,6 +125,35 @@
 - production / shared staging / preview: **禁止**。残置は認証保護低下のセキュリティ事故につながる。
 - local / isolated test: 明示的な検証時のみ一時許容。終了後は必ず削除する。
 
+
+## 6.3 capability profile / strict mode 推奨
+
+### production 推奨設定
+- `VERITAS_CAP_FUJI_TRUST_LOG=1`: FUJI 判定の TrustLog 監査証跡を維持する。production では常時有効を推奨。
+- `VERITAS_CAP_EMIT_MANIFEST=1`: startup 時に capability manifest を出力し、optional dependency の欠落や capability drift を観測可能にする。
+- `VERITAS_CAP_MEMORY_POSIX_FILE_LOCK=1`（POSIX 環境）: Memory store のファイル更新競合を抑制するため有効を維持する。
+- `VERITAS_CAP_FUJI_TOOL_BRIDGE=1` は、FUJI が外部 safety tool を使う運用でのみ有効化する。無効化する場合は capability manifest と運用手順で明示する。
+
+### local / test でのみ許容する設定
+- `VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=0`: 依存未導入環境で fallback 検証を行うときのみ許容。本番推奨構成では embedding 差分による挙動差を避けるため、使用有無を固定する。
+- `VERITAS_CAP_FUJI_TOOL_BRIDGE=0`: ローカル単体試験やオフライン検証では許容できるが、shared 環境では FUJI capability 差分として扱う。
+- `VERITAS_AUTH_ALLOW_FAIL_OPEN=true`: 認証 fail-open の危険フラグであり、isolated local/test の一時検証以外では禁止する。
+
+### strict mode を推奨する箇所
+- `VERITAS_CAP_FUJI_YAML_POLICY=1`: production で YAML policy を正規運用する場合は明示有効化し、依存（PyYAML）欠落を fail-fast させる。
+- `VERITAS_FUJI_STRICT_POLICY_LOAD=1`: policy file の欠損・破損時に permissive fallback へ流さず、deny policy へ倒す strict load を推奨する。
+- `VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1`: ベクトル検索品質を production で固定したい場合は明示有効化し、依存欠落を設定不整合として表面化させる。
+
+### fallback / degraded の観測方法
+- startup log の `[CapabilityManifest] component=... manifest=... disabled=...` を確認し、想定外に disabled になった capability がないかを監視する。
+- FUJI policy fallback は `FUJI policy fallback triggered:` warning と strict mode 時の error で検知する。
+- Memory sentence-transformers fallback は `[CONFIG_MISMATCH] sentence-transformers is unavailable...` warning で検知する。
+- auth fail-open は §6.2 の startup warning / fail-fast / deployment check を併用し、shared 環境に残置しない。
+
+### セキュリティ注意
+- optional dependency fallback は可用性向上に役立つ一方、shared 環境では capability drift により安全性・監査性・検索品質の非決定性を生む。
+- 特に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と permissive policy fallback の併用は、防御低下の複合リスクになるため避ける。
+
 ## 7. セキュリティ上の警告
 - `trace_id` は監査相関用であり、認可判定には使用しない。
 - 外部入力の `trace_id` は形式検証を行い、ヘッダ/ログインジェクションを防止する。
