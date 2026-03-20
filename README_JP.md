@@ -14,10 +14,10 @@
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
 **Version**: 2.0.0  
-**Release Status**: 開発中  
+**Release Status**: ベータ版  
 **Author**: Takeshi Fujishita
 
-VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-closed安全ゲート付き・ハッシュチェーン監査可能** な意思決定パイプラインで包み、リアルタイム運用可視化のための **Mission Controlダッシュボード**（Next.js）を提供します。
+VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-closed安全ゲート付き・ハッシュチェーン監査可能** な意思決定パイプラインで包み、リアルタイム運用可視化のための **Mission Controlダッシュボード**（Next.js）を提供します。現在の公開リリースは、**ベータ品質のガバナンス基盤** として位置づけるのが適切です。機能範囲は広く、監査性も高い一方で、安全な運用には環境ごとの設定と検証が前提になります。
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision / Agent OS**
 
@@ -48,6 +48,7 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 
 ## 目次
 
+- [ベータ版の位置づけ](#ベータ版の位置づけ)
 - [なぜVERITASか](#なぜveritasか)
 - [できること](#できること)
 - [プロジェクト構成](#プロジェクト構成)
@@ -65,6 +66,21 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - [引用（BibTeX）](#引用bibtex)
 
 ---
+
+## ベータ版の位置づけ
+
+| 領域 | 現在のベータ版としての状態 |
+|---|---|
+| コア意思決定経路 | `/v1/decide` のオーケストレーション、ゲート、永続化、Replay フックまで一通り実装済みです。 |
+| ガバナンス | ポリシー更新、承認フロー、監査証跡、コンプライアンス出力が中核機能として組み込まれています。 |
+| フロントエンド | Mission Control は単なるデモではなく、運用者向けワークフローを意識した構成です。 |
+| 安全性 | FUJI、Replay、TrustLog 周辺を含め、許容的フォールバックより fail-closed を優先する設計です。 |
+| 導入想定 | 評価環境、ステージング、社内パイロット、制御されたベータ導入に適しています。本番利用には環境依存のハードニングと運用審査が必要です。 |
+
+**ここでいう「ベータ版」とは**
+- バックエンド、フロントエンド、Replay、ガバナンス、コンプライアンスまで統合された広いアーキテクチャをすでに持っている状態です。
+- もはやアルファ試作ではなく、監査基盤を備えた実用寄りの段階です。
+- 一方で、ポリシーパック、デプロイ既定値、環境固有の統合については継続的な改善が前提です。
 
 ## なぜVERITASか
 
@@ -119,6 +135,19 @@ VERITAS は **ガバナンス** を最適化します。
 ```
 
 同梱サブシステム:
+
+### 拡張時に重要な責務境界
+
+以下の境界はコードとテストの両方で意識されており、拡張時に崩さないことが重要です。
+
+| コンポーネント | 主責務 | 持ち込むべきでない責務 | 推奨拡張方向 |
+|---|---|---|---|
+| **Planner** | 計画構造、アクションプラン生成、Planner 向け要約 | Kernel オーケストレーション、FUJI ポリシー、Memory 永続化内部 | Planner helper / 正規化レイヤ |
+| **Kernel** | 意思決定計算、スコアリング、討論の接続、根拠の組み立て | API オーケストレーション、永続化、ガバナンス保存処理 | Kernel stages / QA helper / contract |
+| **FUJI** | 最終安全・ポリシー判定、拒否セマンティクス、監査向けゲート状態 | Memory 管理、Planner 分岐、汎用永続化ワークフロー | FUJI policy / safety-head / helper |
+| **MemoryOS** | 保存、検索、要約、ライフサイクル、セキュリティ制御 | Planner の方針、Kernel の意思決定方針、FUJI のゲート判定 | Memory store / search / lifecycle / security helper |
+
+この責務分離により、単一ファイルの「エージェントループ」よりも監査しやすく、進化させやすい構造になっています。
 
 | サブシステム | 目的 |
 |---|---|
@@ -668,6 +697,15 @@ pnpm --filter frontend e2e
 ---
 
 ## セキュリティ注意（重要）
+
+> [!WARNING]
+> VERITAS は fail-closed を前提に設計されていますが、**安全な既定値があること** と **設定なしで安全に運用できること** は同義ではありません。ベータ導入前に、シークレット管理、暗号鍵、WORM / Transparency 設定、公開ネットワーク露出を必ず確認してください。
+
+**ベータ運用で特に重要な警告**
+- `VERITAS_API_SECRET=change-me` のような既定値のままバックエンドを公開しないでください。
+- TrustLog 暗号化は secure-by-default を前提としており、`VERITAS_ENCRYPTION_KEY` 未設定時は意図的に書き込み失敗になります。
+- MemoryOS の legacy pickle 移行は一時的な移行専用経路として扱ってください。デシリアライズ経路は高リスクです。
+- BFF / サーバールーティングは慎重に運用してください。`NEXT_PUBLIC_*` で内部 API 構成を漏らすと、想定している境界が弱くなります。
 
 ### 認証情報・鍵管理
 

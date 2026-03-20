@@ -14,10 +14,10 @@
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
 **Version**: 2.0.0  
-**Release Status**: In Development  
+**Release Status**: Beta  
 **Author**: Takeshi Fujishita
 
-VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-closed safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility.
+VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-closed safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility. The current public release should be read as a **beta-grade governance platform**: broad in capability, strong in auditability, and intentionally conservative in safety defaults.
 
 > Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
 
@@ -48,6 +48,7 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 
 ## Contents
 
+- [Beta at a Glance](#beta-at-a-glance)
 - [Why VERITAS?](#why-veritas)
 - [What It Does](#what-it-does)
 - [Project Structure](#project-structure)
@@ -65,6 +66,21 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - [Citation (BibTeX)](#citation-bibtex)
 
 ---
+
+## Beta at a Glance
+
+| Area | Current beta posture |
+|---|---|
+| Core decision path | End-to-end `/v1/decide` pipeline is implemented with orchestration, gating, persistence, and replay hooks. |
+| Governance | Policy updates, approval workflow, audit trail, and compliance export paths are already first-class. |
+| Frontend | Mission Control is feature-rich enough for operator workflows, not just a demo shell. |
+| Safety stance | Fail-closed behavior is preferred over permissive fallback across FUJI-, replay-, and TrustLog-adjacent flows. |
+| Deployment expectation | Suitable for evaluation, staging, internal pilots, and guarded beta programs; production use still requires environment-specific hardening and operational review. |
+
+**What "beta" means here**
+- The architecture is broad and already integrated across backend, frontend, replay, governance, and compliance surfaces.
+- The project is **not** positioned as an alpha prototype anymore; it already contains substantial operational and audit infrastructure.
+- You should still expect active iteration in policy packs, deployment defaults, and environment-specific integrations.
 
 ## Why VERITAS?
 
@@ -119,6 +135,19 @@ Input Normalize → Memory Retrieval → Web Search → Options Normalize
 ```
 
 Bundled subsystems:
+
+### Responsibility boundaries that matter
+
+These boundaries are enforced in code and tests, and they are important when extending the system:
+
+| Component | Owns | Should not absorb | Recommended extension direction |
+|---|---|---|---|
+| **Planner** | Planning structure, action-plan generation, planner-oriented summaries | Kernel orchestration, FUJI policy logic, Memory persistence internals | Planner helpers / planner normalization layers |
+| **Kernel** | Decision computation, scoring, debate wiring, rationale assembly | API orchestration, persistence, direct governance storage concerns | Kernel stages / QA helpers / contracts |
+| **FUJI** | Final safety and policy gating, rejection semantics, audit-facing gate status | Memory management, planner branching, general persistence workflows | FUJI policy, safety-head, and helper modules |
+| **MemoryOS** | Memory storage, retrieval, summarization, lifecycle, security controls | Planner policy, kernel decision policy, FUJI gate logic | Memory store / search / lifecycle / security helpers |
+
+This separation is one of the reasons VERITAS is easier to audit and safer to evolve than a single-file "agent loop."
 
 | Subsystem | Purpose |
 |---|---|
@@ -674,6 +703,15 @@ pnpm --filter frontend e2e
 ---
 
 ## Security Notes (Important)
+
+> [!WARNING]
+> VERITAS is designed to fail closed, but **safe-by-default does not mean safe-without-configuration**. Before any beta deployment, verify secrets handling, encryption keys, WORM/transparency settings, and network exposure in your own environment.
+
+**Key beta-era security warnings**
+- Do **not** expose the backend with placeholder secrets such as `VERITAS_API_SECRET=change-me`.
+- TrustLog encryption is mandatory in secure mode; missing `VERITAS_ENCRYPTION_KEY` will break writes by design rather than silently downgrading security.
+- Treat legacy pickle migration in MemoryOS as a temporary migration-only path because deserialization pathways are high risk.
+- Review BFF/server routing carefully; leaking internal API topology via public `NEXT_PUBLIC_*` variables weakens the intended boundary.
 
 ### Credential and key management
 
