@@ -14,6 +14,10 @@ from veritas_os.core.memory_store import (
     DEFAULT_RETENTION_CLASS,
     ALLOWED_RETENTION_CLASSES,
 )
+from veritas_os.core.memory_store_helpers import (
+    is_record_expired_compat,
+    normalize_document_lifecycle,
+)
 
 
 @pytest.fixture
@@ -171,6 +175,33 @@ class TestIsRecordExpired:
         assert MemoryStore._is_record_expired({"value": "string"}) is False
 
 
+class TestMemoryStoreCompatHelpers:
+    def test_normalize_document_lifecycle_keeps_contract(self):
+        payload = {
+            "text": "hello",
+            "meta": {"retention_class": "LONG", "legal_hold": "yes"},
+        }
+
+        result = normalize_document_lifecycle(
+            payload,
+            default_retention_class=DEFAULT_RETENTION_CLASS,
+            allowed_retention_classes={"short", "medium", "long"},
+            parse_expires_at=MemoryStore._parse_expires_at,
+        )
+
+        assert result["meta"]["retention_class"] == "long"
+        assert result["meta"]["legal_hold"] is True
+
+    def test_is_record_expired_compat_handles_expired_record(self):
+        past = time.time() - 86400
+        record = {"value": {"meta": {"expires_at": past}}}
+
+        assert is_record_expired_compat(
+            record,
+            parse_expires_at=MemoryStore._parse_expires_at,
+        ) is True
+
+
 class TestSearch:
     def test_basic_search(self, store):
         store.put("u1", "k1", {"text": "hello world", "kind": "episodic"})
@@ -186,7 +217,6 @@ class TestSearch:
         result = store.search("zzzznotfound", min_sim=0.5)
         assert result == {} or len(result.get("episodic", [])) == 0
 
-
 class TestSimpleScore:
     def test_exact_substring(self, store):
         score = store._simple_score("hello", "hello world")
@@ -198,7 +228,6 @@ class TestSimpleScore:
 
     def test_empty(self, store):
         assert store._simple_score("", "hello") == 0.0
-
 
 class TestRecent:
     def test_recent(self, store):
@@ -213,7 +242,6 @@ class TestRecent:
         results = store.recent("u1", contains="apple")
         assert len(results) == 1
 
-
 class TestEraseUser:
     def test_erase(self, store):
         store.put("u1", "k1", "v1")
@@ -222,12 +250,10 @@ class TestEraseUser:
         assert report["deleted_count"] >= 1
         assert store.get("u1", "k1") is None
 
-
 class TestPutEpisode:
     def test_basic_episode(self, store):
         key = store.put_episode("test episode text", tags=["test"])
         assert key.startswith("episode_")
-
 
 class TestSummarizeForPlanner:
     def test_no_matches(self, store):
@@ -239,11 +265,9 @@ class TestSummarizeForPlanner:
         result = store.summarize_for_planner("u1", "VERITAS")
         assert "VERITAS" in result
 
-
 class TestAppendHistory:
     def test_append(self, store):
         assert store.append_history("u1", {"event": "test"}) is True
-
 
 class TestAddUsage:
     def test_add(self, store):

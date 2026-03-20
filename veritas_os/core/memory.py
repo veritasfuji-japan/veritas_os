@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timezone
+from datetime import timezone
 from uuid import uuid4
 import json
 import os
@@ -78,6 +78,8 @@ from .memory_search_helpers import (
 from .memory_store_helpers import (
     build_kvs_search_hits,
     filter_recent_records,
+    is_record_expired_compat as _is_record_expired_compat_impl,
+    normalize_document_lifecycle as _normalize_document_lifecycle_impl,
     simple_score as _simple_score_impl,
 )
 from .memory_summary_helpers import build_planner_summary
@@ -837,66 +839,22 @@ def _install_memory_store_compat_hooks() -> None:
         return parse_expires_at(expires_at)
 
     def _normalize_lifecycle_compat(value: Any) -> Any:
-        if not isinstance(value, dict):
-            return value
-
-        lifecycle_target_keys = {"text", "kind", "tags", "meta"}
-        if not any(key in value for key in lifecycle_target_keys):
-            return value
-
-        normalized = dict(value)
-        meta = dict(normalized.get("meta") or {})
-
-        retention_class = str(
-            meta.get("retention_class") or DEFAULT_RETENTION_CLASS
-        ).strip().lower()
-        if retention_class not in ALLOWED_RETENTION_CLASSES:
-            retention_class = DEFAULT_RETENTION_CLASS
-
-        raw_hold = meta.get("legal_hold", False)
-        if isinstance(raw_hold, str):
-            legal_hold = raw_hold.strip().lower() in ("true", "1", "yes")
-        else:
-            legal_hold = bool(raw_hold)
-        normalized_expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
-
-        meta["retention_class"] = retention_class
-        meta["legal_hold"] = legal_hold
-        meta["expires_at"] = normalized_expires_at
-        normalized["meta"] = meta
-        return normalized
+        return _normalize_document_lifecycle_impl(
+            value,
+            default_retention_class=DEFAULT_RETENTION_CLASS,
+            allowed_retention_classes=ALLOWED_RETENTION_CLASSES,
+            parse_expires_at=MemoryStore._parse_expires_at,
+        )
 
     def _is_record_expired_compat(
         record: Dict[str, Any],
         now_ts: Optional[float] = None,
     ) -> bool:
-        value = record.get("value") or {}
-        if not isinstance(value, dict):
-            return False
-
-        meta = value.get("meta") or {}
-        if not isinstance(meta, dict):
-            return False
-
-        raw_hold = meta.get("legal_hold", False)
-        if isinstance(raw_hold, str):
-            hold = raw_hold.strip().lower() in ("true", "1", "yes")
-        else:
-            hold = bool(raw_hold)
-        if hold:
-            return False
-
-        expires_at = MemoryStore._parse_expires_at(meta.get("expires_at"))
-        if not expires_at:
-            return False
-
-        try:
-            expire_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-        except ValueError:
-            return False
-
-        now = now_ts if now_ts is not None else time.time()
-        return expire_dt.timestamp() <= float(now)
+        return _is_record_expired_compat_impl(
+            record,
+            parse_expires_at=MemoryStore._parse_expires_at,
+            now_ts=now_ts,
+        )
 
     def _erase_user_compat(
         self: MemoryStore,
