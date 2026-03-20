@@ -406,7 +406,8 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
                 if bullet_collection_started:
                     break
                 continue
-            if stripped_line.startswith("- "):
+            bullet_marker = stripped_line[:2]
+            if bullet_marker in {"- ", "* "}:
                 bullet_collection_started = True
                 bullet_lines.append(stripped_line[2:].strip().strip("`"))
                 continue
