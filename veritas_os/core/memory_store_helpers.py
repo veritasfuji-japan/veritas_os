@@ -6,7 +6,86 @@ selection and scoring logic into a focused module.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+import time
+from typing import Any, Callable, Dict, List, Optional
+
+
+def normalize_document_lifecycle(
+    value: Any,
+    *,
+    default_retention_class: str,
+    allowed_retention_classes: set[str],
+    parse_expires_at: Callable[[Any], Optional[str]],
+) -> Any:
+    """Normalize lifecycle metadata for MemoryStore-compatible documents.
+
+    The helper is intentionally side-effect free so ``memory.py`` can reuse it
+    from compatibility hooks without growing new branching logic inline.
+    """
+    if not isinstance(value, dict):
+        return value
+
+    lifecycle_target_keys = {"text", "kind", "tags", "meta"}
+    if not any(key in value for key in lifecycle_target_keys):
+        return value
+
+    normalized = dict(value)
+    meta = dict(normalized.get("meta") or {})
+
+    retention_class = str(
+        meta.get("retention_class") or default_retention_class
+    ).strip().lower()
+    if retention_class not in allowed_retention_classes:
+        retention_class = default_retention_class
+
+    raw_hold = meta.get("legal_hold", False)
+    if isinstance(raw_hold, str):
+        legal_hold = raw_hold.strip().lower() in ("true", "1", "yes")
+    else:
+        legal_hold = bool(raw_hold)
+
+    meta["retention_class"] = retention_class
+    meta["legal_hold"] = legal_hold
+    meta["expires_at"] = parse_expires_at(meta.get("expires_at"))
+    normalized["meta"] = meta
+    return normalized
+
+
+def is_record_expired_compat(
+    record: Dict[str, Any],
+    *,
+    parse_expires_at: Callable[[Any], Optional[str]],
+    now_ts: Optional[float] = None,
+) -> bool:
+    """Return whether a MemoryStore record is expired for compat wrappers."""
+    value = record.get("value") or {}
+    if not isinstance(value, dict):
+        return False
+
+    meta = value.get("meta") or {}
+    if not isinstance(meta, dict):
+        return False
+
+    raw_hold = meta.get("legal_hold", False)
+    if isinstance(raw_hold, str):
+        hold = raw_hold.strip().lower() in ("true", "1", "yes")
+    else:
+        hold = bool(raw_hold)
+    if hold:
+        return False
+
+    expires_at = parse_expires_at(meta.get("expires_at"))
+    if not expires_at:
+        return False
+
+    try:
+        expire_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+
+    now = now_ts if now_ts is not None else time.time()
+    return expire_dt.timestamp() <= float(now)
 
 
 def extract_record_text(record: Dict[str, Any]) -> str:
