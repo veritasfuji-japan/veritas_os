@@ -268,3 +268,28 @@ doc alignment error が発生しうる** 状態でした。
 
 > 思想と安全設計は非常に強く、API レベルの高優先度懸念はかなり改善済み。
 > これからの主戦場は、構造的複雑度の制御である。
+
+## 2026-03-20 追加改善（doc drift の機械可読性を強化）
+
+再評価文書を踏まえて boundary checker の運用経路を再確認したところ、
+`doc_alignment_error` は CI の JSON レポートに出力されるものの、
+`source_module` が一律 `documentation` になっており、**どの責務境界のガイダンスが
+ずれたのかを機械的に特定しにくい** 状態が残っていました。
+
+これは中核責務の再設計ではなく observability の不足であり、
+無駄なモジュール分割を避けるため今回は boundary checker の
+構造化エラー生成だけを最小改善しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` に
+  `DocAlignmentIssue` と `collect_doc_alignment_issues()` を追加し、
+  doc drift を module 単位で構造化して扱うよう改善
+- `collect_boundary_issues()` が `doc_alignment_error` を
+  `planner` / `kernel` / `fuji` / `memory` の実モジュール名付きで返すよう修正し、
+  JSON machine report でも対象境界を直接追跡可能に変更
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  module context が保持されることの回帰テストを追加し、
+  今後の CI 解析で対象責務が失われないことを固定
+
+この改善も Planner / Kernel / FUJI / MemoryOS の責務境界や public contract を変えず、
+レビューで継続課題とされた「正規拡張ポイントの明確化」を
+運用・監視側から扱いやすくするための最小差分です。

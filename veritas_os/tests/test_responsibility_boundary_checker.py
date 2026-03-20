@@ -14,6 +14,7 @@ from scripts.architecture.check_responsibility_boundaries import (
     build_remediation_guide,
     check_boundaries,
     collect_boundary_issues,
+    collect_doc_alignment_issues,
     extract_doc_extension_points,
     find_doc_alignment_issues,
 )
@@ -136,6 +137,65 @@ def test_collect_boundary_issues_classifies_boundary_violation(tmp_path: Path) -
     assert issues[0].code == "boundary_violation"
     assert issues[0].source_module == "planner"
     assert issues[0].forbidden_module == "kernel"
+
+
+def test_collect_doc_alignment_issues_preserves_module_context(tmp_path: Path) -> None:
+    """Structured doc drift issues should keep the affected module name."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- veritas_os.core.planner_json
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+- veritas_os.core.kernel_stages
+
+### FUJI (`veritas_os.core.fuji`)
+**Preferred extension points**:
+- veritas_os.core.fuji_policy
+
+### MemoryOS (`veritas_os.core.memory`)
+**Preferred extension points**:
+- veritas_os.core.memory_store
+""".strip(),
+        encoding="utf-8",
+    )
+
+    issues = collect_doc_alignment_issues(doc_path)
+
+    assert issues
+    assert issues[0].source_module == "planner"
+    assert "planner" in issues[0].message
+
+
+def test_build_machine_report_keeps_module_context_for_doc_alignment_error(
+    tmp_path: Path,
+) -> None:
+    """Machine report should expose doc drift under the affected module."""
+    issues = [
+        BoundaryIssue(
+            code="doc_alignment_error",
+            message="Preferred extension points out of sync for 'memory'",
+            path=tmp_path / "core_responsibility_boundaries.md",
+            source_module="memory",
+        ),
+    ]
+
+    report = json.loads(build_machine_report(issues))
+
+    assert report["issues"][0]["source_module"] == "memory"
+    assert report["issues"][0]["recommended_extension_points"] == [
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
+    ]
 
 
 def test_collect_boundary_issues_detects_doc_alignment_error(tmp_path: Path) -> None:
