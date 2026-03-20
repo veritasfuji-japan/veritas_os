@@ -166,6 +166,7 @@ fail-open は非本番でも認証保護を弱めるため、
 ## 実施記録（2026-03-20）
 
 ### 今回完了した改善
+- **Priority 3 / 指示 3-1**: `veritas_os/api/routes_memory.py` の Memory API 失敗応答に additive な `error_code` 分類 (`validation_failure` / `backend_unavailable` / `security_policy_rejection` / `serialization_storage_failure` / `unknown_failure`) を追加し、既存の `ok / status / errors[]` 契約を維持したまま監査・運用トリアージしやすくした。`memory_put` の stage-level error と `memory_search` / `memory_get` / `memory_erase` の失敗応答で利用できる。
 - **Priority 1 / 指示 1-1**: `pipeline.py` / `kernel.py` / `fuji.py` / `memory.py` の module docstring を更新し、public contract・推奨拡張ポイント・compatibility layer の扱いを明示した。
 - **Priority 1 / 指示 1-1 の回帰防止**: `scripts/architecture/check_responsibility_boundaries.py` を拡張し、上記 4 モジュールの docstring に required marker と推奨拡張ポイントが残っているかを CI 向けに検査できるようにした。対応する回帰テストも追加した。
 - **Priority 2 / 指示 2-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に TrustLog degraded 状態 (`trust_json_status=unreadable|invalid|too_large`) の運用 runbook を追加した。

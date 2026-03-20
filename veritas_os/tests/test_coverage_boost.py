@@ -609,7 +609,11 @@ class TestServerMemoryEndpoints:
         assert body["legacy"]["saved"] is False
         assert body["vector"]["saved"] is True
         assert body["errors"] == [
-            {"stage": "legacy", "message": "legacy save failed"}
+            {
+                "stage": "legacy",
+                "message": "legacy save failed",
+                "error_code": "backend_unavailable",
+            }
         ]
 
     def test_memory_search_store_unavailable(self, monkeypatch):
