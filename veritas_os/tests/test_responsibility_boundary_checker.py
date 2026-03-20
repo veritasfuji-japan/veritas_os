@@ -507,6 +507,61 @@ def test_extract_doc_extension_points_accepts_asterisk_bullets(
     )
 
 
+def test_collect_doc_alignment_issues_detects_duplicate_module_sections(
+    tmp_path: Path,
+) -> None:
+    """Duplicate module sections should surface as structured doc drift."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- `veritas_os.core.planner_normalization`
+- `veritas_os.core.planner_json`
+- `veritas_os.core.strategy`
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- `veritas_os.core.planner_normalization`
+- `veritas_os.core.planner_json`
+- `veritas_os.core.strategy`
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+- `veritas_os.core.kernel_stages`
+- `veritas_os.core.kernel_qa`
+- `veritas_os.core.pipeline_contracts`
+
+### FUJI (`veritas_os.core.fuji`)
+**Preferred extension points**:
+- `veritas_os.core.fuji_policy`
+- `veritas_os.core.fuji_policy_rollout`
+- `veritas_os.core.fuji_helpers`
+- `veritas_os.core.fuji_safety_head`
+
+### MemoryOS (`veritas_os.core.memory`)
+**Preferred extension points**:
+- `veritas_os.core.memory_store`
+- `veritas_os.core.memory_helpers`
+- `veritas_os.core.memory_search_helpers`
+- `veritas_os.core.memory_summary_helpers`
+- `veritas_os.core.memory_lifecycle`
+- `veritas_os.core.memory_security`
+""".strip(),
+        encoding="utf-8",
+    )
+
+    issues = collect_doc_alignment_issues(doc_path)
+
+    assert any(
+        issue.source_module == "planner"
+        and "Duplicate preferred extension point section" in issue.message
+        for issue in issues
+    )
+
+
 def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:
     """Checker guidance should stay aligned with the architecture source of truth."""
     issues = find_doc_alignment_issues(

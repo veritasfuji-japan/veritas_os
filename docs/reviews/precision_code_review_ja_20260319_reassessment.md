@@ -363,3 +363,26 @@ CI/運用監視の信頼性だけを高めるものです。
 この改善も Planner / Kernel / FUJI / MemoryOS の public contract や責務境界を変えず、
 レビューで継続課題とされた「正規拡張ポイントの明確化」を
 不要な CI ノイズなしで維持しやすくするものです。
+
+## 2026-03-20 追加改善（architecture 文書の重複節を drift として検知）
+
+再評価文書に沿って boundary checker の運用上の盲点を再確認したところ、
+`docs/architecture/core_responsibility_boundaries.md` に同じ責務境界の節が
+重複して追加された場合、**後勝ちや黙殺ではなく「曖昧なガイダンス」そのものを
+CI で止めるべきなのに、従来は明示的に検知していませんでした。**
+
+これは中核責務の見直しではなく、正規拡張ポイント文書の監査性不足です。
+無駄な構造変更を避けるため、今回は boundary checker の文書整合性検証だけを
+最小差分で改善しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` に
+  architecture 文書の重複節を抽出する処理を追加し、
+  同一モジュールの Preferred extension points 節が複数ある場合は
+  `doc_alignment_error` として module 単位で失敗させるよう修正
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  duplicate Planner 節の回帰テストを追加し、
+  今後の文書編集で曖昧な拡張ガイダンスが見逃されないことを固定
+
+この改善も Planner / Kernel / FUJI / MemoryOS の public contract や責務境界を変えず、
+レビューで継続課題とされた「正規拡張ポイントの明確化」を
+曖昧な文書状態のまま通さないための最小差分です。

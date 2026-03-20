@@ -379,6 +379,14 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
 def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
     """Extract preferred extension points from the architecture document."""
     document = doc_path.read_text(encoding="utf-8")
+    extracted, _ = _extract_doc_extension_points_from_text(document)
+    return extracted
+
+
+def _extract_doc_extension_points_from_text(
+    document: str,
+) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
+    """Extract doc extension points and duplicate module sections from text."""
     section_pattern = re.compile(
         r"### (?P<section>[^\n]+?) \(`veritas_os\.core\.[^`]+`\)\n"
         r"(?P<body>.*?)(?=\n### |\Z)",
@@ -386,6 +394,7 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
     )
     marker = "**Preferred extension points**:"
     extracted: dict[str, tuple[str, ...]] = {}
+    duplicate_sections: list[str] = []
 
     for match in section_pattern.finditer(document):
         section_name = match.group("section").strip()
@@ -413,45 +422,12 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
                 continue
             if bullet_collection_started:
                 break
+        if module_name in extracted:
+            duplicate_sections.append(module_name)
+            continue
         extracted[module_name] = tuple(bullet_lines)
 
-    return extracted
-
-
-def _read_doc_extension_points(
-    doc_path: Path,
-) -> tuple[dict[str, tuple[str, ...]], DocExtractionError | None]:
-    """Read doc extension points while converting doc access failures to errors."""
-    try:
-        return extract_doc_extension_points(doc_path), None
-    except FileNotFoundError:
-        return {}, DocExtractionError(
-            message=(
-                "Unable to read architecture boundary document: "
-                f"file not found at {doc_path}"
-            )
-        )
-    except PermissionError:
-        return {}, DocExtractionError(
-            message=(
-                "Unable to read architecture boundary document: "
-                f"permission denied for {doc_path}"
-            )
-        )
-    except UnicodeDecodeError:
-        return {}, DocExtractionError(
-            message=(
-                "Unable to read architecture boundary document: "
-                f"invalid UTF-8 at {doc_path}"
-            )
-        )
-    except OSError as exc:
-        return {}, DocExtractionError(
-            message=(
-                "Unable to read architecture boundary document: "
-                f"os error for {doc_path}: {exc.strerror or str(exc)}"
-            )
-        )
+    return extracted, tuple(duplicate_sections)
 
 
 def _normalize_extension_points_for_alignment(
@@ -463,7 +439,50 @@ def _normalize_extension_points_for_alignment(
 
 def collect_doc_alignment_issues(doc_path: Path) -> list[DocAlignmentIssue]:
     """Return structured mismatches between docs and checker guidance."""
-    documented_points, extraction_error = _read_doc_extension_points(doc_path)
+    try:
+        document = doc_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"file not found at {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections: tuple[str, ...] = ()
+    except PermissionError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"permission denied for {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    except UnicodeDecodeError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"invalid UTF-8 at {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    except OSError as exc:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"os error for {doc_path}: {exc.strerror or str(exc)}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    else:
+        documented_points, duplicate_sections = _extract_doc_extension_points_from_text(
+            document
+        )
+        extraction_error = None
+
     mismatches: list[DocAlignmentIssue] = []
     if extraction_error is not None:
         mismatches.append(
@@ -473,6 +492,17 @@ def collect_doc_alignment_issues(doc_path: Path) -> list[DocAlignmentIssue]:
             )
         )
         return mismatches
+
+    for module_name in duplicate_sections:
+        mismatches.append(
+            DocAlignmentIssue(
+                source_module=module_name,
+                message=(
+                    "Duplicate preferred extension point section found for "
+                    f"'{module_name}' in {doc_path}"
+                ),
+            )
+        )
 
     for module_name, configured_points in RECOMMENDED_EXTENSION_POINTS.items():
         expected_points = documented_points.get(module_name)
