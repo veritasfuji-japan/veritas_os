@@ -11,13 +11,10 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import json
-import socket
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Optional
-from urllib import error as urllib_error
 from urllib import parse as urllib_parse
-from urllib import request as urllib_request
 
 
 class RequestException(Exception):
@@ -119,34 +116,34 @@ class _RequestsCompat:
         timeout: Optional[float] = None,
         data: bytes | None = None,
     ) -> _CompatResponse:
-        request = urllib_request.Request(
-            url,
-            data=data,
-            headers=headers or {},
-            method=method,
-        )
+        httpx = importlib.import_module("httpx")
+
         try:
-            with urllib_request.urlopen(request, timeout=timeout) as response:
-                body = response.read()
-                headers_map = dict(response.headers.items())
-                return _CompatResponse(
-                    status_code=response.status,
-                    _body=body,
-                    headers=headers_map,
-                )
-        except urllib_error.HTTPError as exc:
+            response = httpx.request(
+                method,
+                url,
+                content=data,
+                headers=headers or {},
+                timeout=timeout,
+            )
+            return _CompatResponse(
+                status_code=response.status_code,
+                _body=response.content,
+                headers=dict(response.headers.items()),
+            )
+        except httpx.TimeoutException as exc:
+            raise Timeout(str(exc)) from exc
+        except httpx.HTTPStatusError as exc:
             response = _CompatResponse(
-                status_code=exc.code,
-                _body=exc.read(),
-                headers=dict(exc.headers.items()),
+                status_code=exc.response.status_code,
+                _body=exc.response.content,
+                headers=dict(exc.response.headers.items()),
             )
             raise HTTPError(
                 str(exc),
                 response=response,
             ) from exc
-        except socket.timeout as exc:
-            raise Timeout(str(exc)) from exc
-        except OSError as exc:
+        except httpx.HTTPError as exc:
             raise RequestException(str(exc)) from exc
 
 
