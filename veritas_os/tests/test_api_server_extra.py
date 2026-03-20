@@ -20,7 +20,11 @@ from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
-from veritas_os.api.schemas import MemoryPutRequest, MemorySearchRequest
+from veritas_os.api.schemas import (
+    MemoryGetRequest,
+    MemoryPutRequest,
+    MemorySearchRequest,
+)
 
 
 client = TestClient(server.app)
@@ -1973,6 +1977,47 @@ def test_memory_search_exposes_error_code_for_validation_failures(monkeypatch):
     assert res["ok"] is False
     assert res["error"] == "memory search failed"
     assert res["error_code"] == "validation_failure"
+
+
+def test_memory_search_invalid_kinds_returns_validation_error_code() -> None:
+    """Invalid kind filters should expose the same additive validation code."""
+
+    res = server.memory_search(
+        MemorySearchRequest(user_id="u1", query="hello", kinds=["semantic", "bad"])
+    )
+
+    assert res["ok"] is False
+    assert res["error"] == "invalid kinds: ['bad']"
+    assert res["error_code"] == "validation_failure"
+
+
+def test_memory_put_unavailable_store_returns_backend_error_code(monkeypatch):
+    """Unavailable memory backends should remain observable to operators."""
+
+    class DummyState:
+        err = "offline"
+
+    monkeypatch.setattr(server, "_memory_store_state", DummyState())
+    monkeypatch.setattr(server, "get_memory_store", lambda: None)
+
+    res = server.memory_put(MemoryPutRequest(user_id="u1", text="hello"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory store unavailable"
+    assert res["error_code"] == "backend_unavailable"
+
+
+def test_memory_get_unavailable_store_returns_backend_error_code(monkeypatch):
+    """memory_get should classify store-unavailable failures consistently."""
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: None)
+
+    res = server.memory_get(MemoryGetRequest(user_id="u1", key="k1"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory store unavailable"
+    assert res["error_code"] == "backend_unavailable"
+    assert res["value"] is None
 
 
 def test_memory_search_does_not_swallow_base_exceptions(monkeypatch):
