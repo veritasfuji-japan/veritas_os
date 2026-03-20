@@ -174,6 +174,7 @@ fail-open は非本番でも認証保護を弱めるため、
 - **Priority 2 / 指示 2-2 の検知強化**: `scripts/quality/check_deployment_env_defaults.py` を強化し、`export VERITAS_AUTH_ALLOW_FAIL_OPEN = "true"` のような空白・引用符・大文字小文字ゆらぎ付きの危険設定も検知できるようにした。対応する回帰テストを追加した。
 - **Priority 3 / 指示 3-2**: `veritas_os/api/routes_memory.py` の broad exception を、通常の validation / backend / storage / policy 失敗だけを structured response に落とす限定例外タプルへ段階的に縮小した。これにより `KeyboardInterrupt` / `SystemExit` 相当の `BaseException` を握りつぶさず、既存の `ok / status / errors[] / error_code` 契約は維持した。`veritas_os/tests/test_api_server_extra.py` に回帰テストを追加した。
 - **Priority 1 / 指示 1-2**: `veritas_os/core/memory.py` 内の compatibility-heavy な `MemoryStore` lifecycle 正規化 / expiry 判定を `veritas_os/core/memory_store_helpers.py` へ抽出し、`_install_memory_store_compat_hooks()` は互換フック配線のみに寄せた。これにより MemoryOS の互換層分岐を helper 側へ逃がしつつ、既存 `MemoryStore._normalize_lifecycle` / `_is_record_expired` 契約は維持した。`veritas_os/tests/test_memory_store_core.py` に helper 経由の回帰テストを追加した。
+- **Follow-up fix**: Priority 1 / 指示 1-2 の helper 抽出後、`veritas_os/core/memory.py` の `VectorMemory.add()` が引き続き `datetime.now(timezone.utc)` を参照するため、lint で検知された `datetime` import 抜けを復旧した。責務や public contract の変更はない。
 
 ### 今回あえて実施しなかった改善
 - **Priority 1 / 指示 1-2 以降** の helper 分離や、Memory API 以外の広域例外縮小は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
