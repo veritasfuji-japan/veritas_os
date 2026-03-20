@@ -263,6 +263,28 @@ def test_check_policy_hot_reload_delegates_to_shared_fuji_policy(monkeypatch):
     assert observed["capability"] is fuji.capability_cfg
 
 
+def test_check_policy_hot_reload_keeps_local_policy_on_noop(monkeypatch):
+    """Shared helper が no-op のときは local policy override を維持する。"""
+    shared_policy = {"version": "shared_policy"}
+    local_policy = {"version": "local_override"}
+
+    monkeypatch.setattr(fuji._fuji_policy, "POLICY", shared_policy)
+    monkeypatch.setattr(fuji._fuji_policy, "_POLICY_MTIME", 789.0)
+    monkeypatch.setattr(
+        fuji._fuji_policy,
+        "_check_policy_hot_reload",
+        lambda: None,
+    )
+
+    fuji.POLICY = local_policy
+    fuji._POLICY_MTIME = 123.0
+
+    fuji._check_policy_hot_reload()  # type: ignore[attr-defined]
+
+    assert fuji.POLICY is local_policy
+    assert fuji._POLICY_MTIME == 123.0
+
+
 # ---------------------------------------------------------
 # fallback_safety_head
 # ---------------------------------------------------------

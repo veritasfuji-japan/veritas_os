@@ -266,12 +266,18 @@ def reload_policy() -> Dict[str, Any]:
 
 
 def _check_policy_hot_reload() -> None:
-    """Delegate FUJI policy hot reload to the shared policy helper."""
+    """Delegate FUJI policy hot reload without clobbering local test overrides."""
     global POLICY, _POLICY_MTIME
     _sync_fuji_policy_runtime()
+    previous_policy = _fuji_policy.POLICY
+    previous_mtime = getattr(_fuji_policy, "_POLICY_MTIME", _POLICY_MTIME)
     _fuji_policy._check_policy_hot_reload()
-    POLICY = _fuji_policy.POLICY
-    _POLICY_MTIME = getattr(_fuji_policy, "_POLICY_MTIME", _POLICY_MTIME)
+    next_policy = _fuji_policy.POLICY
+    next_mtime = getattr(_fuji_policy, "_POLICY_MTIME", _POLICY_MTIME)
+
+    if next_policy is not previous_policy or next_mtime != previous_mtime:
+        POLICY = next_policy
+        _POLICY_MTIME = next_mtime
 
 
 # =========================================================
