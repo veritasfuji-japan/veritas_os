@@ -168,13 +168,21 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", srv._memory_store_state.err)
-        return {"ok": False, "error": "memory store unavailable"}
+        return {
+            "ok": False,
+            "error": "memory store unavailable",
+            "error_code": "backend_unavailable",
+        }
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
     except MEMORY_ROUTE_EXCEPTIONS as exc:
         logger.error("[MemoryOS][resolve_user] Error: %s", exc)
-        return {"ok": False, "error": "memory operation failed"}
+        return {
+            "ok": False,
+            "error": "memory operation failed",
+            "error_code": _classify_memory_failure(exc),
+        }
 
     key = body.key or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
     value = body.value or {}
@@ -282,7 +290,13 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", srv._memory_store_state.err)
-        return {"ok": False, "error": "memory store unavailable", "hits": [], "count": 0}
+        return {
+            "ok": False,
+            "error": "memory store unavailable",
+            "error_code": "backend_unavailable",
+            "hits": [],
+            "count": 0,
+        }
 
     try:
         q = payload.query
@@ -296,6 +310,7 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
             return {
                 "ok": False,
                 "error": kinds_error,
+                "error_code": "validation_failure",
                 "hits": [],
                 "count": 0,
             }
@@ -344,7 +359,12 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
-        return {"ok": False, "error": "memory store unavailable", "value": None}
+        return {
+            "ok": False,
+            "error": "memory store unavailable",
+            "error_code": "backend_unavailable",
+            "value": None,
+        }
 
     try:
         uid = srv._resolve_memory_user_id(body.user_id, x_api_key)
@@ -367,7 +387,11 @@ def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(def
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
-        return {"ok": False, "error": "memory store unavailable"}
+        return {
+            "ok": False,
+            "error": "memory store unavailable",
+            "error_code": "backend_unavailable",
+        }
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
@@ -382,6 +406,7 @@ def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(def
         return {
             "ok": False,
             "error": "erase operation unsupported by active memory backend",
+            "error_code": "backend_unavailable",
         }
     except MEMORY_ROUTE_EXCEPTIONS as e:
         logger.error("memory_erase failed: %s", e)
