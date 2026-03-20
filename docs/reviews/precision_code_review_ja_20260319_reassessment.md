@@ -236,6 +236,28 @@ doc alignment error が発生しうる** 状態でした。
 レビューで継続課題とされた「拡張境界の見えにくさ」を支える
 文書整合性チェックの信頼性だけを上げるものです。
 
+## 2026-03-20 追加改善（箇条書き順序差分への耐性強化）
+
+上記までの整合性検証を再確認したところ、boundary checker の
+`find_doc_alignment_issues()` は Preferred extension points の**並び順まで
+厳密一致**で比較しており、**意味が同じ箇条書きの順序入れ替えだけでも
+doc alignment error が発生しうる** 状態でした。
+
+これは責務境界や public contract の問題ではなく、
+文書ガイダンスの意味差分と cosmetic diff を過剰に同一視してしまう
+運用ノイズの問題です。そこで今回は checker の整合性比較だけを最小修正しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` の
+  extension point 整合性比較を順序非依存にし、
+  箇条書きの並び替えだけでは drift 扱いしないように改善
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  全モジュールで順序だけを入れ替えた Markdown を与える回帰テストを追加し、
+  今後の文書整理で CI が誤検知しないことを固定
+
+この改善も Planner / Kernel / FUJI / MemoryOS の責務境界を変えず、
+レビューで重視された「正規拡張ポイントの明確化」を
+不要な CI ノイズなしで維持しやすくするものです。
+
 ## 最終結論
 
 このコードベースは、監査性・安全性・再現性を強く意識して作られた高品質な基盤です。

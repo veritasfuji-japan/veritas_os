@@ -389,6 +389,49 @@ def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:
     assert issues == []
 
 
+def test_find_doc_alignment_issues_ignores_bullet_order_only(tmp_path: Path) -> None:
+    """Pure bullet reordering should not count as doc/checker drift."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- `veritas_os.core.strategy`
+- `veritas_os.core.planner_json`
+- `veritas_os.core.planner_normalization`
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+- `veritas_os.core.pipeline_contracts`
+- `veritas_os.core.kernel_qa`
+- `veritas_os.core.kernel_stages`
+
+### FUJI (`veritas_os.core.fuji`)
+**Preferred extension points**:
+- `veritas_os.core.fuji_safety_head`
+- `veritas_os.core.fuji_helpers`
+- `veritas_os.core.fuji_policy_rollout`
+- `veritas_os.core.fuji_policy`
+
+### MemoryOS (`veritas_os.core.memory`)
+**Preferred extension points**:
+- `veritas_os.core.memory_security`
+- `veritas_os.core.memory_lifecycle`
+- `veritas_os.core.memory_summary_helpers`
+- `veritas_os.core.memory_search_helpers`
+- `veritas_os.core.memory_helpers`
+- `veritas_os.core.memory_store`
+""".strip(),
+        encoding="utf-8",
+    )
+
+    issues = find_doc_alignment_issues(doc_path)
+
+    assert issues == []
+
+
 def test_check_boundaries_includes_doc_alignment_issues(tmp_path: Path) -> None:
     """Text-mode checker should fail when the architecture doc drifts."""
     _write_module(tmp_path / "planner.py", "# planner module\n")
