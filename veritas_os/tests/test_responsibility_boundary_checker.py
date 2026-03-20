@@ -253,6 +253,26 @@ def test_collect_doc_alignment_issues_classifies_missing_doc_file(
     ]
 
 
+def test_collect_doc_alignment_issues_classifies_invalid_utf8_doc(
+    tmp_path: Path,
+) -> None:
+    """Invalid UTF-8 docs should become structured alignment errors."""
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_bytes(bytes.fromhex("fffe00") + b"bad utf8")
+
+    issues = collect_doc_alignment_issues(doc_path)
+
+    assert issues == [
+        DocAlignmentIssue(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"invalid UTF-8 at {doc_path}"
+            ),
+            source_module="documentation",
+        )
+    ]
+
+
 def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
     """Machine report should summarize issue counts for CI parsers."""
     issues = [

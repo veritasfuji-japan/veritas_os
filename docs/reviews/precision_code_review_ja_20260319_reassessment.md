@@ -258,6 +258,29 @@ doc alignment error が発生しうる** 状態でした。
 レビューで重視された「正規拡張ポイントの明確化」を
 不要な CI ノイズなしで維持しやすくするものです。
 
+## 2026-03-20 追加改善（architecture 文書の不正エンコーディングを構造化エラー化）
+
+再評価文書の観点で boundary checker の文書読込経路をさらに確認したところ、
+`docs/architecture/core_responsibility_boundaries.md` が存在していても
+**UTF-8 以外で壊れて保存された場合は `UnicodeDecodeError` がそのまま伝播し、
+CI から機械可読な失敗理由を拾いにくい** 状態が残っていました。
+
+これは責務境界や public contract の問題ではなく、文書依存の運用パスにおける
+observability の不足です。無駄な中核変更を避けるため、今回は boundary checker の
+文書デコード失敗だけを最小差分で構造化しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` にて
+  architecture 文書の UTF-8 デコード失敗を `DocExtractionError` として扱い、
+  `doc_alignment_error` / `source_module=documentation` で一貫して返すよう修正
+- 併せてその他の `OSError` も構造化メッセージへ変換し、
+  traceback 依存なしで CI から失敗理由を取得できるよう改善
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  invalid UTF-8 文書の回帰テストを追加し、将来の退行を防止
+
+この改善も Planner / Kernel / FUJI / MemoryOS の責務境界や public contract を一切変えず、
+レビューで重視された「正規拡張ポイントの明確化」を支える
+CI/運用監視の信頼性だけを高めるものです。
+
 ## 最終結論
 
 このコードベースは、監査性・安全性・再現性を強く意識して作られた高品質な基盤です。

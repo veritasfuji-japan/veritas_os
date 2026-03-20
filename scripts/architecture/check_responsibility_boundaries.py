@@ -421,7 +421,7 @@ def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
 def _read_doc_extension_points(
     doc_path: Path,
 ) -> tuple[dict[str, tuple[str, ...]], DocExtractionError | None]:
-    """Read doc extension points while converting I/O failures to structured errors."""
+    """Read doc extension points while converting doc access failures to errors."""
     try:
         return extract_doc_extension_points(doc_path), None
     except FileNotFoundError:
@@ -436,6 +436,20 @@ def _read_doc_extension_points(
             message=(
                 "Unable to read architecture boundary document: "
                 f"permission denied for {doc_path}"
+            )
+        )
+    except UnicodeDecodeError:
+        return {}, DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"invalid UTF-8 at {doc_path}"
+            )
+        )
+    except OSError as exc:
+        return {}, DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"os error for {doc_path}: {exc.strerror or str(exc)}"
             )
         )
 
