@@ -293,3 +293,28 @@ doc alignment error が発生しうる** 状態でした。
 この改善も Planner / Kernel / FUJI / MemoryOS の責務境界や public contract を変えず、
 レビューで継続課題とされた「正規拡張ポイントの明確化」を
 運用・監視側から扱いやすくするための最小差分です。
+
+## 2026-03-20 追加改善（アーキテクチャ文書の欠落を構造化エラー化）
+
+再評価文書の観点で boundary checker の失敗経路を再確認したところ、
+Preferred extension points の整合性比較は強化されていた一方で、
+`docs/architecture/core_responsibility_boundaries.md` 自体が欠落または unreadable な場合は
+**checker が例外で終了し、CI から機械可読な失敗理由を拾いにくい** 状態が残っていました。
+
+これは Planner / Kernel / FUJI / MemoryOS の責務見直しではなく、
+文書依存の運用パスにおける observability の不足です。
+無駄な構造変更を避けるため、今回は boundary checker の
+文書読込エラーだけを最小差分で構造化しました。
+
+- `scripts/architecture/check_responsibility_boundaries.py` に
+  文書読込失敗を `DocExtractionError` として受ける補助関数を追加
+- architecture 文書が欠落・権限不足でも、
+  `doc_alignment_error` / `source_module=documentation` として
+  一貫した失敗要因を返すよう修正
+- `veritas_os/tests/test_responsibility_boundary_checker.py` に
+  文書欠落時の回帰テストを追加し、
+  doc alignment の失敗が traceback ではなく構造化エラーで観測されることを固定
+
+この改善も責務境界や public contract を一切変えず、
+レビューで重視された「正規拡張ポイントの明確化」を支える
+CI/運用監視の信頼性だけを高めるものです。
