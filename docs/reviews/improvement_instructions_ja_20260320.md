@@ -172,9 +172,10 @@ fail-open は非本番でも認証保護を弱めるため、
 - **Priority 2 / 指示 2-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に TrustLog degraded 状態 (`trust_json_status=unreadable|invalid|too_large`) の運用 runbook を追加した。
 - **Priority 2 / 指示 2-2**: 同 runbook に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` の startup warning / fail-fast / CI・deployment check / 環境別ポリシーを追記した。
 - **Priority 2 / 指示 2-2 の検知強化**: `scripts/quality/check_deployment_env_defaults.py` を強化し、`export VERITAS_AUTH_ALLOW_FAIL_OPEN = "true"` のような空白・引用符・大文字小文字ゆらぎ付きの危険設定も検知できるようにした。対応する回帰テストを追加した。
+- **Priority 3 / 指示 3-2**: `veritas_os/api/routes_memory.py` の broad exception を、通常の validation / backend / storage / policy 失敗だけを structured response に落とす限定例外タプルへ段階的に縮小した。これにより `KeyboardInterrupt` / `SystemExit` 相当の `BaseException` を握りつぶさず、既存の `ok / status / errors[] / error_code` 契約は維持した。`veritas_os/tests/test_api_server_extra.py` に回帰テストを追加した。
 
 ### 今回あえて実施しなかった改善
-- **Priority 1 / 指示 1-2 以降** の helper 分離や例外契約拡張は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
+- **Priority 1 / 指示 1-2 以降** の helper 分離や、Memory API 以外の広域例外縮小は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
 - **Priority 4 capability profile** は有用だが、まず中核モジュールの入口明示と degraded / fail-open runbook のほうが優先度が高いため後続タスクへ残す。
 
 ### セキュリティ警告

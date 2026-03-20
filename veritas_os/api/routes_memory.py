@@ -23,6 +23,23 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Route handlers intentionally catch only expected operational failures so
+# process-level BaseException signals (for example KeyboardInterrupt/SystemExit)
+# still propagate. The public response contract stays unchanged.
+MEMORY_ROUTE_EXCEPTIONS = (
+    AttributeError,
+    ConnectionError,
+    JSONDecodeError,
+    KeyError,
+    OSError,
+    PermissionError,
+    RuntimeError,
+    TimeoutError,
+    TypeError,
+    ValueError,
+)
+
+
 def _classify_memory_failure(exc: Exception) -> str:
     """Classify MemoryOS failures without changing the public response contract.
 
@@ -155,7 +172,7 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
-    except Exception as exc:
+    except MEMORY_ROUTE_EXCEPTIONS as exc:
         logger.error("[MemoryOS][resolve_user] Error: %s", exc)
         return {"ok": False, "error": "memory operation failed"}
 
@@ -178,7 +195,7 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
         try:
             _store_put(store, user_id, key, value)
             legacy_saved = True
-        except Exception as exc:
+        except MEMORY_ROUTE_EXCEPTIONS as exc:
             errors.append(_build_memory_stage_error("legacy", exc))
 
     kind = body.kind
@@ -228,7 +245,7 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
                     {"text": text_clean, "tags": tags, "meta": meta_for_store},
                 )
                 new_id = episode_key
-        except Exception as exc:
+        except MEMORY_ROUTE_EXCEPTIONS as exc:
             errors.append(_build_memory_stage_error("vector", exc))
 
     ok = legacy_saved or bool(new_id) or (not value and not text)
@@ -311,7 +328,7 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
 
         return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
 
-    except Exception as e:
+    except MEMORY_ROUTE_EXCEPTIONS as e:
         logger.error("[MemoryOS][search] Error: %s", e)
         return {
             "ok": False,
@@ -334,7 +351,7 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
         key = body.key
         value = _store_get(store, uid, key)
         return {"ok": True, "value": value}
-    except Exception as e:
+    except MEMORY_ROUTE_EXCEPTIONS as e:
         logger.error("memory_get failed: %s", e)
         return {
             "ok": False,
@@ -366,7 +383,7 @@ def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(def
             "ok": False,
             "error": "erase operation unsupported by active memory backend",
         }
-    except Exception as e:
+    except MEMORY_ROUTE_EXCEPTIONS as e:
         logger.error("memory_erase failed: %s", e)
         return {
             "ok": False,
