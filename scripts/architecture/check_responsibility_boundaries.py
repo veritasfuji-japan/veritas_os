@@ -409,16 +409,17 @@ def _extract_doc_extension_points_from_text(
 
         bullet_lines: list[str] = []
         bullet_collection_started = False
+        bullet_pattern = re.compile(r"^(?:[-*+]\s+|\d+\.\s+)(?P<item>.+)$")
         for line in remainder.splitlines():
             stripped_line = line.strip()
             if not stripped_line:
                 if bullet_collection_started:
                     break
                 continue
-            bullet_marker = stripped_line[:2]
-            if bullet_marker in {"- ", "* "}:
+            bullet_match = bullet_pattern.match(stripped_line)
+            if bullet_match is not None:
                 bullet_collection_started = True
-                bullet_lines.append(stripped_line[2:].strip().strip("`"))
+                bullet_lines.append(bullet_match.group("item").strip().strip("`"))
                 continue
             if bullet_collection_started:
                 break
