@@ -43,6 +43,14 @@ class BoundaryIssue:
     forbidden_module: str | None = None
 
 
+@dataclass(frozen=True)
+class DocAlignmentIssue:
+    """Structured mismatch between the checker config and architecture docs."""
+
+    source_module: str
+    message: str
+
+
 DEFAULT_DOC_PATH = Path("docs/architecture/core_responsibility_boundaries.md")
 
 
@@ -181,13 +189,13 @@ def collect_boundary_issues(
 ) -> list[BoundaryIssue]:
     """Collect machine-classifiable boundary checker issues."""
     issues: list[BoundaryIssue] = []
-    for message in find_doc_alignment_issues(doc_path):
+    for issue in collect_doc_alignment_issues(doc_path):
         issues.append(
             BoundaryIssue(
                 code="doc_alignment_error",
-                message=message,
+                message=issue.message,
                 path=doc_path,
-                source_module="documentation",
+                source_module=issue.source_module,
             )
         )
     for rule in rules:
@@ -409,28 +417,44 @@ def _normalize_extension_points_for_alignment(
     return tuple(sorted(extension_points))
 
 
-def find_doc_alignment_issues(doc_path: Path) -> list[str]:
-    """Return human-readable mismatches between docs and checker guidance."""
+def collect_doc_alignment_issues(doc_path: Path) -> list[DocAlignmentIssue]:
+    """Return structured mismatches between docs and checker guidance."""
     documented_points = extract_doc_extension_points(doc_path)
-    mismatches: list[str] = []
+    mismatches: list[DocAlignmentIssue] = []
 
     for module_name, configured_points in RECOMMENDED_EXTENSION_POINTS.items():
         expected_points = documented_points.get(module_name)
         if expected_points is None:
             mismatches.append(
-                f"Missing preferred extension point section for '{module_name}' in {doc_path}"
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Missing preferred extension point section for "
+                        f"'{module_name}' in {doc_path}"
+                    ),
+                )
             )
             continue
         if _normalize_extension_points_for_alignment(
             expected_points
         ) != _normalize_extension_points_for_alignment(configured_points):
             mismatches.append(
-                "Preferred extension points out of sync for "
-                f"'{module_name}': doc={list(expected_points)} "
-                f"checker={list(configured_points)}"
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Preferred extension points out of sync for "
+                        f"'{module_name}': doc={list(expected_points)} "
+                        f"checker={list(configured_points)}"
+                    ),
+                )
             )
 
     return mismatches
+
+
+def find_doc_alignment_issues(doc_path: Path) -> list[str]:
+    """Return human-readable mismatches between docs and checker guidance."""
+    return [issue.message for issue in collect_doc_alignment_issues(doc_path)]
 
 
 def _build_parser() -> argparse.ArgumentParser:
