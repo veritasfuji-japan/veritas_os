@@ -161,3 +161,18 @@ fail-open は非本番でも認証保護を弱めるため、
 - 中核本体に処理を足す前に helper / stage へ逃がす
 - セキュリティ上の degraded 状態は「黙って通す」のではなく観測可能に保つ
 - shared 環境で fail-open を許さない
+
+
+## 実施記録（2026-03-20）
+
+### 今回完了した改善
+- **Priority 1 / 指示 1-1**: `pipeline.py` / `kernel.py` / `fuji.py` / `memory.py` の module docstring を更新し、public contract・推奨拡張ポイント・compatibility layer の扱いを明示した。
+- **Priority 2 / 指示 2-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に TrustLog degraded 状態 (`trust_json_status=unreadable|invalid|too_large`) の運用 runbook を追加した。
+- **Priority 2 / 指示 2-2**: 同 runbook に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` の startup warning / fail-fast / CI・deployment check / 環境別ポリシーを追記した。
+
+### 今回あえて実施しなかった改善
+- **Priority 1 / 指示 1-2 以降** の helper 分離や例外契約拡張は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
+- **Priority 4 capability profile** は有用だが、まず中核モジュールの入口明示と degraded / fail-open runbook のほうが優先度が高いため後続タスクへ残す。
+
+### セキュリティ警告
+- `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` は local / isolated test 限定の危険フラグであり、shared staging / preview / production へ残置すると auth store 障害時の防御低下を招く。

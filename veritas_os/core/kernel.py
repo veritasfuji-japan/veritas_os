@@ -3,10 +3,22 @@
 # -*- coding: utf-8 -*-
 """Core decision logic for VERITAS Kernel.
 
-This module keeps ``decide()`` backward compatible while limiting its
-responsibility to *decision computation* (alternative scoring, debate,
-FUJI gating, and rationale generation). Pipeline orchestration, side effects,
-and persistence are handled in ``core/pipeline.py``.
+Public contract:
+- ``decide()`` remains the backward-compatible kernel entry-point consumed by
+  pipeline orchestration and tests.
+- The module is responsible for decision computation only: alternative
+  scoring, debate, FUJI gating, and rationale generation.
+
+Preferred extension points:
+- ``kernel_stages.py`` for staged kernel flow changes
+- ``kernel_qa.py`` for QA / validation-specific helpers
+- ``pipeline_contracts.py`` for cross-module payload normalization contracts
+
+Compatibility guidance:
+- Backward-compatible wrappers live here so older call sites continue to work,
+  but new branching, fallback shaping, and adapter logic should be added to
+  helper modules first. Pipeline orchestration, side effects, and persistence
+  stay in ``core/pipeline.py``.
 """
 from __future__ import annotations
 

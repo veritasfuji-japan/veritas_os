@@ -2,6 +2,24 @@
 """
 MemoryOS - 改善版
 
+Public contract:
+- ``MemoryStore`` と関連 API は、記憶の保存・検索・要約・ライフサイクル
+  制御を担う MemoryOS の互換入口です。
+- 本モジュールは MemoryOS の I/O と orchestration を保持し、Planner /
+  Kernel / FUJI の責務へ横滑りしません。
+
+Preferred extension points:
+- ``memory_helpers.py`` for normalization / compatibility helpers
+- ``memory_search_helpers.py`` for search payload shaping and fallback scoring
+- ``memory_summary_helpers.py`` for summary text formatting
+- ``memory_lifecycle.py`` / ``memory_security.py`` / ``memory_store.py`` for
+  lifecycle, security, and backend store details
+
+Compatibility guidance:
+- Optional dependency fallback と既存 private wrapper は後方互換のため残して
+  あります。新しい検索整形・summary 整形・fallback 分岐は helper 側へ追加し、
+  本体へ新規責務を直接積み増さないでください。
+
 主な改善点:
 1. 組み込みベクトル検索実装（sentence-transformers）
 2. インデックス管理の改善
