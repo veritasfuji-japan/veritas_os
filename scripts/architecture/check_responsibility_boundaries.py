@@ -43,6 +43,9 @@ class BoundaryIssue:
     forbidden_module: str | None = None
 
 
+DEFAULT_DOC_PATH = Path("docs/architecture/core_responsibility_boundaries.md")
+
+
 DEFAULT_RULES: tuple[BoundaryRule, ...] = (
     BoundaryRule(
         source_module="planner",
@@ -174,9 +177,19 @@ def _parse_imported_names(path: Path) -> set[str]:
 def collect_boundary_issues(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+    doc_path: Path = DEFAULT_DOC_PATH,
 ) -> list[BoundaryIssue]:
     """Collect machine-classifiable boundary checker issues."""
     issues: list[BoundaryIssue] = []
+    for message in find_doc_alignment_issues(doc_path):
+        issues.append(
+            BoundaryIssue(
+                code="doc_alignment_error",
+                message=message,
+                path=doc_path,
+                source_module="documentation",
+            )
+        )
     for rule in rules:
         path = core_dir / f"{rule.source_module}.py"
         try:
@@ -293,9 +306,20 @@ def build_remediation_guide(
     return header + "\n".join(rows)
 
 
-def check_boundaries(core_dir: Path, rules: Iterable[BoundaryRule] = DEFAULT_RULES) -> list[str]:
+def check_boundaries(
+    core_dir: Path,
+    rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+    doc_path: Path = DEFAULT_DOC_PATH,
+) -> list[str]:
     """Run all boundary rules and return all violation messages."""
-    return [issue.message for issue in collect_boundary_issues(core_dir=core_dir, rules=rules)]
+    return [
+        issue.message
+        for issue in collect_boundary_issues(
+            core_dir=core_dir,
+            rules=rules,
+            doc_path=doc_path,
+        )
+    ]
 
 
 def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
@@ -305,6 +329,7 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
         "boundary_violation": 0,
         "input_invalid": 0,
         "permission_denied": 0,
+        "doc_alignment_error": 0,
     }
     for issue in issue_list:
         if issue.code in counts:
@@ -400,6 +425,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to the core module directory (default: veritas_os/core).",
     )
     parser.add_argument(
+        "--doc-path",
+        type=Path,
+        default=DEFAULT_DOC_PATH,
+        help=(
+            "Path to the architecture document used for extension-point "
+            "alignment checks "
+            "(default: docs/architecture/core_responsibility_boundaries.md)."
+        ),
+    )
+    parser.add_argument(
         "--report-format",
         choices=("text", "json"),
         default="text",
@@ -412,7 +447,10 @@ def main() -> int:
     """CLI entrypoint for CI execution."""
     parser = _build_parser()
     args = parser.parse_args()
-    structured_issues = collect_boundary_issues(core_dir=args.core_dir)
+    structured_issues = collect_boundary_issues(
+        core_dir=args.core_dir,
+        doc_path=args.doc_path,
+    )
     issues = [issue.message for issue in structured_issues]
 
     if issues:
