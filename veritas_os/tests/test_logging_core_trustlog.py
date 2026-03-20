@@ -162,3 +162,36 @@ def test_verify_trust_log_detects_tamper(tmp_path, monkeypatch):
     result = core_logging.verify_trust_log()
     assert result["ok"] is False
     assert result["broken"] is True
+
+
+def test_append_trust_log_warns_when_signed_trustlog_is_unavailable(
+    tmp_path,
+    monkeypatch,
+    caplog,
+):
+    """Missing cryptography must degrade signed TrustLog without import failure."""
+    _setup_tmp_trust_log(tmp_path, monkeypatch)
+    caplog.set_level("WARNING", logger=trust_log_impl.__name__)
+
+    monkeypatch.setattr(
+        trust_log_impl.importlib.util,
+        "find_spec",
+        lambda name: None if name == "cryptography" else object(),
+    )
+    monkeypatch.setattr(trust_log_impl, "_SIGNED_TRUSTLOG_APPEND", None)
+    monkeypatch.setattr(trust_log_impl, "_SIGNED_TRUSTLOG_ERRORS", ())
+    monkeypatch.setattr(
+        trust_log_impl,
+        "_SIGNED_TRUSTLOG_WARNING_EMITTED",
+        False,
+    )
+
+    entry = core_logging.append_trust_log(
+        {"request_id": "signed-optional", "decision": "allow"}
+    )
+
+    assert entry["request_id"] == "signed-optional"
+    assert (
+        "Signed TrustLog disabled: cryptography is unavailable"
+        in caplog.text
+    )

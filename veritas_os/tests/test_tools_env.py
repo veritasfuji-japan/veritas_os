@@ -2,10 +2,33 @@
 
 from __future__ import annotations
 
+import builtins
+import importlib
+import sys
 from typing import Any, Dict, List
 
 import veritas_os.tools as tools
 from veritas_os.tools import call_tool
+
+
+def test_tools_import_does_not_eagerly_import_web_search(monkeypatch):
+    """veritas_os.tools import 時に requests 依存を eager import しない。"""
+    original_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "veritas_os.tools.web_search":
+            raise AssertionError("web_search should not be imported eagerly")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    sys.modules.pop("veritas_os.tools", None)
+
+    try:
+        reloaded = importlib.import_module("veritas_os.tools")
+    finally:
+        sys.modules["veritas_os.tools"] = tools
+
+    assert reloaded.call_tool("unknown_tool")["ok"] is False
 
 
 def test_call_tool_web_search(monkeypatch):
