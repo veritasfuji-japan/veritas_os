@@ -138,6 +138,41 @@ def test_collect_boundary_issues_classifies_boundary_violation(tmp_path: Path) -
     assert issues[0].forbidden_module == "kernel"
 
 
+def test_collect_boundary_issues_detects_doc_alignment_error(tmp_path: Path) -> None:
+    """Doc/checker drift should surface as a machine-readable issue."""
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "kernel.py", "# kernel module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- veritas_os.core.planner_json
+
+### Kernel (`veritas_os.core.kernel`)
+**Preferred extension points**:
+- veritas_os.core.kernel_stages
+
+### FUJI (`veritas_os.core.fuji`)
+**Preferred extension points**:
+- veritas_os.core.fuji_policy
+
+### MemoryOS (`veritas_os.core.memory`)
+**Preferred extension points**:
+- veritas_os.core.memory_store
+""".strip(),
+        encoding="utf-8",
+    )
+
+    issues = collect_boundary_issues(core_dir=tmp_path, doc_path=doc_path)
+
+    assert any(issue.code == "doc_alignment_error" for issue in issues)
+
+
 def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
     """Machine report should summarize issue counts for CI parsers."""
     issues = [
@@ -162,6 +197,7 @@ def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
     assert report["summary"]["boundary_violation"] == 1
     assert report["summary"]["permission_denied"] == 1
     assert report["summary"]["input_invalid"] == 0
+    assert report["summary"]["doc_alignment_error"] == 0
     assert report["issues"][0]["allowed_dependencies"] == [
         "veritas_os.core.memory",
         "veritas_os.core.world",
@@ -237,3 +273,26 @@ def test_find_doc_alignment_issues_returns_empty_for_current_doc() -> None:
     )
 
     assert issues == []
+
+
+def test_check_boundaries_includes_doc_alignment_issues(tmp_path: Path) -> None:
+    """Text-mode checker should fail when the architecture doc drifts."""
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "kernel.py", "# kernel module\n")
+    _write_module(tmp_path / "fuji.py", "# fuji module\n")
+    _write_module(tmp_path / "memory.py", "# memory module\n")
+    doc_path = tmp_path / "core_responsibility_boundaries.md"
+    doc_path.write_text(
+        """
+# Core Responsibility Boundaries
+
+### Planner (`veritas_os.core.planner`)
+**Preferred extension points**:
+- veritas_os.core.planner_json
+""".strip(),
+        encoding="utf-8",
+    )
+
+    issues = check_boundaries(core_dir=tmp_path, doc_path=doc_path)
+
+    assert any("Preferred extension points out of sync" in issue for issue in issues)
