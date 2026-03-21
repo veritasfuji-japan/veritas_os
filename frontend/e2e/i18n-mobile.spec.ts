@@ -37,7 +37,7 @@ test.describe("i18n: language toggle", () => {
 });
 
 test.describe("Mobile viewport: major flows don't break", () => {
-  test.use({ ...devices["iPhone 13"] });
+  test.use({ viewport: devices["iPhone 13"].viewport });
 
   const pages = [
     { path: "/", name: "Dashboard" },
