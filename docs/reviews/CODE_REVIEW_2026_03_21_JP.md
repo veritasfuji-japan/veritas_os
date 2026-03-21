@@ -123,7 +123,9 @@ health / audit への明示的な露出が望ましい。
 
 ### P2
 
-- `planner.py` / `kernel.py` の互換ロジックを helper/stage へさらに移送する
+- [x] `planner.py` / `kernel.py` の互換ロジックを helper/stage へさらに移送する
+  - 2026-03-21 対応。`veritas_os/core/planner.py` 先頭に集中していた inventory 判定・step 正規化・simple QA 判定を `veritas_os/core/planner_helpers.py` へ移送し、`planner.py` 側は既存の `_wants_inventory_step` / `_normalize_step` / `_normalize_steps_list` / `_is_simple_qa` を helper alias として再公開する形に整理した。これにより Planner 本体の責務は plan 生成フローに寄り、既存呼び出し互換も維持した。
+  - `veritas_os/tests/test_planner.py` に helper alias の互換性テストを追加し、既存 API の挙動が変わっていないことを固定した。
 
 ### P3
 
