@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 import pytest
 
 from veritas_os.core import planner as planner_core
+from veritas_os.core import planner_helpers
 
 
 # -------------------------------
@@ -148,6 +149,22 @@ def test_simple_qa_plan_structure_and_stage():
         assert "eta_hours" in s
         assert "risk" in s
         assert isinstance(s["dependencies"], list)
+
+
+def test_planner_helper_aliases_preserve_behavior():
+    assert (
+        planner_core._wants_inventory_step("inventory check")
+        == planner_helpers.wants_inventory_step("inventory check")
+    )
+    assert planner_core._normalize_step({"id": "s1"}) == planner_helpers.normalize_step(
+        {"id": "s1"}
+    )
+    assert planner_core._normalize_steps_list([{"id": "s1"}]) == (
+        planner_helpers.normalize_steps_list([{"id": "s1"}])
+    )
+    assert planner_core._is_simple_qa("今日は何日ですか？", {}) == (
+        planner_helpers.is_simple_qa("今日は何日ですか？", {})
+    )
 
 
 # -------------------------------

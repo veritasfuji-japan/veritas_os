@@ -13,6 +13,13 @@ from . import world as world_model
 from . import memory as mem
 from . import code_planner  # ★ 追加
 from .planner_normalization import normalize_float, normalize_int
+from .planner_helpers import (
+    StepDict,
+    is_simple_qa as _is_simple_qa,
+    normalize_step as _normalize_step,
+    normalize_steps_list as _normalize_steps_list,
+    wants_inventory_step as _wants_inventory_step,
+)
 from .planner_json import (  # ★ JSON解析ロジックを分離
     _truncate_json_extract_input,
     _safe_parse,
@@ -30,18 +37,6 @@ _FALLBACK_SAFE_ERRORS = (ValueError, TypeError, KeyError, AttributeError)
 _MEMORY_LOOKUP_ERRORS = (AttributeError, TypeError, ValueError, OSError)
 
 
-class StepDict(TypedDict, total=False):
-    """Planner step definition for normalized step payloads."""
-
-    id: str
-    title: str
-    detail: str
-    why: str
-    eta_hours: float
-    risk: float
-    dependencies: List[str]
-
-
 class PlanDict(TypedDict, total=False):
     """Planner plan payload containing normalized steps and metadata."""
 
@@ -49,196 +44,6 @@ class PlanDict(TypedDict, total=False):
     raw: Dict[str, Any]
     meta: Dict[str, Any]
     source: str
-
-# ============================
-#  step1（棚卸し）意図判定
-# ============================
-
-def _wants_inventory_step(query: str, context: Dict[str, Any] | None = None) -> bool:
-    """
-    「棚卸し/現状整理/step1で進めて」など、inventory(step1)系を明示的に求めているか。
-    ここで True のときだけ step1 を“特別扱い”してよい前提にする。
-    """
-    _ = context or {}
-    q = (query or "").strip()
-    if not q:
-        return False
-    ql = q.lower()
-
-    # 明示の step 指定
-    if "step1" in ql or "step 1" in ql:
-        return True
-
-    # 棚卸し/現状整理
-    if "棚卸" in q or "棚おろし" in q:
-        return True
-    if ("現状" in q) and ("整理" in q or "把握" in q or "棚卸" in q):
-        return True
-
-    # 英語寄り
-    if "inventory" in ql:
-        return True
-
-    return False
-
-
-# ============================
-#  共通: step 正規化ヘルパ
-# ============================
-
-def _normalize_step(
-    step: StepDict,
-    default_eta_hours: float = 1.0,
-    default_risk: float = 0.1,
-) -> StepDict:
-    """
-    1つの step に対して、eta_hours / risk / dependencies を安全な値へ正規化する。
-
-    - eta_hours: 数値へ変換し、負値は 0.0 に丸める
-    - risk: 数値へ変換し、0.0〜1.0 の範囲へ丸める
-    - dependencies: list[str] に正規化
-
-    既存値がある場合も型不正な値は補正し、後続処理での型崩れを防ぐ。
-    """
-    s: StepDict = dict(step)
-
-    eta_candidate = s.get("eta_hours", default_eta_hours)
-    s["eta_hours"] = normalize_float(
-        eta_candidate,
-        field_name="eta_hours",
-        default_override=default_eta_hours,
-    )
-
-    risk_candidate = s.get("risk", default_risk)
-    s["risk"] = normalize_float(
-        risk_candidate,
-        field_name="risk",
-        default_override=default_risk,
-    )
-
-    deps = s.get("dependencies")
-    if not isinstance(deps, list):
-        s["dependencies"] = []
-    else:
-        s["dependencies"] = [str(d) for d in deps]
-
-    return s
-
-
-def _normalize_steps_list(
-    steps: List[StepDict] | None,
-    default_eta_hours: float = 1.0,
-    default_risk: float = 0.1,
-) -> List[StepDict]:
-    """
-    steps のリストに対して _normalize_step を一括適用。
-    None や不正要素が混ざっていても「まともな dict だけ」を採用する。
-    """
-    if not isinstance(steps, list):
-        return []
-
-    normalized: List[StepDict] = []
-    for st in steps:
-        if not isinstance(st, dict):
-            continue
-        normalized.append(
-            _normalize_step(
-                st,
-                default_eta_hours=default_eta_hours,
-                default_risk=default_risk,
-            )
-        )
-    return normalized
-
-
-# ============================
-#  simple QA 判定 & プラン
-# ============================
-
-def _is_simple_qa(query: str, context: Dict[str, Any] | None = None) -> bool:
-    """
-    「重いAGIプラン不要なシンプル質問」かどうかをざっくり判定する。
-    - kernel / pipeline 側の simple_qa モードと合わせて使うことを想定。
-    - ※ AGI / VERITAS 系の問いはここでは simple_qa に絶対しない。
-    """
-    ctx = context or {}
-
-    if ctx.get("mode") == "simple_qa" or ctx.get("simple_qa"):
-        return True
-
-    q = (query or "").strip()
-    if not q:
-        return False
-
-    q_lower = q.lower()
-
-    agi_block_keywords = [
-        "agi",
-        "ＡＧＩ",
-        "veritas",
-        "ヴェリタス",
-        "ベリタス",
-        "proto-agi",
-        "プロトagi",
-    ]
-    if any(k in q or k in q_lower for k in agi_block_keywords):
-        return False
-
-    is_short = len(q) <= 40
-    question_prefixes = (
-        "what",
-        "why",
-        "when",
-        "where",
-        "who",
-        "which",
-        "how",
-        "can ",
-        "could ",
-        "should ",
-        "is ",
-        "are ",
-        "do ",
-        "does ",
-        "did ",
-    )
-    question_endings = (
-        "か",
-        "かね",
-        "かな",
-        "でしょうか",
-        "教えて",
-        "を教えて",
-        "知りたい",
-    )
-    looks_question = (
-        ("?" in q)
-        or ("？" in q)
-        or q_lower.startswith(question_prefixes)
-        or q.endswith(question_endings)
-    )
-    has_plan_words = any(
-        k in q for k in ["どう進め", "進め方", "計画", "プラン", "ロードマップ", "タスク"]
-    ) or any(
-        k in q_lower
-        for k in [
-            "roadmap",
-            "plan",
-            "strategy",
-            "next step",
-            "next steps",
-            "implementation",
-            "implement",
-            "task",
-            "tasks",
-        ]
-    )
-
-    if is_short and looks_question and not has_plan_words:
-        return True
-
-    return False
-
 
 def _simple_qa_plan(
     query: str,
