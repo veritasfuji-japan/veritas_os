@@ -107,7 +107,9 @@ health / audit への明示的な露出が望ましい。
 
 ### P0
 
-- production で sanitize import failure を fail-closed にする
+- [x] production で sanitize import failure を fail-closed にする
+  - 2026-03-21 対応済み。`veritas_os/api/startup_health.py` の `check_runtime_feature_health()` を更新し、`sanitize` モジュール未ロード時は non-production では警告、production (`VERITAS_ENV=production` / `prod`) では `RuntimeError` を送出して API 起動を停止するよう変更した。これにより PII masking 欠落状態での fail-open 起動を防止する。
+  - `veritas_os/tests/test_api_startup_health.py` に、non-production 警告動作を維持しつつ production では fail-closed になる回帰テストを追加した。
 
 ### P1
 
