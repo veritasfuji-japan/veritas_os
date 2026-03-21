@@ -7,17 +7,18 @@ VERITAS Environment Tools
 """
 from __future__ import annotations
 
+import importlib
 from typing import Any, Dict
-
-from .web_search import web_search
-from .github_adapter import github_search_repos
-from .llm_safety import run as llm_safety_run
 
 _DEFAULT_MAX_RESULTS = 5
 _DEFAULT_MAX_CATEGORIES = 5
 _MIN_LIMIT = 1
 _MAX_RESULTS_LIMIT = 100
 _MAX_CATEGORIES_LIMIT = 20
+
+web_search = None
+github_search_repos = None
+llm_safety_run = None
 
 
 def _normalize_kind(kind: Any) -> str:
@@ -38,6 +39,22 @@ def _clamp_int(
     except (TypeError, ValueError):
         return default
     return max(min_value, min(max_value, normalized))
+
+
+def _resolve_tool_callable(
+    attr_name: str,
+    module_name: str,
+    export_name: str,
+) -> Any:
+    """Resolve optional tool implementations lazily for sparse environments."""
+    current = globals().get(attr_name)
+    if callable(current):
+        return current
+
+    module = importlib.import_module(module_name)
+    resolved = getattr(module, export_name)
+    globals()[attr_name] = resolved
+    return resolved
 
 
 def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
@@ -68,22 +85,37 @@ def call_tool(kind: str, **kwargs: Any) -> Dict[str, Any]:
 
     # --- web 検索 ---
     if normalized_kind == "web_search":
-        return web_search(
+        tool_impl = _resolve_tool_callable(
+            "web_search",
+            "veritas_os.tools.web_search",
+            "web_search",
+        )
+        return tool_impl(
             query=kwargs.get("query", ""),
             max_results=max_results,
         )
 
     # --- GitHub 検索 ---
     if normalized_kind == "github_search":
-        return github_search_repos(
+        tool_impl = _resolve_tool_callable(
+            "github_search_repos",
+            "veritas_os.tools.github_adapter",
+            "github_search_repos",
+        )
+        return tool_impl(
             query=kwargs.get("query", ""),
             max_results=max_results,
         )
 
     # --- LLM ベース安全ヘッド ---
     if normalized_kind == "llm_safety":
+        tool_impl = _resolve_tool_callable(
+            "llm_safety_run",
+            "veritas_os.tools.llm_safety",
+            "run",
+        )
         # llm_safety.run(text=..., context=..., alternatives=...)
-        return llm_safety_run(
+        return tool_impl(
             text=kwargs.get("text", "") or kwargs.get("query", ""),
             context=kwargs.get("context") or {},
             alternatives=kwargs.get("alternatives") or [],

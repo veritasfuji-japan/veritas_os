@@ -27,22 +27,46 @@ Recommended additional hardening for production:
 from __future__ import annotations
 
 import base64
+import importlib
+import importlib.util
 import logging
 import os
 import stat
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 from veritas_os.security.hash import sha256_hex
 
 logger = logging.getLogger(__name__)
 
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import (
-    Ed25519PrivateKey,
-    Ed25519PublicKey,
-)
+
+def _load_crypto_primitives() -> tuple[Any, Any, Any, Any]:
+    """Load cryptography primitives lazily for signed TrustLog operations.
+
+    Security:
+        Signed TrustLog integrity depends on Ed25519 primitives from
+        ``cryptography``. When the package is unavailable, callers receive a
+        clear runtime error instead of an import-time crash so non-signed code
+        paths can continue to operate in a degraded but observable mode.
+    """
+    if importlib.util.find_spec("cryptography") is None:
+        raise RuntimeError(
+            "cryptography is required for signed TrustLog operations"
+        )
+
+    exceptions = importlib.import_module("cryptography.exceptions")
+    serialization = importlib.import_module(
+        "cryptography.hazmat.primitives.serialization"
+    )
+    ed25519 = importlib.import_module(
+        "cryptography.hazmat.primitives.asymmetric.ed25519"
+    )
+    return (
+        exceptions.InvalidSignature,
+        serialization,
+        ed25519.Ed25519PrivateKey,
+        ed25519.Ed25519PublicKey,
+    )
 
 
 def generate_ed25519_keypair() -> Tuple[bytes, bytes]:
@@ -51,7 +75,8 @@ def generate_ed25519_keypair() -> Tuple[bytes, bytes]:
     Returns:
         Tuple of ``(private_key_raw, public_key_raw)``.
     """
-    private_key = Ed25519PrivateKey.generate()
+    _, serialization, private_key_cls, _ = _load_crypto_primitives()
+    private_key = private_key_cls.generate()
     public_key = private_key.public_key()
     private_raw = private_key.private_bytes(
         encoding=serialization.Encoding.Raw,
@@ -117,15 +142,17 @@ def _check_private_key_permissions(private_key_path: Path) -> None:
         logger.warning("Could not stat private key file %s: %s", private_key_path, exc)
 
 
-def _load_private_key(private_key_path: Path) -> Ed25519PrivateKey:
+def _load_private_key(private_key_path: Path) -> Any:
+    _, _, private_key_cls, _ = _load_crypto_primitives()
     _check_private_key_permissions(private_key_path)
     raw = base64.urlsafe_b64decode(private_key_path.read_text(encoding="utf-8"))
-    return Ed25519PrivateKey.from_private_bytes(raw)
+    return private_key_cls.from_private_bytes(raw)
 
 
-def _load_public_key(public_key_path: Path) -> Ed25519PublicKey:
+def _load_public_key(public_key_path: Path) -> Any:
+    _, _, _, public_key_cls = _load_crypto_primitives()
     raw = base64.urlsafe_b64decode(public_key_path.read_text(encoding="utf-8"))
-    return Ed25519PublicKey.from_public_bytes(raw)
+    return public_key_cls.from_public_bytes(raw)
 
 
 def sign_payload_hash(payload_hash: str, private_key_path: Path) -> str:
@@ -141,11 +168,12 @@ def verify_payload_signature(
     public_key_path: Path,
 ) -> bool:
     """Verify an Ed25519 signature over a payload hash string."""
+    invalid_signature_cls, _, _, _ = _load_crypto_primitives()
     public_key = _load_public_key(public_key_path)
     signature = base64.urlsafe_b64decode(signature_b64)
     try:
         public_key.verify(signature, payload_hash.encode("utf-8"))
-    except InvalidSignature:
+    except invalid_signature_cls:
         return False
     return True
 
