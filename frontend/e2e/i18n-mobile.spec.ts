@@ -37,7 +37,7 @@ test.describe("i18n: language toggle", () => {
 });
 
 test.describe("Mobile viewport: major flows don't break", () => {
-  test.use({ viewport: devices["iPhone 13"].viewport });
+  const MOBILE_VIEWPORT = devices["iPhone 13"].viewport;
 
   const pages = [
     { path: "/", name: "Dashboard" },
@@ -49,6 +49,7 @@ test.describe("Mobile viewport: major flows don't break", () => {
 
   for (const { path, name } of pages) {
     test(`${name} page renders on mobile viewport`, async ({ page }) => {
+      await page.setViewportSize(MOBILE_VIEWPORT);
       await page.goto(path);
       // Page should not overflow or show horizontal scrollbar
       const bodyWidth = await page.evaluate(
