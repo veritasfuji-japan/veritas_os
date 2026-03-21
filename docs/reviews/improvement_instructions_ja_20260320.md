@@ -182,10 +182,20 @@ fail-open は非本番でも認証保護を弱めるため、
 - **Priority 4 / 指示 4-1**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` に capability profile / strict mode 推奨セクションを追加し、FUJI / MemoryOS の production 推奨設定、local/test 限定設定、strict mode 推奨箇所、fallback 観測方法を明文化した。optional dependency による capability drift を startup log と warning で追跡できるよう、`[CapabilityManifest]` と各 fallback warning の確認ポイントも追記した。
 - **Priority 4 / 指示 4-1 の回帰防止**: `scripts/quality/check_capability_profile_doc.py` を追加し、runbook に上記 capability profile 必須トークンが残っているかを CI 向けに検査できるようにした。対応する回帰テストも追加した。
 
+## 実施記録（2026-03-21）
+
+### 今回完了した改善
+- **Priority 1 / 指示 1-2 追加**: `veritas_os/core/pipeline.py` に残っていた `call_core_decide`（~120行のシグネチャ交渉ロジック）を `veritas_os/core/pipeline_signature_adapter.py` へ抽出した。`pipeline.py` は後方互換のため re-export を維持し、`pipeline_execute.py` への注入経路も変更なし。これにより pipeline.py の compatibility-heavy な処理を helper へ逃がし、中核オーケストレーション層の複雑度を低減した。`veritas_os/tests/test_pipeline_signature_adapter.py` に adapter 直接呼出・re-export 同一性・RuntimeError 処理の回帰テストを追加した。
+- **Priority 3 / 指示 3-2 追加**: `pipeline_helpers.py` の broad `except Exception` 7箇所を限定例外タプルへ縮小した（`_as_str` → `(TypeError, ValueError, AttributeError, RuntimeError)`、`_norm_severity` → `(TypeError, ValueError, AttributeError, RuntimeError)`、`_to_bool_local` → `(TypeError, ValueError, AttributeError, RuntimeError)`、`_set_int_metric` → `(TypeError, ValueError)`、`_set_bool_metric` → `(TypeError, ValueError, AttributeError, RuntimeError)`、`_query_is_step1_hint` → `(TypeError, AttributeError, RuntimeError)`、`_has_step1_minimum_evidence` → `(TypeError, AttributeError, KeyError, RuntimeError)`）。`RuntimeError` はカスタムオブジェクトの `__str__()` / `__bool__()` / `__iter__()` が投げるケースに対応。`_lazy_import` は外部モジュール読込のため意図的に broad を維持した。回帰テストを `test_pipeline_signature_adapter.py` に追加した。
+- **Priority 3 / 指示 3-2 追加**: `pipeline_contracts.py` の `_ensure_full_contract` 内 broad `except Exception` 4箇所を限定例外タプルへ縮小した（stage_latency → `(TypeError, ValueError)`、mem_evidence_count → `(TypeError, ValueError)`、context_obj → `(TypeError, ValueError, RuntimeError)`、memory_meta.query → `(TypeError, AttributeError)`）。`_deep_merge_dict` と `_merge_extras_preserving_contract` の外側 recovery handler は最終防壁のため意図的に broad を維持した。回帰テストを `test_pipeline_signature_adapter.py` に追加した。
+- **Priority 3 / 指示 3-2 追加**: `pipeline.py` の `get_request_params` 内 broad `except Exception` 2箇所を `(TypeError, ValueError, AttributeError, KeyError, RuntimeError)` へ縮小した。`_dedupe_alts` は外部モジュール呼出のため意図的に broad を維持した。
+- **Priority 1 / 指示 1-2 + Priority 3 / 指示 3-2 の同時縮小**: `pipeline_signature_adapter.py` の `_params` / `_can_bind` では、元の `except Exception` を `(TypeError, ValueError, RuntimeError)` に縮小し、`inspect.signature` / `bind_partial` の既知失敗型のみを吸収するようにした。
+
 ### 今回あえて実施しなかった改善
-- **Priority 1 / 指示 1-2 以降** の helper 分離や、Memory API 以外の広域例外縮小は、既存 public contract・責務境界・回帰範囲への影響が相対的に大きいため、今回の最小差分では未着手とした。
 - `MemoryStore` 互換フックにはなお `legal_hold` / cascade delete / score 計算などの薄い adapter が残るが、現時点では pure helper 化の効果が小さく、責務境界や互換契約を崩さずに優先して削るべき複雑度ではないため未着手とした。
-- **Priority 4 capability profile** の基礎文書化と CI チェックは今回完了したが、将来的な profile 細分化（環境別 manifest 例や dependency matrix の詳細表）は、既存運用に必要な最小差分を超えるため未着手とした。
+- **Priority 4 capability profile** の基礎文書化と CI チェックは前回完了したが、将来的な profile 細分化（環境別 manifest 例や dependency matrix の詳細表）は、既存運用に必要な最小差分を超えるため未着手とした。
+- `pipeline_retrieval.py` / `pipeline_gate.py` / `kernel_stages.py` の broad exception は、LLM subsystem resilience（`LLMError` 等の非標準例外）や外部サブシステム呼出に起因するため、限定タプル化は安全性を下げるリスクがあり未着手とした。
+- `_deep_merge_dict` / `_merge_extras_preserving_contract` の外側 recovery handler は最終防壁であり、限定タプル化の利点が小さいため意図的に broad を維持した。
 
 ### セキュリティ警告
 - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` は local / isolated test 限定の危険フラグであり、shared staging / preview / production へ残置すると auth store 障害時の防御低下を招く。
