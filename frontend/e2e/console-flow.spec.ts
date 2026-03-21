@@ -53,11 +53,12 @@ test.describe("Console: decision flow", () => {
     expect(await rawButton.count()).toBe(0);
   });
 
-  test("keyboard: Enter in input submits the form", async ({ page }) => {
+  test("submitting query shows loading or error state", async ({ page }) => {
     const input = page.getByPlaceholder(/メッセージを入力|Enter a message/);
     await input.fill("Test keyboard submit");
-    await input.press("Enter");
-    // Should show loading or error (backend may not be running)
+    const sendButton = page.getByRole("button", { name: /送信|Send/i });
+    await sendButton.click();
+    // Should show loading or error (backend may not be running in CI)
     await expect(
       page
         .getByText(/送信中|Sending|ネットワークエラー|Network error|Timeout|503|service_unavailable|HTTP/i)

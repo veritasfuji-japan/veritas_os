@@ -20,7 +20,7 @@ test.describe("Risk: real-time monitoring flow", () => {
   });
 
   test("time window filter changes visible data", async ({ page }) => {
-    const timeSelect = page.locator("select").first();
+    const timeSelect = page.getByLabel(/時間窓|Time window/i);
     await expect(timeSelect).toBeVisible();
 
     // Change to 1h window
@@ -34,8 +34,7 @@ test.describe("Risk: real-time monitoring flow", () => {
   });
 
   test("cluster filter narrows points", async ({ page }) => {
-    // Get the second select (cluster drilldown)
-    const clusterSelect = page.locator("select").nth(1);
+    const clusterSelect = page.getByLabel(/クラスタ ドリルダウン|Cluster drilldown/i);
     await expect(clusterSelect).toBeVisible();
 
     await clusterSelect.selectOption("critical");

@@ -9,11 +9,11 @@ test.describe("Governance: policy management flow", () => {
   });
 
   test("renders role selector and mode selector", async ({ page }) => {
-    const roleSelect = page.getByLabel("role");
+    const roleSelect = page.getByLabel("role", { exact: true });
     await expect(roleSelect).toBeVisible();
     await expect(roleSelect).toHaveValue("admin");
 
-    const modeSelect = page.getByLabel("mode");
+    const modeSelect = page.getByLabel("mode", { exact: true });
     await expect(modeSelect).toBeVisible();
     await expect(modeSelect).toHaveValue("standard");
   });
@@ -59,7 +59,7 @@ test.describe("Governance: policy management flow", () => {
   });
 
   test("role change updates capability matrix", async ({ page }) => {
-    const roleSelect = page.getByLabel("role");
+    const roleSelect = page.getByLabel("role", { exact: true });
 
     await roleSelect.selectOption("viewer");
     await expect(page.getByText("Viewer")).toBeVisible();
@@ -69,7 +69,7 @@ test.describe("Governance: policy management flow", () => {
   });
 
   test("mode change updates explanation panel", async ({ page }) => {
-    const modeSelect = page.getByLabel("mode");
+    const modeSelect = page.getByLabel("mode", { exact: true });
     await modeSelect.selectOption("eu_ai_act");
     // Mode explanation summary appears after selecting eu_ai_act
     await expect(page.getByText("EU AI Act 準拠モード")).toBeVisible();
