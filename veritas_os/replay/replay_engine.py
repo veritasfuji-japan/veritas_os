@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List
 
-from veritas_os.api.schemas import DecideRequest
 from veritas_os.core import pipeline
 
 # ★ パストラバーサル防止: ファイル名に使用する ID から危険文字を除去
@@ -240,6 +239,8 @@ def _strict_tool_lock() -> Iterator[None]:
 
 async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResult:
     """Replay a persisted decision with deterministic controls and save a report."""
+    from veritas_os.api.schemas import DecideRequest
+
     started = time.time()
     strict_mode = _strict_mode_enabled() if strict is None else bool(strict)
 

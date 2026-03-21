@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import os
 import stat
 from pathlib import Path
@@ -117,3 +118,19 @@ class TestSigningPermissionCheck:
 
         # Should not raise (just logs warning)
         _check_private_key_permissions(missing)
+
+    def test_generate_keypair_raises_runtime_error_without_cryptography(
+        self,
+        monkeypatch,
+    ):
+        """Missing cryptography must fail at call time, not module import time."""
+        import veritas_os.security.signing as signing
+
+        monkeypatch.setattr(
+            signing.importlib.util,
+            "find_spec",
+            lambda name: None if name == "cryptography" else object(),
+        )
+
+        with pytest.raises(RuntimeError, match="cryptography is required"):
+            signing.generate_ed25519_keypair()
