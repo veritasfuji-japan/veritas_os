@@ -71,11 +71,11 @@ test.describe("Governance: policy management flow", () => {
   test("mode change updates explanation panel", async ({ page }) => {
     const modeSelect = page.getByLabel("mode");
     await modeSelect.selectOption("eu_ai_act");
-    await expect(page.getByText(/EU AI Act/i)).toBeVisible();
+    // Mode explanation summary appears after selecting eu_ai_act
+    await expect(page.getByText("EU AI Act 準拠モード")).toBeVisible();
   });
 
   test("risk gauge displays percentage", async ({ page }) => {
-    await expect(page.getByText(/Risk gauge:/)).toBeVisible();
-    await expect(page.getByText(/%/)).toBeVisible();
+    await expect(page.getByText(/Risk gauge:.*%/)).toBeVisible();
   });
 });

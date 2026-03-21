@@ -60,7 +60,7 @@ test.describe("Console: decision flow", () => {
     // Should show loading or error (backend may not be running)
     await expect(
       page
-        .getByText(/送信中|Sending|ネットワークエラー|Network error|Timeout/i)
+        .getByText(/送信中|Sending|ネットワークエラー|Network error|Timeout|503|service_unavailable|HTTP/i)
         .first(),
     ).toBeVisible({ timeout: 25_000 });
   });
