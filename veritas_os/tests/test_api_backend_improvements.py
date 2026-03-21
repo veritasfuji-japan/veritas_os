@@ -108,9 +108,34 @@ class TestEnhancedHealth:
         checks = data["checks"]
         assert "pipeline" in checks
         assert "memory" in checks
-        # Values should be either "ok" or "unavailable"
+        # Values should be either "ok", "degraded", or "unavailable"
         assert checks["pipeline"] in ("ok", "unavailable")
-        assert checks["memory"] in ("ok", "unavailable")
+        assert checks["memory"] in ("ok", "degraded", "unavailable")
+
+    def test_health_exposes_memory_degradation_details(self, monkeypatch):
+        """Non-fatal MemoryStore load issues should surface in /health."""
+
+        class FakeMemoryStore:
+            def health_snapshot(self):
+                return {
+                    "status": "degraded",
+                    "last_error": {
+                        "stage": "targeted_payload_load",
+                        "kind": "episodic",
+                        "detail": "JSONDecodeError",
+                        "recorded_at": "2026-03-21T00:00:00Z",
+                    },
+                    "error_counts": {"targeted_payload_load:episodic": 2},
+                }
+
+        monkeypatch.setattr(server, "get_memory_store", lambda: FakeMemoryStore())
+
+        r = client.get("/health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert data["checks"]["memory"] == "degraded"
+        assert data["memory_health"]["last_error"]["detail"] == "JSONDecodeError"
 
     def test_health_ok_reflects_deps(self, monkeypatch):
         """ok field should reflect dependency availability."""
