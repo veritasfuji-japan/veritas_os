@@ -111,7 +111,9 @@ health / audit への明示的な露出が望ましい。
 
 ### P1
 
-- BFF の `VERITAS_API_KEY` を request 時に取得する形へ変更し、緊急ローテーションを即時反映できるようにする
+- [x] BFF の `VERITAS_API_KEY` を request 時に取得する形へ変更し、緊急ローテーションを即時反映できるようにする
+  - 2026-03-21 対応済み。`frontend/app/api/veritas/[...path]/route.ts` で module import 時の固定読み込みを廃止し、各 request ごとに `process.env.VERITAS_API_KEY` を再評価するよう変更した。これにより BFF 再起動なしでもキー更新が次リクエストから反映される。
+  - `frontend/app/api/veritas/[...path]/route.test.ts` に、未設定時の 503 応答と、連続 2 リクエストで異なる API キーが upstream に送られる回帰テストを追加した。
 - Memory corruption / load failure を health / audit に反映する
 
 ### P2
