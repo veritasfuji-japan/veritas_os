@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import logging
 import re
@@ -36,10 +37,6 @@ from veritas_os.logging.encryption import (
 )
 from veritas_os.logging.redact import redact_entry as _redact_entry
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
-from veritas_os.audit.trustlog_signed import (
-    SignedTrustLogWriteError,
-    append_signed_decision,
-)
 from veritas_os.security.hash import sha256_hex
 
 
@@ -86,6 +83,13 @@ trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
 _append_success_count: int = 0
 _append_failure_count: int = 0
 _append_stats_lock = threading.Lock()
+_SIGNED_TRUSTLOG_APPEND = None
+_SIGNED_TRUSTLOG_ERRORS: tuple[type[Exception], ...] = ()
+_SIGNED_TRUSTLOG_WARNING_EMITTED = False
+
+
+class SignedTrustLogWriteError(RuntimeError):
+    """Backward-compatible wrapper for signed TrustLog runtime failures."""
 
 
 def get_trust_log_stats() -> dict:
@@ -99,6 +103,54 @@ def get_trust_log_stats() -> dict:
             "append_success": _append_success_count,
             "append_failure": _append_failure_count,
         }
+
+
+def _load_signed_trustlog_support() -> tuple[Any, tuple[type[Exception], ...]]:
+    """Resolve signed TrustLog support lazily for optional crypto environments.
+
+    Security:
+        When ``cryptography`` is unavailable, VERITAS keeps the legacy TrustLog
+        hash-chain + encryption path active but disables signed append-only
+        entries. This is a degraded audit-integrity mode, so the function emits
+        an operator-visible warning the first time it falls back.
+    """
+    global _SIGNED_TRUSTLOG_APPEND
+    global _SIGNED_TRUSTLOG_ERRORS
+    global _SIGNED_TRUSTLOG_WARNING_EMITTED
+
+    if _SIGNED_TRUSTLOG_APPEND is not None:
+        return _SIGNED_TRUSTLOG_APPEND, _SIGNED_TRUSTLOG_ERRORS
+
+    if importlib.util.find_spec("cryptography") is None:
+        if not _SIGNED_TRUSTLOG_WARNING_EMITTED:
+            logger.warning(
+                "Signed TrustLog disabled: cryptography is unavailable; "
+                "continuing with legacy trust log only."
+            )
+            _SIGNED_TRUSTLOG_WARNING_EMITTED = True
+        _SIGNED_TRUSTLOG_APPEND = None
+        _SIGNED_TRUSTLOG_ERRORS = ()
+        return None, ()
+
+    from veritas_os.audit.trustlog_signed import (
+        SignedTrustLogWriteError,
+        append_signed_decision,
+    )
+
+    _SIGNED_TRUSTLOG_APPEND = append_signed_decision
+    _SIGNED_TRUSTLOG_ERRORS = (SignedTrustLogWriteError,)
+    return _SIGNED_TRUSTLOG_APPEND, _SIGNED_TRUSTLOG_ERRORS
+
+
+def append_signed_decision(entry: dict) -> Any:
+    """Append a signed TrustLog entry via the optional signed-log backend."""
+    signed_append, signed_errors = _load_signed_trustlog_support()
+    if signed_append is None:
+        raise SignedTrustLogWriteError("signed trust log unavailable")
+    try:
+        return signed_append(entry)
+    except signed_errors as exc:
+        raise SignedTrustLogWriteError(str(exc)) from exc
 
 
 # =============================================================================
@@ -447,7 +499,8 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
                 append_signed_decision(entry)
             except SignedTrustLogWriteError:
                 logger.warning(
-                    "append_signed_decision failed; continuing with legacy trust log",
+                    "append_signed_decision failed; continuing with legacy "
+                    "trust log",
                     exc_info=True,
                 )
 

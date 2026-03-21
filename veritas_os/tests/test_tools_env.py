@@ -2,10 +2,64 @@
 
 from __future__ import annotations
 
+import builtins
+import importlib
+import sys
 from typing import Any, Dict, List
 
 import veritas_os.tools as tools
 from veritas_os.tools import call_tool
+
+
+def test_tools_import_does_not_eagerly_import_web_search(monkeypatch):
+    """veritas_os.tools import 時に requests 依存を eager import しない。"""
+    original_import = builtins.__import__
+
+    def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "veritas_os.tools.web_search":
+            raise AssertionError("web_search should not be imported eagerly")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    sys.modules.pop("veritas_os.tools", None)
+
+    try:
+        reloaded = importlib.import_module("veritas_os.tools")
+    finally:
+        sys.modules["veritas_os.tools"] = tools
+
+    assert reloaded.call_tool("unknown_tool")["ok"] is False
+
+
+def test_web_modules_import_without_requests_dependency(monkeypatch):
+    """web_search / github_adapter は requests 未導入でも import 可能。"""
+    from veritas_os.tools import _requests_compat
+
+    original_web_search = sys.modules.get("veritas_os.tools.web_search")
+    original_github_adapter = sys.modules.get("veritas_os.tools.github_adapter")
+    monkeypatch.setattr(
+        _requests_compat.importlib.util,
+        "find_spec",
+        lambda name: None if name == "requests" else object(),
+    )
+    sys.modules.pop("veritas_os.tools.web_search", None)
+    sys.modules.pop("veritas_os.tools.github_adapter", None)
+
+    try:
+        web_search_mod = importlib.import_module("veritas_os.tools.web_search")
+        github_adapter_mod = importlib.import_module(
+            "veritas_os.tools.github_adapter"
+        )
+    finally:
+        if original_web_search is not None:
+            sys.modules["veritas_os.tools.web_search"] = original_web_search
+        if original_github_adapter is not None:
+            sys.modules["veritas_os.tools.github_adapter"] = original_github_adapter
+
+    assert hasattr(web_search_mod.requests, "post")
+    assert hasattr(web_search_mod.requests, "exceptions")
+    assert hasattr(github_adapter_mod.requests, "get")
+    assert hasattr(github_adapter_mod.requests, "exceptions")
 
 
 def test_call_tool_web_search(monkeypatch):
