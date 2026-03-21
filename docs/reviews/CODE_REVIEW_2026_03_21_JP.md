@@ -127,7 +127,9 @@ health / audit への明示的な露出が望ましい。
 
 ### P3
 
-- フロント API client の abort 原因判定を改善し、timeout と user cancel を分離する
+- [x] フロント API client の abort 原因判定を改善し、timeout と user cancel を分離する
+  - 2026-03-21 対応済み。`frontend/lib/api-client.ts` の `veritasFetchWithOptions()` で timeout 起因の abort と caller 起因の abort を分離し、`ApiError.kind` に `cancelled` を追加した。これにより UI は timeout と明示的な user cancel を別扱いできる。
+  - `frontend/lib/api-client.test.ts` に timeout / caller abort の回帰テストを追加した。
 
 ---
 
