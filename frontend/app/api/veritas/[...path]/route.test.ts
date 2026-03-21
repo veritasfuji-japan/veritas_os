@@ -1,3 +1,4 @@
+import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -7,6 +8,7 @@ import {
   parseAuthTokensConfig,
 } from "./route-auth";
 import { getBodySizeBytes } from "./body-size";
+import { GET } from "./route";
 import { resolveTraceId } from "./trace-id";
 import {
   resetApiBaseUrlWarningStateForTest,
@@ -178,5 +180,61 @@ describe("resolveTraceId", () => {
     expect(traceId).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
+  });
+});
+
+
+describe("veritas bff route runtime api key resolution", () => {
+  it("returns 503 when VERITAS_API_KEY is missing at request time", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_API_KEY", "");
+    vi.stubEnv("VERITAS_BFF_AUTH_TOKENS_JSON", '{"token-admin":"admin"}');
+
+    const request = new NextRequest("http://localhost/api/veritas/v1/governance/policy", {
+      headers: { authorization: "Bearer token-admin" },
+    });
+
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["v1", "governance", "policy"] }),
+    });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "server_misconfigured",
+      detail: "VERITAS_API_KEY is not configured on server.",
+    });
+  });
+
+  it("uses the latest VERITAS_API_KEY for each request", async () => {
+    vi.stubEnv("VERITAS_API_BASE_URL", "http://internal-api:8000");
+    vi.stubEnv("VERITAS_BFF_AUTH_TOKENS_JSON", '{"token-admin":"admin"}');
+
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    vi.stubEnv("VERITAS_API_KEY", "first-key");
+    const firstRequest = new NextRequest("http://localhost/api/veritas/v1/governance/policy", {
+      headers: { authorization: "Bearer token-admin" },
+    });
+    await GET(firstRequest, {
+      params: Promise.resolve({ path: ["v1", "governance", "policy"] }),
+    });
+
+    vi.stubEnv("VERITAS_API_KEY", "rotated-key");
+    const secondRequest = new NextRequest("http://localhost/api/veritas/v1/governance/policy", {
+      headers: { authorization: "Bearer token-admin" },
+    });
+    await GET(secondRequest, {
+      params: Promise.resolve({ path: ["v1", "governance", "policy"] }),
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((fetchMock.mock.calls[0]?.[1]?.headers as Headers).get("X-API-Key")).toBe("first-key");
+    expect((fetchMock.mock.calls[1]?.[1]?.headers as Headers).get("X-API-Key")).toBe("rotated-key");
   });
 });

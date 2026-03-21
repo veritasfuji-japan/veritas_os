@@ -10,10 +10,12 @@ import { resolveTraceId, TRACE_ID_HEADER_NAME } from "./trace-id";
 
 import { resolveApiBaseUrl } from "./route-config";
 
-const API_KEY = process.env.VERITAS_API_KEY ?? "";
-
 /** Max request body size for proxied requests (1MB). */
 const MAX_PROXY_BODY_BYTES = 1 * 1024 * 1024;
+
+function resolveApiKey(): string {
+  return (process.env.VERITAS_API_KEY ?? "").trim();
+}
 
 function buildTargetUrl(
   apiBaseUrl: string,
@@ -80,7 +82,9 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
     );
   }
 
-  if (!API_KEY.trim()) {
+  const apiKey = resolveApiKey();
+
+  if (!apiKey) {
     return NextResponse.json(
       {
         error: "server_misconfigured",
@@ -98,7 +102,7 @@ async function handleProxy(request: NextRequest, pathSegments: string[]): Promis
 
   const targetUrl = buildTargetUrl(apiBaseUrl, pathSegments, request.nextUrl.searchParams);
   const upstreamHeaders = new Headers();
-  upstreamHeaders.set("X-API-Key", API_KEY.trim());
+  upstreamHeaders.set("X-API-Key", apiKey);
   upstreamHeaders.set(TRACE_ID_HEADER_NAME, traceId);
   upstreamHeaders.set("X-Request-Id", traceId);
 
