@@ -62,10 +62,10 @@ test.describe("Governance: policy management flow", () => {
     const roleSelect = page.getByLabel("role", { exact: true });
 
     await roleSelect.selectOption("viewer");
-    await expect(page.getByText("Viewer")).toBeVisible();
+    await expect(page.getByText("Viewer（閲覧専用）")).toBeVisible();
 
     await roleSelect.selectOption("operator");
-    await expect(page.getByText("Operator")).toBeVisible();
+    await expect(page.getByText("Operator（運用）")).toBeVisible();
   });
 
   test("mode change updates explanation panel", async ({ page }) => {
