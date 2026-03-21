@@ -3,6 +3,22 @@
 """
 FUJI Gate v2 (Safety Head × Policy Engine × TrustLog)
 
+Public contract:
+- ``fuji_gate()`` and the v1-compatible validation helpers provide the stable
+  policy/safety gate consumed by Kernel and API layers.
+- This module coordinates final gate decisions and audit-facing status only;
+  detailed policy loading and safety-head behavior belong in helper modules.
+
+Preferred extension points:
+- ``fuji_policy.py`` / ``fuji_policy_rollout.py`` for policy loading and rollout
+- ``fuji_helpers.py`` for normalization and compatibility helpers
+- ``fuji_safety_head.py`` for deterministic / LLM safety-head behavior
+
+Compatibility guidance:
+- This file still contains compatibility shims for older validation paths.
+  Preserve those adapters, but add new fallback, rollout, or safety logic to
+  the helper modules above so FUJI responsibility does not sprawl further.
+
 PoC仕様：
 - low_evidence のときは allow に倒さず、必ず「補う/止める」へ寄せる
   - 高リスク/高ステークス => deny
@@ -207,97 +223,42 @@ def _detect_prompt_injection(text: str) -> Dict[str, Any]:
     return _detect_prompt_injection_impl(text)
 
 
+def _sync_fuji_policy_runtime() -> None:
+    """Keep shared policy helpers aligned with fuji.py capability aliases."""
+    _fuji_policy.yaml = yaml
+    _fuji_policy.capability_cfg = capability_cfg
+
+
 def _fallback_policy(
     *,
     path: Path | None,
     reason: str,
     exc: Exception | None = None,
 ) -> Dict[str, Any]:
-    """Return fallback policy while preserving fuji.py logging semantics."""
-    path_label = str(path) if path is not None else "<none>"
-    strict_mode = _strict_policy_load_enabled()
-
-    if exc is None:
-        _logger.warning(
-            "FUJI policy fallback triggered: reason=%s path=%s strict=%s",
-            reason,
-            path_label,
-            strict_mode,
-        )
-    else:
-        _logger.warning(
-            "FUJI policy fallback triggered: reason=%s path=%s exc_type=%s strict=%s",
-            reason,
-            path_label,
-            type(exc).__name__,
-            strict_mode,
-            exc_info=True,
-        )
-
-    if strict_mode:
-        _logger.error(
-            "FUJI strict policy-load mode active. Deny policy is enforced due to policy load failure. "
-            "path=%s reason=%s",
-            path_label,
-            reason,
-        )
-        return dict(_STRICT_DENY_POLICY)
-
-    return dict(_DEFAULT_POLICY)
+    """Delegate fallback-policy handling to fuji_policy helpers."""
+    _sync_fuji_policy_runtime()
+    return _fuji_policy._fallback_policy(path=path, reason=reason, exc=exc)
 
 
 
 def _load_policy(path: Path | None) -> Dict[str, Any]:
-    """Backward-compatible FUJI policy loader with local logger semantics."""
-    if not capability_cfg.enable_fuji_yaml_policy or yaml is None:
-        return dict(_DEFAULT_POLICY)
-
-    if path is None or not path.exists():
-        return _fallback_policy(path=path, reason="missing_policy_file")
-
-    yaml_error = getattr(yaml, "YAMLError", None)
-    yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
-    handled_errors = (TypeError, ValueError, OSError) + yaml_errors
-
-    try:
-        with path.open("r", encoding="utf-8") as file_obj:
-            data = yaml.safe_load(file_obj) or {}
-    except handled_errors as exc:
-        return _fallback_policy(path=path, reason="yaml_load_error", exc=exc)
-
-    if "version" not in data:
-        data["version"] = f"fuji_file_{path.name}"
-
-    return data
+    """Backward-compatible FUJI policy loader via the shared policy module."""
+    _sync_fuji_policy_runtime()
+    return _fuji_policy._load_policy(path)
 
 
 
 def _load_policy_from_str(content: str, path: Path) -> Dict[str, Any]:
-    """Parse FUJI policy content while preserving legacy error behavior."""
-    if not capability_cfg.enable_fuji_yaml_policy or yaml is None:
-        return dict(_DEFAULT_POLICY)
-
-    yaml_error = getattr(yaml, "YAMLError", None)
-    yaml_errors = (yaml_error,) if isinstance(yaml_error, type) else ()
-    handled_errors = (TypeError, ValueError) + yaml_errors
-
-    try:
-        data = yaml.safe_load(content) or {}
-    except handled_errors as exc:
-        return _fallback_policy(path=path, reason="yaml_parse_error", exc=exc)
-
-    if "version" not in data:
-        data["version"] = f"fuji_file_{path.name}"
-
-    return data
+    """Parse FUJI policy content via the shared policy module."""
+    _sync_fuji_policy_runtime()
+    return _fuji_policy._load_policy_from_str(content, path)
 
 
 
 def reload_policy() -> Dict[str, Any]:
     """Reload the shared FUJI policy state and keep module aliases synchronized."""
     global POLICY, _POLICY_MTIME
-    _fuji_policy.yaml = yaml
-    _fuji_policy.capability_cfg = capability_cfg
+    _sync_fuji_policy_runtime()
     POLICY = _fuji_policy.reload_policy()
     _POLICY_MTIME = getattr(_fuji_policy, "_POLICY_MTIME", _POLICY_MTIME)
     return POLICY

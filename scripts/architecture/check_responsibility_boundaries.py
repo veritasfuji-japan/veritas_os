@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -42,6 +43,25 @@ class BoundaryIssue:
     forbidden_module: str | None = None
 
 
+@dataclass(frozen=True)
+class DocAlignmentIssue:
+    """Structured mismatch between the checker config and architecture docs."""
+
+    source_module: str
+    message: str
+    path: Path | None = None
+
+
+@dataclass(frozen=True)
+class DocExtractionError:
+    """Structured error raised while reading extension points from docs."""
+
+    message: str
+
+
+DEFAULT_DOC_PATH = Path("docs/architecture/core_responsibility_boundaries.md")
+
+
 DEFAULT_RULES: tuple[BoundaryRule, ...] = (
     BoundaryRule(
         source_module="planner",
@@ -61,7 +81,7 @@ DEFAULT_RULES: tuple[BoundaryRule, ...] = (
 ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
     "planner": (
         "veritas_os.core.memory",
-        "veritas_os.core.world_model",
+        "veritas_os.core.world",
         "veritas_os.core.strategy",
     ),
     "kernel": (
@@ -70,17 +90,77 @@ ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
         "veritas_os.core.memory",
     ),
     "fuji": (
-        "veritas_os.core.fuji_codes",
-        "veritas_os.core.sanitize",
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
     ),
     "memory": (
-        "veritas_os.utils.atomic_io",
-        "veritas_os.core.memory_vector",
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_security",
     ),
 }
 
 
-REMEDIATION_LINK = "docs/review/SYSTEM_SCORECARD_2026_03_02.md#実装方針責務境界を越えない範囲"
+RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
+    "planner": (
+        "veritas_os.core.planner_normalization",
+        "veritas_os.core.planner_json",
+        "veritas_os.core.strategy",
+    ),
+    "kernel": (
+        "veritas_os.core.kernel_stages",
+        "veritas_os.core.kernel_qa",
+        "veritas_os.core.pipeline_contracts",
+    ),
+    "fuji": (
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
+    ),
+    "memory": (
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
+    ),
+}
+
+
+REMEDIATION_LINK = "docs/architecture/core_responsibility_boundaries.md"
+DOC_SECTION_TO_MODULE: dict[str, str] = {
+    "Planner": "planner",
+    "Kernel": "kernel",
+    "FUJI": "fuji",
+    "MemoryOS": "memory",
+}
+MODULE_DOCSTRING_REQUIRED_MARKERS: tuple[str, ...] = (
+    "Public contract:",
+    "Preferred extension points:",
+    "Compatibility guidance:",
+)
+DOCSTRING_GUARD_MODULES: tuple[str, ...] = (
+    "pipeline",
+    "kernel",
+    "fuji",
+    "memory",
+)
+MODULE_DOCSTRING_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
+    "pipeline": (
+        "veritas_os.core.pipeline_inputs",
+        "veritas_os.core.pipeline_execute",
+        "veritas_os.core.pipeline_policy",
+        "veritas_os.core.pipeline_response",
+        "veritas_os.core.pipeline_persist",
+        "veritas_os.core.pipeline_replay",
+    ),
+    "kernel": RECOMMENDED_EXTENSION_POINTS["kernel"],
+    "fuji": RECOMMENDED_EXTENSION_POINTS["fuji"],
+    "memory": RECOMMENDED_EXTENSION_POINTS["memory"],
+}
 
 
 def _normalize_module_name(module_name: str) -> str:
@@ -134,12 +214,89 @@ def _parse_imported_names(path: Path) -> set[str]:
     return _collect_imported_names(tree)
 
 
+def _load_module_docstring(path: Path) -> str:
+    """Return the module docstring for a Python source file."""
+    source = path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(path))
+    return ast.get_docstring(tree, clean=False) or ""
+
+
+def collect_module_docstring_issues(
+    core_dir: Path,
+    modules: Iterable[str] = DOCSTRING_GUARD_MODULES,
+) -> list[DocAlignmentIssue]:
+    """Validate core module docstrings keep boundary guidance visible."""
+    issues: list[DocAlignmentIssue] = []
+    for module_name in modules:
+        path = core_dir / f"{module_name}.py"
+        try:
+            docstring = _load_module_docstring(path)
+        except FileNotFoundError:
+            continue
+
+        missing_markers = [
+            marker for marker in MODULE_DOCSTRING_REQUIRED_MARKERS
+            if marker not in docstring
+        ]
+        if missing_markers:
+            issues.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        f"Module docstring guidance missing for '{module_name}': "
+                        f"{missing_markers}"
+                    ),
+                    path=path,
+                )
+            )
+
+        recommended_points = MODULE_DOCSTRING_EXTENSION_POINTS.get(module_name, ())
+        missing_points = [
+            point for point in recommended_points
+            if f"``{point.rsplit('.', maxsplit=1)[-1]}.py``" not in docstring
+            and f"``{point.rsplit('.', maxsplit=1)[-1]}``" not in docstring
+            and point not in docstring
+        ]
+        if missing_points:
+            issues.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Module docstring extension points out of sync for "
+                        f"'{module_name}': missing={missing_points}"
+                    ),
+                    path=path,
+                )
+            )
+
+    return issues
+
+
 def collect_boundary_issues(
     core_dir: Path,
     rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+    doc_path: Path = DEFAULT_DOC_PATH,
 ) -> list[BoundaryIssue]:
     """Collect machine-classifiable boundary checker issues."""
     issues: list[BoundaryIssue] = []
+    for issue in collect_doc_alignment_issues(doc_path):
+        issues.append(
+            BoundaryIssue(
+                code="doc_alignment_error",
+                message=issue.message,
+                path=issue.path or doc_path,
+                source_module=issue.source_module,
+            )
+        )
+    for issue in collect_module_docstring_issues(core_dir):
+        issues.append(
+            BoundaryIssue(
+                code="doc_alignment_error",
+                message=issue.message,
+                path=issue.path or core_dir / f"{issue.source_module}.py",
+                source_module=issue.source_module,
+            )
+        )
     for rule in rules:
         path = core_dir / f"{rule.source_module}.py"
         try:
@@ -229,12 +386,18 @@ def build_remediation_guide(
     """Build a CI-friendly remediation guide for boundary violations."""
     rows: list[str] = []
     for violation in violations:
-        alternatives = ", ".join(ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",)))
+        alternatives = ", ".join(
+            ALLOWED_DEPENDENCY_GUIDE.get(violation.source_module, ("N/A",))
+        )
+        extension_points = ", ".join(
+            RECOMMENDED_EXTENSION_POINTS.get(violation.source_module, ("N/A",))
+        )
         rows.append(
             " | ".join(
                 (
                     f"{violation.source_module} -> {violation.forbidden_module}",
                     alternatives,
+                    extension_points,
                     remediation_link,
                 )
             )
@@ -245,14 +408,25 @@ def build_remediation_guide(
 
     header = (
         "\n=== Responsibility Boundary Remediation Guide ===\n"
-        "禁止依存 | 代替実装先（許可依存） | 修正例リンク\n"
+        "禁止依存 | 代替実装先（許可依存） | 正規拡張ポイント | 修正例リンク\n"
     )
     return header + "\n".join(rows)
 
 
-def check_boundaries(core_dir: Path, rules: Iterable[BoundaryRule] = DEFAULT_RULES) -> list[str]:
+def check_boundaries(
+    core_dir: Path,
+    rules: Iterable[BoundaryRule] = DEFAULT_RULES,
+    doc_path: Path = DEFAULT_DOC_PATH,
+) -> list[str]:
     """Run all boundary rules and return all violation messages."""
-    return [issue.message for issue in collect_boundary_issues(core_dir=core_dir, rules=rules)]
+    return [
+        issue.message
+        for issue in collect_boundary_issues(
+            core_dir=core_dir,
+            rules=rules,
+            doc_path=doc_path,
+        )
+    ]
 
 
 def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
@@ -262,6 +436,7 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
         "boundary_violation": 0,
         "input_invalid": 0,
         "permission_denied": 0,
+        "doc_alignment_error": 0,
     }
     for issue in issue_list:
         if issue.code in counts:
@@ -279,11 +454,182 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
                 "forbidden_module": issue.forbidden_module,
                 "path": str(issue.path),
                 "message": issue.message,
+                "allowed_dependencies": list(
+                    ALLOWED_DEPENDENCY_GUIDE.get(issue.source_module, ())
+                ),
+                "recommended_extension_points": list(
+                    RECOMMENDED_EXTENSION_POINTS.get(issue.source_module, ())
+                ),
+                "remediation_link": REMEDIATION_LINK,
             }
             for issue in issue_list
         ],
     }
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def extract_doc_extension_points(doc_path: Path) -> dict[str, tuple[str, ...]]:
+    """Extract preferred extension points from the architecture document."""
+    document = doc_path.read_text(encoding="utf-8")
+    extracted, _ = _extract_doc_extension_points_from_text(document)
+    return extracted
+
+
+def _extract_doc_extension_points_from_text(
+    document: str,
+) -> tuple[dict[str, tuple[str, ...]], tuple[str, ...]]:
+    """Extract doc extension points and duplicate module sections from text."""
+    section_pattern = re.compile(
+        r"### (?P<section>[^\r\n]+?) \(`veritas_os\.core\.[^`]+`\)\r?\n"
+        r"(?P<body>.*?)(?=\r?\n### |\Z)",
+        re.DOTALL,
+    )
+    marker = "**Preferred extension points**:"
+    extracted: dict[str, tuple[str, ...]] = {}
+    duplicate_sections: list[str] = []
+
+    for match in section_pattern.finditer(document):
+        section_name = match.group("section").strip()
+        module_name = DOC_SECTION_TO_MODULE.get(section_name)
+        if module_name is None:
+            continue
+
+        body = match.group("body")
+        _, marker_found, remainder = body.partition(marker)
+        if not marker_found:
+            continue
+
+        bullet_lines: list[str] = []
+        bullet_collection_started = False
+        bullet_pattern = re.compile(r"^(?:[-*+]\s+|\d+\.\s+)(?P<item>.+)$")
+        for line in remainder.splitlines():
+            stripped_line = line.strip()
+            if not stripped_line:
+                if bullet_collection_started:
+                    break
+                continue
+            bullet_match = bullet_pattern.match(stripped_line)
+            if bullet_match is not None:
+                bullet_collection_started = True
+                bullet_lines.append(bullet_match.group("item").strip().strip("`"))
+                continue
+            if bullet_collection_started:
+                break
+        if module_name in extracted:
+            duplicate_sections.append(module_name)
+            continue
+        extracted[module_name] = tuple(bullet_lines)
+
+    return extracted, tuple(duplicate_sections)
+
+
+def _normalize_extension_points_for_alignment(
+    extension_points: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Normalize extension-point lists for order-insensitive doc alignment."""
+    return tuple(sorted(extension_points))
+
+
+def collect_doc_alignment_issues(doc_path: Path) -> list[DocAlignmentIssue]:
+    """Return structured mismatches between docs and checker guidance."""
+    try:
+        document = doc_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"file not found at {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections: tuple[str, ...] = ()
+    except PermissionError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"permission denied for {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    except UnicodeDecodeError:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"invalid UTF-8 at {doc_path}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    except OSError as exc:
+        extraction_error = DocExtractionError(
+            message=(
+                "Unable to read architecture boundary document: "
+                f"os error for {doc_path}: {exc.strerror or str(exc)}"
+            )
+        )
+        documented_points = {}
+        duplicate_sections = ()
+    else:
+        documented_points, duplicate_sections = _extract_doc_extension_points_from_text(
+            document
+        )
+        extraction_error = None
+
+    mismatches: list[DocAlignmentIssue] = []
+    if extraction_error is not None:
+        mismatches.append(
+            DocAlignmentIssue(
+                source_module="documentation",
+                message=extraction_error.message,
+            )
+        )
+        return mismatches
+
+    for module_name in duplicate_sections:
+        mismatches.append(
+            DocAlignmentIssue(
+                source_module=module_name,
+                message=(
+                    "Duplicate preferred extension point section found for "
+                    f"'{module_name}' in {doc_path}"
+                ),
+            )
+        )
+
+    for module_name, configured_points in RECOMMENDED_EXTENSION_POINTS.items():
+        expected_points = documented_points.get(module_name)
+        if expected_points is None:
+            mismatches.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Missing preferred extension point section for "
+                        f"'{module_name}' in {doc_path}"
+                    ),
+                )
+            )
+            continue
+        if _normalize_extension_points_for_alignment(
+            expected_points
+        ) != _normalize_extension_points_for_alignment(configured_points):
+            mismatches.append(
+                DocAlignmentIssue(
+                    source_module=module_name,
+                    message=(
+                        "Preferred extension points out of sync for "
+                        f"'{module_name}': doc={list(expected_points)} "
+                        f"checker={list(configured_points)}"
+                    ),
+                )
+            )
+
+    return mismatches
+
+
+def find_doc_alignment_issues(doc_path: Path) -> list[str]:
+    """Return human-readable mismatches between docs and checker guidance."""
+    return [issue.message for issue in collect_doc_alignment_issues(doc_path)]
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -294,6 +640,16 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("veritas_os/core"),
         help="Path to the core module directory (default: veritas_os/core).",
+    )
+    parser.add_argument(
+        "--doc-path",
+        type=Path,
+        default=DEFAULT_DOC_PATH,
+        help=(
+            "Path to the architecture document used for extension-point "
+            "alignment checks "
+            "(default: docs/architecture/core_responsibility_boundaries.md)."
+        ),
     )
     parser.add_argument(
         "--report-format",
@@ -308,7 +664,10 @@ def main() -> int:
     """CLI entrypoint for CI execution."""
     parser = _build_parser()
     args = parser.parse_args()
-    structured_issues = collect_boundary_issues(core_dir=args.core_dir)
+    structured_issues = collect_boundary_issues(
+        core_dir=args.core_dir,
+        doc_path=args.doc_path,
+    )
     issues = [issue.message for issue in structured_issues]
 
     if issues:

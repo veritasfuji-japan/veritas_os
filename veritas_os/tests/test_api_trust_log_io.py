@@ -42,6 +42,40 @@ def test_load_logs_json_supports_dict_and_list_payload(tmp_path: Path) -> None:
     assert items == [{"request_id": "r2"}]
 
 
+def test_load_logs_json_result_marks_unreadable_payload(tmp_path: Path) -> None:
+    logger = _LoggerStub()
+    log_json = tmp_path / "trust_log.json"
+    log_json.write_text("{broken json", encoding="utf-8")
+
+    result = trust_log_io.load_logs_json_result(
+        log_json,
+        max_log_file_size=1024 * 1024,
+        effective_log_paths=lambda: (tmp_path, log_json, tmp_path / "trust_log.jsonl"),
+        logger=logger,
+    )
+
+    assert result.status == "unreadable"
+    assert result.items == []
+    assert result.error
+
+
+def test_load_logs_json_result_marks_invalid_top_level_payload(tmp_path: Path) -> None:
+    logger = _LoggerStub()
+    log_json = tmp_path / "trust_log.json"
+    log_json.write_text('"corrupted"', encoding="utf-8")
+
+    result = trust_log_io.load_logs_json_result(
+        log_json,
+        max_log_file_size=1024 * 1024,
+        effective_log_paths=lambda: (tmp_path, log_json, tmp_path / "trust_log.jsonl"),
+        logger=logger,
+    )
+
+    assert result.status == "invalid"
+    assert result.error == "aggregate log payload must be a list or object"
+    assert result.items == []
+
+
 def test_append_trust_log_entry_writes_jsonl_and_json(tmp_path: Path) -> None:
     logger = _LoggerStub()
     log_json = tmp_path / "trust_log.json"
@@ -52,6 +86,14 @@ def test_append_trust_log_entry_writes_jsonl_and_json(tmp_path: Path) -> None:
 
     def _load(path: Path | None) -> list:
         return trust_log_io.load_logs_json(
+            path,
+            max_log_file_size=1024 * 1024,
+            effective_log_paths=_effective_paths,
+            logger=logger,
+        )
+
+    def _load_result(path: Path | None) -> trust_log_io.TrustLogLoadResult:
+        return trust_log_io.load_logs_json_result(
             path,
             max_log_file_size=1024 * 1024,
             effective_log_paths=_effective_paths,
@@ -73,6 +115,7 @@ def test_append_trust_log_entry_writes_jsonl_and_json(tmp_path: Path) -> None:
         effective_log_paths=_effective_paths,
         has_atomic_io=False,
         atomic_append_line=None,
+        load_logs_json_result_fn=_load_result,
         load_logs_json_fn=_load,
         save_json_fn=_save,
         secure_chmod_fn=lambda _path: None,
@@ -91,6 +134,58 @@ def test_append_trust_log_entry_writes_jsonl_and_json(tmp_path: Path) -> None:
     aggregate = json.loads(log_json.read_text(encoding="utf-8"))
     assert aggregate["items"][0]["request_id"] == "req-1"
     assert published[0]["event_type"] == "trustlog.appended"
+
+
+def test_append_trust_log_entry_skips_aggregate_rewrite_when_json_unreadable(
+    tmp_path: Path,
+) -> None:
+    logger = _LoggerStub()
+    log_json = tmp_path / "trust_log.json"
+    log_json.write_text("{broken json", encoding="utf-8")
+    log_jsonl = tmp_path / "trust_log.jsonl"
+
+    def _effective_paths() -> tuple[Path, Path, Path]:
+        return tmp_path, log_json, log_jsonl
+
+    def _load(path: Path | None) -> list:
+        return trust_log_io.load_logs_json(
+            path,
+            max_log_file_size=1024 * 1024,
+            effective_log_paths=_effective_paths,
+            logger=logger,
+        )
+
+    def _load_result(path: Path | None) -> trust_log_io.TrustLogLoadResult:
+        return trust_log_io.load_logs_json_result(
+            path,
+            max_log_file_size=1024 * 1024,
+            effective_log_paths=_effective_paths,
+            logger=logger,
+        )
+
+    saved_payloads: list[list] = []
+    trust_log_io.append_trust_log_entry(
+        {"request_id": "req-2", "kind": "decision"},
+        effective_log_paths=_effective_paths,
+        has_atomic_io=False,
+        atomic_append_line=None,
+        load_logs_json_result_fn=_load_result,
+        load_logs_json_fn=_load,
+        save_json_fn=lambda _path, items: saved_payloads.append(items),
+        secure_chmod_fn=lambda _path: None,
+        publish_event=lambda *_args, **_kwargs: None,
+        logger=logger,
+        errstr=str,
+        trust_log_lock=threading.Lock(),
+    )
+
+    assert saved_payloads == []
+    assert log_json.read_text(encoding="utf-8") == "{broken json"
+    assert log_jsonl.exists() is True
+    assert any(
+        "write trust_log.json skipped" in call[0]
+        for call in logger.warning_calls
+    )
 
 
 def test_write_shadow_decide_snapshot_creates_snapshot(tmp_path: Path) -> None:

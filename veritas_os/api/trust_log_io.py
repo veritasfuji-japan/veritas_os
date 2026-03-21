@@ -2,10 +2,72 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Callable, Dict, Optional
+
+
+@dataclass(frozen=True)
+class TrustLogLoadResult:
+    """Structured trust-log aggregate load result used to avoid silent data loss."""
+
+    items: list
+    status: str
+    error: Optional[str] = None
+
+
+def load_logs_json_result(
+    path: Optional[Path],
+    *,
+    max_log_file_size: int,
+    effective_log_paths: Callable[[], tuple[Path, Path, Path]],
+    logger: Any,
+) -> TrustLogLoadResult:
+    """Load trust-log aggregate JSON and preserve unreadable/degraded state."""
+    try:
+        if path is None:
+            _, log_json, _ = effective_log_paths()
+            path = log_json
+
+        if not path.exists():
+            return TrustLogLoadResult(items=[], status="missing")
+
+        file_size = path.stat().st_size
+        if file_size > max_log_file_size:
+            logger.warning("Log file too large (%d bytes), skipping load", file_size)
+            return TrustLogLoadResult(
+                items=[],
+                status="too_large",
+                error=f"aggregate log exceeds {max_log_file_size} bytes",
+            )
+
+        with open(path, "r", encoding="utf-8") as file_obj:
+            obj = json.load(file_obj)
+
+        if isinstance(obj, dict):
+            items = obj.get("items", [])
+        elif isinstance(obj, list):
+            items = obj
+        else:
+            return TrustLogLoadResult(
+                items=[],
+                status="invalid",
+                error="aggregate log payload must be a list or object",
+            )
+
+        if not isinstance(items, list):
+            return TrustLogLoadResult(
+                items=[],
+                status="invalid",
+                error="aggregate log payload is not a list",
+            )
+
+        return TrustLogLoadResult(items=items, status="ok")
+    except Exception as exc:
+        logger.debug("_load_logs_json: failed to load %s", path, exc_info=True)
+        return TrustLogLoadResult(items=[], status="unreadable", error=str(exc))
 
 
 def load_logs_json(
@@ -15,31 +77,13 @@ def load_logs_json(
     effective_log_paths: Callable[[], tuple[Path, Path, Path]],
     logger: Any,
 ) -> list:
-    """Load trust-log aggregate JSON safely with size guard and compatibility behavior."""
-    try:
-        if path is None:
-            _, log_json, _ = effective_log_paths()
-            path = log_json
-
-        if not path.exists():
-            return []
-
-        file_size = path.stat().st_size
-        if file_size > max_log_file_size:
-            logger.warning("Log file too large (%d bytes), skipping load", file_size)
-            return []
-
-        with open(path, "r", encoding="utf-8") as file_obj:
-            obj = json.load(file_obj)
-
-        if isinstance(obj, dict):
-            return obj.get("items", [])
-        if isinstance(obj, list):
-            return obj
-        return []
-    except Exception:
-        logger.debug("_load_logs_json: failed to load %s", path, exc_info=True)
-        return []
+    """Load trust-log aggregate JSON safely with legacy list-only compatibility."""
+    return load_logs_json_result(
+        path,
+        max_log_file_size=max_log_file_size,
+        effective_log_paths=effective_log_paths,
+        logger=logger,
+    ).items
 
 
 def secure_chmod(path: Path, *, logger: Any, errstr: Callable[[Exception], str]) -> None:
@@ -76,6 +120,7 @@ def append_trust_log_entry(
     effective_log_paths: Callable[[], tuple[Path, Path, Path]],
     has_atomic_io: bool,
     atomic_append_line: Optional[Callable[..., None]],
+    load_logs_json_result_fn: Callable[[Optional[Path]], TrustLogLoadResult],
     load_logs_json_fn: Callable[[Optional[Path]], list],
     save_json_fn: Callable[[Path, list], None],
     secure_chmod_fn: Callable[[Path], None],
@@ -109,7 +154,16 @@ def append_trust_log_entry(
         except Exception as exc:
             logger.warning("write trust_log.jsonl failed: %s", errstr(exc))
 
-        items = load_logs_json_fn(log_json)
+        load_result = load_logs_json_result_fn(log_json)
+        if load_result.status not in {"ok", "missing"}:
+            logger.warning(
+                "write trust_log.json skipped: aggregate log status=%s error=%s",
+                load_result.status,
+                load_result.error or "unknown",
+            )
+            return
+
+        items = list(load_result.items or load_logs_json_fn(log_json))
         items.append(entry)
         try:
             save_json_fn(log_json, items)

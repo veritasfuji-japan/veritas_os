@@ -580,6 +580,42 @@ class TestServerMemoryEndpoints:
         body = resp.json()
         assert body["ok"] is True
 
+    def test_memory_put_reports_partial_failure_when_legacy_save_fails(
+        self,
+        monkeypatch,
+    ):
+        class PartialStore:
+            def put(self, *args, **kwargs):
+                if args and args[0] == server._derive_api_user_id(_TEST_KEY):
+                    raise RuntimeError("legacy backend unavailable")
+                return "vector-id"
+
+        monkeypatch.setattr(server, "get_memory_store", lambda: PartialStore())
+        resp = _client.post(
+            "/v1/memory/put",
+            headers=_AUTH,
+            json={
+                "user_id": "u1",
+                "key": "legacy-key",
+                "value": {"hello": "world"},
+                "text": "episode text",
+                "kind": "semantic",
+            },
+        )
+
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["status"] == "partial_failure"
+        assert body["legacy"]["saved"] is False
+        assert body["vector"]["saved"] is True
+        assert body["errors"] == [
+            {
+                "stage": "legacy",
+                "message": "legacy save failed",
+                "error_code": "backend_unavailable",
+            }
+        ]
+
     def test_memory_search_store_unavailable(self, monkeypatch):
         monkeypatch.setattr(server, "get_memory_store", lambda: None)
         resp = _client.post("/v1/memory/search", headers=_AUTH, json={
@@ -769,6 +805,8 @@ class TestServerMetrics:
         body = resp.json()
         assert "decide_files" in body
         assert body["decide_files"] == 0
+        assert body["trust_json_status"] == "missing"
+        assert body["trust_json_error"] is False
 
     def test_metrics_with_files(self, monkeypatch, tmp_path):
         shadow = tmp_path / "shadow"
@@ -784,6 +822,24 @@ class TestServerMetrics:
         body = resp.json()
         assert body["decide_files"] == 1
         assert body["trust_jsonl_lines"] == 2
+        assert body["trust_json_status"] == "missing"
+
+    def test_metrics_reports_unreadable_trust_json(self, monkeypatch, tmp_path):
+        """Metrics should expose degraded aggregate trust-log readability."""
+        log_json = tmp_path / "tl.json"
+        log_json.write_text("{broken", encoding="utf-8")
+        monkeypatch.setattr(server, "_effective_shadow_dir", lambda: tmp_path)
+        monkeypatch.setattr(
+            server,
+            "_effective_log_paths",
+            lambda: (tmp_path, log_json, tmp_path / "tl.jsonl"),
+        )
+
+        resp = _client.get("/v1/metrics", headers=_AUTH)
+
+        body = resp.json()
+        assert body["trust_json_status"] == "unreadable"
+        assert body["trust_json_error"] is True
 
 
 class TestServerTrustLogs:

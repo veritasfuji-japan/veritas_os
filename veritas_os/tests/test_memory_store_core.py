@@ -14,6 +14,15 @@ from veritas_os.core.memory_store import (
     DEFAULT_RETENTION_CLASS,
     ALLOWED_RETENTION_CLASSES,
 )
+from veritas_os.core.memory_store_helpers import (
+    erase_user_records,
+    is_record_expired_compat,
+    normalize_document_lifecycle,
+    put_episode_record,
+    recent_records_compat,
+    search_records_compat,
+    summarize_records_for_planner,
+)
 
 
 @pytest.fixture
@@ -171,6 +180,128 @@ class TestIsRecordExpired:
         assert MemoryStore._is_record_expired({"value": "string"}) is False
 
 
+class TestMemoryStoreCompatHelpers:
+    def test_normalize_document_lifecycle_keeps_contract(self):
+        payload = {
+            "text": "hello",
+            "meta": {"retention_class": "LONG", "legal_hold": "yes"},
+        }
+
+        result = normalize_document_lifecycle(
+            payload,
+            default_retention_class=DEFAULT_RETENTION_CLASS,
+            allowed_retention_classes={"short", "medium", "long"},
+            parse_expires_at=MemoryStore._parse_expires_at,
+        )
+
+        assert result["meta"]["retention_class"] == "long"
+        assert result["meta"]["legal_hold"] is True
+
+    def test_is_record_expired_compat_handles_expired_record(self):
+        past = time.time() - 86400
+        record = {"value": {"meta": {"expires_at": past}}}
+
+        assert is_record_expired_compat(
+            record,
+            parse_expires_at=MemoryStore._parse_expires_at,
+        ) is True
+
+    def test_erase_user_records_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "secret"})
+
+        helper_module = mock.Mock()
+        helper_module.erase_user_data = mock.Mock(
+            return_value=(
+                [],
+                {"deleted_count": 1, "reason": "gdpr", "actor": "tester"},
+            )
+        )
+
+        report = erase_user_records(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            user_id="u1",
+            reason="gdpr",
+            actor="tester",
+        )
+
+        assert report["ok"] is True
+        helper_module.erase_user_data.assert_called_once()
+
+    def test_recent_records_compat_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "alpha"})
+        helper_module = mock.Mock()
+        helper_module.filter_recent_records = mock.Mock(
+            return_value=[{"key": "patched"}]
+        )
+
+        result = recent_records_compat(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            user_id="u1",
+            limit=5,
+        )
+
+        assert result == [{"key": "patched"}]
+        helper_module.filter_recent_records.assert_called_once()
+
+    def test_search_records_compat_prefers_patched_helper(self, store):
+        store.put("u1", "k1", {"text": "hello world", "kind": "episodic"})
+        helper_module = mock.Mock()
+        helper_module.build_kvs_search_hits = mock.Mock(
+            return_value=[{"id": "patched", "text": "hello world", "score": 1.0}]
+        )
+
+        result = search_records_compat(
+            store=store,
+            helper_module=helper_module,
+            original_helper=object(),
+            fallback_helper=mock.Mock(),
+            query="hello",
+            user_id="u1",
+        )
+
+        assert result == {
+            "episodic": [{"id": "patched", "text": "hello world", "score": 1.0}]
+        }
+        helper_module.build_kvs_search_hits.assert_called_once()
+
+    def test_put_episode_record_logs_vector_failure_without_breaking(self, store):
+        mem_vec = mock.Mock()
+        mem_vec.add.side_effect = RuntimeError("vector down")
+        logger = mock.Mock()
+
+        key = put_episode_record(
+            store=store,
+            text="episodic note",
+            tags=["ops"],
+            meta={"user_id": "u1"},
+            mem_vec=mem_vec,
+            logger=logger,
+        )
+
+        assert key.startswith("episode_")
+        assert store.get("u1", key)["text"] == "episodic note"
+        logger.warning.assert_called_once()
+
+    def test_summarize_records_for_planner_uses_search_contract(self, store):
+        store.put("u1", "k1", {"text": "planner context", "kind": "episodic"})
+
+        result = summarize_records_for_planner(
+            store=store,
+            user_id="u1",
+            query="planner",
+            limit=3,
+            build_summary=lambda items: f"items={len(items)}",
+        )
+
+        assert result == "items=1"
+
+
 class TestSearch:
     def test_basic_search(self, store):
         store.put("u1", "k1", {"text": "hello world", "kind": "episodic"})
@@ -186,7 +317,6 @@ class TestSearch:
         result = store.search("zzzznotfound", min_sim=0.5)
         assert result == {} or len(result.get("episodic", [])) == 0
 
-
 class TestSimpleScore:
     def test_exact_substring(self, store):
         score = store._simple_score("hello", "hello world")
@@ -198,7 +328,6 @@ class TestSimpleScore:
 
     def test_empty(self, store):
         assert store._simple_score("", "hello") == 0.0
-
 
 class TestRecent:
     def test_recent(self, store):
@@ -213,7 +342,6 @@ class TestRecent:
         results = store.recent("u1", contains="apple")
         assert len(results) == 1
 
-
 class TestEraseUser:
     def test_erase(self, store):
         store.put("u1", "k1", "v1")
@@ -222,12 +350,10 @@ class TestEraseUser:
         assert report["deleted_count"] >= 1
         assert store.get("u1", "k1") is None
 
-
 class TestPutEpisode:
     def test_basic_episode(self, store):
         key = store.put_episode("test episode text", tags=["test"])
         assert key.startswith("episode_")
-
 
 class TestSummarizeForPlanner:
     def test_no_matches(self, store):
@@ -239,11 +365,9 @@ class TestSummarizeForPlanner:
         result = store.summarize_for_planner("u1", "VERITAS")
         assert "VERITAS" in result
 
-
 class TestAppendHistory:
     def test_append(self, store):
         assert store.append_history("u1", {"event": "test"}) is True
-
 
 class TestAddUsage:
     def test_add(self, store):

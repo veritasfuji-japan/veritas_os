@@ -61,6 +61,8 @@ def test_metrics_endpoint():
     data = resp.json()
     assert "decide_files" in data
     assert "trust_jsonl_lines" in data
+    assert "trust_json_status" in data
+    assert "trust_json_error" in data
 
 
 # ------------------------------------------------------------------

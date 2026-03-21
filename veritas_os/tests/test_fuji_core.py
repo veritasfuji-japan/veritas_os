@@ -184,6 +184,57 @@ def test_load_policy_strict_mode_enforces_deny_policy(tmp_path, monkeypatch, cap
     assert "strict policy-load mode active" in caplog.text.lower()
 
 
+def test_load_policy_delegates_to_shared_fuji_policy(monkeypatch, tmp_path):
+    """fuji.py の互換入口は shared policy helper を経由する。"""
+    policy_file = tmp_path / "fuji.yaml"
+    policy_file.write_text("version: delegated", encoding="utf-8")
+    expected = {"version": "delegated"}
+    observed = {}
+
+    def _fake_load_policy(path):
+        observed["path"] = path
+        observed["yaml"] = fuji._fuji_policy.yaml
+        observed["capability"] = fuji._fuji_policy.capability_cfg
+        return expected
+
+    monkeypatch.setattr(fuji._fuji_policy, "_load_policy", _fake_load_policy)
+
+    result = fuji._load_policy(policy_file)  # type: ignore[attr-defined]
+
+    assert result == expected
+    assert observed["path"] == policy_file
+    assert observed["yaml"] is fuji.yaml
+    assert observed["capability"] is fuji.capability_cfg
+
+
+def test_load_policy_from_str_delegates_to_shared_fuji_policy(monkeypatch):
+    """文字列ロードも shared policy helper に委譲し、runtime alias を同期する。"""
+    expected = {"version": "from_shared_helper"}
+    observed = {}
+
+    def _fake_load_policy_from_str(content, path):
+        observed["content"] = content
+        observed["path"] = path
+        observed["yaml"] = fuji._fuji_policy.yaml
+        observed["capability"] = fuji._fuji_policy.capability_cfg
+        return expected
+
+    monkeypatch.setattr(
+        fuji._fuji_policy,
+        "_load_policy_from_str",
+        _fake_load_policy_from_str,
+    )
+    path = Path("/tmp/fuji_policy.yaml")
+
+    result = fuji._load_policy_from_str("version: delegated", path)  # type: ignore[attr-defined]
+
+    assert result == expected
+    assert observed["content"] == "version: delegated"
+    assert observed["path"] == path
+    assert observed["yaml"] is fuji.yaml
+    assert observed["capability"] is fuji.capability_cfg
+
+
 # ---------------------------------------------------------
 # fallback_safety_head
 # ---------------------------------------------------------
@@ -737,5 +788,4 @@ def test_evaluate_with_string_query(monkeypatch):
     assert called["context"]["stakes"] == 0.1
     assert called["evidence"] == []
     assert called["alternatives"] == []
-
 

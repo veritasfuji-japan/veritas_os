@@ -82,11 +82,14 @@ def test_io_boundary_planner_does_not_perform_direct_write_calls() -> None:
     assert not _has_forbidden_write_calls(planner_tree, forbidden_write_ops)
 
 
-def test_state_ownership_memory_store_declared_only_in_memory_module() -> None:
-    """MemoryStore type should be owned by MemoryOS only."""
+def test_state_ownership_memory_store_exposed_only_via_memory_boundary() -> None:
+    """MemoryStore should be exposed from MemoryOS without redefinition drift."""
+    from veritas_os.core import memory_store
+
     memory_tree = _read_ast(MODULE_FILES["memory"])
     class_names = {node.name for node in ast.walk(memory_tree) if isinstance(node, ast.ClassDef)}
-    assert "MemoryStore" in class_names
+    assert "MemoryStore" not in class_names
+    assert memory.MemoryStore is memory_store.MemoryStore
 
     for module_name in ("planner", "kernel", "fuji"):
         tree = _read_ast(MODULE_FILES[module_name])

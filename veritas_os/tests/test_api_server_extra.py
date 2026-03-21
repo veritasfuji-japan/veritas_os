@@ -20,7 +20,11 @@ from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
-from veritas_os.api.schemas import MemoryPutRequest
+from veritas_os.api.schemas import (
+    MemoryGetRequest,
+    MemoryPutRequest,
+    MemorySearchRequest,
+)
 
 
 client = TestClient(server.app)
@@ -85,6 +89,8 @@ def test_health_and_status_and_metrics(monkeypatch):
     data = r.json()
     assert "decide_files" in data
     assert "trust_jsonl_lines" in data
+    assert "trust_json_status" in data
+    assert "trust_json_error" in data
     assert "last_decide_at" in data
     assert "server_time" in data
     assert "auth_reject_reasons" in data
@@ -127,6 +133,7 @@ def test_auth_store_error_policy_fail_open(monkeypatch):
         def increment_rate_limit(self, api_key: str, limit: int, window_sec: float) -> bool:
             raise RuntimeError("broken rate")
 
+    monkeypatch.setenv("VERITAS_ENV", "local")
     monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
     monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
     monkeypatch.setattr(server, "_AUTH_SECURITY_STORE", BrokenStore())
@@ -1178,6 +1185,75 @@ def test_memory_put_respects_kind_for_vector_store(monkeypatch):
     assert calls["item"]["meta"]["user_id"] == "anon"
 
 
+def test_memory_put_reports_partial_failure_when_vector_save_fails(monkeypatch):
+    """memory_put should expose stage-level partial failure details."""
+
+    class PartialStore:
+        def __init__(self):
+            self.legacy = {}
+
+        def put(self, *args, **kwargs):
+            if len(args) == 2 and isinstance(args[1], dict) and "text" in args[1]:
+                raise RuntimeError("vector backend offline")
+            user_id = args[0]
+            key = kwargs.get("key", args[1] if len(args) > 1 else None)
+            value = kwargs.get("value", args[2] if len(args) > 2 else None)
+            self.legacy[(user_id, key)] = value
+            return None
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: PartialStore())
+
+    res = server.memory_put(
+        MemoryPutRequest(
+            user_id="u-partial",
+            key="legacy-key",
+            value={"foo": "bar"},
+            kind="semantic",
+            text="hello",
+            tags=["t1"],
+        )
+    )
+
+    assert res["ok"] is True
+    assert res["status"] == "partial_failure"
+    assert res["legacy"]["saved"] is True
+    assert res["vector"]["saved"] is False
+    assert res["errors"] == [
+        {
+            "stage": "vector",
+            "message": "vector save failed",
+            "error_code": "backend_unavailable",
+        }
+    ]
+
+
+def test_memory_put_reports_failed_when_all_save_paths_fail(monkeypatch):
+    """memory_put should not mask a total write failure as success."""
+
+    class FailingStore:
+        def put(self, *args, **kwargs):
+            raise RuntimeError("backend offline")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: FailingStore())
+
+    res = server.memory_put(
+        MemoryPutRequest(
+            user_id="u-fail",
+            key="legacy-key",
+            value={"foo": "bar"},
+            kind="semantic",
+            text="hello",
+        )
+    )
+
+    assert res["ok"] is False
+    assert res["status"] == "failed"
+    assert res["error"] == "memory operation failed"
+    assert res["error_code"] == "partial_failure"
+    assert {item["stage"] for item in res["errors"]} == {"legacy", "vector"}
+    assert {item["error_code"] for item in res["errors"]} == {"backend_unavailable"}
+
+
 def test_memory_search_filters_by_user(monkeypatch):
     """
     memory_search:
@@ -1885,3 +1961,98 @@ def test_memory_put_accepts_string_value():
     )
     assert r.status_code == 200
     assert r.json()["ok"] is True
+
+
+def test_memory_search_exposes_error_code_for_validation_failures(monkeypatch):
+    """memory_search should publish additive error codes for failure triage."""
+
+    class InvalidSearchStore:
+        def search(self, **_kwargs):
+            raise ValueError("query shape invalid")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: InvalidSearchStore())
+
+    res = server.memory_search(MemorySearchRequest(user_id="u1", query="hello"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory search failed"
+    assert res["error_code"] == "validation_failure"
+
+
+def test_memory_search_invalid_kinds_returns_validation_error_code() -> None:
+    """Invalid kind filters should expose the same additive validation code."""
+
+    res = server.memory_search(
+        MemorySearchRequest(user_id="u1", query="hello", kinds=["semantic", "bad"])
+    )
+
+    assert res["ok"] is False
+    assert res["error"] == "invalid kinds: ['bad']"
+    assert res["error_code"] == "validation_failure"
+
+
+def test_memory_put_unavailable_store_returns_backend_error_code(monkeypatch):
+    """Unavailable memory backends should remain observable to operators."""
+
+    class DummyState:
+        err = "offline"
+
+    monkeypatch.setattr(server, "_memory_store_state", DummyState())
+    monkeypatch.setattr(server, "get_memory_store", lambda: None)
+
+    res = server.memory_put(MemoryPutRequest(user_id="u1", text="hello"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory store unavailable"
+    assert res["error_code"] == "backend_unavailable"
+
+
+def test_memory_get_unavailable_store_returns_backend_error_code(monkeypatch):
+    """memory_get should classify store-unavailable failures consistently."""
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: None)
+
+    res = server.memory_get(MemoryGetRequest(user_id="u1", key="k1"))
+
+    assert res["ok"] is False
+    assert res["error"] == "memory store unavailable"
+    assert res["error_code"] == "backend_unavailable"
+    assert res["value"] is None
+
+
+def test_memory_search_does_not_swallow_base_exceptions(monkeypatch):
+    """memory_search must not mask process-level exceptions."""
+
+    class SearchAbort(BaseException):
+        """Sentinel used to verify BaseException propagation."""
+
+    class ExplodingStore:
+        def search(self, **_kwargs):
+            raise SearchAbort("stop search")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: ExplodingStore())
+
+    with pytest.raises(SearchAbort, match="stop search"):
+        server.memory_search(MemorySearchRequest(user_id="u1", query="hello"))
+
+
+def test_memory_put_does_not_swallow_base_exceptions(monkeypatch):
+    """memory_put should preserve BaseException semantics during backend writes."""
+
+    class WriteAbort(BaseException):
+        """Sentinel used to verify BaseException propagation."""
+
+    class ExplodingStore:
+        def put(self, *args, **kwargs):
+            raise WriteAbort("stop write")
+
+    monkeypatch.setattr(server, "get_memory_store", lambda: ExplodingStore())
+
+    with pytest.raises(WriteAbort, match="stop write"):
+        server.memory_put(
+            MemoryPutRequest(
+                user_id="u1",
+                key="k1",
+                value={"foo": "bar"},
+            )
+        )
