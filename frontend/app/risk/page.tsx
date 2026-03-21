@@ -17,7 +17,7 @@ import { WhyFlaggedPanel } from "./components/WhyFlaggedPanel";
 /* ------------------------------------------------------------------ */
 
 export default function RiskIntelligencePage(): JSX.Element {
-  const { t, language } = useI18n();
+  const { t, tk, language } = useI18n();
   const stream = useRiskStream();
 
   const uncertainCount = stream.visiblePoints.filter((p) => getCluster(p) === "uncertain").length;
@@ -75,7 +75,7 @@ export default function RiskIntelligencePage(): JSX.Element {
           {/* Filter controls */}
           <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2.5 text-xs">
             <label className="space-y-1">
-              <span className="text-muted-foreground">Time window</span>
+              <span className="text-muted-foreground">{tk("timeWindow")}</span>
               <select className="block rounded border border-border bg-background px-2 py-1" value={stream.timeWindowHours} onChange={(event) => stream.setTimeWindowHours(Number(event.target.value))}>
                 <option value={1}>1h</option>
                 <option value={6}>6h</option>
@@ -84,7 +84,7 @@ export default function RiskIntelligencePage(): JSX.Element {
               </select>
             </label>
             <label className="space-y-1">
-              <span className="text-muted-foreground">Cluster drilldown</span>
+              <span className="text-muted-foreground">{tk("clusterDrilldown")}</span>
               <select className="block rounded border border-border bg-background px-2 py-1" value={stream.selectedCluster} onChange={(event) => stream.setSelectedCluster(event.target.value as "all" | "critical" | "risky" | "uncertain")}>
                 <option value="all">all points</option>
                 <option value="critical">critical cluster</option>

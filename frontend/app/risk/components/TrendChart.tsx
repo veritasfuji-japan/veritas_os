@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { TrendBucket } from "../risk-types";
 import { bucketMeaning } from "../data-helpers";
 
@@ -10,7 +11,7 @@ interface TrendChartProps {
   onSelectCluster: (cluster: "all" | "critical") => void;
 }
 
-export function TrendChart({ trend, spikeDetected, unsafeBurst, onSelectCluster }: TrendChartProps): JSX.Element {
+export const TrendChart = memo(function TrendChart({ trend, spikeDetected, unsafeBurst, onSelectCluster }: TrendChartProps): JSX.Element {
   return (
     <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
       <p className="mb-2 font-semibold">Trend / Spike / Burst</p>
@@ -43,4 +44,4 @@ export function TrendChart({ trend, spikeDetected, unsafeBurst, onSelectCluster 
       </div>
     </div>
   );
-}
+});

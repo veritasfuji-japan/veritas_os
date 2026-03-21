@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 import { useI18n } from "../../../components/i18n-provider";
 import type { FlaggedEntry } from "../risk-types";
@@ -9,7 +10,7 @@ interface DrilldownPanelProps {
   entry: FlaggedEntry | null;
 }
 
-export function DrilldownPanel({ entry }: DrilldownPanelProps): JSX.Element {
+export const DrilldownPanel = memo(function DrilldownPanel({ entry }: DrilldownPanelProps): JSX.Element {
   const { t } = useI18n();
 
   return (
@@ -88,4 +89,4 @@ export function DrilldownPanel({ entry }: DrilldownPanelProps): JSX.Element {
       )}
     </div>
   );
-}
+});

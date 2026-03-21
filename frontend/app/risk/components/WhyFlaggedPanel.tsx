@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { useI18n } from "../../../components/i18n-provider";
 import type { FlaggedEntry } from "../risk-types";
 
@@ -7,7 +8,7 @@ interface WhyFlaggedPanelProps {
   entry: FlaggedEntry | null;
 }
 
-export function WhyFlaggedPanel({ entry }: WhyFlaggedPanelProps): JSX.Element {
+export const WhyFlaggedPanel = memo(function WhyFlaggedPanel({ entry }: WhyFlaggedPanelProps): JSX.Element {
   const { t } = useI18n();
 
   return (
@@ -57,4 +58,4 @@ export function WhyFlaggedPanel({ entry }: WhyFlaggedPanelProps): JSX.Element {
       )}
     </div>
   );
-}
+});

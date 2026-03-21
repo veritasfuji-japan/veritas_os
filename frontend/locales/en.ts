@@ -25,4 +25,10 @@ export const en: Record<LocaleKey, string> = {
   streamSecurityNote: "Security note: API key is injected server-side and never exposed to browser code.",
   streamAuthRecoveryHint: "Detected authentication error (401/403). Please re-authenticate, then reconnect.",
   streamAuthRetryPausedUntil: "Retry paused temporarily (scheduled resume):",
+  retry: "Retry",
+  timeWindow: "Time window",
+  clusterDrilldown: "Cluster drilldown",
+  timeoutError: "Timeout: request did not complete in time.",
+  serverError: "Server error: please try again later.",
+  validationError: "Validation error: please check your input.",
 };
