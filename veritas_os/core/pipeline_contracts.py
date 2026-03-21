@@ -113,7 +113,7 @@ def _ensure_full_contract(
     mm = extras["memory_meta"]
     try:
         base_ctx = dict(context_obj) if isinstance(context_obj, dict) else {}
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RuntimeError):
         logger.debug("[_ensure_full_contract] context_obj conversion failed", exc_info=True)
         base_ctx = {}
 

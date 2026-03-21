@@ -25,7 +25,7 @@ def _as_str(x: Any, *, limit: int = 2000) -> str:
     """任意の値を文字列に変換し、limit 文字で切り詰める。"""
     try:
         s = "" if x is None else str(x)
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError, RuntimeError):
         logger.debug("[_as_str] str() conversion failed, using repr()", exc_info=True)
         s = repr(x)
     if limit and len(s) > limit:
@@ -37,7 +37,7 @@ def _norm_severity(x: Any) -> str:
     """重要度文字列を high/med/low に正規化する。"""
     try:
         s = str(x).lower().strip()
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError, RuntimeError):
         logger.debug("[_norm_severity] severity normalization failed for %r", x, exc_info=True)
         s = "med"
     if s in ("high", "h", "critical", "crit"):
@@ -62,7 +62,7 @@ def _to_bool_local(x: Any) -> bool:
         return x != 0
     try:
         s = str(x).strip().lower()
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError, RuntimeError):
         logger.debug("[_to_bool_local] str() conversion failed for %r", type(x).__name__, exc_info=True)
         return False
     return s in ("1", "true", "yes", "y", "on")
@@ -112,7 +112,7 @@ def _set_bool_metric(
         extras["metrics"] = {}
     try:
         extras["metrics"][key] = _to_bool_local(value)
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError, RuntimeError):
         logger.debug("[_set_bool_metric] bool conversion failed for key=%s value=%r", key, value, exc_info=True)
         extras["metrics"][key] = bool(default)
 
@@ -181,7 +181,7 @@ def _query_is_step1_hint(q: Any) -> bool:
             or ("棚卸" in qs)
             or ("現状" in qs and ("棚卸" in qs or "整理" in qs))
         )
-    except (TypeError, AttributeError):
+    except (TypeError, AttributeError, RuntimeError):
         logger.debug("[_query_is_step1_hint] hint check failed", exc_info=True)
         return False
 
@@ -222,7 +222,7 @@ def _has_step1_minimum_evidence(evs: Any) -> bool:
             if has_inv and has_issues:
                 return True
         return False
-    except (TypeError, AttributeError, KeyError):
+    except (TypeError, AttributeError, KeyError, RuntimeError):
         logger.debug("[_has_step1_minimum_evidence] evidence check failed", exc_info=True)
         return False
 
