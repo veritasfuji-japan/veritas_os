@@ -23,6 +23,12 @@ export const ja = {
   streamSecurityNote: "セキュリティ注記: APIキーはサーバー側で注入され、ブラウザーコードには公開されません。",
   streamAuthRecoveryHint: "認証エラー (401/403) を検知しました。再認証後に再接続してください。",
   streamAuthRetryPausedUntil: "再試行を一時停止中（再開予定）:",
+  retry: "再試行",
+  timeWindow: "時間窓",
+  clusterDrilldown: "クラスタ ドリルダウン",
+  timeoutError: "タイムアウト: リクエストが時間内に完了しませんでした。",
+  serverError: "サーバーエラー: しばらくしてから再試行してください。",
+  validationError: "入力エラー: リクエスト内容を確認してください。",
 } as const;
 
 export type LocaleKey = keyof typeof ja;

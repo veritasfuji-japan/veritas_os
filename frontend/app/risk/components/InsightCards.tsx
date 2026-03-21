@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import Link from "next/link";
 
 interface InsightCardsProps {
@@ -12,7 +13,7 @@ interface InsightCardsProps {
 }
 
 
-export function InsightCards({ clusterRatio, clusterCount, filteredPointsCount, unsafeBurst, latestHighRisk, uncertainCount }: InsightCardsProps): JSX.Element {
+export const InsightCards = memo(function InsightCards({ clusterRatio, clusterCount, filteredPointsCount, unsafeBurst, latestHighRisk, uncertainCount }: InsightCardsProps): JSX.Element {
   return (
     <div className="grid gap-3 md:grid-cols-3">
       <div className={`rounded-lg border p-3 text-xs ${clusterRatio >= 0.05 ? "border-warning/40 bg-warning/5" : "border-border/50 bg-background/60"}`}>
@@ -53,4 +54,4 @@ export function InsightCards({ clusterRatio, clusterCount, filteredPointsCount, 
       </div>
     </div>
   );
-}
+});

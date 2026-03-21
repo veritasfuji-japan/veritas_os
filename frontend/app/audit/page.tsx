@@ -87,7 +87,13 @@ export default function TrustLogExplorerPage(): JSX.Element {
         onLoadLogs={(c, r) => void data.loadLogs(c, r)}
       />
 
-      {data.error ? <ErrorBanner message={data.error} /> : null}
+      {data.error ? (
+        <ErrorBanner
+          message={data.error}
+          onRetry={() => void data.loadLogs(null, true)}
+          retryLabel={t("再試行", "Retry")}
+        />
+      ) : null}
 
       {/* Summary */}
       <AuditSummaryPanel

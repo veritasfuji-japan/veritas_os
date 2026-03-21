@@ -103,7 +103,13 @@ export default function GovernanceControlPage(): JSX.Element {
 
       <EUAIActGovernanceDashboard />
 
-      {state.error ? <ErrorBanner message={state.error} /> : null}
+      {state.error ? (
+        <ErrorBanner
+          message={state.error}
+          onRetry={() => void state.fetchPolicy()}
+          retryLabel={t("再試行", "Retry")}
+        />
+      ) : null}
       {state.success ? <SuccessBanner message={state.success} /> : null}
 
       {/* ── Empty state when no policy is loaded ── */}
