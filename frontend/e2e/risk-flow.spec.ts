@@ -4,13 +4,13 @@ test.describe("Risk: real-time monitoring flow", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/risk");
     await expect(
-      page.getByText("Risk Intelligence"),
+      page.getByRole("heading", { name: "Risk Intelligence" }),
     ).toBeVisible();
   });
 
   test("renders heatmap with scatter plot", async ({ page }) => {
     await expect(
-      page.getByText("Real-time Risk Heatmap"),
+      page.getByRole("heading", { name: "Real-time Risk Heatmap" }),
     ).toBeVisible();
     // SVG scatter plot should be present
     const svg = page.locator(
