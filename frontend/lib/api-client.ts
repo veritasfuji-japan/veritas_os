@@ -25,6 +25,7 @@ const RETRY_BACKOFF_BASE_MS = 1_000;
 export type ApiErrorKind =
   | "network"
   | "timeout"
+  | "cancelled"
   | "auth"
   | "validation"
   | "server"
@@ -142,13 +143,19 @@ export async function veritasFetchWithOptions(
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const controller = new AbortController();
+    let timedOut = false;
     // If the caller already has a signal, chain abort
     if (init.signal) {
-      init.signal.addEventListener("abort", () => controller.abort(), {
-        once: true,
-      });
+      init.signal.addEventListener(
+        "abort",
+        () => controller.abort(init.signal?.reason),
+        { once: true },
+      );
     }
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new DOMException("Request timed out", "TimeoutError"));
+    }, timeoutMs);
 
     try {
       const response = await fetch(input, {
@@ -180,13 +187,12 @@ export async function veritasFetchWithOptions(
       lastError = caught;
 
       if (caught instanceof DOMException && caught.name === "AbortError") {
-        // Could be timeout or caller-initiated abort — don't retry timeouts
-        throw new ApiError(
-          "Request timed out",
-          "timeout",
-          null,
-          null,
-        );
+        if (timedOut) {
+          throw new ApiError("Request timed out", "timeout", null, null);
+        }
+        if (init.signal?.aborted) {
+          throw new ApiError("Request was cancelled", "cancelled", null, null);
+        }
       }
 
       // Network errors are retryable

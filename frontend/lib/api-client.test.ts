@@ -125,6 +125,41 @@ describe("veritasFetchWithOptions", () => {
       expect((e as ApiError).kind).toBe("network");
     }
   });
+
+  it("classifies timeout aborts as timeout errors", async () => {
+    globalThis.fetch = vi.fn().mockImplementation(
+      (_, init?: RequestInit) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        }),
+    );
+
+    await expect(
+      veritasFetchWithOptions("/api/test", { timeoutMs: 5 }),
+    ).rejects.toMatchObject({ kind: "timeout" });
+  });
+
+  it("classifies caller aborts as cancelled errors", async () => {
+    const controller = new AbortController();
+    globalThis.fetch = vi.fn().mockImplementation(
+      (_, init?: RequestInit) =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("aborted", "AbortError"));
+          });
+        }),
+    );
+
+    const pending = veritasFetchWithOptions("/api/test", {
+      init: { signal: controller.signal },
+      timeoutMs: 100,
+    });
+    controller.abort("user-cancelled");
+
+    await expect(pending).rejects.toMatchObject({ kind: "cancelled" });
+  });
 });
 
 describe("devLog", () => {
