@@ -291,9 +291,9 @@ async def stage_web_search_async(
                 snippet = item.get("snippet") or item.get("text") or title or (str(uri) if uri else "")
                 snippet = f"[q={ws_final_query}] {snippet}"
                 try:
-                    confidence = float(item.get("confidence", 0.7) or 0.7)
+                    confidence = float(item.get("confidence", DEFAULT_CONFIDENCE) or DEFAULT_CONFIDENCE)
                 except (ValueError, TypeError):
-                    confidence = 0.7
+                    confidence = DEFAULT_CONFIDENCE
                 ev = _norm_evidence_item(
                     {
                         "source": "web",

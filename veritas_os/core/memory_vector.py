@@ -413,9 +413,9 @@ class VectorMemory:
             import numpy as np
 
             # ベクトルを正規化
-            vec_norm = vec / (np.linalg.norm(vec) + 1e-10)
+            vec_norm = vec / (np.linalg.norm(vec) + 1e-7)
             matrix_norm = matrix / (
-                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
+                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-7
             )
 
             # 内積 = コサイン類似度

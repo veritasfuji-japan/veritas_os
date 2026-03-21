@@ -409,10 +409,12 @@ def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str,
     history = _load_value_history()
     latest_ema = history[-1]["ema"] if history else baseline
 
-    if baseline <= 0:
+    if baseline <= 1e-9:
         drift_percent = 0.0
     else:
         drift_percent = ((latest_ema - baseline) / baseline) * 100.0
+        # Cap drift to prevent extreme values when baseline is very small
+        drift_percent = max(-1000.0, min(1000.0, drift_percent))
 
     return {
         "baseline": baseline,

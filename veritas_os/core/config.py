@@ -135,6 +135,28 @@ class ScoringConfig:
         default_factory=lambda: _parse_float("VERITAS_TELOS_SCALE_FACTOR", 0.2)
     )
 
+    def __post_init__(self) -> None:
+        """Clamp all scoring parameters to valid [0.0, 1.0] range."""
+        for attr in (
+            "intent_weather_bonus",
+            "intent_health_bonus",
+            "intent_learn_bonus",
+            "intent_plan_bonus",
+            "query_match_bonus",
+            "high_stakes_threshold",
+            "high_stakes_bonus",
+            "persona_bias_multiplier",
+            "telos_scale_base",
+            "telos_scale_factor",
+        ):
+            val = getattr(self, attr)
+            clamped = max(0.0, min(1.0, val))
+            if clamped != val:
+                logging.getLogger(__name__).warning(
+                    "ScoringConfig.%s=%r clamped to %r", attr, val, clamped,
+                )
+                object.__setattr__(self, attr, clamped)
+
 
 # =============================================================================
 # FUJI Gate 設定（fuji.py から外部化）

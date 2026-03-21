@@ -313,8 +313,8 @@ class CosineIndex:
 
         # ロック外で計算（パフォーマンス向上）
         # 正規化（cosine 類似度）
-        Vn = V / (np.linalg.norm(V, axis=1, keepdims=True) + 1e-8)
-        Qn = q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-8)
+        Vn = V / (np.linalg.norm(V, axis=1, keepdims=True) + 1e-7)
+        Qn = q / (np.linalg.norm(q, axis=1, keepdims=True) + 1e-7)
 
         sims = np.clip(Qn @ Vn.T, -1.0, 1.0)  # (Q, N)
 

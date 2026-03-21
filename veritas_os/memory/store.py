@@ -515,4 +515,4 @@ class MemoryStore:
             return default
         if not math.isfinite(parsed):
             return default
-        return max(-1.0, min(parsed, 1.0))
+        return max(0.0, min(parsed, 1.0))

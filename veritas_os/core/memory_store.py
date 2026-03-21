@@ -51,7 +51,7 @@ class MemoryStore:
         self._cache_loaded_at: float = 0.0
         _raw_ttl = os.getenv("VERITAS_MEMORY_CACHE_TTL", "5.0")
         try:
-            self._cache_ttl: float = float(_raw_ttl)
+            self._cache_ttl: float = max(0.0, min(3600.0, float(_raw_ttl)))
         except (ValueError, TypeError):
             logger.warning("Invalid VERITAS_MEMORY_CACHE_TTL=%r, using default 5.0", _raw_ttl)
             self._cache_ttl = 5.0
