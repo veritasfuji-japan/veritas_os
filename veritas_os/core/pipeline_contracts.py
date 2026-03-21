@@ -94,7 +94,7 @@ def _ensure_full_contract(
     for stage_name in ("retrieval", "web", "llm", "gate", "persist"):
         try:
             stage_latency[stage_name] = max(0, int(stage_latency.get(stage_name, 0) or 0))
-        except Exception:
+        except (TypeError, ValueError):
             logger.debug("[_ensure_full_contract] stage_latency[%s] conversion failed", stage_name, exc_info=True)
             stage_latency[stage_name] = 0
     extras["metrics"]["stage_latency"] = stage_latency
@@ -105,7 +105,7 @@ def _ensure_full_contract(
             "mem_evidence_count",
             int(extras["metrics"].get("mem_evidence_count", 0) or 0),
         )
-    except Exception:
+    except (TypeError, ValueError):
         logger.debug("[_ensure_full_contract] mem_evidence_count conversion failed", exc_info=True)
         extras["metrics"]["mem_evidence_count"] = 0
 
@@ -113,7 +113,7 @@ def _ensure_full_contract(
     mm = extras["memory_meta"]
     try:
         base_ctx = dict(context_obj) if isinstance(context_obj, dict) else {}
-    except Exception:
+    except (TypeError, ValueError):
         logger.debug("[_ensure_full_contract] context_obj conversion failed", exc_info=True)
         base_ctx = {}
 
@@ -134,7 +134,7 @@ def _ensure_full_contract(
         if not (isinstance(existing_q, str) and existing_q.strip()):
             if isinstance(query_str, str) and query_str.strip():
                 mm["query"] = query_str
-    except Exception:
+    except (TypeError, AttributeError):
         logger.debug("[_ensure_full_contract] memory_meta.query assignment failed", exc_info=True)
 
 
