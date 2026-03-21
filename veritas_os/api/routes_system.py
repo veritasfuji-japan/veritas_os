@@ -80,16 +80,27 @@ def health() -> Dict[str, Any]:
     srv = _get_server()
     try:
         pipeline_ok = srv.get_decision_pipeline() is not None
-        memory_ok = srv.get_memory_store() is not None
-        all_ok = pipeline_ok and memory_ok
+        memory_store = srv.get_memory_store()
+        memory_ok = memory_store is not None
+        memory_health = None
+        if memory_ok and hasattr(memory_store, "health_snapshot"):
+            memory_health = memory_store.health_snapshot()
+
+        memory_status = "ok" if memory_ok else "unavailable"
+        if memory_health and memory_health.get("status") == "degraded":
+            memory_status = "degraded"
+
+        all_ok = pipeline_ok and memory_status == "ok"
         result: Dict[str, Any] = {
             "ok": all_ok,
             "uptime": int(time.time() - srv.START_TS),
             "checks": {
                 "pipeline": "ok" if pipeline_ok else "unavailable",
-                "memory": "ok" if memory_ok else "unavailable",
+                "memory": memory_status,
             },
         }
+        if memory_health:
+            result["memory_health"] = memory_health
         return result
     except Exception as e:
         logger.error("[Health] check failed: %s", e)

@@ -1,4 +1,5 @@
 from pathlib import Path
+from copy import deepcopy
 import json
 import logging
 import math
@@ -131,6 +132,12 @@ class MemoryStore:
 
     def __init__(self, dim: int = 384) -> None:
         self._lock = threading.RLock()  # リエントラントロック
+        self._health_lock = threading.Lock()
+        self._health_status: Dict[str, Any] = {
+            "status": "ok",
+            "last_error": None,
+            "error_counts": {},
+        }
         self.emb = HashEmbedder(dim=dim)
         # 段階キャッシュ（kind -> id -> payload）
         self._payload_cache: Dict[str, Dict[str, Dict[str, Any]]] = {
@@ -147,6 +154,29 @@ class MemoryStore:
             for k in FILES.keys()
         }
         self._boot()
+
+    def _record_load_issue(self, stage: str, kind: str, detail: str) -> None:
+        """Record a non-fatal memory load issue for health/audit visibility."""
+        issue_key = f"{stage}:{kind}"
+        issue = {
+            "stage": stage,
+            "kind": kind,
+            "detail": detail,
+            "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        }
+        with self._health_lock:
+            error_counts = dict(self._health_status.get("error_counts") or {})
+            error_counts[issue_key] = int(error_counts.get(issue_key, 0)) + 1
+            self._health_status = {
+                "status": "degraded",
+                "last_error": issue,
+                "error_counts": error_counts,
+            }
+
+    def health_snapshot(self) -> Dict[str, Any]:
+        """Return an immutable snapshot of MemoryStore health telemetry."""
+        with self._health_lock:
+            return deepcopy(self._health_status)
 
     def _boot(self) -> None:
         """
@@ -169,8 +199,10 @@ class MemoryStore:
                 if file_size > MAX_JSONL_FILE_SIZE:
                     logger.warning("[MemoryStore] %s too large for boot rebuild (%d bytes), skipping",
                                    kind, file_size)
+                    self._record_load_issue("boot_rebuild", kind, "file_too_large")
                     continue
-            except OSError:
+            except OSError as exc:
+                self._record_load_issue("boot_rebuild", kind, f"stat_failed:{exc}")
                 continue
 
             ids, texts = [], []
@@ -192,8 +224,9 @@ class MemoryStore:
                             or j.get("summary")
                             or j.get("snippet", "")
                         )
-                    except (json.JSONDecodeError, KeyError, TypeError):
+                    except (json.JSONDecodeError, KeyError, TypeError) as exc:
                         # 不正なJSONまたは必須フィールド欠損をスキップ
+                        self._record_load_issue("boot_rebuild", kind, type(exc).__name__)
                         continue
                     # ★ OOM対策: ブート時の再構築もアイテム数上限を適用
                     if len(ids) >= MAX_SEARCH_ITEMS:
@@ -201,6 +234,7 @@ class MemoryStore:
                             "[MemoryStore] %s hit MAX_SEARCH_ITEMS (%d) during boot, truncating",
                             kind, MAX_SEARCH_ITEMS,
                         )
+                        self._record_load_issue("boot_rebuild", kind, "max_search_items_truncated")
                         break
 
             self._cache_complete[kind] = len(ids) < MAX_SEARCH_ITEMS
@@ -210,6 +244,7 @@ class MemoryStore:
                 idx.add(vecs, ids)  # ★ ここで追加すると .npz 保存まで自動で行われる
             else:
                 logger.warning("[MemoryStore] No valid items found in %s for kind=%s", path, kind)
+                self._record_load_issue("boot_rebuild", kind, "no_valid_items")
 
     def put(self, kind: str, item: Dict[str, Any]) -> str:
         """
@@ -329,8 +364,10 @@ class MemoryStore:
             if file_size > MAX_JSONL_FILE_SIZE:
                 logger.warning("[MemoryStore] %s too large for targeted payload load (%d bytes)",
                                kind, file_size)
+                self._record_load_issue("targeted_payload_load", kind, "file_too_large")
                 return found
-        except OSError:
+        except OSError as exc:
+            self._record_load_issue("targeted_payload_load", kind, f"stat_failed:{exc}")
             return found
 
         offset_map = self._offset_index.get(kind, {})
@@ -351,7 +388,8 @@ class MemoryStore:
                         else:
                             # オフセット不整合（ファイルローテーション等）→ リニアスキャンにフォールバック
                             ids_without_offset.append(item_id)
-                    except (json.JSONDecodeError, OSError):
+                    except (json.JSONDecodeError, OSError) as exc:
+                        self._record_load_issue("targeted_payload_load", kind, type(exc).__name__)
                         ids_without_offset.append(item_id)  # フォールバック対象に追加
 
                 # オフセット未登録分のみ線形スキャン
@@ -362,6 +400,7 @@ class MemoryStore:
                         try:
                             item = json.loads(line)
                         except json.JSONDecodeError:
+                            self._record_load_issue("targeted_payload_load", kind, "JSONDecodeError")
                             continue
                         _id = item.get("id")
                         if _id in wanted:
@@ -370,6 +409,7 @@ class MemoryStore:
                                 break
         except (OSError, IOError) as e:
             logger.warning("[MemoryStore] Failed targeted payload load from %s: %s", path, e)
+            self._record_load_issue("targeted_payload_load", kind, f"open_failed:{e}")
 
         return found
 

@@ -561,3 +561,44 @@ def test_put_episode_delegates_to_put(memory_env, monkeypatch):
     assert it["meta"] == {"foo": "bar"}
     # ts は put_episode 側で埋められている
     assert isinstance(it["ts"], (int, float))
+
+
+def test_boot_records_health_when_json_is_corrupted(memory_env):
+    """_boot は破損 JSON を health telemetry に記録する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    files["episodic"].write_text(
+        '{"id":"ok","text":"valid","tags":[],"meta":{},"ts":1}\n{"id":\n',
+        encoding="utf-8",
+    )
+
+    ms = store.MemoryStore(dim=4)
+
+    health = ms.health_snapshot()
+    assert health["status"] == "degraded"
+    assert health["last_error"]["stage"] == "boot_rebuild"
+    assert health["last_error"]["kind"] == "episodic"
+    assert health["error_counts"]["boot_rebuild:episodic"] >= 1
+
+
+def test_targeted_payload_load_records_health_on_decode_error(memory_env):
+    """targeted payload load の decode error は health telemetry に残る。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    files["episodic"].write_text(
+        '{"id":"broken","text":"value","tags":[],"meta":{},"ts":1}\n',
+        encoding="utf-8",
+    )
+
+    ms = store.MemoryStore(dim=4)
+    ms._offset_index["episodic"]["broken"] = 0
+    files["episodic"].write_text("not-json\n", encoding="utf-8")
+
+    loaded = ms._load_payloads_for_ids("episodic", ["broken"])
+
+    assert loaded == {}
+    health = ms.health_snapshot()
+    assert health["status"] == "degraded"
+    assert health["last_error"]["stage"] == "targeted_payload_load"
+    assert health["last_error"]["kind"] == "episodic"
+    assert health["error_counts"]["targeted_payload_load:episodic"] >= 1
