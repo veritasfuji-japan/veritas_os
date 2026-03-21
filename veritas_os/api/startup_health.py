@@ -113,13 +113,25 @@ def check_runtime_feature_health(
     has_sanitize: bool,
     has_atomic_io: bool,
 ) -> None:
-    """Warn about degraded runtime features so operators are never silently misled."""
+    """Surface degraded runtime features with production fail-closed handling.
+
+    Security policy:
+    - Missing sanitize support is warning-only in non-production profiles so
+      local recovery work can continue.
+    - Missing sanitize support is fatal in production because running without
+      PII masking can leak sensitive data into logs.
+    - Missing atomic I/O remains warning-only because it affects reliability
+      rather than confidentiality/integrity of request handling.
+    """
     if not has_sanitize:
-        logger.warning(
-            "[SECURITY] PII masking is DISABLED (sanitize module failed to load). "
-            "Sensitive data may appear in shadow logs. "
-            "Fix the import error and restart to restore full protection."
+        message = (
+            "[SECURITY] PII masking is DISABLED (sanitize module failed to "
+            "load). Sensitive data may appear in shadow logs. Fix the import "
+            "error and restart to restore full protection."
         )
+        if should_fail_fast_startup():
+            raise RuntimeError(f"{message} Refusing startup in production.")
+        logger.warning("%s", message)
     if not has_atomic_io:
         logger.warning(
             "[RELIABILITY] Atomic I/O is DISABLED (atomic_io module failed to load). "
