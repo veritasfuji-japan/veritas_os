@@ -153,8 +153,8 @@ def stage_value_core(
         ctx.value_ema = 0.5
 
     BOOST_MAX = float(os.getenv("VERITAS_VALUE_BOOST_MAX", "0.05"))
-    boost = (ctx.value_ema - 0.5) * 2.0
-    boost = max(-1.0, min(1.0, boost)) * BOOST_MAX
+    # EMA deviation from neutral (0.5) scaled to [-BOOST_MAX, +BOOST_MAX]
+    boost = max(-1.0, min(1.0, (ctx.value_ema - 0.5) * 2.0)) * BOOST_MAX
 
     ctx.input_alts = _apply_value_boost(ctx.input_alts, boost)
     ctx.alternatives = _apply_value_boost(ctx.alternatives, boost)
@@ -169,7 +169,9 @@ def stage_value_core(
     ctx.effective_risk = max(0.0, min(1.0, ctx.effective_risk))
 
     TELOS_EMA_DELTA = float(os.getenv("VERITAS_TELOS_EMA_DELTA", "0.10"))
-    ctx.telos_threshold = BASE_TELOS_THRESHOLD - TELOS_EMA_DELTA * (ctx.value_ema - 0.5) * 2.0
+    # Shift telos threshold by EMA deviation: high EMA lowers threshold, low EMA raises it
+    ema_deviation = max(-1.0, min(1.0, (ctx.value_ema - 0.5) * 2.0))
+    ctx.telos_threshold = BASE_TELOS_THRESHOLD - TELOS_EMA_DELTA * ema_deviation
     ctx.telos_threshold = max(TELOS_THRESHOLD_MIN, min(TELOS_THRESHOLD_MAX, ctx.telos_threshold))
 
     # world.utility synthesis

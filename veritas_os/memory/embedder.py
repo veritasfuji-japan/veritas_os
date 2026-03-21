@@ -16,7 +16,7 @@ class HashEmbedder:
         # 64byte→dimへ拡張/繰り返し
         arr = np.frombuffer(h, dtype=np.uint8).astype(np.float32)
         v = np.tile(arr, int(np.ceil(self.dim/arr.size)))[:self.dim]
-        v = (v - v.mean()) / (v.std() + 1e-6)
+        v = (v - v.mean()) / (v.std() + 1e-7)
         return v
     def embed(self, texts: List[str]) -> np.ndarray:
         if len(texts) > MAX_BATCH_SIZE:

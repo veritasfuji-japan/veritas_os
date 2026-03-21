@@ -62,8 +62,8 @@ def _norm_evidence_item(ev: Any) -> Optional[Dict[str, Any]]:
         except Exception:
             snippet_s = repr(snippet)
 
-        conf_raw = ev2.get("confidence", 0.7)
-        conf = max(0.0, min(1.0, float(conf_raw if conf_raw is not None else 0.7)))
+        conf_raw = ev2.get("confidence", 0.55)
+        conf = max(0.0, min(1.0, float(conf_raw if conf_raw is not None else 0.55)))
 
         if uri is None:
             uri_s = None
