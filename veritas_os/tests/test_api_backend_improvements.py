@@ -104,6 +104,8 @@ class TestEnhancedHealth:
         assert r.status_code == 200
         data = r.json()
         assert "uptime" in data
+        assert "status" in data
+        assert data["status"] in ("ok", "degraded", "unavailable")
         assert "checks" in data
         checks = data["checks"]
         assert "pipeline" in checks
@@ -134,6 +136,7 @@ class TestEnhancedHealth:
         assert r.status_code == 200
         data = r.json()
         assert data["ok"] is False
+        assert data["status"] == "degraded"
         assert data["checks"]["memory"] == "degraded"
         assert data["memory_health"]["last_error"]["detail"] == "JSONDecodeError"
 
@@ -147,6 +150,17 @@ class TestEnhancedHealth:
         )
         r = client.get("/health")
         data = r.json()
+        assert data["checks"]["pipeline"] == "unavailable"
+
+    def test_health_status_is_unavailable_when_pipeline_is_missing(self, monkeypatch):
+        """Top-level health status should distinguish unavailable dependencies."""
+        monkeypatch.setattr(server, "get_decision_pipeline", lambda: None)
+
+        r = client.get("/health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert data["status"] == "unavailable"
         assert data["checks"]["pipeline"] == "unavailable"
 
 

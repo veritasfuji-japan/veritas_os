@@ -77,6 +77,7 @@ def root() -> Dict[str, Any]:
 @public_router.get("/health")
 @public_router.get("/v1/health")
 def health() -> Dict[str, Any]:
+    """Return lightweight health information with explicit degraded status."""
     srv = _get_server()
     try:
         pipeline_ok = srv.get_decision_pipeline() is not None
@@ -86,16 +87,24 @@ def health() -> Dict[str, Any]:
         if memory_ok and hasattr(memory_store, "health_snapshot"):
             memory_health = memory_store.health_snapshot()
 
+        pipeline_status = "ok" if pipeline_ok else "unavailable"
         memory_status = "ok" if memory_ok else "unavailable"
         if memory_health and memory_health.get("status") == "degraded":
             memory_status = "degraded"
 
-        all_ok = pipeline_ok and memory_status == "ok"
+        health_status = "ok"
+        if pipeline_status == "unavailable" or memory_status == "unavailable":
+            health_status = "unavailable"
+        elif memory_status == "degraded":
+            health_status = "degraded"
+
+        all_ok = health_status == "ok"
         result: Dict[str, Any] = {
             "ok": all_ok,
+            "status": health_status,
             "uptime": int(time.time() - srv.START_TS),
             "checks": {
-                "pipeline": "ok" if pipeline_ok else "unavailable",
+                "pipeline": pipeline_status,
                 "memory": memory_status,
             },
         }
