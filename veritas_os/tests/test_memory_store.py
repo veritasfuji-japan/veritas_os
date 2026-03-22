@@ -496,6 +496,30 @@ def test_resolve_memory_dir_accepts_allowlisted_path_in_production(
     assert str(allowed_dir.resolve(strict=False)) in caplog.text
 
 
+def test_resolve_memory_dir_rejects_non_allowlisted_path_in_prod_alias(
+    memory_env,
+    monkeypatch,
+    caplog,
+    tmp_path,
+):
+    """`VERITAS_ENV=prod` でも production と同じ allowlist 制約を適用する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    allowed_root = tmp_path / "allowed"
+    denied_dir = tmp_path / "denied" / "memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_ENV", "prod")
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(denied_dir))
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_ALLOWLIST", str(allowed_root))
+
+    caplog.set_level("WARNING")
+    resolved = store._resolve_memory_dir()
+
+    assert resolved == default_dir
+    assert "rejected in production" in caplog.text
+
+
 def test_resolve_memory_dir_rejects_relative_path(memory_env, monkeypatch, caplog, tmp_path):
     """相対パスの VERITAS_MEMORY_DIR は安全上の理由で拒否する。"""
     store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
