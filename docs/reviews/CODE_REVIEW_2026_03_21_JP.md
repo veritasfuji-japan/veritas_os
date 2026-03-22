@@ -124,6 +124,8 @@ health / audit への明示的な露出が望ましい。
   - `veritas_os/tests/test_auth_core.py` に、non-production では従来どおり warning + fallback を維持しつつ、production では missing URL / Redis 初期化失敗を fail-closed にする回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/startup_health.py` の `check_runtime_feature_health()` を更新し、`atomic_io` モジュール未ロード時も production (`VERITAS_ENV=production` / `prod`) では `RuntimeError` を送出して API 起動を停止するよう変更した。これにより trust-log / shadow-log が direct file I/O に silently degrade したまま本番稼働する経路を閉じ、監査ログの crash-safe 性を fail-closed で守る。
   - `veritas_os/tests/test_api_startup_health.py` に、non-production では従来どおり warning を維持しつつ production では fail-closed になる回帰テストを追加した。
+  - 2026-03-22 追記。`veritas_os/api/startup_health.py` の startup flag validation を更新し、実際に auth fail-open を要求する `VERITAS_AUTH_STORE_FAILURE_MODE=open` も `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と同様に明示警告・production fail-closed の対象にした。これにより、起動前チェックが実ランタイム設定とずれて fail-open 要求を見落とす経路を閉じた。
+  - `veritas_os/tests/test_api_startup_health.py` に、`VERITAS_AUTH_STORE_FAILURE_MODE=open` の non-production 警告と production fail-closed を固定する回帰テストを追加した。
 
 ### P1
 

@@ -56,6 +56,8 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
 
     Security policy:
     - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` must never be present in production.
+    - `VERITAS_AUTH_STORE_FAILURE_MODE=open` must also be surfaced explicitly so
+      operators can see the effective fail-open request during startup.
     - Auth fail-open is only supported for local/test-style profiles and must
       not remain enabled in shared staging environments.
     - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
@@ -67,6 +69,10 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
     is_node_production = _is_node_env_production()
     profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
     auth_fail_open_enabled = _is_truthy_env("VERITAS_AUTH_ALLOW_FAIL_OPEN")
+    auth_store_failure_mode = (
+        (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
+    )
+    auth_fail_open_requested = auth_store_failure_mode == "open"
     public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
 
     if is_node_production and not is_production:
@@ -76,21 +82,26 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
             "deployments must explicitly set VERITAS_ENV=production before release."
         )
 
-    if auth_fail_open_enabled:
+    if auth_fail_open_enabled or auth_fail_open_requested:
+        configured_flags = []
+        if auth_fail_open_enabled:
+            configured_flags.append("VERITAS_AUTH_ALLOW_FAIL_OPEN=true")
+        if auth_fail_open_requested:
+            configured_flags.append("VERITAS_AUTH_STORE_FAILURE_MODE=open")
+        configured_flags_text = " + ".join(configured_flags)
         message = (
-            "[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is enabled. "
+            f"[SECURITY] {configured_flags_text} is enabled. "
             "This weakens auth-store failure protections and must stay limited "
             "to controlled non-production testing."
         )
         if is_production:
-            raise RuntimeError(
-                f"{message} Refusing startup in production."
-            )
+            raise RuntimeError(f"{message} Refusing startup in production.")
         logger.warning("%s", message)
         if profile not in {"dev", "development", "local", "test"}:
             logger.warning(
-                "[SECURITY] VERITAS_AUTH_ALLOW_FAIL_OPEN=true is unsupported for "
+                "[SECURITY] Auth fail-open request (%s) is unsupported for "
                 "VERITAS_ENV=%s and will be ignored by auth store fallback logic.",
+                configured_flags_text,
                 profile or "unset",
             )
 

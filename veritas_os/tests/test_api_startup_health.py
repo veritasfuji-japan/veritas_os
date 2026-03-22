@@ -68,6 +68,22 @@ def test_validate_startup_security_flags_warns_non_production_fail_open(
     assert "VERITAS_AUTH_ALLOW_FAIL_OPEN=true is enabled" in caplog.text
 
 
+def test_validate_startup_security_flags_warns_non_production_requested_open_mode(
+    monkeypatch,
+    caplog,
+):
+    """Requesting open auth-store fallback should also emit a security warning."""
+    monkeypatch.setenv("VERITAS_ENV", "local")
+    monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled" in caplog.text
+
+
 def test_validate_startup_security_flags_warns_fail_open_unsupported_profile(
     monkeypatch,
     caplog,
@@ -109,6 +125,19 @@ def test_validate_startup_security_flags_rejects_production_fail_open(
     monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
 
     with pytest.raises(RuntimeError, match="VERITAS_AUTH_ALLOW_FAIL_OPEN=true"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
+def test_validate_startup_security_flags_rejects_production_open_failure_mode(
+    monkeypatch,
+):
+    """Production must fail fast when auth-store fallback is requested open."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
+
+    with pytest.raises(RuntimeError, match="VERITAS_AUTH_STORE_FAILURE_MODE=open"):
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )
