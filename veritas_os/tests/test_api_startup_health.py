@@ -170,3 +170,31 @@ def test_check_runtime_feature_health_rejects_missing_sanitize_in_production(
             has_sanitize=False,
             has_atomic_io=True,
         )
+
+
+def test_check_runtime_feature_health_logs_atomic_io_warning_non_production(
+    caplog,
+):
+    """Non-production should still surface atomic I/O degradation as a warning."""
+    with caplog.at_level(logging.WARNING):
+        startup_health.check_runtime_feature_health(
+            logger=logging.getLogger("test.startup_health"),
+            has_sanitize=True,
+            has_atomic_io=False,
+        )
+
+    assert "Atomic I/O is DISABLED" in caplog.text
+
+
+def test_check_runtime_feature_health_rejects_missing_atomic_io_in_production(
+    monkeypatch,
+):
+    """Production must fail closed when crash-safe audit writes are unavailable."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    with pytest.raises(RuntimeError, match="Atomic I/O is DISABLED"):
+        startup_health.check_runtime_feature_health(
+            logger=logging.getLogger("test.startup_health"),
+            has_sanitize=True,
+            has_atomic_io=False,
+        )
