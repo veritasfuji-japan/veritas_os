@@ -7,7 +7,6 @@ import asyncio
 import heapq
 import json
 import logging
-import os
 import queue
 import time
 from pathlib import Path
@@ -220,6 +219,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     except Exception as e:
         logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
 
+    auth_store = _auth_store_health(srv)
     result = {
         "decide_files": total_decide_files,
         "decide_files_returned": len(files),
@@ -231,8 +231,13 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "last_decide_at": last_at,
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": srv.get_decision_pipeline() is not None,
-        "auth_store_mode": (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower() or "memory",
-        "auth_store_failure_mode": srv._auth_store_failure_mode(),
+        "auth_store_mode": auth_store["details"].get("requested_mode", "memory"),
+        "auth_store_effective_mode": auth_store["details"].get("effective_mode", "memory"),
+        "auth_store_status": auth_store["status"],
+        "auth_store_failure_mode": auth_store["details"].get(
+            "failure_mode", srv._auth_store_failure_mode()
+        ),
+        "auth_store_reasons": auth_store["details"].get("reasons", []),
         "auth_reject_reasons": srv._snapshot_auth_reject_reason_metrics(),
     }
     if srv._is_debug_mode():
