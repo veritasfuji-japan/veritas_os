@@ -133,6 +133,7 @@ class TestEnhancedHealth:
                         "stage": "targeted_payload_load",
                         "kind": "episodic",
                         "detail": "JSONDecodeError",
+                        "issue_code": "JSONDecodeError",
                         "recorded_at": "2026-03-21T00:00:00Z",
                     },
                     "error_counts": {"targeted_payload_load:episodic": 2},
@@ -147,6 +148,7 @@ class TestEnhancedHealth:
         assert data["status"] == "degraded"
         assert data["checks"]["memory"] == "degraded"
         assert data["memory_health"]["last_error"]["detail"] == "JSONDecodeError"
+        assert data["memory_health"]["last_error"]["issue_code"] == "JSONDecodeError"
 
     def test_health_ok_reflects_deps(self, monkeypatch):
         """ok field should reflect dependency availability."""
