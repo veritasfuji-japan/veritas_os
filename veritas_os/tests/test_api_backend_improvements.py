@@ -216,6 +216,32 @@ class TestEnhancedHealth:
 # -------------------------------------------------
 
 
+    def test_metrics_exposes_auth_store_degradation(self, monkeypatch):
+        """Metrics endpoint should expose auth-store posture for audit visibility."""
+        monkeypatch.setattr(
+            server,
+            "auth_store_health_snapshot",
+            lambda: {
+                "status": "degraded",
+                "requested_mode": "redis",
+                "effective_mode": "memory",
+                "failure_mode": "closed",
+                "distributed_safe": False,
+                "reasons": ["redis_store_unavailable"],
+            },
+        )
+
+        r = client.get("/v1/metrics", headers=_AUTH_HEADERS)
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["auth_store_mode"] == "redis"
+        assert data["auth_store_effective_mode"] == "memory"
+        assert data["auth_store_status"] == "degraded"
+        assert data["auth_store_failure_mode"] == "closed"
+        assert data["auth_store_reasons"] == ["redis_store_unavailable"]
+
+
 class TestGracefulShutdown:
     def test_shutdown_returns_503(self):
         """When shutting down, requests should get 503 with Retry-After."""
