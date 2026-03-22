@@ -122,6 +122,8 @@ health / audit への明示的な露出が望ましい。
   - `veritas_os/tests/test_api_backend_improvements.py` に、metrics 応答へ memory/runtime の degradation が露出する回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/auth.py` の `_create_auth_security_store()` を更新し、`VERITAS_AUTH_SECURITY_STORE=redis` を要求した production (`VERITAS_ENV=production` / `prod`) では、`VERITAS_AUTH_REDIS_URL` 未設定や Redis 初期化失敗時に `RuntimeError` を送出して fail-closed で起動停止するようにした。これにより distributed-safe な auth store を要求した本番構成が silent に in-memory へ degrade する経路を閉じた。
   - `veritas_os/tests/test_auth_core.py` に、non-production では従来どおり warning + fallback を維持しつつ、production では missing URL / Redis 初期化失敗を fail-closed にする回帰テストを追加した。
+  - 2026-03-22 追記。`veritas_os/api/startup_health.py` の `check_runtime_feature_health()` を更新し、`atomic_io` モジュール未ロード時も production (`VERITAS_ENV=production` / `prod`) では `RuntimeError` を送出して API 起動を停止するよう変更した。これにより trust-log / shadow-log が direct file I/O に silently degrade したまま本番稼働する経路を閉じ、監査ログの crash-safe 性を fail-closed で守る。
+  - `veritas_os/tests/test_api_startup_health.py` に、non-production では従来どおり warning を維持しつつ production では fail-closed になる回帰テストを追加した。
 
 ### P1
 

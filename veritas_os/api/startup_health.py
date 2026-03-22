@@ -120,8 +120,8 @@ def check_runtime_feature_health(
       local recovery work can continue.
     - Missing sanitize support is fatal in production because running without
       PII masking can leak sensitive data into logs.
-    - Missing atomic I/O remains warning-only because it affects reliability
-      rather than confidentiality/integrity of request handling.
+    - Missing atomic I/O is also fatal in production because trust-log writes
+      lose crash-safe guarantees and audit durability degrades silently.
     """
     if not has_sanitize:
         message = (
@@ -133,8 +133,12 @@ def check_runtime_feature_health(
             raise RuntimeError(f"{message} Refusing startup in production.")
         logger.warning("%s", message)
     if not has_atomic_io:
-        logger.warning(
-            "[RELIABILITY] Atomic I/O is DISABLED (atomic_io module failed to load). "
-            "Trust log writes are less crash-safe (using direct file I/O). "
-            "Fix the import error and restart to restore full protection."
+        message = (
+            "[SECURITY] Atomic I/O is DISABLED (atomic_io module failed to load). "
+            "Trust-log and shadow-log writes are no longer crash-safe, so audit "
+            "durability is degraded. Fix the import error and restart to restore "
+            "full protection."
         )
+        if should_fail_fast_startup():
+            raise RuntimeError(f"{message} Refusing startup in production.")
+        logger.warning("%s", message)
