@@ -42,6 +42,16 @@ def _get_server():
     return srv
 
 
+def _runtime_feature_checks(srv: Any) -> Dict[str, str]:
+    """Return runtime feature statuses for health visibility."""
+    sanitize_status = "ok" if getattr(srv, "_HAS_SANITIZE", False) else "degraded"
+    atomic_io_status = "ok" if getattr(srv, "_HAS_ATOMIC_IO", False) else "degraded"
+    return {
+        "sanitize": sanitize_status,
+        "atomic_io": atomic_io_status,
+    }
+
+
 # ------------------------------------------------------------------
 # Pydantic models
 # ------------------------------------------------------------------
@@ -89,13 +99,17 @@ def health() -> Dict[str, Any]:
 
         pipeline_status = "ok" if pipeline_ok else "unavailable"
         memory_status = "ok" if memory_ok else "unavailable"
+        runtime_features = _runtime_feature_checks(srv)
         if memory_health and memory_health.get("status") == "degraded":
             memory_status = "degraded"
 
         health_status = "ok"
         if pipeline_status == "unavailable" or memory_status == "unavailable":
             health_status = "unavailable"
-        elif memory_status == "degraded":
+        elif (
+            memory_status == "degraded"
+            or "degraded" in runtime_features.values()
+        ):
             health_status = "degraded"
 
         all_ok = health_status == "ok"
@@ -107,6 +121,7 @@ def health() -> Dict[str, Any]:
                 "pipeline": pipeline_status,
                 "memory": memory_status,
             },
+            "runtime_features": runtime_features,
         }
         if memory_health:
             result["memory_health"] = memory_health

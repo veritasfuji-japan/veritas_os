@@ -110,9 +110,14 @@ class TestEnhancedHealth:
         checks = data["checks"]
         assert "pipeline" in checks
         assert "memory" in checks
+        assert "runtime_features" in data
+        assert "sanitize" in data["runtime_features"]
+        assert "atomic_io" in data["runtime_features"]
         # Values should be either "ok", "degraded", or "unavailable"
         assert checks["pipeline"] in ("ok", "unavailable")
         assert checks["memory"] in ("ok", "degraded", "unavailable")
+        assert data["runtime_features"]["sanitize"] in ("ok", "degraded")
+        assert data["runtime_features"]["atomic_io"] in ("ok", "degraded")
 
     def test_health_exposes_memory_degradation_details(self, monkeypatch):
         """Non-fatal MemoryStore load issues should surface in /health."""
@@ -162,6 +167,20 @@ class TestEnhancedHealth:
         assert data["ok"] is False
         assert data["status"] == "unavailable"
         assert data["checks"]["pipeline"] == "unavailable"
+
+    def test_health_runtime_features_show_sanitize_degradation(self, monkeypatch):
+        """Health endpoint should expose runtime security degradation."""
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+        monkeypatch.setattr(server, "_HAS_ATOMIC_IO", False)
+
+        r = client.get("/health")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert data["status"] == "degraded"
+        assert data["runtime_features"]["sanitize"] == "degraded"
+        assert data["runtime_features"]["atomic_io"] == "degraded"
 
 
 # -------------------------------------------------
