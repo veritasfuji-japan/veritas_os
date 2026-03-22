@@ -161,6 +161,7 @@ def status() -> Dict[str, Any]:
         "pipeline_ok": srv.get_decision_pipeline() is not None,
         "api_key_configured": bool(expected),
     }
+
     if srv._is_debug_mode():
         result["cfg_error"] = srv._cfg_state.err
         result["pipeline_error"] = srv._pipeline_state.err
@@ -192,6 +193,7 @@ def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> tuple[list[Pat
 
 @router.get("/v1/metrics")
 def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
+    """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
     shadow_dir = srv._effective_shadow_dir()
     _, log_json, log_jsonl = srv._effective_log_paths()
@@ -220,6 +222,17 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
 
     auth_store = _auth_store_health(srv)
+    runtime_features = _runtime_feature_checks(srv)
+    memory_store = srv.get_memory_store()
+    memory_health = None
+    memory_status = "unavailable"
+    if memory_store is not None:
+        memory_status = "ok"
+        if hasattr(memory_store, "health_snapshot"):
+            memory_health = memory_store.health_snapshot()
+            if memory_health.get("status") == "degraded":
+                memory_status = "degraded"
+
     result = {
         "decide_files": total_decide_files,
         "decide_files_returned": len(files),
@@ -231,6 +244,8 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "last_decide_at": last_at,
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": srv.get_decision_pipeline() is not None,
+        "memory_status": memory_status,
+        "runtime_features": runtime_features,
         "auth_store_mode": auth_store["details"].get("requested_mode", "memory"),
         "auth_store_effective_mode": auth_store["details"].get("effective_mode", "memory"),
         "auth_store_status": auth_store["status"],
@@ -240,6 +255,9 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "auth_store_reasons": auth_store["details"].get("reasons", []),
         "auth_reject_reasons": srv._snapshot_auth_reject_reason_metrics(),
     }
+    if memory_health is not None:
+        result["memory_health"] = memory_health
+
     if srv._is_debug_mode():
         result["pipeline_error"] = srv._pipeline_state.err
         result["cfg_error"] = srv._cfg_state.err
