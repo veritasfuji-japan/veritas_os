@@ -61,6 +61,24 @@ def _auth_store_health(srv: Any) -> Dict[str, Any]:
     }
 
 
+def _trust_log_health(srv: Any) -> Dict[str, Any]:
+    """Return trust-log aggregate JSON health for audit visibility."""
+    trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
+    if trust_log_runtime is None:
+        return {"status": "unknown", "details": {"status": "unknown"}}
+
+    _, log_json, _ = srv._effective_log_paths()
+    trust_log_runtime.effective_log_paths = srv._effective_log_paths
+    load_result = trust_log_runtime.load_logs_json_result(log_json)
+    raw_status = getattr(load_result, "status", "unknown")
+    status = "ok" if raw_status in {"ok", "missing"} else "degraded"
+    details: Dict[str, Any] = {"status": raw_status}
+    error = getattr(load_result, "error", None)
+    if error:
+        details["error"] = error
+    return {"status": status, "details": details}
+
+
 # ------------------------------------------------------------------
 # Pydantic models
 # ------------------------------------------------------------------
@@ -110,6 +128,7 @@ def health() -> Dict[str, Any]:
         memory_status = "ok" if memory_ok else "unavailable"
         runtime_features = _runtime_feature_checks(srv)
         auth_store = _auth_store_health(srv)
+        trust_log = _trust_log_health(srv)
         if memory_health and memory_health.get("status") == "degraded":
             memory_status = "degraded"
 
@@ -120,6 +139,7 @@ def health() -> Dict[str, Any]:
             memory_status == "degraded"
             or "degraded" in runtime_features.values()
             or auth_store["status"] == "degraded"
+            or trust_log["status"] == "degraded"
         ):
             health_status = "degraded"
 
@@ -132,9 +152,11 @@ def health() -> Dict[str, Any]:
                 "pipeline": pipeline_status,
                 "memory": memory_status,
                 "auth_store": auth_store["status"],
+                "trust_log": trust_log["status"],
             },
             "runtime_features": runtime_features,
             "auth_store": auth_store["details"],
+            "trust_log": trust_log["details"],
         }
         if memory_health:
             result["memory_health"] = memory_health

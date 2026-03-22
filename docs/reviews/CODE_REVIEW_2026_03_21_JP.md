@@ -114,6 +114,8 @@ health / audit への明示的な露出が望ましい。
   - `veritas_os/tests/test_api_backend_improvements.py` に、runtime feature の degradation が health 応答へ露出する回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/auth.py` に `auth_store_health_snapshot()` を追加し、`veritas_os/api/routes_system.py` の `/health` / `/v1/health` で `checks.auth_store` と `auth_store` 詳細を返すようにした。これにより `VERITAS_AUTH_SECURITY_STORE=redis` を要求しながら in-memory にフォールバックしている状態や、non-production の fail-open 設定を health 監視だけで検知できる。
   - `veritas_os/tests/test_api_backend_improvements.py` に、auth store の degraded 状態が health 応答へ露出する回帰テストを追加した。
+  - 2026-03-22 追記。`veritas_os/api/routes_system.py` の `/health` / `/v1/health` に `checks.trust_log` と `trust_log` 詳細を追加し、aggregate `trust_log.json` が `invalid` / `unreadable` / `too_large` へ劣化した状態を health 監視から直接検知できるようにした。これにより audit trail の degraded 状態が `/v1/metrics` だけでなく軽量 health poll でも観測可能になり、silent degradation を避けやすくなる。
+  - `veritas_os/tests/test_api_backend_improvements.py` に、trust log の degraded 状態が health 応答へ露出する回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/routes_system.py` の `/v1/metrics` に `auth_store_effective_mode` / `auth_store_status` / `auth_store_reasons` を追加し、health poll だけでなく監査・運用メトリクス収集側でも auth store の degrade を追跡できるようにした。これにより redis 要求時の in-memory フォールバックや fail-open 設定が、定期メトリクス収集からも把握できる。
   - `veritas_os/tests/test_api_backend_improvements.py` に、metrics 応答へ auth store degradation が露出する回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/routes_system.py` の `/v1/metrics` に `memory_status` / `memory_health` / `runtime_features` を追加し、Memory 破損フォールバックや `sanitize` / `atomic_io` 欠落を health endpoint 以外の定期メトリクス収集からも追跡できるようにした。これにより empty-state へ倒れた非致命障害や安全機能の欠落が、監査・監視パイプライン上で見落とされにくくなる。
