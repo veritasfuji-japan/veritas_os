@@ -9,6 +9,7 @@ import pytest
 
 from veritas_os.api.auth import (
     InMemoryAuthSecurityStore,
+    _create_auth_security_store,
     _auth_store_failure_mode,
     _warn_auth_store_fail_open_once,
     _check_and_register_nonce,
@@ -223,6 +224,56 @@ class TestAuthStoreFailureMode:
             clear=True,
         ):
             assert _auth_store_failure_mode() == "closed"
+
+
+class TestCreateAuthSecurityStore:
+    def test_redis_mode_warns_and_falls_back_outside_production(self, caplog):
+        """Non-production Redis auth-store failures may degrade with warning."""
+        caplog.set_level("WARNING")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_ENV": "local",
+                "VERITAS_AUTH_SECURITY_STORE": "redis",
+            },
+            clear=True,
+        ):
+            store = _create_auth_security_store()
+
+        assert isinstance(store, InMemoryAuthSecurityStore)
+        assert "VERITAS_AUTH_REDIS_URL is missing" in caplog.text
+
+    def test_redis_mode_rejects_missing_url_in_production(self):
+        """Production must fail closed when Redis auth-store config is incomplete."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_ENV": "production",
+                "VERITAS_AUTH_SECURITY_STORE": "redis",
+            },
+            clear=True,
+        ):
+            with pytest.raises(RuntimeError, match="VERITAS_AUTH_REDIS_URL is missing"):
+                _create_auth_security_store()
+
+    def test_redis_mode_rejects_runtime_init_failure_in_production(self):
+        """Production must fail closed when Redis auth-store initialization fails."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_ENV": "production",
+                "VERITAS_AUTH_SECURITY_STORE": "redis",
+                "VERITAS_AUTH_REDIS_URL": "redis://example.test:6379/0",
+            },
+            clear=True,
+        ):
+            with mock.patch(
+                "veritas_os.api.auth.importlib.import_module",
+                side_effect=RuntimeError("redis unavailable"),
+            ):
+                with pytest.raises(RuntimeError, match="redis unavailable"):
+                    _create_auth_security_store()
 
 
 class TestEnvIntSafe:

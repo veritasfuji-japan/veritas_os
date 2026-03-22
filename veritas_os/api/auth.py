@@ -193,14 +193,34 @@ class RedisAuthSecurityStore:
 
 
 def _create_auth_security_store() -> AuthSecurityStore:
-    """Create auth security store from environment configuration."""
+    """Create auth security store from environment configuration.
+
+    Security policy:
+        When operators explicitly request Redis-backed auth security storage in
+        production, initialization must fail closed if Redis is misconfigured
+        or unavailable. Silently downgrading to the in-memory store would
+        weaken replay/rate-limit guarantees in multi-worker deployments.
+    """
     mode = (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower()
     if mode != "redis":
         return InMemoryAuthSecurityStore()
 
+    def _raise_or_warn(detail: str) -> None:
+        """Enforce fail-closed auth-store startup in production deployments."""
+        from veritas_os.api.startup_health import should_fail_fast_startup
+
+        message = (
+            f"{detail} "
+            "Auth security store cannot fall back to in-memory in production "
+            "when VERITAS_AUTH_SECURITY_STORE=redis is required."
+        )
+        if should_fail_fast_startup():
+            raise RuntimeError(message)
+        logger.warning("%s", message)
+
     redis_url = (os.getenv("VERITAS_AUTH_REDIS_URL") or "").strip()
     if not redis_url:
-        logger.warning(
+        _raise_or_warn(
             "VERITAS_AUTH_SECURITY_STORE=redis but VERITAS_AUTH_REDIS_URL is missing; "
             "falling back to in-memory auth store (not distributed-safe)."
         )
@@ -213,10 +233,9 @@ def _create_auth_security_store() -> AuthSecurityStore:
         logger.info("Auth security store initialized in redis mode")
         return RedisAuthSecurityStore(client)
     except Exception as exc:
-        logger.warning(
+        _raise_or_warn(
             "Failed to initialize redis auth store (%s); falling back to in-memory "
-            "auth store (not distributed-safe).",
-            _errstr(exc),
+            "auth store (not distributed-safe)." % _errstr(exc)
         )
         return InMemoryAuthSecurityStore()
 
