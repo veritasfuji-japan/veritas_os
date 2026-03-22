@@ -605,6 +605,21 @@ def test_boot_records_health_when_json_is_corrupted(memory_env):
     assert health["error_counts"]["boot_rebuild:episodic"] >= 1
 
 
+def test_targeted_payload_load_records_missing_file_issue_code(memory_env):
+    """missing memory file は health telemetry で明示分類される。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    ms = store.MemoryStore(dim=4)
+    loaded = ms._load_payloads_for_ids("episodic", ["missing-id"])
+
+    assert loaded == {}
+    health = ms.health_snapshot()
+    assert health["status"] == "degraded"
+    assert health["last_error"]["kind"] == "episodic"
+    assert health["last_error"]["issue_code"] == "file_missing"
+    assert health["issue_counts"]["file_missing"] >= 1
+
+
 def test_targeted_payload_load_records_health_on_decode_error(memory_env):
     """targeted payload load の decode error は health telemetry に残る。"""
     store, files, index_paths, FakeIndex, FakeEmbedder = memory_env

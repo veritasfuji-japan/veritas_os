@@ -14,6 +14,16 @@ from veritas_os.core.atomic_io import atomic_append_line
 
 logger = logging.getLogger(__name__)
 
+
+def _classify_load_exception(exc: OSError) -> str:
+    """Return a stable telemetry code for non-fatal filesystem errors."""
+    if isinstance(exc, FileNotFoundError):
+        return "file_missing"
+    if isinstance(exc, PermissionError):
+        return "permission_denied"
+    return "io_error"
+
+
 def _default_memory_dir() -> Path:
     """Return the project-local memory directory path."""
     base_dir = Path(__file__).resolve().parents[2]
@@ -155,22 +165,35 @@ class MemoryStore:
         }
         self._boot()
 
-    def _record_load_issue(self, stage: str, kind: str, detail: str) -> None:
+    def _record_load_issue(
+        self,
+        stage: str,
+        kind: str,
+        detail: str,
+        issue_code: Optional[str] = None,
+    ) -> None:
         """Record a non-fatal memory load issue for health/audit visibility."""
         issue_key = f"{stage}:{kind}"
+        normalized_issue_code = issue_code or detail
         issue = {
             "stage": stage,
             "kind": kind,
             "detail": detail,
+            "issue_code": normalized_issue_code,
             "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         }
         with self._health_lock:
             error_counts = dict(self._health_status.get("error_counts") or {})
+            issue_counts = dict(self._health_status.get("issue_counts") or {})
             error_counts[issue_key] = int(error_counts.get(issue_key, 0)) + 1
+            issue_counts[normalized_issue_code] = int(
+                issue_counts.get(normalized_issue_code, 0)
+            ) + 1
             self._health_status = {
                 "status": "degraded",
                 "last_error": issue,
                 "error_counts": error_counts,
+                "issue_counts": issue_counts,
             }
 
     def health_snapshot(self) -> Dict[str, Any]:
@@ -202,7 +225,12 @@ class MemoryStore:
                     self._record_load_issue("boot_rebuild", kind, "file_too_large")
                     continue
             except OSError as exc:
-                self._record_load_issue("boot_rebuild", kind, f"stat_failed:{exc}")
+                self._record_load_issue(
+                    "boot_rebuild",
+                    kind,
+                    f"stat_failed:{exc}",
+                    issue_code=_classify_load_exception(exc),
+                )
                 continue
 
             ids, texts = [], []
@@ -367,7 +395,12 @@ class MemoryStore:
                 self._record_load_issue("targeted_payload_load", kind, "file_too_large")
                 return found
         except OSError as exc:
-            self._record_load_issue("targeted_payload_load", kind, f"stat_failed:{exc}")
+            self._record_load_issue(
+                "targeted_payload_load",
+                kind,
+                f"stat_failed:{exc}",
+                issue_code=_classify_load_exception(exc),
+            )
             return found
 
         offset_map = self._offset_index.get(kind, {})
@@ -409,7 +442,12 @@ class MemoryStore:
                                 break
         except (OSError, IOError) as e:
             logger.warning("[MemoryStore] Failed targeted payload load from %s: %s", path, e)
-            self._record_load_issue("targeted_payload_load", kind, f"open_failed:{e}")
+            self._record_load_issue(
+                "targeted_payload_load",
+                kind,
+                f"open_failed:{e}",
+                issue_code=_classify_load_exception(e),
+            )
 
         return found
 
