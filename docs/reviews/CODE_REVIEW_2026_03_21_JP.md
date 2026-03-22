@@ -130,6 +130,7 @@ health / audit への明示的な露出が望ましい。
   - 2026-03-21 対応済み。`veritas_os/memory/store.py` に非致命な読み込み障害を記録する health telemetry を追加し、boot rebuild / targeted payload load での JSON decode error・I/O error・サイズ超過・truncation を `health_snapshot()` で取得できるようにした。
   - `veritas_os/api/routes_system.py` の `/health` / `/v1/health` は、MemoryStore が degraded telemetry を持つ場合に `checks.memory="degraded"` と `memory_health` を返すよう変更した。これにより empty-state へフォールバックしても運用監視から破損兆候を検知できる。
   - 2026-03-21 追記。health 応答に top-level の `status` (`ok` / `degraded` / `unavailable`) を追加し、Memory の非致命障害と依存欠落をレスポンスだけで判別できるようにした。`ok` の既存ブール契約は維持しつつ、監視側が `checks` の深掘りなしで degradation を扱える。
+  - 2026-03-22 追記。`veritas_os/memory/store.py` の production 判定を `VERITAS_ENV=production` だけでなく `prod` も含むよう修正し、`VERITAS_MEMORY_DIR_ALLOWLIST` の強制が `prod` 別名では抜け落ちる経路を閉じた。これにより Memory ディレクトリの fail-closed 制約が、他の startup hardening と同じ production alias 契約で一貫する。
   - `veritas_os/tests/test_memory_store.py` と `veritas_os/tests/test_api_backend_improvements.py` に回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/memory/store.py` の health telemetry に `issue_code` / `issue_counts` を追加し、JSON 破損・ファイル消失・権限不備などの非致命な読み込み失敗を `file_missing` / `permission_denied` / `io_error` の安定コードで識別できるようにした。これにより、従来の `detail` 文字列だけでは曖昧だった「破損・消失・I/O 障害」の区別を監視側が機械的に扱える。
   - `veritas_os/tests/test_memory_store.py` と `veritas_os/tests/test_api_backend_improvements.py` に、`issue_code` の露出と missing file 分類の回帰テストを追加した。

@@ -43,7 +43,7 @@ def _resolve_memory_dir() -> Path:
     default_path = _default_memory_dir()
     env_memory_dir = os.getenv("VERITAS_MEMORY_DIR", "").strip()
     profile = (os.getenv("VERITAS_ENV", "") or "").strip().lower()
-    is_production = profile == "production"
+    is_production = profile in {"prod", "production"}
 
     if not env_memory_dir:
         resolved_default = default_path.resolve(strict=False)
