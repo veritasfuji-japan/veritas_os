@@ -241,6 +241,35 @@ class TestEnhancedHealth:
         assert data["auth_store_failure_mode"] == "closed"
         assert data["auth_store_reasons"] == ["redis_store_unavailable"]
 
+    def test_metrics_exposes_memory_and_runtime_degradation(self, monkeypatch):
+        """Metrics endpoint should expose degraded memory/runtime security posture."""
+
+        class FakeMemoryStore:
+            def health_snapshot(self):
+                return {
+                    "status": "degraded",
+                    "last_error": {
+                        "stage": "boot_rebuild",
+                        "kind": "semantic",
+                        "detail": "JSONDecodeError",
+                        "recorded_at": "2026-03-22T00:00:00Z",
+                    },
+                    "error_counts": {"boot_rebuild:semantic": 1},
+                }
+
+        monkeypatch.setattr(server, "get_memory_store", lambda: FakeMemoryStore())
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+        monkeypatch.setattr(server, "_HAS_ATOMIC_IO", False)
+
+        r = client.get("/v1/metrics", headers=_AUTH_HEADERS)
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["memory_status"] == "degraded"
+        assert data["memory_health"]["last_error"]["detail"] == "JSONDecodeError"
+        assert data["runtime_features"]["sanitize"] == "degraded"
+        assert data["runtime_features"]["atomic_io"] == "degraded"
+
 
 class TestGracefulShutdown:
     def test_shutdown_returns_503(self):
