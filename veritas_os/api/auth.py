@@ -291,6 +291,44 @@ def _warn_auth_store_fail_open_once() -> None:
     )
 
 
+def auth_store_health_snapshot() -> Dict[str, Any]:
+    """Return auth store runtime health for monitoring and audit visibility.
+
+    The snapshot intentionally exposes posture rather than secrets so `/health`
+    can reveal when a distributed deployment silently fell back to the
+    in-memory store, or when non-production testing is running in fail-open
+    mode. This helps operators detect degraded security before an outage turns
+    into an auth control gap.
+    """
+    requested_mode = (
+        (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower()
+        or "memory"
+    )
+    failure_mode = _auth_store_failure_mode()
+    effective_store = _get_effective_auth_store()
+    effective_mode = "redis" if isinstance(effective_store, RedisAuthSecurityStore) else "memory"
+
+    status = "ok"
+    reasons = []
+
+    if requested_mode == "redis" and effective_mode != "redis":
+        status = "degraded"
+        reasons.append("redis_store_unavailable")
+
+    if failure_mode == "open":
+        status = "degraded"
+        reasons.append("fail_open_enabled")
+
+    return {
+        "status": status,
+        "requested_mode": requested_mode,
+        "effective_mode": effective_mode,
+        "failure_mode": failure_mode,
+        "distributed_safe": effective_mode == "redis",
+        "reasons": reasons,
+    }
+
+
 def _auth_store_register_nonce(nonce: str, ttl_sec: float) -> bool:
     """Register nonce with explicit fail-open/fail-closed fallback policy."""
     try:

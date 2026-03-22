@@ -52,6 +52,16 @@ def _runtime_feature_checks(srv: Any) -> Dict[str, str]:
     }
 
 
+def _auth_store_health(srv: Any) -> Dict[str, Any]:
+    """Return auth-store runtime health details for system health responses."""
+    snapshot = srv.auth_store_health_snapshot()
+    status = snapshot.get("status", "ok")
+    return {
+        "status": status if status in {"ok", "degraded"} else "degraded",
+        "details": snapshot,
+    }
+
+
 # ------------------------------------------------------------------
 # Pydantic models
 # ------------------------------------------------------------------
@@ -100,6 +110,7 @@ def health() -> Dict[str, Any]:
         pipeline_status = "ok" if pipeline_ok else "unavailable"
         memory_status = "ok" if memory_ok else "unavailable"
         runtime_features = _runtime_feature_checks(srv)
+        auth_store = _auth_store_health(srv)
         if memory_health and memory_health.get("status") == "degraded":
             memory_status = "degraded"
 
@@ -109,6 +120,7 @@ def health() -> Dict[str, Any]:
         elif (
             memory_status == "degraded"
             or "degraded" in runtime_features.values()
+            or auth_store["status"] == "degraded"
         ):
             health_status = "degraded"
 
@@ -120,8 +132,10 @@ def health() -> Dict[str, Any]:
             "checks": {
                 "pipeline": pipeline_status,
                 "memory": memory_status,
+                "auth_store": auth_store["status"],
             },
             "runtime_features": runtime_features,
+            "auth_store": auth_store["details"],
         }
         if memory_health:
             result["memory_health"] = memory_health

@@ -465,6 +465,7 @@ from veritas_os.api.auth import (  # noqa: E402,F401
     _auth_fail_lock,
     _cleanup_auth_fail_bucket_unsafe,
     _auth_store_failure_mode,
+    auth_store_health_snapshot,
     _auth_store_register_nonce,
     _auth_store_increment_auth_failure,
     _auth_store_increment_rate_limit,

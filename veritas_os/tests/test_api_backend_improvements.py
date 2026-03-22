@@ -110,12 +110,15 @@ class TestEnhancedHealth:
         checks = data["checks"]
         assert "pipeline" in checks
         assert "memory" in checks
+        assert "auth_store" in checks
         assert "runtime_features" in data
+        assert "auth_store" in data
         assert "sanitize" in data["runtime_features"]
         assert "atomic_io" in data["runtime_features"]
         # Values should be either "ok", "degraded", or "unavailable"
         assert checks["pipeline"] in ("ok", "unavailable")
         assert checks["memory"] in ("ok", "degraded", "unavailable")
+        assert checks["auth_store"] in ("ok", "degraded")
         assert data["runtime_features"]["sanitize"] in ("ok", "degraded")
         assert data["runtime_features"]["atomic_io"] in ("ok", "degraded")
 
@@ -181,6 +184,31 @@ class TestEnhancedHealth:
         assert data["status"] == "degraded"
         assert data["runtime_features"]["sanitize"] == "degraded"
         assert data["runtime_features"]["atomic_io"] == "degraded"
+
+    def test_health_shows_auth_store_degradation(self, monkeypatch):
+        """Health endpoint should expose auth-store security degradation."""
+        monkeypatch.setattr(
+            server,
+            "auth_store_health_snapshot",
+            lambda: {
+                "status": "degraded",
+                "requested_mode": "redis",
+                "effective_mode": "memory",
+                "failure_mode": "closed",
+                "distributed_safe": False,
+                "reasons": ["redis_store_unavailable"],
+            },
+        )
+
+        r = client.get("/health")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert data["status"] == "degraded"
+        assert data["checks"]["auth_store"] == "degraded"
+        assert data["auth_store"]["requested_mode"] == "redis"
+        assert data["auth_store"]["effective_mode"] == "memory"
 
 
 # -------------------------------------------------
