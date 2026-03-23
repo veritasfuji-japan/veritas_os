@@ -270,6 +270,10 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "runtime_features": runtime_features,
         "auth_store_mode": auth_store["details"].get("requested_mode", "memory"),
         "auth_store_effective_mode": auth_store["details"].get("effective_mode", "memory"),
+        "auth_store_requested_failure_mode": auth_store["details"].get(
+            "requested_failure_mode",
+            "closed",
+        ),
         "auth_store_status": auth_store["status"],
         "auth_store_failure_mode": auth_store["details"].get(
             "failure_mode", srv._auth_store_failure_mode()

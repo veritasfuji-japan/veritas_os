@@ -317,11 +317,16 @@ def auth_store_health_snapshot() -> Dict[str, Any]:
     can reveal when a distributed deployment silently fell back to the
     in-memory store, or when non-production testing is running in fail-open
     mode. This helps operators detect degraded security before an outage turns
-    into an auth control gap.
+    into an auth control gap. It also surfaces ignored fail-open requests so
+    misconfigured staging/shared environments do not appear fully healthy.
     """
     requested_mode = (
         (os.getenv("VERITAS_AUTH_SECURITY_STORE") or "memory").strip().lower()
         or "memory"
+    )
+    requested_failure_mode = (
+        (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
+        or "closed"
     )
     failure_mode = _auth_store_failure_mode()
     effective_store = _get_effective_auth_store()
@@ -334,6 +339,10 @@ def auth_store_health_snapshot() -> Dict[str, Any]:
         status = "degraded"
         reasons.append("redis_store_unavailable")
 
+    if requested_failure_mode == "open" and failure_mode != "open":
+        status = "degraded"
+        reasons.append("fail_open_request_ignored")
+
     if failure_mode == "open":
         status = "degraded"
         reasons.append("fail_open_enabled")
@@ -341,6 +350,7 @@ def auth_store_health_snapshot() -> Dict[str, Any]:
     return {
         "status": status,
         "requested_mode": requested_mode,
+        "requested_failure_mode": requested_failure_mode,
         "effective_mode": effective_mode,
         "failure_mode": failure_mode,
         "distributed_safe": effective_mode == "redis",

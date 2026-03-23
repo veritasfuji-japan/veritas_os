@@ -126,6 +126,8 @@ health / audit への明示的な露出が望ましい。
   - `veritas_os/tests/test_api_startup_health.py` に、non-production では従来どおり warning を維持しつつ production では fail-closed になる回帰テストを追加した。
   - 2026-03-22 追記。`veritas_os/api/startup_health.py` の startup flag validation を更新し、実際に auth fail-open を要求する `VERITAS_AUTH_STORE_FAILURE_MODE=open` も `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と同様に明示警告・production fail-closed の対象にした。これにより、起動前チェックが実ランタイム設定とずれて fail-open 要求を見落とす経路を閉じた。
   - `veritas_os/tests/test_api_startup_health.py` に、`VERITAS_AUTH_STORE_FAILURE_MODE=open` の non-production 警告と production fail-closed を固定する回帰テストを追加した。
+  - 2026-03-22 追記。`veritas_os/api/auth.py` の `auth_store_health_snapshot()` に `requested_failure_mode` と `fail_open_request_ignored` 理由を追加し、`veritas_os/api/routes_system.py` の `/health` / `/v1/metrics` でも露出するようにした。これにより staging や `VERITAS_ENV` 未設定環境で `VERITAS_AUTH_STORE_FAILURE_MODE=open` が安全側で無効化されても、health/metrics 上は「正常」に見え続ける問題を避けられる。
+  - `veritas_os/tests/test_auth_core.py` と `veritas_os/tests/test_api_backend_improvements.py` に、ignored fail-open request が degraded として観測できる回帰テストを追加した。
 
 ### P1
 
