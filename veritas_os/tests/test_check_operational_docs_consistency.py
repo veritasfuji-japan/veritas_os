@@ -19,6 +19,18 @@ def test_collect_missing_tokens_reports_readme_and_runbook_gaps() -> None:
     assert "### 4.4 `/health` / `/status` の運用判定" in missing
 
 
+def test_collect_missing_tokens_reports_primary_readme_gaps() -> None:
+    """Checker should keep the top-level README source-of-truth markers."""
+    missing = checker.collect_missing_tokens(
+        "**Release Status**: ベータ版\n",
+        checker.PRIMARY_README_REQUIRED_TOKENS,
+    )
+
+    assert "**ベータ品質のガバナンス基盤**" in missing
+    assert "### 拡張時に重要な責務境界" in missing
+    assert "| **Planner** |" in missing
+
+
 def test_main_returns_success_for_current_repository_docs(capsys) -> None:
     """Repository docs should satisfy the operational consistency check."""
     exit_code = checker.main()

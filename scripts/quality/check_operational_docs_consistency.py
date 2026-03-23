@@ -15,10 +15,21 @@ import pathlib
 import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+PRIMARY_README_PATH = REPO_ROOT / "README_JP.md"
 README_PATH = REPO_ROOT / "veritas_os/README_JP.md"
 RUNBOOK_PATH = REPO_ROOT / "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"
 DOC_MAP_PATH = REPO_ROOT / "docs/notes/CODE_REVIEW_DOCUMENT_MAP.md"
 
+PRIMARY_README_REQUIRED_TOKENS = (
+    "**Release Status**: ベータ版",
+    "**ベータ品質のガバナンス基盤**",
+    "### 拡張時に重要な責務境界",
+    "| **Planner** |",
+    "| **Kernel** |",
+    "| **FUJI** |",
+    "| **MemoryOS** |",
+    "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
+)
 README_REQUIRED_TOKENS = (
     "Beta%20Governance%20Platform",
     "**正本 / 最新の運用判断**",
@@ -65,6 +76,7 @@ def _validate_file(path: pathlib.Path, required_tokens: tuple[str, ...]) -> list
 def main() -> int:
     """Validate the P1 operational documentation contract."""
     problems = []
+    problems.extend(_validate_file(PRIMARY_README_PATH, PRIMARY_README_REQUIRED_TOKENS))
     problems.extend(_validate_file(README_PATH, README_REQUIRED_TOKENS))
     problems.extend(_validate_file(RUNBOOK_PATH, RUNBOOK_REQUIRED_TOKENS))
     problems.extend(_validate_file(DOC_MAP_PATH, DOC_MAP_REQUIRED_TOKENS))
