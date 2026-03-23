@@ -52,6 +52,9 @@ jobs:
       - name: Operational docs consistency check
         run: python scripts/quality/check_operational_docs_consistency.py
 
+      - name: Memory directory allowlist check
+        run: python scripts/security/check_memory_dir_allowlist.py
+
       - name: httpx raw upload deprecation check
         run: python scripts/security/check_httpx_raw_upload_usage.py
 
