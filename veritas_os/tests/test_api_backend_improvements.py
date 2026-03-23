@@ -132,6 +132,11 @@ class TestEnhancedHealth:
             def health_snapshot(self):
                 return {
                     "status": "degraded",
+                    "config": {
+                        "configured_dir": "/unsafe/memory",
+                        "effective_dir": "/safe/default-memory",
+                        "reason": "production_allowlist_rejected",
+                    },
                     "last_error": {
                         "stage": "targeted_payload_load",
                         "kind": "episodic",
@@ -152,6 +157,10 @@ class TestEnhancedHealth:
         assert data["checks"]["memory"] == "degraded"
         assert data["memory_health"]["last_error"]["detail"] == "JSONDecodeError"
         assert data["memory_health"]["last_error"]["issue_code"] == "JSONDecodeError"
+        assert (
+            data["memory_health"]["config"]["reason"]
+            == "production_allowlist_rejected"
+        )
 
     def test_health_ok_reflects_deps(self, monkeypatch):
         """ok field should reflect dependency availability."""

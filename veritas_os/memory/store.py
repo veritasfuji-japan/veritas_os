@@ -15,6 +15,16 @@ from veritas_os.core.atomic_io import atomic_append_line
 logger = logging.getLogger(__name__)
 
 
+MEMORY_DIR_HEALTH: Dict[str, Any] = {
+    "status": "ok",
+    "details": {
+        "configured_dir": None,
+        "effective_dir": None,
+        "reason": None,
+    },
+}
+
+
 def _classify_load_exception(exc: OSError) -> str:
     """Return a stable telemetry code for non-fatal filesystem errors."""
     if isinstance(exc, FileNotFoundError):
@@ -29,6 +39,21 @@ def _default_memory_dir() -> Path:
     base_dir = Path(__file__).resolve().parents[2]
     veritas_dir = base_dir / "veritas_os"
     return veritas_dir / "memory"
+
+
+def _set_memory_dir_health(
+    status: str,
+    configured_dir: Optional[str],
+    effective_dir: Path,
+    reason: Optional[str] = None,
+) -> None:
+    """Persist memory directory resolution telemetry for health visibility."""
+    MEMORY_DIR_HEALTH["status"] = status
+    MEMORY_DIR_HEALTH["details"] = {
+        "configured_dir": configured_dir,
+        "effective_dir": str(effective_dir.resolve(strict=False)),
+        "reason": reason,
+    }
 
 
 def _resolve_memory_dir() -> Path:
@@ -47,6 +72,7 @@ def _resolve_memory_dir() -> Path:
 
     if not env_memory_dir:
         resolved_default = default_path.resolve(strict=False)
+        _set_memory_dir_health("ok", None, resolved_default)
         logger.info("[MemoryStore] memory directory resolved to %s", resolved_default)
         return default_path
 
@@ -58,6 +84,12 @@ def _resolve_memory_dir() -> Path:
             "Falling back to default path=%s",
             env_memory_dir,
             default_path.resolve(strict=False),
+        )
+        _set_memory_dir_health(
+            "degraded",
+            env_memory_dir,
+            default_path,
+            reason="invalid_configured_path",
         )
         return default_path
 
@@ -76,6 +108,12 @@ def _resolve_memory_dir() -> Path:
                 "VERITAS_MEMORY_DIR_ALLOWLIST is empty; using default path=%s",
                 default_path.resolve(strict=False),
             )
+            _set_memory_dir_health(
+                "degraded",
+                env_memory_dir,
+                default_path,
+                reason="production_allowlist_missing",
+            )
             return default_path
 
         if not any(
@@ -89,8 +127,15 @@ def _resolve_memory_dir() -> Path:
                 [str(prefix) for prefix in allow_prefixes],
                 default_path.resolve(strict=False),
             )
+            _set_memory_dir_health(
+                "degraded",
+                env_memory_dir,
+                default_path,
+                reason="production_allowlist_rejected",
+            )
             return default_path
 
+    _set_memory_dir_health("ok", env_memory_dir, resolved_candidate)
     logger.info("[MemoryStore] memory directory resolved to %s", resolved_candidate)
     return candidate
 
@@ -144,9 +189,10 @@ class MemoryStore:
         self._lock = threading.RLock()  # リエントラントロック
         self._health_lock = threading.Lock()
         self._health_status: Dict[str, Any] = {
-            "status": "ok",
+            "status": MEMORY_DIR_HEALTH["status"],
             "last_error": None,
             "error_counts": {},
+            "config": deepcopy(MEMORY_DIR_HEALTH["details"]),
         }
         self.emb = HashEmbedder(dim=dim)
         # 段階キャッシュ（kind -> id -> payload）
@@ -199,7 +245,12 @@ class MemoryStore:
     def health_snapshot(self) -> Dict[str, Any]:
         """Return an immutable snapshot of MemoryStore health telemetry."""
         with self._health_lock:
-            return deepcopy(self._health_status)
+            snapshot = deepcopy(self._health_status)
+        config = deepcopy(MEMORY_DIR_HEALTH["details"])
+        snapshot["config"] = config
+        if snapshot.get("status") == "ok" and MEMORY_DIR_HEALTH["status"] == "degraded":
+            snapshot["status"] = "degraded"
+        return snapshot
 
     def _boot(self) -> None:
         """
