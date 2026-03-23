@@ -169,20 +169,66 @@ def health() -> Dict[str, Any]:
         )
 
 
+def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
+    """Build a shared status snapshot with explicit degraded-state visibility."""
+    expected = (srv._get_expected_api_key() or "").strip()
+    pipeline_ok = srv.get_decision_pipeline() is not None
+    memory_store = srv.get_memory_store()
+    memory_ok = memory_store is not None
+    memory_health = None
+    if memory_ok and hasattr(memory_store, "health_snapshot"):
+        memory_health = memory_store.health_snapshot()
+
+    pipeline_status = "ok" if pipeline_ok else "unavailable"
+    memory_status = "ok" if memory_ok else "unavailable"
+    if memory_health and memory_health.get("status") == "degraded":
+        memory_status = "degraded"
+
+    runtime_features = _runtime_feature_checks(srv)
+    auth_store = _auth_store_health(srv)
+    trust_log = _trust_log_health(srv)
+
+    system_status = "ok"
+    if pipeline_status == "unavailable" or memory_status == "unavailable":
+        system_status = "unavailable"
+    elif (
+        memory_status == "degraded"
+        or "degraded" in runtime_features.values()
+        or auth_store["status"] == "degraded"
+        or trust_log["status"] == "degraded"
+    ):
+        system_status = "degraded"
+
+    result: Dict[str, Any] = {
+        "ok": True,
+        "status": system_status,
+        "version": "veritas-api 1.0.3",
+        "uptime": int(time.time() - srv.START_TS),
+        "server_time": srv.utc_now_iso_z(),
+        "pipeline_ok": pipeline_ok,
+        "api_key_configured": bool(expected),
+        "checks": {
+            "pipeline": pipeline_status,
+            "memory": memory_status,
+            "auth_store": auth_store["status"],
+            "trust_log": trust_log["status"],
+        },
+        "runtime_features": runtime_features,
+        "auth_store": auth_store["details"],
+        "trust_log": trust_log["details"],
+    }
+    if memory_health:
+        result["memory_health"] = memory_health
+
+    return result
+
+
 @public_router.get("/status")
 @public_router.get("/v1/status")
 @public_router.get("/api/status")
 def status() -> Dict[str, Any]:
     srv = _get_server()
-    expected = (srv._get_expected_api_key() or "").strip()
-    result = {
-        "ok": True,
-        "version": "veritas-api 1.0.3",
-        "uptime": int(time.time() - srv.START_TS),
-        "server_time": srv.utc_now_iso_z(),
-        "pipeline_ok": srv.get_decision_pipeline() is not None,
-        "api_key_configured": bool(expected),
-    }
+    result = _system_status_snapshot(srv)
 
     if srv._is_debug_mode():
         result["cfg_error"] = srv._cfg_state.err
