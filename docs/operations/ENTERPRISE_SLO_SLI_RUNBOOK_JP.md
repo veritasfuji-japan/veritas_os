@@ -55,6 +55,22 @@
 - Primary: on-call backend
 - Secondary: platform/security
 
+### 4.3 degraded 判定のアラートポリシー（P1固定）
+| シグナル | 判定 | 推奨優先度 | 必須アクション |
+|---|---|---|---|
+| `runtime_features.sanitize=degraded` | P0 / Sev1 | 即時 | 新規リリース停止。production では起動拒否を確認し、non-production でも原因除去まで shared 環境へ昇格しない。 |
+| `runtime_features.atomic_io=degraded` | P0 / Sev1 | 即時 | TrustLog / shadow log の crash-safe 性低下として扱い、監査ログ保全を優先して隔離・再デプロイする。 |
+| `checks.auth_store=degraded` | P1 / Sev2 | 15分以内 | fail-open 要求や redis→memory fallback の有無を確認し、shared / production では設定修正完了までリリース停止。 |
+| `checks.memory=degraded` | P1 / Sev2 | 15分以内 | empty-state fallback や JSON 破損の可能性として扱い、永続領域・権限・破損状況を確認する。 |
+| `checks.trust_log=degraded` | P1 / Sev2 | 15分以内 | 監査 JSON 劣化として扱い、`trust_json_status` ごとの runbook (§6.1) を実施する。 |
+| top-level `status=degraded` が 10分継続 | 集約アラート | P1 / Sev2 | 内訳 (`checks.*`, `runtime_features.*`) を掘り下げ、単一障害か複合劣化かを判定する。 |
+
+### 4.4 `/health` / `/status` の運用判定
+- `status=ok`: 通常運用。ただし長期傾向は metrics でも追跡する。
+- `status=degraded`: **許容放置しない**。`ok=true` でも安全機能・監査機能・永続化のどれかが劣化しているため、アラート対象にする。
+- `status=unavailable`: P0。依存喪失または主要機能停止として即時エスカレーションする。
+- `/status` のみを使う軽量監視でも、`status` と `checks` を必須収集項目にする。`ok=true` だけで正常判定してはいけない。
+
 ## 5. 障害対応 Runbook
 
 ### 5.1 初動（0–15分）

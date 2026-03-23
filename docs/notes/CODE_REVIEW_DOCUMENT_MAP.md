@@ -2,12 +2,12 @@
 title: コードレビュー文書マップ（整理版）
 doc_type: review_document_index
 latest: true
-updated_at: 2026-02-25
+updated_at: 2026-03-23
 ---
 
 # コードレビュー文書マップ（整理版）
 
-最終更新: 2026-02-25
+最終更新: 2026-03-23
 
 この文書は、リポジトリ内に点在しているコードレビュー関連 Markdown の
 **参照順序**と**用途**を整理するためのインデックスです。
@@ -26,6 +26,11 @@ updated_at: 2026-02-25
    - 環境依存で未実施の項目も明示
 
 > 運用上は、上記 3 ファイルを「一次情報」として扱います。
+
+### README / Runbook の正本
+- 導入判断・責務境界・beta positioning の正本: `README_JP.md`
+- degraded 状態の運用意味・アラート方針・復旧手順の正本: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
+- `veritas_os/README_JP.md` は補助説明であり、production readiness の最終判断根拠として単独利用しない。
 
 ---
 
