@@ -98,6 +98,7 @@
 - production では `NEXT_PUBLIC_VERITAS_API_BASE_URL` を必ず未設定にする。残っていると BFF は安全側で `503 server_misconfigured` になり、内部 API 経路の公開リスクも生む。
 - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` は検証専用の危険フラグであり、production へ混入させない。backend startup は fail-fast するが、環境定義から除去しておくこと。
 - デプロイ担当者はリリース前に環境変数一覧をレビューし、不要な `NEXT_PUBLIC_*` と fail-open 系フラグが含まれていないことを確認する。
+- `VERITAS_ENV=prod|production` かつ `VERITAS_MEMORY_DIR` を使う場合は、`python scripts/security/check_memory_dir_allowlist.py` を release gate に含め、allowlist 不一致や相対パス指定を事前に fail させる。
 
 ## 6.1 TrustLog degraded 状態 runbook
 
