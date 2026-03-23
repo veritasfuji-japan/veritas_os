@@ -138,6 +138,7 @@
 - `VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=0`: 依存未導入環境で fallback 検証を行うときのみ許容。本番推奨構成では embedding 差分による挙動差を避けるため、使用有無を固定する。
 - `VERITAS_CAP_FUJI_TOOL_BRIDGE=0`: ローカル単体試験やオフライン検証では許容できるが、shared 環境では FUJI capability 差分として扱う。
 - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true`: 認証 fail-open の危険フラグであり、isolated local/test の一時検証以外では禁止する。
+- `VERITAS_AUTH_STORE_FAILURE_MODE=open`: auth store 障害時に fail-open を要求する危険設定であり、`VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と同様に isolated local/test の一時検証以外では禁止する。
 
 ### strict mode を推奨する箇所
 - `VERITAS_CAP_FUJI_YAML_POLICY=1`: production で YAML policy を正規運用する場合は明示有効化し、依存（PyYAML）欠落を fail-fast させる。
@@ -148,11 +149,11 @@
 - startup log の `[CapabilityManifest] component=... manifest=... disabled=...` を確認し、想定外に disabled になった capability がないかを監視する。
 - FUJI policy fallback は `FUJI policy fallback triggered:` warning と strict mode 時の error で検知する。
 - Memory sentence-transformers fallback は `[CONFIG_MISMATCH] sentence-transformers is unavailable...` warning で検知する。
-- auth fail-open は §6.2 の startup warning / fail-fast / deployment check を併用し、shared 環境に残置しない。
+- auth fail-open は §6.2 の startup warning / fail-fast / deployment check を併用し、`VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と `VERITAS_AUTH_STORE_FAILURE_MODE=open` の両方を shared 環境に残置しない。
 
 ### セキュリティ注意
 - optional dependency fallback は可用性向上に役立つ一方、shared 環境では capability drift により安全性・監査性・検索品質の非決定性を生む。
-- 特に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` と permissive policy fallback の併用は、防御低下の複合リスクになるため避ける。
+- 特に `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` / `VERITAS_AUTH_STORE_FAILURE_MODE=open` と permissive policy fallback の併用は、防御低下の複合リスクになるため避ける。
 
 ## 7. セキュリティ上の警告
 - `trace_id` は監査相関用であり、認可判定には使用しない。

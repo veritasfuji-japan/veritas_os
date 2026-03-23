@@ -13,6 +13,7 @@ def test_collect_missing_tokens_reports_missing_required_markers() -> None:
 
     assert "### production 推奨設定" in missing
     assert "VERITAS_CAP_FUJI_TRUST_LOG=1" in missing
+    assert "VERITAS_AUTH_STORE_FAILURE_MODE=open" in missing
     assert "[CapabilityManifest]" in missing
 
 

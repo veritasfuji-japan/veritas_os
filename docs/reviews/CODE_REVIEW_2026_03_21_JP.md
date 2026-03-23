@@ -108,6 +108,8 @@ health / audit への明示的な露出が望ましい。
 ### P0
 
 - [x] production で sanitize import failure を fail-closed にする
+  - 2026-03-23 追記。`scripts/quality/check_capability_profile_doc.py` を更新し、運用 runbook (`docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`) にも `VERITAS_AUTH_STORE_FAILURE_MODE=open` の危険性と禁止方針が明記されていることを CI で固定した。これにより deployment template だけでなく operator-facing capability profile 文書側でも auth fail-open 要求の見落としを防げる。
+  - `veritas_os/tests/test_check_capability_profile_doc.py` に、runbook checker が `VERITAS_AUTH_STORE_FAILURE_MODE=open` 欠落を検知する回帰テストを追加した。
   - 2026-03-23 追記。`scripts/quality/check_deployment_env_defaults.py` を更新し、operator-facing template に `VERITAS_AUTH_STORE_FAILURE_MODE=open` が残っている場合も CI/レビュー時に検知できるようにした。既存の `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` 検知と合わせて、startup では警告や fail-closed になる危険フラグが deployment template 側に温存される経路を最小差分で塞いだ。
   - `veritas_os/tests/test_deployment_env_defaults.py` に、引用符・`export` 付きの `VERITAS_AUTH_STORE_FAILURE_MODE=OPEN` を forbidden assignment として捕捉する回帰テストを追加した。
   - 2026-03-21 対応済み。`veritas_os/api/startup_health.py` の `check_runtime_feature_health()` を更新し、`sanitize` モジュール未ロード時は non-production では警告、production (`VERITAS_ENV=production` / `prod`) では `RuntimeError` を送出して API 起動を停止するよう変更した。これにより PII masking 欠落状態での fail-open 起動を防止する。
