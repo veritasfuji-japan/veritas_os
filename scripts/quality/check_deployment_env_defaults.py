@@ -34,7 +34,10 @@ RULES = (
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
         ),
-        forbidden_env_assignments=(("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),),
+        forbidden_env_assignments=(
+            ("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),
+            ("VERITAS_AUTH_STORE_FAILURE_MODE", "open"),
+        ),
     ),
     TemplateRule(
         relative_path="setup.sh",
@@ -46,7 +49,10 @@ RULES = (
             "NEXT_PUBLIC_API_BASE_URL",
             "NEXT_PUBLIC_VERITAS_API_BASE_URL",
         ),
-        forbidden_env_assignments=(("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),),
+        forbidden_env_assignments=(
+            ("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),
+            ("VERITAS_AUTH_STORE_FAILURE_MODE", "open"),
+        ),
     ),
 )
 
@@ -134,7 +140,8 @@ def main() -> int:
         print(f"- {violation}")
     print(
         "\nUse server-only VERITAS_* variables in operator-facing templates and "
-        "never ship fail-open auth flags in default configuration."
+        "never ship fail-open auth flags or open auth-store failure modes in "
+        "default configuration."
     )
     return 1
 
