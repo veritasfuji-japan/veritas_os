@@ -124,6 +124,9 @@ class TestEnhancedHealth:
         assert checks["trust_log"] in ("ok", "degraded", "unknown")
         assert data["runtime_features"]["sanitize"] in ("ok", "degraded")
         assert data["runtime_features"]["atomic_io"] in ("ok", "degraded")
+        assert "alert_policy" in data
+        assert data["alert_policy"]["highest_priority"] in ("none", "P0", "P1")
+        assert isinstance(data["alert_policy"]["alerts"], list)
 
     def test_health_exposes_memory_degradation_details(self, monkeypatch):
         """Non-fatal MemoryStore load issues should surface in /health."""
@@ -198,6 +201,24 @@ class TestEnhancedHealth:
         assert data["status"] == "degraded"
         assert data["runtime_features"]["sanitize"] == "degraded"
         assert data["runtime_features"]["atomic_io"] == "degraded"
+
+    def test_health_includes_machine_readable_alert_policy(self, monkeypatch):
+        """Health endpoint should embed runbook-aligned alert priority hints."""
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+
+        r = client.get("/health")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["alert_policy"]["highest_priority"] == "P0"
+        assert data["alert_policy"]["requires_action"] is True
+        assert {
+            "signal": "runtime_features.sanitize",
+            "status": "degraded",
+            "priority": "P0",
+            "severity": "sev1",
+            "action": "stop_release_and_restore_sanitize",
+        } in data["alert_policy"]["alerts"]
 
     def test_health_shows_auth_store_degradation(self, monkeypatch):
         """Health endpoint should expose auth-store security degradation."""
@@ -280,6 +301,11 @@ class TestEnhancedHealth:
         assert data["checks"]["memory"] == "degraded"
         assert data["runtime_features"]["sanitize"] == "degraded"
         assert data["memory_health"]["last_error"]["issue_code"] == "JSONDecodeError"
+        assert data["alert_policy"]["highest_priority"] == "P0"
+        assert any(
+            alert["signal"] == "checks.memory"
+            for alert in data["alert_policy"]["alerts"]
+        )
 
     def test_health_shows_trust_log_degradation(self, monkeypatch):
         """Health endpoint should expose degraded trust-log aggregate state."""

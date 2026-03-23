@@ -79,6 +79,108 @@ def _trust_log_health(srv: Any) -> Dict[str, Any]:
     return {"status": status, "details": details}
 
 
+def _derive_alert_policy(
+    checks: Dict[str, str],
+    runtime_features: Dict[str, str],
+) -> Dict[str, Any]:
+    """Return machine-readable alert semantics for health/status consumers.
+
+    The reassessment identified a P1 operational risk: callers could see a
+    degraded system state but still need local logic to map it to alert
+    priority. Embedding the minimum policy here keeps `/health` and `/status`
+    aligned with the runbook without changing Planner / Kernel / FUJI /
+    MemoryOS responsibilities.
+    """
+    triggered_alerts: list[Dict[str, str]] = []
+    alert_catalog = (
+        (
+            runtime_features.get("sanitize") == "degraded",
+            {
+                "signal": "runtime_features.sanitize",
+                "status": "degraded",
+                "priority": "P0",
+                "severity": "sev1",
+                "action": "stop_release_and_restore_sanitize",
+            },
+        ),
+        (
+            runtime_features.get("atomic_io") == "degraded",
+            {
+                "signal": "runtime_features.atomic_io",
+                "status": "degraded",
+                "priority": "P0",
+                "severity": "sev1",
+                "action": "isolate_runtime_and_restore_atomic_io",
+            },
+        ),
+        (
+            checks.get("auth_store") == "degraded",
+            {
+                "signal": "checks.auth_store",
+                "status": "degraded",
+                "priority": "P1",
+                "severity": "sev2",
+                "action": "inspect_auth_fallback_and_pause_release",
+            },
+        ),
+        (
+            checks.get("memory") == "degraded",
+            {
+                "signal": "checks.memory",
+                "status": "degraded",
+                "priority": "P1",
+                "severity": "sev2",
+                "action": "inspect_memory_persistence_and_corruption",
+            },
+        ),
+        (
+            checks.get("trust_log") == "degraded",
+            {
+                "signal": "checks.trust_log",
+                "status": "degraded",
+                "priority": "P1",
+                "severity": "sev2",
+                "action": "run_trust_log_recovery_runbook",
+            },
+        ),
+        (
+            checks.get("pipeline") == "unavailable",
+            {
+                "signal": "checks.pipeline",
+                "status": "unavailable",
+                "priority": "P0",
+                "severity": "sev1",
+                "action": "restore_decision_pipeline",
+            },
+        ),
+        (
+            checks.get("memory") == "unavailable",
+            {
+                "signal": "checks.memory",
+                "status": "unavailable",
+                "priority": "P0",
+                "severity": "sev1",
+                "action": "restore_memory_store",
+            },
+        ),
+    )
+    for is_triggered, alert in alert_catalog:
+        if is_triggered:
+            triggered_alerts.append(alert)
+
+    highest_priority = "none"
+    if any(alert["priority"] == "P0" for alert in triggered_alerts):
+        highest_priority = "P0"
+    elif triggered_alerts:
+        highest_priority = "P1"
+
+    return {
+        "highest_priority": highest_priority,
+        "requires_action": bool(triggered_alerts),
+        "alerts": triggered_alerts,
+    }
+
+
 # ------------------------------------------------------------------
 # Pydantic models
 # ------------------------------------------------------------------
@@ -144,17 +246,19 @@ def health() -> Dict[str, Any]:
             health_status = "degraded"
 
         all_ok = health_status == "ok"
+        checks = {
+            "pipeline": pipeline_status,
+            "memory": memory_status,
+            "auth_store": auth_store["status"],
+            "trust_log": trust_log["status"],
+        }
         result: Dict[str, Any] = {
             "ok": all_ok,
             "status": health_status,
             "uptime": int(time.time() - srv.START_TS),
-            "checks": {
-                "pipeline": pipeline_status,
-                "memory": memory_status,
-                "auth_store": auth_store["status"],
-                "trust_log": trust_log["status"],
-            },
+            "checks": checks,
             "runtime_features": runtime_features,
+            "alert_policy": _derive_alert_policy(checks, runtime_features),
             "auth_store": auth_store["details"],
             "trust_log": trust_log["details"],
         }
@@ -199,6 +303,12 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
     ):
         system_status = "degraded"
 
+    checks = {
+        "pipeline": pipeline_status,
+        "memory": memory_status,
+        "auth_store": auth_store["status"],
+        "trust_log": trust_log["status"],
+    }
     result: Dict[str, Any] = {
         "ok": True,
         "status": system_status,
@@ -207,13 +317,9 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": pipeline_ok,
         "api_key_configured": bool(expected),
-        "checks": {
-            "pipeline": pipeline_status,
-            "memory": memory_status,
-            "auth_store": auth_store["status"],
-            "trust_log": trust_log["status"],
-        },
+        "checks": checks,
         "runtime_features": runtime_features,
+        "alert_policy": _derive_alert_policy(checks, runtime_features),
         "auth_store": auth_store["details"],
         "trust_log": trust_log["details"],
     }
