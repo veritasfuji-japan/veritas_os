@@ -470,6 +470,11 @@ def test_resolve_memory_dir_rejects_non_allowlisted_path_in_production(
 
     assert resolved == default_dir
     assert "rejected in production" in caplog.text
+    assert store.MEMORY_DIR_HEALTH["status"] == "degraded"
+    assert (
+        store.MEMORY_DIR_HEALTH["details"]["reason"]
+        == "production_allowlist_rejected"
+    )
 
 
 def test_resolve_memory_dir_accepts_allowlisted_path_in_production(
@@ -534,6 +539,8 @@ def test_resolve_memory_dir_rejects_relative_path(memory_env, monkeypatch, caplo
 
     assert resolved == default_dir
     assert "[SECURITY]" in caplog.text
+    assert store.MEMORY_DIR_HEALTH["status"] == "degraded"
+    assert store.MEMORY_DIR_HEALTH["details"]["reason"] == "invalid_configured_path"
 
 
 def test_resolve_memory_dir_rejects_path_traversal(memory_env, monkeypatch, caplog, tmp_path):
@@ -641,3 +648,30 @@ def test_targeted_payload_load_records_health_on_decode_error(memory_env):
     assert health["last_error"]["stage"] == "targeted_payload_load"
     assert health["last_error"]["kind"] == "episodic"
     assert health["error_counts"]["targeted_payload_load:episodic"] >= 1
+
+
+def test_health_snapshot_exposes_memory_dir_config_mismatch(
+    memory_env,
+    monkeypatch,
+    tmp_path,
+):
+    """Memory directory fallback は health telemetry に露出する。"""
+    store, files, index_paths, FakeIndex, FakeEmbedder = memory_env
+
+    default_dir = tmp_path / "default-memory"
+    denied_dir = tmp_path / "denied" / "memory"
+    monkeypatch.setattr(store, "_default_memory_dir", lambda: default_dir)
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(denied_dir))
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_ALLOWLIST", str(tmp_path / "allowed"))
+
+    resolved = store._resolve_memory_dir()
+    assert resolved == default_dir
+
+    ms = store.MemoryStore(dim=4)
+    health = ms.health_snapshot()
+
+    assert health["status"] == "degraded"
+    assert health["config"]["configured_dir"] == str(denied_dir)
+    assert health["config"]["effective_dir"] == str(default_dir.resolve(strict=False))
+    assert health["config"]["reason"] == "production_allowlist_rejected"
