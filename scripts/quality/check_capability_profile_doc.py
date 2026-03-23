@@ -20,6 +20,7 @@ REQUIRED_TOKENS = (
     "VERITAS_CAP_EMIT_MANIFEST=1",
     "### local / test でのみ許容する設定",
     "VERITAS_AUTH_ALLOW_FAIL_OPEN=true",
+    "VERITAS_AUTH_STORE_FAILURE_MODE=open",
     "### strict mode を推奨する箇所",
     "VERITAS_CAP_FUJI_YAML_POLICY=1",
     "VERITAS_FUJI_STRICT_POLICY_LOAD=1",
