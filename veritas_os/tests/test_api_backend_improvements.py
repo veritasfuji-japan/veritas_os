@@ -242,6 +242,36 @@ class TestEnhancedHealth:
         assert data["auth_store"]["failure_mode"] == "closed"
         assert data["auth_store"]["reasons"] == ["fail_open_request_ignored"]
 
+    def test_status_exposes_runtime_and_memory_degradation(self, monkeypatch):
+        """Status endpoint should surface degraded posture for lightweight polling."""
+
+        class FakeMemoryStore:
+            def health_snapshot(self):
+                return {
+                    "status": "degraded",
+                    "last_error": {
+                        "stage": "boot_rebuild",
+                        "kind": "semantic",
+                        "detail": "JSONDecodeError",
+                        "issue_code": "JSONDecodeError",
+                        "recorded_at": "2026-03-23T00:00:00Z",
+                    },
+                    "error_counts": {"boot_rebuild:semantic": 1},
+                }
+
+        monkeypatch.setattr(server, "get_memory_store", lambda: FakeMemoryStore())
+        monkeypatch.setattr(server, "_HAS_SANITIZE", False)
+
+        r = client.get("/status")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["ok"] is False
+        assert data["status"] == "degraded"
+        assert data["checks"]["memory"] == "degraded"
+        assert data["runtime_features"]["sanitize"] == "degraded"
+        assert data["memory_health"]["last_error"]["issue_code"] == "JSONDecodeError"
+
     def test_health_shows_trust_log_degradation(self, monkeypatch):
         """Health endpoint should expose degraded trust-log aggregate state."""
 
