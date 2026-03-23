@@ -12,6 +12,7 @@ from veritas_os.api.auth import (
     _create_auth_security_store,
     _auth_store_failure_mode,
     _warn_auth_store_fail_open_once,
+    auth_store_health_snapshot,
     _check_and_register_nonce,
     _cleanup_auth_fail_bucket_unsafe,
     _derive_api_user_id,
@@ -224,6 +225,29 @@ class TestAuthStoreFailureMode:
             clear=True,
         ):
             assert _auth_store_failure_mode() == "closed"
+
+
+class TestAuthStoreHealthSnapshot:
+    def setup_method(self):
+        _warn_auth_store_fail_open_once.cache_clear()
+
+    def test_health_snapshot_marks_ignored_fail_open_request_degraded(self):
+        """Ignored fail-open requests should stay visible in health telemetry."""
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_ENV": "staging",
+                "VERITAS_AUTH_STORE_FAILURE_MODE": "open",
+                "VERITAS_AUTH_ALLOW_FAIL_OPEN": "true",
+            },
+            clear=True,
+        ):
+            snapshot = auth_store_health_snapshot()
+
+        assert snapshot["status"] == "degraded"
+        assert snapshot["requested_failure_mode"] == "open"
+        assert snapshot["failure_mode"] == "closed"
+        assert "fail_open_request_ignored" in snapshot["reasons"]
 
 
 class TestCreateAuthSecurityStore:

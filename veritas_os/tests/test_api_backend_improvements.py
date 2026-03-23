@@ -198,6 +198,7 @@ class TestEnhancedHealth:
             lambda: {
                 "status": "degraded",
                 "requested_mode": "redis",
+                "requested_failure_mode": "closed",
                 "effective_mode": "memory",
                 "failure_mode": "closed",
                 "distributed_safe": False,
@@ -214,6 +215,32 @@ class TestEnhancedHealth:
         assert data["checks"]["auth_store"] == "degraded"
         assert data["auth_store"]["requested_mode"] == "redis"
         assert data["auth_store"]["effective_mode"] == "memory"
+
+    def test_health_shows_ignored_fail_open_request(self, monkeypatch):
+        """Health endpoint should expose ignored fail-open requests."""
+        monkeypatch.setattr(
+            server,
+            "auth_store_health_snapshot",
+            lambda: {
+                "status": "degraded",
+                "requested_mode": "memory",
+                "requested_failure_mode": "open",
+                "effective_mode": "memory",
+                "failure_mode": "closed",
+                "distributed_safe": False,
+                "reasons": ["fail_open_request_ignored"],
+            },
+        )
+
+        r = client.get("/health")
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["status"] == "degraded"
+        assert data["checks"]["auth_store"] == "degraded"
+        assert data["auth_store"]["requested_failure_mode"] == "open"
+        assert data["auth_store"]["failure_mode"] == "closed"
+        assert data["auth_store"]["reasons"] == ["fail_open_request_ignored"]
 
     def test_health_shows_trust_log_degradation(self, monkeypatch):
         """Health endpoint should expose degraded trust-log aggregate state."""
@@ -256,6 +283,7 @@ class TestEnhancedHealth:
             lambda: {
                 "status": "degraded",
                 "requested_mode": "redis",
+                "requested_failure_mode": "closed",
                 "effective_mode": "memory",
                 "failure_mode": "closed",
                 "distributed_safe": False,
@@ -269,9 +297,35 @@ class TestEnhancedHealth:
         data = r.json()
         assert data["auth_store_mode"] == "redis"
         assert data["auth_store_effective_mode"] == "memory"
+        assert data["auth_store_requested_failure_mode"] == "closed"
         assert data["auth_store_status"] == "degraded"
         assert data["auth_store_failure_mode"] == "closed"
         assert data["auth_store_reasons"] == ["redis_store_unavailable"]
+
+    def test_metrics_exposes_ignored_fail_open_request(self, monkeypatch):
+        """Metrics endpoint should expose ignored fail-open requests."""
+        monkeypatch.setattr(
+            server,
+            "auth_store_health_snapshot",
+            lambda: {
+                "status": "degraded",
+                "requested_mode": "memory",
+                "requested_failure_mode": "open",
+                "effective_mode": "memory",
+                "failure_mode": "closed",
+                "distributed_safe": False,
+                "reasons": ["fail_open_request_ignored"],
+            },
+        )
+
+        r = client.get("/v1/metrics", headers=_AUTH_HEADERS)
+
+        assert r.status_code == 200
+        data = r.json()
+        assert data["auth_store_status"] == "degraded"
+        assert data["auth_store_requested_failure_mode"] == "open"
+        assert data["auth_store_failure_mode"] == "closed"
+        assert data["auth_store_reasons"] == ["fail_open_request_ignored"]
 
     def test_metrics_exposes_memory_and_runtime_degradation(self, monkeypatch):
         """Metrics endpoint should expose degraded memory/runtime security posture."""
