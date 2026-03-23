@@ -266,7 +266,7 @@ class TestEnhancedHealth:
 
         assert r.status_code == 200
         data = r.json()
-        assert data["ok"] is False
+        assert data["ok"] is True
         assert data["status"] == "degraded"
         assert data["checks"]["memory"] == "degraded"
         assert data["runtime_features"]["sanitize"] == "degraded"

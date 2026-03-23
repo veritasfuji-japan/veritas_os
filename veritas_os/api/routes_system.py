@@ -200,7 +200,7 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
         system_status = "degraded"
 
     result: Dict[str, Any] = {
-        "ok": system_status == "ok",
+        "ok": True,
         "status": system_status,
         "version": "veritas-api 1.0.3",
         "uptime": int(time.time() - srv.START_TS),
