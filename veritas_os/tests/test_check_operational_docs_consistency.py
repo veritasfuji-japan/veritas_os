@@ -40,13 +40,14 @@ def test_main_returns_success_for_current_repository_docs(capsys) -> None:
     assert "Operational documentation consistency checks passed." in output
 
 
-def test_ci_workflow_runs_operational_doc_and_complexity_guards() -> None:
+def test_ci_workflow_runs_operational_and_memory_config_guards() -> None:
     """CI lint workflow should execute the reassessment guard scripts."""
     workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "main.yml"
     content = workflow.read_text(encoding="utf-8")
 
     assert "python scripts/architecture/check_core_complexity_budget.py" in content
     assert "python scripts/quality/check_operational_docs_consistency.py" in content
+    assert "python scripts/security/check_memory_dir_allowlist.py" in content
 
 
 def test_makefile_quality_checks_target_includes_reassessment_guards() -> None:
@@ -57,3 +58,4 @@ def test_makefile_quality_checks_target_includes_reassessment_guards() -> None:
     assert "quality-checks:" in content
     assert "python scripts/architecture/check_core_complexity_budget.py" in content
     assert "python scripts/quality/check_operational_docs_consistency.py" in content
+    assert "python scripts/security/check_memory_dir_allowlist.py" in content
