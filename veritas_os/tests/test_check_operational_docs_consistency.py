@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from scripts.quality import check_operational_docs_consistency as checker
 
 
@@ -24,3 +26,22 @@ def test_main_returns_success_for_current_repository_docs(capsys) -> None:
 
     assert exit_code == 0
     assert "Operational documentation consistency checks passed." in output
+
+
+def test_ci_workflow_runs_operational_doc_and_complexity_guards() -> None:
+    """CI lint workflow should execute the reassessment guard scripts."""
+    workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "main.yml"
+    content = workflow.read_text(encoding="utf-8")
+
+    assert "python scripts/architecture/check_core_complexity_budget.py" in content
+    assert "python scripts/quality/check_operational_docs_consistency.py" in content
+
+
+def test_makefile_quality_checks_target_includes_reassessment_guards() -> None:
+    """Local quality target should mirror the key reassessment gates."""
+    makefile = Path(__file__).resolve().parents[2] / "Makefile"
+    content = makefile.read_text(encoding="utf-8")
+
+    assert "quality-checks:" in content
+    assert "python scripts/architecture/check_core_complexity_budget.py" in content
+    assert "python scripts/quality/check_operational_docs_consistency.py" in content

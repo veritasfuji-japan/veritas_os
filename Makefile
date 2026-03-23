@@ -3,7 +3,7 @@ PYTHON_FALLBACK ?= 3.12
 UV ?= uv
 TEST_ARGS ?=
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split quality-checks
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -87,3 +87,13 @@ test-split:
 		echo "[veritas] Running split tests: -k $$expr"; \
 		UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest pytest -q veritas_os/tests -k "$$expr" --durations=20; \
 	done
+
+quality-checks:
+	@python scripts/architecture/check_responsibility_boundaries.py --report-format json
+	@python scripts/architecture/check_core_complexity_budget.py
+	@python scripts/quality/check_operational_docs_consistency.py
+	@python scripts/security/check_httpx_raw_upload_usage.py
+	@python scripts/security/check_subprocess_shell_usage.py
+	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0
+	@python scripts/quality/check_deployment_env_defaults.py
+	@python scripts/security/check_runtime_pickle_artifacts.py
