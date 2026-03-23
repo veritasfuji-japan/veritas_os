@@ -31,6 +31,17 @@ def test_collect_missing_tokens_reports_primary_readme_gaps() -> None:
     assert "| **Planner** |" in missing
 
 
+def test_collect_missing_tokens_reports_secondary_readme_scope_gaps() -> None:
+    """Checker should preserve the secondary README scope disclaimer."""
+    missing = checker.collect_missing_tokens(
+        "Beta%20Governance%20Platform\n",
+        checker.README_REQUIRED_TOKENS,
+    )
+
+    assert "**Document Scope**: バックエンド配下の補助リファレンス" in missing
+    assert "**記述スコープの注意**" in missing
+
+
 def test_main_returns_success_for_current_repository_docs(capsys) -> None:
     """Repository docs should satisfy the operational consistency check."""
     exit_code = checker.main()

@@ -32,9 +32,11 @@ PRIMARY_README_REQUIRED_TOKENS = (
 )
 README_REQUIRED_TOKENS = (
     "Beta%20Governance%20Platform",
+    "**Document Scope**: バックエンド配下の補助リファレンス",
     "**正本 / 最新の運用判断**",
     "[`README_JP.md`](../README_JP.md)",
     "**セキュリティ注意**",
+    "**記述スコープの注意**",
     "ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
 )
 RUNBOOK_REQUIRED_TOKENS = (
