@@ -4,7 +4,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-Production%20Ready%20(98%25)-green.svg)]()
+[![Status](https://img.shields.io/badge/status-Beta%20Governance%20Platform-blue.svg)]()
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](../docs/COVERAGE_REPORT.md)
 
@@ -28,6 +28,10 @@ VERITAS OS は、LLM（例: **OpenAI GPT-4.1-mini**）をラップして
 - **日本語版 README**（このファイル）
 
 > ※法的には、ライセンス条件は常にトップレベルの [`LICENSE`](LICENSE) と英語版 README の記載が優先されます。
+
+> **正本 / 最新の運用判断**: リポジトリ全体の現行ポジショニング、責務境界、運用上の注意はトップレベルの [`README_JP.md`](../README_JP.md) を正本として参照してください。`veritas_os/README_JP.md` は主にバックエンド配下の機能説明用であり、ベータ前提の運用判断や導入可否の最終根拠として単独利用しないでください。
+
+> **セキュリティ注意**: この README だけを根拠に production readiness を判断すると、運用ハードニングや degraded 時の対応要件を見落とすおそれがあります。導入判断の前に、必ずトップレベル README と `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md` を併読してください。
 
 ---
 
