@@ -9,6 +9,7 @@ from json import JSONDecodeError
 from typing import Any, Dict, Optional, Tuple
 
 from fastapi import APIRouter, Header
+from fastapi.responses import JSONResponse
 
 from veritas_os.api.schemas import (
     MemoryEraseRequest,
@@ -168,11 +169,14 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", srv._memory_store_state.err)
-        return {
-            "ok": False,
-            "error": "memory store unavailable",
-            "error_code": "backend_unavailable",
-        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "memory store unavailable",
+                "error_code": "backend_unavailable",
+            },
+        )
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)
@@ -290,13 +294,16 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", srv._memory_store_state.err)
-        return {
-            "ok": False,
-            "error": "memory store unavailable",
-            "error_code": "backend_unavailable",
-            "hits": [],
-            "count": 0,
-        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "memory store unavailable",
+                "error_code": "backend_unavailable",
+                "hits": [],
+                "count": 0,
+            },
+        )
 
     try:
         q = payload.query
@@ -359,12 +366,15 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
-        return {
-            "ok": False,
-            "error": "memory store unavailable",
-            "error_code": "backend_unavailable",
-            "value": None,
-        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "memory store unavailable",
+                "error_code": "backend_unavailable",
+                "value": None,
+            },
+        )
 
     try:
         uid = srv._resolve_memory_user_id(body.user_id, x_api_key)
@@ -387,11 +397,14 @@ def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(def
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
-        return {
-            "ok": False,
-            "error": "memory store unavailable",
-            "error_code": "backend_unavailable",
-        }
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "error": "memory store unavailable",
+                "error_code": "backend_unavailable",
+            },
+        )
 
     try:
         user_id = srv._resolve_memory_user_id(body.user_id, x_api_key)

@@ -562,7 +562,8 @@ def run(
             # fallback=True を明示し、呼び出し元が追加ペナルティを適用できるようにする
             logger.warning("LLM safety head failed, falling back to heuristic: %s: %s", type(e).__name__, e)
             fb = heuristic_analyze(text)
-            fb["ok"] = True
+            fb["ok"] = False
+            fb["degraded"] = True
             fb["llm_fallback"] = True
             fb.setdefault("raw", {})["llm_error"] = "LLM safety head unavailable"
             fb.setdefault("raw", {})["llm_error_type"] = type(e).__name__

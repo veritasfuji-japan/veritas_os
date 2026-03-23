@@ -35,43 +35,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build image (local only)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          provenance: false
-          sbom: false
+          load: true
+          push: false
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:${{ github.sha }}
 
-      - name: Wait for image availability on GHCR
-        run: |
-          set -euxo pipefail
-          image_ref="${{ steps.image.outputs.name }}:${{ github.sha }}"
-          for i in 1 2 3 4 5; do
-            if docker buildx imagetools inspect "$image_ref" >/dev/null 2>&1; then
-              echo "Image is available: $image_ref"
-              exit 0
-            fi
-            echo "Image not available yet (attempt $i/5)."
-            sleep $((i * 6))
-          done
-          echo "Image was not discoverable on GHCR in time: $image_ref"
-          exit 1
-
       - name: Run Trivy vulnerability scanner
-        continue-on-error: true
         uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          exit-code: '1'
 
       - name: Upload Trivy scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: trivy-results.sarif
+
+      - name: Push image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:${{ github.sha }}

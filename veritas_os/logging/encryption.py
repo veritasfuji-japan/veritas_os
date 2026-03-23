@@ -42,7 +42,17 @@ logger = logging.getLogger(__name__)
 _AES_BLOCK = 16
 _IV_SIZE = 16
 _HMAC_SIZE = 32
-_KEY_HALF = 16
+# Derive two independent 32-byte subkeys from the 32-byte master key
+# via HMAC-SHA256 so that both encryption and authentication use 256-bit keys.
+_HMAC_CTR_ENC_INFO = b"veritas-hmac-ctr-enc"
+_HMAC_CTR_MAC_INFO = b"veritas-hmac-ctr-mac"
+
+
+def _derive_hmac_ctr_keys(master: bytes) -> tuple[bytes, bytes]:
+    """Derive 256-bit enc_key and hmac_key from a 32-byte master key."""
+    enc_key = hmac.new(master, _HMAC_CTR_ENC_INFO, hashlib.sha256).digest()
+    hmac_key = hmac.new(master, _HMAC_CTR_MAC_INFO, hashlib.sha256).digest()
+    return enc_key, hmac_key
 _STREAM_BLOCK = 32  # SHA-256 output size
 
 
@@ -183,8 +193,7 @@ def decrypt(ciphertext: str) -> str:
 
 
 def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
-    enc_key = key[:_KEY_HALF]
-    hmac_key = key[_KEY_HALF:]
+    enc_key, hmac_key = _derive_hmac_ctr_keys(key)
     iv = secrets.token_bytes(_IV_SIZE)
     data = plaintext.encode("utf-8")
 
@@ -198,8 +207,7 @@ def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
 
 
 def _decrypt_hmac_ctr(token: str, key: bytes) -> str:
-    hmac_key = key[_KEY_HALF:]
-    enc_key = key[:_KEY_HALF]
+    enc_key, hmac_key = _derive_hmac_ctr_keys(key)
 
     raw = base64.urlsafe_b64decode(token[4:])
     if len(raw) < _HMAC_SIZE + _IV_SIZE + 1:

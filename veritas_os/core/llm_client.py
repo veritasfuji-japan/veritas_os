@@ -212,7 +212,7 @@ def _circuit_record_failure(provider: str) -> None:
 _MODEL_ALLOWLIST_PREFIXES: Dict[str, tuple[str, ...]] = {
     LLMProvider.OPENAI.value: ("gpt-", "o", "text-embedding-"),
     LLMProvider.ANTHROPIC.value: ("claude-",),
-    LLMProvider.GOOGLE.value: ("gemini-"),
+    LLMProvider.GOOGLE.value: ("gemini-",),
     LLMProvider.OPENROUTER.value: ("openai/", "anthropic/", "google/", "meta-llama/", "mistralai/"),
 }
 

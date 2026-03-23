@@ -532,24 +532,41 @@ class VectorMemory:
             return
 
         logger.info(
-            f"[VectorMemory] Rebuilding index for {len(documents)} documents..."
+            "[VectorMemory] Rebuilding index for %d documents...",
+            len(documents),
         )
 
-        with self._lock:
-            self.documents = []
-            self.embeddings = None
+        # ★ 競合修正: ロック外で全埋め込みを事前計算し、
+        # ロック内でアトミックに差し替える
+        import numpy as np
 
+        new_docs = []
+        embeddings_list = []
+        counter = 0
         for doc in documents:
             text = doc.get("text", "")
             if not text:
                 continue
+            embedding = self.model.encode([text])[0]
+            counter += 1
+            new_doc = {
+                "id": f"{doc.get('kind', 'semantic')}_{counter}_{int(time.time())}",
+                "kind": doc.get("kind", "semantic"),
+                "text": text,
+                "tags": doc.get("tags") or [],
+                "meta": doc.get("meta") or {},
+                "ts": time.time(),
+            }
+            new_docs.append(new_doc)
+            embeddings_list.append(embedding)
 
-            self.add(
-                kind=doc.get("kind", "semantic"),
-                text=text,
-                tags=doc.get("tags"),
-                meta=doc.get("meta"),
-            )
+        with self._lock:
+            self.documents = new_docs
+            self._id_counter = counter
+            if embeddings_list:
+                self.embeddings = np.vstack([e.reshape(1, -1) for e in embeddings_list])
+            else:
+                self.embeddings = None
 
         self._save_index()
         logger.info(

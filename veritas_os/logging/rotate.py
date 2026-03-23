@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import TextIO, Union
 
+from .encryption import decrypt as _decrypt_line_if_needed
 from .paths import LOG_JSONL
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,7 @@ def save_last_hash_marker(trust_log: Path) -> None:
         last_line = _read_last_nonempty_line(trust_log)
         if not last_line:
             return
+        last_line = _decrypt_line_if_needed(last_line)
         last = json.loads(last_line)
         last_hash = last.get("sha256") if isinstance(last, dict) else None
         if last_hash:
