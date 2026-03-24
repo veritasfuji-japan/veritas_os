@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -372,3 +374,91 @@ class TestAppendHistory:
 class TestAddUsage:
     def test_add(self, store):
         assert store.add_usage("u1", cited_ids=["id1"]) is True
+
+
+class TestMemoryStoreIOAndIsolation:
+    def test_load_all_returns_empty_when_file_missing(self, tmp_path):
+        path = tmp_path / "missing.json"
+        store = MemoryStore(path)
+        path.unlink()
+
+        assert store._load_all(copy=True, use_cache=False) == []
+
+    def test_load_all_returns_empty_for_corrupt_json(self, tmp_path):
+        path = tmp_path / "memory.json"
+        path.write_text("{bad json", encoding="utf-8")
+        store = MemoryStore(path)
+
+        assert store._load_all(copy=True, use_cache=False) == []
+
+    def test_save_all_returns_false_on_atomic_write_error(self, tmp_path, monkeypatch):
+        store = MemoryStore(tmp_path / "memory.json")
+
+        @contextmanager
+        def fake_lock(_path):
+            yield
+
+        def bad_atomic_write_json(*_args, **_kwargs):
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("veritas_os.core.memory_store.locked_memory", fake_lock)
+        monkeypatch.setattr(
+            "veritas_os.core.atomic_io.atomic_write_json",
+            bad_atomic_write_json,
+        )
+
+        assert store._save_all([]) is False
+
+    def test_put_get_list_with_user_isolation(self, store):
+        assert store.put("u1", "k1", "v1") is True
+        assert store.put("u2", "k1", "v2") is True
+
+        assert store.get("u1", "k1") == "v1"
+        assert store.get("u2", "k1") == "v2"
+
+        u1_records = store.list_all("u1")
+        u2_records = store.list_all("u2")
+        assert len(u1_records) == 1
+        assert len(u2_records) == 1
+        assert u1_records[0]["value"] == "v1"
+        assert u2_records[0]["value"] == "v2"
+
+    def test_expired_record_filtered_but_legal_hold_survives(self, store):
+        now = datetime.now(timezone.utc).timestamp()
+        expired = now - 60
+        store.put(
+            "u1",
+            "expired",
+            {"text": "stale", "meta": {"expires_at": expired, "legal_hold": False}},
+        )
+        store.put(
+            "u1",
+            "held",
+            {"text": "protected", "meta": {"expires_at": expired, "legal_hold": True}},
+        )
+
+        assert store.get("u1", "expired") is None
+        held = store.get("u1", "held")
+        assert held is not None
+        assert held["text"] == "protected"
+        assert [r["key"] for r in store.list_all("u1")] == ["held"]
+
+    def test_search_filters_by_user_kind_and_min_similarity(self, store):
+        store.put("u1", "k1", {"text": "alpha plan", "kind": "episodic"})
+        store.put("u2", "k2", {"text": "alpha plan", "kind": "semantic"})
+
+        result = store.search(
+            "alpha",
+            user_id="u1",
+            kinds=["episodic"],
+            min_sim=0.5,
+        )
+
+        assert "episodic" in result
+        assert len(result["episodic"]) == 1
+        assert result["episodic"][0]["id"] == "k1"
+
+    def test_search_returns_empty_when_filtered_out(self, store):
+        store.put("u1", "k1", {"text": "tiny signal", "kind": "episodic"})
+
+        assert store.search("completely different", min_sim=0.9) == {}
