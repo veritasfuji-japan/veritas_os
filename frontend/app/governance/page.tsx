@@ -15,6 +15,7 @@ import { ApprovalWorkflow } from "./components/ApprovalWorkflow";
 import { ApplyFlow } from "./components/ApplyFlow";
 import { TrustLogStream } from "./components/TrustLogStream";
 import { ChangeHistory } from "./components/ChangeHistory";
+import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 
 /* ------------------------------------------------------------------ */
 /*  Main page component                                                */
@@ -26,6 +27,17 @@ export default function GovernanceControlPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      {state.pendingConfirm ? (
+        <ConfirmDialog
+          open={true}
+          title={t("確認", "Confirm")}
+          description={state.pendingConfirm.description}
+          confirmLabel={t("確認する", "Confirm")}
+          cancelLabel={t("キャンセル", "Cancel")}
+          onConfirm={() => { state.pendingConfirm?.onConfirm(); state.dismissConfirm(); }}
+          onCancel={state.dismissConfirm}
+        />
+      ) : null}
       {/* ── Header: Governance Control Plane ── */}
       <Card
         title="Governance Control"

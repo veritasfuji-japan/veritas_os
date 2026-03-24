@@ -194,6 +194,12 @@ describe("GovernanceControlPage", () => {
     fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
     fireEvent.click(screen.getByRole("button", { name: "ドライラン" }));
 
+    // applyPolicy が ConfirmDialog を表示するのでダイアログ内「確認する」をクリック
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "確認する" })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: "確認する" }));
+
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent("Dry-run を完了しました。適用はされていません。");
     });

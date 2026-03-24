@@ -125,6 +125,7 @@ export function useAuditData(): AuditDataState {
   const [exportFormat, setExportFormat] = useState<ExportFormat>("json");
 
   const requestSearchNonceRef = useRef(0);
+  const loadAbortRef = useRef<AbortController | null>(null);
 
   /* ---------------------------------------------------------------- */
   /*  Derived data                                                     */
@@ -232,6 +233,11 @@ export function useAuditData(): AuditDataState {
     nextCursor: string | null,
     replace: boolean,
   ): Promise<void> => {
+    // Cancel any in-flight loadLogs request before starting a new one
+    loadAbortRef.current?.abort();
+    const controller = new AbortController();
+    loadAbortRef.current = controller;
+
     setError(null);
     setLoading(true);
     try {
@@ -239,6 +245,7 @@ export function useAuditData(): AuditDataState {
       if (nextCursor) params.set("cursor", nextCursor);
       const response = await veritasFetch(
         `/api/veritas/v1/trust/logs?${params.toString()}`,
+        { signal: controller.signal },
       );
       if (!response.ok) {
         setError(
@@ -263,6 +270,8 @@ export function useAuditData(): AuditDataState {
       if (replace && nextItems.length > 0) setSelected(nextItems[0]);
     } catch (caught: unknown) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
+        // Cancelled by a newer loadLogs call — silently drop the stale request
+        if (loadAbortRef.current !== controller) return;
         setError(
           t(
             "タイムアウト: trust logs 取得が時間内に完了しませんでした。",
@@ -278,7 +287,9 @@ export function useAuditData(): AuditDataState {
         ),
       );
     } finally {
-      setLoading(false);
+      if (loadAbortRef.current === controller) {
+        setLoading(false);
+      }
     }
   };
 

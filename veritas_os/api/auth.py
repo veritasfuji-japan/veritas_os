@@ -466,20 +466,36 @@ def _get_expected_api_key() -> str:
     return key
 
 
+def _get_trusted_proxies() -> frozenset:
+    """Return the set of trusted proxy IPs from VERITAS_TRUSTED_PROXIES env var."""
+    raw = os.getenv("VERITAS_TRUSTED_PROXIES", "").strip()
+    if not raw:
+        return frozenset()
+    return frozenset(ip.strip() for ip in raw.split(",") if ip.strip())
+
+
 def _resolve_client_ip(
     request: Optional[Request],
     x_forwarded_for: Any,
 ) -> str:
-    """Resolve client IP for auth-failure throttling."""
-    forwarded_raw = x_forwarded_for if isinstance(x_forwarded_for, str) else ""
-    forwarded = forwarded_raw.split(",", maxsplit=1)[0].strip()
-    if forwarded:
-        return forwarded
+    """Resolve client IP for auth-failure throttling.
 
+    X-Forwarded-For is trusted only when the direct connection IP is listed in
+    VERITAS_TRUSTED_PROXIES (comma-separated).  Without that env var the direct
+    connection IP is always used, preventing XFF spoofing of the rate-limiter.
+    """
+    direct_ip = ""
     if request is not None and request.client is not None and request.client.host:
-        return request.client.host.strip() or "unknown"
+        direct_ip = request.client.host.strip()
 
-    return "unknown"
+    trusted_proxies = _get_trusted_proxies()
+    if trusted_proxies and direct_ip in trusted_proxies:
+        forwarded_raw = x_forwarded_for if isinstance(x_forwarded_for, str) else ""
+        forwarded = forwarded_raw.split(",", maxsplit=1)[0].strip()
+        if forwarded:
+            return forwarded
+
+    return direct_ip or "unknown"
 
 
 def _enforce_auth_failure_rate_limit(client_ip: str) -> None:

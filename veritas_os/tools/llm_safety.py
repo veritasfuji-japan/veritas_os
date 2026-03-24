@@ -134,7 +134,7 @@ _COMPOUND_PATTERNS: list[tuple[re.Pattern[str], str, str]] = [
 
 _RE_PHONE  = re.compile(r'(0\d{1,4}[-―‐ｰ–—]?\d{1,4}[-―‐ｰ–—]?\d{3,4})')
 _RE_EMAIL  = re.compile(r'[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}')
-_RE_ADDRJP = re.compile(r'(東京都|道府県|市|区|町|村).{0,20}\d')
+_RE_ADDRJP = re.compile(r'([都道府県]|市|区|町|村).{0,20}\d')
 # ★ 修正: 漢字2〜4文字だけでは日本語テキスト全般にマッチして偽陽性が多すぎるため、
 # 敬称（さん/様/氏/先生/殿）付きの名前パターンに限定する（sanitize.py と同様のアプローチ）
 # 例: "山田太郎さん", "田中 様", "鈴木先生"

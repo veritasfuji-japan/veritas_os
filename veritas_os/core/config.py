@@ -314,6 +314,20 @@ def emit_capability_manifest(component: str, manifest: Dict[str, bool]) -> None:
     )
 
 
+_PLACEHOLDER_SECRETS: frozenset = frozenset({
+    "your_veritas_api_secret_here",
+    "changeme",
+    "change-me",
+    "change_me",
+    "placeholder",
+    "dummy",
+    "secret",
+    "test",
+    "password",
+    "example",
+})
+
+
 @dataclass
 class VeritasConfig:
     # ==== API ====
@@ -524,7 +538,7 @@ class VeritasConfig:
         secret = self.api_secret.strip()
         if not secret:
             return False
-        if secret == "YOUR_VERITAS_API_SECRET_HERE":
+        if secret.lower() in _PLACEHOLDER_SECRETS:
             return False
         return True
 
