@@ -126,7 +126,7 @@ export function useDecide({
           `HTTP ${response.status}: Request failed. Please try again later.`,
         );
         setError(nextError);
-        setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: nextError }]);
+        setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: nextError }]);
         setResult(null);
         return;
       }
@@ -135,7 +135,7 @@ export function useDecide({
       if (!isDecideResponse(payload)) {
         const schemaError = tk("schemaMismatch");
         setError(schemaError);
-        setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: schemaError }]);
+        setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: schemaError }]);
         setResult(null);
         return;
       }
@@ -143,7 +143,7 @@ export function useDecide({
       setResult(payload);
       setChatMessages((prev) => [
         ...prev,
-        { id: Date.now() + 1, role: "assistant", content: toAssistantMessage(payload, t) },
+        { id: nextMessageId(), role: "assistant", content: toAssistantMessage(payload, t) },
       ]);
     } catch (caught: unknown) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
@@ -153,7 +153,7 @@ export function useDecide({
             "Timeout: decision request did not complete in time.",
           );
           setError(timeoutError);
-          setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: timeoutError }]);
+          setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: timeoutError }]);
           setResult(null);
         }
         return;
@@ -163,7 +163,7 @@ export function useDecide({
       }
       const networkError = tk("networkError");
       setError(networkError);
-      setChatMessages((prev) => [...prev, { id: Date.now() + 1, role: "assistant", content: networkError }]);
+      setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: networkError }]);
       setResult(null);
     } finally {
       if (isLatestRequest()) {

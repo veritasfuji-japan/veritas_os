@@ -74,7 +74,7 @@ jobs:
 
       - name: Bandit security scan
         run: |
-          bandit -r veritas_os/core veritas_os/api veritas_os/tools \
+          bandit -r veritas_os/ \
             -s B101 \
             --severity-level medium \
             -f txt

@@ -487,8 +487,10 @@ class VectorMemory:
             top_results = results[:k]
 
             logger.info(
-                f"[VectorMemory] Search '{query[:50]}...' "
-                f"found {len(top_results)}/{len(results)} hits"
+                "[VectorMemory] Search '%s...' found %d/%d hits",
+                query[:50],
+                len(top_results),
+                len(results),
             )
 
             return top_results

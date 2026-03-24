@@ -15,6 +15,8 @@ import type {
 } from "../governance-types";
 import { bumpDraftVersion, collectChanges, deepEqual } from "../helpers";
 
+type PendingConfirm = { description: string; onConfirm: () => void };
+
 export function useGovernanceState() {
   const { t } = useI18n();
   const [savedPolicy, setSavedPolicy] = useState<GovernancePolicyUI | null>(null);
@@ -27,6 +29,12 @@ export function useGovernanceState() {
   const [success, setSuccess] = useState<string | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [trustLog, setTrustLog] = useState<TrustLogEntry[]>([]);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+
+  const dismissConfirm = useCallback(() => setPendingConfirm(null), []);
+  const requestConfirm = useCallback((description: string, onConfirm: () => void) => {
+    setPendingConfirm({ description, onConfirm });
+  }, []);
 
   const hasChanges = useMemo(() => savedPolicy !== null && draft !== null && !deepEqual(savedPolicy, draft), [savedPolicy, draft]);
   const canApply = selectedRole === "admin";
@@ -89,90 +97,107 @@ export function useGovernanceState() {
     }
   }, [appendHistory, appendLog, t]);
 
-  const applyPolicy = useCallback(async (mode: PolicyActionMode) => {
+  const applyPolicy = useCallback((mode: PolicyActionMode) => {
     if (!draft) return;
-    if (!window.confirm(t(`${mode} を実行します。変更を確定しますか？`, `Execute ${mode}. Confirm changes?`))) return;
+    requestConfirm(
+      t(`${mode} を実行します。変更を確定しますか？`, `Execute ${mode}. Confirm changes?`),
+      () => {
+        void (async () => {
+          setSaving(true);
+          setError(null);
+          setSuccess(null);
 
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
+          if (mode === "dry-run") {
+            appendHistory("dry-run", "no persistent write");
+            appendLog("dry-run completed without apply", "info");
+            setSuccess(t("Dry-run を完了しました。適用はされていません。", "Dry-run completed. No changes applied."));
+            setSaving(false);
+            return;
+          }
 
-    if (mode === "dry-run") {
-      appendHistory("dry-run", "no persistent write");
-      appendLog("dry-run completed without apply", "info");
-      setSuccess(t("Dry-run を完了しました。適用はされていません。", "Dry-run completed. No changes applied."));
-      setSaving(false);
-      return;
-    }
+          if (mode === "shadow") {
+            appendHistory("shadow", "shadow validation stream enabled");
+            appendLog("shadow mode enabled; outputs are validated only", "warning");
+            setSuccess(t("Shadow mode を有効化しました。判定のみ実施します。", "Shadow mode enabled. Validation only."));
+            setSaving(false);
+            return;
+          }
 
-    if (mode === "shadow") {
-      appendHistory("shadow", "shadow validation stream enabled");
-      appendLog("shadow mode enabled; outputs are validated only", "warning");
-      setSuccess(t("Shadow mode を有効化しました。判定のみ実施します。", "Shadow mode enabled. Validation only."));
-      setSaving(false);
-      return;
-    }
-
-    try {
-      const res = await veritasFetch("/api/veritas/v1/governance/policy", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!res.ok) {
-        setError(t(`HTTP ${res.status}: ポリシー更新に失敗しました。`, `HTTP ${res.status}: Failed to update policy.`));
-        return;
-      }
-      const validation = validateGovernancePolicyResponse(await res.json());
-      if (!validation.ok) {
-        setError(t("適用レスポンスの検証に失敗しました。TrustLog を確認してください。", "Apply response validation failed. Check TrustLog."));
-        return;
-      }
-      const nextPolicy = {
-        ...validation.data.policy,
-        effective_at: new Date().toISOString(),
-        last_applied: new Date().toISOString(),
-        approval_status: "approved" as ApprovalStatus,
-        draft_version: bumpDraftVersion(validation.data.policy.version),
-      } as GovernancePolicyUI;
-      setSavedPolicy(nextPolicy);
-      setDraft(structuredClone(nextPolicy));
-      appendHistory("apply", `version ${nextPolicy.version} applied`);
-      appendLog(`applied version ${nextPolicy.version}`, "policy");
-      setSuccess(t("ポリシーを適用しました。", "Policy applied successfully."));
-    } catch {
-      setError(t("適用処理に失敗しました。通信・権限・整合性を確認してください。", "Apply failed. Check connectivity, permissions, and consistency."));
-    } finally {
-      setSaving(false);
-    }
-  }, [appendHistory, appendLog, draft, t]);
+          try {
+            const res = await veritasFetch("/api/veritas/v1/governance/policy", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(draft),
+            });
+            if (!res.ok) {
+              setError(t(`HTTP ${res.status}: ポリシー更新に失敗しました。`, `HTTP ${res.status}: Failed to update policy.`));
+              return;
+            }
+            const validation = validateGovernancePolicyResponse(await res.json());
+            if (!validation.ok) {
+              setError(t("適用レスポンスの検証に失敗しました。TrustLog を確認してください。", "Apply response validation failed. Check TrustLog."));
+              return;
+            }
+            const nextPolicy = {
+              ...validation.data.policy,
+              effective_at: new Date().toISOString(),
+              last_applied: new Date().toISOString(),
+              approval_status: "approved" as ApprovalStatus,
+              draft_version: bumpDraftVersion(validation.data.policy.version),
+            } as GovernancePolicyUI;
+            setSavedPolicy(nextPolicy);
+            setDraft(structuredClone(nextPolicy));
+            appendHistory("apply", `version ${nextPolicy.version} applied`);
+            appendLog(`applied version ${nextPolicy.version}`, "policy");
+            setSuccess(t("ポリシーを適用しました。", "Policy applied successfully."));
+          } catch {
+            setError(t("適用処理に失敗しました。通信・権限・整合性を確認してください。", "Apply failed. Check connectivity, permissions, and consistency."));
+          } finally {
+            setSaving(false);
+          }
+        })();
+      },
+    );
+  }, [appendHistory, appendLog, draft, requestConfirm, t]);
 
   const rollback = useCallback(() => {
     if (!savedPolicy) return;
-    if (!window.confirm(t("現在の適用済みポリシーへロールバックしますか？", "Rollback to the currently applied policy?"))) return;
-    setDraft(structuredClone(savedPolicy));
-    appendHistory("rollback", `rolled back to version ${savedPolicy.version}`);
-    appendLog(`rollback preview to ${savedPolicy.version}`, "warning");
-    setSuccess(t("ドラフトを適用済みポリシーへ戻しました。", "Draft reverted to the applied policy."));
-  }, [appendHistory, appendLog, savedPolicy, t]);
+    requestConfirm(
+      t("現在の適用済みポリシーへロールバックしますか？", "Rollback to the currently applied policy?"),
+      () => {
+        setDraft(structuredClone(savedPolicy));
+        appendHistory("rollback", `rolled back to version ${savedPolicy.version}`);
+        appendLog(`rollback preview to ${savedPolicy.version}`, "warning");
+        setSuccess(t("ドラフトを適用済みポリシーへ戻しました。", "Draft reverted to the applied policy."));
+      },
+    );
+  }, [appendHistory, appendLog, requestConfirm, savedPolicy, t]);
 
   const approveChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
-    if (!window.confirm(t("ドラフト変更を承認しますか？", "Approve draft changes?"))) return;
-    setDraft((prev) => prev ? { ...prev, approval_status: "approved" } : prev);
-    appendHistory("approve", `draft changes approved by ${selectedRole}`);
-    appendLog(`draft approved by ${selectedRole}`, "policy");
-    setSuccess(t("ドラフトを承認しました。apply で本番適用できます。", "Draft approved. Apply to push to production."));
-  }, [draft, hasChanges, appendHistory, appendLog, selectedRole, t]);
+    requestConfirm(
+      t("ドラフト変更を承認しますか？", "Approve draft changes?"),
+      () => {
+        setDraft((prev) => prev ? { ...prev, approval_status: "approved" } : prev);
+        appendHistory("approve", `draft changes approved by ${selectedRole}`);
+        appendLog(`draft approved by ${selectedRole}`, "policy");
+        setSuccess(t("ドラフトを承認しました。apply で本番適用できます。", "Draft approved. Apply to push to production."));
+      },
+    );
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, selectedRole, t]);
 
   const rejectChanges = useCallback(() => {
     if (!draft || !hasChanges) return;
-    if (!window.confirm(t("ドラフト変更を却下しますか？", "Reject draft changes?"))) return;
-    setDraft((prev) => prev ? { ...prev, approval_status: "rejected" } : prev);
-    appendHistory("reject", `draft changes rejected by ${selectedRole}`);
-    appendLog(`draft rejected by ${selectedRole}`, "warning");
-    setSuccess(t("ドラフトを却下しました。", "Draft rejected."));
-  }, [draft, hasChanges, appendHistory, appendLog, selectedRole, t]);
+    requestConfirm(
+      t("ドラフト変更を却下しますか？", "Reject draft changes?"),
+      () => {
+        setDraft((prev) => prev ? { ...prev, approval_status: "rejected" } : prev);
+        appendHistory("reject", `draft changes rejected by ${selectedRole}`);
+        appendLog(`draft rejected by ${selectedRole}`, "warning");
+        setSuccess(t("ドラフトを却下しました。", "Draft rejected."));
+      },
+    );
+  }, [appendHistory, appendLog, draft, hasChanges, requestConfirm, selectedRole, t]);
 
   const currentRisk = savedPolicy ? Math.round(((savedPolicy.risk_thresholds.deny_upper + savedPolicy.auto_stop.max_risk_score) / 2) * 100) : 0;
   const pendingRisk = draft ? Math.round(((draft.risk_thresholds.deny_upper + draft.auto_stop.max_risk_score) / 2) * 100) : 0;
@@ -214,5 +239,7 @@ export function useGovernanceState() {
     riskGauge,
     riskDrift,
     draftApprovalStatus,
+    pendingConfirm,
+    dismissConfirm,
   };
 }

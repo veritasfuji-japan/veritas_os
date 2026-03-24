@@ -8,11 +8,12 @@ import os
 import re
 import subprocess
 import time
-from contextlib import contextmanager
+import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, AsyncIterator, Dict, List
 
 from veritas_os.api.schemas import DecideRequest
 from veritas_os.core import pipeline
@@ -227,15 +228,23 @@ def _diff_summary(diff: Dict[str, Any]) -> str:
     return f"fields_changed={','.join(str(v) for v in changed)}"
 
 
-@contextmanager
-def _strict_tool_lock() -> Iterator[None]:
-    """Disable external retrieval side-effects for strict replay mode."""
-    original_get_memory_store = pipeline._get_memory_store
-    try:
+_strict_replay_lock = asyncio.Lock()
+
+
+@asynccontextmanager
+async def _strict_tool_lock() -> AsyncIterator[None]:
+    """Disable external retrieval side-effects for strict replay mode.
+
+    Uses an asyncio.Lock to serialize concurrent strict replays, preventing
+    races on the module-level pipeline._get_memory_store monkey-patch.
+    """
+    async with _strict_replay_lock:
+        original_get_memory_store = pipeline._get_memory_store
         pipeline._get_memory_store = lambda: None
-        yield
-    finally:
-        pipeline._get_memory_store = original_get_memory_store
+        try:
+            yield
+        finally:
+            pipeline._get_memory_store = original_get_memory_store
 
 
 async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResult:
@@ -282,7 +291,7 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
     replay_req = DecideRequest.model_validate(req_body)
 
     if strict_mode:
-        with _strict_tool_lock():
+        async with _strict_tool_lock():
             replay_output = await pipeline.run_decide_pipeline(replay_req, pipeline._ReplayRequest())
     else:
         replay_output = await pipeline.run_decide_pipeline(replay_req, pipeline._ReplayRequest())
