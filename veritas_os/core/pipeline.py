@@ -719,6 +719,8 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 async def run_decide_pipeline(
     req: DecideRequest,
     request: Request,
+    *,
+    memory_store_getter: Optional[Callable] = None,
 ) -> Dict[str, Any]:
     """
     Main pipeline for /v1/decide.
@@ -747,6 +749,9 @@ async def run_decide_pipeline(
     # Required modules check
     _check_required_modules()
 
+    # Allow callers (e.g. replay engine) to override memory store getter
+    effective_get_memory_store = memory_store_getter or _get_memory_store
+
     # =================================================================
     # Stage 1: Input normalization  (-> pipeline_inputs)
     # =================================================================
@@ -762,7 +767,7 @@ async def run_decide_pipeline(
     # =================================================================
     stage_memory_retrieval(
         ctx,
-        _get_memory_store=_get_memory_store,
+        _get_memory_store=effective_get_memory_store,
         _memory_search=_memory_search,
         _memory_put=_memory_put,
         _memory_add_usage=_memory_add_usage,
@@ -889,7 +894,7 @@ async def run_decide_pipeline(
     # =================================================================
     persist_audit_log(ctx, append_trust_log_fn=append_trust_log, write_shadow_decide_fn=write_shadow_decide)
 
-    persist_to_memory(ctx, payload, _get_memory_store=_get_memory_store, _memory_put=_memory_put)
+    persist_to_memory(ctx, payload, _get_memory_store=effective_get_memory_store, _memory_put=_memory_put)
 
     persist_reason_and_reflection(
         ctx, payload,

@@ -8,12 +8,10 @@ import os
 import re
 import subprocess
 import time
-import asyncio
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List
+from typing import Any, Dict, List
 
 from veritas_os.api.schemas import DecideRequest
 from veritas_os.core import pipeline
@@ -228,23 +226,9 @@ def _diff_summary(diff: Dict[str, Any]) -> str:
     return f"fields_changed={','.join(str(v) for v in changed)}"
 
 
-_strict_replay_lock = asyncio.Lock()
-
-
-@asynccontextmanager
-async def _strict_tool_lock() -> AsyncIterator[None]:
-    """Disable external retrieval side-effects for strict replay mode.
-
-    Uses an asyncio.Lock to serialize concurrent strict replays, preventing
-    races on the module-level pipeline._get_memory_store monkey-patch.
-    """
-    async with _strict_replay_lock:
-        original_get_memory_store = pipeline._get_memory_store
-        pipeline._get_memory_store = lambda: None
-        try:
-            yield
-        finally:
-            pipeline._get_memory_store = original_get_memory_store
+def _noop_memory_store() -> None:
+    """Return None to disable memory store during strict replay."""
+    return None
 
 
 async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResult:
@@ -290,11 +274,12 @@ async def run_replay(decision_id: str, strict: bool | None = None) -> ReplayResu
 
     replay_req = DecideRequest.model_validate(req_body)
 
+    replay_kwargs: Dict[str, Any] = {}
     if strict_mode:
-        async with _strict_tool_lock():
-            replay_output = await pipeline.run_decide_pipeline(replay_req, pipeline._ReplayRequest())
-    else:
-        replay_output = await pipeline.run_decide_pipeline(replay_req, pipeline._ReplayRequest())
+        replay_kwargs["memory_store_getter"] = _noop_memory_store
+    replay_output = await pipeline.run_decide_pipeline(
+        replay_req, pipeline._ReplayRequest(), **replay_kwargs
+    )
 
     original_output = replay_meta.get("final_output") if isinstance(replay_meta.get("final_output"), dict) else snapshot
     before = _normalized_payload(original_output)

@@ -204,14 +204,20 @@ async def limit_body_size(request: Request, call_next):
                 content={"detail": "Invalid Content-Length header"}
             )
 
-    # ★ chunked transfer encoding 対策: 実際のボディストリームサイズも制限する
+    # ★ chunked transfer encoding 対策: ストリーミング読み取りで制限値到達時に打ち切る
     if request.method in ("POST", "PUT", "PATCH"):
-        body = await request.body()
-        if len(body) > effective_limit:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": f"Request body too large. Max size: {effective_limit} bytes"}
-            )
+        received = 0
+        chunks: list[bytes] = []
+        async for chunk in request.stream():
+            received += len(chunk)
+            if received > effective_limit:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request body too large. Max size: {effective_limit} bytes"}
+                )
+            chunks.append(chunk)
+        # Store the fully read body so downstream can access it via request.body()
+        request._body = b"".join(chunks)
 
     return await call_next(request)
 
