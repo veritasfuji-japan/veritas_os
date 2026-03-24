@@ -38,6 +38,13 @@ import veritas_os.api.server as server
 client = TestClient(server.app)
 
 
+def _raise_import(msg: str):
+    """Return a callable that raises ImportError with *msg*."""
+    def _raiser(name: str, *args: Any, **kwargs: Any):
+        raise ImportError(msg)
+    return _raiser
+
+
 @pytest.fixture(autouse=True)
 def _reset_rate_bucket(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_KEY)
@@ -73,7 +80,7 @@ class TestGetCfg:
         monkeypatch.setattr(server, "_cfg_state", fresh_state)
         monkeypatch.setattr(
             server.importlib, "import_module",
-            lambda name: (_ for _ in ()).throw(ImportError("cfg missing")),
+            _raise_import("cfg missing"),
         )
         result = server.get_cfg()
         assert result.cors_allow_origins == []
@@ -109,7 +116,7 @@ class TestGetDecisionPipeline:
         monkeypatch.setattr(server, "_pipeline_state", fresh_state)
         monkeypatch.setattr(
             server.importlib, "import_module",
-            lambda name: (_ for _ in ()).throw(ImportError("no pipeline")),
+            _raise_import("no pipeline"),
         )
         result = server.get_decision_pipeline()
         assert result is None
@@ -190,7 +197,7 @@ class TestGetFujiCore:
         monkeypatch.setattr(server, "_fuji_state", server._LazyState())
         monkeypatch.setattr(
             server.importlib, "import_module",
-            lambda name: (_ for _ in ()).throw(ImportError("fuji missing")),
+            _raise_import("fuji missing"),
         )
         result = server.get_fuji_core()
         assert result is None
@@ -247,7 +254,7 @@ class TestGetValueCore:
         monkeypatch.setattr(server, "_value_core_state", server._LazyState())
         monkeypatch.setattr(
             server.importlib, "import_module",
-            lambda name: (_ for _ in ()).throw(ImportError("value_core missing")),
+            _raise_import("value_core missing"),
         )
         result = server.get_value_core()
         assert result is None
@@ -320,7 +327,7 @@ class TestGetMemoryStore:
         monkeypatch.setattr(server, "_memory_store_state", server._LazyState())
         monkeypatch.setattr(
             server.importlib, "import_module",
-            lambda name: (_ for _ in ()).throw(ImportError("memory missing")),
+            _raise_import("memory missing"),
         )
         result = server.get_memory_store()
         assert result is None
@@ -423,8 +430,9 @@ class TestValidationErrorHandler:
         if resp.status_code == 422:
             data = resp.json()
             raw = data.get("raw_body", "")
-            # PII should be masked if redact() works
             assert isinstance(raw, str)
+            # redact() should mask the email address
+            assert "user@example.com" not in raw
 
     def test_422_hint_has_expected_example(self, monkeypatch):
         """422 response always includes hint with expected_example."""
