@@ -314,6 +314,20 @@ def emit_capability_manifest(component: str, manifest: Dict[str, bool]) -> None:
     )
 
 
+_PLACEHOLDER_SECRETS: frozenset = frozenset({
+    "your_veritas_api_secret_here",
+    "changeme",
+    "change-me",
+    "change_me",
+    "placeholder",
+    "dummy",
+    "secret",
+    "test",
+    "password",
+    "example",
+})
+
+
 @dataclass
 class VeritasConfig:
     # ==== API ====
@@ -514,19 +528,6 @@ class VeritasConfig:
             f"repo_root={self.repo_root!r}, log_dir={self.log_dir!r})"
         )
 
-    _PLACEHOLDER_SECRETS: frozenset = frozenset({
-        "your_veritas_api_secret_here",
-        "changeme",
-        "change-me",
-        "change_me",
-        "placeholder",
-        "dummy",
-        "secret",
-        "test",
-        "password",
-        "example",
-    })
-
     @property
     def api_secret_configured(self) -> bool:
         """API Secret が正しく設定されているかどうかを返す。
@@ -537,7 +538,7 @@ class VeritasConfig:
         secret = self.api_secret.strip()
         if not secret:
             return False
-        if secret.lower() in self._PLACEHOLDER_SECRETS:
+        if secret.lower() in _PLACEHOLDER_SECRETS:
             return False
         return True
 

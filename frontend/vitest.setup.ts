@@ -1,5 +1,20 @@
 import "@testing-library/jest-dom/vitest";
 
+// jsdom does not implement HTMLDialogElement.showModal / close.
+// Provide no-op stubs so components using <dialog> render without errors.
+if (typeof HTMLDialogElement !== "undefined") {
+  if (!HTMLDialogElement.prototype.showModal) {
+    HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute("open", "");
+    };
+  }
+  if (!HTMLDialogElement.prototype.close) {
+    HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute("open");
+    };
+  }
+}
+
 // Provide a global EventSource stub for jsdom (which doesn't have SSE support)
 if (typeof globalThis.EventSource === "undefined") {
   class MockEventSource {

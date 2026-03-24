@@ -99,8 +99,25 @@ class TestResolveMemoryUserId:
 
 
 class TestResolveClientIp:
-    def test_from_forwarded_for(self):
-        assert _resolve_client_ip(None, "10.0.0.1, 10.0.0.2") == "10.0.0.1"
+    def test_xff_ignored_without_trusted_proxies(self):
+        # VERITAS_TRUSTED_PROXIES 未設定時は X-Forwarded-For を無視してフォールバック
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("VERITAS_TRUSTED_PROXIES", None)
+            assert _resolve_client_ip(None, "10.0.0.1, 10.0.0.2") == "unknown"
+
+    def test_xff_used_when_direct_ip_is_trusted(self):
+        # 直接接続 IP が信頼プロキシリストにある場合は X-Forwarded-For を使用
+        req = mock.MagicMock()
+        req.client.host = "10.0.0.2"
+        with mock.patch.dict(os.environ, {"VERITAS_TRUSTED_PROXIES": "10.0.0.2"}):
+            assert _resolve_client_ip(req, "1.2.3.4, 10.0.0.2") == "1.2.3.4"
+
+    def test_xff_ignored_when_direct_ip_not_trusted(self):
+        # 直接接続 IP が信頼プロキシリストにない場合は X-Forwarded-For を無視
+        req = mock.MagicMock()
+        req.client.host = "10.0.0.5"
+        with mock.patch.dict(os.environ, {"VERITAS_TRUSTED_PROXIES": "10.0.0.2"}):
+            assert _resolve_client_ip(req, "1.2.3.4, 10.0.0.5") == "10.0.0.5"
 
     def test_from_request(self):
         req = mock.MagicMock()
