@@ -54,6 +54,16 @@ jobs:
           scanners: vuln
           severity: CRITICAL,HIGH
           ignore-unfixed: true
+          exit-code: '0'
+
+      - name: Enforce Trivy gate (actionable criticals only)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: CRITICAL
+          ignore-unfixed: true
           exit-code: '1'
 
       - name: Upload Trivy scan results to GitHub Security
