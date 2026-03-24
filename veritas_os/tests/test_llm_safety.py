@@ -348,7 +348,8 @@ def test_run_llm_error_falls_back_to_heuristic(monkeypatch):
 
     res = llm_safety.run("some text")
 
-    assert res["ok"] is True
+    assert res["ok"] is False
+    assert res["degraded"] is True
     assert res["model"] == "heuristic"
     assert res["risk_score"] == 0.3
     assert "raw" in res

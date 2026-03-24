@@ -172,6 +172,37 @@ def _entry_chain_hash(entry: Dict[str, Any]) -> str:
     return sha256_hex(canonical_json_dumps(entry))
 
 
+def _read_last_entry(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """最終エントリのみを読み取る（O(1) に近い性能）。"""
+    path = path or SIGNED_TRUSTLOG_JSONL
+    if not path.exists():
+        return None
+    chunk_size = 65536
+    with path.open("rb") as f:
+        f.seek(0, 2)
+        file_size = f.tell()
+        if file_size == 0:
+            return None
+        pos = file_size
+        buf = b""
+        while pos > 0:
+            read_size = min(chunk_size, pos)
+            pos -= read_size
+            f.seek(pos)
+            buf = f.read(read_size) + buf
+            lines = buf.splitlines()
+            # 末尾から非空行を探す
+            for raw in reversed(lines):
+                raw = raw.strip()
+                if raw:
+                    try:
+                        return json.loads(raw.decode("utf-8", errors="replace"))
+                    except json.JSONDecodeError:
+                        continue
+            # まだ非空行が見つからなければ、さらに読み戻す
+    return None
+
+
 def _read_all_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     path = path or SIGNED_TRUSTLOG_JSONL
     if not path.exists():
@@ -205,8 +236,8 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         _ensure_signing_keys()
         with _lock:
-            entries = _read_all_entries(SIGNED_TRUSTLOG_JSONL)
-            previous_hash = _entry_chain_hash(entries[-1]) if entries else None
+            last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
+            previous_hash = _entry_chain_hash(last_entry) if last_entry else None
             payload_hash = sha256_of_canonical_json(decision_payload)
             signature = sign_payload_hash(payload_hash, PRIVATE_KEY_PATH)
 

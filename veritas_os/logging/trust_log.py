@@ -79,6 +79,10 @@ MAX_JSON_ITEMS = 2000
 # スレッドセーフ化: ハッシュチェーンの整合性を保証するためのロック
 # ★ マルチスレッド環境（FastAPI等）での同時書き込みによるチェーン破損を防止
 # NOTE: server.py のフォールバック trust log もこのロックを共有する
+# IMPORTANT: RLock（リエントラントロック）を使用する理由:
+#   log_decision() → get_last_hash() のように、ロック保持中に内部関数が
+#   同じロックを再取得するパスが存在する。通常の Lock に変更するとデッドロックする。
+#   この依存関係を変更する場合は、全ての呼び出しパスを確認すること。
 _trust_log_lock = threading.RLock()
 trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
 
@@ -253,6 +257,54 @@ def _recover_last_hash_from_rotated_log() -> str | None:
     return None
 
 
+def _get_last_hash_unlocked() -> str | None:
+    """ロックなしで最終ハッシュを取得する内部版。
+
+    呼び出し側が _trust_log_lock を保持していることを前提とする。
+    """
+    try:
+        if not LOG_JSONL.exists():
+            marker_hash = load_last_hash_marker(LOG_JSONL)
+            if marker_hash:
+                return marker_hash
+            logger.warning(
+                "trust log marker is missing while active log does not exist; attempting rotated-log recovery"
+            )
+            return _recover_last_hash_from_rotated_log()
+        file_size = LOG_JSONL.stat().st_size
+        if file_size == 0:
+            marker_hash = load_last_hash_marker(LOG_JSONL)
+            if marker_hash:
+                return marker_hash
+            logger.warning(
+                "trust log marker is missing while active log is empty; attempting rotated-log recovery"
+            )
+            return _recover_last_hash_from_rotated_log()
+        with open(LOG_JSONL, "rb") as f:
+            start = max(0, file_size - 65536)
+            while True:
+                f.seek(start)
+                raw = f.read(file_size - start)
+                chunk = raw.decode("utf-8", errors="replace")
+                lines = chunk.splitlines()
+                if not lines:
+                    return None
+
+                if "\n" not in chunk and start > 0:
+                    start = max(0, start - 65536)
+                    continue
+
+                sha = _extract_last_sha256_from_lines(lines)
+                if sha is not None:
+                    return sha
+                if start == 0:
+                    return None
+                start = max(0, start - 65536)
+    except OSError as exc:
+        logger.warning("get_last_hash failed: %s", exc)
+    return None
+
+
 def get_last_hash() -> str | None:
     """直近の trust_log.jsonl から最後の SHA-256 値を取得。
 
@@ -267,49 +319,7 @@ def get_last_hash() -> str | None:
       読み込むリスクを排除する。
     """
     with _trust_log_lock:
-        try:
-            if not LOG_JSONL.exists():
-                # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
-                marker_hash = load_last_hash_marker(LOG_JSONL)
-                if marker_hash:
-                    return marker_hash
-                logger.warning(
-                    "trust log marker is missing while active log does not exist; attempting rotated-log recovery"
-                )
-                return _recover_last_hash_from_rotated_log()
-            file_size = LOG_JSONL.stat().st_size
-            if file_size == 0:
-                # ★ ローテーション後: マーカーから前ファイルの最終ハッシュを取得
-                marker_hash = load_last_hash_marker(LOG_JSONL)
-                if marker_hash:
-                    return marker_hash
-                logger.warning(
-                    "trust log marker is missing while active log is empty; attempting rotated-log recovery"
-                )
-                return _recover_last_hash_from_rotated_log()
-            with open(LOG_JSONL, "rb") as f:
-                start = max(0, file_size - 65536)
-                while True:
-                    f.seek(start)
-                    raw = f.read(file_size - start)
-                    chunk = raw.decode("utf-8", errors="replace")
-                    lines = chunk.splitlines()
-                    if not lines:
-                        return None
-
-                    if "\n" not in chunk and start > 0:
-                        start = max(0, start - 65536)
-                        continue
-
-                    sha = _extract_last_sha256_from_lines(lines)
-                    if sha is not None:
-                        return sha
-                    if start == 0:
-                        return None
-                    start = max(0, start - 65536)
-        except OSError as exc:
-            logger.warning("get_last_hash failed: %s", exc)
-        return None
+        return _get_last_hash_unlocked()
 
 
 def calc_sha256(payload: dict) -> str:
@@ -392,7 +402,8 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
 
             # ---- 直前ハッシュの取得（JSONL 側を正とする）----
-            sha256_prev = get_last_hash()
+            # ★ ロック保持中のためロック不要版を使用（RLock再入を回避）
+            sha256_prev = _get_last_hash_unlocked()
 
             items = _load_logs_json()
 

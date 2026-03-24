@@ -182,7 +182,11 @@ async def track_inflight_requests(request: Request, call_next):
 
 
 async def limit_body_size(request: Request, call_next):
-    """★ C-3 修正: リクエストボディサイズ制限ミドルウェア"""
+    """★ C-3 修正: リクエストボディサイズ制限ミドルウェア
+
+    Content-Length ヘッダーと実際のボディストリームの両方を制限する。
+    chunked transfer encoding によるバイパスを防止する。
+    """
     # Read from server module to support test monkeypatching
     from veritas_os.api import server as _srv
     effective_limit = getattr(_srv, "MAX_REQUEST_BODY_SIZE", MAX_REQUEST_BODY_SIZE)
@@ -199,6 +203,16 @@ async def limit_body_size(request: Request, call_next):
                 status_code=400,
                 content={"detail": "Invalid Content-Length header"}
             )
+
+    # ★ chunked transfer encoding 対策: 実際のボディストリームサイズも制限する
+    if request.method in ("POST", "PUT", "PATCH"):
+        body = await request.body()
+        if len(body) > effective_limit:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": f"Request body too large. Max size: {effective_limit} bytes"}
+            )
+
     return await call_next(request)
 
 

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from json import JSONDecodeError
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Header, Response
 
 from veritas_os.api.schemas import (
     MemoryEraseRequest,
@@ -162,12 +162,14 @@ def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[st
 # ------------------------------------------------------------------
 
 @router.post("/v1/memory/put")
-def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
+def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     """Store memory data and surface stage-level partial failures explicitly."""
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_put: memory store unavailable: %s", srv._memory_store_state.err)
+        if response is not None:
+            response.status_code = 503
         return {
             "ok": False,
             "error": "memory store unavailable",
@@ -285,11 +287,13 @@ def memory_put(body: MemoryPutRequest, x_api_key: Optional[str] = Header(default
 
 
 @router.post("/v1/memory/search")
-def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
+def memory_search(payload: MemorySearchRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
         logger.warning("memory_search: memory store unavailable: %s", srv._memory_store_state.err)
+        if response is not None:
+            response.status_code = 503
         return {
             "ok": False,
             "error": "memory store unavailable",
@@ -355,10 +359,12 @@ def memory_search(payload: MemorySearchRequest, x_api_key: Optional[str] = Heade
 
 
 @router.post("/v1/memory/get")
-def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
+def memory_get(body: MemoryGetRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
+        if response is not None:
+            response.status_code = 503
         return {
             "ok": False,
             "error": "memory store unavailable",
@@ -382,11 +388,13 @@ def memory_get(body: MemoryGetRequest, x_api_key: Optional[str] = Header(default
 
 
 @router.post("/v1/memory/erase")
-def memory_erase(body: MemoryEraseRequest, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
+def memory_erase(body: MemoryEraseRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     """Erase a tenant's memories with legal-hold protection and audit log."""
     srv = _get_server()
     store = srv.get_memory_store()
     if store is None:
+        if response is not None:
+            response.status_code = 503
         return {
             "ok": False,
             "error": "memory store unavailable",

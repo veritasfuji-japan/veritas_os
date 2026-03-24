@@ -358,14 +358,25 @@ class TestFujiGateIntegration:
 
     def test_fuji_evaluate_safe_query(self):
         """安全なクエリが allow されるか"""
+        from unittest.mock import patch
         from veritas_os.core import fuji
+        from veritas_os.core.fuji import SafetyHeadResult
 
-        result = fuji.evaluate(
-            "今日の天気を教えてください",
-            context={"user_id": "test", "stakes": 0.5},
-            evidence=[{"source": "test", "text": "天気情報", "score": 0.8}],
-            alternatives=[],
+        safe_result = SafetyHeadResult(
+            risk_score=0.05,
+            categories=[],
+            rationale="safe query",
+            model="mock",
+            raw={"ok": True},
         )
+
+        with patch.object(fuji, "run_safety_head", return_value=safe_result):
+            result = fuji.evaluate(
+                "今日の天気を教えてください",
+                context={"user_id": "test", "stakes": 0.5},
+                evidence=[{"source": "test", "text": "天気情報", "score": 0.8}],
+                alternatives=[],
+            )
 
         assert result["status"] in ("allow", "allow_with_warning")
         assert result["risk"] < 0.5
