@@ -659,7 +659,7 @@ class TestLockedMemory:
 
         with pytest.raises(TimeoutError, match="failed to acquire lock"):
             with locked_memory(target, timeout=0.1):
-                pass  # pragma: no cover
+                pass
 
         # Clean up
         lockfile.unlink(missing_ok=True)
