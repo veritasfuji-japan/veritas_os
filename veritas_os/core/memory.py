@@ -545,7 +545,7 @@ class VectorMemory:
         counter = 0
         for doc in documents:
             text = doc.get("text", "")
-            if not text:
+            if not text or not text.strip():
                 continue
             embedding = self.model.encode([text])[0]
             counter += 1

@@ -37,4 +37,7 @@ jobs:
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          upload: true
+          # NOTE: upload は GitHub の default setup が有効なため false に設定。
+          # default setup を無効にした場合は true に変更すること。
+          # continue-on-error は除去済みのため、分析エラー時は CI が失敗する。
+          upload: false
