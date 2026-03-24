@@ -158,12 +158,17 @@ def encrypt(plaintext: str) -> str:
         )
 
     if _USE_REAL_AES:
-        return _encrypt_aesgcm(plaintext, key)
-    return _encrypt_hmac_ctr(plaintext, key)
+        return "ENC:aesgcm:" + _encrypt_aesgcm_raw(plaintext, key)
+    return "ENC:hmac-ctr:" + _encrypt_hmac_ctr_raw(plaintext, key)
 
 
 def decrypt(ciphertext: str) -> str:
     """Decrypt an ``ENC:``-prefixed ciphertext string.
+
+    Algorithm dispatch uses the tag between ``ENC:`` and the payload
+    (e.g. ``ENC:aesgcm:<b64>``).  Legacy tokens without an algorithm tag
+    are dispatched based on the currently available backend for backward
+    compatibility.
 
     Returns the original string unchanged if it does not start with ``ENC:``.
     Raises :class:`EncryptionKeyMissing` when the key is required but absent.
@@ -177,7 +182,15 @@ def decrypt(ciphertext: str) -> str:
             "Cannot decrypt: VERITAS_ENCRYPTION_KEY not set"
         )
 
+    after_prefix = ciphertext[4:]  # strip "ENC:"
+
     try:
+        if after_prefix.startswith("aesgcm:"):
+            return _decrypt_aesgcm_raw(after_prefix[7:], key)
+        if after_prefix.startswith("hmac-ctr:"):
+            return _decrypt_hmac_ctr_raw(after_prefix[9:], key)
+
+        # Legacy tokens without algorithm tag — dispatch by available backend.
         if _USE_REAL_AES:
             return _decrypt_aesgcm(ciphertext, key)
         return _decrypt_hmac_ctr(ciphertext, key)
@@ -192,7 +205,8 @@ def decrypt(ciphertext: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
+def _encrypt_hmac_ctr_raw(plaintext: str, key: bytes) -> str:
+    """Return base64-encoded HMAC-CTR ciphertext (no ENC: prefix)."""
     enc_key, hmac_key = _derive_hmac_ctr_keys(key)
     iv = secrets.token_bytes(_IV_SIZE)
     data = plaintext.encode("utf-8")
@@ -203,13 +217,18 @@ def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
     payload = iv + ciphertext
     tag = hmac.new(hmac_key, payload, hashlib.sha256).digest()
 
-    return "ENC:" + base64.urlsafe_b64encode(tag + payload).decode("ascii")
+    return base64.urlsafe_b64encode(tag + payload).decode("ascii")
 
 
-def _decrypt_hmac_ctr(token: str, key: bytes) -> str:
+def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
+    return "ENC:" + _encrypt_hmac_ctr_raw(plaintext, key)
+
+
+def _decrypt_hmac_ctr_raw(b64_payload: str, key: bytes) -> str:
+    """Decrypt base64-encoded HMAC-CTR ciphertext (no ENC: prefix)."""
     enc_key, hmac_key = _derive_hmac_ctr_keys(key)
 
-    raw = base64.urlsafe_b64decode(token[4:])
+    raw = base64.urlsafe_b64decode(b64_payload)
     if len(raw) < _HMAC_SIZE + _IV_SIZE + 1:
         raise ValueError("ciphertext too short")
 
@@ -229,20 +248,30 @@ def _decrypt_hmac_ctr(token: str, key: bytes) -> str:
     return plaintext_bytes.decode("utf-8")
 
 
+def _decrypt_hmac_ctr(token: str, key: bytes) -> str:
+    return _decrypt_hmac_ctr_raw(token[4:], key)
+
+
 # ---------------------------------------------------------------------------
 # AES-GCM backend (when cryptography package is installed)
 # ---------------------------------------------------------------------------
 
 
-def _encrypt_aesgcm(plaintext: str, key: bytes) -> str:
+def _encrypt_aesgcm_raw(plaintext: str, key: bytes) -> str:
+    """Return base64-encoded AES-GCM ciphertext (no ENC: prefix)."""
     nonce = secrets.token_bytes(12)
     aes = AESGCM(key)
     ct = aes.encrypt(nonce, plaintext.encode("utf-8"), None)
-    return "ENC:" + base64.urlsafe_b64encode(nonce + ct).decode("ascii")
+    return base64.urlsafe_b64encode(nonce + ct).decode("ascii")
 
 
-def _decrypt_aesgcm(token: str, key: bytes) -> str:
-    raw = base64.urlsafe_b64decode(token[4:])
+def _encrypt_aesgcm(plaintext: str, key: bytes) -> str:
+    return "ENC:" + _encrypt_aesgcm_raw(plaintext, key)
+
+
+def _decrypt_aesgcm_raw(b64_payload: str, key: bytes) -> str:
+    """Decrypt base64-encoded AES-GCM ciphertext (no ENC: prefix)."""
+    raw = base64.urlsafe_b64decode(b64_payload)
     if len(raw) < 13:
         raise ValueError("ciphertext too short for AES-GCM")
     nonce = raw[:12]
@@ -251,8 +280,11 @@ def _decrypt_aesgcm(token: str, key: bytes) -> str:
     try:
         return aes.decrypt(nonce, ct, None).decode("utf-8")
     except Exception as exc:
-        # cryptography raises InvalidTag on tampered data
         raise ValueError(f"AES-GCM decryption failed — data may be tampered: {exc}") from exc
+
+
+def _decrypt_aesgcm(token: str, key: bytes) -> str:
+    return _decrypt_aesgcm_raw(token[4:], key)
 
 
 # ---------------------------------------------------------------------------

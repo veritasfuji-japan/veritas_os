@@ -26,14 +26,30 @@ export function I18nProvider({ children }: { children: React.ReactNode }): JSX.E
   const [language, setLanguage] = useState<Language>("ja");
 
   useEffect(() => {
-    const storedLanguage = window.localStorage.getItem("veritas_language");
-    if (storedLanguage === "ja" || storedLanguage === "en") {
-      setLanguage(storedLanguage);
+    try {
+      const storedLanguage = window.localStorage.getItem("veritas_language");
+      if (storedLanguage === "ja" || storedLanguage === "en") {
+        setLanguage(storedLanguage);
+      }
+    } catch {
+      // localStorage unavailable (private browsing, quota exceeded, etc.)
     }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "veritas_language" && (e.newValue === "ja" || e.newValue === "en")) {
+        setLanguage(e.newValue);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("veritas_language", language);
+    try {
+      window.localStorage.setItem("veritas_language", language);
+    } catch {
+      // localStorage unavailable
+    }
     document.documentElement.lang = language;
   }, [language]);
 

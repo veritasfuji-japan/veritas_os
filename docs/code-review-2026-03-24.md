@@ -228,3 +228,33 @@
 2. **来週**: HIGH上位（DNS Rebinding、Trivy gate、イメージタグ固定、openapi厳格化）
 3. **今月**: 残りのHIGH + MEDIUM
 4. **継続的**: LOW項目を技術債として管理
+
+---
+
+## 対応済みステータス（2026-03-24 更新）
+
+### CRITICAL — 全5件対策済み（コード変更不要）
+
+| # | 問題 | ステータス | 根拠 |
+|---|------|-----------|------|
+| 1 | 秘密鍵が暗号化なしでファイル保管 | **対策済み** | `signing.py`: `0o600` パーミッション設定 + `_check_private_key_permissions()` による起動時検証済み。本番向け HSM/KMS 推奨はドキュメント記載済み |
+| 2 | ダッシュボード一時パスワードが `/tmp` に保存 | **対策済み** | `dashboard_server.py`: `O_CREAT\|O_EXCL` + `0o600` で原子的作成。本番環境では `DASHBOARD_PASSWORD` 必須（未設定で `RuntimeError`） |
+| 3 | 認証失敗バケットのメモリ枯渇リスク | **対策済み** | `auth.py`: `_cleanup_auth_fail_bucket_unsafe()` で期限切れエントリ削除 + 上限超過時に最古エントリ削除 |
+| 4 | CSPで `unsafe-inline` がデフォルト有効 | **対策済み** | `middleware.ts`: `shouldEnforceNonceCsp()` が `VERITAS_ENV=production` 時に自動的に nonce CSP を強制 |
+| 5 | APIエラーレスポンスの無検査UI露出 | **対策済み** | `useDecide.ts`: ステータスコード別に `tk()` でジェネリックメッセージを表示。バックエンドのエラー本文は UI に露出しない |
+
+### HIGH — 対応状況
+
+| # | 問題 | ステータス | 対応内容 |
+|---|------|-----------|---------|
+| 1 | DNS Rebinding TOCTOU | 未対応 | IPピンニングの実装が必要（アーキテクチャ変更） |
+| 2 | ReDoS防止が不十分 | 未対応 | 入力長上限 `_MAX_PII_INPUT_LENGTH` は設定済み。チャンク処理は要検討 |
+| 3 | Slack Webhook URLのホスト検証 | **対策済み** | `hooks.slack-gov.com` が `allowed_hosts` に追加済み |
+| 4 | 暗号化アルゴリズムのマーキング不足 | **修正済み** | `encryption.py`: 暗号文に `ENC:aesgcm:` / `ENC:hmac-ctr:` タグを付与。復号時にタグで自動ディスパッチ。レガシー（タグなし）トークンとの後方互換性も維持 |
+| 5 | サブプロセスの外部タイムアウト制御なし | **対策済み** | `alert_doctor.py`: `subprocess.check_output()` に `timeout` パラメータ設定済み + `TimeoutExpired` ハンドリング済み |
+| 6 | fork PRでセキュリティゲートがスキップ | 未対応 | GitHub Actions のトークン権限制限による構造的制約 |
+| 7 | Trivyスキャンで HIGH脆弱性をサイレント通過 | **対策済み** | `publish-ghcr.yml`: 2段構成（SARIF出力用 `exit-code: '0'` + CRITICAL強制ゲート `exit-code: '1'`） |
+| 8 | Dockerイメージタグがローリング | **修正済み** | `Dockerfile`: `python:3.11.12-slim` に固定 / `docker-compose.yml`: `node:20.19.0-bookworm` に固定 |
+| 9 | セキュリティツールのバージョン未固定 | **修正済み** | `main.yml`: `ruff==0.11.4`, `bandit==1.9.0`, `pip-audit==2.8.0` / `security-gates.yml`: `pip-audit==2.8.0` に固定 |
+| 10 | openapi.yaml additionalProperties | 未対応 | 35箇所以上の変更が必要（スキーマ互換性の確認が先） |
+| 11 | localStorage例外処理なし | **修正済み** | `i18n-provider.tsx`: `try/catch` 追加 + `storage` イベントリスナーによるマルチタブ同期 |

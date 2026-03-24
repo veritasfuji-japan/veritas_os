@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          python -m pip install ruff bandit
+          python -m pip install ruff==0.11.4 bandit==1.9.0
 
       - name: Ruff check (lint)
         run: ruff check veritas_os/
@@ -100,7 +100,7 @@ jobs:
         run: |
           set -euxo pipefail
           python -m pip install --upgrade pip
-          python -m pip install pip-audit
+          python -m pip install pip-audit==2.8.0
 
       - name: Block high/critical CVEs in Python dependencies
         run: pip-audit -r veritas_os/requirements.txt --desc
