@@ -22,7 +22,7 @@ services:
       start_period: 10s
 
   frontend:
-    image: node:20-bookworm
+    image: node:20.19.0-bookworm
     container_name: veritas-frontend
     working_dir: /app
     command: >-
