@@ -137,7 +137,7 @@ class TestSafeWebSearchEdgeCases:
     """Edge-case branches for _safe_web_search sanitization and dispatch."""
 
     @pytest.mark.anyio
-    async def test_query_becomes_empty_after_unicode_sanitization(self, monkeypatch):
+    async def test_query_becomes_empty_after_removing_unsafe_unicode_chars(self, monkeypatch):
         """Query composed entirely of unsafe Unicode chars → None."""
         called = []
         monkeypatch.setattr(
@@ -269,7 +269,7 @@ class TestSafeWebSearchEdgeCases:
         assert result == {"source": "tool"}
 
     @pytest.mark.anyio
-    async def test_neither_callable_both_non_callable(self, monkeypatch):
+    async def test_both_non_callable(self, monkeypatch):
         """Both web_search and _tool_web_search are non-callable objects → None."""
         monkeypatch.setattr(pl, "web_search", 42, raising=False)
         monkeypatch.setattr(pl, "_tool_web_search", "not callable")
@@ -397,8 +397,13 @@ class TestToDictEdgeCases:
         assert result["name"] == "test"
         assert "self_ref" not in result  # filtered out
 
-    def test_model_dump_returns_non_dict_falls_to_dict_method(self):
-        """model_dump returns non-dict → falls through to dict()."""
+    def test_model_dump_non_dict_return_accepted(self):
+        """model_dump returning non-dict is accepted as-is (existing behavior).
+
+        The current implementation returns whatever model_dump() produces
+        without a type check on the result.  This test documents that
+        behavior rather than asserting it *should* be this way.
+        """
 
         class Obj:
             def model_dump(self, **kw):
@@ -407,14 +412,8 @@ class TestToDictEdgeCases:
             def dict(self):
                 return {"via": "dict_method"}
 
-        # model_dump doesn't raise but also doesn't return dict —
-        # current code doesn't check return type of model_dump
-        # so it will return whatever model_dump returns.
         result = pl.to_dict(Obj())
-        # model_dump returns "not a dict" which is truthy, and code returns it.
-        # Actually, looking at the code: the model_dump try block returns o.model_dump(exclude_none=True)
-        # unconditionally if it doesn't raise. So "not a dict" will be returned.
-        # This is existing behavior — we just document it.
+        # model_dump returns "not a dict" and the code returns it as-is.
         assert result is not None
 
     def test_no_dict_but_has___dict__(self):
