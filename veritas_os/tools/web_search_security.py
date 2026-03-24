@@ -201,6 +201,44 @@ def _validate_rebinding_guard(url: str, expected_ips: set[str]) -> None:
         raise ValueError("websearch endpoint DNS result changed during request")
 
 
+def _pin_dns_context(url: str, pinned_ips: set[str]):
+    """Context manager that pins urllib3 DNS resolution to pre-resolved IPs.
+
+    Eliminates the TOCTOU gap between DNS validation and the actual HTTP
+    request by overriding ``urllib3.util.connection.create_connection`` so
+    that the target hostname always resolves to one of the preflight IPs.
+
+    Usage::
+
+        with _pin_dns_context(url, resolved_ips):
+            requests.post(url, ...)
+    """
+    import contextlib
+    import urllib3.util.connection as _urllib3_conn
+
+    parsed = urlparse((url or "").strip())
+    target_host = _canonicalize_hostname(parsed.hostname or "")
+    pinned_ip = sorted(pinned_ips)[0]
+
+    @contextlib.contextmanager
+    def _pin():
+        original = _urllib3_conn.create_connection
+
+        def _pinned(address, *args, **kwargs):  # type: ignore[no-untyped-def]
+            host, port = address
+            if _canonicalize_hostname(host) == target_host:
+                return original((pinned_ip, port), *args, **kwargs)
+            return original(address, *args, **kwargs)
+
+        _urllib3_conn.create_connection = _pinned  # type: ignore[assignment]
+        try:
+            yield
+        finally:
+            _urllib3_conn.create_connection = original
+
+    return _pin()
+
+
 def _clear_private_host_cache() -> None:
     """Clear DNS lookup cache used by SSRF host checks."""
     _resolve_host_infos.cache_clear()

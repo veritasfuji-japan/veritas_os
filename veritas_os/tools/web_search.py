@@ -67,6 +67,7 @@ from .web_search_security import (
     _extract_public_ips_for_url,
     _clear_private_host_cache,
     _is_hostname_exact_or_subdomain,
+    _pin_dns_context,
 )
 
 WEBSEARCH_URL: str = os.getenv("VERITAS_WEBSEARCH_URL", "").strip()
@@ -317,14 +318,23 @@ def _post_with_retry(
             if expected_ips is not None:
                 _validate_rebinding_guard(url, expected_ips)
 
-            response = requests.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=timeout,
-                allow_redirects=False,
-                proxies=request_proxies,
-            )
+            # IP pinning: force urllib3 to connect to the preflight-resolved
+            # IP, closing the TOCTOU window between validation and connect.
+            _ctx = _pin_dns_context(url, expected_ips) if expected_ips else None
+            if _ctx is not None:
+                _ctx.__enter__()
+            try:
+                response = requests.post(
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=timeout,
+                    allow_redirects=False,
+                    proxies=request_proxies,
+                )
+            finally:
+                if _ctx is not None:
+                    _ctx.__exit__(None, None, None)
             status_code = getattr(response, "status_code", None)
             if status_code is not None and _should_retry_status(status_code):
                 if attempt < WEBSEARCH_MAX_RETRIES:
