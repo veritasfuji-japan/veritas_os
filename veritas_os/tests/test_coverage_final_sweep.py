@@ -840,8 +840,8 @@ class TestServerImportFallbacks:
         assert allow_cred is False
 
         # List input with valid origin
-        origins, allow_cred = server._resolve_cors_settings(["http://x.com"])
-        assert "http://x.com" in origins
+        origins, allow_cred = server._resolve_cors_settings(["http://localhost:3000"])
+        assert "http://localhost:3000" in origins
 
     def test_server_is_placeholder(self):
         """_is_placeholder correctly detects placeholder objects."""
