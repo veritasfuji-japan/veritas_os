@@ -247,14 +247,14 @@
 
 | # | 問題 | ステータス | 対応内容 |
 |---|------|-----------|---------|
-| 1 | DNS Rebinding TOCTOU | 未対応 | IPピンニングの実装が必要（アーキテクチャ変更） |
-| 2 | ReDoS防止が不十分 | 未対応 | 入力長上限 `_MAX_PII_INPUT_LENGTH` は設定済み。チャンク処理は要検討 |
+| 1 | DNS Rebinding TOCTOU | **修正済み** | `web_search_security.py`: `_pin_dns_context()` を追加し、urllib3のDNS解決をプリフライトIPにピンニング。`web_search.py`: リクエスト実行時にコンテキストマネージャで適用し、検証〜接続間のTOCTOUギャップを解消 |
+| 2 | ReDoS防止が不十分 | **修正済み** | `sanitize.py`: `_MAX_PII_INPUT_LENGTH` を1,000,000から100,000に引き下げ。チャンク処理は既存実装済み（128文字オーバーラップ付きセグメント分割） |
 | 3 | Slack Webhook URLのホスト検証 | **対策済み** | `hooks.slack-gov.com` が `allowed_hosts` に追加済み |
 | 4 | 暗号化アルゴリズムのマーキング不足 | **修正済み** | `encryption.py`: 暗号文に `ENC:aesgcm:` / `ENC:hmac-ctr:` タグを付与。復号時にタグで自動ディスパッチ。レガシー（タグなし）トークンとの後方互換性も維持 |
 | 5 | サブプロセスの外部タイムアウト制御なし | **対策済み** | `alert_doctor.py`: `subprocess.check_output()` に `timeout` パラメータ設定済み + `TimeoutExpired` ハンドリング済み |
-| 6 | fork PRでセキュリティゲートがスキップ | 未対応 | GitHub Actions のトークン権限制限による構造的制約 |
+| 6 | fork PRでセキュリティゲートがスキップ | **修正済み** | `security-gates.yml`: fork PRを除外する `if` 条件を全ジョブから削除。`dependency-audit`・`secret-scan`・`next-public-secret-guard` はいずれも `contents: read` 権限のみで動作するため、fork PRでも実行可能 |
 | 7 | Trivyスキャンで HIGH脆弱性をサイレント通過 | **対策済み** | `publish-ghcr.yml`: 2段構成（SARIF出力用 `exit-code: '0'` + CRITICAL強制ゲート `exit-code: '1'`） |
 | 8 | Dockerイメージタグがローリング | **修正済み** | `Dockerfile`: `python:3.11.12-slim` に固定 / `docker-compose.yml`: `node:20.19.0-bookworm` に固定 |
 | 9 | セキュリティツールのバージョン未固定 | **修正済み** | `main.yml`: `ruff==0.11.4`, `bandit==1.9.4`, `pip-audit==2.8.0` / `security-gates.yml`: `pip-audit==2.8.0` に固定 |
-| 10 | openapi.yaml additionalProperties | 未対応 | 35箇所以上の変更が必要（スキーマ互換性の確認が先） |
+| 10 | openapi.yaml additionalProperties | 未対応 | 35箇所以上の変更が必要（スキーマ互換性の確認が先。可変構造スキーマが多く一律変更はAPIブレイキングチェンジのリスク大） |
 | 11 | localStorage例外処理なし | **修正済み** | `i18n-provider.tsx`: `try/catch` 追加 + `storage` イベントリスナーによるマルチタブ同期 |

@@ -42,7 +42,8 @@ _logger = logging.getLogger(__name__)
 # Luhnチェック時の入力文字列長上限（DoS対策）
 _MAX_CARD_INPUT_LENGTH = 256
 # PII検査対象の入力長上限（ReDoS/CPU DoS対策）
-_MAX_PII_INPUT_LENGTH = 1_000_000
+# 100k: 複雑な日本語PII正規表現との組み合わせで計算量爆発を防止
+_MAX_PII_INPUT_LENGTH = 100_000
 # 1回の検出で保持する一致数上限（メモリ消費抑止）
 _MAX_PII_MATCHES = 10_000
 

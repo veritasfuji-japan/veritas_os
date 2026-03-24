@@ -11,19 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  fork-pr-permission-notice:
-    name: Fork PR permission notice
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - name: Explain skip reason
-        run: |
-          echo "::warning::Security Gates jobs that require repository checkout are skipped for fork PRs due to GitHub token permission restrictions."
-          echo "::warning::Security risk: skipping these checks lowers enforcement for untrusted forks; run full gates after maintainers branch the changes."
-
   dependency-audit:
     name: Dependency audit (Python + Node)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -73,7 +62,6 @@ jobs:
 
   secret-scan:
     name: Secret scan (gitleaks)
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -91,7 +79,6 @@ jobs:
 
   next-public-secret-guard:
     name: Guard NEXT_PUBLIC secret-like variables
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
