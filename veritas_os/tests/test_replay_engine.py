@@ -65,7 +65,7 @@ async def test_run_replay_strict_mode_skips_tools_and_matches(monkeypatch, tmp_p
 
     captured = {}
 
-    async def _fake_run(req, _request):
+    async def _fake_run(req, _request, **_kw):
         body = req.model_dump()
         captured["temperature"] = body.get("temperature")
         captured["seed"] = body.get("seed")
@@ -114,7 +114,7 @@ async def test_run_replay_writes_expected_diff_schema(monkeypatch, tmp_path: Pat
         },
     }
 
-    async def _fake_run(_req, _request):
+    async def _fake_run(_req, _request, **_kw):
         return {
             "decision": {"output": "reject", "answer": "ng"},
             "fuji": {"result": "reject", "status": "reject"},
@@ -154,7 +154,7 @@ async def test_run_replay_rejects_model_version_mismatch(monkeypatch, tmp_path: 
         },
     }
 
-    async def _fake_run(_req, _request):
+    async def _fake_run(_req, _request, **_kw):
         return {}
 
     monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
@@ -185,7 +185,7 @@ async def test_run_replay_rejects_retrieval_checksum_mismatch(monkeypatch, tmp_p
         },
     }
 
-    async def _fake_run(_req, _request):
+    async def _fake_run(_req, _request, **_kw):
         return {}
 
     monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
@@ -210,7 +210,7 @@ async def test_run_replay_rejects_missing_model_version_by_default(
         },
     }
 
-    async def _fake_run(_req, _request):
+    async def _fake_run(_req, _request, **_kw):
         return {}
 
     monkeypatch.setattr(replay_engine.pipeline, "_load_persisted_decision", lambda _id: snapshot)
