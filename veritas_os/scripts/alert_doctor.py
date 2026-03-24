@@ -180,7 +180,7 @@ def post_slack(text: str, timeout_sec: int = 12, max_retry: int = 3) -> bool:
                 data=body,
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=timeout_sec) as r:
+            with urllib.request.urlopen(req, timeout=timeout_sec) as r:  # nosec B310 - URL validated by _validate_webhook_url
                 if r.status == 200:
                     print("✅ Slack通知成功")
                     return True
@@ -203,7 +203,7 @@ def http_get(url: str, timeout: int = 3):
         return None, "health URL blocked by security policy"
 
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(url, timeout=timeout) as r:  # nosec B310 - URL validated by _validate_health_url
             return r.status, r.read().decode("utf-8", "ignore")
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return None, str(e)
