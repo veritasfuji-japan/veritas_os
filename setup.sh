@@ -165,7 +165,8 @@ VERITAS_API_BASE_URL=http://localhost:8000
 # This enables strict CSP defaults and startup fail-fast checks.
 ENVEOF
 
-    success ".env file created with auto-generated secrets."
+    chmod 600 .env
+    success ".env file created with auto-generated secrets (permissions: 600)."
     warn "Edit .env to set your OPENAI_API_KEY (or ANTHROPIC_API_KEY) before starting."
 fi
 
