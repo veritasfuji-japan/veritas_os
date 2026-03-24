@@ -255,6 +255,6 @@
 | 6 | fork PRでセキュリティゲートがスキップ | 未対応 | GitHub Actions のトークン権限制限による構造的制約 |
 | 7 | Trivyスキャンで HIGH脆弱性をサイレント通過 | **対策済み** | `publish-ghcr.yml`: 2段構成（SARIF出力用 `exit-code: '0'` + CRITICAL強制ゲート `exit-code: '1'`） |
 | 8 | Dockerイメージタグがローリング | **修正済み** | `Dockerfile`: `python:3.11.12-slim` に固定 / `docker-compose.yml`: `node:20.19.0-bookworm` に固定 |
-| 9 | セキュリティツールのバージョン未固定 | **修正済み** | `main.yml`: `ruff==0.11.4`, `bandit==1.9.0`, `pip-audit==2.8.0` / `security-gates.yml`: `pip-audit==2.8.0` に固定 |
+| 9 | セキュリティツールのバージョン未固定 | **修正済み** | `main.yml`: `ruff==0.11.4`, `bandit==1.9.4`, `pip-audit==2.8.0` / `security-gates.yml`: `pip-audit==2.8.0` に固定 |
 | 10 | openapi.yaml additionalProperties | 未対応 | 35箇所以上の変更が必要（スキーマ互換性の確認が先） |
 | 11 | localStorage例外処理なし | **修正済み** | `i18n-provider.tsx`: `try/catch` 追加 + `storage` イベントリスナーによるマルチタブ同期 |
