@@ -201,7 +201,7 @@ python -m pytest -q veritas_os/tests \
    - そのため、カバレッジ率の直接比較は参考値として扱うこと
 3. **比較不能な値**: 前回レポートに含まれていない新規サブモジュール (pipeline_gate.py, pipeline_execute.py, routes_decide.py 等) は「前回値なし」扱い
 4. **term-missing vs xml の差**: term-missing の 87% と coverage.xml の 89.3% は branch coverage の計算方式の違いによる。CI 判定は term-missing ベース
-5. **環境差**: CI は Python 3.11/3.12 のマトリクスで実行するが、今回は 3.12.3 のみで実行
+5. **環境差**: CI は Python 3.11/3.12 のマトリクスで実行するが、今回は 3.12.3 のみで実行。Python バージョン間のカバレッジ差は通常 0.1% 未満であり、本レポートの結論には影響しないと考えられるが、正式な CI マージ前には両バージョンでの検証が推奨される
 6. **外部依存**: `OPENAI_API_KEY` と `VERITAS_API_KEY` はダミー値で実行。実 API 呼び出しはモックされている
 
 ### coverage 再現コマンド
