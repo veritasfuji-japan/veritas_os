@@ -363,3 +363,148 @@ def test_put_rejects_tenant_mismatch(monkeypatch) -> None:
         json=_approved({"fuji_rules": {"pii_check": False}}),
     )
     assert resp.status_code == 403
+
+
+class TestGovernanceHardeningBranches:
+    """Focused branch tests for governance core defensive paths."""
+
+    def test_enforce_four_eyes_rejects_insufficient_approvals(self):
+        with pytest.raises(PermissionError, match="exactly two approvals"):
+            gov_mod.enforce_four_eyes_approval({
+                "approvals": [{"reviewer": "alice", "signature": "sig-a"}]
+            })
+
+    def test_enforce_four_eyes_rejects_duplicate_signatures(self):
+        with pytest.raises(PermissionError, match="two distinct signatures"):
+            gov_mod.enforce_four_eyes_approval(
+                {
+                    "approvals": [
+                        {"reviewer": "alice", "signature": "shared"},
+                        {"reviewer": "bob", "signature": "shared"},
+                    ]
+                }
+            )
+
+    def test_enforce_four_eyes_can_be_disabled(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES", "0")
+        gov_mod.enforce_four_eyes_approval({})
+
+    def test_update_policy_hot_reload_callback_failure_is_degraded(self, tmp_path):
+        policy_path = tmp_path / "gov.json"
+        history_path = tmp_path / "history.jsonl"
+        policy_path.write_text(json.dumps(gov_mod.GovernancePolicy().model_dump()))
+
+        observed = []
+
+        def failing_cb(_policy):
+            raise RuntimeError("reload failed")
+
+        def success_cb(policy):
+            observed.append(policy["fuji_rules"]["pii_check"])
+
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", policy_path), patch.object(
+            gov_mod, "_POLICY_HISTORY_PATH", history_path
+        ), patch.object(gov_mod, "_policy_update_callbacks", [failing_cb, success_cb]):
+            updated = gov_mod.update_policy(
+                _approved({"fuji_rules": {"pii_check": False}, "updated_by": "x" * 500})
+            )
+
+        assert updated["fuji_rules"]["pii_check"] is False
+        assert observed == [False]
+        assert len(updated["updated_by"]) == 200
+
+    def test_get_policy_history_returns_empty_when_missing(self, tmp_path):
+        with patch.object(gov_mod, "_POLICY_HISTORY_PATH", tmp_path / "missing.jsonl"):
+            assert gov_mod.get_policy_history(limit=10) == []
+
+    def test_get_policy_history_skips_invalid_lines_and_applies_limit(self, tmp_path):
+        history_path = tmp_path / "history.jsonl"
+        history_path.write_text(
+            "\n".join(
+                [
+                    '{"new_version": "v1"}',
+                    'NOT-JSON',
+                    '{"new_version": "v2"}',
+                    '{"new_version": "v3"}',
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
+            records = gov_mod.get_policy_history(limit=2)
+
+        assert [record["new_version"] for record in records] == ["v3", "v2"]
+
+    def test_get_policy_history_read_error_returns_empty(self, monkeypatch, tmp_path):
+        history_path = tmp_path / "history.jsonl"
+        history_path.write_text('{"new_version": "v1"}\n', encoding="utf-8")
+
+        def _boom(*_args, **_kwargs):
+            raise OSError("disk error")
+
+        monkeypatch.setattr(Path, "read_text", _boom)
+        with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
+            assert gov_mod.get_policy_history(limit=5) == []
+
+    def test_get_value_drift_zero_baseline_edge_case(self, tmp_path):
+        value_file = tmp_path / "value_stats.json"
+        value_file.write_text(
+            json.dumps({"history": [{"ema": 0.9, "timestamp": "t1"}]}),
+            encoding="utf-8",
+        )
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (value_file,)):
+            result = gov_mod.get_value_drift(telos_baseline=0.0)
+
+        assert result["latest_ema"] == 0.9
+        assert result["drift_percent"] == 0.0
+
+    def test_get_value_drift_caps_extreme_drift(self, tmp_path):
+        value_file = tmp_path / "value_stats.json"
+        value_file.write_text(
+            json.dumps({"history": [{"ema": 1.0, "timestamp": "t1"}]}),
+            encoding="utf-8",
+        )
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (value_file,)):
+            result = gov_mod.get_value_drift(telos_baseline=0.001)
+
+        assert result["drift_percent"] == 1000.0
+
+    def test_load_value_history_fallback_to_secondary_path(self, tmp_path):
+        broken = tmp_path / "broken.json"
+        valid = tmp_path / "valid.json"
+        broken.write_text("{not-json}", encoding="utf-8")
+        valid.write_text(
+            json.dumps([{"ema": 0.2, "created_at": "2026-01-01T00:00:00Z"}]),
+            encoding="utf-8",
+        )
+
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (broken, valid)):
+            result = gov_mod.get_value_drift(telos_baseline=0.5)
+
+        assert result["status"] == "ok"
+        assert result["history"][0]["timestamp"] == "2026-01-01T00:00:00Z"
+
+    def test_load_value_history_coerces_and_filters_invalid_points(self, tmp_path):
+        value_file = tmp_path / "value_stats.json"
+        value_file.write_text(
+            json.dumps(
+                {
+                    "history": [
+                        {"ema": -3, "ts": "first"},
+                        {"ema": 2, "timestamp": "second"},
+                        {"ema": "bad"},
+                        "invalid",
+                        {"ema": 0.55},
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.object(gov_mod, "_VALUE_HISTORY_PATHS", (value_file,)):
+            result = gov_mod.get_value_drift(telos_baseline=0.5)
+
+        assert [point["ema"] for point in result["history"]] == [0.0, 1.0, 0.55]
+        assert result["history"][-1]["timestamp"] == "point-4"
+
