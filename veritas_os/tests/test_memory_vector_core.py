@@ -322,9 +322,8 @@ class TestCosineSimStatic:
 
         Covers lines 423-427 (_cosine_similarity exception fallback).
         """
-        # Pass a 1-D vec with a matrix that has incompatible shape for
-        # np.linalg.norm(axis=1) — e.g. a scalar — to trigger an exception.
-        bad_matrix = "not-an-array"
+        # A 1-D matrix (missing axis=1 for norm) triggers an AxisError.
+        bad_matrix = np.array([1.0, 2.0])
         vec = np.array([1.0, 0.0])
         result = VectorMemory._cosine_similarity(vec, bad_matrix)
         np.testing.assert_array_equal(result, np.zeros(len(bad_matrix)))
@@ -435,7 +434,7 @@ class TestAddAutosaveEvery100:
         vm._save_index = track_save
 
         for i in range(100):
-            assert vm.add("ep", f"doc {i}") is True
+            assert vm.add("episodic", f"doc {i}") is True
 
         assert len(vm.documents) == 100
         # _save_index should have been called once at exactly 100 docs
@@ -447,7 +446,7 @@ class TestSearchDoubleCheckGuard:
 
     def test_documents_cleared_between_checks(self):
         vm = _make_vm_raw(dim=2)
-        vm.documents = [{"id": "d1", "text": "x", "kind": "ep"}]
+        vm.documents = [{"id": "d1", "text": "x", "kind": "episodic"}]
         vm.embeddings = np.ones((1, 2), dtype=np.float32)
 
         call_count = [0]
@@ -474,7 +473,7 @@ class TestLoadIndexBase64NoShape:
         raw = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).tobytes()
         import base64
         payload = {
-            "documents": [{"id": "d1", "text": "hi", "kind": "ep"}],
+            "documents": [{"id": "d1", "text": "hi", "kind": "episodic"}],
             "embeddings": base64.b64encode(raw).decode("ascii"),
             "embeddings_dtype": "float32",
             # No "embeddings_shape" key → shape is None → skip reshape
@@ -495,7 +494,7 @@ class TestSaveIndexNoNumpyEmbeddings:
 
     def test_non_numpy_embeddings_saved_as_null(self, tmp_path, monkeypatch):
         vm = _make_vm_raw(index_path=tmp_path / "idx.json", dim=2)
-        vm.documents = [{"id": "d1", "text": "hi", "kind": "ep"}]
+        vm.documents = [{"id": "d1", "text": "hi", "kind": "episodic"}]
         # Set embeddings to a plain list (no tobytes attribute)
         vm.embeddings = [[1.0, 2.0]]
 
