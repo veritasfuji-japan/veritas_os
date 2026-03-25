@@ -280,12 +280,15 @@ def get_policy() -> Dict[str, Any]:
 def _sanitize_updated_by(raw: Any) -> str:
     """Sanitize the ``updated_by`` field for safe persistence and display.
 
+    * Falls back to ``"api"`` for ``None``
     * Coerces to str
     * Strips leading/trailing whitespace and control characters
     * Removes HTML-like tags to mitigate stored-XSS when rendered in dashboards
     * Truncates to 200 characters (DoS protection)
     """
     import re
+    if raw is None:
+        return "api"
     text = str(raw).strip()
     # Strip control characters (U+0000–U+001F, U+007F–U+009F) except common whitespace
     text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", text)

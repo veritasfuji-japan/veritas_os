@@ -590,7 +590,7 @@ class TestUpdatedBySanitization:
 
     def test_none_defaults_to_api(self):
         result = gov_mod.update_policy({"updated_by": None})
-        assert result["updated_by"] == "None"
+        assert result["updated_by"] == "api"
 
 
 class TestFourEyesApproval:
@@ -766,12 +766,12 @@ class TestPolicyHistoryAppendAndTrim:
     def test_append_history_graceful_on_write_error(self, tmp_path, monkeypatch):
         """_append_policy_history should not raise on I/O error."""
         history_path = tmp_path / "history.jsonl"
+
+        def _raise_oserror(*_args, **_kwargs):
+            raise OSError("disk full")
+
         with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path):
-            # Make parent dir read-only to trigger write error
-            monkeypatch.setattr(
-                "builtins.open",
-                lambda *a, **kw: (_ for _ in ()).throw(OSError("disk full")),
-            )
+            monkeypatch.setattr("builtins.open", _raise_oserror)
             # Should not raise
             gov_mod._append_policy_history({"version": "v1"}, {"version": "v2"})
 
