@@ -12,7 +12,9 @@ from __future__ import annotations
 import ipaddress
 import logging
 import os
+import re
 import socket
+import unicodedata
 from functools import lru_cache
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -44,6 +46,11 @@ def _canonicalize_hostname(hostname: str) -> str:
     such as ``example.com.``. Treating these as distinct strings can bypass
     exact-match checks and create inconsistent SSRF protections.
 
+    NFKC normalization is applied to collapse Unicode confusables such as
+    fullwidth characters (e.g., ``ｅｘａｍｐｌｅ．ｃｏｍ`` → ``example.com``)
+    before further processing.  This prevents policy bypass via visually
+    similar but byte-distinct hostnames.
+
     Args:
         hostname: Raw hostname string.
 
@@ -51,7 +58,10 @@ def _canonicalize_hostname(hostname: str) -> str:
         Canonicalized lowercase hostname without surrounding whitespace
         or a trailing dot.
     """
-    return (hostname or "").strip().lower().rstrip(".")
+    raw = (hostname or "").strip()
+    # NFKC collapses fullwidth Latin, compatibility Katakana, etc.
+    normalized = unicodedata.normalize("NFKC", raw)
+    return normalized.lower().rstrip(".")
 
 
 def _is_hostname_exact_or_subdomain(hostname: str, domain: str) -> bool:
@@ -69,6 +79,35 @@ def _is_hostname_exact_or_subdomain(hostname: str, domain: str) -> bool:
         normalized_host == normalized_domain
         or normalized_host.endswith(f".{normalized_domain}")
     )
+
+
+# ---------------------------------------------------------------------------
+# Hostname confusable detection
+# ---------------------------------------------------------------------------
+
+# Regex matching characters outside the DNS LDH (Letters-Digits-Hyphens) set
+# *after* NFKC normalization.  Any match means the hostname contains
+# non-ASCII residue (e.g., Cyrillic homoglyphs like а/а, Greek ο/о) that
+# survived NFKC but is not valid in a DNS label.
+_RE_NON_LDH = re.compile(r"[^a-z0-9.\-]")
+
+
+def _hostname_has_confusable_chars(hostname: str) -> bool:
+    """Detect hostnames containing non-LDH characters after NFKC normalization.
+
+    Hostnames that still contain non-ASCII after NFKC normalization are
+    potential homoglyph/confusable attacks (e.g., Cyrillic ``а`` in place
+    of Latin ``a``).  Legitimate internationalized domain names (IDN) are
+    handled via IDNA encoding at the DNS layer; raw non-LDH characters in
+    a hostname string are suspicious and should be blocked conservatively.
+
+    Returns:
+        True if the hostname contains confusable characters.
+    """
+    host = _canonicalize_hostname(hostname)
+    if not host:
+        return False
+    return bool(_RE_NON_LDH.search(host))
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +129,10 @@ def _is_obviously_private_or_local_host(hostname: str) -> bool:
         return True
 
     if host.endswith((".local", ".internal", ".localhost", ".localdomain")):
+        return True
+
+    # Block hostnames with non-LDH residue after NFKC (homoglyph attacks).
+    if _hostname_has_confusable_chars(host):
         return True
 
     try:

@@ -240,6 +240,16 @@ TOXICITY_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"developer\s+message", re.IGNORECASE),
     re.compile(r"exfiltrat(e|ion)|leak\s+secret", re.IGNORECASE),
     re.compile(r"jailbreak|do\s+anything\s+now", re.IGNORECASE),
+    # Additional high-signal injection patterns
+    re.compile(r"disregard\s+(all\s+)?previous", re.IGNORECASE),
+    re.compile(r"forget\s+(all\s+)?(previous|prior|above)\s+instructions", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(in\s+)?", re.IGNORECASE),
+    re.compile(r"new\s+instructions?\s*:", re.IGNORECASE),
+    re.compile(r"override\s+(system|safety|instructions?)", re.IGNORECASE),
+    re.compile(r"act\s+as\s+(an?\s+)?unrestricted", re.IGNORECASE),
+    re.compile(r"pretend\s+(to\s+be|you\s+are)\s+", re.IGNORECASE),
+    re.compile(r"\[\s*system\s*\]", re.IGNORECASE),
+    re.compile(r"<\|?(system|im_start|endoftext)\|?>", re.IGNORECASE),
 )
 
 TOXICITY_COMPACT_MARKERS: tuple[str, ...] = (
@@ -250,10 +260,32 @@ TOXICITY_COMPACT_MARKERS: tuple[str, ...] = (
     "leaksecret",
     "jailbreak",
     "doanythingnow",
+    # Additional compact markers
+    "disregardprevious",
+    "forgetpreviousinstructions",
+    "overridesystem",
+    "overridesafety",
+    "newinstructions",
+    "actasunrestricted",
 )
 
 TOXICITY_COMPACT_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"i[gq]n[o0]re[a-z0-9]*instruct[i1]ons", re.IGNORECASE),
+    # Broader confusable-resistant pattern for "disregard ... instructions"
+    re.compile(r"d[i1]sr[e3]g[a4]rd[a-z0-9]*[i1]nstruct[i1]ons", re.IGNORECASE),
+    # "forget ... instructions"
+    re.compile(r"f[o0]rg[e3]t[a-z0-9]*[i1]nstruct[i1]ons", re.IGNORECASE),
+    # "override system/safety"
+    re.compile(r"[o0]v[e3]rr[i1]d[e3][a-z0-9]*s[a4]f[e3]ty", re.IGNORECASE),
+)
+
+# Zero-width and invisible Unicode characters used to evade text matching.
+# These are stripped before toxicity analysis to prevent bypass via
+# invisible character insertion (e.g., "ig\u200bnore previous").
+_RE_INVISIBLE_CHARS = re.compile(
+    r"[\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\u2064"
+    r"\ufeff\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5"
+    r"\u180e\u2028\u2029\u202a-\u202e\u2066-\u2069\ufff9-\ufffb]"
 )
 
 LEETSPEAK_TRANSLATION = str.maketrans(
@@ -266,6 +298,11 @@ LEETSPEAK_TRANSLATION = str.maketrans(
         "7": "t",
         "@": "a",
         "$": "s",
+        # Additional common substitutions
+        "!": "i",
+        "|": "l",
+        "{": "c",
+        "(": "c",
     }
 )
 
@@ -622,10 +659,21 @@ def _is_toxic_result(title: str, snippet: str, url: str) -> bool:
         This heuristic intentionally prefers false-positive blocking for
         suspicious instruction-like payloads in external search snippets.
         It should not be treated as a complete defense against RAG poisoning.
+
+    Normalization pipeline:
+        1. NFKC normalize (collapses fullwidth, compatibility forms)
+        2. Strip zero-width / invisible Unicode chars (prevents insertion bypass)
+        3. URL-decode (handles percent-encoded payloads)
+        4. Regex scan on decoded text
+        5. Leetspeak normalize + compact marker scan
+        6. Base64 payload scan
     """
     raw_text = f"{title}\n{snippet}\n{url}"
     normalized_text = unicodedata.normalize("NFKC", raw_text)
-    decoded_text = unquote(normalized_text)
+    # Strip invisible characters that could be inserted between letters
+    # to evade substring/regex matching (e.g., "ig\u200bnore").
+    cleaned_text = _RE_INVISIBLE_CHARS.sub("", normalized_text)
+    decoded_text = unquote(cleaned_text)
     text = decoded_text.lower()
     if any(pattern.search(text) for pattern in TOXICITY_PATTERNS):
         return True
