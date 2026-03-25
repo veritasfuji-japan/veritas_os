@@ -290,14 +290,25 @@ class TestSearchBranches:
         assert all(uid == "u1" for uid in ids)
 
     def test_search_kind_filtering(self, store: MemoryStore) -> None:
-        """kinds filter only returns matching kinds."""
+        """kinds filter only returns matching kinds.
+
+        Note: MemoryStore.search() always groups results under the
+        ``"episodic"`` key regardless of the actual record kind.
+        """
         store.put("u1", "k1", {"text": "term", "kind": "episodic"})
         store.put("u1", "k2", {"text": "term", "kind": "semantic"})
+
+        # Filter to semantic only
         result = store.search("term", kinds=["semantic"])
-        assert "episodic" in result
-        assert all(
-            h["meta"]["kind"] == "semantic" for h in result["episodic"]
-        )
+        hits = result.get("episodic", [])
+        assert len(hits) == 1
+        assert hits[0]["meta"]["kind"] == "semantic"
+
+        # Filter to episodic only
+        result2 = store.search("term", kinds=["episodic"])
+        hits2 = result2.get("episodic", [])
+        assert len(hits2) == 1
+        assert hits2[0]["meta"]["kind"] == "episodic"
 
     def test_search_respects_k_limit(self, store: MemoryStore) -> None:
         """k parameter limits the number of results."""
