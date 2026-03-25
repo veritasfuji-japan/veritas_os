@@ -105,7 +105,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             except BlockingIOError:
                 if time.time() - start > timeout:
                     fh.close()
-                    raise TimeoutError(f"failed to acquire lock for {path}")
+                    raise TimeoutError(f"failed to acquire lock for {path}") from None
                 time.sleep(0.02)
         try:
             yield
@@ -143,7 +143,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                         e,
                     )
                 if time.time() - start > timeout:
-                    raise TimeoutError(f"failed to acquire lock for {path}")
+                    raise TimeoutError(f"failed to acquire lock for {path}") from None
                 time.sleep(backoff)
                 backoff = min(backoff * 2.0, 0.32)
         try:

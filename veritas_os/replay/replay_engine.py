@@ -305,7 +305,6 @@ def _audit_summary(
     mode_label = "strict" if strict else "standard"
     verdict = "MATCH" if match else "MISMATCH"
 
-    divergence = diff.get("divergence_level", DIVERGENCE_NONE)
     if match:
         return f"Replay {decision_id} ({mode_label}): {verdict} — no divergence detected."
 

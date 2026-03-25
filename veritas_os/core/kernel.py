@@ -857,8 +857,8 @@ async def decide(
     try:
         latency_ms = int((time.time() - start_ts) * 1000)
         extras["metrics"]["latency_ms"] = latency_ms
-    except (TypeError, ValueError, OverflowError):
-        pass
+    except (TypeError, ValueError, OverflowError) as e:
+        logger.debug("latency_ms calculation failed: %s", e)
 
     if degraded_subsystems:
         extras["degraded_subsystems"] = sorted(set(degraded_subsystems))
