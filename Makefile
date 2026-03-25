@@ -92,6 +92,7 @@ quality-checks:
 	@python scripts/architecture/check_responsibility_boundaries.py --report-format json
 	@python scripts/architecture/check_core_complexity_budget.py
 	@python scripts/quality/check_operational_docs_consistency.py
+	@python scripts/quality/check_frontend_docs_consistency.py
 	@python scripts/security/check_memory_dir_allowlist.py
 	@python scripts/security/check_httpx_raw_upload_usage.py
 	@python scripts/security/check_subprocess_shell_usage.py

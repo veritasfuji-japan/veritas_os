@@ -216,13 +216,13 @@ veritas_os/                  ← Monorepo root
 
 ## Frontend — Mission Control Dashboard
 
-The frontend is a **Next.js 15** (React 18, TypeScript) dashboard that provides operational visibility into the decision pipeline.
+The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides operational visibility into the decision pipeline.
 
 ### Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 15.5 (App Router) |
+| Framework | Next.js 16.1 (App Router) |
 | Language | TypeScript 5.7 |
 | Styling | Tailwind CSS 3.4 + CVA (class-variance-authority) |
 | Icons | Lucide React |
