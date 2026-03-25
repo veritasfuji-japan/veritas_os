@@ -12,6 +12,19 @@ import time
 from typing import Any, Callable, Dict, Optional, Set
 
 
+def parse_legal_hold(raw_hold: Any) -> bool:
+    """Normalize ``legal_hold`` to a boolean.
+
+    Accepts bool, int, or common string representations
+    (``"true"``/``"1"``/``"yes"``).  All other values — including the
+    non-empty string ``"false"`` — are treated as ``False`` to match the
+    semantics used by ``MemoryStore._normalize_lifecycle``.
+    """
+    if isinstance(raw_hold, str):
+        return raw_hold.strip().lower() in ("true", "1", "yes")
+    return bool(raw_hold)
+
+
 def parse_expires_at(expires_at: Any) -> Optional[str]:
     """Normalize ``expires_at`` into a UTC ISO-8601 string or ``None``."""
     if expires_at in (None, ""):
@@ -60,7 +73,7 @@ def normalize_lifecycle(
     if retention_class not in allowed_retention_classes:
         retention_class = default_retention_class
 
-    legal_hold = bool(meta.get("legal_hold", False))
+    legal_hold = parse_legal_hold(meta.get("legal_hold", False))
     normalized_expires_at = parse_expires_at_fn(meta.get("expires_at"))
 
     meta["retention_class"] = retention_class
@@ -85,7 +98,7 @@ def is_record_expired(
     if not isinstance(meta, dict):
         return False
 
-    if bool(meta.get("legal_hold", False)):
+    if parse_legal_hold(meta.get("legal_hold", False)):
         return False
 
     expires_at = parse_expires_at_fn(meta.get("expires_at"))
@@ -109,8 +122,7 @@ def is_record_legal_hold(record: Dict[str, Any]) -> bool:
     meta = value.get("meta") or {}
     if not isinstance(meta, dict):
         return False
-    return bool(meta.get("legal_hold", False))
-
+    return parse_legal_hold(meta.get("legal_hold", False))
 
 def should_cascade_delete_semantic(
     record: Dict[str, Any],
@@ -135,7 +147,7 @@ def should_cascade_delete_semantic(
     if str(meta.get("user_id") or "") != user_id:
         return False
 
-    if bool(meta.get("legal_hold", False)):
+    if parse_legal_hold(meta.get("legal_hold", False)):
         return False
 
     source_keys = meta.get("source_episode_keys") or []

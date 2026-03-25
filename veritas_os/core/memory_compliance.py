@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 import time
 import logging
 
+from .memory_lifecycle import parse_legal_hold
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,7 +28,7 @@ def is_record_legal_hold(record: Dict[str, Any]) -> bool:
     meta = value.get("meta") or {}
     if not isinstance(meta, dict):
         return False
-    return bool(meta.get("legal_hold", False))
+    return parse_legal_hold(meta.get("legal_hold", False))
 
 
 def should_cascade_delete_semantic(
@@ -52,7 +54,7 @@ def should_cascade_delete_semantic(
     if str(meta.get("user_id") or "") != user_id:
         return False
 
-    if bool(meta.get("legal_hold", False)):
+    if parse_legal_hold(meta.get("legal_hold", False)):
         return False
 
     source_keys = meta.get("source_episode_keys") or []
