@@ -1,5 +1,6 @@
 # tests/test_llm_client.py
 import importlib
+import warnings
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,9 @@ from veritas_os.core import llm_client
 from veritas_os.core.llm_client import (
     LLMProvider,
     LLMError,
+    SupportTier,
+    PROVIDER_SUPPORT_TIER,
+    get_provider_support_tier,
     _format_request,
     _parse_response,
     _get_api_key,
@@ -882,3 +886,116 @@ def test_http_post_allows_normal_sized_response(monkeypatch):
 
     result = llm_client._http_post("https://example.com/api")
     assert result is fake_resp
+
+
+# ------------------------------------------------------------
+# Support tier のテスト
+# ------------------------------------------------------------
+
+
+class TestSupportTier:
+    """Tests for LLM provider support tier definitions."""
+
+    def test_support_tier_enum_values(self):
+        assert SupportTier.PRODUCTION.value == "production"
+        assert SupportTier.PLANNED.value == "planned"
+        assert SupportTier.EXPERIMENTAL.value == "experimental"
+
+    def test_all_providers_have_tier(self):
+        """Every LLMProvider must have an entry in PROVIDER_SUPPORT_TIER."""
+        for p in LLMProvider:
+            assert p.value in PROVIDER_SUPPORT_TIER, (
+                f"Provider '{p.value}' missing from PROVIDER_SUPPORT_TIER"
+            )
+
+    def test_openai_is_production(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OPENAI.value] is SupportTier.PRODUCTION
+
+    def test_anthropic_is_planned(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.ANTHROPIC.value] is SupportTier.PLANNED
+
+    def test_google_is_planned(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.GOOGLE.value] is SupportTier.PLANNED
+
+    def test_ollama_is_experimental(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OLLAMA.value] is SupportTier.EXPERIMENTAL
+
+    def test_openrouter_is_experimental(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OPENROUTER.value] is SupportTier.EXPERIMENTAL
+
+    def test_get_provider_support_tier_known(self):
+        assert get_provider_support_tier("openai") == SupportTier.PRODUCTION
+        assert get_provider_support_tier("anthropic") == SupportTier.PLANNED
+        assert get_provider_support_tier("ollama") == SupportTier.EXPERIMENTAL
+
+    def test_get_provider_support_tier_unknown_defaults_to_experimental(self):
+        assert get_provider_support_tier("unknown-provider") == SupportTier.EXPERIMENTAL
+
+    def test_production_provider_no_warning(self, monkeypatch):
+        """OpenAI (production) should not emit a UserWarning."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        dummy = _DummyResponse(
+            200,
+            {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.OPENAI.value,
+                model="gpt-4.1-mini",
+            )
+        tier_warnings = [x for x in w if "tier" in str(x.message)]
+        assert len(tier_warnings) == 0
+
+    def test_planned_provider_emits_warning(self, monkeypatch):
+        """Anthropic (planned) should emit a UserWarning."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "ak-test")
+
+        dummy = _DummyResponse(
+            200,
+            {"content": [{"type": "text", "text": "ok"}]},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.ANTHROPIC.value,
+                model="claude-opus-4-6",
+            )
+        tier_warnings = [x for x in w if "planned" in str(x.message)]
+        assert len(tier_warnings) == 1
+        assert "anthropic" in str(tier_warnings[0].message)
+
+    def test_experimental_provider_emits_warning(self, monkeypatch):
+        """Ollama (experimental) should emit a UserWarning."""
+        dummy = _DummyResponse(
+            200,
+            {"message": {"role": "assistant", "content": "ok"}},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.OLLAMA.value,
+                model="llama3",
+            )
+        tier_warnings = [x for x in w if "experimental" in str(x.message)]
+        assert len(tier_warnings) == 1
+        assert "ollama" in str(tier_warnings[0].message)
+
+    def test_support_tier_exported_in_all(self):
+        """SupportTier and helpers are part of the public API."""
+        assert "SupportTier" in llm_client.__all__
+        assert "PROVIDER_SUPPORT_TIER" in llm_client.__all__
+        assert "get_provider_support_tier" in llm_client.__all__

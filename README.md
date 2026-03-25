@@ -582,17 +582,27 @@ Dockerfile `CMD` accordingly before building the image.
 
 ### LLM Client
 
-Supports multiple providers via `LLM_PROVIDER` environment variable:
+Supports multiple providers via `LLM_PROVIDER` environment variable. Each provider has a **support tier** that indicates its production readiness:
 
-| Provider | Model | Status |
+| Tier | Meaning |
+|---|---|
+| **production** | CI-tested, production-deployment target, covered by SLA |
+| **planned** | Code paths implemented but not verified in production; may lag behind upstream API changes |
+| **experimental** | Minimal scaffold only; subject to breaking changes; not for production use |
+
+| Provider | Model | Tier |
 |---|---|---|
-| `openai` | GPT-4.1-mini (default) | Production |
-| `anthropic` | Claude | Planned |
-| `google` | Gemini | Planned |
-| `ollama` | Local models | Planned |
-| `openrouter` | Aggregator | Planned |
+| `openai` | GPT-4.1-mini (default) | **production** |
+| `anthropic` | Claude | planned |
+| `google` | Gemini | planned |
+| `ollama` | Local models | experimental |
+| `openrouter` | Aggregator | experimental |
 
-Features: shared `httpx.Client` with connection pooling (`LLM_POOL_MAX_CONNECTIONS=20`), retry with configurable backoff (`LLM_MAX_RETRIES=3`), response size guard (16 MB), monkeypatchable for testing.
+> **Runtime notice**: Using a non-production provider emits a `UserWarning` so callers are aware of the tier boundary.
+>
+> **Promoting a provider to production** requires: (1) integration test suite with ≥ 90 % path coverage for the provider, (2) successful staging deployment for ≥ 2 weeks, (3) API-compatibility review against upstream changelog, and (4) explicit approval in a pull request.
+
+Features: shared `httpx.Client` with connection pooling (`LLM_POOL_MAX_CONNECTIONS=20`), retry with configurable backoff (`LLM_MAX_RETRIES=3`), response size guard (16 MB), circuit breaker per provider, monkeypatchable for testing.
 
 ---
 
