@@ -1,6 +1,6 @@
-# veritas_os/core/memory.py (改善版 + MemoryDistill)
+# veritas_os/core/memory.py
 """
-MemoryOS - 改善版
+MemoryOS - public API facade.
 
 Public contract:
 - ``MemoryStore`` と関連 API は、記憶の保存・検索・要約・ライフサイクル
@@ -8,41 +8,30 @@ Public contract:
 - 本モジュールは MemoryOS の I/O と orchestration を保持し、Planner /
   Kernel / FUJI の責務へ横滑りしません。
 
-Preferred extension points:
-- ``memory_helpers.py`` for normalization / compatibility helpers
-- ``memory_search_helpers.py`` for search payload shaping and fallback scoring
-- ``memory_summary_helpers.py`` for summary text formatting
-- ``memory_lifecycle.py`` / ``memory_security.py`` / ``memory_store.py`` for
-  lifecycle, security, and backend store details
+Architecture (responsibility split):
+- ``memory_vector.py``       : VectorMemory class (algorithm + data structure)
+- ``memory_store_compat.py`` : MemoryStore compatibility hooks
+- ``memory_distillation.py`` : episodic → semantic distillation orchestration
+- ``memory_storage.py``      : file locking (locked_memory) + pickle scanning
+- ``memory_security.py``     : runtime security guards
+- ``memory_store.py``        : KVS backend (MemoryStore class)
 
-Compatibility guidance:
-- Optional dependency fallback と既存 private wrapper は後方互換のため残して
-  あります。新しい検索整形・summary 整形・fallback 分岐は helper 側へ追加し、
-  本体へ新規責務を直接積み増さないでください。
-
-主な改善点:
-1. 組み込みベクトル検索実装（sentence-transformers）
-2. インデックス管理の改善
-3. より詳細なログとデバッグ情報
-4. フォールバック戦略の強化
-5. Memory Distill（episodic → semantic 要約）の追加
+This module re-exports every symbol that callers historically imported from
+``veritas_os.core.memory`` so the public API surface is unchanged.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-from datetime import datetime, timezone
 from uuid import uuid4
 import json
 import os
 import time
 import threading
-from contextlib import contextmanager
 import logging
-import base64
 
-from .config import capability_cfg, emit_capability_manifest
+from .config import capability_cfg, emit_capability_manifest, cfg
 from .memory_security import (
     PICKLE_MIGRATION_GUIDE_PATH,
     emit_legacy_pickle_runtime_blocked,
@@ -95,11 +84,49 @@ from .memory_store import (
     MemoryStore,
 )
 
+# -- VectorMemory class (authoritative implementation in memory_vector.py) --
+from .memory_vector import VectorMemory  # noqa: F401  -- re-exported
+from . import memory_vector as _memory_vector_module
+
+# -- File locking (authoritative implementation in memory_storage.py) --
+from .memory_storage import locked_memory as _storage_locked_memory
+from contextlib import contextmanager
+
+# -- Distill orchestration (authoritative in memory_distillation.py) --
+from .memory_distillation import (
+    distill_memory_for_user as _distill_impl,
+)
+
+# -- Store compat hooks --
+from .memory_store_compat import install_memory_store_compat_hooks
+
+from . import llm_client
+import sys
+
 logger = logging.getLogger(__name__)
 
-_ORIGINAL_ERASE_USER_DATA = erase_user_data
-_ORIGINAL_FILTER_RECENT_RECORDS = filter_recent_records
-_ORIGINAL_BUILD_KVS_SEARCH_HITS = build_kvs_search_hits
+# Attributes that should be propagated to memory_vector when set via
+# monkeypatch on the memory module (test compatibility).
+_SYNCED_VECTOR_ATTRS = frozenset({"_is_explicitly_enabled", "_emit_legacy_pickle_runtime_blocked"})
+
+_original_module_class = type(sys.modules[__name__])
+
+
+class _SyncModule(_original_module_class):
+    """Module subclass that propagates select monkeypatches to memory_vector."""
+
+    def __setattr__(self, name: str, value: object) -> None:
+        super().__setattr__(name, value)
+        if name in _SYNCED_VECTOR_ATTRS:
+            setattr(_memory_vector_module, name, value)
+
+
+sys.modules[__name__].__class__ = _SyncModule
+
+
+# ============================
+# Backward-compatible thin wrappers
+# ============================
 
 
 def _is_explicitly_enabled(env_key: str) -> bool:
@@ -138,456 +165,14 @@ if capability_cfg.emit_manifest_on_import:
 
 
 # ============================
-# ベクトル検索モジュール（組み込み）
+# External model compatibility layer
 # ============================
 
-
-class VectorMemory:
-    """
-    組み込みベクトルメモリ実装
-
-    sentence-transformers を使用してテキストの埋め込みを生成し、
-    コサイン類似度で検索を行う。
-
-    スレッドセーフ: 全ての読み書き操作は RLock で保護されています。
-    """
-
-    def __init__(
-        self,
-        model_name: str = "all-MiniLM-L6-v2",
-        index_path: Optional[Path] = None,
-        embedding_dim: int = 384,
-    ):
-        self.model_name = model_name
-        self.index_path = index_path
-        self.embedding_dim = embedding_dim
-        self._lock = threading.RLock()
-        self._id_counter = 0
-
-        # データストア
-        self.documents: List[Dict[str, Any]] = []
-        self.embeddings: Optional[Any] = None  # numpy array
-
-        # モデルのロード
-        self.model = None
-        self._load_model()
-
-        # インデックスのロード
-        if index_path and index_path.exists():
-            self._load_index()
-
-    def _load_model(self):
-        """埋め込みモデルをスレッドセーフに一度だけロードする。"""
-        if self.model is not None:
-            return
-
-        with self._lock:
-            if self.model is not None:
-                return
-
-            if not capability_cfg.enable_memory_sentence_transformers:
-                logger.info(
-                    "[VectorMemory] sentence-transformers disabled by "
-                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
-                )
-                return
-
-            try:
-                from sentence_transformers import SentenceTransformer
-
-                self.model = SentenceTransformer(self.model_name)
-                logger.info("[VectorMemory] Loaded model: %s", self.model_name)
-            except ImportError as exc:
-                if _is_explicitly_enabled(
-                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
-                ):
-                    raise RuntimeError(
-                        "sentence-transformers is required when "
-                        "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1"
-                    ) from exc
-                logger.warning(
-                    "[CONFIG_MISMATCH] sentence-transformers is unavailable while "
-                    "the default capability is enabled; continuing with fallback "
-                    "embedding mode. To enforce strict mode, set "
-                    "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS=1 explicitly."
-                )
-                self.model = None
-            except (OSError, RuntimeError, ValueError, TypeError) as e:
-                logger.error("[VectorMemory] Failed to load model: %s", e)
-                self.model = None
-
-    def _load_index(self):
-        """永続化されたインデックスをロード（JSON形式のみ）。"""
-        if not self.index_path:
-            return
-
-        # JSON形式のパス（.json拡張子）
-        json_path = self.index_path.with_suffix(".json")
-        legacy_pkl_path = self.index_path
-
-        try:
-            import numpy as np
-
-            # 1) まずJSON形式を試す
-            if json_path.exists():
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-
-                self.documents = data.get("documents", [])
-                embeddings_data = data.get("embeddings")
-
-                if embeddings_data is not None:
-                    # Base64形式の場合
-                    if isinstance(embeddings_data, str):
-                        raw_bytes = base64.b64decode(embeddings_data)
-                        dtype = data.get("embeddings_dtype", "float32")
-                        shape = data.get("embeddings_shape")
-                        self.embeddings = np.frombuffer(raw_bytes, dtype=dtype)
-                        if shape:
-                            self.embeddings = self.embeddings.reshape(shape)
-                    # リスト形式の場合
-                    elif isinstance(embeddings_data, list):
-                        self.embeddings = np.array(embeddings_data, dtype=np.float32)
-                    else:
-                        self.embeddings = None
-
-                logger.info(
-                    f"[VectorMemory] Loaded JSON index: {len(self.documents)} documents"
-                )
-                return
-
-            # 2) 旧pickle形式は runtime では読み込まない
-            if legacy_pkl_path.exists() and legacy_pkl_path.suffix == ".pkl":
-                _emit_legacy_pickle_runtime_blocked(
-                    path=legacy_pkl_path,
-                    artifact_name="vector index",
-                )
-                return
-
-        except (OSError, ValueError, TypeError, json.JSONDecodeError) as e:
-            logger.error("[VectorMemory] Failed to load index: %s", e)
-
-    def _save_index(self):
-        """インデックスをJSON形式で永続化（セキュリティ向上のためpickle廃止）"""
-        if not self.index_path:
-            return
-
-        try:
-            # JSON形式のパス（.json拡張子に統一）
-            json_path = self.index_path.with_suffix(".json")
-            json_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # embeddingsをBase64エンコード（コンパクト＋JSON互換）
-            embeddings_b64 = None
-            embeddings_shape = None
-            embeddings_dtype = None
-
-            if self.embeddings is not None:
-                import numpy as np
-                # numpy arrayの場合
-                if hasattr(self.embeddings, "tobytes"):
-                    embeddings_b64 = base64.b64encode(
-                        self.embeddings.astype(np.float32).tobytes()
-                    ).decode("ascii")
-                    embeddings_shape = list(self.embeddings.shape)
-                    embeddings_dtype = "float32"
-
-            data = {
-                "documents": self.documents,
-                "embeddings": embeddings_b64,
-                "embeddings_shape": embeddings_shape,
-                "embeddings_dtype": embeddings_dtype,
-                "model_name": self.model_name,
-                "embedding_dim": self.embedding_dim,
-                "format_version": "2.0",  # バージョン管理
-            }
-
-            # アトミック書き込み（途中で失敗しても元ファイルを壊さない）
-            from veritas_os.core.atomic_io import atomic_write_json
-            atomic_write_json(json_path, data)
-
-            # index_pathも更新（次回保存時のため）
-            self.index_path = json_path
-
-            logger.info(
-                "[VectorMemory] Saved JSON index: %d documents", len(self.documents)
-            )
-        except (OSError, TypeError, ValueError) as e:
-            logger.error("[VectorMemory] Failed to save index: %s", e)
-
-    def add(
-        self,
-        kind: str,
-        text: str,
-        tags: Optional[List[str]] = None,
-        meta: Optional[Dict[str, Any]] = None,
-    ) -> bool:
-        """
-        ドキュメントを追加してインデックスを更新
-
-        Args:
-            kind: ドキュメント種別（"semantic", "episodic" など）
-            text: テキスト内容
-            tags: タグのリスト
-            meta: メタデータ。``meta["lineage"]`` に辞書を渡すと
-                  データリネージュ情報（EU AI Act Art. 10 / GAP-05）
-                  がドキュメントに記録される。
-
-        Returns:
-            成功したかどうか
-        """
-        if not self.model:
-            logger.warning("[VectorMemory] Model not loaded, cannot add document")
-            return False
-
-        if not text or not text.strip():
-            return False
-
-        # GAP-05 (Art. 10): Data quality validation at ingestion
-        # Log quality issues for audit trail but do not block — memory
-        # operations may involve short text and other acceptable edge cases.
-        try:
-            from veritas_os.core.eu_ai_act_compliance_module import validate_data_quality
-
-            quality = validate_data_quality(text=text, kind=kind, meta=meta)
-            if not quality["passed"]:
-                logger.info(
-                    "[VectorMemory] Data quality issue detected (Art. 10): %s",
-                    quality["issues"],
-                )
-        except ImportError:
-            pass
-
-        try:
-            import numpy as np
-
-            # 埋め込み生成（ロック外で実行 - 計算コストが高い）
-            embedding = self.model.encode([text])[0]
-
-            with self._lock:
-                # ドキュメント追加
-                self._id_counter += 1
-                doc = {
-                    "id": f"{kind}_{self._id_counter}_{int(time.time())}",
-                    "kind": kind,
-                    "text": text,
-                    "tags": tags or [],
-                    "meta": meta or {},
-                    "ts": time.time(),
-                }
-
-                # GAP-05 (Art. 10): Data lineage tracking
-                lineage = (meta or {}).get("lineage")
-                if isinstance(lineage, dict):
-                    doc["lineage"] = lineage
-                else:
-                    doc["lineage"] = {
-                        "source": "internal",
-                        "document_type": kind,
-                        "ingested_at": datetime.now(timezone.utc).isoformat(),
-                    }
-
-                self.documents.append(doc)
-
-                # 埋め込み配列を更新
-                if self.embeddings is None:
-                    self.embeddings = embedding.reshape(1, -1)
-                else:
-                    self.embeddings = np.vstack([self.embeddings, embedding])
-
-                # 定期的に保存（100件ごと）
-                if len(self.documents) % 100 == 0 and self.index_path:
-                    self._save_index()
-
-            logger.debug("[VectorMemory] Added document: %s", doc["id"])
-            return True
-
-        except Exception as e:
-            logger.error("[VectorMemory] Failed to add document: %s", e)
-            return False
-
-    def search(
-        self,
-        query: str,
-        k: int = 10,
-        kinds: Optional[List[str]] = None,
-        min_sim: float = 0.0,
-    ) -> List[Dict[str, Any]]:
-        """
-        ベクトル検索を実行
-
-        Args:
-            query: 検索クエリ
-            k: 返す最大件数
-            kinds: フィルタするドキュメント種別
-            min_sim: 最小類似度閾値（0.0-1.0）
-
-        Returns:
-            検索結果のリスト（スコア降順）
-        """
-        if not self.model:
-            logger.debug("[VectorMemory] Model not loaded")
-            return []
-
-        if not query or not query.strip():
-            return []
-
-        if not self.documents or self.embeddings is None:
-            logger.debug("[VectorMemory] No documents in index")
-            return []
-
-        try:
-            # クエリの埋め込み生成（ロック外で実行 - 計算コストが高い）
-            query_embedding = self.model.encode([query])[0]
-
-            with self._lock:
-                if not self.documents or self.embeddings is None:
-                    return []
-
-                # スナップショットを取得
-                docs_snapshot = list(self.documents)
-                import numpy as np
-                embeddings_snapshot = np.array(self.embeddings, copy=True)
-
-            # ロック外で計算
-            # コサイン類似度計算
-            similarities = self._cosine_similarity(query_embedding, embeddings_snapshot)
-
-            # 結果を構築
-            results: List[Dict[str, Any]] = []
-            for idx, sim in enumerate(similarities):
-                if sim < min_sim:
-                    continue
-
-                if idx >= len(docs_snapshot):
-                    continue
-
-                doc = docs_snapshot[idx]
-
-                # kinds フィルタリング
-                if kinds and doc.get("kind") not in kinds:
-                    continue
-
-                results.append(
-                    {
-                        "id": doc["id"],
-                        "text": doc["text"],
-                        "score": float(sim),
-                        "kind": doc["kind"],
-                        "tags": doc.get("tags", []),
-                        "meta": doc.get("meta", {}),
-                        "ts": doc.get("ts"),
-                    }
-                )
-
-            # スコア降順でソート
-            results.sort(key=lambda x: x["score"], reverse=True)
-
-            # 上位k件を返す
-            top_results = results[:k]
-
-            logger.info(
-                "[VectorMemory] Search '%s...' found %d/%d hits",
-                query[:50],
-                len(top_results),
-                len(results),
-            )
-
-            return top_results
-
-        except Exception as e:
-            logger.error("[VectorMemory] Search failed: %s", e)
-            return []
-
-    @staticmethod
-    def _cosine_similarity(vec: Any, matrix: Any) -> Any:
-        """コサイン類似度を計算"""
-        try:
-            import numpy as np
-
-            # ベクトルを正規化
-            vec_norm = vec / (np.linalg.norm(vec) + 1e-10)
-            matrix_norm = matrix / (
-                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
-            )
-
-            # 内積 = コサイン類似度
-            similarities = np.dot(matrix_norm, vec_norm)
-
-            return similarities
-
-        except Exception as e:
-            logger.error("[VectorMemory] Cosine similarity calculation failed: %s", e)
-            import numpy as np
-
-            return np.zeros(len(matrix))
-
-    def rebuild_index(self, documents: List[Dict[str, Any]]) -> None:
-        """
-        既存のドキュメントリストからインデックスを再構築
-
-        Args:
-            documents: ドキュメントのリスト
-        """
-        if not self.model:
-            logger.warning("[VectorMemory] Model not loaded, cannot rebuild index")
-            return
-
-        logger.info(
-            "[VectorMemory] Rebuilding index for %d documents...",
-            len(documents),
-        )
-
-        # ★ 競合修正: ロック外で全埋め込みを事前計算し、
-        # ロック内でアトミックに差し替える
-        import numpy as np
-
-        new_docs = []
-        embeddings_list = []
-        counter = 0
-        for doc in documents:
-            text = doc.get("text", "")
-            if not text or not text.strip():
-                continue
-            embedding = self.model.encode([text])[0]
-            counter += 1
-            new_doc = {
-                "id": f"{doc.get('kind', 'semantic')}_{counter}_{int(time.time())}",
-                "kind": doc.get("kind", "semantic"),
-                "text": text,
-                "tags": doc.get("tags") or [],
-                "meta": doc.get("meta") or {},
-                "ts": time.time(),
-            }
-            new_docs.append(new_doc)
-            embeddings_list.append(embedding)
-
-        with self._lock:
-            self.documents = new_docs
-            self._id_counter = counter
-            if embeddings_list:
-                self.embeddings = np.vstack([e.reshape(1, -1) for e in embeddings_list])
-            else:
-                self.embeddings = None
-
-        self._save_index()
-        logger.info(
-            f"[VectorMemory] Index rebuilt: {len(self.documents)} documents indexed"
-        )
-
-
-# ============================
-# 旧コードとの互換性レイヤー
-# ============================
-
-# 外部モジュールからの読み込み試行（後方互換性）
 memory_model_core = None
 try:
-    # 通常インストール時
     from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
 except (ImportError, ModuleNotFoundError):
     try:
-        # パッケージとしてでなくローカルから叩く場合の保険
         from .models import memory_model as memory_model_core  # type: ignore
     except (ImportError, ModuleNotFoundError):
         memory_model_core = None
@@ -599,7 +184,6 @@ else:
     MEM_VEC_EXTERNAL = None
     MEM_CLF = None
 
-# SimpleMemVec のようなダミー実装は無視して VectorMemory を優先する
 if MEM_VEC_EXTERNAL is not None and MEM_VEC_EXTERNAL.__class__.__name__ == "SimpleMemVec":
     logger.info(
         "[VectorMemory] Detected SimpleMemVec as external MEM_VEC; "
@@ -618,7 +202,11 @@ logger.info("[MemoryModel] module loaded from: %s", __file__)
 
 MODEL = None
 
-# VectorMemory インスタンスの初期化
+
+# ============================
+# MEM_VEC singleton management
+# ============================
+
 # ★ 修正 (H-10): MEM_VEC へのアクセスをスレッドセーフにするためのロック
 _mem_vec_lock = threading.Lock()
 MEM_VEC = None
@@ -702,10 +290,13 @@ def _get_mem_vec() -> Any:
         return MEM_VEC
 
 
+# ============================
+# Prediction helpers
+# ============================
+
+
 def predict_decision_status(query_text: str) -> str:
-    """
-    （暫定）クエリテキストから「決定ステータス」を推定するヘルパー。
-    """
+    """（暫定）クエリテキストから「決定ステータス」を推定するヘルパー。"""
     if MODEL is None:
         return "unknown"
     try:
@@ -717,12 +308,9 @@ def predict_decision_status(query_text: str) -> str:
 
 
 def predict_gate_label(text: str) -> Dict[str, float]:
-    """
-    FUJI/ValueCore から使える gate 用ラッパー。
-    """
+    """FUJI/ValueCore から使える gate 用ラッパー。"""
     prob_allow = 0.5
 
-    # 1) MEM_CLF 優先
     clf = MEM_CLF
     if clf is not None:
         try:
@@ -737,7 +325,6 @@ def predict_gate_label(text: str) -> Dict[str, float]:
         except Exception as e:
             logger.error("[MemoryModel] MEM_CLF.predict_proba error: %s", e)
 
-    # 2) MODEL (runtime optional model) に predict_proba があれば使う
     if MODEL is not None and hasattr(MODEL, "predict_proba"):
         try:
             probs = MODEL.predict_proba([text])[0]
@@ -757,9 +344,6 @@ def predict_gate_label(text: str) -> Dict[str, float]:
 # ストレージ設定
 # ============================
 
-from .config import cfg
-from . import llm_client
-
 MEM_PATH_ENV = os.getenv("VERITAS_MEMORY_PATH")
 if MEM_PATH_ENV:
     MEM_PATH = Path(MEM_PATH_ENV).expanduser()
@@ -771,52 +355,37 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ============================
-# ファイルロック（multi-process 対応）
+# File locking wrapper
 # ============================
+# Tests monkeypatch ``memory.IS_WIN`` / ``memory.fcntl`` to exercise the
+# non-POSIX code path, so the lock wrapper reads from *this* module's globals.
 
 
 @contextmanager
-def locked_memory(path: Path, timeout: float = 5.0) -> Any:
-    """
-    memory.json 用のシンプルな排他ロック。
-    """
-    start = time.time()
-    lockfile: Optional[Path] = None
-    fh = None
+def locked_memory(path: Path, timeout: float = 5.0):
+    """memory.json 用のシンプルな排他ロック。
 
+    Thin wrapper around ``memory_storage.locked_memory`` that reads ``IS_WIN``
+    and ``fcntl`` from *this* module's scope so that tests can monkeypatch
+    them via ``memory.IS_WIN`` / ``memory.fcntl``.
+    """
     if not IS_WIN and fcntl is not None:
-        # POSIX: fcntl によるファイルロック
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fh = open(path, "a+", encoding="utf-8")
-        while True:
-            try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore
-                break
-            except BlockingIOError:
-                if time.time() - start > timeout:
-                    fh.close()
-                    raise TimeoutError(f"failed to acquire lock for {path}")
-                time.sleep(0.02)
-        try:
+        # POSIX path — delegate to storage implementation
+        with _storage_locked_memory(path, timeout=timeout):
             yield
-        finally:
-            try:
-                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)  # type: ignore
-            except Exception as e:
-                logger.error("[MemoryOS] unlock failed: %s", e)
-            fh.close()
     else:
-        # Windows or 非POSIX: .lock ファイルで排他
+        # Non-POSIX / Windows fallback — must be self-contained so
+        # monkeypatching ``memory.fcntl = None`` forces this branch.
         lockfile = path.with_suffix(path.suffix + ".lock")
-        _STALE_LOCK_AGE_SECONDS = 300  # 5 minutes
+        _STALE_LOCK_AGE_SECONDS = 300
         backoff = 0.01
+        start = time.time()
         while True:
             try:
                 fd = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.close(fd)
                 break
             except FileExistsError:
-                # Stale lock detection: remove lockfile older than threshold
                 try:
                     lock_age = time.time() - os.path.getmtime(str(lockfile))
                     if lock_age > _STALE_LOCK_AGE_SECONDS:
@@ -829,8 +398,7 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
                 except OSError as e:
                     logger.debug(
                         "[MemoryOS] lockfile mtime check failed: %s (%s)",
-                        lockfile,
-                        e,
+                        lockfile, e,
                     )
                 if time.time() - start > timeout:
                     raise TimeoutError(f"failed to acquire lock for {path}")
@@ -840,15 +408,14 @@ def locked_memory(path: Path, timeout: float = 5.0) -> Any:
             yield
         finally:
             try:
-                # Use missing_ok=True to avoid TOCTOU race condition
-                # (file could be deleted between exists() check and unlink())
                 lockfile.unlink(missing_ok=True)
             except Exception as e:
                 logger.error("[MemoryOS] lockfile cleanup failed: %s", e)
 
 
-
-
+# ============================
+# Store compat hooks (wired once at import time)
+# ============================
 
 
 def _compat_locked_memory(path: Path, timeout: float = 5.0) -> Any:
@@ -856,158 +423,11 @@ def _compat_locked_memory(path: Path, timeout: float = 5.0) -> Any:
     return locked_memory(path, timeout=timeout)
 
 
-def _install_memory_store_compat_hooks() -> None:
-    """Keep shared MemoryStore behavior patchable via memory.py symbols."""
-
-    def _parse_expires_at_compat(expires_at: Any) -> Optional[str]:
-        return parse_expires_at(expires_at)
-
-    def _normalize_lifecycle_compat(value: Any) -> Any:
-        return _normalize_document_lifecycle_impl(
-            value,
-            default_retention_class=DEFAULT_RETENTION_CLASS,
-            allowed_retention_classes=ALLOWED_RETENTION_CLASSES,
-            parse_expires_at=MemoryStore._parse_expires_at,
-        )
-
-    def _is_record_expired_compat(
-        record: Dict[str, Any],
-        now_ts: Optional[float] = None,
-    ) -> bool:
-        return _is_record_expired_compat_impl(
-            record,
-            parse_expires_at=MemoryStore._parse_expires_at,
-            now_ts=now_ts,
-        )
-
-    def _erase_user_compat(
-        self: MemoryStore,
-        user_id: str,
-        reason: str,
-        actor: str,
-    ) -> Dict[str, Any]:
-        return erase_user_records(
-            store=self,
-            helper_module=_memory_store_module,
-            original_helper=_ORIGINAL_ERASE_USER_DATA,
-            fallback_helper=erase_user_data,
-            user_id=user_id,
-            reason=reason,
-            actor=actor,
-        )
-
-    def _is_record_legal_hold_compat(record: Dict[str, Any]) -> bool:
-        return is_record_legal_hold(record)
-
-    def _should_cascade_delete_semantic_compat(
-        record: Dict[str, Any],
-        user_id: str,
-        erased_keys: set[str],
-    ) -> bool:
-        return should_cascade_delete_semantic(
-            record=record,
-            user_id=user_id,
-            erased_keys=erased_keys,
-        )
-
-    def _recent_compat(
-        self: MemoryStore,
-        user_id: str,
-        limit: int = 20,
-        contains: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        return recent_records_compat(
-            store=self,
-            helper_module=_memory_store_module,
-            original_helper=_ORIGINAL_FILTER_RECENT_RECORDS,
-            fallback_helper=filter_recent_records,
-            user_id=user_id,
-            contains=contains,
-            limit=limit,
-        )
-
-    def _simple_score_compat(self: MemoryStore, query: str, text: str) -> float:
-        return _simple_score_impl(query, text)
-
-    def _search_compat(
-        self: MemoryStore,
-        query: str,
-        k: int = 10,
-        kinds: Optional[List[str]] = None,
-        min_sim: float = 0.0,
-        user_id: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        episodic = search_records_compat(
-            store=self,
-            helper_module=_memory_store_module,
-            original_helper=_ORIGINAL_BUILD_KVS_SEARCH_HITS,
-            fallback_helper=build_kvs_search_hits,
-            query=query,
-            k=k,
-            kinds=kinds,
-            min_sim=min_sim,
-            user_id=user_id,
-        )
-        if episodic:
-            logger.debug(
-                "[MemoryOS][KVS] episodic hits=%d",
-                len(episodic.get("episodic") or []),
-            )
-        return episodic
-
-    def _put_episode_compat(
-        self: MemoryStore,
-        text: str,
-        tags: Optional[List[str]] = None,
-        meta: Optional[Dict[str, Any]] = None,
-        **kwargs: Any,
-    ) -> str:
-        return put_episode_record(
-            store=self,
-            text=text,
-            tags=tags,
-            meta=meta,
-            mem_vec=_get_mem_vec(),
-            logger=logger,
-            time_module=time,
-            **kwargs,
-        )
-
-    def _summarize_for_planner_compat(
-        self: MemoryStore,
-        user_id: str,
-        query: str,
-        limit: int = 8,
-    ) -> str:
-        return summarize_records_for_planner(
-            store=self,
-            user_id=user_id,
-            query=query,
-            limit=limit,
-            build_summary=build_planner_summary,
-        )
-
-    _memory_store_module.locked_memory = _compat_locked_memory
-    _memory_store_module.erase_user_data = erase_user_data
-    _memory_store_module.filter_recent_records = filter_recent_records
-    _memory_store_module.build_kvs_search_hits = build_kvs_search_hits
-    MemoryStore._parse_expires_at = staticmethod(_parse_expires_at_compat)
-    MemoryStore._normalize_lifecycle = staticmethod(_normalize_lifecycle_compat)
-    MemoryStore._is_record_expired = staticmethod(_is_record_expired_compat)
-    MemoryStore.erase_user = _erase_user_compat
-    MemoryStore._is_record_legal_hold = staticmethod(_is_record_legal_hold_compat)
-    MemoryStore._should_cascade_delete_semantic = staticmethod(
-        _should_cascade_delete_semantic_compat
-    )
-    MemoryStore.recent = _recent_compat
-    MemoryStore._simple_score = _simple_score_compat
-    MemoryStore.search = _search_compat
-    MemoryStore.put_episode = _put_episode_compat
-    MemoryStore.summarize_for_planner = _summarize_for_planner_compat
-
-
-_install_memory_store_compat_hooks()
+install_memory_store_compat_hooks(
+    locked_memory_fn=_compat_locked_memory,
+    get_mem_vec_fn=_get_mem_vec,
+    memory_module=sys.modules[__name__],
+)
 
 
 # ============================
@@ -1052,6 +472,11 @@ def get_evidence_for_query(
         user_id=user_id,
         top_k=top_k,
     )
+
+
+# ============================
+# _LazyMemoryStore + MEM global
+# ============================
 
 
 class _LazyMemoryStore:
@@ -1105,12 +530,9 @@ def _load_memory_store() -> "MemoryStore":
 # ==== グローバル MEM (遅延初期化) ====
 MEM = _LazyMemoryStore(_load_memory_store)
 
-# ★ 修正: builtins.MEM への代入を削除。
-# 他モジュールは from veritas_os.core.memory import MEM で明示的にインポートしてください。
-
 
 # ============================
-# 関数 API（改善版）
+# 関数 API
 # ============================
 
 
@@ -1125,22 +547,11 @@ def add(
 ) -> Dict[str, Any]:
     """
     MemoryOS に「1件のテキスト」を追加するためのユーティリティ。
-
-    例: import_pdf_to_memory.py からの呼び出しを想定
-
-        memory.add(
-            user_id="fujishita",
-            text="PDFから切り出したチャンク",
-            kind="doc",
-            source_label="VERITAS_Zenodo_JP",
-            meta={"page": 3},
-        )
     """
     if not text or not text.strip():
         raise ValueError("[MemoryOS.add] text is empty")
 
     entry_meta: Dict[str, Any] = dict(meta or {})
-    # user_id / source_label も meta に刻んでおく
     entry_meta.setdefault("user_id", user_id)
     if source_label is not None:
         entry_meta.setdefault("source_label", source_label)
@@ -1152,23 +563,15 @@ def add(
         "meta": entry_meta,
     }
 
-    # ---- 1) KVS に保存 ----
     key = f"{kind}_{int(time.time())}_{uuid4().hex[:8]}"
     ok = MEM.put(user_id, key, record)
     if not ok:
         logger.error("[MemoryOS.add] MEM.put failed")
 
-    # ---- 2) ベクトルインデックスにも追加（失敗しても致命的ではない） ----
-    # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
     _vec = _get_mem_vec()
     if _vec is not None:
         try:
-            _vec.add(
-                kind=kind,
-                text=text,
-                tags=tags or [],
-                meta=entry_meta,
-            )
+            _vec.add(kind=kind, text=text, tags=tags or [], meta=entry_meta)
         except (AttributeError, TypeError, ValueError, RuntimeError) as e:
             logger.warning("[MemoryOS.add] MEM_VEC.add error: %s", e)
 
@@ -1183,14 +586,12 @@ def put(*args, **kwargs) -> bool:
     1) KVS: put(user_id, key, value)
     2) ベクトル: put(kind, {"text": ..., "tags": [...], "meta": {...}})
     """
-    # user_id + key/value kwargs
     if len(args) == 1 and "key" in kwargs:
         user_id = args[0]
         key = kwargs["key"]
         value = kwargs.get("value")
         return MEM.put(user_id, key, value)
 
-    # kind + dict (ベクトルモード)
     if len(args) == 2 and isinstance(args[1], dict):
         kind = str(args[0] or "semantic")
         doc = dict(args[1])
@@ -1201,8 +602,6 @@ def put(*args, **kwargs) -> bool:
         if not text and not doc:
             return False
 
-        # ベクトルインデックスに追加
-        # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
         _vec = _get_mem_vec()
         if _vec is not None:
             try:
@@ -1213,17 +612,14 @@ def put(*args, **kwargs) -> bool:
             except (AttributeError, TypeError, ValueError, RuntimeError) as e:
                 logger.warning("[MemoryOS] MEM_VEC.add error (fallback to KVS): %s", e)
 
-        # KVSにも保存
         user_id = meta.get("user_id", kind)
         key = f"{kind}_{int(time.time())}"
         return MEM.put(user_id, key, doc)
 
-    # 完全位置引数 (KVSモード)
     if len(args) >= 3:
         user_id, key, value = args[0], args[1], args[2]
         return MEM.put(user_id, key, value)
 
-    # kwargs 指定
     if "user_id" in kwargs and "key" in kwargs:
         return MEM.put(kwargs["user_id"], kwargs["key"], kwargs.get("value"))
 
@@ -1258,10 +654,7 @@ def recent(
 
 
 def _dedup_hits(hits: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
-    """
-    ヒット結果を (text, user_id) 単位で去重しつつ k 件までに制限する。
-    順序は元のリストの順を維持する。
-    """
+    """ヒット結果を (text, user_id) 単位で去重しつつ k 件までに制限する。"""
     return _dedup_hits_impl(hits, k)
 
 
@@ -1279,23 +672,11 @@ def search(
     優先順:
     1) MEM_VEC があればベクトル検索
     2) エラーまたは0件 → KVS simple search にフォールバック
-
-    戻り値: list[dict]
     """
-
-    # ===========================
-    # 1) ベクトル検索（優先）
-    # ===========================
-    # ★ 修正 (H-10): ローカル変数スナップショットで TOCTOU を防止
     _vec = _get_mem_vec()
     if _vec is not None:
         try:
-            raw = _vec.search(
-                query=query,
-                k=k,
-                kinds=kinds,
-                min_sim=min_sim,
-            )
+            raw = _vec.search(query=query, k=k, kinds=kinds, min_sim=min_sim)
             candidates = collect_candidate_hits(raw)
             if candidates:
                 filtered = filter_hits_for_user(candidates, user_id)
@@ -1303,8 +684,9 @@ def search(
                     candidates = filtered
                 unique = _dedup_hits(candidates, k)
                 logger.info(
-                    f"[MemoryOS] Vector search returned "
-                    f"{len(unique)} unique hits (raw={len(candidates)})"
+                    "[MemoryOS] Vector search returned "
+                    "%d unique hits (raw=%d)",
+                    len(unique), len(candidates),
                 )
                 return unique
 
@@ -1313,15 +695,15 @@ def search(
             )
 
         except TypeError:
-            # 旧シグネチャへのフォールバック
             try:
                 raw = _vec.search(query, k=k)  # type: ignore[call-arg]
                 if isinstance(raw, list) and raw:
                     hits = [h for h in raw if isinstance(h, dict)]
                     unique = _dedup_hits(hits, k)
                     logger.info(
-                        f"[MemoryOS] Vector search (old sig) returned "
-                        f"{len(unique)} unique hits (raw={len(hits)})"
+                        "[MemoryOS] Vector search (old sig) returned "
+                        "%d unique hits (raw=%d)",
+                        len(unique), len(hits),
                     )
                     return unique
                 logger.info(
@@ -1333,16 +715,9 @@ def search(
         except (AttributeError, ValueError, RuntimeError) as e:
             logger.warning("[MemoryOS] MEM_VEC.search error: %s", e)
 
-    # ===========================
-    # 2) フォールバック: KVS simple search
-    # ===========================
     res = MEM.search(
-        query=query,
-        k=k,
-        kinds=kinds,
-        min_sim=min_sim,
-        user_id=user_id,
-        **kwargs,
+        query=query, k=k, kinds=kinds, min_sim=min_sim,
+        user_id=user_id, **kwargs,
     )
     hits = normalize_store_hits(res)
 
@@ -1351,8 +726,9 @@ def search(
 
     unique = _dedup_hits(hits, k)
     logger.info(
-        f"[MemoryOS] KVS search returned "
-        f"{len(unique)} unique hits (raw={len(hits)})"
+        "[MemoryOS] KVS search returned "
+        "%d unique hits (raw=%d)",
+        len(unique), len(hits),
     )
     return unique
 
@@ -1390,90 +766,22 @@ def distill_memory_for_user(
     戻り値:
         保存した semantic メモリの dict（失敗時は None）
     """
-    # 1) memory.json から対象ユーザーのレコードを取得
-    try:
-        all_records = MEM.list_all(user_id=user_id)
-    except (OSError, RuntimeError, ValueError, TypeError) as e:
-        logger.error("[MemoryDistill] list_all failed for user=%s: %s", user_id, e)
-        return None
-
-    episodic = collect_episodic_records(
-        all_records,
+    return _distill_impl(
+        user_id,
+        max_items=max_items,
         min_text_len=min_text_len,
         tags=tags,
+        model=model,
+        mem_store=MEM,
+        llm_client_module=llm_client,
+        put_fn=put,
     )
-
-    if not episodic:
-        logger.info("[MemoryDistill] no episodic records for user=%s", user_id)
-        return None
-
-    target_eps = episodic[:max_items]
-
-    # 2) プロンプト生成
-    prompt = _build_distill_prompt(user_id, target_eps)
-    system_msg = "You are VERITAS Memory Distill module."
-
-    # 3) LLM コール（唯一の境界: llm_client.chat_completion）
-    try:
-        chat_fn = getattr(llm_client, "chat_completion", None)
-        if not callable(chat_fn):
-            logger.error("[MemoryDistill] llm_client.chat_completion not available")
-            return None
-        kwargs: Dict[str, Any] = {"max_tokens": 1024}
-        if model:
-            kwargs["model"] = model
-
-        resp = chat_fn(
-            system_prompt=system_msg,
-            user_prompt=prompt,
-            **kwargs,
-        )
-
-    except TypeError as e:
-        logger.error("[MemoryDistill] LLM call TypeError: %s", e)
-        return None
-    except (RuntimeError, ValueError, OSError) as e:
-        logger.error("[MemoryDistill] LLM call failed: %s", e)
-        return None
-
-    # 4) レスポンスからテキストを取り出す
-    summary_text = extract_summary_text(resp)
-    if not summary_text:
-        logger.error("[MemoryDistill] empty summary_text from LLM")
-        return None
-
-    # 5) semantic メモリとして永続化
-    doc = build_semantic_memory_doc(
-        user_id=user_id,
-        summary_text=summary_text,
-        episodes=target_eps,
-        tags=tags,
-    )
-
-    ok = put("semantic", doc)
-    if not ok:
-        logger.error("[MemoryDistill] failed to save semantic memory")
-        return None
-
-    logger.info(
-        f"[MemoryDistill] semantic note saved for user={user_id} "
-        f"(items={len(target_eps)}, chars={len(summary_text)})"
-    )
-    return doc
 
 
 def rebuild_vector_index() -> None:
     """
     既存のmemory.jsonからベクトルインデックスを再構築
-
-    使用例:
-        from veritas_os.core import memory
-        memory.rebuild_vector_index()
     """
-    # NOTE:
-    #   rebuild は明示運用コマンドのため、MEM_VEC が未初期化(None)なら
-    #   ここでは暗黙初期化せずに即 return する。
-    #   これにより「MEM_VEC が None のときは何もしない」という既存契約を維持する。
     with _mem_vec_lock:
         _vec = MEM_VEC
 
@@ -1489,15 +797,11 @@ def rebuild_vector_index() -> None:
 
     logger.info("[MemoryOS] Starting vector index rebuild...")
 
-    # memory.jsonから全データを読み込み
     all_data = MEM.list_all()
-
-    # ベクトル化可能なドキュメントを抽出
     documents = build_vector_rebuild_documents(all_data)
 
     logger.info("[MemoryOS] Found %d documents to index", len(documents))
 
-    # インデックス再構築
     _vec.rebuild_index(documents)  # type: ignore[arg-type]
 
     logger.info("[MemoryOS] Vector index rebuild complete")

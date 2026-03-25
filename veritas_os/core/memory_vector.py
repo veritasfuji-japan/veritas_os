@@ -1,9 +1,15 @@
 # veritas_os/core/memory_vector.py
 """
-VectorMemory - 組み込みベクトルメモリ実装
+VectorMemory - built-in vector memory implementation.
 
-sentence-transformers を使用してテキストの埋め込みを生成し、
-コサイン類似度で検索を行う。
+Provides the ``VectorMemory`` class which uses sentence-transformers for
+embedding generation and cosine similarity for semantic search.  The class
+is thread-safe (RLock protected) and persists its index as JSON.
+
+The singleton lifecycle (``MEM_VEC``, ``_get_mem_vec``) and prediction
+helpers (``predict_gate_label``, ``predict_decision_status``) remain in
+``memory.py`` because tests frequently monkeypatch those module-level
+symbols.  This module is purely the data-structure / algorithm layer.
 """
 
 from __future__ import annotations
@@ -12,43 +18,30 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
 import json
-import os
 import time
 import threading
 import base64
 import logging
 
 from .config import capability_cfg
+from .memory_security import (
+    emit_legacy_pickle_runtime_blocked,
+    is_explicitly_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
-PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
 
-
+# Module-level wrappers used by VectorMemory methods.
+# Tests that import VectorMemory from ``memory.py`` can patch
+# ``memory._is_explicitly_enabled`` — memory.py re-assigns
+# ``memory_vector._is_explicitly_enabled`` to keep the override visible.
 def _is_explicitly_enabled(env_key: str) -> bool:
-    """Return True when the capability env var is explicitly set to a truthy value."""
-    value = os.getenv(env_key)
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    return is_explicitly_enabled(env_key)
 
 
 def _emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
-    """Log a security error for legacy pickle artifacts blocked at runtime.
-
-    Pickle/joblib deserialization is permanently removed due to arbitrary code
-    execution (RCE) risk.  Use the offline migration CLI to convert legacy
-    artifacts:  ``python -m veritas_os.scripts.migrate_pickle``
-    """
-    logger.error(
-        "[SECURITY] Legacy %s pickle detected at %s. "
-        "Runtime pickle/joblib loading is permanently disabled (RCE risk). "
-        "Migrate artifacts offline: python -m veritas_os.scripts.migrate_pickle  "
-        "See %s for details.",
-        artifact_name,
-        path,
-        PICKLE_MIGRATION_GUIDE_PATH,
-    )
+    emit_legacy_pickle_runtime_blocked(path=path, artifact_name=artifact_name)
 
 
 class VectorMemory:
@@ -94,7 +87,10 @@ class VectorMemory:
             if self.model is not None:
                 return
 
-            if not capability_cfg.enable_memory_sentence_transformers:
+            # Resolve config at call time so module reloads are visible.
+            from .config import capability_cfg as _cfg
+
+            if not _cfg.enable_memory_sentence_transformers:
                 logger.info(
                     "[VectorMemory] sentence-transformers disabled by "
                     "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS"
@@ -161,7 +157,8 @@ class VectorMemory:
                         self.embeddings = None
 
                 logger.info(
-                    f"[VectorMemory] Loaded JSON index: {len(self.documents)} documents"
+                    "[VectorMemory] Loaded JSON index: %d documents",
+                    len(self.documents),
                 )
                 return
 
@@ -253,8 +250,6 @@ class VectorMemory:
             return False
 
         # GAP-05 (Art. 10): Data quality validation at ingestion
-        # Log quality issues for audit trail but do not block — memory
-        # operations may involve short text and other acceptable edge cases.
         try:
             from veritas_os.core.eu_ai_act_compliance_module import validate_data_quality
 
@@ -396,8 +391,10 @@ class VectorMemory:
             top_results = results[:k]
 
             logger.info(
-                f"[VectorMemory] Search '{query[:50]}...' "
-                f"found {len(top_results)}/{len(results)} hits"
+                "[VectorMemory] Search '%s...' found %d/%d hits",
+                query[:50],
+                len(top_results),
+                len(results),
             )
 
             return top_results
@@ -413,9 +410,9 @@ class VectorMemory:
             import numpy as np
 
             # ベクトルを正規化
-            vec_norm = vec / (np.linalg.norm(vec) + 1e-7)
+            vec_norm = vec / (np.linalg.norm(vec) + 1e-10)
             matrix_norm = matrix / (
-                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-7
+                np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
             )
 
             # 内積 = コサイン類似度
@@ -441,26 +438,44 @@ class VectorMemory:
             return
 
         logger.info(
-            f"[VectorMemory] Rebuilding index for {len(documents)} documents..."
+            "[VectorMemory] Rebuilding index for %d documents...",
+            len(documents),
         )
 
-        with self._lock:
-            self.documents = []
-            self.embeddings = None
+        # ★ 競合修正: ロック外で全埋め込みを事前計算し、
+        # ロック内でアトミックに差し替える
+        import numpy as np
 
+        new_docs = []
+        embeddings_list = []
+        counter = 0
         for doc in documents:
             text = doc.get("text", "")
-            if not text:
+            if not text or not text.strip():
                 continue
+            embedding = self.model.encode([text])[0]
+            counter += 1
+            new_doc = {
+                "id": f"{doc.get('kind', 'semantic')}_{counter}_{int(time.time())}",
+                "kind": doc.get("kind", "semantic"),
+                "text": text,
+                "tags": doc.get("tags") or [],
+                "meta": doc.get("meta") or {},
+                "ts": time.time(),
+            }
+            new_docs.append(new_doc)
+            embeddings_list.append(embedding)
 
-            self.add(
-                kind=doc.get("kind", "semantic"),
-                text=text,
-                tags=doc.get("tags"),
-                meta=doc.get("meta"),
-            )
+        with self._lock:
+            self.documents = new_docs
+            self._id_counter = counter
+            if embeddings_list:
+                self.embeddings = np.vstack([e.reshape(1, -1) for e in embeddings_list])
+            else:
+                self.embeddings = None
 
         self._save_index()
         logger.info(
-            f"[VectorMemory] Index rebuilt: {len(self.documents)} documents indexed"
+            "[VectorMemory] Index rebuilt: %d documents indexed",
+            len(self.documents),
         )
