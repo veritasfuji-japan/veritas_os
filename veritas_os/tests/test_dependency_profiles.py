@@ -16,9 +16,11 @@ if sys.version_info >= (3, 11):
     import tomllib
 else:
     try:
-        import tomllib  # type: ignore[import]
-    except ModuleNotFoundError:
         import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:  # pragma: no cover
+        raise ImportError(
+            "Python <3.11 requires the 'tomli' package: pip install tomli"
+        )
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PYPROJECT = _ROOT / "pyproject.toml"
