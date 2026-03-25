@@ -1,4 +1,11 @@
-"""Compliance report engine for enterprise-grade audit exports."""
+"""Compliance report engine for enterprise-grade audit exports.
+
+Generates reproducible, cryptographically signed compliance reports that
+integrate decision logs, replay verification, trustlog integrity checks,
+and governance policy context.  Every report carries an ``evidence_completeness``
+score and ``input_sources`` block so auditors can trace each claim to its
+source artifact.
+"""
 
 from __future__ import annotations
 
@@ -25,7 +32,7 @@ from veritas_os.security.signing import sign_payload_hash
 
 logger = logging.getLogger(__name__)
 
-REPORT_SCHEMA_VERSION = "1.1.0"
+REPORT_SCHEMA_VERSION = "1.2.0"
 
 REPORT_DIR = (Path(LOG_DIR) / "compliance_reports").resolve()
 
@@ -82,6 +89,19 @@ def _load_governance_context() -> Dict[str, Any]:
 
 _DECISION_REQUIRED_FIELDS = ("request_id",)
 
+_KNOWN_DECISION_STATUSES = frozenset(
+    {"allow", "reject", "rejected", "review", "block", "escalate"}
+)
+
+
+def _validate_timestamp(raw: str) -> Optional[str]:
+    """Return an issue string if *raw* is not a valid ISO-8601 timestamp, else ``None``."""
+    try:
+        datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return "invalid_timestamp_format"
+    return None
+
 
 def _validate_decision_record(rec: Dict[str, Any]) -> List[str]:
     """Validate a decision record and return a list of issues (empty = valid).
@@ -113,7 +133,22 @@ def _validate_decision_record(rec: Dict[str, Any]) -> List[str]:
             except (TypeError, ValueError):
                 issues.append("risk_not_numeric")
 
+    # Validate timestamp when present.
+    ts_raw = rec.get("ts") or rec.get("created_at")
+    if ts_raw is not None:
+        ts_issue = _validate_timestamp(str(ts_raw))
+        if ts_issue:
+            issues.append(ts_issue)
+
+    # Warn on unknown decision_status values.
+    status = rec.get("decision_status")
+    if status is not None and status not in _KNOWN_DECISION_STATUSES:
+        issues.append(f"unknown_decision_status:{status}")
+
     return issues
+
+
+_REPLAY_REQUIRED_FIELDS = ("match", "diff")
 
 
 def _validate_replay_payload(payload: Any) -> Dict[str, Any]:
@@ -124,6 +159,15 @@ def _validate_replay_payload(payload: Any) -> Dict[str, Any]:
     """
     if not isinstance(payload, dict):
         return {"available": False, "valid": False, "reason": "invalid_type"}
+
+    # Check required fields.
+    missing = [f for f in _REPLAY_REQUIRED_FIELDS if f not in payload]
+    if missing:
+        return {
+            "available": True,
+            "valid": False,
+            "reason": f"missing_required_fields:{','.join(missing)}",
+        }
 
     result: Dict[str, Any] = {
         "available": True,
@@ -171,11 +215,14 @@ def _iter_decision_logs() -> Iterable[Dict[str, Any]]:
     for path in sorted(log_dir.glob("decide_*.json"), reverse=True):
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Skipping unreadable decision log %s: %s", path, exc)
             continue
         if isinstance(payload, dict):
             payload["_source_path"] = str(path)
             records.append(payload)
+        else:
+            logger.warning("Skipping non-dict decision log %s", path)
     return records
 
 
@@ -314,7 +361,13 @@ def _finalize_report(
         "public_key_path": str(PUBLIC_KEY_PATH),
     }
 
-    report_id = f"{report_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    # Derive report_id from the (possibly injected) timestamp so that file
+    # names are deterministic when generated_at is supplied.
+    try:
+        ts_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        ts_dt = datetime.now(timezone.utc)
+    report_id = f"{report_type}_{ts_dt.strftime('%Y%m%d_%H%M%S')}"
     json_path = REPORT_DIR / f"{report_id}.json"
     pdf_path = REPORT_DIR / f"{report_id}.pdf"
     persist_report_json(json_path, body)
@@ -327,10 +380,56 @@ def _finalize_report(
     return ReportArtifact(report=body, json_path=json_path, pdf_path=pdf_path)
 
 
+def _compute_evidence_completeness(
+    rec: Dict[str, Any],
+    integrity: Dict[str, Any],
+    gov_ctx: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Score evidence completeness (0.0–1.0) with per-component breakdown.
+
+    Each component contributes equally.  A missing or failed component
+    scores 0; a degraded component scores 0.5.
+    """
+    components: Dict[str, float] = {}
+
+    # Decision record basics
+    gate = rec.get("gate") if isinstance(rec.get("gate"), dict) else None
+    fuji = rec.get("fuji") if isinstance(rec.get("fuji"), dict) else None
+    components["gate"] = 1.0 if gate is not None else 0.0
+    components["fuji"] = 1.0 if fuji is not None else 0.0
+    components["timestamp"] = 1.0 if (rec.get("ts") or rec.get("created_at")) else 0.0
+
+    # Replay
+    replay = integrity.get("replay_verification", {})
+    if replay.get("available") and replay.get("valid", True):
+        components["replay"] = 1.0
+    elif replay.get("available"):
+        components["replay"] = 0.5
+    else:
+        components["replay"] = 0.0
+
+    # Trustlog
+    sig_ok = integrity.get("signature_verification", {}).get("ok", False)
+    chain_ok = integrity.get("hash_chain_integrity", {}).get("ok", False)
+    components["trustlog_signature"] = 1.0 if sig_ok else 0.0
+    components["hash_chain"] = 1.0 if chain_ok else 0.0
+
+    # Governance
+    components["governance_policy"] = 1.0 if gov_ctx.get("policy_available") else 0.0
+
+    total = sum(components.values()) / len(components) if components else 0.0
+    return {
+        "score": round(total, 4),
+        "components": components,
+    }
+
+
 def _build_compliance_narrative(
     rec: Dict[str, Any],
     integrity: Dict[str, Any],
     gov_ctx: Dict[str, Any],
+    *,
+    validation_issues: Optional[List[str]] = None,
 ) -> str:
     """Build a human-readable narrative explaining the compliance determination."""
     parts: List[str] = []
@@ -351,6 +450,14 @@ def _build_compliance_narrative(
         parts.append(
             f"Risk thresholds from governance policy "
             f"'{gov_ctx.get('policy_version', 'unknown')}' were applied."
+        )
+
+    # Fuji violations
+    fuji = rec.get("fuji") if isinstance(rec.get("fuji"), dict) else {}
+    violations = fuji.get("violations", [])
+    if violations:
+        parts.append(
+            f"Content safety violations detected: {', '.join(str(v) for v in violations)}."
         )
 
     replay = integrity.get("replay_verification", {})
@@ -375,6 +482,12 @@ def _build_compliance_narrative(
             issues.append("hash chain integrity broken")
         parts.append(f"Integrity issues detected: {', '.join(issues)}.")
 
+    # Validation issues
+    if validation_issues:
+        parts.append(
+            f"Validation issues found: {', '.join(validation_issues)}. Manual review required."
+        )
+
     return " ".join(parts)
 
 
@@ -393,12 +506,16 @@ def generate_eu_ai_act_report(decision_id: str) -> Dict[str, Any]:
     integrity_section = _build_integrity_section(
         str(rec.get("request_id") or decision_id),
     )
-    narrative = _build_compliance_narrative(rec, integrity_section, gov_ctx)
+    validation_issues = decision_section.get("validation_issues", [])
+    narrative = _build_compliance_narrative(
+        rec, integrity_section, gov_ctx, validation_issues=validation_issues,
+    )
+    evidence = _compute_evidence_completeness(rec, integrity_section, gov_ctx)
 
     compliance_status = (
         "pass" if rec.get("decision_status") != "rejected" else "review_required"
     )
-    if decision_section.get("validation_issues"):
+    if validation_issues:
         compliance_status = "review_required"
 
     payload = {
@@ -410,6 +527,7 @@ def generate_eu_ai_act_report(decision_id: str) -> Dict[str, Any]:
             "policy_available": gov_ctx.get("policy_available"),
             "policy_updated_at": gov_ctx.get("policy_updated_at", ""),
         },
+        "evidence_completeness": evidence,
         "summary": {
             "regulation": "EU AI Act",
             "compliance_status": compliance_status,
@@ -431,6 +549,10 @@ def generate_internal_governance_report(
     start_raw, end_raw = date_range
     start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
     end = datetime.fromisoformat(end_raw.replace("Z", "+00:00"))
+    if start > end:
+        raise ValueError(
+            f"date_range start ({start_raw}) must not be after end ({end_raw})"
+        )
 
     gov_ctx = _load_governance_context()
 

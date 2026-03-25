@@ -467,13 +467,14 @@ class TestValidateReplayPayload:
         assert result["reason"] == "invalid_type"
 
     def test_preserves_schema_version(self):
-        payload = {"match": False, "schema_version": "1.0.0"}
+        payload = {"match": False, "diff": {}, "schema_version": "1.0.0"}
         result = report_engine._validate_replay_payload(payload)
         assert result["schema_version"] == "1.0.0"
 
     def test_preserves_severity_and_divergence(self):
         payload = {
             "match": False,
+            "diff": {},
             "severity": "critical",
             "divergence_level": "critical_divergence",
             "audit_summary": "mismatch found",
@@ -917,3 +918,426 @@ class TestBuildDecisionSectionWithGovernance:
         section = report_engine._build_decision_section(rec)
         assert "missing_required_field:request_id" in section["validation_issues"]
         assert "invalid_gate_type:expected_dict" in section["validation_issues"]
+
+
+# ---------------------------------------------------------------------------
+# ▼ Enhanced tests: reproducible evidence generation, schema strictness,
+#   deterministic filenames, evidence completeness, narrative coverage,
+#   replay required-field validation, path traversal, date-range ordering
+# ---------------------------------------------------------------------------
+
+
+class TestSafeFilenameId:
+    """Verify _safe_filename_id sanitises dangerous characters."""
+
+    def test_strips_path_traversal_characters(self):
+        assert ".." not in report_engine._safe_filename_id("../../etc/passwd")
+        assert "/" not in report_engine._safe_filename_id("foo/bar")
+
+    def test_truncates_long_ids(self):
+        long_id = "a" * 300
+        assert len(report_engine._safe_filename_id(long_id)) == 128
+
+    def test_preserves_safe_characters(self):
+        assert report_engine._safe_filename_id("dec-001_abc") == "dec-001_abc"
+
+
+class TestFindDecision:
+    """Verify _find_decision matches on both request_id and decision_id."""
+
+    def test_matches_by_request_id(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "req-match", risk=0.1)
+
+        assert report_engine._find_decision("req-match") is not None
+
+    def test_matches_by_decision_id(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        payload = {
+            "request_id": "req-x",
+            "decision_id": "did-y",
+            "decision_status": "allow",
+            "ts": "2026-01-01T12:00:00Z",
+            "gate": {"risk": 0.1},
+            "fuji": {},
+        }
+        (log_dir / "decide_did.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+
+        assert report_engine._find_decision("did-y") is not None
+        assert report_engine._find_decision("req-x") is not None
+        assert report_engine._find_decision("nonexistent") is None
+
+
+class TestValidateTimestamp:
+    """Test _validate_timestamp helper."""
+
+    def test_valid_iso8601(self):
+        assert report_engine._validate_timestamp("2026-01-01T12:00:00Z") is None
+
+    def test_valid_with_offset(self):
+        assert report_engine._validate_timestamp("2026-01-01T12:00:00+09:00") is None
+
+    def test_invalid_format(self):
+        assert report_engine._validate_timestamp("not-a-date") == "invalid_timestamp_format"
+
+    def test_empty_string(self):
+        assert report_engine._validate_timestamp("") == "invalid_timestamp_format"
+
+
+class TestDecisionRecordTimestampValidation:
+    """Verify _validate_decision_record catches bad timestamps."""
+
+    def test_invalid_timestamp_reported(self):
+        rec = {
+            "request_id": "req-1",
+            "ts": "not-a-timestamp",
+        }
+        issues = report_engine._validate_decision_record(rec)
+        assert "invalid_timestamp_format" in issues
+
+    def test_valid_timestamp_no_issue(self):
+        rec = {
+            "request_id": "req-1",
+            "ts": "2026-01-01T12:00:00Z",
+            "gate": {"risk": 0.5},
+            "fuji": {},
+        }
+        issues = report_engine._validate_decision_record(rec)
+        assert "invalid_timestamp_format" not in issues
+
+    def test_unknown_decision_status_flagged(self):
+        rec = {"request_id": "req-1", "decision_status": "banana"}
+        issues = report_engine._validate_decision_record(rec)
+        assert any("unknown_decision_status" in i for i in issues)
+
+    def test_known_decision_status_ok(self):
+        for status in ("allow", "reject", "review", "block"):
+            rec = {"request_id": "req-1", "decision_status": status}
+            issues = report_engine._validate_decision_record(rec)
+            assert not any("unknown_decision_status" in i for i in issues)
+
+
+class TestReplayRequiredFields:
+    """Verify replay validation rejects payloads missing required fields."""
+
+    def test_missing_match_field(self):
+        result = report_engine._validate_replay_payload({"diff": {}})
+        assert result["valid"] is False
+        assert "missing_required_fields" in result["reason"]
+        assert "match" in result["reason"]
+
+    def test_missing_diff_field(self):
+        result = report_engine._validate_replay_payload({"match": True})
+        assert result["valid"] is False
+        assert "diff" in result["reason"]
+
+    def test_missing_both_fields(self):
+        result = report_engine._validate_replay_payload({})
+        assert result["valid"] is False
+        assert "match" in result["reason"]
+        assert "diff" in result["reason"]
+
+    def test_replay_with_missing_required_returns_degraded_in_latest(
+        self, monkeypatch, tmp_path
+    ):
+        """_latest_replay_result returns unavailable when replay lacks required fields."""
+        _, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        replay_dir.joinpath("replay_dec-bad_1.json").write_text(
+            json.dumps({"some_field": "value"}), encoding="utf-8"
+        )
+
+        result = report_engine._latest_replay_result("dec-bad")
+        assert result["available"] is False
+        assert "missing_required_fields" in result["result"]
+
+
+class TestDeterministicFilenames:
+    """Verify report filenames are derived from the injected timestamp."""
+
+    def test_filename_matches_injected_timestamp(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        fixed_ts = "2026-06-15T08:30:00Z"
+        artifact = report_engine._finalize_report(
+            "eu_ai_act",
+            {"scope": "eu_ai_act", "summary": {}},
+            generated_at=fixed_ts,
+        )
+
+        assert "20260615_083000" in artifact.json_path.name
+        assert "20260615_083000" in artifact.pdf_path.name
+
+    def test_two_calls_same_timestamp_same_filenames(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        fixed_ts = "2026-03-01T00:00:00Z"
+        a1 = report_engine._finalize_report(
+            "test", {"scope": "test"}, generated_at=fixed_ts,
+        )
+        a2 = report_engine._finalize_report(
+            "test", {"scope": "test"}, generated_at=fixed_ts,
+        )
+
+        assert a1.json_path.name == a2.json_path.name
+
+
+class TestEvidenceCompleteness:
+    """Test _compute_evidence_completeness scoring."""
+
+    def test_full_evidence_scores_1(self):
+        rec = {
+            "gate": {"risk": 0.3},
+            "fuji": {"status": "allow"},
+            "ts": "2026-01-01T12:00:00Z",
+        }
+        integrity = {
+            "replay_verification": {"available": True, "valid": True, "match": True},
+            "signature_verification": {"ok": True},
+            "hash_chain_integrity": {"ok": True},
+        }
+        gov_ctx = {"policy_available": True}
+
+        result = report_engine._compute_evidence_completeness(rec, integrity, gov_ctx)
+        assert result["score"] == 1.0
+        assert all(v == 1.0 for v in result["components"].values())
+
+    def test_missing_everything_scores_0(self):
+        rec = {}
+        integrity = {
+            "replay_verification": {"available": False},
+            "signature_verification": {"ok": False},
+            "hash_chain_integrity": {"ok": False},
+        }
+        gov_ctx = {"policy_available": False}
+
+        result = report_engine._compute_evidence_completeness(rec, integrity, gov_ctx)
+        assert result["score"] == 0.0
+
+    def test_partial_evidence_scores_between_0_and_1(self):
+        rec = {
+            "gate": {"risk": 0.2},
+            "ts": "2026-01-01T12:00:00Z",
+        }
+        integrity = {
+            "replay_verification": {"available": False},
+            "signature_verification": {"ok": True},
+            "hash_chain_integrity": {"ok": True},
+        }
+        gov_ctx = {"policy_available": False}
+
+        result = report_engine._compute_evidence_completeness(rec, integrity, gov_ctx)
+        assert 0.0 < result["score"] < 1.0
+        assert result["components"]["fuji"] == 0.0
+        assert result["components"]["gate"] == 1.0
+
+    def test_degraded_replay_scores_half(self):
+        rec = {"gate": {}, "fuji": {}, "ts": "2026-01-01T12:00:00Z"}
+        integrity = {
+            "replay_verification": {"available": True, "valid": False},
+            "signature_verification": {"ok": True},
+            "hash_chain_integrity": {"ok": True},
+        }
+        gov_ctx = {"policy_available": True}
+
+        result = report_engine._compute_evidence_completeness(rec, integrity, gov_ctx)
+        assert result["components"]["replay"] == 0.5
+
+    def test_eu_report_includes_evidence_completeness(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.5)
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert result["ok"] is True
+        assert "evidence_completeness" in result
+        assert "score" in result["evidence_completeness"]
+        assert "components" in result["evidence_completeness"]
+        assert 0.0 <= result["evidence_completeness"]["score"] <= 1.0
+
+
+class TestNarrativeEnhancements:
+    """Test enhanced narrative content."""
+
+    def test_narrative_includes_validation_issues(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_bad.json").write_text(
+            json.dumps({
+                "request_id": "dec-bad",
+                "decision_status": "allow",
+                "ts": "2026-01-01T12:00:00Z",
+                "gate": "not-a-dict",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-bad")
+        narrative = result["summary"]["narrative"]
+        assert "Validation issues found" in narrative
+        assert "Manual review required" in narrative
+
+    def test_narrative_includes_fuji_violations(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_violations.json").write_text(
+            json.dumps({
+                "request_id": "dec-viol",
+                "decision_status": "reject",
+                "ts": "2026-01-01T12:00:00Z",
+                "gate": {"risk": 0.9},
+                "fuji": {
+                    "status": "reject",
+                    "violations": ["pii_detected", "self_harm_content"],
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-viol")
+        narrative = result["summary"]["narrative"]
+        assert "Content safety violations detected" in narrative
+        assert "pii_detected" in narrative
+
+    def test_narrative_no_validation_issues_when_clean(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_clean.json", "dec-clean", risk=0.2)
+
+        result = report_engine.generate_eu_ai_act_report("dec-clean")
+        assert "Validation issues found" not in result["summary"]["narrative"]
+
+
+class TestGovernanceReportDateRangeOrdering:
+    """Verify governance report rejects inverted date ranges."""
+
+    def test_start_after_end_raises_value_error(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        with pytest.raises(ValueError, match="must not be after"):
+            report_engine.generate_internal_governance_report(
+                ("2026-02-01T00:00:00Z", "2026-01-01T00:00:00Z")
+            )
+
+    def test_same_start_and_end_succeeds(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        result = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z")
+        )
+        assert result["ok"] is True
+
+
+class TestSchemaVersion:
+    """Verify the report schema version is updated consistently."""
+
+    def test_schema_version_is_1_2_0(self):
+        assert report_engine.REPORT_SCHEMA_VERSION == "1.2.0"
+
+    def test_all_report_types_include_schema_version(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.3)
+
+        eu = report_engine.generate_eu_ai_act_report("dec-001")
+        assert eu["report_schema_version"] == "1.2.0"
+
+        gov = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+        )
+        assert gov["report_schema_version"] == "1.2.0"
+
+        risk = report_engine.generate_risk_summary_report()
+        assert risk["report_schema_version"] == "1.2.0"
+
+
+class TestGovernanceReportSkippedRecordDetail:
+    """Verify skipped_records contains actionable detail."""
+
+    def test_skipped_records_include_request_id_and_reason(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_no_ts.json").write_text(
+            json.dumps({"request_id": "dec-no-ts", "gate": {"risk": 0.5}}),
+            encoding="utf-8",
+        )
+        (log_dir / "decide_bad_ts.json").write_text(
+            json.dumps({
+                "request_id": "dec-bad-ts",
+                "ts": "garbage",
+                "gate": {"risk": 0.1},
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-12-31T23:59:59Z")
+        )
+
+        skipped = result["skipped_records"]
+        assert len(skipped) == 2
+        ids = {r["request_id"] for r in skipped}
+        assert "dec-no-ts" in ids
+        assert "dec-bad-ts" in ids
+        reasons = {r["reason"] for r in skipped}
+        assert "missing_timestamp" in reasons
+        assert "invalid_timestamp" in reasons
+
+
+class TestReportSignatureIntegrity:
+    """Verify the signed hash is actually over the report body."""
+
+    def test_hash_covers_body_without_signature_block(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        from veritas_os.security.hash import sha256_of_canonical_json
+
+        artifact = report_engine._finalize_report(
+            "eu_ai_act",
+            {"scope": "eu_ai_act", "summary": {}},
+            generated_at="2026-01-01T00:00:00Z",
+        )
+
+        # Reconstruct body without signed_report_hash and artifacts
+        body_for_hash = {
+            k: v
+            for k, v in artifact.report.items()
+            if k not in ("signed_report_hash", "artifacts")
+        }
+        expected_hash = sha256_of_canonical_json(body_for_hash)
+        assert artifact.report["signed_report_hash"]["report_hash"] == expected_hash
+
+
+class TestEndToEndReportReproducibility:
+    """Full end-to-end reproducibility: same inputs → same hash."""
+
+    def test_eu_report_reproducible_with_fixed_env(self, monkeypatch, tmp_path):
+        log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.55)
+        replay_dir.joinpath("replay_dec-001_1.json").write_text(
+            json.dumps({
+                "match": True,
+                "diff": {},
+                "replay_time_ms": 10,
+                "schema_version": "1.0.0",
+            }),
+            encoding="utf-8",
+        )
+
+        # Fix timestamp and governance for reproducibility
+        fixed_ts = "2026-06-01T00:00:00Z"
+        monkeypatch.setattr(report_engine, "_utc_now", lambda: fixed_ts)
+        monkeypatch.setattr(
+            report_engine,
+            "_load_governance_context",
+            lambda: {
+                "policy_available": True,
+                "policy_version": "test_v1",
+                "policy_updated_at": "2026-01-01",
+                "risk_thresholds": dict(report_engine._DEFAULT_RISK_THRESHOLDS),
+            },
+        )
+
+        r1 = report_engine.generate_eu_ai_act_report("dec-001")
+        r2 = report_engine.generate_eu_ai_act_report("dec-001")
+
+        assert r1["signed_report_hash"]["report_hash"] == r2["signed_report_hash"]["report_hash"]
+        assert r1["summary"]["narrative"] == r2["summary"]["narrative"]
+        assert r1["evidence_completeness"] == r2["evidence_completeness"]
