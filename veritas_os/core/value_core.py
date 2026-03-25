@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Any
 
@@ -60,6 +60,50 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "一次情報(公式/論文)を調べる": 0.70,
     "情報収集を優先する": 0.60,
     "サウナ控め": 0.30,
+}
+
+# ==============================
+#   コンテキストプロファイル（domain 別の重み調整）
+# ==============================
+CONTEXT_PROFILES: Dict[str, Dict[str, float]] = {
+    "medical": {
+        "harm_avoid": 1.0,
+        "truthfulness": 1.0,
+        "accountability": 0.95,
+        "ethics": 0.95,
+    },
+    "financial": {
+        "legality": 1.0,
+        "accountability": 0.95,
+        "reversibility": 0.9,
+        "truthfulness": 0.9,
+    },
+    "legal": {
+        "legality": 1.0,
+        "ethics": 1.0,
+        "accountability": 0.95,
+        "truthfulness": 0.9,
+    },
+    "safety": {
+        "harm_avoid": 1.0,
+        "ethics": 0.95,
+        "reversibility": 0.9,
+        "accountability": 0.9,
+    },
+}
+
+# ==============================
+#   ポリシープリセット（policy 別のスコア下限）
+# ==============================
+POLICY_PRESETS: Dict[str, Dict[str, float]] = {
+    "strict": {
+        "ethics": 0.9,
+        "legality": 0.9,
+        "harm_avoid": 0.9,
+        "truthfulness": 0.85,
+    },
+    "balanced": {},
+    "permissive": {},
 }
 
 # ==============================
@@ -136,6 +180,11 @@ class ValueResult:
     total: float
     top_factors: List[str]
     rationale: str
+    # --- 追加フィールド（後方互換: デフォルト値あり） ---
+    contributions: Dict[str, float] = field(default_factory=dict)
+    applied_context: str = ""
+    applied_policy: str = ""
+    audit_trail: List[Dict[str, Any]] = field(default_factory=list)
 
 
 # ==============================
@@ -181,18 +230,63 @@ def heuristic_value_scores(q: str, ctx: dict) -> Dict[str, float]:
 
 
 # ==============================
+#   Rationale 生成（explainability 強化）
+# ==============================
+def _build_rationale(
+    top: List[str],
+    contribs: Dict[str, float],
+    weights: Dict[str, float],
+    scores: Dict[str, float],
+    applied_context: str,
+    applied_policy: str,
+) -> str:
+    """上位因子の数値寄与を含む詳細 rationale を生成する。"""
+    parts: List[str] = []
+
+    if applied_context:
+        parts.append(f"[domain={applied_context}]")
+    if applied_policy:
+        parts.append(f"[policy={applied_policy}]")
+
+    # 上位 3 因子の数値内訳
+    factor_descs: List[str] = []
+    for k in top[:3]:
+        w = weights.get(k, 0.0)
+        s = scores.get(k, 0.0)
+        c = contribs.get(k, 0.0)
+        factor_descs.append(f"{k}({s:.2f}×{w:.2f}={c:.2f})")
+    if factor_descs:
+        parts.append("主要因子: " + ", ".join(factor_descs))
+
+    # 意味的な補足
+    if "ethics" in top:
+        parts.append("倫理面を重視しました")
+    if "legality" in top:
+        parts.append("法的な安全性を考慮しました")
+    if "user_benefit" in top:
+        parts.append("あなたの長期的な利益を優先しました")
+    if not any(k in top for k in ("ethics", "legality", "user_benefit")):
+        parts.append("全体のバランスを見て判断しました")
+
+    return " / ".join(parts)
+
+
+# ==============================
 #   メイン評価関数（学習付き）
 # ==============================
 def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     """
     - heuristic_value_scores で scores を出す
     - context["value_scores"] / ["value_weights"] で上書き可能
+    - context["domain"] でコンテキストプロファイル適用
+    - context["policy"] でポリシープリセット適用
     - ValueProfile を使って total を計算
     - ついでに weights を少しだけ学習して保存
     """
     ctx = context or {}
     q = query or ""
     qn = q.lower()
+    audit: List[Dict[str, Any]] = []
 
     # 1) ヒューリスティクスで基本スコア
     scores = heuristic_value_scores(q, ctx)
@@ -218,18 +312,56 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     )
     scores.setdefault("サウナ控め", _clip01(scores.get("サウナ控め", 0.3)))
 
+    # 3.5) ポリシープリセットによるスコア下限適用
+    applied_policy = ""
+    policy_name = str(ctx.get("policy", ""))
+    if policy_name and policy_name in POLICY_PRESETS:
+        applied_policy = policy_name
+        floors = POLICY_PRESETS[policy_name]
+        for k, floor_val in floors.items():
+            old = scores.get(k, 0.0)
+            if old < floor_val:
+                scores[k] = floor_val
+                audit.append({
+                    "action": "policy_floor",
+                    "policy": policy_name,
+                    "key": k,
+                    "old": round(old, 4),
+                    "new": round(floor_val, 4),
+                })
+
     # 4) 重みの決定（保存 > context 上書き）
     prof = ValueProfile.load()
     merged_w = prof.weights.copy()
     ctx_weights = ctx.get("value_weights", {}) or {}
     for k, v in ctx_weights.items():
         merged_w[k] = _clip01(_to_float(v, merged_w.get(k, 0.0)))
+
+    # 4.5) コンテキストプロファイルによる重み調整
+    applied_context = ""
+    domain = str(ctx.get("domain", ""))
+    if domain and domain in CONTEXT_PROFILES:
+        applied_context = domain
+        profile_weights = CONTEXT_PROFILES[domain]
+        for k, target_w in profile_weights.items():
+            old_w = merged_w.get(k, 0.0)
+            if old_w < target_w:
+                merged_w[k] = target_w
+                audit.append({
+                    "action": "context_weight",
+                    "domain": domain,
+                    "key": k,
+                    "old": round(old_w, 4),
+                    "new": round(target_w, 4),
+                })
+
     weights = _normalize_weights(merged_w)
 
     # 5) 加重平均で total（sum→クリップではなく平均にするので 1.0 固定を防ぐ）
+    contribs: Dict[str, float] = {}
     if scores:
         contribs = {
-            k: float(scores[k]) * float(weights.get(k, 1.0))
+            k: round(float(scores[k]) * float(weights.get(k, 1.0)), 4)
             for k in scores.keys()
         }
         total_raw = sum(contribs.values()) / max(len(contribs), 1)
@@ -245,24 +377,26 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
     )
     top = [k for k, _ in factors_sorted[:5]]
 
-    # 7) 簡単な rationale
-    rationale_parts: List[str] = []
-    if "ethics" in top:
-        rationale_parts.append("倫理面を重視しました")
-    if "legality" in top:
-        rationale_parts.append("法的な安全性を考慮しました")
-    if "user_benefit" in top:
-        rationale_parts.append("あなたの長期的な利益を優先しました")
-    if not rationale_parts:
-        rationale_parts.append("全体のバランスを見て判断しました")
-    rationale = " / ".join(rationale_parts)
+    # 7) 詳細 rationale（explainability 強化）
+    rationale = _build_rationale(
+        top, contribs, weights, scores, applied_context, applied_policy,
+    )
 
     # 8) オンライン学習（禁止フラグが立っていなければ）
     if not ctx.get("no_learn_values", False):
         lr = float(ctx.get("value_lr", 0.02))
         prof.update_from_scores(scores, lr=lr)
 
-    return ValueResult(scores=scores, total=total, top_factors=top, rationale=rationale)
+    return ValueResult(
+        scores=scores,
+        total=total,
+        top_factors=top,
+        rationale=rationale,
+        contributions=contribs,
+        applied_context=applied_context,
+        applied_policy=applied_policy,
+        audit_trail=audit,
+    )
 
 
 # ==============================
