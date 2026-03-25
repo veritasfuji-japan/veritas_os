@@ -226,3 +226,103 @@ python -m pytest -q veritas_os/tests \
   --durations=20 \
   --tb=short
 ```
+
+---
+
+## Follow-up Re-Measurement (2026-03-25 07:02 UTC)
+
+### Summary
+
+| 項目 | 値 |
+|------|-----|
+| **測定日時** | 2026-03-25 07:02 UTC |
+| **Python** | 3.11.14 |
+| **OS** | Linux 6.18.5 |
+| **テストフレームワーク** | pytest 9.0.2 + pytest-cov 7.1.0 |
+| **ブランチカバレッジ** | 有効 (.coveragerc で `branch = True`) |
+| **テスト結果** | **4512 passed**, 0 failed, 3 skipped |
+| **実行時間** | 186.50s (3分06秒) |
+| **全体カバレッジ (term-missing)** | **89%** (Stmts: 18,225 / Miss: 1,683 / Branch: 5,672 / BrPart: 688) |
+| **カバレッジ最低ライン (CI)** | 85% (`--cov-fail-under=85`) |
+| **CI 基準** | ✅ パス (89% ≥ 85%) |
+
+### Commands Executed
+
+```bash
+# 依存関係インストール
+pip install -r veritas_os/requirements.txt
+pip install pytest pytest-cov pytest-asyncio httpx cffi
+
+# CI 相当の coverage 計測コマンド
+OPENAI_API_KEY=DUMMY_FOR_CI \
+VERITAS_API_KEY=DUMMY_FOR_CI \
+PYTHONUNBUFFERED=1 \
+python -m pytest -q veritas_os/tests \
+  --cov=veritas_os \
+  --cov-config=veritas_os/tests/.coveragerc \
+  --cov-report=term-missing \
+  --cov-report=xml:coverage.xml \
+  --cov-report=html:coverage-html \
+  -m "not slow" \
+  --durations=20 \
+  --tb=short
+```
+
+成果物:
+
+| ファイル | 状態 |
+|---------|------|
+| `coverage.xml` | ✅ 生成済み |
+| `coverage-html/` | ✅ 生成済み |
+| pytest term-missing 出力 | ✅ 取得済み |
+
+### Current Target Module Snapshot
+
+| Module | Stmts | Miss | Branch | BrPart | Current Coverage | Notes |
+|--------|-------|------|--------|--------|-----------------|-------|
+| `core/pipeline.py` | 269 | 6 | 54 | 0 | **98%** | Branch 100% 達成。Missing: 220-221, 227-228, 632-633 |
+| `api/server.py` | 240 | 20 | 14 | 0 | **92%** | Branch 100% 達成。Missing: 120-124, 129-130, 136-139, 156-157, 162-166, 303-308 |
+| `core/memory.py` | 629 | 27 | 168 | 21 | **94%** | Missing: 126, 182, 358-359, 445, 588-593 等 |
+| `core/kernel.py` | 451 | 21 | 168 | 16 | **94%** | Missing: 40, 43, 50, 85, 109, 538, 546, 586 等 |
+| `core/fuji.py` | 455 | 37 | 142 | 21 | **90%** | Missing: 155, 168-173, 239-240, 273, 318 等 |
+
+### Delta vs Previous Follow-up Report (2026-03-24)
+
+| Module | Previous (2026-03-24) | Current (2026-03-25) | Delta | Comment |
+|--------|----------------------|---------------------|-------|---------|
+| `core/pipeline.py` | 98% (Miss: 6) | **98%** (Miss: 6) | ±0% | 変化なし |
+| `api/server.py` | 93% (Miss: 19) | **92%** (Miss: 20) | −1% | Miss 19→20 (+1行)。コード変更またはブランチ計算方式差による微差 |
+| `core/memory.py` | 94% (Miss: 27) | **94%** (Miss: 27) | ±0% | 変化なし |
+| `core/kernel.py` | 94% (Miss: 21) | **94%** (Miss: 21) | ±0% | 変化なし |
+| `core/fuji.py` | 90% (Miss: 35) | **90%** (Miss: 37) | ±0% | Miss 35→37 (+2行)。コード変更またはPythonバージョン差による微差 |
+| **全体** | 87% (term) / 89.3% (xml) | **89%** (term) | +2% (term) | Stmts 同数 (18,225)、Miss 1,957→1,683 (−274行改善)。テスト数 4,350→4,512 (+162) |
+
+> **注**: 前回 (2026-03-24) は Python 3.12.3 で実行、今回 (2026-03-25) は Python 3.11.14 で実行。Python バージョンの差による term-missing 出力の微差がある可能性がある。全体の term-missing カバレッジが 87%→89% に上昇しているのは、テスト数増加 (+162) と Miss 行の減少 (−274行) による実質的改善。
+
+### Limitations / Notes
+
+1. **フルスイート実行**: `not slow` マーク付きテストのみ実行 (CI 相当)。slow テストは除外
+2. **Python バージョン差**: CI は Python 3.11/3.12 のマトリクスだが、今回は 3.11.14 のみで実行。前回レポート (2026-03-24) は 3.12.3 で実行されており、バージョン差による微差がある可能性がある
+3. **CI 完全一致ではない**: CI は `--junitxml` や `--cov-fail-under` も指定するが、本計測では `--cov-fail-under` は省略。term-missing の 89% は CI 基準 85% を超過
+4. **外部依存**: `OPENAI_API_KEY` と `VERITAS_API_KEY` はダミー値で実行。実 API 呼び出しはモックされている
+5. **cffi 追加インストール**: 環境の `cryptography` モジュールが `_cffi_backend` を要求したため、`cffi` パッケージを追加インストールした
+6. **実行不能だったもの**: なし。全テスト正常に収集・実行完了
+
+### Next Actions
+
+次のカバレッジ改善で最も効果的な改善候補:
+
+| 優先 | モジュール | 現在 | Miss 行 | 改善インパクト | 推奨アクション |
+|------|-----------|------|---------|--------------|--------------|
+| 1 | `core/memory_store.py` | 44% | 148 | 高 (148 行回収可能) | VectorMemory/MemoryStore の search/get/delete メソッドのテスト追加 |
+| 2 | `core/memory_vector.py` | 61% | 72 | 高 (72 行回収可能) | ベクトル検索・インデックス操作のテスト追加。前回 39%→61% と改善済みだがまだ低い |
+| 3 | `memory/store.py` | 82% | 51 | 中〜高 (51 行回収可能) | ストア永続化・検索パスのテスト追加 |
+| 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加 |
+| 5 | `core/pipeline_decide_stages.py` | 77% | 41 | 中 (41 行回収可能) | decide ステージの分岐テスト追加 |
+| 6 | `api/routes_system.py` | 86% | 40 | 中 (40 行回収可能) | システムルートのエッジケーステスト追加 |
+| 7 | `api/governance.py` | 84% | 37 | 中 (37 行回収可能) | 前回 69%→84% と改善済み。残りのガバナンスエンドポイントテスト追加 |
+| 8 | `core/fuji.py` | 90% | 37 | 中 (37 行回収可能) | PII/ポリシーの残り分岐テスト追加 |
+| 9 | `api/routes_decide.py` | 72% | 35 | 中 (35 行回収可能) | decide ルートの分岐テスト追加 |
+| 10 | `core/world.py` | 91% | 36 | 中 (36 行回収可能) | world モデルの残り分岐テスト追加 |
+
+> **合計**: TOP 10 の改善で最大 **542 行** のミスを回収可能。全体カバレッジを約 **3.0%** 向上させる可能性がある。
