@@ -93,7 +93,7 @@
 | 1 | `core/memory_store.py` | 43% | 152 | 高 (152 行回収可能) | VectorMemory/MemoryStore の実行パステスト追加。search/get/delete メソッドのテスト。 |
 | ~~2~~ | ~~`core/memory_vector.py`~~ | ~~39%~~ → **99%** | ~~116~~ → 0 | ✅ **改善済** | テスト追加により全ステートメント網羅。ブランチも 66/66 の 65 をカバー (BrPart=1)。 |
 | ~~2~~ | ~~`api/governance.py`~~ | ~~69%~~ → **97%** | ~~69~~ → 7 | ✅ **改善済** | four-eyes approval・policy CRUD・history append/trim・callback hot-reload・updated_by sanitization のテスト追加。62 行回収。 |
-| 3 | `tools/web_search_security.py` | 59% | 53 | 中 (53 行回収可能) | URL 検証・セキュリティチェックのエッジケーステスト追加。 |
+| 3 | `tools/web_search_security.py` | 59% → **改善中** | 53 | 中 (53 行回収可能) | ✅ **adversarial テスト追加済** — NFKC confusable, leetspeak, URL-encoded, base64, invisible char injection, hostname homoglyph 等の攻撃パターン網羅テスト (`test_web_search_adversarial.py`, 86 テスト追加)。`_canonicalize_hostname` に NFKC 正規化追加、`_hostname_has_confusable_chars` でホモグリフ検出強化、`_is_toxic_result` にゼロ幅文字除去・新パターン追加。 |
 | 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加。 |
 | 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | ✅ **adversarial テスト追加済** — missing key, wrong key, corrupted ciphertext, truncated line 等の fail-closed テスト (`test_trustlog_adversarial.py`)。 |
 | 5b | `audit/trustlog_signed.py` | — | — | 中 | ✅ **adversarial テスト追加済** — signature invalid, previous_hash mismatch, WORM mirror write failure, transparency anchor failure のテスト。`verify_signature` の例外処理バグ修正。 |
