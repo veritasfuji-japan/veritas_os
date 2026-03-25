@@ -66,7 +66,7 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
                 <p className="text-muted-foreground">Reasons:</p>
                 <ul className="ml-3 list-disc text-foreground">
                   {view.reasons.map((reason, i) => (
-                    <li key={`reason-${i}`}>{reason}</li>
+                    <li key={`reason-${reason}-${i}`}>{reason}</li>
                   ))}
                 </ul>
               </div>
@@ -84,7 +84,7 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
                   </thead>
                   <tbody>
                     {view.violations.map((v, i) => (
-                      <tr key={`violation-${i}`} className="border-t border-border/50">
+                      <tr key={`violation-${v.rule}-${i}`} className="border-t border-border/50">
                         <td className="px-2 py-1 font-mono">{v.rule}</td>
                         <td className="px-2 py-1">{v.detail}</td>
                         <td className="px-2 py-1">{v.severity}</td>

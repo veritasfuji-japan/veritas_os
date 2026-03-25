@@ -35,7 +35,13 @@ function renderDiffValue(value: unknown): string {
   }
 }
 
-/** Returns true if the value is a non-trivial object or array. */
+/** Short summary label for a value: "{N keys}" for objects, rendered string otherwise. */
+function valueSummary(value: unknown): string {
+  if (typeof value === "object" && value !== null) {
+    return `{${Object.keys(value as Record<string, unknown>).length} keys}`;
+  }
+  return renderDiffValue(value);
+}
 function isExpandable(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value !== "object") return false;
@@ -112,7 +118,7 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
                     <td className="px-2 py-1">
                       {needsExpand ? (
                         <details>
-                          <summary className="cursor-pointer">{typeof previous === "object" && previous !== null ? `{${Object.keys(previous as Record<string, unknown>).length} keys}` : renderDiffValue(previous)}</summary>
+                          <summary className="cursor-pointer">{valueSummary(previous)}</summary>
                           <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{renderDiffValue(previous)}</pre>
                         </details>
                       ) : (
@@ -122,7 +128,7 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
                     <td className="px-2 py-1">
                       {needsExpand ? (
                         <details>
-                          <summary className="cursor-pointer">{typeof current === "object" && current !== null ? `{${Object.keys(current as Record<string, unknown>).length} keys}` : renderDiffValue(current)}</summary>
+                          <summary className="cursor-pointer">{valueSummary(current)}</summary>
                           <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{renderDiffValue(current)}</pre>
                         </details>
                       ) : (

@@ -194,6 +194,8 @@ export function toFujiGateDetailView(result: DecideResponse | null): FujiGateDet
     };
   }
 
+  // Gate properties override fuji properties when names collide,
+  // since gate is the canonical API-facing view of the safety decision.
   const merged = {
     ...(result.fuji as Record<string, unknown>),
     ...(result.gate as Record<string, unknown>),
