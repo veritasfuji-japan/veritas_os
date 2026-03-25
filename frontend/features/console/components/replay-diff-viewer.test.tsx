@@ -70,4 +70,32 @@ describe("ReplayDiffViewer", () => {
 
     expect(screen.getByTestId("divergence-badge")).toHaveTextContent("No Divergence");
   });
+
+  it("renders nested objects as expandable details instead of [object Object]", () => {
+    render(
+      <ReplayDiffViewer
+        result={{
+          chosen: { meta: { foo: "bar" } },
+          extras: { replay_previous_chosen: { meta: { foo: "baz" } } },
+        } as never}
+      />,
+    );
+
+    // Should show expandable summary, not "[object Object]"
+    expect(screen.getAllByText("{1 keys}").length).toBeGreaterThan(0);
+    expect(screen.queryByText("[object Object]")).not.toBeInTheDocument();
+  });
+
+  it("shows change summary when fields differ", () => {
+    render(
+      <ReplayDiffViewer
+        result={{
+          chosen: { id: "a", score: 0.9 },
+          extras: { replay_previous_chosen: { id: "a", score: 0.5 } },
+        } as never}
+      />,
+    );
+
+    expect(screen.getByTestId("change-summary")).toHaveTextContent("1 field(s) changed: score");
+  });
 });
