@@ -3,9 +3,31 @@
 """
 LLM クライアント（マルチプロバイダー対応版 / 実運用は gpt-4.1-mini 前提）
 
-現状:
-    - 実際に使うのは OpenAI + gpt-4.1-mini（または env で指定した OpenAI モデル）
-    - Anthropic / Google / Ollama / OpenRouter は「将来用」のサポートを残す
+サポートティア定義 / Support Tier Definitions:
+
+    production
+        CI テスト済み・本番デプロイ対象・SLA の範囲内。
+        Fully tested in CI, production-deployment target, covered by SLA.
+
+    planned
+        コードパスは実装済みだが本番未検証。API 変更に追従していない場合がある。
+        利用時にはランタイム警告を出力する。
+        Code paths implemented but not verified in production. May lag behind
+        upstream API changes. A runtime warning is emitted on use.
+
+    experimental
+        最小限のスキャフォールド。破壊的変更の可能性あり。本番使用禁止。
+        利用時にはランタイム警告を出力する。
+        Minimal scaffold only. Subject to breaking changes. Not for production.
+        A runtime warning is emitted on use.
+
+プロバイダー別ティア / Per-Provider Tier:
+
+    openai      → production    (デフォルト / default)
+    anthropic   → planned
+    google      → planned
+    ollama      → experimental
+    openrouter  → experimental
 
 環境変数:
     LLM_PROVIDER : openai | anthropic | google | ollama | openrouter  (デフォルト: openai)
@@ -14,10 +36,10 @@ LLM クライアント（マルチプロバイダー対応版 / 実運用は gpt
     LLM_MAX_RETRIES : 最大リトライ回数 (デフォルト: 3)
     LLM_RETRY_DELAY : リトライ間隔秒 (デフォルト: 2)
 
-    OPENAI_API_KEY     : OpenAI 用 API キー（必須）
-    ANTHROPIC_API_KEY  : Claude 用 API キー（将来用）
-    GOOGLE_API_KEY     : Gemini 用 API キー（将来用）
-    OPENROUTER_API_KEY : OpenRouter 用 API キー（将来用）
+    OPENAI_API_KEY     : OpenAI 用 API キー（必須 / required）
+    ANTHROPIC_API_KEY  : Claude 用 API キー（planned — 将来用）
+    GOOGLE_API_KEY     : Gemini 用 API キー（planned — 将来用）
+    OPENROUTER_API_KEY : OpenRouter 用 API キー（experimental — 将来用）
 """
 
 from __future__ import annotations
@@ -27,6 +49,7 @@ import os
 import re
 import threading
 import time
+import warnings
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -53,6 +76,56 @@ class LLMProvider(str, Enum):
 
 class LLMError(Exception):
     """LLM 呼び出しに関するエラー"""
+
+
+class SupportTier(str, Enum):
+    """LLM プロバイダーのサポートレベル / Support tier for LLM providers.
+
+    production   — CI テスト済み・本番デプロイ対象
+    planned      — コードパスは実装済みだが本番未検証
+    experimental — 最小限のスキャフォールド・破壊的変更あり得る
+    """
+    PRODUCTION = "production"
+    PLANNED = "planned"
+    EXPERIMENTAL = "experimental"
+
+
+#: プロバイダーごとのサポートティア。変更時は README.md も更新すること。
+#: Support tier per provider. Keep in sync with README.md.
+PROVIDER_SUPPORT_TIER: Dict[str, SupportTier] = {
+    LLMProvider.OPENAI.value: SupportTier.PRODUCTION,
+    LLMProvider.ANTHROPIC.value: SupportTier.PLANNED,
+    LLMProvider.GOOGLE.value: SupportTier.PLANNED,
+    LLMProvider.OLLAMA.value: SupportTier.EXPERIMENTAL,
+    LLMProvider.OPENROUTER.value: SupportTier.EXPERIMENTAL,
+}
+
+
+def get_provider_support_tier(provider: str) -> SupportTier:
+    """Return the :class:`SupportTier` for *provider*.
+
+    Unknown providers default to ``SupportTier.EXPERIMENTAL``.
+    """
+    return PROVIDER_SUPPORT_TIER.get(provider, SupportTier.EXPERIMENTAL)
+
+
+def _warn_non_production_provider(provider: str) -> None:
+    """Emit a runtime warning when a non-production provider is selected.
+
+    The warning is issued once per provider per process via
+    ``warnings.warn`` (category ``UserWarning``, ``stacklevel=3``
+    so that the caller of ``chat()`` appears in the traceback).
+    """
+    tier = get_provider_support_tier(provider)
+    if tier is SupportTier.PRODUCTION:
+        return
+    warnings.warn(
+        f"LLM provider '{provider}' is '{tier.value}' tier — "
+        f"not verified for production use. "
+        f"See llm_client.PROVIDER_SUPPORT_TIER for details.",
+        UserWarning,
+        stacklevel=3,
+    )
 
 
 # =========================
@@ -621,6 +694,9 @@ def chat(
     # ★ Circuit breaker — fail fast if provider is known to be down
     _circuit_check(provider)
 
+    # ★ Support tier notice — warn callers about non-production providers
+    _warn_non_production_provider(provider)
+
     # ★ Affect 注入（必要な時だけ効く）
     system_prompt = _inject_affect_into_system_prompt(
         system_prompt=system_prompt,
@@ -774,7 +850,7 @@ def chat(
 # =========================
 
 def chat_openai(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
-    """OpenAI 専用ショートカット（実質これが今の VERITAS のメイン入口）"""
+    """OpenAI 専用ショートカット [tier: production]"""
     return chat(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
@@ -784,8 +860,8 @@ def chat_openai(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any
 
 
 def chat_gpt4_mini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
-    """
-    gpt-4.1-mini 専用ショートカット
+    """gpt-4.1-mini 専用ショートカット [tier: production]
+
     環境変数に関係なく gpt-4.1-mini を強制したい場面用。
     """
     kwargs.setdefault("model", "gpt-4.1-mini")
@@ -793,7 +869,7 @@ def chat_gpt4_mini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, 
 
 
 def chat_claude(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
-    """Claude 用ショートカット（将来用）"""
+    """Claude 用ショートカット [tier: planned]"""
     kwargs.setdefault("model", "claude-opus-4-6")
     return chat(
         system_prompt=system_prompt,
@@ -804,7 +880,7 @@ def chat_claude(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any
 
 
 def chat_gemini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
-    """Gemini 用ショートカット（将来用）"""
+    """Gemini 用ショートカット [tier: planned]"""
     kwargs.setdefault("model", "gemini-1.5-pro")
     return chat(
         system_prompt=system_prompt,
@@ -815,7 +891,7 @@ def chat_gemini(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any
 
 
 def chat_local(system_prompt: str, user_prompt: str, **kwargs) -> Dict[str, Any]:
-    """Ollama / ローカルモデル用ショートカット（将来用）"""
+    """Ollama / ローカルモデル用ショートカット [tier: experimental]"""
     kwargs.setdefault("model", "llama3")
     return chat(
         system_prompt=system_prompt,
@@ -841,6 +917,9 @@ def chat_completion(
 __all__ = [
     "LLMProvider",
     "LLMError",
+    "SupportTier",
+    "PROVIDER_SUPPORT_TIER",
+    "get_provider_support_tier",
     "chat",
     "chat_openai",
     "chat_gpt4_mini",
