@@ -262,7 +262,6 @@ def heuristic_analyze(text: str) -> Dict[str, Any]:
     - カテゴリ別リスク設定
     """
     scan_variants = _build_safety_scan_variants(text)
-    t = scan_variants[0]
     categories: List[str] = []
     risk = 0.05
     reasons: List[str] = []

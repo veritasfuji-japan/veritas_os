@@ -27,6 +27,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# セキュリティパッチ適用（ベースイメージの既知CVE修正）
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 # ビルドステージからインストール済みパッケージのみコピー（ビルドツール類を除外）
 COPY --from=builder /build/deps /app/deps
 

@@ -335,7 +335,7 @@ def _redact_text(text: str) -> str:
         try:
             return _mask_pii_impl(text)
         except Exception:
-            pass
+            logger.warning("sanitize.mask_pii failed; falling back to basic regex")
     text = re.sub(r"\b[\w\.-]+@[\w\.-]+\.\w+\b", "[redacted@email]", text)
     text = re.sub(
         r"\b\d{2,4}[-・\s]?\d{2,4}[-・\s]?\d{3,4}\b",

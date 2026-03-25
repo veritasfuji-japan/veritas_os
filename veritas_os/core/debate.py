@@ -554,8 +554,8 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
                         else:
                             try:
                                 objs.append(json.loads(s))
-                            except Exception:
-                                pass
+                            except Exception as e:
+                                logger.debug("DebateOS: skipping unparseable JSON object: %s", e)
                         buf_start = None
                         if len(objs) >= max_objects:
                             break
