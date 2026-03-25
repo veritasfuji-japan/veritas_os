@@ -12,6 +12,9 @@ Public contract:
 Preferred extension points:
 - ``kernel_stages.py`` for staged kernel flow changes
 - ``kernel_qa.py`` for QA / validation-specific helpers
+- ``kernel_post_choice.py`` for post-choice affect/reason/reflection enrichment
+- ``kernel_episode.py`` for episode logging side-effects
+- ``kernel_doctor.py`` for auto-doctor security utilities
 - ``pipeline_contracts.py`` for cross-module payload normalization contracts
 
 Compatibility guidance:
@@ -49,57 +52,21 @@ class StrategyCapability(Protocol):
     def score_options(self, *args: Any, **kwargs: Any) -> Any:
         ...
 
-def _read_proc_self_status_seccomp() -> int | None:
-    """Read Linux seccomp mode from ``/proc/self/status``.
-
-    Returns:
-        ``0`` for disabled, ``1`` for strict mode, ``2`` for filter mode,
-        or ``None`` when the value cannot be determined.
-    """
-    from pathlib import Path
-
-    status_path = Path("/proc/self/status")
-    if not status_path.exists():
-        return None
-
-    try:
-        for line in status_path.read_text(encoding="utf-8").splitlines():
-            if line.startswith("Seccomp:"):
-                _, value = line.split(":", 1)
-                return int(value.strip())
-    except (OSError, ValueError):
-        return None
-    return None
-
-
-def _read_apparmor_profile() -> str | None:
-    """Read the current AppArmor profile label on Linux.
-
-    Returns:
-        The profile label string, or ``None`` when unavailable.
-    """
-    from pathlib import Path
-
-    current_path = Path("/proc/self/attr/current")
-    if not current_path.exists():
-        return None
-
-    try:
-        profile = current_path.read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-
-    return profile or None
+# ============================================================
+# Doctor / security utilities — implementation in kernel_doctor.py.
+# Re-exported here so existing callers and test monkeypatches that
+# target ``kernel.<name>`` keep working.
+# ============================================================
+from .kernel_doctor import (  # noqa: E402
+    _is_safe_python_executable,
+    _open_doctor_log_fd,
+    _read_proc_self_status_seccomp,
+    _read_apparmor_profile,
+)
 
 
 def _is_doctor_confinement_profile_active() -> bool:
-    """Return whether process confinement is active for safe auto-doctor.
-
-    Security:
-        ``subprocess.Popen`` widens impact when operational settings are wrong.
-        Auto-starting doctor is therefore allowed only when at least one runtime
-        confinement profile (seccomp or AppArmor) is active.
-    """
+    """Return whether process confinement is active for safe auto-doctor."""
     seccomp_mode = _read_proc_self_status_seccomp()
     if seccomp_mode is not None and seccomp_mode > 0:
         return True
@@ -110,68 +77,6 @@ def _is_doctor_confinement_profile_active() -> bool:
 
     normalized = apparmor_profile.lower()
     return normalized not in {"unconfined", "docker-default (enforce)"}
-
-
-def _is_safe_python_executable(executable_path: str | None) -> bool:
-    """Validate that a Python executable path is safe to launch.
-
-    Args:
-        executable_path: Path candidate, usually ``sys.executable``.
-
-    Returns:
-        ``True`` when the path points to an executable Python interpreter.
-
-    Security:
-        Auto-doctor launches a subprocess. Rejecting missing, non-absolute,
-        non-executable, or unexpected binary names reduces command hijacking
-        risk when runtime environment variables are tampered with.
-    """
-    import os
-
-    if not executable_path:
-        return False
-    if not os.path.isabs(executable_path):
-        return False
-    if not os.path.isfile(executable_path):
-        return False
-    if not os.access(executable_path, os.X_OK):
-        return False
-
-    executable_name = os.path.basename(executable_path).lower().replace(".exe", "")
-    return bool(re.match(r"^(python|pypy)[0-9.]*$", executable_name))
-
-
-def _open_doctor_log_fd(log_path: str) -> int:
-    """Open a doctor log file descriptor with secure defaults.
-
-    The descriptor is opened with restrictive file permissions and validated
-    as a regular file. When available, ``O_NOFOLLOW`` is enabled to reduce
-    symlink-based redirection risks.
-
-    Args:
-        log_path: Absolute file path of the doctor log.
-
-    Returns:
-        File descriptor opened in append mode.
-
-    Raises:
-        OSError: If the file cannot be opened.
-        ValueError: If the opened path is not a regular file.
-    """
-    import os
-    import stat
-
-    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND
-    nofollow_flag = getattr(os, "O_NOFOLLOW", 0)
-    if nofollow_flag:
-        flags |= nofollow_flag
-
-    fd = os.open(log_path, flags, 0o600)
-    st = os.fstat(fd)
-    if not stat.S_ISREG(st.st_mode):
-        os.close(fd)
-        raise ValueError("Doctor log path must point to a regular file")
-    return fd
 
 from .types import (
     ToolResult,
@@ -186,7 +91,6 @@ from .types import (
 from .utils import _safe_float, _to_text, _redact_text, redact_payload
 
 import asyncio
-import inspect
 
 from . import adapt
 from . import evidence as evos
@@ -568,10 +472,10 @@ def _score_alternatives_with_value_core_and_persona(
     ctx: Dict[str, Any] | None = None,
     telemetry: Dict[str, Any] | None = None,
 ) -> bool:
-    """
-    ★ 後方互換ラッパ
-    旧バージョンから呼ばれている名前を維持するための薄い wrapper。
-    実装は _score_alternatives() に委譲する。
+    """Thin delegate to ``_score_alternatives()``.
+
+    .. deprecated::
+        Prefer ``_score_alternatives()`` directly. Scheduled for removal.
     """
     score_kwargs: Dict[str, Any] = {
         "intent": intent,
@@ -880,81 +784,40 @@ async def decide(
 
     # =======================================================
     # AffectOS / ReasonOS: 自己評価 & 理由 & Self-Refine テンプレ
+    # ★ 実装は kernel_post_choice.py に分離
     # =======================================================
-    try:
-        affect_meta = affect_core.reflect({
-            "query": q_text,
-            "chosen": chosen,
-            "gate": fuji_result,
-            "values": {
-                "total": float(telos_score),
-                # 現時点では ema = total として扱う
-                "ema": float(telos_score),
-            },
-        })
-        extras.setdefault("affect", {})
-        extras["affect"]["meta"] = affect_meta
-    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
-        extras.setdefault("affect", {})
-        extras["affect"]["meta_error"] = repr(e)
+    from . import kernel_post_choice as _post_choice
 
-    # 自然文 Reason（なぜこの決定が妥当か）
-    # ★ セキュリティ修正: reason_core の存在チェックと安全な呼び出し
-    try:
-        if reason_core is not None and hasattr(reason_core, "generate_reason"):
-            gen_reason_fn = reason_core.generate_reason
-            reason_args = {
-                "query": q_text,
-                "planner": extras.get("planner"),
-                "values": {"total": float(telos_score)},
-                "gate": fuji_result,
-                "context": {
-                    "user_id": user_id,
-                    "mode": mode,
-                    "intent": intent,
-                },
-            }
-            # ★ async/sync を安全に判定して呼び出し
-            if asyncio.iscoroutinefunction(gen_reason_fn):
-                reason_natural = await gen_reason_fn(**reason_args)
-            else:
-                reason_natural = gen_reason_fn(**reason_args)
-
-            extras.setdefault("affect", {})
-            extras["affect"]["natural"] = reason_natural
-        else:
-            extras.setdefault("affect", {})
-            extras["affect"]["natural_error"] = "reason_core.generate_reason not available"
-    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
-        extras.setdefault("affect", {})
-        extras["affect"]["natural_error"] = repr(e)
-
-    # Self-Refine 用テンプレ（高リスク or 高 stakes のときだけ）
-    # ★ セキュリティ修正: reason_core の存在チェックと安全な async 呼び出し
-    try:
-        risk_val = float(fuji_result.get("risk", 0.0))
-        if (not fast_mode) and (stakes >= 0.7 or risk_val >= 0.5):
-            if reason_core is not None and hasattr(reason_core, "generate_reflection_template"):
-                gen_refl_fn = reason_core.generate_reflection_template
-                refl_args = {
-                    "query": q_text,
-                    "chosen": chosen,
-                    "gate": fuji_result,
-                    "values": {"total": float(telos_score)},
-                    "planner": extras.get("planner") or {},
-                }
-                # ★ async/sync を安全に判定して呼び出し
-                if asyncio.iscoroutinefunction(gen_refl_fn):
-                    refl_tmpl = await gen_refl_fn(**refl_args)
-                else:
-                    refl_tmpl = gen_refl_fn(**refl_args)
-
-                if refl_tmpl:
-                    extras.setdefault("affect", {})
-                    extras["affect"]["reflection_template"] = refl_tmpl
-    except (TypeError, ValueError, RuntimeError, AttributeError) as e:
-        extras.setdefault("affect", {})
-        extras["affect"]["reflection_template_error"] = repr(e)
+    await _post_choice.enrich_affect(
+        query=q_text,
+        chosen=chosen,
+        fuji_result=fuji_result,
+        telos_score=telos_score,
+        affect_core=affect_core,
+        extras=extras,
+    )
+    await _post_choice.enrich_reason(
+        query=q_text,
+        telos_score=telos_score,
+        fuji_result=fuji_result,
+        reason_core=reason_core,
+        user_id=user_id,
+        mode=mode,
+        intent=intent,
+        planner=extras.get("planner"),
+        extras=extras,
+    )
+    await _post_choice.enrich_reflection(
+        query=q_text,
+        chosen=chosen,
+        fuji_result=fuji_result,
+        telos_score=telos_score,
+        reason_core=reason_core,
+        planner=extras.get("planner"),
+        stakes=stakes,
+        fast_mode=fast_mode,
+        extras=extras,
+    )
 
     extras.setdefault("agi_goals", {})
     if fast_mode:
@@ -962,43 +825,24 @@ async def decide(
     else:
         extras["agi_goals"]["status"] = "delegated_to_pipeline"
 
-    orchestrated_by_pipeline = bool(ctx.get("_orchestrated_by_pipeline"))
-    if not orchestrated_by_pipeline and not ctx.get("_episode_saved_by_pipeline"):
-        try:
-            episode_text = (
-                f"[query] {q_text}\n"
-                f"[chosen] {chosen.get('title')}\n"
-                f"[mode] {mode}\n"
-                f"[intent] {intent}\n"
-                f"[telos_score] {telos_score}"
-            )
-            episode_record = {
-                "text": episode_text,
-                "tags": ["episode", "decide", "veritas"],
-                "meta": {
-                    "user_id": user_id,
-                    "request_id": req_id,
-                    "mode": mode,
-                    "intent": intent,
-                },
-            }
-            redacted_episode_record = redact_payload(episode_record)
-            if redacted_episode_record != episode_record:
-                extras.setdefault("memory_log", {})
-                extras["memory_log"]["warning"] = (
-                    "PII detected in episode log; masked before persistence."
-                )
-            try:
-                mem_core.MEM.put("episodic", redacted_episode_record)
-            except TypeError:
-                mem_core.MEM.put(
-                    user_id,
-                    f"decision:{req_id}",
-                    redacted_episode_record,
-                )
-        except (TypeError, ValueError, RuntimeError, OSError) as e:
-            extras.setdefault("memory_log", {})
-            extras["memory_log"]["error"] = repr(e)
+    # =======================================================
+    # Episode logging side-effects
+    # ★ 実装は kernel_episode.py に分離
+    # =======================================================
+    from . import kernel_episode as _episode
+
+    _episode.save_episode(
+        query=q_text,
+        chosen=chosen,
+        ctx=ctx,
+        intent=intent,
+        mode=mode,
+        telos_score=telos_score,
+        req_id=req_id,
+        mem_core=mem_core,
+        redact_payload_fn=redact_payload,
+        extras=extras,
+    )
 
     if ctx.get("auto_doctor", False):
         extras.setdefault("doctor", {})
