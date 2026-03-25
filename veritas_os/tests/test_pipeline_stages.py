@@ -234,6 +234,99 @@ class TestAssembleResponse:
         assert res["decision_status"] == "allow"
         assert res["gate"]["decision_status"] == "allow"
 
+    def test_contract_defaults_and_backward_compat_fields(self) -> None:
+        from veritas_os.core.pipeline_response import assemble_response
+
+        ctx = PipelineContext(
+            query="compat",
+            request_id="req-compat",
+            alternatives=[{"title": "A"}],
+            response_extras={"metrics": {"latency_ms": 12}},
+            raw=["not-a-dict"],  # type: ignore[arg-type]
+        )
+        res = assemble_response(
+            ctx,
+            load_persona_fn=lambda: {"role": "tester"},
+            plan={"steps": ["s1"], "source": "unit"},
+        )
+
+        assert res["options"] == res["alternatives"]
+        assert res["memory_citations"] == []
+        assert res["memory_used_count"] == 0
+        assert res["planner"] == {"steps": [], "raw": None, "source": "fallback"}
+        assert res["extras"]["metrics"]["latency_ms"] == 12
+        assert res["trust_log"] is None
+
+    def test_assembly_preserves_explicit_optional_fields(self) -> None:
+        from veritas_os.core.pipeline_response import assemble_response
+
+        planner_payload = {"steps": ["p1"], "raw": {"t": 1}, "source": "planner"}
+        ctx = PipelineContext(
+            query="q",
+            request_id="req-2",
+            effective_risk=0.73,
+            telos=0.42,
+            decision_status="rejected",
+            rejection_reason="blocked",
+            modifications=[{"kind": "mask"}],
+            response_extras={
+                "memory_citations": [{"id": "m1"}],
+                "memory_used_count": 3,
+                "planner": planner_payload,
+            },
+            raw={"trust_log": [{"stage": "gate"}]},
+        )
+        res = assemble_response(
+            ctx,
+            load_persona_fn=lambda: {"name": "x"},
+            plan={"steps": ["a"]},
+        )
+
+        assert res["memory_citations"] == [{"id": "m1"}]
+        assert res["memory_used_count"] == 3
+        assert res["planner"] == planner_payload
+        assert res["gate"]["risk"] == pytest.approx(0.73)
+        assert res["gate"]["telos_score"] == pytest.approx(0.42)
+        assert res["rejection_reason"] == "blocked"
+        assert res["trust_log"] == [{"stage": "gate"}]
+
+
+class TestCoerceToDecideResponse:
+    """DecideResponse coercion stage."""
+
+    def test_uses_model_validate_and_model_dump_on_success(self) -> None:
+        from veritas_os.core.pipeline_response import coerce_to_decide_response
+
+        class DummyModel:
+            def __init__(self, data: Dict[str, Any]) -> None:
+                self.data = data
+
+            def model_dump(self) -> Dict[str, Any]:
+                return {"ok": True, "normalized": self.data.get("query", "")}
+
+        class DummySchema:
+            @staticmethod
+            def model_validate(data: Dict[str, Any]) -> DummyModel:
+                return DummyModel(data)
+
+        payload = {"query": "hello", "evidence": []}
+        out = coerce_to_decide_response(payload, DecideResponse=DummySchema)
+
+        assert out == {"ok": True, "normalized": "hello"}
+
+    def test_falls_back_to_original_payload_on_validation_error(self) -> None:
+        from veritas_os.core.pipeline_response import coerce_to_decide_response
+
+        class FailingSchema:
+            @staticmethod
+            def model_validate(_data: Dict[str, Any]) -> Any:
+                raise ValueError("invalid")
+
+        payload = {"query": "broken", "evidence": ["bad-shape"]}
+        out = coerce_to_decide_response(payload, DecideResponse=FailingSchema)
+
+        assert out is payload
+
 
 # =========================================================
 # pipeline_policy: stage_gate_decision
@@ -344,6 +437,38 @@ class TestFinalizeEvidence:
         finalize_evidence(payload, web_evidence=web_ev, evidence_max=50)
         sources = [e.get("source") for e in payload["evidence"]]
         assert "web" in sources
+
+    def test_uses_pipeline_evidence_when_payload_evidence_missing(self) -> None:
+        from veritas_os.core.pipeline_response import finalize_evidence
+
+        payload: Dict[str, Any] = {
+            "evidence": None,
+            "_pipeline_evidence": [{"source": "pipe", "snippet": "s1", "confidence": 0.8}],
+        }
+        finalize_evidence(payload, web_evidence=[], evidence_max=10)
+        assert payload["evidence"][0]["source"] == "pipe"
+
+    def test_normalizes_malformed_evidence_and_dedupes(self) -> None:
+        from veritas_os.core.pipeline_response import finalize_evidence
+
+        payload: Dict[str, Any] = {
+            "evidence": [
+                "alpha",
+                {"source": "web", "uri": "http://dup", "snippet": "same", "confidence": 0.6},
+                {"source": "web", "uri": "http://dup", "snippet": "same", "confidence": 0.9},
+            ],
+        }
+        web_evidence = [
+            {"source": "web", "uri": "http://dup", "snippet": "same", "confidence": 0.2},
+            {"source": "web", "uri": "http://new", "snippet": "new", "confidence": 0.7},
+        ]
+
+        finalize_evidence(payload, web_evidence=web_evidence, evidence_max=20)
+
+        assert isinstance(payload["evidence"], list)
+        assert all(isinstance(ev, dict) for ev in payload["evidence"])
+        assert sum(1 for ev in payload["evidence"] if ev.get("uri") == "http://dup") == 1
+        assert any(ev.get("uri") == "http://new" for ev in payload["evidence"])
 
 
 def test_build_replay_snapshot_includes_external_dependency_versions() -> None:
