@@ -87,6 +87,10 @@ def _mirror_to_worm(line: str) -> Dict[str, Any]:
     try:
         _append_line(path, line)
     except OSError as exc:
+        _logger.warning(
+            "WORM mirror write failed (path=%s): %s: %s",
+            path, exc.__class__.__name__, exc,
+        )
         return {
             "configured": True,
             "ok": False,
@@ -115,6 +119,10 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
     try:
         _append_line(path, line)
     except OSError as exc:
+        _logger.warning(
+            "Transparency anchor write failed (path=%s): %s: %s",
+            path, exc.__class__.__name__, exc,
+        )
         return {
             "configured": True,
             "ok": False,
@@ -198,6 +206,10 @@ def _read_last_entry(path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
                     try:
                         return json.loads(raw.decode("utf-8", errors="replace"))
                     except json.JSONDecodeError:
+                        _logger.warning(
+                            "Skipping corrupt trailing entry in signed TrustLog at %s",
+                            path,
+                        )
                         continue
             # まだ非空行が見つからなければ、さらに読み戻す
     return None
@@ -284,11 +296,16 @@ def verify_signature(entry: Dict[str, Any]) -> bool:
         return False
     if not PUBLIC_KEY_PATH.exists():
         return False
-    return verify_payload_signature(
-        payload_hash=str(entry["payload_hash"]),
-        signature_b64=str(entry["signature"]),
-        public_key_path=PUBLIC_KEY_PATH,
-    )
+    try:
+        return verify_payload_signature(
+            payload_hash=str(entry["payload_hash"]),
+            signature_b64=str(entry["signature"]),
+            public_key_path=PUBLIC_KEY_PATH,
+        )
+    except Exception:  # noqa: BLE001
+        # Malformed signatures (bad base64, wrong length, etc.) are treated
+        # as verification failures rather than propagating as crashes.
+        return False
 
 
 def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
