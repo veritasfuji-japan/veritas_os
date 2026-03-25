@@ -139,6 +139,10 @@ async def replay_endpoint(decision_id: str, request: Request):
         "match": result.match,
         "diff_summary": result.diff_summary,
         "replay_time_ms": result.replay_time_ms,
+        "schema_version": result.schema_version,
+        "severity": result.severity,
+        "divergence_level": result.divergence_level,
+        "audit_summary": result.audit_summary,
     }
 
 

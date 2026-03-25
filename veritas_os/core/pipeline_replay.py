@@ -53,14 +53,40 @@ def _build_replay_diff(
     orig_norm = _sanitize_for_diff(original)
     replay_norm = _sanitize_for_diff(replayed)
     if orig_norm == replay_norm:
-        return {"changed": False, "summary": "no_diff", "keys": []}
+        return {
+            "changed": False,
+            "summary": "no_diff",
+            "keys": [],
+            "severity": "info",
+            "divergence_level": "no_divergence",
+        }
 
     keys = sorted(set(orig_norm.keys()) | set(replay_norm.keys()))
     changed_keys = [key for key in keys if orig_norm.get(key) != replay_norm.get(key)]
+
+    _severity_map: Dict[str, str] = {
+        "decision": "critical",
+        "fuji": "critical",
+        "value_scores": "warning",
+    }
+    field_severities = [_severity_map.get(k, "info") for k in changed_keys]
+    max_severity = (
+        "critical" if "critical" in field_severities
+        else "warning" if "warning" in field_severities
+        else "info"
+    )
+    divergence = (
+        "critical_divergence" if "critical" in field_severities
+        else "acceptable_divergence" if field_severities
+        else "no_divergence"
+    )
+
     return {
         "changed": True,
         "summary": f"changed_keys={len(changed_keys)}",
         "keys": changed_keys,
+        "severity": max_severity,
+        "divergence_level": divergence,
         "original": orig_norm,
         "replayed": replay_norm,
     }

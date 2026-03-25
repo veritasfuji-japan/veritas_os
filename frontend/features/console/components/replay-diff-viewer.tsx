@@ -4,15 +4,60 @@ interface ReplayDiffViewerProps {
   result: DecideResponse;
 }
 
+/** Classify per-field severity for audit visibility. */
+function fieldSeverity(key: string): "critical" | "warning" | "info" {
+  if (key === "decision" || key === "fuji") return "critical";
+  if (key === "value_scores") return "warning";
+  return "info";
+}
+
+const severityStyles: Record<string, string> = {
+  critical: "bg-destructive/10 border-l-2 border-destructive",
+  warning: "bg-warning/10 border-l-2 border-warning",
+  info: "",
+};
+
+const severityLabels: Record<string, string> = {
+  critical: "CRITICAL",
+  warning: "WARNING",
+  info: "",
+};
+
 export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element {
   const previousChosen = (result.extras?.replay_previous_chosen ?? {}) as Record<string, unknown>;
   const currentChosen = (result.chosen ?? {}) as Record<string, unknown>;
 
   const keys = Array.from(new Set([...Object.keys(previousChosen), ...Object.keys(currentChosen)]));
 
+  // Determine overall divergence level for the header badge.
+  const changedKeys = keys.filter(
+    (k) => JSON.stringify(previousChosen[k]) !== JSON.stringify(currentChosen[k]),
+  );
+  const severities = changedKeys.map(fieldSeverity);
+  const divergenceLevel = severities.includes("critical")
+    ? "critical_divergence"
+    : severities.length > 0
+      ? "acceptable_divergence"
+      : "no_divergence";
+
+  const divergenceBadge: Record<string, { label: string; className: string }> = {
+    critical_divergence: { label: "Critical Divergence", className: "text-destructive font-semibold" },
+    acceptable_divergence: { label: "Acceptable Divergence", className: "text-warning font-semibold" },
+    no_divergence: { label: "No Divergence", className: "text-muted-foreground" },
+  };
+
+  const badge = divergenceBadge[divergenceLevel] ?? divergenceBadge.no_divergence;
+
   return (
     <section className="space-y-2" aria-label="replay diff viewer">
-      <h3 className="text-sm font-semibold text-foreground">Replay diff viewer</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground">Replay diff viewer</h3>
+        {keys.length > 0 && (
+          <span className={`text-xs ${badge.className}`} data-testid="divergence-badge">
+            {badge.label}
+          </span>
+        )}
+      </div>
       {keys.length === 0 ? (
         <p className="text-xs text-muted-foreground">No replay baseline is available.</p>
       ) : (
@@ -23,6 +68,7 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
                 <th className="px-2 py-1">Field</th>
                 <th className="px-2 py-1">Previous</th>
                 <th className="px-2 py-1">Current</th>
+                <th className="px-2 py-1">Severity</th>
               </tr>
             </thead>
             <tbody>
@@ -30,11 +76,18 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
                 const previous = previousChosen[key];
                 const current = currentChosen[key];
                 const changed = JSON.stringify(previous) !== JSON.stringify(current);
+                const severity = changed ? fieldSeverity(key) : "info";
+                const rowClass = changed ? severityStyles[severity] || "bg-warning/10" : "";
                 return (
-                  <tr key={key} className={changed ? "bg-warning/10" : ""}>
+                  <tr key={key} className={rowClass}>
                     <td className="px-2 py-1 font-mono">{key}</td>
                     <td className="px-2 py-1">{String(previous ?? "-")}</td>
                     <td className="px-2 py-1">{String(current ?? "-")}</td>
+                    <td className="px-2 py-1 text-center">
+                      {changed && severityLabels[severity] ? (
+                        <span className="rounded px-1 text-[10px] font-bold uppercase">{severityLabels[severity]}</span>
+                      ) : null}
+                    </td>
                   </tr>
                 );
               })}
