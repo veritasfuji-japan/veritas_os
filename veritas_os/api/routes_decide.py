@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Rejection status set, shared across handlers.
+# DECISION_REJECTED is "rejected" (lowercase) — the .lower() comparison
+# in check_fuji_rejection handles any casing from pipeline output.
 _REJECTED_STATUSES: set[str] = {"reject", "rejected", DECISION_REJECTED}
 
 

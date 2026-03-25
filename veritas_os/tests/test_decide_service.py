@@ -288,7 +288,7 @@ class TestValidateAndRespond:
         assert "warn_detail" in body
 
     def test_set_ok_false_disabled(self):
-        """When set_ok_false=False, 'ok' is not forced to False."""
+        """When set_ok_false=False, 'ok' is not forcibly set to False in the response body."""
         publish = MagicMock()
 
         class StrictModel(BaseModel):
@@ -303,8 +303,8 @@ class TestValidateAndRespond:
             set_ok_false=False,
         )
         body = _decode_json_response(result)
-        # ok should not be explicitly set to False
-        assert body.get("ok") is not False or "ok" not in body
+        # 'ok' should not be explicitly injected as False
+        assert "ok" not in body or body["ok"] is not False
 
     def test_custom_event_type(self):
         publish = _EventCollector()
