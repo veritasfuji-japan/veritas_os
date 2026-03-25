@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from unittest import mock
 
+import numpy as np
 import pytest
 
 from veritas_os.core.memory_vector import (
@@ -309,9 +311,202 @@ class TestVectorMemoryRebuild:
 
 class TestCosineSimStatic:
     def test_basic(self):
-        import numpy as np
         vec = np.array([1.0, 0.0, 0.0])
         matrix = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
         sims = VectorMemory._cosine_similarity(vec, matrix)
         assert sims[0] > 0.9
         assert sims[1] < 0.1
+
+    def test_exception_returns_zeros(self):
+        """When cosine similarity computation raises, return zeros.
+
+        Covers lines 423-427 (_cosine_similarity exception fallback).
+        """
+        # A 1-D matrix (missing axis=1 for norm) triggers an AxisError.
+        bad_matrix = np.array([1.0, 2.0])
+        vec = np.array([1.0, 0.0])
+        result = VectorMemory._cosine_similarity(vec, bad_matrix)
+        np.testing.assert_array_equal(result, np.zeros(len(bad_matrix)))
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage tests for uncovered branches
+# ---------------------------------------------------------------------------
+
+def _make_vm_raw(*, index_path=None, dim=4):
+    """Create a VectorMemory via __new__ bypassing __init__."""
+    vm = VectorMemory.__new__(VectorMemory)
+    vm.model_name = "test"
+    vm.index_path = index_path
+    vm.embedding_dim = dim
+    vm._lock = threading.RLock()
+    vm._id_counter = 0
+    vm.documents = []
+    vm.embeddings = None
+    vm.model = None
+    return vm
+
+
+class TestLoadModelEarlyReturn:
+    """_load_model: first early-return when model is already loaded (line 84)."""
+
+    def test_model_already_loaded_returns_immediately(self):
+        vm = _make_vm_raw()
+        sentinel = object()
+        vm.model = sentinel
+        # Calling _load_model should return immediately without changing model
+        vm._load_model()
+        assert vm.model is sentinel
+
+
+class TestLoadIndexUnsupportedEmbeddingsType:
+    """_load_index: embeddings value that is neither str nor list (line 157)."""
+
+    def test_embeddings_dict_type_sets_none(self, tmp_path):
+        json_path = tmp_path / "index.json"
+        json_path.write_text(json.dumps({
+            "documents": [{"id": "d1", "text": "hello", "kind": "semantic"}],
+            "embeddings": {"unexpected": "format"},
+        }))
+        vm = _make_vm_raw(index_path=tmp_path / "index")
+        vm._load_index()
+        assert len(vm.documents) == 1
+        assert vm.embeddings is None
+
+    def test_embeddings_int_type_sets_none(self, tmp_path):
+        json_path = tmp_path / "index.json"
+        json_path.write_text(json.dumps({
+            "documents": [{"id": "d1", "text": "hello", "kind": "semantic"}],
+            "embeddings": 42,
+        }))
+        vm = _make_vm_raw(index_path=tmp_path / "index")
+        vm._load_index()
+        assert len(vm.documents) == 1
+        assert vm.embeddings is None
+
+
+class TestAddGAP05ImportError:
+    """add(): ImportError when eu_ai_act_compliance_module is unavailable (lines 262-263)."""
+
+    def test_import_error_does_not_block_add(self):
+        vm = _make_vm_raw(dim=4)
+        vm.model = _FakeModel([np.ones((1, 4), dtype=np.float32)])
+
+        with mock.patch(
+            "veritas_os.core.memory_vector.validate_data_quality",
+            side_effect=ImportError("no module"),
+            create=True,
+        ):
+            # Force the import inside add() to fail
+            import builtins
+            _real_import = builtins.__import__
+
+            def _mock_import(name, *args, **kwargs):
+                if "eu_ai_act_compliance_module" in name:
+                    raise ImportError("mocked away")
+                return _real_import(name, *args, **kwargs)
+
+            with mock.patch.object(builtins, "__import__", side_effect=_mock_import):
+                ok = vm.add("semantic", "hello world")
+
+        assert ok is True
+        assert len(vm.documents) == 1
+
+
+class TestAddAutosaveEvery100:
+    """add(): triggers _save_index every 100 documents (line 304)."""
+
+    def test_autosave_at_100_docs(self, tmp_path):
+        vm = _make_vm_raw(index_path=tmp_path / "idx", dim=2)
+
+        class BulkModel:
+            def encode(self, texts):
+                return np.ones((len(texts), 2), dtype=np.float32)
+
+        vm.model = BulkModel()
+
+        save_calls = []
+        original_save = vm._save_index
+
+        def track_save():
+            save_calls.append(len(vm.documents))
+            # Don't actually save — just track the call
+        vm._save_index = track_save
+
+        for i in range(100):
+            assert vm.add("episodic", f"doc {i}") is True
+
+        assert len(vm.documents) == 100
+        # _save_index should have been called once at exactly 100 docs
+        assert 100 in save_calls
+
+
+class TestSearchDoubleCheckGuard:
+    """search(): second empty-check inside lock returns [] (line 349)."""
+
+    def test_documents_cleared_between_checks(self):
+        vm = _make_vm_raw(dim=2)
+        vm.documents = [{"id": "d1", "text": "x", "kind": "episodic"}]
+        vm.embeddings = np.ones((1, 2), dtype=np.float32)
+
+        call_count = [0]
+
+        class ClearingModel:
+            """Model that clears documents during encode to simulate a race."""
+            def encode(self, texts):
+                call_count[0] += 1
+                # Simulate another thread clearing data after the outer check
+                vm.documents = []
+                vm.embeddings = None
+                return np.ones((len(texts), 2), dtype=np.float32)
+
+        vm.model = ClearingModel()
+        result = vm.search("query")
+        assert result == []
+        assert call_count[0] == 1  # encode was called
+
+
+class TestLoadIndexBase64NoShape:
+    """_load_index: base64 embeddings without shape metadata (branch 151->159)."""
+
+    def test_base64_without_shape_stays_flat(self, tmp_path):
+        raw = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32).tobytes()
+        import base64
+        payload = {
+            "documents": [{"id": "d1", "text": "hi", "kind": "episodic"}],
+            "embeddings": base64.b64encode(raw).decode("ascii"),
+            "embeddings_dtype": "float32",
+            # No "embeddings_shape" key → shape is None → skip reshape
+        }
+        (tmp_path / "index.json").write_text(json.dumps(payload))
+
+        vm = _make_vm_raw(index_path=tmp_path / "index")
+        vm._load_index()
+        assert len(vm.documents) == 1
+        assert vm.embeddings is not None
+        # Without shape metadata the array stays 1-D
+        assert vm.embeddings.ndim == 1
+        assert len(vm.embeddings) == 4
+
+
+class TestSaveIndexNoNumpyEmbeddings:
+    """_save_index: embeddings that lack tobytes (branch 194->201)."""
+
+    def test_non_numpy_embeddings_saved_as_null(self, tmp_path, monkeypatch):
+        vm = _make_vm_raw(index_path=tmp_path / "idx.json", dim=2)
+        vm.documents = [{"id": "d1", "text": "hi", "kind": "episodic"}]
+        # Set embeddings to a plain list (no tobytes attribute)
+        vm.embeddings = [[1.0, 2.0]]
+
+        captured = {}
+
+        def fake_write(path, data):
+            captured["data"] = data
+
+        monkeypatch.setattr(
+            "veritas_os.core.atomic_io.atomic_write_json", fake_write
+        )
+        vm._save_index()
+        # Without tobytes, embeddings_b64 stays None
+        assert captured["data"]["embeddings"] is None
+        assert captured["data"]["embeddings_shape"] is None
