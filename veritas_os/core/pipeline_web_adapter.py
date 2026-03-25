@@ -3,14 +3,31 @@
 """
 Pipeline Web検索アダプタ。
 
-_normalize_web_payload と _extract_web_results を提供する。
-_safe_web_search は globals() によるテストフック機構のため pipeline.py に残す。
+_normalize_web_payload / _extract_web_results / _safe_web_search を提供する。
+
+_safe_web_search は依存注入パターンを採用: 呼び出し元（pipeline.py）が
+web_search 関数を resolver callable として渡す。これにより、テストの
+monkeypatch (pipeline.web_search / pipeline._tool_web_search) が
+引き続き機能する。
 
 pipeline.py の module-level / nested 定義をここに移動した。
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import hashlib
+import inspect
+import logging
+import re
+import unicodedata
+from typing import Any, Callable, Dict, List, Optional
+
+from .pipeline_persistence import _UNSAFE_UNICODE_CATEGORIES
+from .utils import _redact_text
+
+# Use the pipeline module's logger name for safe_web_search so that tests
+# capturing logs from "veritas_os.core.pipeline" continue to work.
+# _normalize_web_payload / _extract_web_results don't log, so this is safe.
+logger = logging.getLogger("veritas_os.core.pipeline")
 
 
 # =========================================================
@@ -104,7 +121,83 @@ def _extract_web_results(ws: Any) -> List[Any]:
     return []
 
 
+# =========================================================
+# safe web search (依存注入パターン)
+# =========================================================
+
+async def safe_web_search(
+    query: str,
+    *,
+    max_results: int = 5,
+    web_search_resolver: Optional[Callable[[], Optional[Callable]]] = None,
+) -> Optional[dict]:
+    """Execute web search safely, never raising exceptions.
+
+    Supports both sync and async web_search callables.
+
+    Args:
+        query: Search query string.
+        max_results: Max results (clamped to [1, 20]).
+        web_search_resolver: Callable that returns the actual web_search
+            function to use. This indirection allows the caller
+            (pipeline.py) to resolve the function at call time, preserving
+            monkeypatch support. If None or returns non-callable, returns None.
+
+    Returns:
+        Web search result dict, or None on failure.
+    """
+    query_text = str(query or "").strip()
+    if not query_text:
+        return None
+    if len(query_text) > 512:
+        query_text = query_text[:512]
+
+    # Block control characters and unsafe Unicode categories (bidi
+    # overrides, surrogates, etc.) to reduce risk of log injection /
+    # unsafe propagation into external adapters.
+    query_text = re.sub(r"[\x00-\x1f\x7f]", "", query_text)
+    query_text = "".join(
+        ch for ch in query_text
+        if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
+    )
+    if not query_text:
+        return None
+
+    try:
+        max_results_int = int(max_results)
+    except (TypeError, ValueError):
+        max_results_int = 5
+    max_results_int = max(1, min(20, max_results_int))
+
+    # Resolve the actual web_search function via the caller-provided resolver
+    fn: Optional[Callable] = None
+    if callable(web_search_resolver):
+        fn = web_search_resolver()
+    if not callable(fn):
+        return None
+
+    query_fingerprint = hashlib.sha256(
+        query_text.encode("utf-8", errors="ignore")
+    ).hexdigest()[:12]
+
+    try:
+        ws = fn(query_text, max_results=max_results_int)
+        if inspect.isawaitable(ws):
+            ws = await ws
+        return ws if isinstance(ws, dict) else None
+    except (RuntimeError, TypeError, ValueError, OSError, TimeoutError, ConnectionError) as exc:
+        logger.debug(
+            "_safe_web_search failed for query_redacted=%r query_sha256_12=%s: %s",
+            _redact_text(query_text),
+            query_fingerprint,
+            repr(exc),
+            exc_info=True,
+        )
+        return None
+
+
 __all__ = [
     "_normalize_web_payload",
     "_extract_web_results",
+    "safe_web_search",
 ]

@@ -17,10 +17,16 @@ Preferred extension points:
 - ``pipeline_persist`` and ``pipeline_replay`` for persistence / replay
 
 Compatibility guidance:
-- This file intentionally keeps compatibility imports and re-exports so older
-  call paths do not break immediately. Extend helpers first, and treat local
-  compatibility wrappers here as adapters rather than a place for new policy
-  branches or fallback-heavy logic.
+- Pure utility functions (to_dict, _norm_alt, get_request_params, etc.) have
+  been moved to ``pipeline_compat.py`` and are re-exported here for backward
+  compatibility.  All existing ``from veritas_os.core.pipeline import X``
+  paths continue to work.
+- Web search core logic has been moved to ``pipeline_web_adapter.safe_web_search``
+  with a dependency-injection pattern.  ``_safe_web_search`` here is a thin
+  wrapper that resolves the web_search function from module-level state,
+  preserving monkeypatch support.
+- Extend helpers first, and treat local compatibility wrappers here as
+  adapters rather than a place for new policy branches or fallback-heavy logic.
 
 This module is the *single entry-point* for the /v1/decide endpoint.
 ``run_decide_pipeline(req, request)`` orchestrates the full decision flow
@@ -33,6 +39,7 @@ by delegating to responsibility-separated stage modules:
   pipeline_persist  – audit, disk persist, memory, world-state, replay
   pipeline_replay   – deterministic replay & diff
   pipeline_types    – PipelineContext dataclass + constants
+  pipeline_compat   – backward-compat utility functions (to_dict, _norm_alt, etc.)
 
 ISSUE-4 / robustness goals:
 - Import must be resilient (optional components must not crash import).
@@ -54,23 +61,15 @@ Payload contracts restored (tests / server expectations):
 
 from __future__ import annotations
 
-import inspect
-import json
-import hashlib
+import inspect  # noqa: F401 – re-exported; tests access pipeline.inspect
 import logging
 import os
-import re
 import time
-import unicodedata
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
-from uuid import uuid4
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-from .utils import (
-    _safe_float,
-    _clip01 as _clip01_base,
+from .utils import (  # noqa: F401 – _redact_text/redact_payload re-exported for backward compat
     _redact_text,
     redact_payload,
     utc_now,
@@ -121,6 +120,7 @@ from .pipeline_memory_adapter import (
 from .pipeline_web_adapter import (
     _normalize_web_payload,
     _extract_web_results,
+    safe_web_search as _safe_web_search_impl,
 )
 from .pipeline_contracts import (
     _ensure_full_contract,
@@ -130,6 +130,17 @@ from .pipeline_contracts import (
 )
 from .pipeline_signature_adapter import (  # noqa: F401 – re-exported for backward compat
     call_core_decide,
+)
+from .pipeline_compat import (  # noqa: F401 – re-exported for backward compat
+    _to_bool,
+    _to_float_or,
+    _clip01,
+    to_dict,
+    _to_dict,
+    get_request_params,
+    _get_request_params,
+    _norm_alt,
+    _fallback_load_persona,
 )
 from .pipeline_persistence import (
     REPO_ROOT,
@@ -249,13 +260,7 @@ except (ImportError, ModuleNotFoundError):
 # ★ ただし、REQUIRED モジュールが None の場合は実行時にエラー
 # =========================================================
 
-def _to_bool(v: Any) -> bool:
-    """Convert value to bool (for env vars, config values, etc.).
-
-    Delegates to ``_to_bool_local`` from pipeline_helpers to eliminate
-    duplication while keeping the public name for backward compatibility.
-    """
-    return _to_bool_local(v)
+# _to_bool -> pipeline_compat.py に移動済み（上部 import で re-export 済み）
 
 
 def _warn(msg: str) -> None:
@@ -352,9 +357,7 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] api.schemas import failed: {repr(e)}")
 
 
-def _fallback_load_persona() -> dict:
-    return {"name": "fallback", "mode": "minimal"}
-
+# _fallback_load_persona -> pipeline_compat.py に移動済み（上部 import で re-export 済み）
 
 load_persona: Any = _fallback_load_persona
 try:
@@ -372,77 +375,11 @@ except (ImportError, ModuleNotFoundError):  # pragma: no cover
 
 
 # =========================================================
-# util helpers
+# Utility functions -> pipeline_compat.py に移動済み
+# to_dict, _to_dict, get_request_params, _get_request_params,
+# _norm_alt, _clip01, _to_float_or, _to_bool, _fallback_load_persona
+# 上部 import で re-export 済み。既存の import path は維持される。
 # =========================================================
-
-def _to_float_or(v: Any, default: float) -> float:
-    """_safe_float のエイリアス（後方互換性のため維持）"""
-    return _safe_float(v, default)
-
-
-def to_dict(o: Any) -> Dict[str, Any]:
-    if isinstance(o, dict):
-        return o
-    if hasattr(o, "model_dump"):
-        try:
-            return o.model_dump(exclude_none=True)
-        except (TypeError, ValueError, RuntimeError):
-            logger.debug("_to_dict: model_dump() failed for %r", type(o).__name__, exc_info=True)
-    if hasattr(o, "dict"):
-        try:
-            return o.dict()
-        except (TypeError, ValueError, RuntimeError):
-            logger.debug("_to_dict: dict() failed for %r", type(o).__name__, exc_info=True)
-    try:
-        if hasattr(o, "__dict__"):
-            raw = o.__dict__
-            if isinstance(raw, dict):
-                # Filter out values that reference the original object to
-                # prevent circular references from breaking downstream
-                # JSON serialization.
-                return {
-                    k: v for k, v in raw.items()
-                    if v is not o
-                }
-            # __dict__ returned a non-dict (e.g. int) – fall through
-    except (TypeError, ValueError, AttributeError):
-        logger.debug("_to_dict: __dict__ fallback failed for %r", type(o).__name__, exc_info=True)
-    return {}
-
-
-# 後方互換エイリアス（テスト移行期間中に維持）
-_to_dict = to_dict
-
-# _redact_text / redact_payload は utils.py に統合済み（import 済み）
-
-
-def get_request_params(request: Any) -> Dict[str, Any]:
-    """
-    DummyRequest 互換:
-    - request.query_params (starlette)
-    - request.params (tests)
-    の両方を吸って dict 化する
-    """
-    out: Dict[str, Any] = {}
-    try:
-        qp = getattr(request, "query_params", None)
-        if qp is not None:
-            out.update(dict(qp))
-    except (TypeError, ValueError, AttributeError, KeyError, RuntimeError):
-        logger.debug("_get_request_params: query_params extraction failed", exc_info=True)
-    try:
-        pm = getattr(request, "params", None)
-        if pm is not None:
-            out.update(dict(pm))
-    except (TypeError, ValueError, AttributeError, KeyError, RuntimeError):
-        logger.debug("_get_request_params: params extraction failed", exc_info=True)
-    return out
-
-
-# 後方互換エイリアス（テスト移行期間中に維持）
-_get_request_params = get_request_params
-
-# _ensure_metrics_contract -> pipeline_contracts.py に移動済み（上部 import）
 
 
 def _get_memory_store() -> Optional[Any]:
@@ -450,55 +387,6 @@ def _get_memory_store() -> Optional[Any]:
     if mem is None:
         return None
     return _get_memory_store_impl(mem=mem)
-
-
-def _norm_alt(o: Any) -> Dict[str, Any]:
-    d = to_dict(o) or {}
-
-    # text/title/description の整形
-    text = d.get("text")
-    if isinstance(text, str):
-        text = text.strip()
-
-    title = d.get("title")
-    if not title and text:
-        title = text
-    d["title"] = str(title or "")
-
-    desc = d.get("description")
-    if not desc and text:
-        desc = text
-    d["description"] = str(desc or "")
-
-    # score 系
-    d["score"] = _to_float_or(d.get("score", 1.0), 1.0)
-    d["score_raw"] = _to_float_or(d.get("score_raw", d["score"]), d["score"])
-
-    # ★ id は「あるなら保持」、None/空/空白だけ新規発行
-    # ★ 制御文字・null バイト・Unicode制御文字（bidiオーバーライド等）を除去し、
-    #   長さを制限（downstream 安全性）
-    _id = d.get("id")
-    if _id is None or (isinstance(_id, str) and _id.strip() == ""):
-        d["id"] = uuid4().hex
-    else:
-        _id_str = str(_id)
-        # ASCII control chars + DEL
-        _id_str = re.sub(r"[\x00-\x1f\x7f]", "", _id_str)
-        # Filter out unsafe Unicode categories (bidi overrides, surrogates, etc.)
-        _id_str = "".join(
-            ch for ch in _id_str
-            if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
-        )
-        if len(_id_str) > 256:
-            _id_str = _id_str[:256]
-        d["id"] = _id_str if _id_str.strip() else uuid4().hex
-
-    return d
-
-
-def _clip01(x: float) -> float:
-    """_clip01_base のラッパー（後方互換性のため維持）"""
-    return _clip01_base(x)
 
 
 # _safe_paths, EVIDENCE_MAX, _SAFE_FILENAME_RE -> pipeline_persistence.py に移動済み
@@ -633,68 +521,33 @@ except (ImportError, ModuleNotFoundError):
     pass  # optional dependency / env missing in CI or local
 
 
-async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
-    """Returns web_search result dict or None (never raises).
-    Supports both sync/async web_search (tests often monkeypatch async).
+def _resolve_web_search_fn() -> Any:
+    """Resolve web_search callable at call time (monkeypatch-safe).
 
     Resolution order:
       1. module-level ``web_search`` (set by monkeypatch in tests)
       2. ``_tool_web_search`` (imported from tools.web_search)
-
-    ``max_results`` is sanitized to an integer in [1, 20] to avoid
-    accidentally passing unbounded values to external adapters.
     """
     import sys
-
-    query_text = str(query or "").strip()
-    if not query_text:
-        return None
-    if len(query_text) > 512:
-        query_text = query_text[:512]
-
-    # Block control characters and unsafe Unicode categories (bidi
-    # overrides, surrogates, etc.) to reduce risk of log injection /
-    # unsafe propagation into external adapters.  Consistent with the
-    # sanitization applied in ``_norm_alt`` for alternative IDs.
-    query_text = re.sub(r"[\x00-\x1f\x7f]", "", query_text)
-    query_text = "".join(
-        ch for ch in query_text
-        if unicodedata.category(ch) not in _UNSAFE_UNICODE_CATEGORIES
-    )
-    if not query_text:
-        return None
-
-    try:
-        max_results_int = int(max_results)
-    except (TypeError, ValueError):
-        max_results_int = 5
-    max_results_int = max(1, min(20, max_results_int))
-
     _this = sys.modules[__name__]
     fn = getattr(_this, "web_search", None)
-    if not callable(fn):
-        fn = getattr(_this, "_tool_web_search", None)
-    if not callable(fn):
-        return None
+    if callable(fn):
+        return fn
+    return getattr(_this, "_tool_web_search", None)
 
-    query_fingerprint = hashlib.sha256(
-        query_text.encode("utf-8", errors="ignore")
-    ).hexdigest()[:12]
 
-    try:
-        ws = fn(query_text, max_results=max_results_int)
-        if inspect.isawaitable(ws):
-            ws = await ws
-        return ws if isinstance(ws, dict) else None
-    except (RuntimeError, TypeError, ValueError, OSError, TimeoutError, ConnectionError) as exc:
-        logger.debug(
-            "_safe_web_search failed for query_redacted=%r query_sha256_12=%s: %s",
-            _redact_text(query_text),
-            query_fingerprint,
-            repr(exc),
-            exc_info=True,
-        )
-        return None
+async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict]:
+    """Returns web_search result dict or None (never raises).
+
+    Core logic is in ``pipeline_web_adapter.safe_web_search``.
+    This thin wrapper resolves the web_search function from module-level
+    state at call time, preserving monkeypatch support for tests.
+    """
+    return await _safe_web_search_impl(
+        query,
+        max_results=max_results,
+        web_search_resolver=_resolve_web_search_fn,
+    )
 
 
 # _normalize_web_payload -> pipeline_web_adapter.py に移動済み

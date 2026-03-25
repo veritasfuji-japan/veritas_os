@@ -246,10 +246,13 @@ Planner → Evidence → Critique → Debate → FUJI → World/Memory update
 
 #### `pipeline.py`
 
-Defines the stages and execution flow of the decision pipeline:
+Orchestrator for the `/v1/decide` decision pipeline:
 
-* Which OS modules are called and in what order
-* Which metrics are collected at which stage
+* `run_decide_pipeline()` is the single entry-point for `/v1/decide`
+* Delegates to responsibility-separated stage modules (`pipeline_inputs`,
+  `pipeline_execute`, `pipeline_policy`, `pipeline_response`, `pipeline_persist`)
+* Pure utility functions live in `pipeline_compat.py` (re-exported for backward compat)
+* Web search core logic lives in `pipeline_web_adapter.py`
 
 #### `planner.py` (PlannerOS)
 
