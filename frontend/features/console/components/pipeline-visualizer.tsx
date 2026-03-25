@@ -69,6 +69,9 @@ export function PipelineVisualizer({ loading, result, error }: PipelineVisualize
               >
                 <p className="font-semibold">{index + 1}. {card.name}</p>
                 <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{card.status}</p>
+                {card.latencyMs !== null && (
+                  <p className="mt-0.5 text-[10px] tabular-nums text-muted-foreground">{card.latencyMs.toFixed(0)} ms</p>
+                )}
               </button>
             </li>
           );

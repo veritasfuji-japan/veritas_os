@@ -3,7 +3,9 @@ import { toArray } from "../analytics/utils";
 import { PIPELINE_STAGES, type PipelineStageName } from "../constants";
 import {
   type DecisionResultView,
+  type FujiGateDetailView,
   type FujiGateView,
+  type FujiViolationView,
   type PipelineStageStatus,
   type PipelineStageView,
 } from "../types";
@@ -142,25 +144,85 @@ export function toDecisionResultView(result: DecideResponse): DecisionResultView
     .map((item) => (item as Record<string, unknown>).source)
     .filter((value): value is string => typeof value === "string");
 
+  const valuesRecord = (result.values ?? {}) as Record<string, unknown>;
+  const chosenValueScore = typeof valuesRecord.total === "number" ? valuesRecord.total : null;
+
   return {
     chosen: {
       finalDecision: readText(chosen, "title", "decision", "id"),
       whyChosen: readText(chosen, "why", "rationale", "reason"),
       supportingEvidenceSummary: evidenceSources.length > 0 ? evidenceSources.slice(0, 3).join(", ") : "n/a",
-      valueRationale: readText((result.values ?? {}) as Record<string, unknown>, "rationale"),
+      valueRationale: readText(valuesRecord, "rationale"),
+      valueScore: chosenValueScore,
     },
-    alternatives: alternatives.map((item, index) => ({
-      optionSummary: readText(item, "title", "description", "id") || `Option ${index + 1}`,
-      tradeOff: readText(item, "trade_off", "tradeoff", "impact", "description"),
-      relativeWeakness: readText(item, "weakness", "relative_weakness", "risk"),
-    })),
+    alternatives: alternatives.map((item, index) => {
+      const altScore = typeof item.value_score === "number"
+        ? item.value_score
+        : typeof item.score === "number"
+          ? item.score
+          : null;
+      return {
+        optionSummary: readText(item, "title", "description", "id") || `Option ${index + 1}`,
+        tradeOff: readText(item, "trade_off", "tradeoff", "impact", "description"),
+        relativeWeakness: readText(item, "weakness", "relative_weakness", "risk"),
+        valueScore: altScore,
+      };
+    }),
     rejectedReasons: {
       fujiBlock: readText((result.gate ?? {}) as Record<string, unknown>, "reason"),
       weakEvidence: typeof result.evidence[0]?.confidence === "number" && result.evidence[0].confidence < 0.6
         ? "Low confidence evidence detected."
         : "n/a",
       poorDebateOutcome: result.debate.length === 0 ? "Debate did not provide decisive support." : "n/a",
-      valueConflict: readText((result.values ?? {}) as Record<string, unknown>, "conflict", "warning"),
+      valueConflict: readText(valuesRecord, "conflict", "warning"),
     },
+  };
+}
+
+/**
+ * Extracts a detailed FUJI gate view with violations, risk score, and reasons
+ * from the merged fuji + gate data in the response.
+ */
+export function toFujiGateDetailView(result: DecideResponse | null): FujiGateDetailView {
+  const base = toFujiGateView(result);
+  if (!result) {
+    return {
+      ...base,
+      riskScore: null,
+      reasons: [],
+      violations: [],
+    };
+  }
+
+  // Gate properties override fuji properties when names collide,
+  // since gate is the canonical API-facing view of the safety decision.
+  const merged = {
+    ...(result.fuji as Record<string, unknown>),
+    ...(result.gate as Record<string, unknown>),
+  };
+
+  const riskRaw = merged.risk ?? merged.risk_score;
+  const riskScore = typeof riskRaw === "number" ? riskRaw : null;
+
+  const rawReasons = Array.isArray(merged.reasons) ? merged.reasons : [];
+  const reasons = rawReasons
+    .map((r: unknown) => (typeof r === "string" ? r : ""))
+    .filter((r: string) => r.length > 0);
+
+  const rawViolations = Array.isArray(merged.violations) ? merged.violations : [];
+  const violations: FujiViolationView[] = rawViolations.map((v: unknown) => {
+    const rec = (v && typeof v === "object" ? v : {}) as Record<string, unknown>;
+    return {
+      rule: readText(rec, "rule", "code", "policy"),
+      detail: readText(rec, "detail", "description", "message"),
+      severity: readText(rec, "severity", "level"),
+    };
+  });
+
+  return {
+    ...base,
+    riskScore,
+    reasons,
+    violations,
   };
 }
