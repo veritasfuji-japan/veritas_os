@@ -387,8 +387,13 @@ cd veritas_os
 
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[full]"     # all features (recommended)
+# pip install -e .           # core-only (API server + OpenAI)
+# pip install -e ".[ml]"    # core + ML tooling
 ```
+
+> See [`docs/dependency-profiles.md`](docs/dependency-profiles.md) for all
+> install profiles and the dependency classification table.
 
 > [!WARNING]
 > Avoid placing secrets directly in shell history. Prefer a `.env` file (git-ignored) or a
