@@ -8,13 +8,23 @@ Public contract:
 - 本モジュールは MemoryOS の I/O と orchestration を保持し、Planner /
   Kernel / FUJI の責務へ横滑りしません。
 
+Preferred extension points:
+- ``memory_helpers.py`` for normalization / compatibility helpers
+- ``memory_search_helpers.py`` for search payload shaping and fallback scoring
+- ``memory_summary_helpers.py`` for summary text formatting
+- ``memory_lifecycle.py`` / ``memory_security.py`` / ``memory_store.py`` for
+  lifecycle, security, and backend store details
+
+Compatibility guidance:
+- Optional dependency fallback と既存 private wrapper は後方互換のため残して
+  あります。新しい検索整形・summary 整形・fallback 分岐は helper 側へ追加し、
+  本体へ新規責務を直接積み増さないでください。
+
 Architecture (responsibility split):
 - ``memory_vector.py``       : VectorMemory class (algorithm + data structure)
 - ``memory_store_compat.py`` : MemoryStore compatibility hooks
 - ``memory_distillation.py`` : episodic → semantic distillation orchestration
 - ``memory_storage.py``      : file locking (locked_memory) + pickle scanning
-- ``memory_security.py``     : runtime security guards
-- ``memory_store.py``        : KVS backend (MemoryStore class)
 
 This module re-exports every symbol that callers historically imported from
 ``veritas_os.core.memory`` so the public API surface is unchanged.
