@@ -15,6 +15,18 @@ from veritas_os.core.memory_vector import (
 )
 
 
+class _FakeModel:
+    """Deterministic fake embedding model for VectorMemory tests."""
+
+    def __init__(self, vectors):
+        self._vectors = list(vectors)
+
+    def encode(self, texts):
+        assert texts  # guard accidental empty calls in tests
+        vec = self._vectors.pop(0)
+        return [vec]
+
+
 class TestIsExplicitlyEnabled:
     def test_not_set(self):
         import os
@@ -106,6 +118,73 @@ class TestVectorMemorySearch:
             vm = VectorMemory(index_path=None)
         assert vm.search("") == []
 
+    def test_search_kinds_filter_topk_and_min_sim(self):
+        """Keep only matching kinds above threshold and slice to top-k."""
+        import numpy as np
+
+        vm = VectorMemory.__new__(VectorMemory)
+        vm.model_name = "test"
+        vm.index_path = None
+        vm.embedding_dim = 3
+        vm._lock = mock.MagicMock()
+        vm._id_counter = 3
+        vm.model = _FakeModel([np.array([1.0, 0.0, 0.0], dtype=np.float32)])
+        vm.documents = [
+            {"id": "d1", "text": "alpha", "kind": "semantic", "tags": []},
+            {"id": "d2", "text": "beta", "kind": "episodic", "tags": []},
+            {"id": "d3", "text": "gamma", "kind": "semantic", "tags": []},
+        ]
+        vm.embeddings = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.9, 0.1, 0.0],
+                [0.2, 0.9, 0.0],
+            ],
+            dtype=np.float32,
+        )
+
+        # Ensure ordering: d1 > d2 > d3, then filter kinds and threshold.
+        with mock.patch.object(
+            VectorMemory,
+            "_cosine_similarity",
+            return_value=np.array([0.95, 0.85, 0.25], dtype=np.float32),
+        ):
+            hits = vm.search(
+                "query",
+                k=1,
+                kinds=["semantic"],
+                min_sim=0.5,
+            )
+
+        assert len(hits) == 1
+        assert hits[0]["id"] == "d1"
+        assert hits[0]["score"] == pytest.approx(0.95)
+
+    def test_search_skips_out_of_range_similarity_entries(self):
+        """Defensive guard: ignore similarity values beyond docs length."""
+        import threading
+        import numpy as np
+
+        vm = VectorMemory.__new__(VectorMemory)
+        vm.model_name = "test"
+        vm.index_path = None
+        vm.embedding_dim = 2
+        vm._lock = threading.RLock()
+        vm._id_counter = 1
+        vm.model = _FakeModel([np.array([1.0, 0.0], dtype=np.float32)])
+        vm.documents = [{"id": "d1", "text": "alpha", "kind": "semantic"}]
+        vm.embeddings = np.array([[1.0, 0.0]], dtype=np.float32)
+
+        with mock.patch.object(
+            VectorMemory,
+            "_cosine_similarity",
+            return_value=np.array([0.9, 0.8], dtype=np.float32),
+        ):
+            hits = vm.search("query", k=10)
+
+        assert len(hits) == 1
+        assert hits[0]["id"] == "d1"
+
 
 class TestVectorMemoryLoadIndex:
     def _make_vm(self, index_path):
@@ -155,6 +234,68 @@ class TestVectorMemoryLoadIndex:
         pkl_path.write_bytes(b"fake pickle")
         vm = self._make_vm(pkl_path)
         assert len(vm.documents) == 0
+
+    def test_load_corrupt_json_keeps_empty_state(self, tmp_path):
+        json_path = tmp_path / "index.json"
+        json_path.write_text("not-json")
+
+        vm = self._make_vm(tmp_path / "index")
+
+        assert vm.documents == []
+        assert vm.embeddings is None
+
+    def test_load_base64_shape_mismatch_preserves_partial_state(self, tmp_path):
+        import base64
+        import numpy as np
+
+        raw = np.array([[1.0, 2.0]], dtype=np.float32).tobytes()
+        payload = {
+            "documents": [{"id": "x", "text": "hello", "kind": "semantic"}],
+            "embeddings": base64.b64encode(raw).decode("ascii"),
+            "embeddings_dtype": "float32",
+            "embeddings_shape": [99, 99],
+        }
+        (tmp_path / "index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+        vm = self._make_vm(tmp_path / "index")
+
+        # Corrupt reshape path is caught; documents are already loaded.
+        assert vm.documents == [{"id": "x", "text": "hello", "kind": "semantic"}]
+        assert vm.embeddings.shape == (2,)
+
+
+class TestVectorMemorySaveIndex:
+    def test_save_index_writes_json_and_updates_path(self, tmp_path, monkeypatch):
+        import threading
+        import numpy as np
+
+        vm = VectorMemory.__new__(VectorMemory)
+        vm.model_name = "fake-model"
+        vm.index_path = tmp_path / "vector_index.pkl"
+        vm.embedding_dim = 4
+        vm._lock = threading.RLock()
+        vm._id_counter = 1
+        vm.documents = [{"id": "d1", "text": "hello", "kind": "semantic"}]
+        vm.embeddings = np.array([[1.0, 2.0, 3.0, 4.0]], dtype=np.float32)
+        vm.model = None
+
+        captured = {}
+
+        def _fake_atomic_write(path, data):
+            captured["path"] = path
+            captured["data"] = data
+
+        monkeypatch.setattr(
+            "veritas_os.core.atomic_io.atomic_write_json",
+            _fake_atomic_write,
+        )
+
+        vm._save_index()
+
+        assert captured["path"].suffix == ".json"
+        assert captured["data"]["format_version"] == "2.0"
+        assert captured["data"]["embeddings_shape"] == [1, 4]
+        assert vm.index_path.suffix == ".json"
 
 
 class TestVectorMemoryRebuild:
