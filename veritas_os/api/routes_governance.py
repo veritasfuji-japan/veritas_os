@@ -133,6 +133,12 @@ def governance_put(body: dict):
             status_code=403,
             content={"ok": False, "error": "governance approval validation failed"},
         )
+    except (ValueError, TypeError) as e:
+        logger.warning("governance_put validation error: %s", e)
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": str(e)},
+        )
     except Exception as e:
         logger.error("governance_put failed: %s", e)
         return JSONResponse(
