@@ -530,8 +530,12 @@ def test_evaluate_contributions_sum_to_total(monkeypatch):
     )
 
     res = value_core.evaluate("テスト", {"no_learn_values": True})
-    avg = sum(res.contributions.values()) / max(len(res.contributions), 1)
-    assert abs(res.total - value_core._clip01(avg)) < 1e-4
+    avg = sum(res.contributions.values()) / len(res.contributions)
+    # total は _clip01(avg) なので、avg <= 1.0 なら total == avg
+    if avg <= 1.0:
+        assert abs(res.total - avg) < 1e-4
+    else:
+        assert res.total == 1.0
 
 
 # ============

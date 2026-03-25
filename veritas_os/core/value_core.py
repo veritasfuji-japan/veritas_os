@@ -272,6 +272,23 @@ def _build_rationale(
 
 
 # ==============================
+#   監査エントリ生成
+# ==============================
+def _audit_entry(
+    action: str, key: str, old: float, new: float, **extra: Any,
+) -> Dict[str, Any]:
+    """audit_trail 用の統一エントリを生成する。"""
+    entry: Dict[str, Any] = {
+        "action": action,
+        "key": key,
+        "old": round(old, 4),
+        "new": round(new, 4),
+    }
+    entry.update(extra)
+    return entry
+
+
+# ==============================
 #   メイン評価関数（学習付き）
 # ==============================
 def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
@@ -322,13 +339,9 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
             old = scores.get(k, 0.0)
             if old < floor_val:
                 scores[k] = floor_val
-                audit.append({
-                    "action": "policy_floor",
-                    "policy": policy_name,
-                    "key": k,
-                    "old": round(old, 4),
-                    "new": round(floor_val, 4),
-                })
+                audit.append(_audit_entry(
+                    "policy_floor", k, old, floor_val, policy=policy_name,
+                ))
 
     # 4) 重みの決定（保存 > context 上書き）
     prof = ValueProfile.load()
@@ -347,13 +360,9 @@ def evaluate(query: str, context: Dict[str, Any]) -> ValueResult:
             old_w = merged_w.get(k, 0.0)
             if old_w < target_w:
                 merged_w[k] = target_w
-                audit.append({
-                    "action": "context_weight",
-                    "domain": domain,
-                    "key": k,
-                    "old": round(old_w, 4),
-                    "new": round(target_w, 4),
-                })
+                audit.append(_audit_entry(
+                    "context_weight", k, old_w, target_w, domain=domain,
+                ))
 
     weights = _normalize_weights(merged_w)
 
