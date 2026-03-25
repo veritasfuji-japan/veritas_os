@@ -95,7 +95,8 @@
 | ~~2~~ | ~~`api/governance.py`~~ | ~~69%~~ → **97%** | ~~69~~ → 7 | ✅ **改善済** | four-eyes approval・policy CRUD・history append/trim・callback hot-reload・updated_by sanitization のテスト追加。62 行回収。 |
 | 3 | `tools/web_search_security.py` | 59% | 53 | 中 (53 行回収可能) | URL 検証・セキュリティチェックのエッジケーステスト追加。 |
 | 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加。 |
-| 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | 暗号化・復号のエッジケース (鍵不正、データ破損) テスト追加。 |
+| 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | ✅ **adversarial テスト追加済** — missing key, wrong key, corrupted ciphertext, truncated line 等の fail-closed テスト (`test_trustlog_adversarial.py`)。 |
+| 5b | `audit/trustlog_signed.py` | — | — | 中 | ✅ **adversarial テスト追加済** — signature invalid, previous_hash mismatch, WORM mirror write failure, transparency anchor failure のテスト。`verify_signature` の例外処理バグ修正。 |
 | 6 | `compliance/report_engine.py` | 63% | 38 | 中 (38 行回収可能) | EU AI Act コンプライアンスレポート生成のテスト追加。 |
 | 7 | `core/memory_storage.py` | 56% | 36 | 中 (36 行回収可能) | ストレージ永続化のテスト追加。ファイル I/O のモックテスト。 |
 | 8 | `core/pipeline_retrieval.py` | 78% | 32 | 中 (32 行回収可能) | 検索・取得パスの分岐テスト追加。 |
