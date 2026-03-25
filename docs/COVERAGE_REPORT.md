@@ -59,7 +59,7 @@
 | `core/memory_lifecycle.py` | 86 | 25 | 42 | 16 | 65% | 70.9% |
 | `logging/encryption.py` | 134 | 43 | 28 | 4 | 67% | 67.9% |
 | `core/pipeline_response.py` | 56 | 17 | 20 | 5 | 68% | 69.6% |
-| `api/governance.py` | 243 | 69 | 64 | 14 | 69% | 71.6% |
+| ~~`api/governance.py`~~ | ~~243~~ → 251 | ~~69~~ → 7 | 66 | 3 | ~~69%~~ → **97%** | 97.2% |
 | `core/pipeline_execute.py` | 92 | 21 | 26 | 9 | 73% | 77.2% |
 | `core/pipeline_gate.py` | 106 | 27 | 20 | 3 | 73% | 74.5% |
 | `core/pipeline_helpers.py` | 137 | 30 | 46 | 7 | 74% | 78.1% |
@@ -92,7 +92,7 @@
 |------|-----------|------|---------|--------------|--------------|
 | 1 | `core/memory_store.py` | 43% | 152 | 高 (152 行回収可能) | VectorMemory/MemoryStore の実行パステスト追加。search/get/delete メソッドのテスト。 |
 | ~~2~~ | ~~`core/memory_vector.py`~~ | ~~39%~~ → **99%** | ~~116~~ → 0 | ✅ **改善済** | テスト追加により全ステートメント網羅。ブランチも 66/66 の 65 をカバー (BrPart=1)。 |
-| 2 | `api/governance.py` | 69% | 69 | 中〜高 (69 行回収可能) | ガバナンスエンドポイントのテスト追加。ポリシー CRUD のテスト。 |
+| ~~2~~ | ~~`api/governance.py`~~ | ~~69%~~ → **97%** | ~~69~~ → 7 | ✅ **改善済** | four-eyes approval・policy CRUD・history append/trim・callback hot-reload・updated_by sanitization のテスト追加。62 行回収。 |
 | 3 | `tools/web_search_security.py` | 59% | 53 | 中 (53 行回収可能) | URL 検証・セキュリティチェックのエッジケーステスト追加。 |
 | 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加。 |
 | 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | 暗号化・復号のエッジケース (鍵不正、データ破損) テスト追加。 |
@@ -101,7 +101,7 @@
 | 8 | `core/pipeline_retrieval.py` | 78% | 32 | 中 (32 行回収可能) | 検索・取得パスの分岐テスト追加。 |
 | 9 | `core/pipeline_helpers.py` | 74% | 30 | 中 (30 行回収可能) | ヘルパー関数の分岐テスト追加。 |
 
-> **合計**: TOP 9 の改善で最大 **498 行** のミスを回収可能。`memory_vector.py` は改善済み (39% → 99%, 116 行回収)。
+> **合計**: TOP 9 の改善で最大 **498 行** のミスを回収可能。`memory_vector.py` は改善済み (39% → 99%, 116 行回収)。`governance.py` は改善済み (69% → 97%, 62 行回収)。
 
 ## 制約・注意点
 

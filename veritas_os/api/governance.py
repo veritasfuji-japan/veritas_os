@@ -277,6 +277,23 @@ def get_policy() -> Dict[str, Any]:
     return _load()
 
 
+def _sanitize_updated_by(raw: Any) -> str:
+    """Sanitize the ``updated_by`` field for safe persistence and display.
+
+    * Coerces to str
+    * Strips leading/trailing whitespace and control characters
+    * Removes HTML-like tags to mitigate stored-XSS when rendered in dashboards
+    * Truncates to 200 characters (DoS protection)
+    """
+    import re
+    text = str(raw).strip()
+    # Strip control characters (U+0000–U+001F, U+007F–U+009F) except common whitespace
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]", "", text)
+    # Strip HTML tags to prevent stored-XSS in governance dashboards
+    text = re.sub(r"<[^>]*>", "", text)
+    return text[:200]
+
+
 def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge *patch* into the current governance policy and persist.
@@ -284,8 +301,15 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     Changes are written atomically and appended to the audit history log.
     All registered callbacks (e.g. FUJI hot-reload) are notified after save.
 
+    Raises:
+        TypeError: If *patch* is not a dict.
+        ValueError: If a nested section is not an object or fails validation.
+
     Returns the full updated policy.
     """
+    if not isinstance(patch, dict):
+        raise TypeError("policy patch must be a dict")
+
     previous = _load()
     current = deepcopy(previous)
 
@@ -317,8 +341,7 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
 
     # Metadata
     current["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-    # ★ セキュリティ修正: updated_by フィールドのサイズ制限（DoS対策）
-    current["updated_by"] = str(patch.get("updated_by", "api"))[:200]
+    current["updated_by"] = _sanitize_updated_by(patch.get("updated_by", "api"))
 
     # Validate through pydantic
     validated = GovernancePolicy.model_validate(current)
