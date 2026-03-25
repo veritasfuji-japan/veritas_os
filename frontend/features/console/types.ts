@@ -53,12 +53,16 @@ export interface DecisionChosenView {
   whyChosen: string;
   supportingEvidenceSummary: string;
   valueRationale: string;
+  /** Value total score (0-1) when available from backend. */
+  valueScore: number | null;
 }
 
 export interface DecisionAlternativeView {
   optionSummary: string;
   tradeOff: string;
   relativeWeakness: string;
+  /** Per-alternative value score (0-1) when the backend provides it. */
+  valueScore: number | null;
 }
 
 export interface DecisionRejectedReasonsView {
@@ -72,6 +76,23 @@ export interface DecisionResultView {
   chosen: DecisionChosenView;
   alternatives: DecisionAlternativeView[];
   rejectedReasons: DecisionRejectedReasonsView;
+}
+
+export interface FujiViolationView {
+  rule: string;
+  detail: string;
+  severity: string;
+}
+
+export interface FujiGateDetailView {
+  decision: string;
+  ruleHit: string;
+  severity: string;
+  remediationHint: string;
+  riskyFragmentPreview: string;
+  riskScore: number | null;
+  reasons: string[];
+  violations: FujiViolationView[];
 }
 
 export interface GovernanceDriftAlert {

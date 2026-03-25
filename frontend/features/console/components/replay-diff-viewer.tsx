@@ -23,6 +23,25 @@ const severityLabels: Record<string, string> = {
   info: "",
 };
 
+/** Render a value as a readable string, handling nested objects. */
+function renderDiffValue(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Returns true if the value is a non-trivial object or array. */
+function isExpandable(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value !== "object") return false;
+  return Object.keys(value as Record<string, unknown>).length > 0;
+}
+
 export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element {
   const previousChosen = (result.extras?.replay_previous_chosen ?? {}) as Record<string, unknown>;
   const currentChosen = (result.chosen ?? {}) as Record<string, unknown>;
@@ -48,6 +67,11 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
 
   const badge = divergenceBadge[divergenceLevel] ?? divergenceBadge.no_divergence;
 
+  // Build a plain-text change summary for quick scanning.
+  const changeSummary = changedKeys.length === 0
+    ? null
+    : `${changedKeys.length} field(s) changed: ${changedKeys.join(", ")}`;
+
   return (
     <section className="space-y-2" aria-label="replay diff viewer">
       <div className="flex items-center gap-2">
@@ -58,6 +82,9 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
           </span>
         )}
       </div>
+      {changeSummary && (
+        <p className="text-xs text-muted-foreground" data-testid="change-summary">{changeSummary}</p>
+      )}
       {keys.length === 0 ? (
         <p className="text-xs text-muted-foreground">No replay baseline is available.</p>
       ) : (
@@ -78,11 +105,30 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
                 const changed = JSON.stringify(previous) !== JSON.stringify(current);
                 const severity = changed ? fieldSeverity(key) : "info";
                 const rowClass = changed ? severityStyles[severity] || "bg-warning/10" : "";
+                const needsExpand = isExpandable(previous) || isExpandable(current);
                 return (
                   <tr key={key} className={rowClass}>
                     <td className="px-2 py-1 font-mono">{key}</td>
-                    <td className="px-2 py-1">{String(previous ?? "-")}</td>
-                    <td className="px-2 py-1">{String(current ?? "-")}</td>
+                    <td className="px-2 py-1">
+                      {needsExpand ? (
+                        <details>
+                          <summary className="cursor-pointer">{typeof previous === "object" && previous !== null ? `{${Object.keys(previous as Record<string, unknown>).length} keys}` : renderDiffValue(previous)}</summary>
+                          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{renderDiffValue(previous)}</pre>
+                        </details>
+                      ) : (
+                        renderDiffValue(previous)
+                      )}
+                    </td>
+                    <td className="px-2 py-1">
+                      {needsExpand ? (
+                        <details>
+                          <summary className="cursor-pointer">{typeof current === "object" && current !== null ? `{${Object.keys(current as Record<string, unknown>).length} keys}` : renderDiffValue(current)}</summary>
+                          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap text-[10px]">{renderDiffValue(current)}</pre>
+                        </details>
+                      ) : (
+                        renderDiffValue(current)
+                      )}
+                    </td>
                     <td className="px-2 py-1 text-center">
                       {changed && severityLabels[severity] ? (
                         <span className="rounded px-1 text-[10px] font-bold uppercase">{severityLabels[severity]}</span>
