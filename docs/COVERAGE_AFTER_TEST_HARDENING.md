@@ -326,3 +326,66 @@ python -m pytest -q veritas_os/tests \
 | 10 | `core/world.py` | 91% | 36 | 中 (36 行回収可能) | world モデルの残り分岐テスト追加 |
 
 > **合計**: TOP 10 の改善で最大 **542 行** のミスを回収可能。全体カバレッジを約 **3.0%** 向上させる可能性がある。
+
+---
+
+## Follow-up Re-Measurement (2026-03-25 追加テスト強化)
+
+### Summary
+
+| 項目 | 値 |
+|------|-----|
+| **測定日時** | 2026-03-25 |
+| **Python** | 3.11.14 |
+| **OS** | Linux 6.18.5 |
+| **テストフレームワーク** | pytest 9.0.2 + pytest-cov 7.1.0 |
+| **ブランチカバレッジ** | 有効 (.coveragerc で `branch = True`) |
+| **テスト結果** | **4587 passed**, 0 failed, 3 skipped |
+| **全体カバレッジ (term-missing)** | **89%** (Stmts: 18,225 / Miss: 1,638 / Branch: 5,672 / BrPart: 675) |
+| **カバレッジ最低ライン (CI)** | 85% (`--cov-fail-under=85`) |
+| **CI 基準** | ✅ パス (89% ≥ 85%) |
+
+### Delta vs Previous (2026-03-25 07:02 UTC)
+
+| 指標 | 前回 (07:02 UTC) | 今回 | 増減 |
+|------|------------------|------|------|
+| テスト数 (passed) | 4,512 | **4,587** | **+75** |
+| Miss 行数 | 1,683 | **1,638** | **−45** |
+| BrPart | 688 | **675** | **−13** |
+| 全体カバレッジ (term) | 89% | **89%** | 維持 (Miss 減による微改善) |
+
+### 今回の改善対象モジュール
+
+| モジュール | 前回 | 今回 | 増減 | Miss | コメント |
+|-----------|------|------|------|------|---------|
+| `core/pipeline_decide_stages.py` | **未テスト (0%)** | **92%** | **+92%** | 13 | 9つの全ステージ関数に対するテスト追加。最大のインパクト。 |
+| `api/routes_decide.py` | 72% | **81%** | **+9%** | 23 | replay_endpoint, replay_decision_endpoint, _get_server のテスト追加。 |
+| `core/memory_store.py` | — | — | — | — | _is_record_legal_hold, _should_cascade_delete_semantic の直接テスト追加。 |
+| `core/fuji_policy.py` | — | — | — | — | _build_runtime_patterns_from_policy 直接テスト、RISKY_KEYWORDS_POC テスト追加。 |
+| `api/governance.py` | — | — | — | — | _policy_path のテスト追加。 |
+
+### 追加されたテストファイル
+
+| ファイル | テスト数 | 対象 |
+|---------|---------|------|
+| `tests/test_pipeline_decide_stages.py` | 45 | 全9ステージ関数 (normalize_options, absorb_raw_results, fallback_alternatives, model_boost, debate, critique_async, value_learning_ema, compute_metrics, evidence_hardening) |
+| `tests/test_coverage_boost_extra.py` | 30 | memory_store 静的メソッド、governance._policy_path、fuji_policy パターン、routes_decide replay エンドポイント |
+
+### Next Actions
+
+次のカバレッジ改善で最も効果的な改善候補:
+
+| 優先 | モジュール | 現在 | Miss 行 | 改善インパクト | 推奨アクション |
+|------|-----------|------|---------|--------------|--------------|
+| 1 | `core/memory_store.py` | 44% | 148 | 高 (148 行回収可能) | MemoryStore の search/get/delete/put の統合テスト追加 |
+| 2 | `memory/store.py` | 82% | 51 | 中〜高 (51 行回収可能) | ストア永続化・検索パスのテスト追加 |
+| 3 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加 |
+| 4 | `api/governance.py` | 84% | 37 | 中 (37 行回収可能) | ガバナンス _save fallback / callback テスト追加 |
+| 5 | `core/world.py` | 91% | 36 | 中 (36 行回収可能) | world モデルの残り分岐テスト追加 |
+| 6 | `core/pipeline_helpers.py` | 74% | 30 | 中 (30 行回収可能) | ヘルパー関数の分岐テスト追加 |
+| 7 | `core/pipeline_persist.py` | 77% | 27 | 中 (27 行回収可能) | 永続化パスの分岐テスト追加 |
+| 8 | `api/routes_decide.py` | 81% | 23 | 中 (23 行回収可能) | decide 成功パス・compliance stop テスト追加 |
+| 9 | `core/pipeline_retrieval.py` | 78% | 32 | 中 (32 行回収可能) | 検索・取得パスの分岐テスト追加 |
+| 10 | `core/pipeline_policy.py` | 78% | 20 | 中 (20 行回収可能) | ポリシー適用パスのテスト追加 |
+
+> **合計**: TOP 10 の改善で最大 **449 行** のミスを回収可能。全体カバレッジを約 **2.5%** 向上させる可能性がある。
