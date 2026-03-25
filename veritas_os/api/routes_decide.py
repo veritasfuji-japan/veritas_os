@@ -1,30 +1,49 @@
 # veritas_os/api/routes_decide.py
-"""Decision pipeline, replay, and FUJI validation endpoints."""
+"""Decision pipeline, replay, and FUJI validation endpoints.
+
+Route handlers are intentionally kept thin ("controller" style).
+Business logic for failure handling, event publishing, compliance
+stops, and response coercion/validation lives in
+:mod:`~veritas_os.api.decide_service` and :mod:`~veritas_os.api.utils`.
+"""
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
-from veritas_os.api.pipeline_orchestrator import (
-    ComplianceStopException,
-    enforce_compliance_stop,
-    resolve_dynamic_steps,
+from veritas_os.api.pipeline_orchestrator import resolve_dynamic_steps
+from veritas_os.api.utils import (
+    _classify_decide_failure,
+    _coerce_decide_payload,
+    _coerce_fuji_payload,
+    _errstr,
+    _is_debug_mode,
+    _is_direct_fuji_api_enabled,
+    _log_decide_failure,
+    _stage_summary,
+    DECIDE_GENERIC_ERROR,
 )
+from veritas_os.api.constants import DECISION_REJECTED
+from veritas_os.api import decide_service as _svc
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Rejection status set, shared across handlers.
+# DECISION_REJECTED is "rejected" (lowercase) — the .lower() comparison
+# in check_fuji_rejection handles any casing from pipeline output.
+_REJECTED_STATUSES: set[str] = {"reject", "rejected", DECISION_REJECTED}
 
 
 def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
-
 
 
 # ------------------------------------------------------------------
@@ -36,112 +55,44 @@ async def decide(req: DecideRequest, request: Request):
     srv = _get_server()
     p = srv.get_decision_pipeline()
     if p is None:
-        srv._log_decide_failure("decision_pipeline unavailable", srv._pipeline_state.err)
-        srv._publish_event("decide.completed", {"ok": False, "error": srv.DECIDE_GENERIC_ERROR})
-        return JSONResponse(
-            status_code=503,
-            content={
-                "ok": False,
-                "error": srv.DECIDE_GENERIC_ERROR,
-                "detail": srv.DECIDE_GENERIC_ERROR,
-                "trust_log": None,
-            },
-        )
+        _log_decide_failure("decision_pipeline unavailable", srv._pipeline_state.err)
+        srv._publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
+        return _svc.error_response(503, error=DECIDE_GENERIC_ERROR)
 
     try:
         payload = await p.run_decide_pipeline(req=req, request=request)
     except Exception as e:
-        failure_category = srv._classify_decide_failure(e)
-        srv._log_decide_failure("decision_pipeline execution failed", e)
+        failure_category = _classify_decide_failure(e)
+        _log_decide_failure("decision_pipeline execution failed", e)
         srv._publish_event(
             "decide.completed",
-            {
-                "ok": False,
-                "error": srv.DECIDE_GENERIC_ERROR,
-                "failure_category": failure_category,
-            },
+            {"ok": False, "error": DECIDE_GENERIC_ERROR, "failure_category": failure_category},
         )
-        return JSONResponse(
-            status_code=503,
-            content={
-                "ok": False,
-                "error": srv.DECIDE_GENERIC_ERROR,
-                "detail": srv.DECIDE_GENERIC_ERROR,
-                "failure_category": failure_category,
-                "trust_log": None,
-            },
-        )
+        return _svc.error_response(503, error=DECIDE_GENERIC_ERROR, failure_category=failure_category)
 
     if isinstance(payload, dict):
         resolve_dynamic_steps(payload)
-        srv._publish_event(
-            "trustlog.debate",
-            {
-                "request_id": payload.get("request_id"),
-                "summary": srv._stage_summary(
-                    payload.get("debate"),
-                    "debate stage completed",
-                ),
-            },
-        )
-        srv._publish_event(
-            "trustlog.critique",
-            {
-                "request_id": payload.get("request_id"),
-                "summary": srv._stage_summary(
-                    payload.get("critique"),
-                    "critique stage completed",
-                ),
-            },
-        )
+        _svc.publish_stage_events(srv._publish_event, _stage_summary, payload)
 
-    coerced = srv._coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
-    try:
-        coerced = enforce_compliance_stop(coerced)
-    except ComplianceStopException as stop:
-        srv._publish_event(
-            "compliance.pending_review",
-            {
-                "request_id": stop.payload.get("request_id"),
-                "status": stop.payload.get("status"),
-            },
-        )
-        return JSONResponse(status_code=200, content=stop.payload)
+    coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
 
-    try:
-        srv._publish_event(
-            "decide.completed",
-            {
-                "ok": bool(coerced.get("ok", True)),
-                "request_id": coerced.get("request_id"),
-                "decision": coerced.get("decision"),
-            },
-        )
-        fuji_payload = coerced.get("fuji") or {}
-        if str(fuji_payload.get("status", "")).lower() in {"reject", "rejected", srv.DECISION_REJECTED}:
-            srv._publish_event(
-                "fuji.rejected",
-                {
-                    "request_id": coerced.get("request_id"),
-                    "status": fuji_payload.get("status"),
-                    "reasons": fuji_payload.get("reasons", []),
-                },
-            )
-        return DecideResponse.model_validate(coerced)
-    except Exception as e:
-        logger.error("DecideResponse validation failed: %s", srv._errstr(e))
-        content: Dict[str, Any] = {
-            **coerced,
-            "ok": False,
-            "warn": "response_model_validation_failed",
-        }
-        if srv._is_debug_mode():
-            content["warn_detail"] = srv._errstr(e)
-        srv._publish_event(
-            "decide.completed",
-            {"ok": False, "warn": "response_model_validation_failed", "request_id": coerced.get("request_id")},
-        )
-        return JSONResponse(status_code=200, content=content)
+    coerced, stop_response = _svc.apply_compliance_stop(coerced, srv._publish_event)
+    if stop_response is not None:
+        return stop_response
+
+    _svc.publish_decide_completion(srv._publish_event, coerced)
+    _svc.check_fuji_rejection(
+        srv._publish_event,
+        coerced.get("fuji") or {},
+        rejected_statuses=_REJECTED_STATUSES,
+        extra_event_fields={"request_id": coerced.get("request_id")},
+    )
+    return _svc.validate_and_respond(
+        DecideResponse, coerced,
+        publish_fn=srv._publish_event,
+        errstr_fn=_errstr,
+        is_debug_fn=_is_debug_mode,
+    )
 
 
 # ------------------------------------------------------------------
@@ -175,7 +126,7 @@ async def replay_endpoint(decision_id: str, request: Request):
             content={"ok": False, "decision_id": decision_id, "error": "decision_not_found"},
         )
     except Exception as e:
-        logger.error("replay endpoint failed: %s", srv._errstr(e))
+        logger.error("replay endpoint failed: %s", _errstr(e))
         return JSONResponse(
             status_code=500,
             content={"ok": False, "decision_id": decision_id, "error": "replay_failed"},
@@ -201,7 +152,7 @@ async def replay_decision_endpoint(decision_id: str, request: Request):
             status_code=503,
             content={
                 "match": False,
-                "diff": {"error": srv.DECIDE_GENERIC_ERROR},
+                "diff": {"error": DECIDE_GENERIC_ERROR},
                 "replay_time_ms": 0,
             },
         )
@@ -220,7 +171,7 @@ async def replay_decision_endpoint(decision_id: str, request: Request):
             mock_external_apis=mock_external_apis,
         )
     except Exception as e:
-        logger.error("decision replay failed: %s", srv._errstr(e))
+        logger.error("decision replay failed: %s", _errstr(e))
         return JSONResponse(
             status_code=500,
             content={
@@ -259,7 +210,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
 @router.post("/v1/fuji/validate", response_model=FujiDecision)
 def fuji_validate(payload: dict):
     srv = _get_server()
-    if not srv._is_direct_fuji_api_enabled():
+    if not _is_direct_fuji_api_enabled():
         return JSONResponse(
             status_code=403,
             content={
@@ -294,41 +245,26 @@ def fuji_validate(payload: dict):
         logger.error("fuji_validate RuntimeError: %s", err_msg)
         return JSONResponse(
             status_code=200,
-            content={
-                "status": "error",
-                "reasons": ["Validation failed"],
-                "violations": []
-            }
+            content={"status": "error", "reasons": ["Validation failed"], "violations": []}
         )
     except Exception as e:
-        logger.error("fuji_validate error: %s", srv._errstr(e))
+        logger.error("fuji_validate error: %s", _errstr(e))
         return JSONResponse(
             status_code=200,
-            content={
-                "status": "error",
-                "reasons": ["Validation failed"],
-                "violations": []
-            }
+            content={"status": "error", "reasons": ["Validation failed"], "violations": []}
         )
 
-    coerced = srv._coerce_fuji_payload(result, action=action)
-    if str(coerced.get("status", "")).lower() in {"reject", "rejected", srv.DECISION_REJECTED}:
-        srv._publish_event(
-            "fuji.rejected",
-            {"action": action, "status": coerced.get("status"), "reasons": coerced.get("reasons", [])},
-        )
-    try:
-        return FujiDecision.model_validate(coerced)
-    except Exception as e:
-        logger.error("FujiDecision validation failed: %s", srv._errstr(e))
-        content: Dict[str, Any] = {
-            **coerced,
-            "warn": "response_model_validation_failed",
-        }
-        if srv._is_debug_mode():
-            content["warn_detail"] = srv._errstr(e)
-        srv._publish_event(
-            "decide.completed",
-            {"ok": False, "warn": "response_model_validation_failed", "request_id": coerced.get("request_id")},
-        )
-        return JSONResponse(status_code=200, content=content)
+    coerced = _coerce_fuji_payload(result, action=action)
+    _svc.check_fuji_rejection(
+        srv._publish_event,
+        coerced,
+        rejected_statuses=_REJECTED_STATUSES,
+        extra_event_fields={"action": action},
+    )
+    return _svc.validate_and_respond(
+        FujiDecision, coerced,
+        publish_fn=srv._publish_event,
+        errstr_fn=_errstr,
+        is_debug_fn=_is_debug_mode,
+        set_ok_false=False,
+    )
