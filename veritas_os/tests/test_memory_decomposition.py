@@ -201,7 +201,9 @@ def test_sync_module_propagates_is_explicitly_enabled(
     from veritas_os.core import memory, memory_vector
 
     original = memory_vector._is_explicitly_enabled
-    sentinel = lambda _: True  # noqa: E731
+
+    def sentinel(_: str) -> bool:
+        return True
 
     monkeypatch.setattr(memory, "_is_explicitly_enabled", sentinel)
     assert memory_vector._is_explicitly_enabled is sentinel
@@ -216,7 +218,9 @@ def test_sync_module_propagates_emit_blocked(
     """Setting memory._emit_legacy_pickle_runtime_blocked also updates memory_vector."""
     from veritas_os.core import memory, memory_vector
 
-    sentinel = lambda path, name: None  # noqa: E731
+    def sentinel(path: Any, name: str) -> None:
+        return None
+
     monkeypatch.setattr(memory, "_emit_legacy_pickle_runtime_blocked", sentinel)
     assert memory_vector._emit_legacy_pickle_runtime_blocked is sentinel
 
