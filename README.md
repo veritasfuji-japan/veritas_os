@@ -153,7 +153,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 |---|---|
 | **MemoryOS** | Episodic/semantic/procedural/affective memory with vector search (sentence-transformers), retention classes, legal hold, and PII masking |
 | **WorldModel** | World state snapshots, causal transitions, project scoping, hypothetical simulation |
-| **ValueCore** | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalancing from TrustLog feedback |
+| **ValueCore** | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalancing from TrustLog feedback. Context-aware domain profiles (medical/financial/legal/safety), policy-aware score floors (strict/balanced/permissive), per-factor contribution explainability, and auditable weight adjustment trail |
 | **FUJI Gate** | Multi-layer safety gate — PII detection, harmful content blocking, sensitive domain filtering, prompt injection defense, confusable character detection, LLM safety head, and policy-driven YAML rules |
 | **TrustLog** | Append-only hash-chained audit log (JSONL) with SHA-256 integrity, Ed25519 signatures, WORM hard-fail mirror, Transparency log anchor, and automatic PII data classification |
 | **Debate** | Multi-viewpoint reasoning (pro/con/third-party) for transparent decision rationale |
@@ -560,7 +560,7 @@ Dockerfile `CMD` accordingly before building the image.
 | Module | Responsibility |
 |---|---|
 | `veritas_os/core/fuji.py` | Multi-layer **fail-closed** safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, LLM safety head, policy rules. All exceptions return `rejected` / `risk=1.0` |
-| `veritas_os/core/value_core.py` | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalance from TrustLog |
+| `veritas_os/core/value_core.py` | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalance from TrustLog. Supports context-aware domain profiles, policy-aware score floors, per-factor contribution explainability, and auditable weight adjustment trail |
 | `veritas_os/api/governance.py` | Policy CRUD with hot-reload, **4-eyes approval** (2 approvers, no duplicates), change callbacks, audit trail, value drift monitoring, **RBAC/ABAC** access control |
 | `veritas_os/logging/trust_log.py` | Hash-chain TrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` with thread-safe append |
 | `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with **WORM hard-fail** mirror, **Transparency log anchor**, automatic **PII data classification** |
