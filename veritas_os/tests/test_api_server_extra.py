@@ -156,6 +156,10 @@ def test_replay_api_endpoint_with_hmac_headers(monkeypatch):
             match=True,
             diff_summary="no_diff",
             replay_time_ms=9,
+            schema_version="1.0.0",
+            severity="info",
+            divergence_level="no_divergence",
+            audit_summary="Replay dec-9 (standard): MATCH — no divergence detected.",
         )
 
     monkeypatch.setattr(server, "run_replay", _fake_run_replay)

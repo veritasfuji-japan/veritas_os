@@ -923,6 +923,20 @@ paths:
                     type: string
                   replay_time_ms:
                     type: integer
+                  schema_version:
+                    type: string
+                    description: Replay artifact schema version (e.g. "1.0.0")
+                  severity:
+                    type: string
+                    description: Highest severity among changed fields (critical, warning, info)
+                    enum: [critical, warning, info]
+                  divergence_level:
+                    type: string
+                    description: Overall divergence classification
+                    enum: [no_divergence, acceptable_divergence, critical_divergence]
+                  audit_summary:
+                    type: string
+                    description: Human-readable audit summary of the replay result
 
   /v1/decision/replay/{decision_id}:
     post:

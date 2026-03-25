@@ -827,6 +827,14 @@ export interface ReplayResponse {
   match: boolean;
   diff_summary: string;
   replay_time_ms: number;
+  /** Replay artifact schema version (e.g. "1.0.0"). */
+  schema_version?: string;
+  /** Highest severity among changed fields: "critical" | "warning" | "info". */
+  severity?: string;
+  /** Overall divergence classification: "no_divergence" | "acceptable_divergence" | "critical_divergence". */
+  divergence_level?: string;
+  /** Human-readable audit summary of the replay result. */
+  audit_summary?: string;
   [key: string]: unknown;
 }
 
