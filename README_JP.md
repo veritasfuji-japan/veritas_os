@@ -388,8 +388,12 @@ cd veritas_os
 
 python3.11 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[full]"     # 全機能（推奨）
+# pip install -e .           # コアのみ（APIサーバー + OpenAI）
+# pip install -e ".[ml]"    # コア + ML ツール
 ```
+
+> インストールプロファイルの詳細は [`docs/dependency-profiles.md`](docs/dependency-profiles.md) を参照してください。
 
 > [!WARNING]
 > シークレットをシェル履歴へ直接残す運用は避けてください。`.env`（gitignore対象）または本番向けシークレットマネージャーを推奨します。

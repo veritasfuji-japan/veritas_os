@@ -1,6 +1,8 @@
 # ============================================================
 # Stage 1: builder — 依存ライブラリのインストールのみ
 # テストファイル・docs・.git はここで除外され本番イメージに含まれない
+# NOTE: requirements.txt installs the FULL dependency set.
+#       For a slimmer image, use: pip install ".[core]" instead.
 # ============================================================
 FROM python:3.11.12-slim AS builder
 

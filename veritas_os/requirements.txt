@@ -1,36 +1,49 @@
 # =============================
-# VERITAS OS — Core Dependencies
+# VERITAS OS — Dependencies
 # =============================
 # All versions are pinned for reproducibility and security.
-# Run `pip install --upgrade <package>` and update this file
-# to upgrade specific packages after testing.
+#
+# This file installs the FULL dependency set (equivalent to `pip install ".[full]"`).
+# For lighter installs see pyproject.toml [project.optional-dependencies].
+#
+# Install profiles:
+#   pip install -r veritas_os/requirements.txt   # full (CI / Docker default)
+#   pip install .                                 # core-only
+#   pip install ".[ml]"                           # + ML tooling
+#   pip install ".[reports]"                      # + reporting / PDF
+#   pip install ".[anthropic]"                    # + Anthropic provider
+#   pip install ".[full]"                         # everything
 
-# --- API / Server ---
+# --- Core: API / Server ---
 fastapi==0.121.0
 uvicorn==0.30.3
 pydantic==2.8.2
 python-dotenv==1.0.1
 orjson==3.11.6
 PyYAML==6.0.1
+jinja2==3.1.6
 
-# --- Model / Decision Engine ---
+# --- Core: LLM Integration ---
+openai==1.51.0
+httpx==0.27.2
+
+# --- Core: Numerical ---
+numpy==1.26.4
+
+# --- Optional [ml]: Model / Decision Engine ---
 scikit-learn==1.5.2
 sentence-transformers==3.0.1
 
-# --- OpenAI / LLM Integration ---
-openai==1.51.0
-httpx==0.27.2
-anthropic==0.34.2
-
-# --- CLI / Dashboard Tools ---
+# --- Optional [reports]: CLI / Dashboard / PDF Tools ---
 matplotlib==3.9.2
-jinja2==3.1.6
-numpy==1.26.4
 pandas==2.2.3
 pdfplumber==0.11.9
-trio==0.26.2
-starlette==0.49.1
 pdfminer.six==20251230
 
-# --- System Tools (optional but stable) ---
+# --- Optional [anthropic]: Anthropic LLM provider ---
+anthropic==0.34.2
+
+# --- Optional [system]: System Tools ---
 psutil==6.0.0
+trio==0.26.2
+starlette==0.49.1

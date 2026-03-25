@@ -19,26 +19,53 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 dependencies = [
+  # --- API / Server (required) ---
   "fastapi==0.121.0",
   "uvicorn==0.30.3",
   "pydantic==2.8.2",
   "python-dotenv==1.0.1",
   "orjson==3.11.6",
   "PyYAML==6.0.1",
-  "scikit-learn==1.5.2",
-  "sentence-transformers==3.0.1",
+  "jinja2==3.1.6",
+  # --- LLM integration (required) ---
   "openai==1.51.0",
   "httpx==0.27.2",
-  "anthropic==0.34.2",
-  "matplotlib==3.9.2",
-  "jinja2==3.1.6",
+  # --- Numerical core (required by memory subsystem) ---
   "numpy==1.26.4",
+]
+
+# ---------------------------------------------------------------------------
+# Optional dependency groups ("extras")
+#
+# Install profiles:
+#   pip install .                  # core-only — API server + primary LLM
+#   pip install ".[ml]"            # + sentence-transformers / scikit-learn
+#   pip install ".[reports]"       # + matplotlib / pandas / PDF tooling
+#   pip install ".[anthropic]"     # + Anthropic LLM provider
+#   pip install ".[system]"        # + psutil / trio
+#   pip install ".[full]"          # everything (CI / Docker default)
+# ---------------------------------------------------------------------------
+[project.optional-dependencies]
+ml = [
+  "scikit-learn==1.5.2",
+  "sentence-transformers==3.0.1",
+]
+reports = [
+  "matplotlib==3.9.2",
   "pandas==2.2.3",
   "pdfplumber==0.11.9",
+  "pdfminer.six==20251230",
+]
+anthropic = [
+  "anthropic==0.34.2",
+]
+system = [
+  "psutil==6.0.0",
   "trio==0.26.2",
   "starlette==0.49.1",
-  "pdfminer.six==20251230",
-  "psutil==6.0.0",
+]
+full = [
+  "veritas-os[ml,reports,anthropic,system]",
 ]
 
 [project.urls]
