@@ -55,7 +55,7 @@
 | `core/memory_store.py` | 284 | 152 | 100 | 4 | 43% | 46.5% |
 | `core/memory_storage.py` | 82 | 36 | 22 | 4 | 56% | 56.1% |
 | `tools/web_search_security.py` | 148 | 53 | 54 | 3 | 59% | 64.2% |
-| `compliance/report_engine.py` | 126 | 38 | 34 | 11 | 63% | 69.8% |
+| ~~`compliance/report_engine.py`~~ | ~~126~~ → 223 | ~~38~~ → 5 | ~~34~~ → 70 | ~~11~~ → 6 | ~~63%~~ → **96%** | 97.8% |
 | `core/memory_lifecycle.py` | 86 | 25 | 42 | 16 | 65% | 70.9% |
 | `logging/encryption.py` | 134 | 43 | 28 | 4 | 67% | 67.9% |
 | `core/pipeline_response.py` | 56 | 17 | 20 | 5 | 68% | 69.6% |
@@ -97,7 +97,7 @@
 | 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加。 |
 | 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | ✅ **adversarial テスト追加済** — missing key, wrong key, corrupted ciphertext, truncated line 等の fail-closed テスト (`test_trustlog_adversarial.py`)。 |
 | 5b | `audit/trustlog_signed.py` | — | — | 中 | ✅ **adversarial テスト追加済** — signature invalid, previous_hash mismatch, WORM mirror write failure, transparency anchor failure のテスト。`verify_signature` の例外処理バグ修正。 |
-| 6 | `compliance/report_engine.py` | 63% | 38 | 中 (38 行回収可能) | EU AI Act コンプライアンスレポート生成のテスト追加。 |
+| 6 | `compliance/report_engine.py` | ~~63%~~ → **96%** | ~~38~~ → 5 | ✅ **改善済** | EU AI Act コンプライアンスレポート生成のテスト追加。入力バリデーション・ガバナンスポリシー統合・リプレイ検証・決定論的出力・説明可能性のテスト追加 (44 テスト追加)。レポートスキーマバージョン追加、ガバナンスリスク閾値統合、`compliance_narrative` による説明可能性向上。 |
 | 7 | `core/memory_storage.py` | 56% | 36 | 中 (36 行回収可能) | ストレージ永続化のテスト追加。ファイル I/O のモックテスト。 |
 | 8 | `core/pipeline_retrieval.py` | 78% | 32 | 中 (32 行回収可能) | 検索・取得パスの分岐テスト追加。 |
 | 9 | `core/pipeline_helpers.py` | 74% | 30 | 中 (30 行回収可能) | ヘルパー関数の分岐テスト追加。 |
