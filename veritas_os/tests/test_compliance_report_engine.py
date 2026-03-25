@@ -390,4 +390,530 @@ def test_latest_replay_result_invalid_schema_returns_degraded_result(
 
     result = report_engine._latest_replay_result("dec-invalid")
 
-    assert result == {"available": False, "result": "invalid"}
+    assert result == {"available": False, "result": "invalid_type"}
+
+
+# ---------------------------------------------------------------------------
+# ▼ New tests: malformed log input, missing evidence, stale/absent policy,
+#   partial compliance data, replay validation, deterministic output,
+#   governance integration, explainability
+# ---------------------------------------------------------------------------
+
+
+class TestValidateDecisionRecord:
+    """Unit tests for _validate_decision_record."""
+
+    def test_valid_record_returns_no_issues(self):
+        rec = {
+            "request_id": "req-1",
+            "gate": {"risk": 0.5},
+            "fuji": {"status": "allow"},
+        }
+        assert report_engine._validate_decision_record(rec) == []
+
+    def test_missing_request_id(self):
+        issues = report_engine._validate_decision_record({})
+        assert "missing_required_field:request_id" in issues
+
+    def test_empty_request_id(self):
+        issues = report_engine._validate_decision_record({"request_id": ""})
+        assert "missing_required_field:request_id" in issues
+
+    def test_gate_not_dict(self):
+        rec = {"request_id": "req-1", "gate": "not-a-dict"}
+        issues = report_engine._validate_decision_record(rec)
+        assert "invalid_gate_type:expected_dict" in issues
+
+    def test_fuji_not_dict(self):
+        rec = {"request_id": "req-1", "fuji": [1, 2, 3]}
+        issues = report_engine._validate_decision_record(rec)
+        assert "invalid_fuji_type:expected_dict" in issues
+
+    def test_risk_out_of_range(self):
+        rec = {"request_id": "req-1", "gate": {"risk": 1.5}}
+        issues = report_engine._validate_decision_record(rec)
+        assert "risk_out_of_range:expected_0_to_1" in issues
+
+    def test_risk_not_numeric(self):
+        rec = {"request_id": "req-1", "gate": {"risk": "not-a-number"}}
+        issues = report_engine._validate_decision_record(rec)
+        assert "risk_not_numeric" in issues
+
+    def test_negative_risk(self):
+        rec = {"request_id": "req-1", "gate": {"risk": -0.1}}
+        issues = report_engine._validate_decision_record(rec)
+        assert "risk_out_of_range:expected_0_to_1" in issues
+
+
+class TestValidateReplayPayload:
+    """Unit tests for _validate_replay_payload."""
+
+    def test_valid_payload(self):
+        payload = {"match": True, "diff": {}, "replay_time_ms": 42}
+        result = report_engine._validate_replay_payload(payload)
+        assert result["available"] is True
+        assert result["valid"] is True
+        assert result["match"] is True
+
+    def test_non_dict_returns_invalid(self):
+        result = report_engine._validate_replay_payload([1, 2])
+        assert result["available"] is False
+        assert result["valid"] is False
+        assert result["reason"] == "invalid_type"
+
+    def test_none_returns_invalid(self):
+        result = report_engine._validate_replay_payload(None)
+        assert result["available"] is False
+        assert result["reason"] == "invalid_type"
+
+    def test_preserves_schema_version(self):
+        payload = {"match": False, "schema_version": "1.0.0"}
+        result = report_engine._validate_replay_payload(payload)
+        assert result["schema_version"] == "1.0.0"
+
+    def test_preserves_severity_and_divergence(self):
+        payload = {
+            "match": False,
+            "severity": "critical",
+            "divergence_level": "critical_divergence",
+            "audit_summary": "mismatch found",
+        }
+        result = report_engine._validate_replay_payload(payload)
+        assert result["severity"] == "critical"
+        assert result["divergence_level"] == "critical_divergence"
+        assert result["audit_summary"] == "mismatch found"
+
+
+class TestClassifyRiskWithGovernanceThresholds:
+    """Test risk classification with custom governance thresholds."""
+
+    def test_default_thresholds(self):
+        assert report_engine._classify_risk(0.1) == "low"
+        assert report_engine._classify_risk(0.3) == "medium"
+        assert report_engine._classify_risk(0.5) == "high"
+        assert report_engine._classify_risk(0.8) == "critical"
+
+    def test_custom_thresholds_lower(self):
+        custom = {"medium_lower": 0.2, "high_lower": 0.4, "critical_lower": 0.6}
+        assert report_engine._classify_risk(0.1, custom) == "low"
+        assert report_engine._classify_risk(0.25, custom) == "medium"
+        assert report_engine._classify_risk(0.45, custom) == "high"
+        assert report_engine._classify_risk(0.65, custom) == "critical"
+
+    def test_custom_thresholds_higher(self):
+        strict = {"medium_lower": 0.5, "high_lower": 0.7, "critical_lower": 0.9}
+        assert report_engine._classify_risk(0.4, strict) == "low"
+        assert report_engine._classify_risk(0.6, strict) == "medium"
+        assert report_engine._classify_risk(0.8, strict) == "high"
+        assert report_engine._classify_risk(0.95, strict) == "critical"
+
+
+class TestMalformedLogInput:
+    """Test report generation with malformed decision log files."""
+
+    def test_non_dict_json_file_skipped(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_array.json").write_text("[1,2,3]", encoding="utf-8")
+        _write_decision(log_dir / "decide_valid.json", "dec-ok", risk=0.1)
+
+        result = report_engine.generate_risk_summary_report()
+        assert result["ok"] is True
+        assert result["decision_count"] == 1
+
+    def test_corrupt_json_file_skipped(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_corrupt.json").write_text("{bad json", encoding="utf-8")
+        _write_decision(log_dir / "decide_valid.json", "dec-ok", risk=0.2)
+
+        result = report_engine.generate_risk_summary_report()
+        assert result["ok"] is True
+        assert result["decision_count"] == 1
+
+    def test_empty_file_skipped(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_empty.json").write_text("", encoding="utf-8")
+        _write_decision(log_dir / "decide_valid.json", "dec-ok", risk=0.3)
+
+        result = report_engine.generate_risk_summary_report()
+        assert result["ok"] is True
+        assert result["decision_count"] == 1
+
+
+class TestMissingEvidence:
+    """Test reports with missing evidence components."""
+
+    def test_eu_report_missing_fuji_and_gate(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_bare.json").write_text(
+            json.dumps({
+                "request_id": "dec-bare",
+                "decision_status": "allow",
+                "ts": "2026-01-01T12:00:00Z",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-bare")
+        assert result["ok"] is True
+        assert result["risk_classification"]["risk_score"] == 0.0
+        assert result["mitigation_actions"] == []
+        assert result["policy_application_evidence"]["fuji"] == {}
+        assert result["policy_application_evidence"]["gate"] == {}
+
+    def test_eu_report_with_non_dict_gate_degrades_gracefully(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_bad_gate.json").write_text(
+            json.dumps({
+                "request_id": "dec-bad-gate",
+                "decision_status": "allow",
+                "ts": "2026-01-01T12:00:00Z",
+                "gate": "not-a-dict",
+                "fuji": "also-not-a-dict",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-bad-gate")
+        assert result["ok"] is True
+        assert "invalid_gate_type:expected_dict" in result["validation_issues"]
+        assert "invalid_fuji_type:expected_dict" in result["validation_issues"]
+        assert result["risk_classification"]["risk_score"] == 0.0
+
+
+class TestStaleAbsentPolicy:
+    """Test report generation when governance policy is unavailable or stale."""
+
+    def test_governance_unavailable_uses_defaults(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.7)
+
+        monkeypatch.setattr(
+            report_engine,
+            "_load_governance_context",
+            lambda: {
+                "policy_available": False,
+                "policy_version": "unavailable",
+                "policy_updated_at": "",
+                "risk_thresholds": dict(report_engine._DEFAULT_RISK_THRESHOLDS),
+            },
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert result["ok"] is True
+        assert result["governance_context"]["policy_available"] is False
+        assert result["governance_context"]["policy_version"] == "unavailable"
+        assert "default thresholds" in result["summary"]["narrative"]
+
+    def test_governance_policy_exception_degrades_gracefully(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.4)
+
+        def _raise(*args, **kwargs):
+            raise ConnectionError("governance service down")
+
+        monkeypatch.setattr(
+            report_engine,
+            "_load_governance_context",
+            lambda: {
+                "policy_available": False,
+                "policy_version": "unavailable",
+                "policy_updated_at": "",
+                "risk_thresholds": dict(report_engine._DEFAULT_RISK_THRESHOLDS),
+            },
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert result["ok"] is True
+        assert result["governance_context"]["policy_available"] is False
+
+    def test_governance_context_included_in_risk_summary(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.5)
+
+        result = report_engine.generate_risk_summary_report()
+        assert result["ok"] is True
+        assert "governance_context" in result
+        assert "policy_version" in result["governance_context"]
+
+    def test_governance_context_included_in_governance_report(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.5)
+
+        result = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+        )
+        assert result["ok"] is True
+        assert "governance_context" in result
+        assert "policy_version" in result["governance_context"]
+
+
+class TestPartialComplianceData:
+    """Test reports with incomplete or partial decision records."""
+
+    def test_decision_with_only_request_id(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_minimal.json").write_text(
+            json.dumps({
+                "request_id": "dec-minimal",
+                "ts": "2026-01-01T12:00:00Z",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-minimal")
+        assert result["ok"] is True
+        assert result["decision_overview"]["decision_id"] == "dec-minimal"
+        assert result["decision_overview"]["decision_status"] is None
+        assert result["risk_classification"]["risk_level"] == "low"
+
+    def test_governance_report_with_mixed_valid_invalid_records(
+        self, monkeypatch, tmp_path
+    ):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_valid.json", "dec-valid", risk=0.1)
+
+        (log_dir / "decide_no_ts.json").write_text(
+            json.dumps({"request_id": "dec-no-ts", "gate": {"risk": 0.5}}),
+            encoding="utf-8",
+        )
+        (log_dir / "decide_bad_ts.json").write_text(
+            json.dumps({
+                "request_id": "dec-bad-ts",
+                "ts": "not-a-date",
+                "gate": {"risk": 0.9},
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+        )
+        assert result["ok"] is True
+        assert result["decision_count"] == 1
+        assert result["summary"]["skipped_records"] == 2
+        assert len(result["skipped_records"]) == 2
+
+        reasons = {r["reason"] for r in result["skipped_records"]}
+        assert "missing_timestamp" in reasons
+        assert "invalid_timestamp" in reasons
+
+    def test_validation_issues_set_review_required(self, monkeypatch, tmp_path):
+        """Decisions with validation issues trigger review_required status."""
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        (log_dir / "decide_no_reqid.json").write_text(
+            json.dumps({
+                "decision_id": "dec-no-reqid",
+                "ts": "2026-01-01T12:00:00Z",
+                "decision_status": "allow",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-no-reqid")
+        assert result["ok"] is True
+        assert "missing_required_field:request_id" in result["validation_issues"]
+        assert result["summary"]["compliance_status"] == "review_required"
+
+
+class TestReplayValidation:
+    """Test replay result validation in the report pipeline."""
+
+    def test_replay_with_schema_version_preserved(self, monkeypatch, tmp_path):
+        _, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        replay_dir.joinpath("replay_dec-sv_1.json").write_text(
+            json.dumps({
+                "match": True,
+                "diff": {},
+                "replay_time_ms": 10,
+                "schema_version": "1.0.0",
+                "severity": "info",
+                "divergence_level": "no_divergence",
+            }),
+            encoding="utf-8",
+        )
+
+        result = report_engine._latest_replay_result("dec-sv")
+        assert result["available"] is True
+        assert result["schema_version"] == "1.0.0"
+        assert result["severity"] == "info"
+
+    def test_replay_unreadable_file(self, monkeypatch, tmp_path):
+        _, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        replay_dir.joinpath("replay_dec-unread_1.json").write_text(
+            "{not valid json", encoding="utf-8"
+        )
+
+        result = report_engine._latest_replay_result("dec-unread")
+        assert result == {"available": False, "result": "unreadable"}
+
+
+class TestDeterministicOutput:
+    """Test that reports are deterministic given the same inputs."""
+
+    def test_finalize_report_includes_schema_version(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        report = report_engine._finalize_report(
+            "eu_ai_act",
+            {"scope": "eu_ai_act", "summary": {"compliance_status": "pass"}},
+        ).report
+
+        assert report["report_schema_version"] == report_engine.REPORT_SCHEMA_VERSION
+
+    def test_finalize_report_accepts_injected_timestamp(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        fixed_ts = "2026-01-01T00:00:00Z"
+        report = report_engine._finalize_report(
+            "eu_ai_act",
+            {"scope": "eu_ai_act", "summary": {"compliance_status": "pass"}},
+            generated_at=fixed_ts,
+        ).report
+
+        assert report["generated_at"] == fixed_ts
+
+    def test_same_input_same_hash_with_fixed_timestamp(self, monkeypatch, tmp_path):
+        _patch_report_environment(monkeypatch, tmp_path)
+
+        payload = {"scope": "eu_ai_act", "summary": {"compliance_status": "pass"}}
+        fixed_ts = "2026-01-01T00:00:00Z"
+
+        r1 = report_engine._finalize_report(
+            "eu_ai_act", dict(payload), generated_at=fixed_ts
+        ).report
+        r2 = report_engine._finalize_report(
+            "eu_ai_act", dict(payload), generated_at=fixed_ts
+        ).report
+
+        assert r1["signed_report_hash"]["report_hash"] == r2["signed_report_hash"]["report_hash"]
+
+
+class TestExplainability:
+    """Test compliance narrative / explainability features."""
+
+    def test_eu_report_includes_narrative(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.6)
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert result["ok"] is True
+        narrative = result["summary"]["narrative"]
+        assert "dec-001" in narrative
+        assert "Risk score" in narrative
+
+    def test_narrative_mentions_replay_missing(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.2)
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert "not available" in result["summary"]["narrative"]
+
+    def test_narrative_mentions_integrity_issues(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.3)
+        monkeypatch.setattr(
+            report_engine,
+            "verify_trustlog_chain",
+            lambda: {"ok": False, "entries_checked": 5, "issues": ["sig_err"]},
+        )
+        monkeypatch.setattr(
+            report_engine,
+            "verify_trust_log",
+            lambda: {"ok": False, "checked": 5, "broken": True, "broken_reason": "x"},
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        narrative = result["summary"]["narrative"]
+        assert "signature verification failed" in narrative
+        assert "hash chain integrity broken" in narrative
+
+    def test_narrative_mentions_replay_match(self, monkeypatch, tmp_path):
+        log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.2)
+        replay_dir.joinpath("replay_dec-001_1.json").write_text(
+            json.dumps({"match": True, "diff": {}, "replay_time_ms": 5}),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert "deterministic output" in result["summary"]["narrative"]
+
+    def test_narrative_mentions_replay_divergence(self, monkeypatch, tmp_path):
+        log_dir, replay_dir, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.2)
+        replay_dir.joinpath("replay_dec-001_1.json").write_text(
+            json.dumps({"match": False, "diff": {"decision": "changed"}, "replay_time_ms": 5}),
+            encoding="utf-8",
+        )
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert "divergence" in result["summary"]["narrative"]
+
+
+class TestInputSourcesTraceability:
+    """Test that reports include input_sources metadata."""
+
+    def test_eu_report_includes_input_sources(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.1)
+
+        result = report_engine.generate_eu_ai_act_report("dec-001")
+        assert "input_sources" in result
+        assert "decision_log" in result["input_sources"]
+        assert "replay_dir" in result["input_sources"]
+        assert "governance_policy_version" in result["input_sources"]
+
+    def test_governance_report_includes_input_sources(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.1)
+
+        result = report_engine.generate_internal_governance_report(
+            ("2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+        )
+        assert "input_sources" in result
+        assert "log_dir" in result["input_sources"]
+
+    def test_risk_summary_includes_input_sources(self, monkeypatch, tmp_path):
+        log_dir, _, _ = _patch_report_environment(monkeypatch, tmp_path)
+        _write_decision(log_dir / "decide_001.json", "dec-001", risk=0.1)
+
+        result = report_engine.generate_risk_summary_report()
+        assert "input_sources" in result
+        assert "log_dir" in result["input_sources"]
+
+
+class TestBuildDecisionSectionWithGovernance:
+    """Test _build_decision_section with governance context."""
+
+    def test_thresholds_used_reflects_governance(self):
+        rec = {"request_id": "req-1", "gate": {"risk": 0.5}, "fuji": {}}
+        gov_ctx = {
+            "risk_thresholds": {
+                "medium_lower": 0.2,
+                "high_lower": 0.4,
+                "critical_lower": 0.6,
+            },
+        }
+
+        section = report_engine._build_decision_section(rec, gov_ctx)
+        assert section["risk_classification"]["thresholds_used"] == gov_ctx["risk_thresholds"]
+        assert section["risk_classification"]["risk_level"] == "high"
+
+    def test_thresholds_used_defaults_without_governance(self):
+        rec = {"request_id": "req-1", "gate": {"risk": 0.5}, "fuji": {}}
+        section = report_engine._build_decision_section(rec)
+        assert section["risk_classification"]["thresholds_used"] == report_engine._DEFAULT_RISK_THRESHOLDS
+
+    def test_validation_issues_included(self):
+        rec = {"gate": "not-a-dict"}
+        section = report_engine._build_decision_section(rec)
+        assert "missing_required_field:request_id" in section["validation_issues"]
+        assert "invalid_gate_type:expected_dict" in section["validation_issues"]
