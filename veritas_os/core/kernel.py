@@ -53,38 +53,20 @@ class StrategyCapability(Protocol):
         ...
 
 # ============================================================
-# Doctor / security utilities (extracted to kernel_doctor.py)
-# Thin wrappers kept here for backward compatibility: existing tests
-# monkeypatch these names on the ``kernel`` module, so re-dispatch
-# through module-level references is required.
+# Doctor / security utilities — implementation in kernel_doctor.py.
+# Re-exported here so existing callers and test monkeypatches that
+# target ``kernel.<name>`` keep working.
 # ============================================================
 from .kernel_doctor import (  # noqa: E402
     _is_safe_python_executable,
     _open_doctor_log_fd,
+    _read_proc_self_status_seccomp,
+    _read_apparmor_profile,
 )
-from .kernel_doctor import (  # noqa: E402
-    _read_proc_self_status_seccomp as _kd_read_seccomp,
-    _read_apparmor_profile as _kd_read_apparmor,
-)
-
-
-def _read_proc_self_status_seccomp() -> int | None:
-    """Delegate to kernel_doctor (kept for monkeypatch compat)."""
-    return _kd_read_seccomp()
-
-
-def _read_apparmor_profile() -> str | None:
-    """Delegate to kernel_doctor (kept for monkeypatch compat)."""
-    return _kd_read_apparmor()
 
 
 def _is_doctor_confinement_profile_active() -> bool:
-    """Check confinement via module-level ``_read_*`` helpers.
-
-    Uses ``kernel._read_proc_self_status_seccomp`` and
-    ``kernel._read_apparmor_profile`` so that monkeypatching these
-    names on the ``kernel`` module still works in tests.
-    """
+    """Return whether process confinement is active for safe auto-doctor."""
     seccomp_mode = _read_proc_self_status_seccomp()
     if seccomp_mode is not None and seccomp_mode > 0:
         return True
@@ -490,10 +472,10 @@ def _score_alternatives_with_value_core_and_persona(
     ctx: Dict[str, Any] | None = None,
     telemetry: Dict[str, Any] | None = None,
 ) -> bool:
-    """Backward-compatible wrapper — use ``_score_alternatives()`` instead.
+    """Thin delegate to ``_score_alternatives()``.
 
     .. deprecated::
-        Kept only for existing callers. Will be removed in a future version.
+        Prefer ``_score_alternatives()`` directly. Scheduled for removal.
     """
     score_kwargs: Dict[str, Any] = {
         "intent": intent,
