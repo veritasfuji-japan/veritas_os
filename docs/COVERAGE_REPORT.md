@@ -1,7 +1,7 @@
 # VERITAS OS — テストカバレッジレポート（改善版）
 
 **最終更新日**: 2026-03-26  
-**基準スナップショット**: 2026-03-24（CI） + 2026-03-26（focused再計測）  
+**基準スナップショット**: 2026-03-24（CI） + 2026-03-26（security focused再計測）  
 **Python**: 3.12.3  
 **OS**: Linux 6.14.0-1017-azure (Ubuntu)  
 **テストフレームワーク**: pytest 9.0.2 / pytest-cov 7.1.0（CI）  
@@ -13,6 +13,11 @@
 
 - **CI判定値（2026-03-24）**: **87%（term-missing）** → ✅ 基準達成（85%以上）
 - **XML line_rate（同日）**: **89.3%**
+- **CI相当テスト実行（2026-03-26, local）**: **5382 passed / 8 skipped / 0 failed**
+- **security focused実測（2026-03-26, trace line-only）**:
+  - `logging/encryption.py`: **95%**
+  - `audit/trustlog_signed.py`: **97%**
+  - `logging/trust_log.py`: **48%**
 - **テスト件数**: 1,768 → 4,350（**+2,582 / +146%**）
 - **失敗テスト**: 4 → **0（全解消）**
 - **コード規模**: 10,614 → 18,225 stmts（**+72%**）
@@ -33,6 +38,8 @@
    - 標準ライブラリ `trace` による line-only coverage
    - 特定モジュールの改善確認用途
    - CI branch coverage と**直接比較不可**
+   - 注: この実行環境では `pytest-cov` が未導入かつ外部取得不可のため、
+     local では CI と同一フォーマットのカバレッジ再生成は未実施
 
 ### 2.2 term 87% と xml 89.3% の差
 
@@ -83,19 +90,18 @@
 |---:|---|---:|---:|---|
 | 1 | `core/memory_storage.py` | 56%（CI） / 96.9%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
 | 2 | `tools/web_search_security.py` | 59%（CI） / 95.3%（focused） | 53 | DNS/ソケット例外分岐の常時回帰テスト化 |
-| 3 | `logging/encryption.py` | 67%（CI） / 88.0%（focused） | 43 | 暗号バックエンド障害時のfail-closed経路を強化 |
-| 4 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
-| 5 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
-| 6 | `core/pipeline_gate.py` | 73% | 27 | deny系条件の境界網羅 |
-| 7 | `core/pipeline_helpers.py` | 74% | 30 | ヘルパ分岐の入力境界テスト |
-| 8 | `core/pipeline_contracts.py` | 74% | 28 | 契約検証の異常値テスト |
-| 9 | `api/routes_decide.py` | 75% | 30 | ルーティング失敗・fallback |
-| 10 | `api/rate_limiting.py` | 76% | 28 | burst境界・時刻依存分岐 |
-| 11 | `core/pipeline_inputs.py` | 77% | 18 | 入力正規化の異常系 |
-| 12 | `core/pipeline_policy.py` | 77% | 21 | policy競合と優先順位 |
-| 13 | `core/fuji_policy.py` | 78% | 45 | rolloutとdeny優先分岐 |
-| 14 | `core/pipeline_persist.py` | 78% | 25 | 保存失敗時の整合性 |
-| 15 | `core/pipeline_retrieval.py` | 78% | 32 | 取得失敗・空結果分岐 |
+| 3 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
+| 4 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
+| 5 | `core/pipeline_gate.py` | 73% | 27 | deny系条件の境界網羅 |
+| 6 | `core/pipeline_helpers.py` | 74% | 30 | ヘルパ分岐の入力境界テスト |
+| 7 | `core/pipeline_contracts.py` | 74% | 28 | 契約検証の異常値テスト |
+| 8 | `api/routes_decide.py` | 75% | 30 | ルーティング失敗・fallback |
+| 9 | `api/rate_limiting.py` | 76% | 28 | burst境界・時刻依存分岐 |
+| 10 | `core/pipeline_inputs.py` | 77% | 18 | 入力正規化の異常系 |
+| 11 | `core/pipeline_policy.py` | 77% | 21 | policy競合と優先順位 |
+| 12 | `core/fuji_policy.py` | 78% | 45 | rolloutとdeny優先分岐 |
+| 13 | `core/pipeline_persist.py` | 78% | 25 | 保存失敗時の整合性 |
+| 14 | `core/pipeline_retrieval.py` | 78% | 32 | 取得失敗・空結果分岐 |
 
 ---
 
@@ -108,26 +114,50 @@
 - `core/memory_lifecycle.py`: 65%（CI） → **98%** — parse_expires_at/normalize_lifecycle/is_record_expired/cascade 全独立テスト追加
 - `core/memory_compliance.py`: 94%（CI） → **100%** — is_record_legal_hold/should_cascade_delete_semantic 全分岐テスト追加
 - focused再計測で高改善:
-  - `logging/encryption.py`: **88.0%**
+  - `logging/encryption.py`: **95%（security adversarial suite）**
+  - `audit/trustlog_signed.py`: **97%（security adversarial suite）**
   - `tools/web_search_security.py`: **95.3%**
 
 > 注意: 上記のうち focused 値は `trace` ベース。CI branch coverage での再確認を必須とする。
+
+### 6.1 adversarial test 反映（2026-03-26）
+
+- `logging/encryption.py` では以下の異常系を実測済み:
+  - missing key
+  - invalid key / wrong-length key
+  - wrong key
+  - corrupted ciphertext（HMAC/IV/body のビット反転含む）
+  - truncated payload
+  - malformed envelope
+  - unsupported marker
+  - plaintext fallback 不可（`append_trust_log` 側で `ENC:` 強制）
+- `audit/trustlog_signed.py` への波及確認:
+  - WORM hard-fail (`VERITAS_TRUSTLOG_WORM_HARD_FAIL=1`) 時に append を fail-closed
+  - Transparency required (`VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1`) 時に anchor 失敗を fail-closed
+  - 署名破壊/チェーン破壊の検知を adversarial テストで固定化
 
 ---
 
 ## 7. セキュリティ観点の重点（要警戒）
 
-### 7.1 `logging/encryption.py`
+### 7.1 `logging/encryption.py`（改善済み）
 
-- 未到達には、暗号バックエンド切替例外や不正envelope処理が含まれる。
-- ここが欠けると、**誤設定時のfail-open（平文許容）リスク**につながる。
+- security adversarial suite で line coverage は **95%**（trace実測）。
+- secure-by-default / fail-closed の主要経路（鍵欠落・鍵不正・復号失敗・平文フォールバック拒否）は回帰テスト化済み。
+- 残課題は CI branch coverage での再検証（local は pytest-cov 不可のため未実施）。
 
-### 7.2 `tools/web_search_security.py`
+### 7.2 `logging/trust_log.py`
+
+- `logging/encryption.py` 改善の反面、`trust_log.py` は focused実測で **48%**。
+- 主な未カバー帯はローテーション回復経路、I/O 障害、巨大ログ終端復旧など運用障害系。
+- ここは hash-chain 継続性と fail-closed 書き込み保証に直結するため、次の重点対象とする。
+
+### 7.3 `tools/web_search_security.py`
 
 - DNS解決不能時のfail-closedやソケット分岐は、**SSRF防御の最終線**。
 - ネットワーク例外注入テストの回帰監視を継続すべき。
 
-### 7.3 `core/memory_store.py`
+### 7.4 `core/memory_store.py`
 
 - 保存失敗時の部分成功抑止は整合性に直結。
 - `put_episode` 周辺は、書き込み失敗時に**必ずロールバック/同期抑止**を検証する。
@@ -137,7 +167,7 @@
 ## 8. 直近アクションプラン（次スプリント）
 
 1. **CI再計測の一本化**
-   - focused改善済み3モジュール（memory_store/encryption/web_search_security）を、CI coverageレポートに反映確認。
+   - focused改善済み3モジュール（encryption/trustlog_signed/web_search_security）を、CI coverageレポートに反映確認。
 2. **80%未満モジュールの段階的解消**
    - 目標: 次回で「80%未満モジュール数」を半減。
 3. **セキュリティ異常系テストの固定化**
@@ -177,3 +207,7 @@ python -m pytest -q veritas_os/tests \
   - CI値とfocused値の目的・比較可否を明確化。
   - セキュリティ上の未到達分岐を独立セクション化。
   - 次アクションを優先順で整理。
+- 2026-03-26: security adversarial 実測を反映。
+  - `logging/encryption.py` は focused実測 95% のため低位表から除外。
+  - `audit/trustlog_signed.py` の fail-closed（WORM/Transparency必須）検証を明記。
+  - `logging/trust_log.py` を次の低位セキュリティ重点として追記。
