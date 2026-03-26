@@ -1,4 +1,22 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
+
+async function waitForPolicyLoadOutcome(
+  page: Page,
+): Promise<"loaded" | "error"> {
+  const applyButton = page.getByRole("button", { name: /適用|Apply/i }).first();
+  const errorBanner = page.locator('[role="alert"]').first();
+
+  const outcome = await Promise.race([
+    applyButton.waitFor({ state: "visible", timeout: 25_000 }).then(
+      () => "loaded" as const,
+    ),
+    errorBanner.waitFor({ state: "visible", timeout: 25_000 }).then(
+      () => "error" as const,
+    ),
+  ]);
+
+  return outcome;
+}
 
 test.describe("Governance: policy management flow", () => {
   test.beforeEach(async ({ page }) => {
@@ -40,18 +58,11 @@ test.describe("Governance: policy management flow", () => {
     });
     await loadButton.click();
 
-    // Wait for loading or result
-    await expect(
-      page
-        .getByText(
-          /読み込み中|Loading|HTTP|ネットワークエラー|Network error|version/i,
-        )
-        .first(),
-    ).toBeVisible({ timeout: 25_000 });
+    const outcome = await waitForPolicyLoadOutcome(page);
 
     // If error, verify retry button is present
     const errorBanner = page.locator('[role="alert"]');
-    if ((await errorBanner.count()) > 0) {
+    if (outcome === "error" || (await errorBanner.count()) > 0) {
       await expect(
         errorBanner.getByRole("button", { name: /再試行|Retry/i }),
       ).toBeVisible();
@@ -84,14 +95,10 @@ test.describe("Governance: policy management flow", () => {
       name: /ポリシーを読み込む|Load policy/i,
     });
     await loadButton.click();
-    await expect(
-      page
-        .getByText(/読み込み中|Loading|HTTP|ネットワークエラー|Network error|version/i)
-        .first(),
-    ).toBeVisible({ timeout: 25_000 });
+    const outcome = await waitForPolicyLoadOutcome(page);
 
     const applyButton = page.getByRole("button", { name: /適用|Apply/i });
-    if ((await applyButton.count()) > 0) {
+    if (outcome === "loaded" && (await applyButton.count()) > 0) {
       await page.getByLabel("role", { exact: true }).selectOption("viewer");
       await expect(applyButton).toBeDisabled();
       await expect(page.getByText(/RBAC: apply\/rollback/)).toBeVisible();

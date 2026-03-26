@@ -110,3 +110,13 @@ API運用層の安全性向上として反映しました。
 - **[HIGH] Direct FUJI API の本番有効化は重大リスク**  
   本改善で fail-fast + 実行時ガードを実装済みですが、設定管理（IaC / Secret Manager）
   でも `VERITAS_ENABLE_DIRECT_FUJI_API` を production で配布しない統制を継続してください。
+
+### 追記（E2E品質改善 / 2026-03-26）
+- `frontend/e2e/governance-flow.spec.ts` の待機条件に含まれていた `/version/i` が、
+  画面ヘッダー文言（versioning）に誤マッチして早期通過することで、実際のロード完了前に
+  `viewer role keeps apply action blocked` テストが判定へ進む不安定要因を確認。
+- 対策として、`waitForPolicyLoadOutcome` ヘルパーを導入し、
+  - apply ボタン可視化（ロード成功）
+  - エラーバナー可視化（ロード失敗）
+  のどちらかを待つ deterministic な待機へ変更。
+- これにより flake を抑制し、RBAC（viewer の apply 禁止）検証の意図を維持。
