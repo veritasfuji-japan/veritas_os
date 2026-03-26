@@ -97,6 +97,17 @@ class TestLoadAllCacheBehavior:
         assert len(data) == 1
         assert data[0]["value"] == "v1"
 
+    def test_load_all_copy_true_returns_deepcopy(
+        self, store: MemoryStore
+    ) -> None:
+        """copy=True should not allow nested mutation to leak into cache."""
+        store.put("u1", "k1", {"text": "v1", "meta": {"nested": {"x": 1}}})
+        loaded = store._load_all(copy=True)
+        loaded[0]["value"]["meta"]["nested"]["x"] = 999
+
+        original = store.get("u1", "k1")
+        assert original["meta"]["nested"]["x"] == 1
+
 
 # ---------------------------------------------------------------------------
 # _load_all — error handling
@@ -155,6 +166,9 @@ class TestParseExpiresAtEdgeCases:
     def test_float_timestamp(self) -> None:
         result = MemoryStore._parse_expires_at(1700000000.5)
         assert result is not None and "2023" in result
+
+    def test_out_of_range_timestamp_returns_none(self) -> None:
+        assert MemoryStore._parse_expires_at(float("inf")) is None
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +303,15 @@ class TestSearchBranches:
         ids = [h["meta"]["user_id"] for h in result["episodic"]]
         assert all(uid == "u1" for uid in ids)
 
+    def test_search_empty_user_id_is_not_bypass(self, store: MemoryStore) -> None:
+        """Empty-string user_id should match only empty user records."""
+        store.put("u1", "k1", {"text": "shared term", "kind": "episodic"})
+        store.put("", "k2", {"text": "shared term", "kind": "episodic"})
+        result = store.search("shared", user_id="")
+        hits = result.get("episodic", [])
+        assert len(hits) == 1
+        assert hits[0]["meta"]["user_id"] == ""
+
     def test_search_kind_filtering(self, store: MemoryStore) -> None:
         """kinds filter only returns matching kinds.
 
@@ -316,6 +339,14 @@ class TestSearchBranches:
             store.put("u1", f"k{i}", {"text": "common term", "kind": "episodic"})
         result = store.search("common", k=2)
         assert len(result.get("episodic", [])) <= 2
+
+    def test_search_negative_k_returns_empty(self, store: MemoryStore) -> None:
+        store.put("u1", "k1", {"text": "common term", "kind": "episodic"})
+        assert store.search("common", k=-1) == {}
+
+    def test_search_invalid_min_sim_fails_closed(self, store: MemoryStore) -> None:
+        store.put("u1", "k1", {"text": "common term", "kind": "episodic"})
+        assert store.search("common", min_sim="bad-value") == {}
 
     def test_search_whitespace_query(self, store: MemoryStore) -> None:
         """Whitespace-only query should return empty dict."""
@@ -394,6 +425,17 @@ class TestRecentEdgeCases:
     def test_recent_empty_user(self, store: MemoryStore) -> None:
         results = store.recent("nonexistent_user")
         assert results == []
+
+
+class TestListAllUserBoundary:
+    def test_list_all_empty_user_id_does_not_return_other_users(
+        self, store: MemoryStore
+    ) -> None:
+        store.put("u1", "k1", "v1")
+        store.put("", "k2", "v2")
+        results = store.list_all(user_id="")
+        assert len(results) == 1
+        assert results[0]["user_id"] == ""
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +549,21 @@ class TestPutEpisodeBranches:
         record = store.get("episodic", key)
         assert record is not None
         assert record["text"] == "no user"
+
+    def test_put_episode_skips_vector_when_put_fails(
+        self, store: MemoryStore, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import inspect
+
+        sig = inspect.signature(type(store).put_episode)
+        if "_get_mem_vec_fn" not in sig.parameters:
+            pytest.skip("put_episode has been replaced by compat layer")
+
+        vec = mock.Mock()
+        monkeypatch.setattr(store, "put", lambda *_args, **_kwargs: False)
+        key = store.put_episode("x", _get_mem_vec_fn=lambda: vec)
+        assert key.startswith("episode_")
+        vec.add.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

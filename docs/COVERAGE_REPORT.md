@@ -117,6 +117,44 @@
 これに合わせ、`core/fuji_policy.py` と `core/fuji_policy_rollout.py` で
 fail-closed 明確化のための小規模構造改善を実施（未知アクション時 deny、rollout 評価例外時 deny）。
 
+## 追補 (2026-03-26): MemoryOS core の再測定・改善更新
+
+`core/memory_store.py` の信頼性改善に合わせ、MemoryOS のコアモジュールを対象に
+focused coverage を再測定した。
+
+- 実行テスト:
+  - `test_memory_store_hardening.py`
+  - `test_memory_store_core.py`
+  - `test_memory_store.py`
+  - `test_memory_store_io_strategy.py`
+  - `test_memory_lifecycle.py`
+  - `test_memory_storage.py`
+  - `test_memory_compliance.py`
+- 結果: **228 passed**
+
+> 計測方式の注意: この環境では `pytest-cov` が未導入のため、標準ライブラリ
+> `trace` の `--count --missing` を使用して line coverage を算出した。
+> そのため、CI の branch coverage 指標とは直接比較できない。
+
+### Focused coverage (trace, line-only)
+
+| モジュール | Executed | Missed | Line Coverage |
+|-----------|----------|--------|---------------|
+| `core/memory_store.py` | 366 | 5 | **98.7%** |
+| `core/memory_storage.py` | 94 | 3 | **96.9%** |
+| `core/memory_lifecycle.py` | 102 | 4 | **96.2%** |
+| `core/memory_compliance.py` | 95 | 0 | **100.0%** |
+
+### 今回の改善ポイント（memory_store）
+
+- `_load_all(copy=True)` の deep copy 化で、呼び出し側のネスト更新による
+  キャッシュ汚染を防止。
+- `list_all`/`search` の `user_id` 判定を `is not None` に統一し、
+  `user_id=""` での境界漏れを防止。
+- `search(k, min_sim)` の境界を fail-closed 化（負値/型不正）。
+- `put_episode` で KVS 保存失敗時に vector 同期を抑止し、部分成功による
+  不整合を回避。
+
 ## 制約・注意点
 
 1. **フルスイート実行**: `not slow` マーク付きテストのみ実行 (CI 相当)。slow テストは除外されている。

@@ -82,3 +82,44 @@ def test_build_kvs_search_hits_applies_user_kind_and_similarity_filters() -> Non
             },
         }
     ]
+
+
+def test_build_kvs_search_hits_empty_user_id_is_filtered() -> None:
+    """Empty-string user IDs must be treated as explicit filter values."""
+    records = [
+        {"key": "a", "user_id": "u1", "ts": 1, "value": {"text": "hello"}},
+        {"key": "b", "user_id": "", "ts": 2, "value": {"text": "hello"}},
+    ]
+    hits = memory_store_helpers.build_kvs_search_hits(
+        records,
+        query="hello",
+        k=10,
+        user_id="",
+    )
+    assert [hit["id"] for hit in hits] == ["b"]
+
+
+def test_build_kvs_search_hits_invalid_min_sim_fails_closed() -> None:
+    """Malformed min_sim should not broaden matches."""
+    records = [
+        {"key": "a", "user_id": "u1", "ts": 1, "value": {"text": "hello"}},
+    ]
+    hits = memory_store_helpers.build_kvs_search_hits(
+        records,
+        query="hello",
+        k=10,
+        min_sim="bad",
+    )
+    assert hits == []
+
+
+def test_build_kvs_search_hits_non_positive_k_returns_empty() -> None:
+    """Non-positive k values should produce empty results."""
+    records = [
+        {"key": "a", "user_id": "u1", "ts": 1, "value": {"text": "hello"}},
+    ]
+    assert memory_store_helpers.build_kvs_search_hits(
+        records,
+        query="hello",
+        k=0,
+    ) == []
