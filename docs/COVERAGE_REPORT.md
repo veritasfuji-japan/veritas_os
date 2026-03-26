@@ -1,7 +1,7 @@
 # VERITAS OS — テストカバレッジレポート（改善版）
 
 **最終更新日**: 2026-03-26  
-**基準スナップショット**: 2026-03-24（CI） + 2026-03-26（security focused再計測）  
+**基準スナップショット**: 2026-03-24（CI） + 2026-03-26（security/memory focused再計測）  
 **Python**: 3.12.3  
 **OS**: Linux 6.14.0-1017-azure (Ubuntu)  
 **テストフレームワーク**: pytest 9.0.2 / pytest-cov 7.1.0（CI）  
@@ -18,6 +18,10 @@
   - `logging/encryption.py`: **95%**
   - `audit/trustlog_signed.py`: **97%**
   - `logging/trust_log.py`: **48%**
+- **memory focused実測（2026-03-26, trace line-only）**:
+  - `core/memory_store.py`: **99%**（`test_memory_store*` 系 266 passed）
+  - `core/memory_storage.py`: **96%**（`test_memory_storage.py` + hardening 109 passed）
+  - `core/memory.py`: **89%**（memory API/facade 系 177 passed）
 - **テスト件数**: 1,768 → 4,350（**+2,582 / +146%**）
 - **失敗テスト**: 4 → **0（全解消）**
 - **コード規模**: 10,614 → 18,225 stmts（**+72%**）
@@ -34,10 +38,14 @@
    - `pytest + pytest-cov`
    - branch coverage 有効
    - CI判定に使用される正規値
-2. **focused再計測（2026-03-26）**
+2. **focused再計測（2026-03-26, security）**
    - 標準ライブラリ `trace` による line-only coverage
    - 特定モジュールの改善確認用途
    - CI branch coverage と**直接比較不可**
+3. **focused再計測（2026-03-26, memory_store周辺）**
+   - 実行A: `test_memory_store.py` + `test_memory_store_core.py` + `test_memory_store_hardening.py` + `test_memory_store_reliability.py`
+   - 実行B: `test_memory_storage.py` + `test_memory_store_hardening.py`
+   - 実行C: `test_memory_core.py` + `test_memory_coverage.py` + `test_memory_branches.py` + `test_memory_decomposition.py`
    - 注: この実行環境では `pytest-cov` が未導入かつ外部取得不可のため、
      local では CI と同一フォーマットのカバレッジ再生成は未実施
 
@@ -88,7 +96,7 @@
 
 | 優先 | モジュール | Coverage | Miss | 改善余地 |
 |---:|---|---:|---:|---|
-| 1 | `core/memory_storage.py` | 56%（CI） / 96.9%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
+| 1 | `core/memory_storage.py` | 56%（CI） / 96%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
 | 2 | `tools/web_search_security.py` | 59%（CI） / 95.3%（focused） | 53 | DNS/ソケット例外分岐の常時回帰テスト化 |
 | 3 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
 | 4 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
@@ -110,7 +118,7 @@
 - `compliance/report_engine.py`: 63% → **96%**
 - `api/governance.py`: 69% → **97%**
 - `core/memory_vector.py`: 39% → **99%**
-- `core/memory_store.py`: 43%（CI） → **99%** — `_normalize` 旧形式マイグレーションの型安全化、search/cache/lifecycle 全分岐網羅
+- `core/memory_store.py`: 43%（CI） → **99%**（focused再計測で再確認） — `_normalize` 旧形式マイグレーション、search/cache/lifecycle 系の回帰を維持
 - `core/memory_lifecycle.py`: 65%（CI） → **98%** — parse_expires_at/normalize_lifecycle/is_record_expired/cascade 全独立テスト追加
 - `core/memory_compliance.py`: 94%（CI） → **100%** — is_record_legal_hold/should_cascade_delete_semantic 全分岐テスト追加
 - focused再計測で高改善:
@@ -159,6 +167,8 @@
 
 ### 7.4 `core/memory_store.py`
 
+- memory_store focused再計測では **99%**（line-only, trace）を維持。
+- ただし `memory.py` 主体の実行では `memory_store.py` は 46–53% に落ちるため、モジュール横断経路での実行依存が残る。
 - 保存失敗時の部分成功抑止は整合性に直結。
 - `put_episode` 周辺は、書き込み失敗時に**必ずロールバック/同期抑止**を検証する。
 
@@ -202,6 +212,10 @@ python -m pytest -q veritas_os/tests \
 
 ## 10. 変更履歴（本ドキュメント）
 
+- 2026-03-26: memory_store 周辺を実測で再更新。
+  - CI相当コマンドは `pytest-cov` 未導入で実行不可（Proxy/Tunnel 制約）を再確認。
+  - focused再計測（trace）で `core/memory_store.py` 99%、`core/memory_storage.py` 96%、`core/memory.py` 89% を反映。
+  - `core/memory_storage.py` の focused 値を 96.9% → 96% に補正（実測値へ揃え込み）。
 - 2026-03-26: 構成を再編し、以下を是正。
   - 「80%未満」セクションに混入していた 99% モジュールを除外。
   - CI値とfocused値の目的・比較可否を明確化。
