@@ -64,3 +64,15 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "slow: mark test as slow or external-I/O dependent",
     )
+    config.addinivalue_line(
+        "markers",
+        "production: production-like validation requiring real services",
+    )
+    config.addinivalue_line(
+        "markers",
+        "smoke: lightweight smoke tests for deployment verification",
+    )
+    config.addinivalue_line(
+        "markers",
+        "external: tests that depend on external network services",
+    )

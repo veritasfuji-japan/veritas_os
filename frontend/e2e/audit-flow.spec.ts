@@ -1,5 +1,11 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * CSS selector for VERITAS error banners, excluding the Next.js route announcer
+ * to avoid Playwright strict-mode violations.
+ */
+const ALERT_BANNER = '[role="alert"]:not(#__next-route-announcer__)';
+
 test.describe("Audit: search and filter flow", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/audit");
@@ -61,7 +67,7 @@ test.describe("Audit: search and filter flow", () => {
     await loadButton.click();
     // Wait for either success or error
     await page.waitForTimeout(5_000);
-    const errorBanner = page.locator('[role="alert"]');
+    const errorBanner = page.locator(ALERT_BANNER);
     if ((await errorBanner.count()) > 0) {
       // Retry button should be present
       await expect(

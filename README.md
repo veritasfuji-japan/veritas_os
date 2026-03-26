@@ -715,6 +715,28 @@ pnpm --filter frontend e2e
 - Coverage artifacts are stored as **XML/HTML** outputs
 - The coverage badge is a documentation snapshot value from `docs/COVERAGE_REPORT.md` (planned: automatic update from CI artifacts)
 
+### Production-like Validation
+
+Beyond the unit/integration test suite, VERITAS includes **production-like validation**
+that exercises real subsystems (TrustLog, encryption, governance API, web search
+security) through production-equivalent code paths:
+
+```bash
+# Run production-like tests (no external deps needed)
+make test-production
+
+# Run smoke tests only
+make test-smoke
+
+# Full validation including Docker Compose (requires Docker)
+make validate
+```
+
+Production validation is also available as a **separate CI workflow**
+(`production-validation.yml`) triggered manually or on a weekly schedule.
+See [`docs/PRODUCTION_VALIDATION.md`](docs/PRODUCTION_VALIDATION.md) for
+the complete strategy, verification matrix, and remaining production risks.
+
 ---
 
 ## Security Notes (Important)
