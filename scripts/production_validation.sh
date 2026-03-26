@@ -85,7 +85,7 @@ if $RUN_DOCKER; then
 
     if ! command -v docker &>/dev/null; then
         log_warn "Phase 2: Docker not available — skipping"
-    elif ! docker info &>/dev/null 2>&1; then
+    elif ! docker info &>/dev/null; then
         log_warn "Phase 2: Docker daemon not running — skipping"
     else
         # Build and start services
