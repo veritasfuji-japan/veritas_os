@@ -52,6 +52,12 @@
 - coverageの集計軸（term-missing / xml / branch計算）差分による。
 - **CI合否は 87%（term-missing）で判定**する。
 
+### 2.3 production-like validation workflow との関係（2026-03-26）
+
+- `.github/workflows/production-validation.yml` で `@production` / `@smoke` / `@external` を**別workflow**として実行する構成が追加された。
+- 本workflowは `--cov` を付けず、coverage gate（85%）にも参加しないため、**本レポートのCI coverage 判定値には直接影響しない**。
+- `main.yml` 側の coverage 測定条件（`pytest -m "not slow" ... --cov-fail-under=85`）は維持されているため、coverage再現コマンド自体は据え置きとする。
+
 ---
 
 ## 3. 全体推移（CI基準）
@@ -188,6 +194,18 @@ python -m pytest -q veritas_os/tests \
   --tb=short
 ```
 
+### 9.1 参考: production-like validation（coverage外）
+
+> 以下は coverage 集計用ではなく、運用系の本番相当検証を行うための補助コマンド。
+
+```bash
+# Separate workflow と同等のローカル実行（coverage には加算しない）
+python -m pytest -q veritas_os/tests -m "production or smoke" --durations=20 --tb=short
+
+# slow テストの分離実行（main.yml の test-slow 相当）
+python -m pytest -q veritas_os/tests -m slow --durations=20 --tb=short
+```
+
 ---
 
 ## 10. 変更履歴（本ドキュメント）
@@ -197,3 +215,7 @@ python -m pytest -q veritas_os/tests \
   - focused再計測（trace）で `tools/web_search_security.py` 96%、`tools/web_search.py` 94% を反映。
   - adversarial 回帰 171件（`test_web_search_security.py` + `test_web_search_adversarial.py`）の実行結果を反映。
   - 低位モジュール表の `tools/web_search_security.py` を「改善中」から「改善済み（回帰継続）」へ更新。
+- 2026-03-26: production-like validation 分離に伴う注記を追加。
+  - `production-validation.yml` は coverage gate 非対象であり、本レポートの CI coverage 判定値へ直接影響しない点を明記。
+  - `main.yml` の coverage 再現条件（`-m "not slow"` + `--cov-fail-under=85`）は不変であることを追記。
+  - 参考情報として、coverage 外の `production or smoke` / `slow` 分離実行コマンドを付記。
