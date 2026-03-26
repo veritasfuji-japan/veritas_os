@@ -91,27 +91,35 @@ def generate_key() -> str:
 
 
 def _get_key_bytes() -> Optional[bytes]:
-    """Return the 32-byte master key from the environment, or None."""
+    """Return the 32-byte master key from the environment, or None.
+
+    Returns ``None`` when the environment variable is not set.
+    Raises :class:`EncryptionKeyMissing` when the variable **is** set but
+    cannot be decoded to a valid 32-byte key, so that a misconfigured key
+    is never silently treated as "no key".
+    """
     raw = os.environ.get("VERITAS_ENCRYPTION_KEY")
     if not raw:
         return None
     try:
         key = base64.b64decode(raw.encode("ascii"), altchars=b"-_", validate=True)
-        if len(key) != 32:
-            logger.warning(
-                "VERITAS_ENCRYPTION_KEY must decode to 32 bytes; got %d — encryption disabled",
-                len(key),
-            )
-            return None
-        return key
-    except (ValueError, TypeError, UnicodeEncodeError):
-        logger.warning("VERITAS_ENCRYPTION_KEY is not valid base64 — encryption disabled")
-        return None
+    except (ValueError, TypeError, UnicodeEncodeError) as exc:
+        raise EncryptionKeyMissing(
+            "VERITAS_ENCRYPTION_KEY is set but contains invalid base64 encoding"
+        ) from exc
+    if len(key) != 32:
+        raise EncryptionKeyMissing(
+            "VERITAS_ENCRYPTION_KEY must decode to exactly 32 bytes"
+        )
+    return key
 
 
 def is_encryption_enabled() -> bool:
     """Return True if at-rest encryption is configured."""
-    return _get_key_bytes() is not None
+    try:
+        return _get_key_bytes() is not None
+    except EncryptionKeyMissing:
+        return False
 
 
 def _decode_urlsafe_b64(payload: str) -> bytes:
@@ -267,16 +275,14 @@ def _encrypt_hmac_ctr_raw(plaintext: str, key: bytes) -> str:
     return base64.urlsafe_b64encode(tag + payload).decode("ascii")
 
 
-def _encrypt_hmac_ctr(plaintext: str, key: bytes) -> str:
-    return "ENC:" + _encrypt_hmac_ctr_raw(plaintext, key)
-
-
 def _decrypt_hmac_ctr_raw(b64_payload: str, key: bytes) -> str:
     """Decrypt base64-encoded HMAC-CTR ciphertext (no ENC: prefix)."""
     enc_key, hmac_key = _derive_hmac_ctr_keys(key)
 
     raw = _decode_urlsafe_b64(b64_payload)
-    if len(raw) < _HMAC_SIZE + _IV_SIZE + 1:
+    # HMAC tag + IV is the minimum valid ciphertext (empty plaintext produces
+    # zero ciphertext bytes, but the HMAC and IV are always present).
+    if len(raw) < _HMAC_SIZE + _IV_SIZE:
         raise ValueError("ciphertext too short")
 
     tag = raw[:_HMAC_SIZE]
@@ -295,9 +301,6 @@ def _decrypt_hmac_ctr_raw(b64_payload: str, key: bytes) -> str:
     return plaintext_bytes.decode("utf-8")
 
 
-def _decrypt_hmac_ctr(token: str, key: bytes) -> str:
-    return _decrypt_hmac_ctr_raw(token[4:], key)
-
 
 # ---------------------------------------------------------------------------
 # AES-GCM backend (when cryptography package is installed)
@@ -312,10 +315,6 @@ def _encrypt_aesgcm_raw(plaintext: str, key: bytes) -> str:
     return base64.urlsafe_b64encode(nonce + ct).decode("ascii")
 
 
-def _encrypt_aesgcm(plaintext: str, key: bytes) -> str:
-    return "ENC:" + _encrypt_aesgcm_raw(plaintext, key)
-
-
 def _decrypt_aesgcm_raw(b64_payload: str, key: bytes) -> str:
     """Decrypt base64-encoded AES-GCM ciphertext (no ENC: prefix)."""
     raw = _decode_urlsafe_b64(b64_payload)
@@ -327,11 +326,7 @@ def _decrypt_aesgcm_raw(b64_payload: str, key: bytes) -> str:
     try:
         return aes.decrypt(nonce, ct, None).decode("utf-8")
     except Exception as exc:
-        raise ValueError(f"AES-GCM decryption failed — data may be tampered: {exc}") from exc
-
-
-def _decrypt_aesgcm(token: str, key: bytes) -> str:
-    return _decrypt_aesgcm_raw(token[4:], key)
+        raise ValueError("AES-GCM decryption failed — data may be tampered") from exc
 
 
 # ---------------------------------------------------------------------------
