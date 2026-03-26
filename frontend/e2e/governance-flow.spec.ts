@@ -3,11 +3,11 @@ import { test, expect, type Page } from "@playwright/test";
 async function waitForPolicyLoadOutcome(
   page: Page,
 ): Promise<"loaded" | "error"> {
-  const applyButton = page.getByRole("button", { name: /適用|Apply/i }).first();
+  const applyFlowHeading = page.getByText("Apply Flow", { exact: true });
   const errorBanner = page.locator('[role="alert"]').first();
 
   const outcome = await Promise.race([
-    applyButton.waitFor({ state: "visible", timeout: 25_000 }).then(
+    applyFlowHeading.waitFor({ state: "visible", timeout: 25_000 }).then(
       () => "loaded" as const,
     ),
     errorBanner.waitFor({ state: "visible", timeout: 25_000 }).then(
@@ -97,8 +97,8 @@ test.describe("Governance: policy management flow", () => {
     await loadButton.click();
     const outcome = await waitForPolicyLoadOutcome(page);
 
-    const applyButton = page.getByRole("button", { name: /適用|Apply/i });
-    if (outcome === "loaded" && (await applyButton.count()) > 0) {
+    const applyButton = page.getByRole("button", { name: /適用|Apply/i }).first();
+    if (outcome === "loaded") {
       await page.getByLabel("role", { exact: true }).selectOption("viewer");
       await expect(applyButton).toBeDisabled();
       await expect(page.getByText(/RBAC: apply\/rollback/)).toBeVisible();
