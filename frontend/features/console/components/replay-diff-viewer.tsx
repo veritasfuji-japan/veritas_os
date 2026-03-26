@@ -58,6 +58,7 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
   const changedKeys = keys.filter(
     (k) => JSON.stringify(previousChosen[k]) !== JSON.stringify(currentChosen[k]),
   );
+  const unchangedKeys = keys.filter((k) => !changedKeys.includes(k));
   const severities = changedKeys.map(fieldSeverity);
   const divergenceLevel = severities.includes("critical")
     ? "critical_divergence"
@@ -77,6 +78,8 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
   const changeSummary = changedKeys.length === 0
     ? null
     : `${changedKeys.length} field(s) changed: ${changedKeys.join(", ")}`;
+  const safetySensitiveChanged = changedKeys.filter((key) => fieldSeverity(key) === "critical");
+  const orderedKeys = [...changedKeys, ...unchangedKeys];
 
   return (
     <section className="space-y-2" aria-label="replay diff viewer">
@@ -90,6 +93,11 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
       </div>
       {changeSummary && (
         <p className="text-xs text-muted-foreground" data-testid="change-summary">{changeSummary}</p>
+      )}
+      {safetySensitiveChanged.length > 0 && (
+        <p className="rounded border border-destructive/40 bg-destructive/10 px-2 py-1 text-xs text-destructive" data-testid="safety-sensitive-warning">
+          Safety-sensitive drift detected: {safetySensitiveChanged.join(", ")}. Re-approval is required before marking this run safe.
+        </p>
       )}
       {keys.length === 0 ? (
         <p className="text-xs text-muted-foreground">No replay baseline is available.</p>
@@ -105,7 +113,7 @@ export function ReplayDiffViewer({ result }: ReplayDiffViewerProps): JSX.Element
               </tr>
             </thead>
             <tbody>
-              {keys.map((key) => {
+              {orderedKeys.map((key) => {
                 const previous = previousChosen[key];
                 const current = currentChosen[key];
                 const changed = JSON.stringify(previous) !== JSON.stringify(current);

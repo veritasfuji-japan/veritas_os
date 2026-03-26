@@ -43,6 +43,7 @@ describe("ReplayDiffViewer", () => {
     );
 
     expect(screen.getByTestId("divergence-badge")).toHaveTextContent("Critical Divergence");
+    expect(screen.getByTestId("safety-sensitive-warning")).toHaveTextContent("Re-approval is required");
   });
 
   it("shows acceptable divergence badge when only non-critical fields change", () => {

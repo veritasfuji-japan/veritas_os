@@ -237,10 +237,13 @@ describe("types", () => {
       approver: "system",
       sha256: "a".repeat(64),
       sha256_prev: "b".repeat(64),
+      chain_verification: "broken",
+      chain_verification_reason: "sha256_prev mismatch at segment 991",
     };
 
     expect(log.sha256).toBe("a".repeat(64));
     expect(log.sha256_prev).toBe("b".repeat(64));
+    expect(log.chain_verification).toBe("broken");
   });
 
   it("CritiqueItem type matches backend CritiqueItem schema", () => {

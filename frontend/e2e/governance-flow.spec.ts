@@ -78,4 +78,14 @@ test.describe("Governance: policy management flow", () => {
   test("risk gauge displays percentage", async ({ page }) => {
     await expect(page.getByText(/Risk gauge:.*%/)).toBeVisible();
   });
+
+  test("viewer role keeps apply action blocked", async ({ page }) => {
+    const loadButton = page.getByRole("button", {
+      name: /ポリシーを読み込む|Load policy/i,
+    });
+    await loadButton.click();
+    await page.getByLabel("role", { exact: true }).selectOption("viewer");
+    await expect(page.getByRole("button", { name: /適用|Apply/i })).toBeDisabled();
+    await expect(page.getByText(/RBAC: apply\/rollback/)).toBeVisible();
+  });
 });

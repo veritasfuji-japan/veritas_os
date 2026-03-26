@@ -38,4 +38,22 @@ describe("MissionPage", () => {
     expect(screen.getAllByText(/Impact window/)).toHaveLength(3);
     expect(screen.getByRole("link", { name: "Decision で triage" })).toHaveAttribute("href", "/console");
   });
+
+  it("surfaces trust-chain, governance, and evidence routing context", () => {
+    render(
+      <I18nProvider>
+        <MissionPage
+          title="Command Dashboard"
+          subtitle="Mission overview"
+          chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("Trust Chain Integrity")).toBeInTheDocument();
+    expect(screen.getByText("Verification:", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Governance approval risk")).toBeInTheDocument();
+    expect(screen.getByText("Risk → Decision → Evidence → Report")).toBeInTheDocument();
+    expect(screen.getByText("degraded:", { exact: false })).toBeInTheDocument();
+  });
 });

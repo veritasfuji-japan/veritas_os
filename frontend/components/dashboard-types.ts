@@ -34,3 +34,37 @@ export interface GlobalHealthSummaryModel {
   trustDegradation: string;
   decisionAnomalies: string;
 }
+
+export interface TrustChainIntegrityModel {
+  verificationStatus: "verified" | "degraded" | "broken";
+  continuityRatio: number;
+  brokenSegments: number;
+  lastVerifiedAt: string;
+  verifier: string;
+  blockedReports: number;
+}
+
+export interface ReplayDiffInsightModel {
+  status: "stable" | "warning" | "critical";
+  changedFields: string[];
+  safetySensitiveFields: string[];
+  operatorActionJa: string;
+  operatorActionEn: string;
+}
+
+export interface GovernanceApprovalModel {
+  pendingVersion: string;
+  status: "ready" | "awaiting_approval" | "blocked";
+  requiredApprovers: string[];
+  missingApprovers: string[];
+  policyRiskDelta: string;
+}
+
+export interface DecisionEvidenceRouteModel {
+  riskSignal: string;
+  decisionTarget: string;
+  evidenceAnchor: string;
+  reportingTarget: string;
+}
+
+export type MissionUiState = "loading" | "empty" | "degraded" | "operational";
