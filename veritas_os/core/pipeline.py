@@ -602,6 +602,9 @@ async def run_decide_pipeline(
     # Required modules check
     _check_required_modules()
 
+    pipeline_started_at = time.time()
+    _stage_failures: List[str] = []  # track degraded stages for observability
+
     # Allow callers (e.g. replay engine) to override memory store getter
     effective_get_memory_store = memory_store_getter or _get_memory_store
 
@@ -745,38 +748,84 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 8: Persist / telemetry  (-> pipeline_persist)
     # =================================================================
-    persist_audit_log(ctx, append_trust_log_fn=append_trust_log, write_shadow_decide_fn=write_shadow_decide)
+    try:
+        persist_audit_log(ctx, append_trust_log_fn=append_trust_log, write_shadow_decide_fn=write_shadow_decide)
+    except Exception as e:
+        _stage_failures.append(f"audit_log:{type(e).__name__}")
+        logger.warning("[pipeline] audit_log persist failed (best-effort): %s", e)
 
-    persist_to_memory(ctx, payload, _get_memory_store=effective_get_memory_store, _memory_put=_memory_put)
+    try:
+        persist_to_memory(ctx, payload, _get_memory_store=effective_get_memory_store, _memory_put=_memory_put)
+    except Exception as e:
+        _stage_failures.append(f"memory_persist:{type(e).__name__}")
+        logger.warning("[pipeline] memory persist failed (best-effort): %s", e)
 
-    persist_reason_and_reflection(
-        ctx, payload,
-        VAL_JSON=VAL_JSON, META_LOG=META_LOG,
-        _load_valstats=_load_valstats, _save_valstats=_save_valstats,
-    )
+    try:
+        persist_reason_and_reflection(
+            ctx, payload,
+            VAL_JSON=VAL_JSON, META_LOG=META_LOG,
+            _load_valstats=_load_valstats, _save_valstats=_save_valstats,
+        )
+    except Exception as e:
+        _stage_failures.append(f"reason_reflection:{type(e).__name__}")
+        logger.warning("[pipeline] reason/reflection persist failed (best-effort): %s", e)
 
     # FINALIZE evidence
     finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
 
     duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
-    persist_decision_to_disk(
-        ctx, payload, duration_ms=duration_ms,
-        LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
-        _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
-    )
+    try:
+        persist_decision_to_disk(
+            ctx, payload, duration_ms=duration_ms,
+            LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
+            _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
+        )
+    except Exception as e:
+        _stage_failures.append(f"disk_persist:{type(e).__name__}")
+        logger.warning("[pipeline] disk persist failed (best-effort): %s", e)
 
-    persist_world_state(ctx, payload)
+    try:
+        persist_world_state(ctx, payload)
+    except Exception as e:
+        _stage_failures.append(f"world_state:{type(e).__name__}")
+        logger.warning("[pipeline] world_state persist failed (best-effort): %s", e)
 
-    persist_dataset_record(
-        ctx, payload, duration_ms=duration_ms,
-        build_dataset_record_fn=build_dataset_record,
-        append_dataset_record_fn=append_dataset_record,
-    )
+    try:
+        persist_dataset_record(
+            ctx, payload, duration_ms=duration_ms,
+            build_dataset_record_fn=build_dataset_record,
+            append_dataset_record_fn=append_dataset_record,
+        )
+    except Exception as e:
+        _stage_failures.append(f"dataset_record:{type(e).__name__}")
+        logger.warning("[pipeline] dataset_record persist failed (best-effort): %s", e)
 
     # =================================================================
     # Stage 8b: Replay snapshot
     # =================================================================
     should_run_web = getattr(ctx, "_should_run_web", False)
-    build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
+    try:
+        build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
+    except Exception as e:
+        _stage_failures.append(f"replay_snapshot:{type(e).__name__}")
+        logger.warning("[pipeline] replay snapshot failed (best-effort): %s", e)
+
+    # =================================================================
+    # Observability: record pipeline health summary
+    # =================================================================
+    total_ms = max(1, int((time.time() - pipeline_started_at) * 1000))
+    extras = payload.setdefault("extras", {})
+    if isinstance(extras, dict):
+        metrics = extras.setdefault("metrics", {})
+        if isinstance(metrics, dict):
+            metrics["pipeline_total_ms"] = total_ms
+            if _stage_failures:
+                metrics["degraded_stages"] = _stage_failures
+    if _stage_failures:
+        logger.info(
+            "[pipeline] completed with degraded stages (%d ms): %s",
+            total_ms,
+            ", ".join(_stage_failures),
+        )
 
     return payload

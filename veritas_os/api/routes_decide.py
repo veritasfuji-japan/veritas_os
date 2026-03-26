@@ -56,7 +56,10 @@ async def decide(req: DecideRequest, request: Request):
     p = srv.get_decision_pipeline()
     if p is None:
         _log_decide_failure("decision_pipeline unavailable", srv._pipeline_state.err)
-        srv._publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
+        try:
+            srv._publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
+        except Exception:
+            logger.debug("event publish failed on pipeline unavailable (best-effort)", exc_info=True)
         return _svc.error_response(503, error=DECIDE_GENERIC_ERROR)
 
     try:
@@ -64,15 +67,21 @@ async def decide(req: DecideRequest, request: Request):
     except Exception as e:
         failure_category = _classify_decide_failure(e)
         _log_decide_failure("decision_pipeline execution failed", e)
-        srv._publish_event(
-            "decide.completed",
-            {"ok": False, "error": DECIDE_GENERIC_ERROR, "failure_category": failure_category},
-        )
+        try:
+            srv._publish_event(
+                "decide.completed",
+                {"ok": False, "error": DECIDE_GENERIC_ERROR, "failure_category": failure_category},
+            )
+        except Exception:
+            logger.debug("event publish failed on pipeline error (best-effort)", exc_info=True)
         return _svc.error_response(503, error=DECIDE_GENERIC_ERROR, failure_category=failure_category)
 
     if isinstance(payload, dict):
         resolve_dynamic_steps(payload)
-        _svc.publish_stage_events(srv._publish_event, _stage_summary, payload)
+        try:
+            _svc.publish_stage_events(srv._publish_event, _stage_summary, payload)
+        except Exception:
+            logger.debug("stage event publish failed (best-effort)", exc_info=True)
 
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
 
@@ -80,13 +89,17 @@ async def decide(req: DecideRequest, request: Request):
     if stop_response is not None:
         return stop_response
 
-    _svc.publish_decide_completion(srv._publish_event, coerced)
-    _svc.check_fuji_rejection(
-        srv._publish_event,
-        coerced.get("fuji") or {},
-        rejected_statuses=_REJECTED_STATUSES,
-        extra_event_fields={"request_id": coerced.get("request_id")},
-    )
+    try:
+        _svc.publish_decide_completion(srv._publish_event, coerced)
+        _svc.check_fuji_rejection(
+            srv._publish_event,
+            coerced.get("fuji") or {},
+            rejected_statuses=_REJECTED_STATUSES,
+            extra_event_fields={"request_id": coerced.get("request_id")},
+        )
+    except Exception:
+        logger.debug("post-pipeline event publish failed (best-effort)", exc_info=True)
+
     return _svc.validate_and_respond(
         DecideResponse, coerced,
         publish_fn=srv._publish_event,
