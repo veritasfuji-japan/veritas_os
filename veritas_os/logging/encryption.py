@@ -35,13 +35,14 @@ import logging
 import os
 import secrets
 import struct
-from typing import Optional
+from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 _AES_BLOCK = 16
 _IV_SIZE = 16
 _HMAC_SIZE = 32
+_AESGCM_NONCE_SIZE = 12
 # Derive two independent 32-byte subkeys from the 32-byte master key
 # via HMAC-SHA256 so that both encryption and authentication use 256-bit keys.
 _HMAC_CTR_ENC_INFO = b"veritas-hmac-ctr-enc"
@@ -54,6 +55,7 @@ def _derive_hmac_ctr_keys(master: bytes) -> tuple[bytes, bytes]:
     hmac_key = hmac.new(master, _HMAC_CTR_MAC_INFO, hashlib.sha256).digest()
     return enc_key, hmac_key
 _STREAM_BLOCK = 32  # SHA-256 output size
+_LEGACY_DECRYPT_ENV = "VERITAS_ENCRYPTION_LEGACY_DECRYPT"
 
 
 class EncryptionKeyMissing(RuntimeError):
@@ -112,6 +114,58 @@ def is_encryption_enabled() -> bool:
     return _get_key_bytes() is not None
 
 
+def _decode_urlsafe_b64(payload: str) -> bytes:
+    """Decode URL-safe base64 with strict validation."""
+    if not payload:
+        raise ValueError("empty ciphertext payload")
+    try:
+        return base64.b64decode(
+            payload.encode("ascii"),
+            altchars=b"-_",
+            validate=True,
+        )
+    except (ValueError, TypeError, UnicodeEncodeError) as exc:
+        raise ValueError("invalid base64 payload") from exc
+
+
+def _legacy_decrypt_enabled() -> bool:
+    """Return whether legacy ``ENC:<payload>`` token decryption is allowed."""
+    raw = (os.environ.get(_LEGACY_DECRYPT_ENV) or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _split_encrypted_token(token: str) -> Tuple[str, str]:
+    """Parse ``ENC:<algorithm>:<base64>`` with explicit fail-closed checks.
+
+    Legacy ``ENC:<base64>`` tokens are rejected by default and can be enabled
+    only via ``VERITAS_ENCRYPTION_LEGACY_DECRYPT=1`` during migration.
+    """
+    if not token.startswith("ENC:"):
+        raise ValueError("missing ENC prefix")
+    after_prefix = token[4:]
+    if not after_prefix:
+        raise ValueError("missing encrypted envelope")
+
+    first_sep = after_prefix.find(":")
+    if first_sep == -1:
+        if _legacy_decrypt_enabled():
+            logger.warning(
+                "Legacy ENC payload accepted due to %s=1; migrate to ENC:<algorithm>:<payload>",
+                _LEGACY_DECRYPT_ENV,
+            )
+            algorithm = "aesgcm" if _USE_REAL_AES else "hmac-ctr"
+            return algorithm, after_prefix
+        raise ValueError("legacy encrypted envelope not accepted")
+
+    algorithm = after_prefix[:first_sep]
+    payload = after_prefix[first_sep + 1:]
+    if algorithm not in {"aesgcm", "hmac-ctr"}:
+        raise ValueError("unsupported encryption algorithm marker")
+    if not payload:
+        raise ValueError("missing encrypted payload")
+    return algorithm, payload
+
+
 # ---------------------------------------------------------------------------
 # Pure-Python HMAC-CTR stream cipher
 # ---------------------------------------------------------------------------
@@ -166,9 +220,9 @@ def decrypt(ciphertext: str) -> str:
     """Decrypt an ``ENC:``-prefixed ciphertext string.
 
     Algorithm dispatch uses the tag between ``ENC:`` and the payload
-    (e.g. ``ENC:aesgcm:<b64>``).  Legacy tokens without an algorithm tag
-    are dispatched based on the currently available backend for backward
-    compatibility.
+    (e.g. ``ENC:aesgcm:<b64>``). Legacy tokens without an algorithm tag are
+    rejected by default and can be enabled only for migrations via
+    ``VERITAS_ENCRYPTION_LEGACY_DECRYPT=1``.
 
     Returns the original string unchanged if it does not start with ``ENC:``.
     Raises :class:`EncryptionKeyMissing` when the key is required but absent.
@@ -182,22 +236,15 @@ def decrypt(ciphertext: str) -> str:
             "Cannot decrypt: VERITAS_ENCRYPTION_KEY not set"
         )
 
-    after_prefix = ciphertext[4:]  # strip "ENC:"
-
     try:
-        if after_prefix.startswith("aesgcm:"):
-            return _decrypt_aesgcm_raw(after_prefix[7:], key)
-        if after_prefix.startswith("hmac-ctr:"):
-            return _decrypt_hmac_ctr_raw(after_prefix[9:], key)
-
-        # Legacy tokens without algorithm tag — dispatch by available backend.
-        if _USE_REAL_AES:
-            return _decrypt_aesgcm(ciphertext, key)
-        return _decrypt_hmac_ctr(ciphertext, key)
+        algorithm, payload = _split_encrypted_token(ciphertext)
+        if algorithm == "aesgcm":
+            return _decrypt_aesgcm_raw(payload, key)
+        if algorithm == "hmac-ctr":
+            return _decrypt_hmac_ctr_raw(payload, key)
+        raise ValueError("unsupported encryption algorithm marker")
     except (ValueError, TypeError, KeyError) as exc:
-        raise DecryptionError(
-            f"Decryption failed for malformed ciphertext: {exc}"
-        ) from exc
+        raise DecryptionError(f"Decryption failed: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +275,7 @@ def _decrypt_hmac_ctr_raw(b64_payload: str, key: bytes) -> str:
     """Decrypt base64-encoded HMAC-CTR ciphertext (no ENC: prefix)."""
     enc_key, hmac_key = _derive_hmac_ctr_keys(key)
 
-    raw = base64.urlsafe_b64decode(b64_payload)
+    raw = _decode_urlsafe_b64(b64_payload)
     if len(raw) < _HMAC_SIZE + _IV_SIZE + 1:
         raise ValueError("ciphertext too short")
 
@@ -271,11 +318,11 @@ def _encrypt_aesgcm(plaintext: str, key: bytes) -> str:
 
 def _decrypt_aesgcm_raw(b64_payload: str, key: bytes) -> str:
     """Decrypt base64-encoded AES-GCM ciphertext (no ENC: prefix)."""
-    raw = base64.urlsafe_b64decode(b64_payload)
-    if len(raw) < 13:
+    raw = _decode_urlsafe_b64(b64_payload)
+    if len(raw) < _AESGCM_NONCE_SIZE + 1:
         raise ValueError("ciphertext too short for AES-GCM")
-    nonce = raw[:12]
-    ct = raw[12:]
+    nonce = raw[:_AESGCM_NONCE_SIZE]
+    ct = raw[_AESGCM_NONCE_SIZE:]
     aes = AESGCM(key)
     try:
         return aes.decrypt(nonce, ct, None).decode("utf-8")

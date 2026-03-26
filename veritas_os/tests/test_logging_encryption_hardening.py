@@ -112,27 +112,49 @@ class TestEncryptDecryptFlow:
 
 
 class TestFallbackAndExceptionPath:
-    def test_unknown_algorithm_token_uses_legacy_dispatch_and_fails_closed(
+    def test_legacy_like_marker_without_separator_fails_closed(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _set_valid_key(monkeypatch)
-        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
 
-        with pytest.raises(encryption.DecryptionError):
+        with pytest.raises(encryption.DecryptionError, match="legacy encrypted envelope not accepted"):
             encryption.decrypt("ENC:unknown-format")
 
-    def test_exception_from_legacy_backend_is_wrapped(
+    def test_missing_payload_fails_closed(
         self,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         _set_valid_key(monkeypatch)
+
+        with pytest.raises(encryption.DecryptionError, match="missing encrypted payload"):
+            encryption.decrypt("ENC:hmac-ctr:")
+
+    def test_legacy_format_rejected_by_default(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
+
+        with pytest.raises(encryption.DecryptionError, match="legacy encrypted envelope not accepted"):
+            encryption.decrypt("ENC:Zm9v")
+
+    def test_legacy_format_can_be_explicitly_enabled(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch, raw=b"A" * 32)
         monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+        token = encryption.encrypt("legacy-ok").replace("ENC:hmac-ctr:", "ENC:")
+        monkeypatch.setenv("VERITAS_ENCRYPTION_LEGACY_DECRYPT", "1")
 
-        def _raise_value_error(token: str, key: bytes) -> str:  # noqa: ARG001
-            raise ValueError("boom")
+        assert encryption.decrypt(token) == "legacy-ok"
 
-        monkeypatch.setattr(encryption, "_decrypt_hmac_ctr", _raise_value_error)
+    def test_base64_validation_error_is_wrapped(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        _set_valid_key(monkeypatch)
 
-        with pytest.raises(encryption.DecryptionError, match="malformed ciphertext"):
-            encryption.decrypt("ENC:anything")
+        with pytest.raises(encryption.DecryptionError, match="invalid base64 payload"):
+            encryption.decrypt("ENC:hmac-ctr:not_base64!!!")

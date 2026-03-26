@@ -179,6 +179,23 @@ class TestCorruptedCiphertext:
         with pytest.raises(DecryptionError):
             decrypt(f"ENC:hmac-ctr:{short_b64}")
 
+    def test_mixed_old_new_format_rejected(self, monkeypatch):
+        _set_valid_key(monkeypatch, raw=b"F" * 32)
+        with pytest.raises(DecryptionError, match="invalid base64 payload"):
+            decrypt("ENC:hmac-ctr:legacy:payload")
+
+    def test_legacy_payload_requires_explicit_opt_in(self, monkeypatch):
+        _set_valid_key(monkeypatch, raw=b"Q" * 32)
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+        modern = encrypt("legacy-migration")
+        legacy = modern.replace("ENC:hmac-ctr:", "ENC:")
+
+        with pytest.raises(DecryptionError, match="legacy encrypted envelope not accepted"):
+            decrypt(legacy)
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_LEGACY_DECRYPT", "true")
+        assert decrypt(legacy) == "legacy-migration"
+
 
 # ===========================================================================
 # 4. Truncated line handling
