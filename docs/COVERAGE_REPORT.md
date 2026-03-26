@@ -155,6 +155,66 @@ focused coverage を再測定した。
 - `put_episode` で KVS 保存失敗時に vector 同期を抑止し、部分成功による
   不整合を回避。
 
+## 追補 (2026-03-26): `encryption.py` / `memory_store.py` / `web_search_security.py` の focused coverage 再計測
+
+`pytest-cov` / `coverage.py` がこの環境で未導入のため、標準ライブラリ
+`trace` を使って対象3モジュールの line coverage を再計測した。
+
+- 実行テスト（合計 **520 passed**）:
+  - memory_store 系:
+    - `test_memory_store.py`
+    - `test_memory_store_core.py`
+    - `test_memory_store_hardening.py`
+    - `test_memory_store_helpers.py`
+    - `test_memory_store_io_strategy.py`
+  - encryption / trustlog 系:
+    - `test_logging_encryption_hardening.py`
+    - `test_trustlog_adversarial.py`
+    - `test_logging_core_trustlog.py`
+    - `test_secure_trustlog.py`
+    - `test_pii_re_dict_and_trustlog_resilience.py`
+  - web_search_security 系:
+    - `test_web_search_security.py`
+    - `test_web_search_adversarial.py`
+    - `test_web_search.py`
+    - `test_web_search_extra.py`
+    - `test_pipeline_web_search.py`
+
+### Focused coverage 結果（trace, line-only）
+
+| モジュール | Executed | Missed | Line Coverage | 前回レポート値(2026-03-24) | 差分 |
+|-----------|----------|--------|---------------|-----------------------------|------|
+| `core/memory_store.py` | 371 | 5 | **98.7%** | 43% | **+55.7pt** |
+| `logging/encryption.py` | 184 | 22 | **88.0%** | 67% | **+21.0pt** |
+| `tools/web_search_security.py` | 170 | 8 | **95.3%** | 59% | **+36.3pt** |
+
+### 未到達行の要約（trace の `>>>>>>` マーカー）
+
+- `core/memory_store.py`（5行）
+  - `search` の入力変換エラー分岐（`ValueError`）
+  - スコア計算のフォールバック分岐（`token_score = 0.0`）
+  - `limit` の型/値不正時フォールバック分岐（`TypeError`, `ValueError`）
+- `logging/encryption.py`（22行）
+  - 暗号バックエンド選択時の例外フォールバック分岐
+  - `ENC:` envelope の入力異常（prefix欠落・空payload・アルゴリズムマーカー異常）
+  - AES-GCM 生実装向けの短文長チェック分岐
+  - `get_encryption_status()` のステータス組み立て分岐
+- `tools/web_search_security.py`（8行）
+  - `%XX` デコード異常の `ValueError` 分岐
+  - `host is not resolvable` の fail-closed 分岐
+  - DNS pinning socket フック経路（tuple アドレス分岐）
+
+### セキュリティ観点の補足（重要）
+
+- `logging/encryption.py` は 88.0% と高水準だが、**暗号方式切替時の例外経路** と
+  **不正 envelope の fail-closed 分岐**に未到達行が残っている。
+- これらは「誤設定時に平文へフォールバックしないこと」を担保する防御線のため、
+  今後も意図的に異常系を注入するテスト（環境変数汚染・破損トークン・backend
+  初期化失敗）を維持することを推奨する。
+- `tools/web_search_security.py` は 95.3% まで改善したが、**DNS 解決失敗時の fail-closed**
+  と **socket create_connection の分岐**は運用時の SSRF 防御に直結するため、
+  ネットワーク例外注入テストを継続して回帰を監視することを推奨する。
+
 ## 制約・注意点
 
 1. **フルスイート実行**: `not slow` マーク付きテストのみ実行 (CI 相当)。slow テストは除外されている。
