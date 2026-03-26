@@ -1,5 +1,43 @@
 import { test, expect, type Page } from "@playwright/test";
 
+const MOCK_GOVERNANCE_POLICY_RESPONSE = {
+  ok: true,
+  policy: {
+    version: "governance_v1",
+    fuji_rules: {
+      pii_check: true,
+      self_harm_block: true,
+      illicit_block: true,
+      violence_review: true,
+      minors_review: true,
+      keyword_hard_block: true,
+      keyword_soft_flag: true,
+      llm_safety_head: true,
+    },
+    risk_thresholds: {
+      allow_upper: 0.4,
+      warn_upper: 0.65,
+      human_review_upper: 0.85,
+      deny_upper: 1.0,
+    },
+    auto_stop: {
+      enabled: true,
+      max_risk_score: 0.85,
+      max_consecutive_rejects: 5,
+      max_requests_per_minute: 60,
+    },
+    log_retention: {
+      retention_days: 90,
+      audit_level: "full",
+      include_fields: ["status", "risk"],
+      redact_before_log: true,
+      max_log_size: 10000,
+    },
+    updated_at: "2026-02-12T00:00:00+00:00",
+    updated_by: "system",
+  },
+};
+
 async function waitForPolicyLoadOutcome(
   page: Page,
 ): Promise<"loaded" | "error"> {
@@ -91,6 +129,14 @@ test.describe("Governance: policy management flow", () => {
   });
 
   test("viewer role keeps apply action blocked", async ({ page }) => {
+    await page.route("**/api/veritas/v1/governance/policy", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(MOCK_GOVERNANCE_POLICY_RESPONSE),
+      });
+    });
+
     const loadButton = page.getByRole("button", {
       name: /ポリシーを読み込む|Load policy/i,
     });
