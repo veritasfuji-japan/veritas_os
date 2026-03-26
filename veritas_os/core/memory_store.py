@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from copy import deepcopy
 import json
 import os
 import time
@@ -112,7 +113,7 @@ class MemoryStore:
                 ):
                     data = self._cache_data
                     if copy:
-                        return [dict(r) for r in data]
+                        return deepcopy(data)
                     return data
 
         if not self.path.exists():
@@ -141,7 +142,7 @@ class MemoryStore:
             self._cache_loaded_at = time.time()
 
         if copy:
-            return [dict(r) for r in data]
+            return deepcopy(data)
         return data
 
     def _save_all(self, data: List[Dict[str, Any]]) -> bool:
@@ -215,7 +216,7 @@ class MemoryStore:
         """全レコードをリスト"""
         data = self._load_all(copy=True)
         filtered_data = [r for r in data if not self._is_record_expired(r)]
-        if user_id:
+        if user_id is not None:
             return [r for r in filtered_data if r.get("user_id") == user_id]
         return filtered_data
 
@@ -226,7 +227,10 @@ class MemoryStore:
             return None
 
         if isinstance(expires_at, (int, float)):
-            dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+            try:
+                dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+            except (OverflowError, OSError, ValueError):
+                return None
             return dt.isoformat()
 
         if isinstance(expires_at, str):
@@ -419,12 +423,26 @@ class MemoryStore:
         if not query:
             return {}
 
+        try:
+            limit = max(0, int(k))
+        except (TypeError, ValueError):
+            limit = 0
+
+        if limit == 0:
+            return {}
+
+        try:
+            min_similarity = float(min_sim)
+        except (TypeError, ValueError):
+            # fail-closed: invalid threshold should not broaden matches.
+            min_similarity = 1.1
+
         data = self._load_all(copy=True)
         episodic: List[Dict[str, Any]] = []
-        target_user = user_id
+        target_user = user_id if user_id is not None else None
 
         for r in data:
-            if target_user and r.get("user_id") != target_user:
+            if target_user is not None and r.get("user_id") != target_user:
                 continue
 
             val = r.get("value") or {}
@@ -436,7 +454,7 @@ class MemoryStore:
                 continue
 
             score = self._simple_score(query, text)
-            if score < min_sim:
+            if score < min_similarity:
                 continue
 
             tags = val.get("tags") or []
@@ -465,7 +483,7 @@ class MemoryStore:
             return {}
 
         logger.debug("[MemoryOS][KVS] episodic hits=%d", len(episodic))
-        return {"episodic": episodic[:k]}
+        return {"episodic": episodic[:limit]}
 
     def put_episode(
         self,
@@ -495,7 +513,10 @@ class MemoryStore:
         key = f"episode_{int(time.time())}"
 
         # KVS
-        self.put(user_id, key, record)
+        saved = self.put(user_id, key, record)
+        if not saved:
+            logger.error("[MemoryOS] put_episode persist failed: key=%s", key)
+            return key
 
         # ベクトルインデックスにも追加
         if _get_mem_vec_fn is not None:
