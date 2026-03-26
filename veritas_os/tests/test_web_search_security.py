@@ -170,3 +170,328 @@ class TestUrlValidation:
 
         monkeypatch.setattr(sec, "_resolve_host_infos", _boom)
         assert not sec._is_allowed_websearch_url("https://example．com/search")
+
+
+# ===================================================================
+# Adversarial security tests – bypass / failure mode coverage
+# ===================================================================
+
+
+class TestTrailingDotBypass:
+    """Trailing dot variations must not escape canonicalization."""
+
+    def test_single_trailing_dot_stripped(self) -> None:
+        assert sec._canonicalize_hostname("example.com.") == "example.com"
+
+    def test_multiple_trailing_dots_stripped(self) -> None:
+        assert sec._canonicalize_hostname("example.com...") == "example.com"
+
+    def test_extract_hostname_strips_trailing_dot(self) -> None:
+        assert sec._extract_hostname("https://example.com./path") == "example.com"
+
+    def test_subdomain_match_with_trailing_dot(self) -> None:
+        assert sec._is_hostname_exact_or_subdomain("api.veritas.com.", "veritas.com")
+
+    def test_allowlist_match_with_trailing_dot(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sec, "_is_private_or_local_host", lambda _h: False)
+        assert sec._is_allowed_websearch_url(
+            "https://api.example.com./search",
+            resolve_allowlist_fn=lambda: {"api.example.com"},
+        )
+
+
+class TestFullwidthHostnameExtraction:
+    """Fullwidth hostname chars must NFKC-normalize in _extract_hostname."""
+
+    def test_fullwidth_hostname_normalized_in_extract(self) -> None:
+        # _extract_hostname now applies NFKC via _canonicalize_hostname
+        assert sec._extract_hostname("ｅｘａｍｐｌｅ．ｃｏｍ/path") == "example.com"
+
+    def test_fullwidth_in_url_scheme(self) -> None:
+        # urlparse won't match the scheme; fallback adds http://
+        host = sec._extract_hostname("ｈｔｔｐｓ://ｅｘａｍｐｌｅ.com/p")
+        # fullwidth scheme won't parse correctly, but host should normalize
+        assert "example" in host or host == ""
+
+
+class TestZeroWidthCharsInHostname:
+    """Zero-width characters injected into hostnames must be stripped."""
+
+    def test_zwsp_in_hostname_stripped(self) -> None:
+        # exam\u200bple.com -> example.com after stripping
+        assert sec._canonicalize_hostname("exam\u200bple.com") == "example.com"
+
+    def test_zwj_in_hostname_stripped(self) -> None:
+        assert sec._canonicalize_hostname("exam\u200dple.com") == "example.com"
+
+    def test_soft_hyphen_in_hostname_stripped(self) -> None:
+        assert sec._canonicalize_hostname("exam\u00adple.com") == "example.com"
+
+    def test_bidi_override_in_hostname_stripped(self) -> None:
+        assert sec._canonicalize_hostname("\u202eexample.com") == "example.com"
+
+    def test_word_joiner_in_hostname_stripped(self) -> None:
+        assert sec._canonicalize_hostname("exam\u2060ple.com") == "example.com"
+
+    def test_bom_in_hostname_stripped(self) -> None:
+        assert sec._canonicalize_hostname("\ufeffexample.com") == "example.com"
+
+    def test_mixed_invisible_chars_stripped(self) -> None:
+        host = "e\u200bx\u200ca\u200dm\u00adp\u2060l\ufeffe.com"
+        assert sec._canonicalize_hostname(host) == "example.com"
+
+    def test_invisible_chars_do_not_trigger_confusable(self) -> None:
+        # After stripping, pure ASCII hostname should NOT be flagged
+        assert not sec._hostname_has_confusable_chars("exam\u200bple.com")
+
+    def test_invisible_chars_in_private_host_check(self) -> None:
+        # localhost with zero-width chars should still be detected
+        assert sec._is_obviously_private_or_local_host("local\u200bhost")
+
+
+class TestInternalPseudoTLDs:
+    """Expanded internal TLD blocklist coverage."""
+
+    @pytest.mark.parametrize("tld", [
+        ".corp", ".home", ".lan", ".intranet", ".private",
+        ".local", ".internal", ".localhost", ".localdomain",
+    ])
+    def test_internal_tld_blocked(self, tld: str) -> None:
+        assert sec._is_obviously_private_or_local_host(f"service{tld}")
+
+    @pytest.mark.parametrize("tld", [
+        ".corp", ".home", ".lan", ".intranet", ".private",
+    ])
+    def test_new_internal_tld_blocked_in_allowed_url(self, tld: str) -> None:
+        assert not sec._is_allowed_websearch_url(f"https://api{tld}/search")
+
+
+class TestSanitizeWebsearchUrlDefenseInDepth:
+    """_sanitize_websearch_url now rejects obviously private/local hosts."""
+
+    def test_sanitize_rejects_localhost(self) -> None:
+        assert sec._sanitize_websearch_url("https://localhost/search") == ""
+
+    def test_sanitize_rejects_single_label(self) -> None:
+        assert sec._sanitize_websearch_url("https://intranet/search") == ""
+
+    def test_sanitize_rejects_private_ip(self) -> None:
+        assert sec._sanitize_websearch_url("https://10.0.0.1/search") == ""
+
+    def test_sanitize_rejects_loopback(self) -> None:
+        assert sec._sanitize_websearch_url("https://127.0.0.1/search") == ""
+
+    def test_sanitize_rejects_internal_tld(self) -> None:
+        assert sec._sanitize_websearch_url("https://api.corp/search") == ""
+
+    def test_sanitize_accepts_public_host(self) -> None:
+        assert (
+            sec._sanitize_websearch_url("https://api.serper.dev/search")
+            == "https://api.serper.dev/search"
+        )
+
+
+class TestCyrillicHomoglyphUrlValidation:
+    """Full-path tests for Cyrillic/Greek homoglyph hostnames in URL validation."""
+
+    def test_cyrillic_a_blocked_in_sanitize(self) -> None:
+        # Cyrillic а (U+0430) instead of Latin a
+        assert sec._sanitize_websearch_url("https://\u0430pple.com/search") == ""
+
+    def test_greek_omicron_blocked_in_sanitize(self) -> None:
+        # Greek ο (U+03BF) instead of Latin o
+        assert sec._sanitize_websearch_url("https://g\u03bfgle.com/search") == ""
+
+    def test_cyrillic_blocked_in_is_allowed(self) -> None:
+        assert not sec._is_allowed_websearch_url("https://\u0430pple.com/search")
+
+
+class TestEmbeddedCredentialsEdgeCases:
+    """Edge cases for embedded credential detection."""
+
+    def test_username_only_in_sanitize(self) -> None:
+        assert sec._sanitize_websearch_url("https://user@example.com/search") == ""
+
+    def test_username_only_in_is_allowed(self) -> None:
+        assert not sec._is_allowed_websearch_url("https://user@example.com/search")
+
+    def test_empty_password_in_sanitize(self) -> None:
+        assert sec._sanitize_websearch_url("https://user:@example.com/search") == ""
+
+    def test_at_sign_in_path_not_blocked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # @ in path component (not userinfo) should be allowed
+        monkeypatch.setattr(sec, "_is_private_or_local_host", lambda _h: False)
+        assert sec._is_allowed_websearch_url("https://example.com/user@host")
+
+
+class TestIPv6PrivateAddresses:
+    """IPv6 loopback and link-local addresses must be blocked."""
+
+    def test_ipv6_loopback_blocked(self) -> None:
+        assert sec._is_obviously_private_or_local_host("::1")
+
+    def test_ipv6_link_local_blocked(self) -> None:
+        assert sec._is_obviously_private_or_local_host("fe80::1")
+
+    def test_ipv6_private_blocked(self) -> None:
+        assert sec._is_obviously_private_or_local_host("fd00::1")
+
+    def test_ipv4_mapped_ipv6_private_blocked(self) -> None:
+        # ::ffff:127.0.0.1 is IPv4-mapped IPv6, not global
+        assert sec._is_obviously_private_or_local_host("::ffff:127.0.0.1")
+
+    def test_ipv6_in_url_sanitize_blocked(self) -> None:
+        assert sec._sanitize_websearch_url("https://[::1]/search") == ""
+
+
+class TestMalformedUrlEdgeCases:
+    """Malformed and edge-case URLs must not bypass validation."""
+
+    def test_none_url_sanitize(self) -> None:
+        assert sec._sanitize_websearch_url(None) == ""  # type: ignore[arg-type]
+
+    def test_whitespace_only_url(self) -> None:
+        assert sec._sanitize_websearch_url("   ") == ""
+
+    def test_file_scheme_blocked(self) -> None:
+        assert sec._sanitize_websearch_url("file:///etc/passwd") == ""
+        assert not sec._is_allowed_websearch_url("file:///etc/passwd")
+
+    def test_ftp_scheme_blocked(self) -> None:
+        assert not sec._is_allowed_websearch_url("ftp://example.com/file")
+
+    def test_javascript_scheme_blocked(self) -> None:
+        assert not sec._is_allowed_websearch_url("javascript:alert(1)")
+
+    def test_data_scheme_blocked(self) -> None:
+        assert not sec._is_allowed_websearch_url("data:text/html,<h1>hi</h1>")
+
+    def test_extract_hostname_none_input(self) -> None:
+        assert sec._extract_hostname(None) == ""  # type: ignore[arg-type]
+
+    def test_extract_hostname_whitespace_only(self) -> None:
+        assert sec._extract_hostname("   ") == ""
+
+    def test_extract_public_ips_empty_url(self) -> None:
+        with pytest.raises(ValueError, match="no hostname"):
+            sec._extract_public_ips_for_url("")
+
+
+class TestDnsFailureModes:
+    """DNS resolution failure handling – fail-closed behavior."""
+
+    def test_os_error_during_resolution_blocks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _boom(_host: str):
+            raise OSError("network unreachable")
+
+        monkeypatch.setattr(sec, "_resolve_host_infos", _boom)
+        assert sec._is_private_or_local_host("example.com") is True
+
+    def test_resolve_uncached_os_error_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _boom(*_a, **_k):
+            raise OSError("network unreachable")
+
+        monkeypatch.setattr(sec.socket, "getaddrinfo", _boom)
+        with pytest.raises(ValueError, match="not resolvable"):
+            sec._resolve_public_ips_uncached("example.com")
+
+    def test_resolve_uncached_unicode_error_raises(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def _boom(*_a, **_k):
+            raise UnicodeError("idna encoding failed")
+
+        monkeypatch.setattr(sec.socket, "getaddrinfo", _boom)
+        with pytest.raises(ValueError, match="not resolvable"):
+            sec._resolve_public_ips_uncached("example.com")
+
+    def test_mixed_global_and_private_ips_rejected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If DNS returns both a global and a private IP, reject."""
+        monkeypatch.setattr(
+            sec,
+            "_resolve_host_infos",
+            lambda _host: (
+                (None, None, None, None, ("8.8.8.8", 0)),
+                (None, None, None, None, ("10.0.0.1", 0)),
+            ),
+        )
+        assert sec._is_private_or_local_host("example.com") is True
+
+
+class TestAllowlistCanonicalizationBypass:
+    """Allowlist matching must use canonicalized hostnames."""
+
+    def test_trailing_dot_matches_allowlist(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sec, "_is_private_or_local_host", lambda _h: False)
+        # URL has trailing dot, allowlist doesn't
+        assert sec._is_allowed_websearch_url(
+            "https://api.example.com./search",
+            resolve_allowlist_fn=lambda: {"api.example.com"},
+        )
+
+    def test_case_insensitive_allowlist(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sec, "_is_private_or_local_host", lambda _h: False)
+        assert sec._is_allowed_websearch_url(
+            "https://API.EXAMPLE.COM/search",
+            resolve_allowlist_fn=lambda: {"api.example.com"},
+        )
+
+    def test_non_allowlisted_host_denied_even_if_public(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(sec, "_is_private_or_local_host", lambda _h: False)
+        assert not sec._is_allowed_websearch_url(
+            "https://evil.com/search",
+            resolve_allowlist_fn=lambda: {"api.example.com"},
+        )
+
+
+class TestRebindingGuardEdgeCases:
+    """Edge cases for the DNS rebinding guard."""
+
+    def test_rebinding_guard_superset_ips_detected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If current DNS returns MORE IPs than expected, flag as drift."""
+        monkeypatch.setattr(
+            sec, "_extract_public_ips_for_url", lambda _u: {"8.8.8.8", "1.1.1.1"}
+        )
+        with pytest.raises(ValueError, match="DNS result changed"):
+            sec._validate_rebinding_guard("https://example.com", {"8.8.8.8"})
+
+    def test_rebinding_guard_subset_ips_detected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If current DNS returns FEWER IPs than expected, flag as drift."""
+        monkeypatch.setattr(
+            sec, "_extract_public_ips_for_url", lambda _u: {"8.8.8.8"}
+        )
+        with pytest.raises(ValueError, match="DNS result changed"):
+            sec._validate_rebinding_guard(
+                "https://example.com", {"8.8.8.8", "1.1.1.1"}
+            )
+
+    def test_rebinding_guard_exact_match_passes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            sec, "_extract_public_ips_for_url", lambda _u: {"8.8.8.8", "1.1.1.1"}
+        )
+        # Should not raise
+        sec._validate_rebinding_guard(
+            "https://example.com", {"8.8.8.8", "1.1.1.1"}
+        )
