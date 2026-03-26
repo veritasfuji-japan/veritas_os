@@ -27,8 +27,14 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Zero-width and invisible Unicode characters that must be stripped from
-# hostnames before canonicalization.  These include ZWSP, ZWJ, ZWNJ,
-# soft hyphen, BOM, word joiner, and BiDi override/embedding chars.
+# hostnames before canonicalization.  These include:
+#   \u00ad        Soft hyphen
+#   \u034f        Combining grapheme joiner
+#   \u200b-\u200f ZWSP, ZWNJ, ZWJ, LRM, RLM
+#   \u2028-\u202f Line/paragraph separators, BiDi embedding/override chars
+#   \u2060-\u2064 Word joiner, invisible times/separator/plus, etc.
+#   \ufeff        Byte-order mark (zero-width no-break space)
+#   \ufff9-\ufffb Interlinear annotation anchors
 _RE_INVISIBLE = re.compile(
     "[\u00ad\u034f\u200b-\u200f\u2028-\u202f\u2060-\u2064\ufeff\ufff9-\ufffb]"
 )
