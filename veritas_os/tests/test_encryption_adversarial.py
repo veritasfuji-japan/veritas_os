@@ -61,12 +61,12 @@ class TestKeyValidation:
 
     def test_invalid_base64_key_raises_on_encrypt(self, monkeypatch):
         monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "%%%invalid%%")
-        with pytest.raises(EncryptionKeyMissing, match="invalid base64"):
+        with pytest.raises(EncryptionKeyMissing, match="invalid base64 encoding"):
             encrypt("test")
 
     def test_invalid_base64_key_raises_on_decrypt(self, monkeypatch):
         monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", "%%%invalid%%")
-        with pytest.raises(EncryptionKeyMissing, match="invalid base64"):
+        with pytest.raises(EncryptionKeyMissing, match="invalid base64 encoding"):
             decrypt("ENC:hmac-ctr:dGVzdA==")
 
     def test_too_short_key_raises_on_encrypt(self, monkeypatch):
@@ -122,7 +122,7 @@ class TestAntiPlaintextDowngrade:
         monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
         for text in ["", "a", "hello world", "日本語", "x" * 100_000]:
             ct = encrypt(text)
-            assert ct.startswith("ENC:"), f"encrypt({text!r:.20}) did not produce ENC: prefix"
+            assert ct.startswith("ENC:"), "encrypt() did not produce ENC: prefix"
 
     def test_encrypt_empty_string_roundtrip(self, monkeypatch):
         _set_valid_key(monkeypatch)
@@ -253,8 +253,8 @@ class TestTruncatedAndCorruptedCiphertext:
     def test_ciphertext_below_minimum_size(self, monkeypatch):
         """Ciphertext shorter than HMAC + IV must be rejected."""
         _set_valid_key(monkeypatch)
-        for size in [0, 1, 10, _HMAC_SIZE, _HMAC_SIZE + _IV_SIZE - 1]:
-            short = base64.urlsafe_b64encode(os.urandom(max(1, size))).decode("ascii")
+        for size in [1, 10, _HMAC_SIZE, _HMAC_SIZE + _IV_SIZE - 1]:
+            short = base64.urlsafe_b64encode(os.urandom(size)).decode("ascii")
             with pytest.raises(DecryptionError):
                 decrypt(f"ENC:hmac-ctr:{short}")
 
@@ -273,7 +273,7 @@ class TestTruncatedAndCorruptedCiphertext:
         ct = encrypt("integrity-test")
         prefix, b64 = ct.rsplit(":", 1)
         raw = base64.urlsafe_b64decode(b64)
-        # Flip one bit in the HMAC tag (first 32 bytes)
+        # Flip one bit in the first byte of the HMAC tag
         tampered = bytes([raw[0] ^ 0x01]) + raw[1:]
         tampered_b64 = base64.urlsafe_b64encode(tampered).decode("ascii")
         with pytest.raises(DecryptionError):

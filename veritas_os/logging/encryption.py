@@ -280,6 +280,8 @@ def _decrypt_hmac_ctr_raw(b64_payload: str, key: bytes) -> str:
     enc_key, hmac_key = _derive_hmac_ctr_keys(key)
 
     raw = _decode_urlsafe_b64(b64_payload)
+    # HMAC tag + IV is the minimum valid ciphertext (empty plaintext produces
+    # zero ciphertext bytes, but the HMAC and IV are always present).
     if len(raw) < _HMAC_SIZE + _IV_SIZE:
         raise ValueError("ciphertext too short")
 
