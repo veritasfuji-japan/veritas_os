@@ -81,23 +81,21 @@
 
 | 優先 | モジュール | Coverage | Miss | 改善余地 |
 |---:|---|---:|---:|---|
-| 1 | `core/memory_store.py` | 43%（CI） / 98.7%（focused） | 152（CI時点） | CI条件での再現確認と分岐網羅の固定化が必要 |
-| 2 | `core/memory_storage.py` | 56%（CI） / 96.9%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
-| 3 | `tools/web_search_security.py` | 59%（CI） / 95.3%（focused） | 53 | DNS/ソケット例外分岐の常時回帰テスト化 |
-| 4 | `core/memory_lifecycle.py` | 65%（CI） / 96.2%（focused） | 25 | 状態遷移の異常系テスト追加 |
-| 5 | `logging/encryption.py` | 67%（CI） / 88.0%（focused） | 43 | 暗号バックエンド障害時のfail-closed経路を強化 |
-| 6 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
-| 7 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
-| 8 | `core/pipeline_gate.py` | 73% | 27 | deny系条件の境界網羅 |
-| 9 | `core/pipeline_helpers.py` | 74% | 30 | ヘルパ分岐の入力境界テスト |
-| 10 | `core/pipeline_contracts.py` | 74% | 28 | 契約検証の異常値テスト |
-| 11 | `api/routes_decide.py` | 75% | 30 | ルーティング失敗・fallback |
-| 12 | `api/rate_limiting.py` | 76% | 28 | burst境界・時刻依存分岐 |
-| 13 | `core/pipeline_inputs.py` | 77% | 18 | 入力正規化の異常系 |
-| 14 | `core/pipeline_policy.py` | 77% | 21 | policy競合と優先順位 |
-| 15 | `core/fuji_policy.py` | 78% | 45 | rolloutとdeny優先分岐 |
-| 16 | `core/pipeline_persist.py` | 78% | 25 | 保存失敗時の整合性 |
-| 17 | `core/pipeline_retrieval.py` | 78% | 32 | 取得失敗・空結果分岐 |
+| 1 | `core/memory_storage.py` | 56%（CI） / 96.9%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
+| 2 | `tools/web_search_security.py` | 59%（CI） / 95.3%（focused） | 53 | DNS/ソケット例外分岐の常時回帰テスト化 |
+| 3 | `logging/encryption.py` | 67%（CI） / 88.0%（focused） | 43 | 暗号バックエンド障害時のfail-closed経路を強化 |
+| 4 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
+| 5 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
+| 6 | `core/pipeline_gate.py` | 73% | 27 | deny系条件の境界網羅 |
+| 7 | `core/pipeline_helpers.py` | 74% | 30 | ヘルパ分岐の入力境界テスト |
+| 8 | `core/pipeline_contracts.py` | 74% | 28 | 契約検証の異常値テスト |
+| 9 | `api/routes_decide.py` | 75% | 30 | ルーティング失敗・fallback |
+| 10 | `api/rate_limiting.py` | 76% | 28 | burst境界・時刻依存分岐 |
+| 11 | `core/pipeline_inputs.py` | 77% | 18 | 入力正規化の異常系 |
+| 12 | `core/pipeline_policy.py` | 77% | 21 | policy競合と優先順位 |
+| 13 | `core/fuji_policy.py` | 78% | 45 | rolloutとdeny優先分岐 |
+| 14 | `core/pipeline_persist.py` | 78% | 25 | 保存失敗時の整合性 |
+| 15 | `core/pipeline_retrieval.py` | 78% | 32 | 取得失敗・空結果分岐 |
 
 ---
 
@@ -106,8 +104,10 @@
 - `compliance/report_engine.py`: 63% → **96%**
 - `api/governance.py`: 69% → **97%**
 - `core/memory_vector.py`: 39% → **99%**
+- `core/memory_store.py`: 43%（CI） → **99%** — `_normalize` 旧形式マイグレーションの型安全化、search/cache/lifecycle 全分岐網羅
+- `core/memory_lifecycle.py`: 65%（CI） → **98%** — parse_expires_at/normalize_lifecycle/is_record_expired/cascade 全独立テスト追加
+- `core/memory_compliance.py`: 94%（CI） → **100%** — is_record_legal_hold/should_cascade_delete_semantic 全分岐テスト追加
 - focused再計測で高改善:
-  - `core/memory_store.py`: **98.7%**
   - `logging/encryption.py`: **88.0%**
   - `tools/web_search_security.py`: **95.3%**
 

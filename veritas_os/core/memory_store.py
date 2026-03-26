@@ -73,7 +73,11 @@ class MemoryStore:
         # 旧形式からのマイグレーション
         if isinstance(raw, dict) and "users" in raw:
             migrated: List[Dict[str, Any]] = []
-            for uid, udata in (raw.get("users") or {}).items():
+            users = raw.get("users")
+            if not isinstance(users, dict):
+                logger.warning("[MemoryOS] old-format 'users' is not a dict, skipping migration")
+                return []
+            for uid, udata in users.items():
                 if isinstance(udata, dict):
                     for k, v in udata.items():
                         migrated.append(
