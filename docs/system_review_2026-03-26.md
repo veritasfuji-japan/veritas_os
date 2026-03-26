@@ -71,3 +71,42 @@
 - `veritas_os/api/routes_decide.py`
 - `veritas_os/logging/encryption.py`
 - `veritas_os/tools/web_search.py`
+
+---
+
+## 追記（改善実施ログ / 2026-03-26）
+
+以下の改善を実装し、責務境界（Planner / Kernel / FUJI / MemoryOS）を越えない
+API運用層の安全性向上として反映しました。
+
+### 1) 本番環境で Direct FUJI API を強制無効化
+- 対応:
+  - `VERITAS_ENABLE_DIRECT_FUJI_API=true` が設定されていても、
+    `VERITAS_ENV=prod|production` では実行時に `False` として扱うガードを追加。
+  - 起動時セキュリティ検証で、production で当該フラグが有効なら fail-fast で起動拒否。
+- 目的:
+  - `/v1/decide` パイプラインを経由しない直接利用の誤運用を防止し、
+    本番の統合制御（監査・運用ポリシー）を維持する。
+
+### 2) `/health` と `/status` にセキュリティ姿勢スナップショットを追加
+- 対応:
+  - `security_posture.direct_fuji_api_enabled`
+  - `security_posture.encryption`（暗号化有効状態・アルゴリズム等）
+  を返すよう拡張。
+- 目的:
+  - 「今どの安全機構が有効か」を即時確認可能にし、
+    運用Runbook/監視ダッシュボードでの誤認を減らす。
+
+### 3) テスト追加・更新
+- 追加:
+  - production で direct FUJI API が強制無効化されることの単体テスト。
+  - 起動時セキュリティ検証で direct FUJI API を
+    - non-production: 警告
+    - production: 例外
+    として扱うテスト。
+  - `/health` が `security_posture` を含むことの確認テスト。
+
+## 追加セキュリティ警告
+- **[HIGH] Direct FUJI API の本番有効化は重大リスク**  
+  本改善で fail-fast + 実行時ガードを実装済みですが、設定管理（IaC / Secret Manager）
+  でも `VERITAS_ENABLE_DIRECT_FUJI_API` を production で配布しない統制を継続してください。
