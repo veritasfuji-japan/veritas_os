@@ -26,8 +26,20 @@ logger = logging.getLogger(__name__)
 # Hostname helpers
 # ---------------------------------------------------------------------------
 
+# Zero-width and invisible Unicode characters that must be stripped from
+# hostnames before canonicalization.  These include ZWSP, ZWJ, ZWNJ,
+# soft hyphen, BOM, word joiner, and BiDi override/embedding chars.
+_RE_INVISIBLE = re.compile(
+    "[\u00ad\u034f\u200b-\u200f\u2028-\u202f\u2060-\u2064\ufeff\ufff9-\ufffb]"
+)
+
 def _extract_hostname(url: str) -> str:
-    """URLからホスト名を抽出する（スキームなしURLも対応）。"""
+    """URLからホスト名を抽出する（スキームなしURLも対応）。
+
+    NFKC normalization is applied so that fullwidth / compatibility
+    characters are collapsed before the hostname is returned, keeping
+    the result consistent with ``_canonicalize_hostname``.
+    """
     if not url:
         return ""
     candidate = url.strip()
@@ -36,7 +48,7 @@ def _extract_hostname(url: str) -> str:
     if not host and "://" not in candidate:
         parsed = urlparse(f"http://{candidate}")
         host = parsed.hostname
-    return (host or "").lower().rstrip(".")
+    return _canonicalize_hostname(host or "")
 
 
 def _canonicalize_hostname(hostname: str) -> str:
@@ -51,6 +63,10 @@ def _canonicalize_hostname(hostname: str) -> str:
     before further processing.  This prevents policy bypass via visually
     similar but byte-distinct hostnames.
 
+    Zero-width and invisible Unicode characters (ZWSP, ZWJ, ZWNJ, soft
+    hyphen, BOM, word joiner, BiDi overrides, etc.) are stripped so that
+    they cannot survive canonicalization and trick downstream LDH checks.
+
     Args:
         hostname: Raw hostname string.
 
@@ -59,6 +75,9 @@ def _canonicalize_hostname(hostname: str) -> str:
         or a trailing dot.
     """
     raw = (hostname or "").strip()
+    # Strip zero-width / invisible characters before normalization so
+    # they don't survive into the LDH check.
+    raw = _RE_INVISIBLE.sub("", raw)
     # NFKC collapses fullwidth Latin, compatibility Katakana, etc.
     normalized = unicodedata.normalize("NFKC", raw)
     return normalized.lower().rstrip(".")
@@ -128,7 +147,10 @@ def _is_obviously_private_or_local_host(hostname: str) -> bool:
     if "." not in host:
         return True
 
-    if host.endswith((".local", ".internal", ".localhost", ".localdomain")):
+    if host.endswith((
+        ".local", ".internal", ".localhost", ".localdomain",
+        ".corp", ".home", ".lan", ".intranet", ".private",
+    )):
         return True
 
     # Block hostnames with non-LDH residue after NFKC (homoglyph attacks).
@@ -326,6 +348,15 @@ def _sanitize_websearch_url(url: str) -> str:
     if not parsed.hostname:
         logging.getLogger(__name__).warning(
             "VERITAS_WEBSEARCH_URL must include a hostname; URL will be ignored"
+        )
+        return ""
+
+    # Defense-in-depth: reject obviously private/local hosts at sanitize
+    # time so that misconfigured env vars are caught early without
+    # relying solely on _is_allowed_websearch_url.
+    if _is_obviously_private_or_local_host(parsed.hostname):
+        logging.getLogger(__name__).warning(
+            "VERITAS_WEBSEARCH_URL points to a private/local host; URL will be ignored"
         )
         return ""
 
