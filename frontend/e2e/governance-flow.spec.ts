@@ -1,10 +1,19 @@
 import { test, expect, type Page } from "@playwright/test";
 
+/**
+ * CSS selector for VERITAS error banners.
+ *
+ * Next.js injects a hidden `<div role="alert" id="__next-route-announcer__">`
+ * for screen-reader route announcements.  We must exclude it so that Playwright
+ * strict-mode does not fail with "resolved to 2 elements".
+ */
+const ALERT_BANNER = '[role="alert"]:not(#__next-route-announcer__)';
+
 async function waitForPolicyLoadOutcome(
   page: Page,
 ): Promise<"loaded" | "error"> {
   const applyButton = page.getByRole("button", { name: /適用|Apply/i }).first();
-  const errorBanner = page.locator('[role="alert"]').first();
+  const errorBanner = page.locator(ALERT_BANNER).first();
 
   const outcome = await Promise.race([
     applyButton.waitFor({ state: "visible", timeout: 25_000 }).then(
@@ -61,7 +70,7 @@ test.describe("Governance: policy management flow", () => {
     const outcome = await waitForPolicyLoadOutcome(page);
 
     // If error, verify retry button is present
-    const errorBanner = page.locator('[role="alert"]');
+    const errorBanner = page.locator(ALERT_BANNER);
     if (outcome === "error" || (await errorBanner.count()) > 0) {
       await expect(
         errorBanner.getByRole("button", { name: /再試行|Retry/i }),
@@ -107,7 +116,7 @@ test.describe("Governance: policy management flow", () => {
 
     // Backend unavailable path: keep this test meaningful by validating
     // degraded/error state and retry affordance.
-    const errorBanner = page.locator('[role="alert"]');
+    const errorBanner = page.locator(ALERT_BANNER);
     await expect(errorBanner).toBeVisible();
     await expect(errorBanner.getByRole("button", { name: /再試行|Retry/i })).toBeVisible();
   });

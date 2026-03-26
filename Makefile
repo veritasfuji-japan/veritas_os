@@ -3,7 +3,7 @@ PYTHON_FALLBACK ?= 3.12
 UV ?= uv
 TEST_ARGS ?=
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split quality-checks
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -99,3 +99,17 @@ quality-checks:
 	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0
 	@python scripts/quality/check_deployment_env_defaults.py
 	@python scripts/security/check_runtime_pickle_artifacts.py
+
+# ── Production-like Validation ───────────────────────────────────────────
+
+test-production:
+	@echo "[veritas] Running production-like tests (pytest -m 'production or smoke')..."
+	@python -m pytest veritas_os/tests/ -m "production or smoke" -v --tb=short --durations=10
+
+test-smoke:
+	@echo "[veritas] Running smoke tests (pytest -m smoke)..."
+	@python -m pytest veritas_os/tests/ -m smoke -v --tb=short
+
+validate:
+	@echo "[veritas] Running full production validation..."
+	@bash scripts/production_validation.sh
