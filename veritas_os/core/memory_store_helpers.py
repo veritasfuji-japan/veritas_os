@@ -145,14 +145,33 @@ def build_kvs_search_hits(
     min_sim: float = 0.0,
     user_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Build normalized fallback KVS search hits from raw store records."""
+    """Build normalized fallback KVS search hits from raw store records.
+
+    Fail-safe guards:
+    - Invalid ``k`` values produce no hits.
+    - Invalid ``min_sim`` values are treated as strict threshold (fail-closed).
+    - ``user_id`` filtering is applied when explicitly provided, including
+      empty-string identifiers.
+    """
     normalized_query = (query or "").strip()
     if not normalized_query:
         return []
 
+    try:
+        limit = max(0, int(k))
+    except (TypeError, ValueError):
+        limit = 0
+    if limit == 0:
+        return []
+
+    try:
+        min_similarity = float(min_sim)
+    except (TypeError, ValueError):
+        min_similarity = 1.1
+
     hits: List[Dict[str, Any]] = []
     for record in records:
-        if user_id and record.get("user_id") != user_id:
+        if user_id is not None and record.get("user_id") != user_id:
             continue
 
         value = record.get("value") or {}
@@ -164,7 +183,7 @@ def build_kvs_search_hits(
             continue
 
         score = simple_score(normalized_query, text)
-        if score < min_sim:
+        if score < min_similarity:
             continue
 
         kind = value.get("kind", "episodic")
@@ -187,7 +206,7 @@ def build_kvs_search_hits(
         )
 
     hits.sort(key=lambda hit: hit.get("score", 0.0), reverse=True)
-    return hits[:k]
+    return hits[:limit]
 
 
 def erase_user_records(

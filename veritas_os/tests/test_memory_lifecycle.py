@@ -32,6 +32,11 @@ def test_parse_expires_at_blank_or_unsupported_returns_none() -> None:
     assert parse_expires_at({"expires_at": "2024-01-01"}) is None
 
 
+def test_parse_expires_at_out_of_range_numeric_returns_none() -> None:
+    """Out-of-range numeric timestamps should fail closed."""
+    assert parse_expires_at(float("inf")) is None
+
+
 def test_normalize_lifecycle_defaults_retention_and_hold() -> None:
     """Lifecycle defaults should be attached to memory-style documents."""
     result = normalize_lifecycle(

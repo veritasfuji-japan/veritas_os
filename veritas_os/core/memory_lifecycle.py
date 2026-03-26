@@ -31,7 +31,10 @@ def parse_expires_at(expires_at: Any) -> Optional[str]:
         return None
 
     if isinstance(expires_at, (int, float)):
-        dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+        try:
+            dt = datetime.fromtimestamp(float(expires_at), tz=timezone.utc)
+        except (OverflowError, OSError, ValueError):
+            return None
         return dt.isoformat()
 
     if isinstance(expires_at, str):
