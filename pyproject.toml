@@ -89,3 +89,10 @@ veritas_os = [
 filterwarnings = [
   "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",
 ]
+markers = [
+  "asyncio: mark test as asynchronous and execute via asyncio.run",
+  "slow: mark test as slow or external-I/O dependent",
+  "production: production-like validation requiring real services",
+  "smoke: lightweight smoke tests for deployment verification",
+  "external: tests that depend on external network services",
+]

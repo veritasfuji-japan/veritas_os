@@ -1,0 +1,174 @@
+# ============================================================================
+# VERITAS OS — Production Validation CI Workflow
+#
+# Runs production-like tests in isolation from the main CI pipeline.
+# Triggered manually (workflow_dispatch) or on a weekly schedule.
+# Does NOT block normal PRs.
+# ============================================================================
+
+name: Production Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_docker:
+        description: "Run Docker Compose smoke test"
+        type: boolean
+        default: false
+      include_external:
+        description: "Run external API tests (requires secrets)"
+        type: boolean
+        default: false
+  schedule:
+    # Weekly on Sundays at 04:00 UTC
+    - cron: "0 4 * * 0"
+
+concurrency:
+  group: production-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
+
+jobs:
+  # ── Production-like Python tests ──────────────────────────────────────
+  production-tests:
+    name: production-tests (py3.12)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest pytest-cov httpx anyio
+
+      - name: Run production-like tests
+        run: |
+          set -euxo pipefail
+          pytest -q veritas_os/tests/ \
+            -m "production or smoke" \
+            -v \
+            --tb=short \
+            --durations=20 \
+            --junitxml=test-reports/production.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-test-report
+          path: test-reports/production.xml
+          if-no-files-found: warn
+
+  # ── Docker Compose smoke test ─────────────────────────────────────────
+  docker-smoke:
+    name: docker-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.include_docker == 'true')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start services
+        run: |
+          set -euxo pipefail
+          docker compose up -d --build --wait --timeout 120
+
+      - name: Verify backend health
+        run: |
+          set -euxo pipefail
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then
+              echo ""
+              echo "Backend healthy!"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+          echo "Backend health check timed out"
+          docker compose logs backend
+          exit 1
+
+      - name: Verify OpenAPI schema
+        run: |
+          set -euxo pipefail
+          curl -sf http://localhost:8000/openapi.json | python3 -c "
+          import json, sys
+          schema = json.load(sys.stdin)
+          assert schema.get('openapi', '').startswith('3.'), 'Invalid OpenAPI version'
+          assert '/v1/decide' in str(schema.get('paths', {})), 'Missing /v1/decide'
+          print('OpenAPI schema valid')
+          "
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down --timeout 10
+
+  # ── External API tests (opt-in) ──────────────────────────────────────
+  external-tests:
+    name: external-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.include_external == 'true'
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_WEBSEARCH_KEY: ${{ secrets.VERITAS_WEBSEARCH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: Run external tests
+        run: |
+          set -euxo pipefail
+          if [ -z "${VERITAS_WEBSEARCH_KEY:-}" ]; then
+            echo "VERITAS_WEBSEARCH_KEY not set — skipping external tests"
+            exit 0
+          fi
+          pytest -q veritas_os/tests/ \
+            -m external \
+            -v \
+            --tb=short
