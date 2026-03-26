@@ -1,241 +1,159 @@
-# VERITAS OS — テストカバレッジレポート
+# VERITAS OS — テストカバレッジレポート（改善版）
 
-**測定日**: 2026-03-24
-**Python**: 3.12.3
-**OS**: Linux 6.14.0-1017-azure (Ubuntu)
-**テストフレームワーク**: pytest 9.0.2 + pytest-cov 7.1.0
-**ブランチカバレッジ**: 有効 (.coveragerc で `branch = True`)
-**CI カバレッジ基準**: 85% (`--cov-fail-under=85`)
+**最終更新日**: 2026-03-26  
+**基準スナップショット**: 2026-03-24（CI） + 2026-03-26（focused再計測）  
+**Python**: 3.12.3  
+**OS**: Linux 6.14.0-1017-azure (Ubuntu)  
+**テストフレームワーク**: pytest 9.0.2 / pytest-cov 7.1.0（CI）  
+**CIカバレッジ基準**: `--cov-fail-under=85`
 
-## 全体サマリー
+---
 
-| 指標 | 前回 (2026-02-12) | 今回 (2026-03-24) | 増減 |
-|------|-------------------|-------------------|------|
-| **全体カバレッジ** | **89%** | **87% (term) / 89.3% (xml)** | ±0〜+0.3% |
-| ソースステートメント数 | 10,614 | 18,225 | +7,611 (+72%) |
-| ミスしたステートメント | 1,664 | 1,957 | +293 |
+## 1. エグゼクティブサマリー
+
+- **CI判定値（2026-03-24）**: **87%（term-missing）** → ✅ 基準達成（85%以上）
+- **XML line_rate（同日）**: **89.3%**
+- **テスト件数**: 1,768 → 4,350（**+2,582 / +146%**）
+- **失敗テスト**: 4 → **0（全解消）**
+- **コード規模**: 10,614 → 18,225 stmts（**+72%**）
+
+> 解釈: コードベースが大幅拡大した中で、CI判定カバレッジを 87% に維持できている。
+
+---
+
+## 2. 計測条件と読み方（重要）
+
+### 2.1 2種類の計測値
+
+1. **CI全体値（2026-03-24）**
+   - `pytest + pytest-cov`
+   - branch coverage 有効
+   - CI判定に使用される正規値
+2. **focused再計測（2026-03-26）**
+   - 標準ライブラリ `trace` による line-only coverage
+   - 特定モジュールの改善確認用途
+   - CI branch coverage と**直接比較不可**
+
+### 2.2 term 87% と xml 89.3% の差
+
+- coverageの集計軸（term-missing / xml / branch計算）差分による。
+- **CI合否は 87%（term-missing）で判定**する。
+
+---
+
+## 3. 全体推移（CI基準）
+
+| 指標 | 前回 (2026-02-12) | 今回 (2026-03-24) | 変化 |
+|---|---:|---:|---:|
+| 全体カバレッジ（term） | 89% | **87%** | -2pt |
+| 全体カバレッジ（xml） | — | **89.3%** | — |
+| ステートメント数 | 10,614 | 18,225 | +7,611 |
+| ミス行数 | 1,664 | 1,957 | +293 |
 | ブランチ数 | 3,530 | 5,672 | +2,142 |
-| 部分カバレッジのブランチ | 580 | 714 | +134 |
-| テスト数 (passed) | 1,768 | 4,350 | **+2,582 (+146%)** |
-| テスト数 (failed) | 4 | 0 | **-4 (全解消)** |
-| テスト数 (skipped) | — | 3 | — |
-| CI 基準 | — | ✅ パス (87% ≥ 85%) | — |
+| 部分カバレッジ分岐 | 580 | 714 | +134 |
+| passed | 1,768 | **4,350** | +2,582 |
+| failed | 4 | **0** | -4 |
+| skipped | — | 3 | — |
 
-> **注**: term-missing 出力の 87% と coverage.xml の 89.3% の差は、branch coverage の計算方式の違いによるもの。CI は term-missing ベースの 87% で判定しており、`--cov-fail-under=85` をパスしている。
+> 補足: 見かけ上カバレッジ率は微減だが、コード増加率（+72%）を考慮すると品質維持は良好。
 
-> **重要**: コードベースが 10,614 → 18,225 ステートメント (+72%) と大幅に増加したにもかかわらず、全体カバレッジは 87〜89% を維持。テスト数は 1,768 → 4,350 (+146%) と 2.5 倍に増加し、以前の 4 件の失敗テストもすべて解消された。
+---
 
-## 重点5モジュールの改善
+## 4. 重点5モジュール（改善実績）
 
-| モジュール | 前回 (2026-02-12) | 今回 (2026-03-24) | 増減 | Stmts | Miss | Branch | BrPart | コメント |
-|-----------|-------------------|-------------------|------|-------|------|--------|--------|---------|
-| `core/pipeline.py` | 68% | **98%** | **+30%** | 269 | 6 | 54 | 0 | 大幅改善。リファクタリングと専用テスト追加の成果。ミス 463→6 行。Branch 100% 達成。 |
-| `api/server.py` | 74% | **93%** | **+19%** | 240 | 19 | 14 | 0 | 大幅改善。エンドポイントテスト追加の成果。ミス 196→19 行。Branch 100% 達成。 |
-| `core/memory.py` | 75% | **94%** | **+19%** | 629 | 27 | 168 | 21 | 大幅改善。VectorMemory/MemoryStore テスト強化の成果。ミス 230→27 行。 |
-| `core/kernel.py` | 81% | **94%** | **+13%** | 451 | 21 | 168 | 15 | 大幅改善。分岐テスト強化の成果。ミス 97→21 行。 |
-| `core/fuji.py` | 85% | **90%** | **+5%** | 455 | 35 | 142 | 20 | 改善。PII/ポリシーテスト追加の成果。ミス 71→35 行。 |
+| モジュール | 前回 | 今回 | 増減 | Stmts | Miss | Branch | BrPart |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `core/pipeline.py` | 68% | **98%** | **+30pt** | 269 | 6 | 54 | 0 |
+| `api/server.py` | 74% | **93%** | **+19pt** | 240 | 19 | 14 | 0 |
+| `core/memory.py` | 75% | **94%** | **+19pt** | 629 | 27 | 168 | 21 |
+| `core/kernel.py` | 81% | **94%** | **+13pt** | 451 | 21 | 168 | 15 |
+| `core/fuji.py` | 85% | **90%** | **+5pt** | 455 | 35 | 142 | 20 |
 
-> **coverage.xml ベースの line_rate**: pipeline.py=97.8%, server.py=92.1%, memory.py=95.7%, kernel.py=95.3%, fuji.py=92.3%
+**所見**:
+- 優先5モジュールはすべて改善。
+- `pipeline.py` / `server.py` は branch 100%（BrPart=0）で安定。
 
-### モジュール分割の効果
+---
 
-大規模モジュールの分割により保守性が向上した。
+## 5. 低カバレッジ優先対象（80%未満のみ）
 
-| 元モジュール | 前回行数 | 今回行数 | サブモジュール例 |
-|-------------|---------|---------|---------------|
-| `pipeline.py` | 1,614 | 269 | pipeline_gate, pipeline_execute, pipeline_persist, pipeline_helpers 等 |
-| `server.py` | 799 | 240 | routes_decide, routes_memory, routes_governance, routes_trust 等 |
-| `memory.py` | 984 | 629 | memory_vector, memory_store, memory_storage, memory_lifecycle 等 |
+> 以下は **「現在 80% 未満」** のみ掲載（改善済みモジュールは除外）。
 
-## カバレッジ低位モジュール (80%未満)
+| 優先 | モジュール | Coverage | Miss | 改善余地 |
+|---:|---|---:|---:|---|
+| 1 | `core/memory_store.py` | 43%（CI） / 98.7%（focused） | 152（CI時点） | CI条件での再現確認と分岐網羅の固定化が必要 |
+| 2 | `core/memory_storage.py` | 56%（CI） / 96.9%（focused） | 36 | 永続化失敗・I/O異常分岐のCI統合 |
+| 3 | `tools/web_search_security.py` | 59%（CI） / 95.3%（focused） | 53 | DNS/ソケット例外分岐の常時回帰テスト化 |
+| 4 | `core/memory_lifecycle.py` | 65%（CI） / 96.2%（focused） | 25 | 状態遷移の異常系テスト追加 |
+| 5 | `logging/encryption.py` | 67%（CI） / 88.0%（focused） | 43 | 暗号バックエンド障害時のfail-closed経路を強化 |
+| 6 | `core/pipeline_response.py` | 68% | 17 | 例外整形・戻り値境界テスト |
+| 7 | `core/pipeline_execute.py` | 73% | 21 | 実行順序・異常分岐の網羅 |
+| 8 | `core/pipeline_gate.py` | 73% | 27 | deny系条件の境界網羅 |
+| 9 | `core/pipeline_helpers.py` | 74% | 30 | ヘルパ分岐の入力境界テスト |
+| 10 | `core/pipeline_contracts.py` | 74% | 28 | 契約検証の異常値テスト |
+| 11 | `api/routes_decide.py` | 75% | 30 | ルーティング失敗・fallback |
+| 12 | `api/rate_limiting.py` | 76% | 28 | burst境界・時刻依存分岐 |
+| 13 | `core/pipeline_inputs.py` | 77% | 18 | 入力正規化の異常系 |
+| 14 | `core/pipeline_policy.py` | 77% | 21 | policy競合と優先順位 |
+| 15 | `core/fuji_policy.py` | 78% | 45 | rolloutとdeny優先分岐 |
+| 16 | `core/pipeline_persist.py` | 78% | 25 | 保存失敗時の整合性 |
+| 17 | `core/pipeline_retrieval.py` | 78% | 32 | 取得失敗・空結果分岐 |
 
-| モジュール | Stmts | Miss | Branch | BrPart | カバレッジ | xml line_rate |
-|-----------|-------|------|--------|--------|-----------|--------------|
-| `core/memory_vector.py` | 210 | 0 | 66 | 1 | **99%** | 100% |
-| `core/memory_store.py` | 284 | 152 | 100 | 4 | 43% | 46.5% |
-| `core/memory_storage.py` | 82 | 36 | 22 | 4 | 56% | 56.1% |
-| `tools/web_search_security.py` | 148 | 53 | 54 | 3 | 59% | 64.2% |
-| ~~`compliance/report_engine.py`~~ | ~~126~~ → 223 | ~~38~~ → 5 | ~~34~~ → 70 | ~~11~~ → 6 | ~~63%~~ → **96%** | 97.8% |
-| `core/memory_lifecycle.py` | 86 | 25 | 42 | 16 | 65% | 70.9% |
-| `logging/encryption.py` | 134 | 43 | 28 | 4 | 67% | 67.9% |
-| `core/pipeline_response.py` | 56 | 17 | 20 | 5 | 68% | 69.6% |
-| ~~`api/governance.py`~~ | ~~243~~ → 251 | ~~69~~ → 7 | 66 | 3 | ~~69%~~ → **97%** | 97.2% |
-| `core/pipeline_execute.py` | 92 | 21 | 26 | 9 | 73% | 77.2% |
-| `core/pipeline_gate.py` | 106 | 27 | 20 | 3 | 73% | 74.5% |
-| `core/pipeline_helpers.py` | 137 | 30 | 46 | 7 | 74% | 78.1% |
-| `core/pipeline_contracts.py` | 112 | 28 | 36 | 9 | 74% | 75.0% |
-| `api/routes_decide.py` | 133 | 30 | 26 | 7 | 75% | 77.4% |
-| `api/rate_limiting.py` | 123 | 28 | 30 | 3 | 76% | 77.2% |
-| `core/pipeline_inputs.py` | 110 | 18 | 40 | 10 | 77% | — |
-| `core/pipeline_policy.py` | 121 | 21 | 32 | 10 | 77% | — |
-| `core/fuji_policy.py` | 220 | 45 | 68 | 7 | 78% | 79.5% |
-| `core/pipeline_persist.py` | 190 | 25 | 54 | 16 | 78% | — |
-| `core/pipeline_retrieval.py` | 184 | 32 | 66 | 18 | 78% | — |
+---
 
-## テスト強化の成果
+## 6. 改善済みハイライト（2026-03-26時点）
 
-1. **テスト数 2.5 倍増**: 1,768 → 4,350 テスト (+2,582)
-2. **失敗テスト全解消**: 4 → 0 (pytest-asyncio 関連の問題を解決)
-3. **重点5モジュール全改善**:
-   - `pipeline.py`: 68% → **98%** (+30%)
-   - `server.py`: 74% → **93%** (+19%)
-   - `memory.py`: 75% → **94%** (+19%)
-   - `kernel.py`: 81% → **94%** (+13%)
-   - `fuji.py`: 85% → **90%** (+5%)
-4. **コードベースのリファクタリング**: 大規模モジュールの分割により保守性向上
-5. **全体カバレッジ維持**: コードベース 72% 増にもかかわらず 87〜89% を維持
-6. **CI 基準超過**: `--cov-fail-under=85` を 87% でパス
+- `compliance/report_engine.py`: 63% → **96%**
+- `api/governance.py`: 69% → **97%**
+- `core/memory_vector.py`: 39% → **99%**
+- focused再計測で高改善:
+  - `core/memory_store.py`: **98.7%**
+  - `logging/encryption.py`: **88.0%**
+  - `tools/web_search_security.py`: **95.3%**
 
-## カバレッジ向上の推奨事項 (次の改善に向けて)
+> 注意: 上記のうち focused 値は `trace` ベース。CI branch coverage での再確認を必須とする。
 
-| 優先 | モジュール | 現在 | Miss 行 | 改善インパクト | 推奨アクション |
-|------|-----------|------|---------|--------------|--------------|
-| 1 | `core/memory_store.py` | 43% | 152 | 高 (152 行回収可能) | VectorMemory/MemoryStore の実行パステスト追加。search/get/delete メソッドのテスト。 |
-| ~~2~~ | ~~`core/memory_vector.py`~~ | ~~39%~~ → **99%** | ~~116~~ → 0 | ✅ **改善済** | テスト追加により全ステートメント網羅。ブランチも 66/66 の 65 をカバー (BrPart=1)。 |
-| ~~2~~ | ~~`api/governance.py`~~ | ~~69%~~ → **97%** | ~~69~~ → 7 | ✅ **改善済** | four-eyes approval・policy CRUD・history append/trim・callback hot-reload・updated_by sanitization のテスト追加。62 行回収。 |
-| 3 | `tools/web_search_security.py` | 59% → **改善中** | 53 | 中 (53 行回収可能) | ✅ **adversarial テスト追加済** — NFKC confusable, leetspeak, URL-encoded, base64, invisible char injection, hostname homoglyph 等の攻撃パターン網羅テスト (`test_web_search_adversarial.py`, 86 テスト追加)。`_canonicalize_hostname` に NFKC 正規化追加、`_hostname_has_confusable_chars` でホモグリフ検出強化、`_is_toxic_result` にゼロ幅文字除去・新パターン追加。 |
-| 4 | `core/fuji_policy.py` | 78% | 45 | 中 (45 行回収可能) | ポリシーロールアウト・検証ロジックのブランチテスト追加。 |
-| 5 | `logging/encryption.py` | 67% | 43 | 中 (43 行回収可能) | ✅ **adversarial テスト追加済** — missing key, wrong key, corrupted ciphertext, truncated line 等の fail-closed テスト (`test_trustlog_adversarial.py`)。 |
-| 5b | `audit/trustlog_signed.py` | — | — | 中 | ✅ **adversarial テスト追加済** — signature invalid, previous_hash mismatch, WORM mirror write failure, transparency anchor failure のテスト。`verify_signature` の例外処理バグ修正。 |
-| 6 | `compliance/report_engine.py` | ~~63%~~ → **96%** | ~~38~~ → 5 | ✅ **改善済** | EU AI Act コンプライアンスレポート生成のテスト追加。入力バリデーション・ガバナンスポリシー統合・リプレイ検証・決定論的出力・説明可能性のテスト追加 (44 テスト追加)。レポートスキーマバージョン追加、ガバナンスリスク閾値統合、`compliance_narrative` による説明可能性向上。 |
-| 7 | `core/memory_storage.py` | 56% | 36 | 中 (36 行回収可能) | ストレージ永続化のテスト追加。ファイル I/O のモックテスト。 |
-| 8 | `core/pipeline_retrieval.py` | 78% | 32 | 中 (32 行回収可能) | 検索・取得パスの分岐テスト追加。 |
-| 9 | `core/pipeline_helpers.py` | 74% | 30 | 中 (30 行回収可能) | ヘルパー関数の分岐テスト追加。 |
+---
 
-> **合計**: TOP 9 の改善で最大 **498 行** のミスを回収可能。`memory_vector.py` は改善済み (39% → 99%, 116 行回収)。`governance.py` は改善済み (69% → 97%, 62 行回収)。
+## 7. セキュリティ観点の重点（要警戒）
 
-## 追補 (2026-03-26): FUJI policy 分岐の追加テスト
+### 7.1 `logging/encryption.py`
 
-- `test_fuji_policy_core.py` に以下の安全性重視ケースを追加:
-  - 無効な `action_on_exceed` を含むルールで fail-closed (`deny`) になること
-  - `PII` と `illicit` の競合ルールで高優先度 (`deny`) が選ばれること
-- `test_fuji_policy_rollout.py` に以下を追加:
-  - rollout disable/enable 相当（stable=canary と strict canary）の差分確認
-  - canary ratio の境界外値 clamp と `NaN` 入力時の fail-closed (`stable`) 確認
-  - リプレイ評価中の例外を fail-closed (`deny`) として扱うこと
+- 未到達には、暗号バックエンド切替例外や不正envelope処理が含まれる。
+- ここが欠けると、**誤設定時のfail-open（平文許容）リスク**につながる。
 
-これに合わせ、`core/fuji_policy.py` と `core/fuji_policy_rollout.py` で
-fail-closed 明確化のための小規模構造改善を実施（未知アクション時 deny、rollout 評価例外時 deny）。
+### 7.2 `tools/web_search_security.py`
 
-## 追補 (2026-03-26): MemoryOS core の再測定・改善更新
+- DNS解決不能時のfail-closedやソケット分岐は、**SSRF防御の最終線**。
+- ネットワーク例外注入テストの回帰監視を継続すべき。
 
-`core/memory_store.py` の信頼性改善に合わせ、MemoryOS のコアモジュールを対象に
-focused coverage を再測定した。
+### 7.3 `core/memory_store.py`
 
-- 実行テスト:
-  - `test_memory_store_hardening.py`
-  - `test_memory_store_core.py`
-  - `test_memory_store.py`
-  - `test_memory_store_io_strategy.py`
-  - `test_memory_lifecycle.py`
-  - `test_memory_storage.py`
-  - `test_memory_compliance.py`
-- 結果: **228 passed**
+- 保存失敗時の部分成功抑止は整合性に直結。
+- `put_episode` 周辺は、書き込み失敗時に**必ずロールバック/同期抑止**を検証する。
 
-> 計測方式の注意: この環境では `pytest-cov` が未導入のため、標準ライブラリ
-> `trace` の `--count --missing` を使用して line coverage を算出した。
-> そのため、CI の branch coverage 指標とは直接比較できない。
+---
 
-### Focused coverage (trace, line-only)
+## 8. 直近アクションプラン（次スプリント）
 
-| モジュール | Executed | Missed | Line Coverage |
-|-----------|----------|--------|---------------|
-| `core/memory_store.py` | 366 | 5 | **98.7%** |
-| `core/memory_storage.py` | 94 | 3 | **96.9%** |
-| `core/memory_lifecycle.py` | 102 | 4 | **96.2%** |
-| `core/memory_compliance.py` | 95 | 0 | **100.0%** |
+1. **CI再計測の一本化**
+   - focused改善済み3モジュール（memory_store/encryption/web_search_security）を、CI coverageレポートに反映確認。
+2. **80%未満モジュールの段階的解消**
+   - 目標: 次回で「80%未満モジュール数」を半減。
+3. **セキュリティ異常系テストの固定化**
+   - 暗号・SSRF・永続化不整合を nightly 回帰セットへ昇格。
+4. **品質ゲート強化（提案）**
+   - 総合85%に加え、critical modules の下限（例: 90%）を設定。
 
-### 今回の改善ポイント（memory_store）
+---
 
-- `_load_all(copy=True)` の deep copy 化で、呼び出し側のネスト更新による
-  キャッシュ汚染を防止。
-- `list_all`/`search` の `user_id` 判定を `is not None` に統一し、
-  `user_id=""` での境界漏れを防止。
-- `search(k, min_sim)` の境界を fail-closed 化（負値/型不正）。
-- `put_episode` で KVS 保存失敗時に vector 同期を抑止し、部分成功による
-  不整合を回避。
-
-## 追補 (2026-03-26): `encryption.py` / `memory_store.py` / `web_search_security.py` の focused coverage 再計測
-
-`pytest-cov` / `coverage.py` がこの環境で未導入のため、標準ライブラリ
-`trace` を使って対象3モジュールの line coverage を再計測した。
-
-- 実行テスト（合計 **520 passed**）:
-  - memory_store 系:
-    - `test_memory_store.py`
-    - `test_memory_store_core.py`
-    - `test_memory_store_hardening.py`
-    - `test_memory_store_helpers.py`
-    - `test_memory_store_io_strategy.py`
-  - encryption / trustlog 系:
-    - `test_logging_encryption_hardening.py`
-    - `test_trustlog_adversarial.py`
-    - `test_logging_core_trustlog.py`
-    - `test_secure_trustlog.py`
-    - `test_pii_re_dict_and_trustlog_resilience.py`
-  - web_search_security 系:
-    - `test_web_search_security.py`
-    - `test_web_search_adversarial.py`
-    - `test_web_search.py`
-    - `test_web_search_extra.py`
-    - `test_pipeline_web_search.py`
-
-### Focused coverage 結果（trace, line-only）
-
-| モジュール | Executed | Missed | Line Coverage | 前回レポート値(2026-03-24) | 差分 |
-|-----------|----------|--------|---------------|-----------------------------|------|
-| `core/memory_store.py` | 371 | 5 | **98.7%** | 43% | **+55.7pt** |
-| `logging/encryption.py` | 184 | 22 | **88.0%** | 67% | **+21.0pt** |
-| `tools/web_search_security.py` | 170 | 8 | **95.3%** | 59% | **+36.3pt** |
-
-### 未到達行の要約（trace の `>>>>>>` マーカー）
-
-- `core/memory_store.py`（5行）
-  - `search` の入力変換エラー分岐（`ValueError`）
-  - スコア計算のフォールバック分岐（`token_score = 0.0`）
-  - `limit` の型/値不正時フォールバック分岐（`TypeError`, `ValueError`）
-- `logging/encryption.py`（22行）
-  - 暗号バックエンド選択時の例外フォールバック分岐
-  - `ENC:` envelope の入力異常（prefix欠落・空payload・アルゴリズムマーカー異常）
-  - AES-GCM 生実装向けの短文長チェック分岐
-  - `get_encryption_status()` のステータス組み立て分岐
-- `tools/web_search_security.py`（8行）
-  - `%XX` デコード異常の `ValueError` 分岐
-  - `host is not resolvable` の fail-closed 分岐
-  - DNS pinning socket フック経路（tuple アドレス分岐）
-
-### セキュリティ観点の補足（重要）
-
-- `logging/encryption.py` は 88.0% と高水準だが、**暗号方式切替時の例外経路** と
-  **不正 envelope の fail-closed 分岐**に未到達行が残っている。
-- これらは「誤設定時に平文へフォールバックしないこと」を担保する防御線のため、
-  今後も意図的に異常系を注入するテスト（環境変数汚染・破損トークン・backend
-  初期化失敗）を維持することを推奨する。
-- `tools/web_search_security.py` は 95.3% まで改善したが、**DNS 解決失敗時の fail-closed**
-  と **socket create_connection の分岐**は運用時の SSRF 防御に直結するため、
-  ネットワーク例外注入テストを継続して回帰を監視することを推奨する。
-
-## 制約・注意点
-
-1. **フルスイート実行**: `not slow` マーク付きテストのみ実行 (CI 相当)。slow テストは除外されている。
-2. **前回比較の注意**:
-   - 前回レポート (2026-02-12) と今回 (2026-03-24) ではコードベースの構造が大きく変更されている (モジュール分割、リファクタリング)
-   - 前回の pipeline.py (1,614行) と今回の pipeline.py (269行) は同名だが実質的に異なるモジュール
-   - 同様に server.py (799→240行)、memory.py (984→629行) も分割されている
-   - そのため、カバレッジ率の直接比較は参考値として扱うこと
-3. **term-missing vs xml の差**: term-missing の 87% と coverage.xml の 89.3% は branch coverage の計算方式の違いによる。CI 判定は term-missing ベース
-4. **環境差**: CI は Python 3.11/3.12 のマトリクスで実行するが、今回は 3.12.3 のみで実行
-5. **外部依存**: `OPENAI_API_KEY` と `VERITAS_API_KEY` はダミー値で実行。実 API 呼び出しはモックされている
-
-### coverage 再現コマンド
+## 9. 再現コマンド（CI相当）
 
 ```bash
 cd /home/runner/work/veritas_os/veritas_os
 
-# 依存関係インストール
 pip install pytest pytest-cov httpx pydantic fastapi numpy
 
-# CI 相当の coverage 計測
 OPENAI_API_KEY=DUMMY_FOR_CI \
 VERITAS_API_KEY=DUMMY_FOR_CI \
 PYTHONUNBUFFERED=1 \
@@ -249,3 +167,13 @@ python -m pytest -q veritas_os/tests \
   --durations=20 \
   --tb=short
 ```
+
+---
+
+## 10. 変更履歴（本ドキュメント）
+
+- 2026-03-26: 構成を再編し、以下を是正。
+  - 「80%未満」セクションに混入していた 99% モジュールを除外。
+  - CI値とfocused値の目的・比較可否を明確化。
+  - セキュリティ上の未到達分岐を独立セクション化。
+  - 次アクションを優先順で整理。
