@@ -3,12 +3,12 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
+[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
 [![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
@@ -44,6 +44,7 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: [`README_JP.md`](README_JP.md)
+- **User Manual (JP)**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
 - **Code review document map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 
 ## Contents
@@ -191,8 +192,11 @@ veritas_os/                  ← Monorepo root
 │   ├── security/            ← SHA-256 hashing, Ed25519 signing
 │   ├── tools/               ← Web search, GitHub search, LLM safety
 │   ├── replay/              ← Deterministic replay engine
-│   └── tests/               ← 3200+ Python tests
-├── frontend/                ← Next.js 15 Mission Control dashboard
+│   ├── prompts/             ← Prompt templates for LLM interactions
+│   ├── reporting/           ← Report generation utilities
+│   ├── benchmarks/          ← Performance benchmark data
+│   └── tests/               ← 5000+ Python tests
+├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
 │   ├── features/console/    ← Decision Console feature module
@@ -206,6 +210,9 @@ veritas_os/                  ← Monorepo root
 ├── sdk/                     ← SDK interface layer (MIT)
 ├── cli/                     ← CLI interface layer (MIT)
 ├── policies/                ← Policy templates (examples are MIT)
+├── config/                  ← Test and runtime configuration
+├── scripts/                 ← Architecture, quality, and security validation scripts
+├── docs/                    ← Architecture docs, reviews, user manual, coverage reports
 ├── openapi.yaml             ← OpenAPI 3.x specification
 ├── docker-compose.yml       ← Full-stack orchestration
 ├── Makefile                 ← Dev/test/deploy commands
@@ -512,7 +519,7 @@ Dockerfile `CMD` accordingly before building the image.
 
 ```text
 ┌──────────────────────────────────────────────────────┐
-│  Frontend (Next.js 15 / React 18 / TypeScript)       │
+│  Frontend (Next.js 16 / React 18 / TypeScript)       │
 │  ┌────────┬──────────┬───────────┬──────────┬──────┐ │
 │  │  Home  │ Console  │   Audit   │Governance│ Risk │ │
 │  └────┬───┴────┬─────┴─────┬─────┴────┬─────┴──┬───┘ │
