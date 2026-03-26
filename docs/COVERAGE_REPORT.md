@@ -210,6 +210,18 @@ python -m pytest -q veritas_os/tests -m slow --durations=20 --tb=short
 
 ## 10. 変更履歴（本ドキュメント）
 
+- 2026-03-26: 80%未満モジュール改善のうち、`pipeline/fuji_policy` 経路の回帰テストを増強。
+  - 追加テスト: `test_pipeline_fuji_policy_paths.py`（9件）
+  - 追加観点:
+    - fail-closed FUJI precheck ペイロード契約
+    - `stage_fuji_precheck` の未知ステータス正規化 / NaN リスク fail-closed
+    - `stage_gate_decision` の Debate `risk_delta` 異常値分岐
+    - 高リスクかつ低 telos の reject 分岐
+    - `fuji_policy` の絶対パス逸脱フォールバック
+    - YAML parse error フォールバック
+    - action precedence 異常値の fail-closed 優先
+    - policy hot reload の missing path / reload 経路
+  - ローカル実行結果: `python -m pytest -q veritas_os/tests/test_pipeline_fuji_policy_paths.py` → 9 passed
 - 2026-03-26: web-search-security 周辺を実測で再更新。
   - CI相当コマンドは `pytest-cov` / `coverage.py` 未導入で local 実行不可を再確認。
   - focused再計測（trace）で `tools/web_search_security.py` 96%、`tools/web_search.py` 94% を反映。
