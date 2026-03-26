@@ -286,7 +286,6 @@ class TestSignatureInvalid:
         # Build a valid entry then tamper its signature
         payload = {"decision": "allow", "request_id": "sig-test"}
         payload_hash = sha256_of_canonical_json(payload)
-        sig = sign_payload_hash(payload_hash, priv_path)
 
         # Create a completely wrong signature (valid base64 of random bytes)
         wrong_sig = base64.urlsafe_b64encode(os.urandom(64)).decode("ascii")
@@ -309,7 +308,6 @@ class TestSignatureInvalid:
         assert any(i["reason"] == "signature_invalid" for i in result["issues"])
 
     def test_verify_signature_returns_false_for_missing_fields(self, tmp_path):
-        pub_path = tmp_path / "pub.key"
         # Missing key file
         assert verify_signature({"payload_hash": "h" * 64, "signature": "sig"}) is False
         # Missing required fields
