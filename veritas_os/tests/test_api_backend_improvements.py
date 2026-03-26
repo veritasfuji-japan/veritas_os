@@ -127,6 +127,10 @@ class TestEnhancedHealth:
         assert "alert_policy" in data
         assert data["alert_policy"]["highest_priority"] in ("none", "P0", "P1")
         assert isinstance(data["alert_policy"]["alerts"], list)
+        assert "security_posture" in data
+        assert "direct_fuji_api_enabled" in data["security_posture"]
+        assert "encryption" in data["security_posture"]
+        assert "algorithm" in data["security_posture"]["encryption"]
 
     def test_health_exposes_memory_degradation_details(self, monkeypatch):
         """Non-fatal MemoryStore load issues should surface in /health."""

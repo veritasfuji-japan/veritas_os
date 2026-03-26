@@ -175,6 +175,35 @@ def test_validate_startup_security_flags_warns_node_env_production_without_verit
     assert "NODE_ENV=production is set without VERITAS_ENV=production" in caplog.text
 
 
+def test_validate_startup_security_flags_warns_direct_fuji_non_production(
+    monkeypatch,
+    caplog,
+):
+    """Direct FUJI flag must raise a warning even in non-production."""
+    monkeypatch.setenv("VERITAS_ENV", "local")
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "true")
+
+    with caplog.at_level(logging.WARNING):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+    assert "VERITAS_ENABLE_DIRECT_FUJI_API=true is enabled" in caplog.text
+
+
+def test_validate_startup_security_flags_rejects_direct_fuji_in_production(
+    monkeypatch,
+):
+    """Production must reject direct FUJI API mode to preserve pipeline controls."""
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "true")
+
+    with pytest.raises(RuntimeError, match="VERITAS_ENABLE_DIRECT_FUJI_API=true"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
+
+
 def test_check_runtime_feature_health_logs_security_warning(caplog):
     """Security warning must be emitted when sanitization is unavailable."""
     with caplog.at_level(logging.WARNING):

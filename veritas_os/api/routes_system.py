@@ -16,10 +16,12 @@ from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from veritas_os.api.utils import _is_direct_fuji_api_enabled
 from veritas_os.api.pipeline_orchestrator import (
     get_runtime_config,
     update_runtime_config,
 )
+from veritas_os.logging.encryption import get_encryption_status
 # Note: report/compliance functions accessed via _get_server() to support
 # test monkeypatching on the server module.
 
@@ -77,6 +79,15 @@ def _trust_log_health(srv: Any) -> Dict[str, Any]:
     if error:
         details["error"] = error
     return {"status": status, "details": details}
+
+
+def _security_posture_snapshot() -> Dict[str, Any]:
+    """Return security-sensitive runtime toggles for operations visibility."""
+    encryption_status = get_encryption_status()
+    return {
+        "direct_fuji_api_enabled": _is_direct_fuji_api_enabled(),
+        "encryption": encryption_status,
+    }
 
 
 def _derive_alert_policy(
@@ -261,6 +272,7 @@ def health() -> Dict[str, Any]:
             "alert_policy": _derive_alert_policy(checks, runtime_features),
             "auth_store": auth_store["details"],
             "trust_log": trust_log["details"],
+            "security_posture": _security_posture_snapshot(),
         }
         if memory_health:
             result["memory_health"] = memory_health
@@ -322,6 +334,7 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
         "alert_policy": _derive_alert_policy(checks, runtime_features),
         "auth_store": auth_store["details"],
         "trust_log": trust_log["details"],
+        "security_posture": _security_posture_snapshot(),
     }
     if memory_health:
         result["memory_health"] = memory_health

@@ -180,6 +180,16 @@ class TestIsDirectFujiApiEnabled:
         with mock.patch.dict(os.environ, {"VERITAS_ENABLE_DIRECT_FUJI_API": "1"}):
             assert _is_direct_fuji_api_enabled() is True
 
+    def test_forced_off_in_production(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "VERITAS_ENABLE_DIRECT_FUJI_API": "1",
+                "VERITAS_ENV": "production",
+            },
+        ):
+            assert _is_direct_fuji_api_enabled() is False
+
 
 class TestParseRiskFromTrustEntry:
     def test_direct_risk(self):

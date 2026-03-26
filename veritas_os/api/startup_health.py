@@ -62,6 +62,9 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
       not remain enabled in shared staging environments.
     - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
       because it can leak internal routing details and triggers BFF fail-closed.
+    - `VERITAS_ENABLE_DIRECT_FUJI_API=true` must never be present in production
+      because it bypasses `/v1/decide` pipeline controls and expands attack
+      surface to direct FUJI policy probing.
     - `NODE_ENV=production` without `VERITAS_ENV=production` must emit a warning
       because frontend strict CSP defaults will not activate automatically.
     """
@@ -73,6 +76,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
         (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
     )
     auth_fail_open_requested = auth_store_failure_mode == "open"
+    direct_fuji_enabled = _is_truthy_env("VERITAS_ENABLE_DIRECT_FUJI_API")
     public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
 
     if is_node_production and not is_production:
@@ -115,6 +119,16 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
             raise RuntimeError(
                 f"{message} Refusing startup in production."
             )
+        logger.warning("%s", message)
+
+    if direct_fuji_enabled:
+        message = (
+            "[SECURITY] VERITAS_ENABLE_DIRECT_FUJI_API=true is enabled. "
+            "Direct FUJI endpoints bypass `/v1/decide` orchestration controls, "
+            "so this flag must remain disabled in production."
+        )
+        if is_production:
+            raise RuntimeError(f"{message} Refusing startup in production.")
         logger.warning("%s", message)
 
 

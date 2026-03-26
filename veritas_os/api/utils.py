@@ -208,12 +208,29 @@ def _is_debug_mode() -> bool:
 
 
 def _is_direct_fuji_api_enabled() -> bool:
-    """Return whether direct FUJI API access is explicitly allowed."""
+    """Return whether direct FUJI API access is explicitly allowed.
+
+    Security guard:
+    Production profiles always force this feature off even when the flag is
+    set, because direct FUJI access bypasses `/v1/decide` pipeline controls.
+    """
     import os
+
     flag = os.getenv("VERITAS_ENABLE_DIRECT_FUJI_API", "")
     normalized_flag = flag.strip().lower()
     truthy_values = {"1", "true", "yes", "on"}
-    return normalized_flag in truthy_values
+    if normalized_flag not in truthy_values:
+        return False
+
+    profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
+    if profile in {"prod", "production"}:
+        logger.warning(
+            "[security-warning] VERITAS_ENABLE_DIRECT_FUJI_API was ignored in "
+            "VERITAS_ENV=%s. Direct FUJI API is blocked in production.",
+            profile,
+        )
+        return False
+    return True
 
 
 def _parse_risk_from_trust_entry(entry: Dict[str, Any]) -> float | None:
