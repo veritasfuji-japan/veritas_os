@@ -54,6 +54,16 @@
 - coverageの集計軸（term-missing / xml / branch計算）差分による。
 - **CI合否は 87%（term-missing）で判定**する。
 
+### 2.3 production-like validation との関係（2026-03-26時点）
+
+- `production` / `smoke` / `external` マーカーの検証は、coverage 判定用の
+  `main.yml` とは分離された `production-validation.yml` で実施される。
+- したがって、本レポートの CI カバレッジ値（`--cov-fail-under=85`）は
+  **`-m "not slow"` の main CI 実行結果**を基準とし、production-like workflow の
+  pass/fail とは集計母集団が異なる。
+- `test-slow` は main CI の並列ジョブで実行されるが、coverage 収集は行わないため、
+  カバレッジ率の母集団には含まれない。
+
 ---
 
 ## 3. 全体推移（CI基準）
@@ -208,10 +218,17 @@ python -m pytest -q veritas_os/tests \
   --tb=short
 ```
 
+> 注: `production-validation.yml` 側の `pytest -m "production or smoke"` および
+> `pytest -m external` は本 coverage 値の再現コマンドではない（別目的の検証）。
+
 ---
 
 ## 10. 変更履歴（本ドキュメント）
 
+- 2026-03-26: production-like validation 分離に伴う注記を追加。
+  - `production-validation.yml` は main coverage 判定から分離される点を明記。
+  - `test-slow` は main CI で実行されるが coverage 母集団に含めない点を追記。
+  - 再現コマンド節に「production/smoke/external は coverage 再現対象外」の注記を追加。
 - 2026-03-26: memory_store 周辺を実測で再更新。
   - CI相当コマンドは `pytest-cov` 未導入で実行不可（Proxy/Tunnel 制約）を再確認。
   - focused再計測（trace）で `core/memory_store.py` 99%、`core/memory_storage.py` 96%、`core/memory.py` 89% を反映。
