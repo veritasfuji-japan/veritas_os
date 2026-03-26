@@ -27,10 +27,19 @@ export function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
     acc[cat].push(row);
     return acc;
   }, {});
+  const highImpactCount = rows.filter((row) => row.category === "threshold" || row.category === "escalation").length;
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">{t(`${rows.length} 件の変更を検出`, `${rows.length} change(s) detected`)}</p>
+      {highImpactCount > 0 ? (
+        <p className="rounded border border-warning/40 bg-warning/10 px-2 py-1 text-xs text-warning">
+          {t(
+            `高影響変更 ${highImpactCount} 件: risk threshold / auto-stop は承認前に再評価が必要です。`,
+            `${highImpactCount} high-impact change(s): risk threshold and auto-stop updates require re-evaluation before approval.`,
+          )}
+        </p>
+      ) : null}
       {(Object.keys(grouped) as DiffChange["category"][]).map((cat) => (
         <div key={cat}>
           <p className="mb-1 text-xs font-semibold text-muted-foreground">{DIFF_CATEGORY_LABELS[cat]}</p>

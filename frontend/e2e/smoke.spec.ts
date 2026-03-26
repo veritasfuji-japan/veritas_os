@@ -60,6 +60,13 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await page.getByRole("link", { name: /TrustLog Explorer/i }).click();
     await expect(page).toHaveURL(/\/audit/);
   });
+
+  test("Dashboard highlights degraded trust and evidence routing", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("Trust Chain Integrity")).toBeVisible();
+    await expect(page.getByText("degraded:", { exact: false })).toBeVisible();
+    await expect(page.getByText("Risk → Decision → Evidence → Report")).toBeVisible();
+  });
 });
 
 // ============================================================

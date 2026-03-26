@@ -196,6 +196,10 @@ export interface TrustLog {
   query?: string | null;
   gate_status?: string | null;
   gate_risk?: number | null;
+  /** Optional chain verification status from audit verification endpoint. */
+  chain_verification?: "verified" | "degraded" | "broken" | "unknown" | null;
+  /** Human-readable reason when verification is degraded/broken. */
+  chain_verification_reason?: string | null;
   [key: string]: unknown;
 }
 

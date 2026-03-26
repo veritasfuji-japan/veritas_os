@@ -7,8 +7,13 @@ import { OpsPriorityCard } from "./ops-priority-card";
 import { useI18n } from "./i18n-provider";
 import {
   type CriticalRailMetric,
+  type DecisionEvidenceRouteModel,
   type GlobalHealthSummaryModel,
+  type GovernanceApprovalModel,
+  type MissionUiState,
   type OpsPriorityItem,
+  type ReplayDiffInsightModel,
+  type TrustChainIntegrityModel,
 } from "./dashboard-types";
 
 interface MissionPageProps {
@@ -130,6 +135,38 @@ const GLOBAL_HEALTH_SUMMARY: GlobalHealthSummaryModel = {
   decisionAnomalies: "Reject spike concentrated on policy.v44 path.",
 };
 
+const TRUST_CHAIN_INTEGRITY: TrustChainIntegrityModel = {
+  verificationStatus: "broken",
+  continuityRatio: 0.92,
+  brokenSegments: 2,
+  lastVerifiedAt: "06:09",
+  verifier: "TrustLog hash daemon",
+  blockedReports: 1,
+};
+
+const REPLAY_DIFF_INSIGHT: ReplayDiffInsightModel = {
+  status: "critical",
+  changedFields: ["decision", "fuji", "value_scores"],
+  safetySensitiveFields: ["decision", "fuji"],
+  operatorActionJa: "Decision と TrustLog を並べて確認し、critical フィールド差分を先に再判定する。",
+  operatorActionEn: "Cross-check Decision and TrustLog, then re-adjudicate critical field differences first.",
+};
+
+const GOVERNANCE_APPROVAL: GovernanceApprovalModel = {
+  pendingVersion: "policy.v44",
+  status: "blocked",
+  requiredApprovers: ["risk-owner", "safety-officer", "governance-admin"],
+  missingApprovers: ["safety-officer"],
+  policyRiskDelta: "+0.18 risk score in high-risk route",
+};
+
+const DECISION_EVIDENCE_ROUTE: DecisionEvidenceRouteModel = {
+  riskSignal: "risk burst p99 +38%",
+  decisionTarget: "Decision Console triage queue",
+  evidenceAnchor: "TrustLog replay verification set #2026-03-26-0610",
+  reportingTarget: "24h incident report bundle (audit + governance)",
+};
+
 /**
  * MissionPage renders the operational command-center view.
  *
@@ -138,6 +175,14 @@ const GLOBAL_HEALTH_SUMMARY: GlobalHealthSummaryModel = {
  */
 export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.Element {
   const { t } = useI18n();
+  const uiState: MissionUiState = TRUST_CHAIN_INTEGRITY.verificationStatus === "broken" ? "degraded" : "operational";
+
+  const statusMessage = {
+    loading: t("データ同期中: 信頼状態の確定前です。", "Syncing data: trust state not yet confirmed."),
+    empty: t("監視データなし: オペレーター確認が必要です。", "No monitoring data: operator verification required."),
+    degraded: t("degraded: 監査連鎖が断続し、レポート確定を一部停止しています。", "Degraded: audit-chain continuity is broken and report finalization is partially blocked."),
+    operational: t("operational: 信頼連鎖は検証済みです。", "Operational: trust chain is verified."),
+  }[uiState];
 
   return (
     <div className="space-y-6">
@@ -154,11 +199,56 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
 
       <GlobalHealthSummary summary={GLOBAL_HEALTH_SUMMARY} />
       <CriticalRail items={CRITICAL_RAIL_ITEMS} />
+      <section aria-label="mission control state" className="rounded-xl border border-border/70 bg-background/70 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">System state</p>
+        <p className={["mt-1 text-sm font-semibold", uiState === "degraded" ? "text-danger" : "text-foreground"].join(" ")}>{statusMessage}</p>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2" aria-label="trust and governance highlights">
+        <Card title="Trust Chain Integrity" titleSize="sm" variant="elevated" accent="danger" className="border-danger/40">
+          <div className="space-y-1 text-xs">
+            <p>Verification: <span className="font-semibold text-danger">{TRUST_CHAIN_INTEGRITY.verificationStatus}</span></p>
+            <p>Continuity ratio: {(TRUST_CHAIN_INTEGRITY.continuityRatio * 100).toFixed(1)}%</p>
+            <p>Broken segments: {TRUST_CHAIN_INTEGRITY.brokenSegments}</p>
+            <p>Blocked reports: {TRUST_CHAIN_INTEGRITY.blockedReports}</p>
+            <p className="text-muted-foreground">Last verified: {TRUST_CHAIN_INTEGRITY.lastVerifiedAt} by {TRUST_CHAIN_INTEGRITY.verifier}</p>
+          </div>
+        </Card>
+
+        <Card title="Governance approval risk" titleSize="sm" variant="elevated" accent="warning" className="border-warning/40">
+          <div className="space-y-1 text-xs">
+            <p>Pending policy: <span className="font-semibold">{GOVERNANCE_APPROVAL.pendingVersion}</span></p>
+            <p>Status: <span className="font-semibold text-warning">{GOVERNANCE_APPROVAL.status}</span></p>
+            <p>Risk delta: {GOVERNANCE_APPROVAL.policyRiskDelta}</p>
+            <p className="text-muted-foreground">Missing approvers: {GOVERNANCE_APPROVAL.missingApprovers.join(", ")}</p>
+          </div>
+        </Card>
+      </section>
 
       <section aria-label={`${title} operational cards`} className="grid gap-4 md:grid-cols-3">
         {OPS_PRIORITY_ITEMS.map((item, index) => (
           <OpsPriorityCard key={item.key} item={item} priority={index + 1} />
         ))}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2" aria-label="replay and evidence routing">
+        <Card title="Replay diff readability" titleSize="sm" variant="glass" className="border-border/70" accent="danger">
+          <div className="space-y-1 text-xs">
+            <p>Status: <span className="font-semibold text-danger">{REPLAY_DIFF_INSIGHT.status}</span></p>
+            <p>Changed fields: {REPLAY_DIFF_INSIGHT.changedFields.join(", ")}</p>
+            <p>Safety-sensitive fields: <span className="font-semibold">{REPLAY_DIFF_INSIGHT.safetySensitiveFields.join(", ")}</span></p>
+            <p className="text-muted-foreground">{t(REPLAY_DIFF_INSIGHT.operatorActionJa, REPLAY_DIFF_INSIGHT.operatorActionEn)}</p>
+          </div>
+        </Card>
+
+        <Card title="Risk → Decision → Evidence → Report" titleSize="sm" variant="glass" className="border-border/70" accent="info">
+          <ol className="list-decimal space-y-1 pl-4 text-xs">
+            <li><span className="font-semibold">Risk:</span> {DECISION_EVIDENCE_ROUTE.riskSignal}</li>
+            <li><span className="font-semibold">Decision:</span> {DECISION_EVIDENCE_ROUTE.decisionTarget}</li>
+            <li><span className="font-semibold">Evidence:</span> {DECISION_EVIDENCE_ROUTE.evidenceAnchor}</li>
+            <li><span className="font-semibold">Report:</span> {DECISION_EVIDENCE_ROUTE.reportingTarget}</li>
+          </ol>
+        </Card>
       </section>
 
       <section className="rounded-xl border border-border/70 bg-muted/20 p-4" aria-label={t("空状態ガイド", "Empty state guide")}>
