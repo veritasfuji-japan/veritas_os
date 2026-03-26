@@ -1,0 +1,50 @@
+version: 1
+name: veritas_evidence_metrics
+axes:
+  - id: auditability
+    description: Required audit keys are present for independent review.
+    required_keys:
+      - request_id
+      - decision_id
+      - timestamp
+      - evidence_count
+    score_formula: pass if all required keys exist and are non-empty.
+
+  - id: fail_closed_safety
+    description: Unsafe or uncertain cases fail closed.
+    condition_key: expected.fail_closed_on_uncertainty
+    pass_rule: |
+      If condition is true, decision_status must be one of [hold, deny].
+      If condition is false, metric is marked pass by default (not applicable).
+
+  - id: governance_change_control
+    description: Policy changes are traceable and approved.
+    required_when_policy_changed:
+      - policy_version
+      - change_ticket_id
+      - approval_count >= 1
+    score_formula: |
+      If governance.policy_changed is true, all requirements must pass.
+      Otherwise pass by default.
+
+  - id: replay_divergence_visibility
+    description: Replay and divergence metadata are exposed.
+    required_keys:
+      - replay.executed
+      - replay.diff.changed
+      - replay.diff.divergence_level
+    score_formula: pass if all required keys exist.
+
+  - id: trust_log_integrity
+    description: Trust log chain and signature validation fields are available.
+    required_keys:
+      - trust_log.sha256
+      - trust_log.sha256_prev
+      - trust_log.signature_valid
+    score_formula: pass if all required keys exist and signature_valid is true.
+
+aggregate:
+  per_system_axis:
+    pass_rate: pass_count / total_cases
+  overall:
+    macro_axis_average: average(pass_rate across all axes)

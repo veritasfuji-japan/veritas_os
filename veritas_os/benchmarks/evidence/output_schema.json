@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VERITAS Evidence Benchmark Report",
+  "type": "object",
+  "required": ["meta", "aggregate", "cases"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["harness_version", "fixtures_path", "generated_at"],
+      "properties": {
+        "harness_version": {"type": "string"},
+        "fixtures_path": {"type": "string"},
+        "generated_at": {"type": "string"}
+      }
+    },
+    "aggregate": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "object",
+          "required": ["pass", "total", "rate"],
+          "properties": {
+            "pass": {"type": "integer", "minimum": 0},
+            "total": {"type": "integer", "minimum": 0},
+            "rate": {"type": "number", "minimum": 0, "maximum": 1}
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["case_id", "systems"],
+        "properties": {
+          "case_id": {"type": "string"},
+          "systems": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["axis_results"],
+              "properties": {
+                "axis_results": {
+                  "type": "object",
+                  "additionalProperties": {"type": "boolean"}
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
