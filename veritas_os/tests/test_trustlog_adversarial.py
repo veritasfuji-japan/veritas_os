@@ -179,6 +179,23 @@ class TestCorruptedCiphertext:
         with pytest.raises(DecryptionError):
             decrypt(f"ENC:hmac-ctr:{short_b64}")
 
+    def test_mixed_old_new_format_rejected(self, monkeypatch):
+        _set_valid_key(monkeypatch, raw=b"F" * 32)
+        with pytest.raises(DecryptionError, match="invalid base64 payload"):
+            decrypt("ENC:hmac-ctr:legacy:payload")
+
+    def test_legacy_payload_requires_explicit_opt_in(self, monkeypatch):
+        _set_valid_key(monkeypatch, raw=b"Q" * 32)
+        monkeypatch.setattr(encryption, "_USE_REAL_AES", False)
+        modern = encrypt("legacy-migration")
+        legacy = modern.replace("ENC:hmac-ctr:", "ENC:")
+
+        with pytest.raises(DecryptionError, match="legacy encrypted envelope not accepted"):
+            decrypt(legacy)
+
+        monkeypatch.setenv("VERITAS_ENCRYPTION_LEGACY_DECRYPT", "true")
+        assert decrypt(legacy) == "legacy-migration"
+
 
 # ===========================================================================
 # 4. Truncated line handling
@@ -269,7 +286,6 @@ class TestSignatureInvalid:
         # Build a valid entry then tamper its signature
         payload = {"decision": "allow", "request_id": "sig-test"}
         payload_hash = sha256_of_canonical_json(payload)
-        sig = sign_payload_hash(payload_hash, priv_path)
 
         # Create a completely wrong signature (valid base64 of random bytes)
         wrong_sig = base64.urlsafe_b64encode(os.urandom(64)).decode("ascii")
@@ -292,7 +308,6 @@ class TestSignatureInvalid:
         assert any(i["reason"] == "signature_invalid" for i in result["issues"])
 
     def test_verify_signature_returns_false_for_missing_fields(self, tmp_path):
-        pub_path = tmp_path / "pub.key"
         # Missing key file
         assert verify_signature({"payload_hash": "h" * 64, "signature": "sig"}) is False
         # Missing required fields
