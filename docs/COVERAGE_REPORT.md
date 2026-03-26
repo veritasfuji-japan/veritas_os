@@ -104,6 +104,19 @@
 
 > **合計**: TOP 9 の改善で最大 **498 行** のミスを回収可能。`memory_vector.py` は改善済み (39% → 99%, 116 行回収)。`governance.py` は改善済み (69% → 97%, 62 行回収)。
 
+## 追補 (2026-03-26): FUJI policy 分岐の追加テスト
+
+- `test_fuji_policy_core.py` に以下の安全性重視ケースを追加:
+  - 無効な `action_on_exceed` を含むルールで fail-closed (`deny`) になること
+  - `PII` と `illicit` の競合ルールで高優先度 (`deny`) が選ばれること
+- `test_fuji_policy_rollout.py` に以下を追加:
+  - rollout disable/enable 相当（stable=canary と strict canary）の差分確認
+  - canary ratio の境界外値 clamp と `NaN` 入力時の fail-closed (`stable`) 確認
+  - リプレイ評価中の例外を fail-closed (`deny`) として扱うこと
+
+これに合わせ、`core/fuji_policy.py` と `core/fuji_policy_rollout.py` で
+fail-closed 明確化のための小規模構造改善を実施（未知アクション時 deny、rollout 評価例外時 deny）。
+
 ## 制約・注意点
 
 1. **フルスイート実行**: `not slow` マーク付きテストのみ実行 (CI 相当)。slow テストは除外されている。

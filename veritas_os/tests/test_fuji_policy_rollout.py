@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import math
+
 from veritas_os.core.fuji import _DEFAULT_POLICY
 from veritas_os.core.fuji_policy_rollout import (
     PolicyReplaySample,
+    _evaluate_sample,
     canary_bucket,
     replay_policy_diff,
 )
@@ -68,3 +71,36 @@ def test_canary_bucket_is_deterministic_and_respects_ratio() -> None:
 
     assert canary_bucket(request_id, 0.0) == "stable"
     assert canary_bucket(request_id, 1.0) == "canary"
+
+
+def test_canary_bucket_clamps_out_of_range_ratio() -> None:
+    request_id = "req-out-of-range"
+    assert canary_bucket(request_id, -1.0) == "stable"
+    assert canary_bucket(request_id, 2.0) == "canary"
+
+
+def test_canary_bucket_nan_ratio_is_fail_closed_stable() -> None:
+    assert canary_bucket("req-nan", math.nan) == "stable"
+
+
+def test_replay_policy_diff_disable_enable_rollout_modes() -> None:
+    samples = [PolicyReplaySample(sample_id="s1", risk=0.55, categories=[])]
+    stable = dict(_DEFAULT_POLICY)
+    canary = _strict_policy()
+
+    disabled = replay_policy_diff(samples=samples, stable_policy=stable, canary_policy=stable)
+    enabled = replay_policy_diff(samples=samples, stable_policy=stable, canary_policy=canary)
+
+    assert disabled["changed"] == 0
+    assert enabled["total"] == 1
+
+
+def test_evaluate_sample_exception_is_fail_closed_deny(monkeypatch) -> None:
+    sample = PolicyReplaySample(sample_id="s1", risk=0.1, categories=[])
+
+    def _raise_apply_policy(**_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("veritas_os.core.fuji._apply_policy", _raise_apply_policy)
+    decision = _evaluate_sample(sample, _DEFAULT_POLICY)
+    assert decision == "deny"

@@ -101,6 +101,49 @@ class TestApplyPolicy:
         result = self._default_call()
         assert result["policy_version"] == "fuji_v2_default"
 
+    def test_invalid_rule_action_is_fail_closed_to_deny(self):
+        policy = {
+            "version": "invalid_action_policy",
+            "base_thresholds": {"default": 0.5},
+            "categories": {
+                "illicit": {
+                    "max_risk_allow": 0.1,
+                    "action_on_exceed": "unsupported_action",
+                }
+            },
+            "actions": {"allow": {"risk_upper": 1.0}},
+        }
+        result = _apply_policy(
+            risk=0.8,
+            categories=["illicit"],
+            stakes=0.5,
+            telos_score=0.0,
+            policy=policy,
+        )
+        assert result["status"] == "deny"
+        assert result["decision_status"] == "deny"
+
+    def test_competing_category_rules_use_highest_precedence(self):
+        policy = {
+            "version": "competing_rules_policy",
+            "base_thresholds": {"default": 0.5},
+            "categories": {
+                "PII": {"max_risk_allow": 0.1, "action_on_exceed": "human_review"},
+                "illicit": {"max_risk_allow": 0.1, "action_on_exceed": "deny"},
+            },
+            "actions": _DEFAULT_POLICY["actions"],
+        }
+        result = _apply_policy(
+            risk=0.9,
+            categories=["PII", "illicit"],
+            stakes=0.5,
+            telos_score=0.0,
+            policy=policy,
+        )
+        assert sorted(result["violations"]) == ["PII", "illicit"]
+        assert result["status"] == "deny"
+        assert result["decision_status"] == "deny"
+
 
 class TestStrictPolicyLoadEnabled:
     def test_disabled_by_default(self):

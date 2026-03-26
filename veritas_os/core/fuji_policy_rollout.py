@@ -43,14 +43,23 @@ def _normalize_expected_decision(value: Optional[str]) -> Optional[str]:
 
 
 def _evaluate_sample(sample: PolicyReplaySample, policy: Mapping[str, Any]) -> str:
-    """Evaluate one sample through FUJI's policy rule engine."""
-    result = fuji._apply_policy(  # pylint: disable=protected-access
-        risk=float(sample.risk),
-        categories=list(sample.categories),
-        stakes=float(sample.stakes),
-        telos_score=float(sample.telos_score),
-        policy=dict(policy),
-    )
+    """Evaluate one sample through FUJI's policy rule engine.
+
+    Fail-closed behavior:
+        - invalid decision values fall back to ``hold``
+        - unexpected evaluation errors fall back to ``deny``
+    """
+    try:
+        result = fuji._apply_policy(  # pylint: disable=protected-access
+            risk=float(sample.risk),
+            categories=list(sample.categories),
+            stakes=float(sample.stakes),
+            telos_score=float(sample.telos_score),
+            policy=dict(policy),
+        )
+    except (TypeError, ValueError, RuntimeError):
+        return "deny"
+
     decision = str(result.get("decision_status", "hold")).lower()
     if decision not in _ALLOWED_DECISIONS:
         return "hold"
@@ -141,7 +150,10 @@ def canary_bucket(request_id: str, canary_ratio: float) -> str:
         This uses SHA-256 hash bucketing for stable assignment and avoids
         random sources that could create inconsistent cross-node behavior.
     """
-    ratio = max(0.0, min(1.0, float(canary_ratio)))
+    ratio = float(canary_ratio)
+    if ratio != ratio:  # NaN guard
+        ratio = 0.0
+    ratio = max(0.0, min(1.0, ratio))
     digest = hashlib.sha256(str(request_id).encode("utf-8")).digest()
     point = int.from_bytes(digest[:8], "big") / float(2**64)
     return "canary" if point < ratio else "stable"
