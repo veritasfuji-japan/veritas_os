@@ -457,10 +457,15 @@ def _apply_policy(
             precedence[_act] = _default_val
     final_action = "allow"
 
+    allowed_actions = {"allow", "warn", "human_review", "deny"}
+
     if violation_details:
         best = "allow"
         for v in violation_details:
             act = str(v.get("action_on_exceed", "human_review"))
+            if act not in allowed_actions:
+                # Fail-closed: invalid category action should never widen access.
+                act = "deny"
             if precedence.get(act, 0) > precedence.get(best, 0):
                 best = act
         final_action = best
