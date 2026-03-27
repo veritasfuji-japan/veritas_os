@@ -55,3 +55,34 @@
 ## 結論
 - 本実行で確認した範囲では、アーキテクチャ統制と基礎セキュリティ統制は良好であり、即時の重大ブロッカーは検出されなかった。
 - ただし、**MemoryOS allowlist の本番相当検証がスキップされた点は明確な警告事項**であり、環境を揃えた再検証が必要。
+
+---
+
+## 改善実施記録（2026-03-27 追記）
+
+### 実施内容
+1. **CI での MemoryOS allowlist 検査を本番プロファイル固定で実行**
+   - `.github/workflows/main.yml` の `Memory directory allowlist check` ステップに、以下を追加:
+     - `VERITAS_ENV=production`
+     - `VERITAS_MEMORY_DIR=/tmp/veritas_memory_ci/runtime`
+     - `VERITAS_MEMORY_DIR_ALLOWLIST=/tmp/veritas_memory_ci`
+     - `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1`
+   - これにより、CI 上で「non-production / 未設定のためスキップ」が発生しない運用へ改善。
+
+2. **allowlist チェックスクリプトに strict mode を追加**
+   - `scripts/security/check_memory_dir_allowlist.py` に
+     `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION` を導入。
+   - strict mode 有効時は、production 検証がスキップされる構成（`VERITAS_ENV` 非 production または `VERITAS_MEMORY_DIR` 未設定）を **明示的に失敗** させる。
+   - セキュリティ意図:
+     - チェックの「未実行」を見逃してリリースするリスクを低減。
+     - MemoryOS 設定ドリフトを CI で早期検知。
+
+3. **回帰テストを追加**
+   - `veritas_os/tests/test_check_memory_dir_allowlist.py` に以下を追加:
+     - strict mode で検証スキップ時に失敗すること
+     - strict mode で正しい production 設定時に成功すること
+
+### セキュリティ警告（継続）
+- strict mode は CI 側で有効化しないと機能しないため、将来 workflow が変更された際に
+  `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1` が欠落しないよう保守が必要。
+- 実運用では、`VERITAS_MEMORY_DIR_ALLOWLIST` を最小権限のディレクトリ範囲に限定し、過剰に広い許可（例: `/tmp` 全体）を避けること。

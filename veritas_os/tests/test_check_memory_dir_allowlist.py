@@ -79,3 +79,37 @@ def test_main_returns_non_zero_for_invalid_configuration(
     assert exit_code == 1
     assert "[SECURITY]" in output
     assert "VERITAS_MEMORY_DIR" in output
+
+
+def test_main_strict_mode_fails_when_production_validation_is_skipped(
+    monkeypatch, capsys
+) -> None:
+    """Strict mode requires production-profile MemoryOS validation in CI."""
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION", "1")
+    monkeypatch.delenv("VERITAS_ENV", raising=False)
+    monkeypatch.delenv("VERITAS_MEMORY_DIR", raising=False)
+    monkeypatch.delenv("VERITAS_MEMORY_DIR_ALLOWLIST", raising=False)
+
+    exit_code = checker.main([])
+    output = capsys.readouterr().out
+
+    assert exit_code == 1
+    assert "Strict mode enabled" in output
+
+
+def test_main_strict_mode_passes_with_valid_production_configuration(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """Strict mode passes when CI provides valid production allowlist config."""
+    allow_root = tmp_path / "allowed"
+    configured = allow_root / "memory"
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION", "1")
+    monkeypatch.setenv("VERITAS_ENV", "production")
+    monkeypatch.setenv("VERITAS_MEMORY_DIR", str(configured))
+    monkeypatch.setenv("VERITAS_MEMORY_DIR_ALLOWLIST", str(allow_root))
+
+    exit_code = checker.main([])
+    output = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "MemoryOS production directory configuration is valid." in output
