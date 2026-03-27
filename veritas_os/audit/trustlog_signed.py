@@ -2,6 +2,20 @@
 
 This module provides cryptographic integrity and authenticity checks for
 structured decision audit logs.
+
+Design (post-compaction):
+    The signed TrustLog stores a *lightweight audit summary* per decision,
+    not the full decision payload.  Full payloads are persisted separately
+    in ``decide_*.json`` / ``trust_log.jsonl`` (encrypted).  Each signed
+    entry carries:
+
+    - ``decision_payload``: compact summary (see :func:`build_trustlog_summary`)
+    - ``payload_hash``: SHA-256 of the *compact summary* (chain-verified)
+    - ``full_payload_hash``: SHA-256 of the *original full payload* so that
+      an auditor can correlate the summary back to the full artifact on disk.
+
+    This keeps individual JSONL lines small while preserving cryptographic
+    traceability to the original data.
 """
 
 from __future__ import annotations
@@ -238,8 +252,150 @@ def _read_all_entries(path: Optional[Path] = None) -> List[Dict[str, Any]]:
     return entries
 
 
+# ---------------------------------------------------------------------------
+# TrustLog payload compaction
+# ---------------------------------------------------------------------------
+
+#: Maximum allowed size (bytes) for a single serialized TrustLog entry line.
+#: Entries exceeding this threshold trigger an ``_OVERSIZED_MARKER`` warning
+#: in the logged payload so that operators can investigate without silent
+#: data loss.
+MAX_ENTRY_LINE_BYTES: int = 32_768  # 32 KiB — generous for a summary line
+
+_OVERSIZED_MARKER = "__trustlog_oversized__"
+
+#: Allowlist of top-level keys that are copied verbatim from the full
+#: decision payload into the TrustLog summary.  Anything not listed here
+#: is dropped.  This is deliberately conservative — add keys only when
+#: they are essential for audit-chain verification or operational triage.
+_SUMMARY_ALLOWLIST: frozenset[str] = frozenset({
+    # Identity & linkage
+    "request_id",
+    "created_at",
+    "decision_id",
+    # Hash-chain fields (set by append_trust_log before reaching here)
+    "sha256",
+    "sha256_prev",
+    # Decision outcome
+    "decision_status",
+    "chosen_title",
+    "rejection_reason",
+    # Risk & scoring
+    "telos_score",
+    "gate_risk",
+    "gate_total",
+    "gate_status",
+    # Policy
+    "fast_mode",
+    "plan_steps",
+    "mem_hits",
+    "web_hits",
+    # Critique
+    "critique_ok",
+    "critique_mode",
+    "critique_reason",
+})
+
+#: Keys inside the full payload whose *scalar* value is extracted for the
+#: summary even though the parent object is excluded.  Format:
+#: ``(dotted_path, summary_key)``.
+_NESTED_SCALAR_EXTRACTS: tuple[tuple[str, str], ...] = (
+    ("fuji.status", "fuji_status"),
+    ("fuji.risk", "fuji_risk"),
+    ("chosen.title", "chosen_title"),
+)
+
+
+def _deep_get(d: Dict[str, Any], dotted: str) -> Any:
+    """Resolve a dotted key path against nested dicts, returning *None* on miss."""
+    parts = dotted.split(".")
+    cur: Any = d
+    for p in parts:
+        if not isinstance(cur, dict):
+            return None
+        cur = cur.get(p)
+    return cur
+
+
+def build_trustlog_summary(full_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a compact audit summary from a full decision payload.
+
+    The summary uses an **allowlist** approach: only keys in
+    ``_SUMMARY_ALLOWLIST`` are kept.  A handful of nested scalars (e.g.
+    ``fuji.status``) are promoted to top-level keys so that the summary
+    remains flat and small.
+
+    The caller is responsible for computing ``full_payload_hash`` on the
+    *original* payload and attaching it to the signed entry separately.
+
+    Returns:
+        A new dict suitable for ``decision_payload`` in the signed TrustLog.
+    """
+    summary: Dict[str, Any] = {}
+
+    # 1. Copy allowlisted top-level scalars
+    for key in _SUMMARY_ALLOWLIST:
+        if key in full_payload:
+            summary[key] = full_payload[key]
+
+    # 2. Extract selected nested scalars
+    for dotted, target_key in _NESTED_SCALAR_EXTRACTS:
+        if target_key not in summary:
+            val = _deep_get(full_payload, dotted)
+            if val is not None:
+                summary[target_key] = val
+
+    # 3. Ensure chosen_title from chosen dict if not already present
+    if "chosen_title" not in summary and isinstance(full_payload.get("chosen"), dict):
+        summary["chosen_title"] = full_payload["chosen"].get("title")
+
+    return summary
+
+
+def _enforce_entry_size(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure the serialized entry does not exceed ``MAX_ENTRY_LINE_BYTES``.
+
+    If the entry is oversized, the ``decision_payload`` is replaced with
+    a minimal stub that preserves the ``request_id`` and an explicit
+    ``__trustlog_oversized__`` marker so the anomaly is auditable.
+
+    The ``payload_hash`` and signature in the outer entry are *not*
+    recalculated — they still refer to the original summary.  The marker
+    makes it clear that the on-disk line is a degraded form and the
+    original summary should be recovered from the encrypted trust_log or
+    decide_*.json artifacts.
+
+    Returns:
+        The (possibly replaced) entry dict.
+    """
+    line = json.dumps(entry, ensure_ascii=False)
+    if len(line.encode("utf-8")) <= MAX_ENTRY_LINE_BYTES:
+        return entry
+
+    _logger.warning(
+        "Signed TrustLog entry exceeds %d bytes (%d actual); "
+        "replacing decision_payload with oversized stub for request_id=%s",
+        MAX_ENTRY_LINE_BYTES,
+        len(line.encode("utf-8")),
+        (entry.get("decision_payload") or {}).get("request_id", "?"),
+    )
+
+    stub_payload: Dict[str, Any] = {
+        "request_id": (entry.get("decision_payload") or {}).get("request_id"),
+        _OVERSIZED_MARKER: True,
+        "original_payload_hash": entry.get("payload_hash"),
+    }
+    entry = dict(entry)
+    entry["decision_payload"] = stub_payload
+    return entry
+
+
 def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
     """Append a signed decision entry to append-only TrustLog JSONL.
+
+    Since the compaction redesign, ``decision_payload`` written to disk is
+    the *compact summary* produced by :func:`build_trustlog_summary`.  The
+    full payload hash is stored in ``full_payload_hash`` for cross-reference.
 
     Raises:
         SignedTrustLogWriteError: If signing/write fails due to expected
@@ -250,18 +406,28 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
         with _lock:
             last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
             previous_hash = _entry_chain_hash(last_entry) if last_entry else None
-            payload_hash = sha256_of_canonical_json(decision_payload)
+
+            # Compute hash of the *full* payload for cross-reference,
+            # then compact to a lightweight summary for on-disk storage.
+            full_payload_hash = sha256_of_canonical_json(decision_payload)
+            compact_payload = build_trustlog_summary(decision_payload)
+
+            payload_hash = sha256_of_canonical_json(compact_payload)
             signature = sign_payload_hash(payload_hash, PRIVATE_KEY_PATH)
 
             entry = {
                 "decision_id": _uuid7(),
                 "timestamp": _utc_now_iso8601(),
                 "previous_hash": previous_hash,
-                "decision_payload": decision_payload,
+                "decision_payload": compact_payload,
                 "payload_hash": payload_hash,
+                "full_payload_hash": full_payload_hash,
                 "signature": signature,
                 "signature_key_fingerprint": public_key_fingerprint(PUBLIC_KEY_PATH),
             }
+
+            # Enforce maximum entry size before writing
+            entry = _enforce_entry_size(entry)
 
             line = json.dumps(entry, ensure_ascii=False) + "\n"
             _append_line(SIGNED_TRUSTLOG_JSONL, line)

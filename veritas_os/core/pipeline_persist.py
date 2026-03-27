@@ -65,16 +65,41 @@ def persist_audit_log(
     append_trust_log_fn: Any,
     write_shadow_decide_fn: Any,
 ) -> None:
-    """Write audit / trust log entry (best‑effort)."""
+    """Write audit / trust log entry (best‑effort).
+
+    The audit entry deliberately excludes bulky nested objects such as
+    ``ctx.context`` (which may contain ``world_state``, ``projects``,
+    full history arrays, etc.).  Full payloads are persisted separately
+    in ``decide_*.json`` and the encrypted ``trust_log.jsonl``.
+
+    Only scalar metadata required for audit-chain verification and
+    operational triage is included here.  The ``context_user_id`` field
+    preserves the user linkage without embedding the entire context dict.
+    """
     try:
+        # --- Compact chosen: keep only title/answer, drop nested blobs ---
+        chosen_raw = ctx.chosen
+        if isinstance(chosen_raw, dict):
+            chosen_compact: Any = {
+                k: v for k, v in chosen_raw.items()
+                if k in {"title", "answer", "action", "status"}
+                and isinstance(v, (str, int, float, bool, type(None)))
+            }
+        else:
+            chosen_compact = chosen_raw
+
         audit_entry = {
             "request_id": ctx.request_id,
             "created_at": utc_now().isoformat(),
-            "context": ctx.context,
+            # Only keep the user_id from context — the full context dict
+            # (world_state, projects, history, etc.) is excluded from the
+            # trust log to prevent entry bloat.
+            "context_user_id": (ctx.context or {}).get("user_id"),
             "query": ctx.query,
-            "chosen": ctx.chosen,
+            "chosen": chosen_compact,
             "telos_score": float(ctx.telos),
-            "fuji": ctx.fuji_dict if isinstance(ctx.fuji_dict, dict) else {},
+            "fuji_status": (ctx.fuji_dict or {}).get("status", "n/a"),
+            "fuji_risk": float((ctx.fuji_dict or {}).get("risk", 0.0)),
             "gate_status": (ctx.fuji_dict or {}).get("status", "n/a"),
             "gate_risk": float((ctx.fuji_dict or {}).get("risk", 0.0)),
             "gate_total": float(ctx.values_payload.get("total", 0.0)),
