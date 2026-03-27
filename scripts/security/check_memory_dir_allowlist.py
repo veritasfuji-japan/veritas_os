@@ -47,6 +47,16 @@ def _normalize_allowlist(raw_allowlist: str) -> list[Path]:
     ]
 
 
+def _find_overbroad_allowlist_prefixes(allow_prefixes: list[Path]) -> list[Path]:
+    """Return allowlist prefixes that are too broad for secure operation.
+
+    Security rationale:
+        Allowing the filesystem root (`/`) effectively disables containment and
+        defeats the purpose of MemoryOS directory restrictions.
+    """
+    return [prefix for prefix in allow_prefixes if prefix.parent == prefix]
+
+
 def validate_memory_dir_configuration(
     env: dict[str, str] | None = None,
 ) -> tuple[bool, list[str]]:
@@ -85,6 +95,19 @@ def validate_memory_dir_configuration(
         findings.append(
             "[SECURITY] VERITAS_MEMORY_DIR_ALLOWLIST must be set when "
             "VERITAS_MEMORY_DIR is configured in production."
+        )
+        return False, findings
+
+    overbroad_prefixes = _find_overbroad_allowlist_prefixes(allow_prefixes)
+    if overbroad_prefixes:
+        findings.append(
+            "[SECURITY] VERITAS_MEMORY_DIR_ALLOWLIST contains an overbroad "
+            "filesystem-root entry. Use a dedicated minimal directory prefix "
+            "instead of '/'."
+        )
+        findings.append(
+            "- overbroad_allowlist: "
+            + ", ".join(str(prefix) for prefix in overbroad_prefixes)
         )
         return False, findings
 

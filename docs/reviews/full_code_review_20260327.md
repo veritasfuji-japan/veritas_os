@@ -97,8 +97,21 @@
      `CI=true` かつ production 設定未指定時は `checker.main([])` が失敗するテストを追加。
    - これにより、将来 strict 判定ロジックが緩んだ場合の退行を自動検知可能。
 
+6. **allowlist の過剰許可（`/`）を検知して失敗化**
+   - `scripts/security/check_memory_dir_allowlist.py` に
+     `VERITAS_MEMORY_DIR_ALLOWLIST=/`（filesystem root）を過剰許可として
+     明示的に reject する検証を追加。
+   - `veritas_os/tests/test_check_memory_dir_allowlist.py` に
+     root allowlist を拒否する回帰テストを追加。
+   - セキュリティ意図:
+     - allowlist が実質無制限になる構成を CI/レビュー段階で遮断。
+     - 「allowlist を設定しているが制約が効いていない」誤設定を予防。
+
 ### セキュリティ警告（継続）
 - strict mode は `CI=true` でも既定有効になったが、ローカル/手動実行では
   既定で有効化されない。必要なジョブでは引き続き
   `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1` を明示し、実行条件の意図を固定すること。
 - 実運用では、`VERITAS_MEMORY_DIR_ALLOWLIST` を最小権限のディレクトリ範囲に限定し、過剰に広い許可（例: `/tmp` 全体）を避けること。
+- `VERITAS_MEMORY_DIR_ALLOWLIST=/` は検査で拒否されるが、`/var` や `/tmp` など
+  広すぎる上位ディレクトリは依然として運用判断に依存する。環境ごとに専用サブディレクトリ
+  （例: `/var/lib/veritas/memory`）へさらに絞り込むこと。
