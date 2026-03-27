@@ -35,12 +35,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build image (local only)
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
-          push: false
+          push: true
+          provenance: true
+          sbom: true
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:${{ github.sha }}
@@ -71,14 +72,3 @@ jobs:
         if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: trivy-results.sarif
-
-      - name: Push image to GHCR
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          provenance: true
-          sbom: true
-          tags: |
-            ${{ steps.image.outputs.name }}:latest
-            ${{ steps.image.outputs.name }}:${{ github.sha }}
