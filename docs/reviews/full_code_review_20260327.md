@@ -126,3 +126,15 @@
   （例: `/var/lib/veritas/memory`）へさらに絞り込むこと。
 - `VERITAS_MEMORY_DIR_ALLOWLIST` に相対パスを使うと検査は失敗する。必ず絶対パスで明示し、
   実行場所に依存しない設定に統一すること。
+
+8. **危険APIパターン検知をスクリプト化して CI 常設化**
+   - `scripts/security/check_unsafe_dynamic_execution_usage.py` を追加し、
+     `eval(...)` / `exec(...)` / `pickle.loads(...)` / `yaml.load(...)` を
+     AST ベースで検出して失敗化するよう改善。
+   - `.github/workflows/main.yml` の lint ジョブに
+     `unsafe dynamic execution/deserialization check` ステップを追加。
+   - `veritas_os/tests/test_check_unsafe_dynamic_execution_usage.py` に
+     検知・非検知・CLI 終了コード・テストディレクトリ除外の回帰テストを追加。
+   - セキュリティ意図:
+     - これまで `rg` に依存していた危険 API の検出を再現可能な CI ガードレールへ昇格。
+     - レビュー手順の運用漏れ（手動実行忘れ）を抑止。
