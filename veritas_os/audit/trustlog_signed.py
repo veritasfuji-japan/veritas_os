@@ -366,11 +366,11 @@ def _enforce_entry_size(entry: Dict[str, Any]) -> Dict[str, Any]:
     a minimal stub that preserves the ``request_id`` and an explicit
     ``__trustlog_oversized__`` marker so the anomaly is auditable.
 
-    The ``payload_hash`` and signature in the outer entry are *not*
-    recalculated — they still refer to the original summary.  The marker
-    makes it clear that the on-disk line is a degraded form and the
-    original summary should be recovered from the encrypted trust_log or
-    decide_*.json artifacts.
+    When the entry is oversized, the ``payload_hash`` and ``signature``
+    are recalculated against the stub so that :func:`verify_trustlog_chain`
+    can still validate the on-disk entry without false-positive mismatches.
+    The ``original_payload_hash`` field in the stub preserves the link to
+    the original compact summary.
 
     Returns:
         The (possibly replaced) entry dict.
@@ -394,6 +394,20 @@ def _enforce_entry_size(entry: Dict[str, Any]) -> Dict[str, Any]:
     }
     entry = dict(entry)
     entry["decision_payload"] = stub_payload
+
+    # Recalculate payload_hash and signature so verify_trustlog_chain
+    # can validate the on-disk entry without false-positive mismatches.
+    entry["payload_hash"] = sha256_of_canonical_json(stub_payload)
+    try:
+        entry["signature"] = sign_payload_hash(
+            entry["payload_hash"], PRIVATE_KEY_PATH,
+        )
+    except Exception:
+        _logger.warning(
+            "Failed to re-sign oversized stub entry; signature will be stale",
+            exc_info=True,
+        )
+
     return entry
 
 
