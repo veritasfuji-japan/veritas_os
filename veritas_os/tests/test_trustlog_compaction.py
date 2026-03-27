@@ -308,6 +308,64 @@ class TestAppendSignedDecisionCompaction:
             assert "world_state" not in serialized
             assert "projects" not in serialized
 
+    def test_concurrent_signed_appends_no_corruption(self, signed_env):
+        """10 threads × 3 appends must not corrupt the signed TrustLog chain."""
+        import threading
+
+        errors: list = []
+        n_threads = 10
+        n_writes = 3
+
+        def worker(tid: int) -> None:
+            try:
+                for seq in range(n_writes):
+                    append_signed_decision(
+                        {"request_id": f"r-conc-{tid}-{seq}", "thread": tid}
+                    )
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker, args=(t,))
+            for t in range(n_threads)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not errors, f"Concurrent signed append errors: {errors}"
+
+        result = verify_trustlog_chain(path=signed_env["jsonl"])
+        assert result["ok"] is True
+        assert result["entries_checked"] == n_threads * n_writes
+
+        # Every line must be valid JSON
+        lines = signed_env["jsonl"].read_text(encoding="utf-8").splitlines()
+        assert len(lines) == n_threads * n_writes
+        for idx, line in enumerate(lines):
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
+                pytest.fail(f"Corrupt entry at line {idx} after concurrent writes")
+
+    def test_15_sequential_appends_chain_intact(self, signed_env):
+        """15 sequential appends must keep the hash chain and signatures intact."""
+        for i in range(15):
+            full = _make_bulky_payload(request_id=f"r-seq15-{i}")
+            entry = append_signed_decision(full)
+            assert verify_signature(entry) is True
+
+        result = verify_trustlog_chain(path=signed_env["jsonl"])
+        assert result["ok"] is True
+        assert result["entries_checked"] == 15
+        assert not result["issues"]
+
+        # Verify no world_state / projects leak in any line
+        raw = signed_env["jsonl"].read_text(encoding="utf-8")
+        assert "world_state" not in raw
+        assert '"projects"' not in raw
+
     def test_detect_tampering_still_works(self, signed_env):
         """Tampering detection must still work with compact payloads."""
         from veritas_os.audit.trustlog_signed import detect_tampering
