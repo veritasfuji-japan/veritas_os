@@ -439,3 +439,118 @@ class TestPersistAuditLogCompaction:
         assert "giant_blob" not in json.dumps(entry.get("chosen", {}))
         # But title should be preserved
         assert entry["chosen"].get("title") == "OK"
+
+
+# ---------------------------------------------------------------------------
+# Oversized entry verification roundtrip
+# ---------------------------------------------------------------------------
+
+class TestOversizedEntryVerification:
+    """Verify that oversized entries pass chain verification after stub replacement."""
+
+    def test_oversized_entry_passes_chain_verification(self, signed_env):
+        """An oversized entry must not cause false-positive chain breakage."""
+        # First, append a normal entry
+        append_signed_decision({"request_id": "r-normal-1", "action": "ok"})
+
+        # Then append an oversized payload that triggers stub replacement.
+        # Use an allowlisted field so the *summary* itself exceeds the limit.
+        huge_payload = _make_bulky_payload(request_id="r-oversized")
+        huge_payload["rejection_reason"] = "x" * (MAX_ENTRY_LINE_BYTES + 5000)
+        append_signed_decision(huge_payload)
+
+        # Append another normal entry after the oversized one
+        append_signed_decision({"request_id": "r-normal-2", "action": "ok"})
+
+        # The chain must still verify cleanly
+        result = verify_trustlog_chain(path=signed_env["jsonl"])
+        assert result["ok"] is True, (
+            f"Chain verification failed after oversized entry: {result['issues']}"
+        )
+        assert result["entries_checked"] == 3
+
+    def test_oversized_stub_has_marker(self, signed_env):
+        """Oversized entries must contain the __trustlog_oversized__ marker."""
+        # Use an allowlisted field with a huge value so the summary itself is oversized
+        huge_payload = {
+            "request_id": "r-huge-mark",
+            "rejection_reason": "y" * (MAX_ENTRY_LINE_BYTES + 5000),
+        }
+        entry = append_signed_decision(huge_payload)
+
+        dp = entry["decision_payload"]
+        assert dp.get(_OVERSIZED_MARKER) is True
+        assert dp.get("original_payload_hash") is not None
+
+    def test_oversized_entry_signature_verifies(self, signed_env):
+        """Signature must verify against the recalculated stub payload_hash."""
+        huge_payload = {
+            "request_id": "r-huge-sig",
+            "rejection_reason": "z" * (MAX_ENTRY_LINE_BYTES + 5000),
+        }
+        entry = append_signed_decision(huge_payload)
+
+        assert verify_signature(entry) is True
+
+
+# ---------------------------------------------------------------------------
+# Concurrent full-pipeline append_trust_log test
+# ---------------------------------------------------------------------------
+
+class TestConcurrentAppendTrustLog:
+    """Verify that 10+ concurrent append_trust_log calls don't corrupt the chain."""
+
+    def test_concurrent_full_pipeline_appends(self, tmp_path, monkeypatch):
+        """10 threads × 3 appends through the full append_trust_log pipeline."""
+        import threading
+        from veritas_os.logging.encryption import generate_key
+        from veritas_os.logging import trust_log
+
+        key = generate_key()
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", key)
+        monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path, raising=False)
+        monkeypatch.setattr(trust_log, "LOG_JSON", tmp_path / "trust_log.json", raising=False)
+
+        jsonl_path = tmp_path / "trust_log.jsonl"
+        monkeypatch.setattr(trust_log, "LOG_JSONL", jsonl_path, raising=False)
+
+        def _open():
+            jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+            return open(jsonl_path, "a", encoding="utf-8")
+
+        monkeypatch.setattr(trust_log, "open_trust_log_for_append", _open, raising=False)
+        # Redirect signed TrustLog to avoid interference
+        monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", tmp_path / "trustlog.jsonl")
+        monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", tmp_path / "keys" / "priv.key")
+        monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", tmp_path / "keys" / "pub.key")
+
+        errors: list = []
+        n_threads = 10
+        n_writes = 3
+
+        def worker(tid: int) -> None:
+            try:
+                for seq in range(n_writes):
+                    trust_log.append_trust_log({
+                        "request_id": f"conc-{tid}-{seq}",
+                        "event": "test",
+                        "data": f"thread {tid} seq {seq}",
+                    })
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=worker, args=(t,))
+            for t in range(n_threads)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=60)
+
+        assert not errors, f"Concurrent append_trust_log errors: {errors}"
+
+        # Verify the encrypted hash chain is intact
+        result = trust_log.verify_trust_log()
+        assert result["ok"] is True, f"Chain broken after concurrent writes: {result}"
+        assert result["checked"] == n_threads * n_writes
