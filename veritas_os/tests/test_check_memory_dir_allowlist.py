@@ -82,6 +82,21 @@ def test_validate_rejects_filesystem_root_allowlist_in_production(
     assert any("overbroad_allowlist:" in line for line in findings)
 
 
+def test_validate_rejects_non_absolute_allowlist_in_production(tmp_path: Path) -> None:
+    """Production allowlist entries must be absolute paths to avoid drift."""
+    ok, findings = checker.validate_memory_dir_configuration(
+        {
+            "VERITAS_ENV": "production",
+            "VERITAS_MEMORY_DIR": str(tmp_path / "memory"),
+            "VERITAS_MEMORY_DIR_ALLOWLIST": "relative/path",
+        }
+    )
+
+    assert ok is False
+    assert any("must contain absolute paths" in line for line in findings)
+    assert any("non_absolute_allowlist_entries:" in line for line in findings)
+
+
 def test_main_returns_non_zero_for_invalid_configuration(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
