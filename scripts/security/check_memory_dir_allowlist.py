@@ -47,6 +47,18 @@ def _normalize_allowlist(raw_allowlist: str) -> list[Path]:
     ]
 
 
+def _find_non_absolute_allowlist_entries(raw_allowlist: str) -> list[str]:
+    """Return raw allowlist entries that are not absolute filesystem paths."""
+    non_absolute_entries: list[str] = []
+    for raw_prefix in raw_allowlist.split(","):
+        normalized = raw_prefix.strip()
+        if not normalized:
+            continue
+        if not Path(normalized).expanduser().is_absolute():
+            non_absolute_entries.append(normalized)
+    return non_absolute_entries
+
+
 def _find_overbroad_allowlist_prefixes(allow_prefixes: list[Path]) -> list[Path]:
     """Return allowlist prefixes that are too broad for secure operation.
 
@@ -95,6 +107,20 @@ def validate_memory_dir_configuration(
         findings.append(
             "[SECURITY] VERITAS_MEMORY_DIR_ALLOWLIST must be set when "
             "VERITAS_MEMORY_DIR is configured in production."
+        )
+        return False, findings
+
+    non_absolute_allowlist_entries = _find_non_absolute_allowlist_entries(
+        raw_allowlist
+    )
+    if non_absolute_allowlist_entries:
+        findings.append(
+            "[SECURITY] VERITAS_MEMORY_DIR_ALLOWLIST must contain absolute "
+            "paths in production deployments."
+        )
+        findings.append(
+            "- non_absolute_allowlist_entries: "
+            + ", ".join(non_absolute_allowlist_entries)
         )
         return False, findings
 

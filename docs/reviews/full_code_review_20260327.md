@@ -107,6 +107,15 @@
      - allowlist が実質無制限になる構成を CI/レビュー段階で遮断。
      - 「allowlist を設定しているが制約が効いていない」誤設定を予防。
 
+7. **allowlist の相対パス指定を拒否して設定ドリフトを予防**
+   - `scripts/security/check_memory_dir_allowlist.py` に
+     `VERITAS_MEMORY_DIR_ALLOWLIST` が相対パスを含む場合の失敗判定を追加。
+   - `veritas_os/tests/test_check_memory_dir_allowlist.py` に
+     相対 allowlist を拒否する回帰テストを追加。
+   - セキュリティ意図:
+     - 実行カレントディレクトリ依存で allowlist 解釈が変わる構成を遮断。
+     - CI と実運用のパス解決差による見逃しリスクを低減。
+
 ### セキュリティ警告（継続）
 - strict mode は `CI=true` でも既定有効になったが、ローカル/手動実行では
   既定で有効化されない。必要なジョブでは引き続き
@@ -115,3 +124,5 @@
 - `VERITAS_MEMORY_DIR_ALLOWLIST=/` は検査で拒否されるが、`/var` や `/tmp` など
   広すぎる上位ディレクトリは依然として運用判断に依存する。環境ごとに専用サブディレクトリ
   （例: `/var/lib/veritas/memory`）へさらに絞り込むこと。
+- `VERITAS_MEMORY_DIR_ALLOWLIST` に相対パスを使うと検査は失敗する。必ず絶対パスで明示し、
+  実行場所に依存しない設定に統一すること。
