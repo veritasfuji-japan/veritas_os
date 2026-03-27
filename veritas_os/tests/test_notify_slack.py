@@ -39,14 +39,15 @@ class NotifySlackTests(unittest.TestCase):
     """Behavioral tests for Slack notification script hardening."""
 
     def test_send_slack_uses_timeout(self):
-        """requests.post should always include a finite timeout value."""
+        """requests.post should include hardened request options."""
         module = load_module()
         observed = {}
 
-        def fake_post(url, json, timeout):
+        def fake_post(url, json, timeout, allow_redirects):
             observed["url"] = url
             observed["json"] = json
             observed["timeout"] = timeout
+            observed["allow_redirects"] = allow_redirects
             return _DummyResponse(200)
 
         with mock.patch.object(module.requests, "post", side_effect=fake_post):
@@ -58,6 +59,7 @@ class NotifySlackTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(observed["url"], "https://hooks.slack.com/services/a/b/c")
         self.assertEqual(observed["timeout"], module.DEFAULT_TIMEOUT_SEC)
+        self.assertFalse(observed["allow_redirects"])
         self.assertIn("hello", observed["json"]["text"])
 
     def test_send_slack_error_log_does_not_include_response_text(self):
