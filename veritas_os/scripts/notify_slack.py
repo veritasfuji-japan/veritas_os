@@ -4,6 +4,7 @@
 Security considerations:
 - HTTP request timeout is always set to prevent indefinite hangs.
 - Error logging never prints response body to avoid accidental data exposure.
+- Redirects are disabled to avoid forwarding payloads to non-Slack destinations.
 """
 
 import datetime
@@ -73,6 +74,7 @@ def send_slack_notification(webhook_url: str, message: str) -> int:
             webhook_url,
             json=payload,
             timeout=DEFAULT_TIMEOUT_SEC,
+            allow_redirects=False,
         )
     except requests.RequestException as exc:
         print(f"[Slack] 通知送信失敗: network_error={exc.__class__.__name__}")
