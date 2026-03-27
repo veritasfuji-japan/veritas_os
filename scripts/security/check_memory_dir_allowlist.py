@@ -16,12 +16,19 @@ from typing import Sequence
 
 
 PRODUCTION_ALIASES = {"prod", "production"}
+STRICT_PRODUCTION_ENV = "VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION"
 
 
-def _is_production_profile() -> bool:
-    """Return whether the current environment requests a production profile."""
-    profile = (os.getenv("VERITAS_ENV", "") or "").strip().lower()
-    return profile in PRODUCTION_ALIASES
+def _is_strict_production_required(environ: dict[str, str]) -> bool:
+    """Return whether CI must fail when production validation is skipped.
+
+    Security rationale:
+        CI skipping this check can hide drift where deployments stop validating
+        MemoryOS allowlist settings. This strict mode enforces explicit
+        production-profile validation in automated pipelines.
+    """
+    raw_value = (environ.get(STRICT_PRODUCTION_ENV, "") or "").strip().lower()
+    return raw_value in {"1", "true", "yes", "on"}
 
 
 def _normalize_allowlist(raw_allowlist: str) -> list[Path]:
@@ -99,9 +106,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the production memory-dir configuration check."""
     del argv  # reserved for future CLI options
 
-    ok, findings = validate_memory_dir_configuration()
+    environ = dict(os.environ)
+    ok, findings = validate_memory_dir_configuration(environ)
+    strict_required = _is_strict_production_required(environ)
+    production_profile = (environ.get("VERITAS_ENV", "") or "").strip().lower()
+    configured_dir = (environ.get("VERITAS_MEMORY_DIR", "") or "").strip()
+
+    if strict_required and (
+        production_profile not in PRODUCTION_ALIASES or not configured_dir
+    ):
+        print(
+            "[SECURITY] Strict mode enabled, but production MemoryOS allowlist "
+            "validation was skipped. Set VERITAS_ENV=production and provide "
+            "VERITAS_MEMORY_DIR plus VERITAS_MEMORY_DIR_ALLOWLIST."
+        )
+        return 1
+
     if ok:
-        if _is_production_profile() and os.getenv("VERITAS_MEMORY_DIR", "").strip():
+        if production_profile in PRODUCTION_ALIASES and configured_dir:
             print("MemoryOS production directory configuration is valid.")
         else:
             print(

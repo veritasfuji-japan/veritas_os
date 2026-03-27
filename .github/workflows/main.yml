@@ -56,6 +56,11 @@ jobs:
         run: python scripts/quality/check_frontend_docs_consistency.py
 
       - name: Memory directory allowlist check
+        env:
+          VERITAS_ENV: "production"
+          VERITAS_MEMORY_DIR: "/tmp/veritas_memory_ci/runtime"
+          VERITAS_MEMORY_DIR_ALLOWLIST: "/tmp/veritas_memory_ci"
+          VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION: "1"
         run: python scripts/security/check_memory_dir_allowlist.py
 
       - name: httpx raw upload deprecation check
