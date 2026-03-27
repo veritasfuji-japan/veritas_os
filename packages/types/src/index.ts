@@ -112,3 +112,14 @@ export type {
   LogRetention,
   RiskThresholds,
 } from "./governance";
+
+export { isContinuationAssessment } from "./continuation";
+
+export type {
+  ContinuationAssessment,
+  ContinuationClaim,
+  ContinuationStatus,
+  RefusalBoundary,
+  SupportSnapshot,
+  SupportStatus,
+} from "./continuation";

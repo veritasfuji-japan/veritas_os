@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://veritas-os.dev/schemas/continuation/v1",
+  "title": "VERITAS Continuation Runtime — Phase-1 Schema",
+  "description": "Defines the continuation types used by the Continuation Runtime (shadow-only phase-1).",
+  "definitions": {
+    "ContinuationStatus": {
+      "type": "string",
+      "enum": ["active", "narrowed", "revoked", "expired"],
+      "description": "Lifecycle status of a continuation claim."
+    },
+    "SupportStatus": {
+      "type": "string",
+      "enum": ["valid", "degraded", "lost"],
+      "description": "Whether the evidence basis for a claim still holds."
+    },
+    "RefusalBoundary": {
+      "type": "string",
+      "enum": ["none", "pre_tool_execution"],
+      "description": "Phase-1 refusal boundary. 'none' means no refusal; 'pre_tool_execution' means shadow-refusal before tool execution."
+    },
+    "ContinuationClaim": {
+      "type": "object",
+      "description": "A claim that a prior decision's support still holds.",
+      "required": ["claim_id", "decision_request_id", "support_basis", "created_at"],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "description": "Unique identifier for this continuation claim."
+        },
+        "decision_request_id": {
+          "type": "string",
+          "description": "The request_id of the original decision this claim references."
+        },
+        "support_basis": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Evidence keys or references that support this claim."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp when the claim was created."
+        }
+      },
+      "additionalProperties": false
+    },
+    "SupportSnapshot": {
+      "type": "object",
+      "description": "A point-in-time snapshot of the evidence basis for a claim.",
+      "required": ["claim_id", "snapshot_at", "support_status", "support_basis"],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "description": "The claim this snapshot belongs to."
+        },
+        "snapshot_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO-8601 timestamp of the snapshot."
+        },
+        "support_status": {
+          "$ref": "#/definitions/SupportStatus"
+        },
+        "support_basis": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Evidence keys or references valid at snapshot time."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ContinuationAssessment": {
+      "type": "object",
+      "description": "The Continuation Runtime's evaluation of a claim. Included in /v1/decide response as the optional 'continuation' field.",
+      "required": [
+        "claim_id",
+        "status",
+        "support_status",
+        "support_basis",
+        "allowed_action_classes",
+        "revocation_reason_code",
+        "shadow_refusal",
+        "refusal_boundary"
+      ],
+      "properties": {
+        "claim_id": {
+          "type": "string",
+          "description": "The continuation claim being assessed."
+        },
+        "status": {
+          "$ref": "#/definitions/ContinuationStatus"
+        },
+        "support_status": {
+          "$ref": "#/definitions/SupportStatus"
+        },
+        "support_basis": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Current evidence basis supporting the claim."
+        },
+        "allowed_action_classes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Action classes permitted under this continuation assessment."
+        },
+        "revocation_reason_code": {
+          "type": ["string", "null"],
+          "description": "Machine-readable reason code if the claim was revoked, or null."
+        },
+        "shadow_refusal": {
+          "type": "boolean",
+          "description": "Whether the runtime would refuse this action in enforcement mode. Shadow-only in phase-1."
+        },
+        "refusal_boundary": {
+          "$ref": "#/definitions/RefusalBoundary"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
