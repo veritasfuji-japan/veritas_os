@@ -69,6 +69,9 @@ jobs:
       - name: subprocess shell usage check
         run: python scripts/security/check_subprocess_shell_usage.py
 
+      - name: unsafe dynamic execution/deserialization check
+        run: python scripts/security/check_unsafe_dynamic_execution_usage.py
+
       - name: replay pipeline-version unknown-rate check
         run: |
           python scripts/quality/check_replay_pipeline_version_unknown_rate.py \
