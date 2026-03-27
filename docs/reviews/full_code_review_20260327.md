@@ -82,7 +82,23 @@
      - strict mode で検証スキップ時に失敗すること
      - strict mode で正しい production 設定時に成功すること
 
+4. **CI 環境で strict mode をデフォルト有効化（ドリフト耐性の強化）**
+   - `scripts/security/check_memory_dir_allowlist.py` の strict 判定を拡張し、
+     `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION` が未設定でも
+     `CI=true` の場合は strict mode を有効化するよう改善。
+   - 効果:
+     - workflow 変更時に strict 用 env の付与漏れがあっても、CI 実行自体で
+       「production 検証スキップ」を失敗として検知できる。
+     - 既存の明示フラグ (`VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1`) は
+       従来どおり優先され、互換性を維持。
+
+5. **CI strict 既定化の回帰テストを追加**
+   - `veritas_os/tests/test_check_memory_dir_allowlist.py` に
+     `CI=true` かつ production 設定未指定時は `checker.main([])` が失敗するテストを追加。
+   - これにより、将来 strict 判定ロジックが緩んだ場合の退行を自動検知可能。
+
 ### セキュリティ警告（継続）
-- strict mode は CI 側で有効化しないと機能しないため、将来 workflow が変更された際に
-  `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1` が欠落しないよう保守が必要。
+- strict mode は `CI=true` でも既定有効になったが、ローカル/手動実行では
+  既定で有効化されない。必要なジョブでは引き続き
+  `VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION=1` を明示し、実行条件の意図を固定すること。
 - 実運用では、`VERITAS_MEMORY_DIR_ALLOWLIST` を最小権限のディレクトリ範囲に限定し、過剰に広い許可（例: `/tmp` 全体）を避けること。
