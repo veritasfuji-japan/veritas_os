@@ -17,6 +17,7 @@ from typing import Sequence
 
 PRODUCTION_ALIASES = {"prod", "production"}
 STRICT_PRODUCTION_ENV = "VERITAS_MEMORY_DIR_CHECK_REQUIRE_PRODUCTION"
+CI_ENV = "CI"
 
 
 def _is_strict_production_required(environ: dict[str, str]) -> bool:
@@ -28,7 +29,13 @@ def _is_strict_production_required(environ: dict[str, str]) -> bool:
         production-profile validation in automated pipelines.
     """
     raw_value = (environ.get(STRICT_PRODUCTION_ENV, "") or "").strip().lower()
-    return raw_value in {"1", "true", "yes", "on"}
+    if raw_value in {"1", "true", "yes", "on"}:
+        return True
+
+    # In CI pipelines, treat strict validation as opt-out to avoid silently
+    # skipping production-profile checks when workflow env wiring drifts.
+    ci_value = (environ.get(CI_ENV, "") or "").strip().lower()
+    return ci_value in {"1", "true", "yes", "on"}
 
 
 def _normalize_allowlist(raw_allowlist: str) -> list[Path]:
