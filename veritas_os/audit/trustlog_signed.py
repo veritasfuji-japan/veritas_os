@@ -86,10 +86,16 @@ def _transparency_required_enabled() -> bool:
 
 
 def _append_line(path: Path, line: str) -> None:
-    """Append a line to ``path``, creating parent directories when required."""
+    """Append a line to ``path``, creating parent directories when required.
+
+    Uses ``fsync`` to ensure durability — matching the main TrustLog's
+    write-ahead guarantee so that signed entries survive process crashes.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as file:
         file.write(line)
+        file.flush()
+        os.fsync(file.fileno())
 
 
 def _mirror_to_worm(line: str) -> Dict[str, Any]:
@@ -273,6 +279,7 @@ _SUMMARY_ALLOWLIST: frozenset[str] = frozenset({
     "request_id",
     "created_at",
     "decision_id",
+    "context_user_id",
     # Hash-chain fields (set by append_trust_log before reaching here)
     "sha256",
     "sha256_prev",
@@ -402,8 +409,8 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
             runtime errors (filesystem, serialization, or value issues).
     """
     try:
-        _ensure_signing_keys()
         with _lock:
+            _ensure_signing_keys()
             last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
             previous_hash = _entry_chain_hash(last_entry) if last_entry else None
 
