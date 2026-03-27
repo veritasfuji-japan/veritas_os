@@ -84,20 +84,30 @@ def test_validate_startup_security_flags_warns_non_production_requested_open_mod
     assert "VERITAS_AUTH_STORE_FAILURE_MODE=open is enabled" in caplog.text
 
 
-def test_validate_startup_security_flags_warns_fail_open_unsupported_profile(
+def test_validate_startup_security_flags_rejects_fail_open_in_staging(
     monkeypatch,
-    caplog,
 ):
-    """Shared non-production profiles should warn that fail-open is unsupported."""
+    """Staging must fail closed when auth fail-open flags are requested."""
     monkeypatch.setenv("VERITAS_ENV", "staging")
     monkeypatch.setenv("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true")
 
-    with caplog.at_level(logging.WARNING):
+    with pytest.raises(RuntimeError, match="VERITAS_ENV=staging"):
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )
 
-    assert "will be ignored by auth store fallback logic" in caplog.text
+
+def test_validate_startup_security_flags_rejects_open_mode_in_staging(
+    monkeypatch,
+):
+    """Staging must reject open auth-store fallback mode requests."""
+    monkeypatch.setenv("VERITAS_ENV", "stg")
+    monkeypatch.setenv("VERITAS_AUTH_STORE_FAILURE_MODE", "open")
+
+    with pytest.raises(RuntimeError, match="VERITAS_ENV=stg"):
+        startup_health.validate_startup_security_flags(
+            logger=logging.getLogger("test.startup_health")
+        )
 
 
 def test_validate_startup_security_flags_warns_fail_open_when_profile_unset(

@@ -58,8 +58,9 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
     - `VERITAS_AUTH_ALLOW_FAIL_OPEN=true` must never be present in production.
     - `VERITAS_AUTH_STORE_FAILURE_MODE=open` must also be surfaced explicitly so
       operators can see the effective fail-open request during startup.
-    - Auth fail-open is only supported for local/test-style profiles and must
-      not remain enabled in shared staging environments.
+    - Auth fail-open is only supported for local/test-style profiles. Shared
+      staging profiles (`stg`/`staging`) are treated as protected pre-production
+      environments and must fail closed when fail-open is requested.
     - `NEXT_PUBLIC_VERITAS_API_BASE_URL` must never be present in production
       because it can leak internal routing details and triggers BFF fail-closed.
     - `VERITAS_ENABLE_DIRECT_FUJI_API=true` must never be present in production
@@ -100,6 +101,11 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
         )
         if is_production:
             raise RuntimeError(f"{message} Refusing startup in production.")
+        if profile in {"stg", "staging"}:
+            raise RuntimeError(
+                f"{message} Refusing startup for protected staging profile "
+                f"VERITAS_ENV={profile}."
+            )
         logger.warning("%s", message)
         if profile not in {"dev", "development", "local", "test"}:
             logger.warning(
