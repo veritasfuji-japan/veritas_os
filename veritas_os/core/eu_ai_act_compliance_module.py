@@ -685,7 +685,7 @@ class HumanReviewQueue:
             )
             urllib.request.urlopen(req, timeout=5)  # nosec B310
         except Exception:
-            logger.debug("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
+            logger.warning("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
 
     @classmethod
     def check_expired_entries(cls) -> List[Dict[str, Any]]:
@@ -1407,7 +1407,7 @@ class ThirdPartyNotificationService:
             )
             urllib.request.urlopen(req, timeout=5)  # nosec B310
         except Exception:
-            logger.debug(
+            logger.warning(
                 "Third-party webhook notification failed for %s",
                 notification.get("notification_id"),
                 exc_info=True,

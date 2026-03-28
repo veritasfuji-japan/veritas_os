@@ -156,14 +156,43 @@ def _env_float(key: str, default: float) -> float:
     except (TypeError, ValueError):
         return default
 
+
+def _env_float_bounded(
+    key: str, default: float, min_val: float, max_val: float,
+) -> float:
+    """環境変数を float として取得し、範囲外の場合は既定値にフォールバックする。"""
+    val = _env_float(key, default)
+    if not (min_val <= val <= max_val):
+        log.warning(
+            "%s=%s is out of bounds [%s, %s]; using default %s",
+            key, val, min_val, max_val, default,
+        )
+        return default
+    return val
+
+
+def _env_int_bounded(
+    key: str, default: int, min_val: int, max_val: int,
+) -> int:
+    """環境変数を int として取得し、範囲外の場合は既定値にフォールバックする。"""
+    val = _env_int(key, default)
+    if not (min_val <= val <= max_val):
+        log.warning(
+            "%s=%s is out of bounds [%s, %s]; using default %s",
+            key, val, min_val, max_val, default,
+        )
+        return default
+    return val
+
+
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", LLMProvider.OPENAI.value)
 # ★ 現在のデフォルトは gpt-4.1-mini を想定（env で上書き可）
 LLM_MODEL = os.environ.get("LLM_MODEL", "gpt-4.1-mini")
 
-LLM_TIMEOUT = _env_float("LLM_TIMEOUT", 60.0)
-LLM_CONNECT_TIMEOUT = _env_float("LLM_CONNECT_TIMEOUT", 10.0)
-LLM_MAX_RETRIES = _env_int("LLM_MAX_RETRIES", 3)
-LLM_RETRY_DELAY = _env_float("LLM_RETRY_DELAY", 2.0)
+LLM_TIMEOUT = _env_float_bounded("LLM_TIMEOUT", 60.0, 5.0, 300.0)
+LLM_CONNECT_TIMEOUT = _env_float_bounded("LLM_CONNECT_TIMEOUT", 10.0, 1.0, 60.0)
+LLM_MAX_RETRIES = _env_int_bounded("LLM_MAX_RETRIES", 3, 0, 10)
+LLM_RETRY_DELAY = _env_float_bounded("LLM_RETRY_DELAY", 2.0, 0.1, 30.0)
 
 # Maximum response body size to parse (16 MB) — prevents memory exhaustion
 LLM_MAX_RESPONSE_BYTES = _env_int("LLM_MAX_RESPONSE_BYTES", 16 * 1024 * 1024)
