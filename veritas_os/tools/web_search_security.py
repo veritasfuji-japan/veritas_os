@@ -206,7 +206,7 @@ def _is_private_or_local_host(hostname: str) -> bool:
         # parsing.  Without this, link-local addresses with a scope ID
         # would raise ValueError and be silently skipped instead of
         # being correctly identified as non-global.
-        ip_text = ip_text.split("%")[0]
+        ip_text = ip_text.partition("%")[0]
         try:
             ip = ipaddress.ip_address(ip_text)
         except ValueError:
@@ -250,7 +250,7 @@ def _resolve_public_ips_uncached(hostname: str) -> set[str]:
         # Strip IPv6 scope ID (e.g. "fe80::1%eth0" → "fe80::1") so
         # that link-local addresses are correctly rejected as non-global
         # instead of raising an opaque "invalid IP" error.
-        ip_text = ip_text.split("%")[0]
+        ip_text = ip_text.partition("%")[0]
         try:
             ip = ipaddress.ip_address(ip_text)
         except ValueError as exc:

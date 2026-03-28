@@ -48,7 +48,7 @@ class MemoryStore:
         # Resolve symlinks after directory creation to prevent TOCTOU
         # attacks where a symlink could redirect writes outside the
         # intended directory.
-        resolved_parent = self.path.parent.resolve(strict=True)
+        resolved_parent = self.path.parent.resolve(strict=False)
         self.path = resolved_parent / self.path.name
 
         # キャッシュ関連

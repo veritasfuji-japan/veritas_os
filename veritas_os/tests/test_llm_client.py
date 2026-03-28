@@ -1071,7 +1071,7 @@ class TestSanitizeAffectHint:
         assert len(result) == llm_client._AFFECT_HINT_MAX_LEN
 
     def test_tabs_and_newlines_preserved(self):
-        """Common whitespace (\\t, \\n, \\r) should not be stripped."""
+        r"""Common whitespace (\t, \n, \r) should not be stripped."""
         result = llm_client._sanitize_affect_hint("hello\tworld\nfoo")
         assert "\t" in result
         assert "\n" in result
