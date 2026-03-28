@@ -23,28 +23,64 @@ from .pipeline_helpers import _warn
 
 logger = logging.getLogger(__name__)
 
+# Top-level /v1/decide response groups.
+# These constants document the payload layering without changing runtime behavior.
+CORE_DECISION_FIELDS = (
+    "ok",
+    "error",
+    "request_id",
+    "query",
+    "chosen",
+    "alternatives",
+    "evidence",
+    "critique",
+    "debate",
+    "telos_score",
+    "fuji",
+    "gate",
+    "values",
+    "persona",
+    "version",
+    "decision_status",
+    "rejection_reason",
+)
 
-def assemble_response(
+AUDIT_DEBUG_INTERNAL_FIELDS = (
+    "extras",
+    "plan",
+    "planner",
+    "trust_log",
+    "memory_citations",
+    "memory_used_count",
+)
+
+BACKWARD_COMPAT_FIELDS = (
+    "options",
+)
+
+
+def _build_response_layers(
     ctx: PipelineContext,
     *,
     load_persona_fn: Any,
     plan: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Build the DecideResponse‑compatible dict from pipeline context."""
-    res = {
+) -> Dict[str, Dict[str, Any]]:
+    """Build grouped payload layers for readability and maintenance.
+
+    Layering is documentation-oriented: callers still receive one flat dict.
+    """
+    core = {
         "ok": True,
         "error": None,
         "request_id": ctx.request_id,
         "query": ctx.query,
         "chosen": ctx.chosen,
         "alternatives": ctx.alternatives,
-        "options": list(ctx.alternatives),
         "evidence": ctx.evidence,
         "critique": ctx.critique,
         "debate": ctx.debate,
         "telos_score": float(ctx.telos),
         "fuji": ctx.fuji_dict,
-        "extras": ctx.response_extras,
         "gate": {
             "risk": float(ctx.effective_risk),
             "telos_score": float(ctx.telos),
@@ -57,12 +93,41 @@ def assemble_response(
         "version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
+    }
+
+    audit_debug_internal = {
+        "extras": ctx.response_extras,
         "memory_citations": ctx.response_extras.get("memory_citations", []),
         "memory_used_count": ctx.response_extras.get("memory_used_count", 0),
         "plan": plan,
         "planner": ctx.response_extras.get("planner", {"steps": [], "raw": None, "source": "fallback"}),
         "trust_log": ctx.raw.get("trust_log") if isinstance(ctx.raw, dict) else None,
     }
+
+    backward_compat = {
+        # Legacy alias kept for historical clients; mirrors alternatives.
+        "options": list(ctx.alternatives),
+    }
+    return {
+        "core": core,
+        "audit_debug_internal": audit_debug_internal,
+        "backward_compat": backward_compat,
+    }
+
+
+def assemble_response(
+    ctx: PipelineContext,
+    *,
+    load_persona_fn: Any,
+    plan: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build the DecideResponse‑compatible dict from pipeline context."""
+    layers = _build_response_layers(ctx, load_persona_fn=load_persona_fn, plan=plan)
+    # Flattened payload keeps pre-existing top-level contract/shape for clients.
+    res: Dict[str, Any] = {}
+    res.update(layers["core"])
+    res.update(layers["audit_debug_internal"])
+    res.update(layers["backward_compat"])
 
     # Continuation runtime shadow output (flag on only; omitted entirely when off)
     if ctx.continuation_snapshot is not None and ctx.continuation_receipt is not None:
