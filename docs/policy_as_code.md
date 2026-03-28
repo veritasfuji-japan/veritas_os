@@ -1,9 +1,14 @@
-# Policy-as-Code (Stage 1)
+# Policy-as-Code (Stage 2 / Compiler v0.1)
 
 ## 目的
 
-本ドキュメントは、VERITAS の Policy-as-Code 第1段階として導入した
-**source policy schema / validation / canonical IR / semantic hash** の最小実装を説明します。
+本ドキュメントは、VERITAS Policy-as-Code の Stage 2 として導入した
+**source policy → canonical IR → compiled bundle artifacts** の実装を説明します。
+
+Stage 1 の schema validation / canonicalization / semantic hash を土台に、
+Stage 2 では **Policy Compiler v0.1** を追加しました。
+
+---
 
 ## Source Policy Format
 
@@ -17,11 +22,14 @@
   - `scope` (`domains` / `routes` / `actors`)
   - `outcome` (`decision` / `reason`)
 - 任意項目:
+  - `effective_date` (ISO 日付文字列)
   - `conditions`
   - `requirements`
   - `constraints`
   - `obligations`
   - `test_vectors`
+  - `source_refs`
+  - `metadata`
 
 許可される `outcome.decision` は次の列挙のみです。
 
@@ -31,44 +39,142 @@
 - `escalate`
 - `require_human_review`
 
-## Validation Flow
+---
 
-1. `veritas_os.policy.schema.load_and_validate_policy` がファイル拡張子を検証します。
-2. YAML/JSON をロードし、マッピング形式であることを検証します。
-3. `SourcePolicy` (Pydantic strict model) で以下を検証します。
-   - 必須フィールド
-   - 列挙値 (`outcome`, 演算子)
-   - ネスト構造 (`scope`, `requirements`, `outcome`)
-   - `minimum_approval_count` と `required_reviewers` の整合性
-4. エラー時は `PolicyValidationError` を返します。
+## Compiler Entrypoint
 
-## Canonical IR の役割
+CLI:
 
-`veritas_os.policy.normalize.to_canonical_ir` は、監査と差分比較のための安定化処理を提供します。
+```bash
+python -m veritas_os.scripts.compile_policy \
+  policies/examples/high_risk_route_requires_human_review.yaml \
+  --output-dir artifacts/policy_compiler
+```
 
-- リスト値を重複排除 + ソート
-- 条件/制約を deterministic order に整列
-- test vector も安定ソート
-- 不要な見た目差分（記述順序）を除去
+deterministic manifest を明示したい場合:
 
-この Canonical IR を `veritas_os.policy.hash.semantic_policy_hash` に入力して、
-見た目に依存しない semantic hash (SHA-256) を生成します。
+```bash
+python -m veritas_os.scripts.compile_policy \
+  policies/examples/high_risk_route_requires_human_review.yaml \
+  --output-dir artifacts/policy_compiler \
+  --compiled-at 2026-03-28T00:00:00Z
+```
 
-## Example Policies
+Python API:
 
-- `policies/examples/high_risk_route_requires_human_review.yaml`
-- `policies/examples/external_tool_usage_denied.yaml`
-- `policies/examples/missing_mandatory_evidence_halt.yaml`
+- `veritas_os.policy.compile_policy_to_bundle(...)`
 
-## この Task で未実装
+---
 
-- FUJI runtime への本格統合
-- Policy compiler (`Policy -> ValueCore/FUJI rules`) 本体
-- generated tests の自動生成
-- bundle signing / distribution
-- UI 差分可視化
+## 生成される Artifact
+
+出力ディレクトリ:
+
+```text
+{output_dir}/{policy_id}/{version}/bundle/
+├── compiled/
+│   ├── canonical_ir.json
+│   └── explain.json
+├── signatures/
+│   └── UNSIGNED
+└── manifest.json
+```
+
+加えて同階層に配布用アーカイブを生成:
+
+```text
+{output_dir}/{policy_id}/{version}/bundle.tar.gz
+```
+
+### canonical_ir.json
+
+- 凍結済み Canonical IR
+- semantic hash の source of truth
+- deterministic JSON 形式
+
+### explain.json
+
+UI / audit export 向けの説明素材。
+
+- policy purpose
+- application scope summary
+- outcome summary
+- obligations summary
+- requirements summary
+
+### manifest.json
+
+最低限以下を含みます。
+
+- `policy_id`
+- `version`
+- `semantic_hash`
+- `compiler_version`
+- `compiled_at`
+- `effective_date`
+- `source_files`
+- `schema_version` (manifest schema)
+- `outcome_summary`
+- `bundle_contents`
+- `signing` (future extension)
+
+---
+
+## Deterministic Output の方針
+
+- Canonical IR は list/order/辞書キーを正規化して deterministic serialize します。
+- `semantic_hash` は canonical IR のみを入力に SHA-256 で計算します。
+- `compiled_at` は manifest 監査情報であり、semantic hash の対象外です。
+- 生成 JSON は stable formatting (`sort_keys=True`, fixed indent) で出力します。
+
+> 同一 source かつ同一 `--compiled-at` を与えた場合、manifest / compiled artifacts は一致します。
+
+---
+
+## Bundle Format v0.1 と将来署名拡張
+
+v0.1 では署名本体は未実装ですが、bundle 構造に以下の拡張点を用意しています。
+
+- `signatures/UNSIGNED` マーカー
+- `manifest.signing`
+  - `status`
+  - `signature_ref`
+  - `key_id`
+  - `extensions`
+
+将来 Task で、以下を段階的に追加できます。
+
+1. `signatures/manifest.sig` の実装
+2. `manifest.signing.signature_ref` の実リンク化
+3. transparency log / trust log 連携
+4. rollout / rollback policy pack metadata の追加
+
+---
+
+## Validation / Compile Flow
+
+1. `load_and_validate_policy` で source policy を strict validation。
+2. `to_canonical_ir` で Canonical IR に正規化。
+3. `semantic_policy_hash` を計算。
+4. `explain.json` と `manifest.json` を生成。
+5. bundle directory + `bundle.tar.gz` を生成。
+
+---
+
+## テスト観点
+
+- valid policy compile success
+- invalid policy compile failure
+- manifest の必須項目整合
+- explanation metadata 出力確認
+- semantic hash stability
+- deterministic output（固定 `compiled_at`）
+- bundle structure validity
+
+---
 
 ## セキュリティ上の注意
 
-- 本段階の semantic hash は **整合性検証の基礎** であり、署名・鍵管理は未導入です。
-- そのため、本番供給チェーンでは将来タスクとして署名検証を追加してください。
+- semantic hash は改ざん検知の基礎だが、**真正性保証は署名導入後**に成立します。
+- `signing.status=unsigned` の bundle は、配布時に信頼境界を跨ぐ用途へそのまま使わないでください。
+- source policy の `metadata` / `source_refs` は監査補助情報であり、機密データの生埋め込みは避けてください。
