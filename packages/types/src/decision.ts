@@ -265,6 +265,76 @@ export interface StageMetrics {
   [key: string]: unknown;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Continuation runtime (shadow/observe — phase-1)                    */
+/* ------------------------------------------------------------------ */
+
+/** Claim status values from ContinuationClaimLineage. */
+export type ContinuationClaimStatus =
+  | "live"
+  | "narrowed"
+  | "degraded"
+  | "escalated"
+  | "halted"
+  | "revoked";
+
+/** Revalidation status values from ContinuationReceipt. */
+export type ContinuationRevalidationStatus =
+  | "renewed"
+  | "narrowed"
+  | "degraded"
+  | "escalated"
+  | "halted"
+  | "revoked"
+  | "failed";
+
+/**
+ * Snapshot-side (state) of continuation runtime output.
+ *
+ * Source of truth: veritas_os/core/continuation_runtime/snapshot.py
+ */
+export interface ContinuationStateSummary {
+  claim_lineage_id: string;
+  snapshot_id: string;
+  claim_status: ContinuationClaimStatus;
+  law_version: string;
+  support_basis?: Record<string, string> | null;
+  burden_state?: Record<string, unknown> | null;
+  headroom_state?: Record<string, unknown> | null;
+  scope?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Receipt-side (audit witness) of continuation runtime output.
+ *
+ * Source of truth: veritas_os/core/continuation_runtime/receipt.py
+ */
+export interface ContinuationReceiptSummary {
+  receipt_id: string;
+  revalidation_status: ContinuationRevalidationStatus;
+  revalidation_outcome: ContinuationRevalidationStatus;
+  should_refuse_before_effect: boolean;
+  divergence_flag: boolean;
+  local_step_result?: string | null;
+  reason_codes?: string[];
+  support_basis_digest?: string | null;
+  burden_headroom_digest?: string | null;
+  prior_decision_continuity_ref?: string | null;
+  parent_receipt_ref?: string | null;
+  receipt_hash_or_attestation?: string | null;
+  [key: string]: unknown;
+}
+
+/**
+ * Top-level continuation block in DecideResponse.
+ * Present only when the continuation runtime feature flag is on.
+ */
+export interface ContinuationOutput {
+  state: ContinuationStateSummary;
+  receipt: ContinuationReceiptSummary;
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   chosen: Record<string, unknown>;
   alternatives: DecisionAlternative[];
@@ -316,6 +386,12 @@ export interface DecideResponse extends DecideResponseMeta {
   pipeline_steps?: string[] | null;
   /** Snapshot for deterministic replay of this decision. */
   deterministic_replay?: Record<string, unknown> | null;
+
+  /**
+   * Continuation runtime output (shadow/observe — phase-1).
+   * Present only when VERITAS_CAP_CONTINUATION_RUNTIME is enabled.
+   */
+  continuation?: ContinuationOutput | null;
 
   [key: string]: unknown;
 }

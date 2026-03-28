@@ -8,6 +8,8 @@ interface ReplayDiffViewerProps {
 function fieldSeverity(key: string): "critical" | "warning" | "info" {
   if (key === "decision" || key === "fuji") return "critical";
   if (key === "value_scores") return "warning";
+  // Continuation runtime (shadow/observe) — warning-level because phase-1 is non-enforcing.
+  if (key === "continuation_state" || key === "continuation_receipt") return "warning";
   return "info";
 }
 

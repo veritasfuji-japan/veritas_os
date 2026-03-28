@@ -186,6 +186,30 @@ def persist_audit_log(
                 else None
             ),
         }
+
+        # ── Continuation runtime (shadow/observe) ──────────────────
+        # Append concise continuation digests only when flag is on.
+        # Feature flag off → ctx.continuation_snapshot is None → no fields added.
+        _c_snap = ctx.continuation_snapshot
+        _c_rcpt = ctx.continuation_receipt
+        if isinstance(_c_snap, dict) and isinstance(_c_rcpt, dict):
+            audit_entry["continuation_claim_lineage_id"] = _c_snap.get("claim_lineage_id")
+            audit_entry["continuation_snapshot_id"] = _c_snap.get("snapshot_id")
+            audit_entry["continuation_claim_status"] = _c_snap.get("claim_status")
+            audit_entry["continuation_law_version_id"] = _c_snap.get("law_version")
+            audit_entry["continuation_receipt_id"] = _c_rcpt.get("receipt_id")
+            audit_entry["continuation_revalidation_status"] = _c_rcpt.get("revalidation_status")
+            audit_entry["continuation_revalidation_outcome"] = _c_rcpt.get("revalidation_outcome")
+            audit_entry["continuation_support_basis_digest"] = _c_rcpt.get("support_basis_digest")
+            audit_entry["continuation_burden_headroom_digest"] = _c_rcpt.get("burden_headroom_digest")
+            audit_entry["continuation_prior_decision_continuity_ref"] = _c_rcpt.get("prior_decision_continuity_ref")
+            audit_entry["continuation_parent_receipt_ref"] = _c_rcpt.get("parent_receipt_ref")
+            audit_entry["continuation_receipt_hash"] = _c_rcpt.get("receipt_hash_or_attestation")
+            audit_entry["continuation_should_refuse"] = _c_rcpt.get("should_refuse_before_effect")
+            audit_entry["continuation_local_step_result"] = _c_rcpt.get("local_step_result")
+            audit_entry["continuation_divergence_flag"] = _c_rcpt.get("divergence_flag")
+            audit_entry["continuation_reason_codes"] = _c_rcpt.get("revalidation_reason_codes")
+
         audit_entry = redact_payload(audit_entry)
         append_trust_log_fn(audit_entry)
         write_shadow_decide_fn(

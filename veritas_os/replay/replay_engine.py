@@ -40,6 +40,10 @@ _FIELD_SEVERITY: Dict[str, str] = {
     "fuji": SEVERITY_CRITICAL,
     "value_scores": SEVERITY_WARNING,
     "evidence": SEVERITY_INFO,
+    # Continuation runtime (shadow/observe) — divergence is warning-level
+    # because phase-1 is non-enforcing; critical would be premature.
+    "continuation_state": SEVERITY_WARNING,
+    "continuation_receipt": SEVERITY_WARNING,
 }
 
 
@@ -220,7 +224,12 @@ def _normalized_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
         )
 
-    return {
+    # ── Continuation runtime (shadow/observe) ──────────────────────
+    # Extract concise continuation fields for replay comparison.
+    # When continuation is absent (flag off), these keys are omitted
+    # entirely so that replay diffs remain clean.
+    continuation_block = payload.get("continuation") if isinstance(payload.get("continuation"), dict) else None
+    result: Dict[str, Any] = {
         "decision": {
             "output": decision_output,
             "answer": decision_answer,
@@ -232,6 +241,24 @@ def _normalized_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
         "value_scores": value_scores,
         "evidence": _sort_evidence(stable_evidence),
     }
+    if continuation_block is not None:
+        c_state = continuation_block.get("state") if isinstance(continuation_block.get("state"), dict) else {}
+        c_receipt = continuation_block.get("receipt") if isinstance(continuation_block.get("receipt"), dict) else {}
+        result["continuation_state"] = {
+            "claim_lineage_id": c_state.get("claim_lineage_id"),
+            "claim_status": c_state.get("claim_status"),
+            "law_version": c_state.get("law_version"),
+            "snapshot_id": c_state.get("snapshot_id"),
+        }
+        result["continuation_receipt"] = {
+            "receipt_id": c_receipt.get("receipt_id"),
+            "revalidation_status": c_receipt.get("revalidation_status"),
+            "revalidation_outcome": c_receipt.get("revalidation_outcome"),
+            "divergence_flag": c_receipt.get("divergence_flag"),
+            "should_refuse_before_effect": c_receipt.get("should_refuse_before_effect"),
+            "reason_codes": c_receipt.get("revalidation_reason_codes"),
+        }
+    return result
 
 
 def _build_diff(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]:
@@ -258,6 +285,8 @@ def _build_diff(before: Dict[str, Any], after: Dict[str, Any]) -> Dict[str, Any]
         high_level.append("Value scores differ.")
     if "evidence" in fields_changed:
         high_level.append("Evidence set differs.")
+    if "continuation_state" in fields_changed or "continuation_receipt" in fields_changed:
+        high_level.append("Continuation standing differs.")
     if not high_level:
         high_level.append("No high-level differences.")
 

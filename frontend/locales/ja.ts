@@ -31,6 +31,9 @@ export const ja = {
   validationError: "入力エラー: リクエスト内容を確認してください。",
   submittingStatus: "実行中…（リクエスト送信中）",
   streamingStatus: "実行中…（イベント受信中）",
+  continuationStatus: "Continuation ステータス",
+  continuationDiverged: "ステップは通過したが chain continuation は弱化しています",
+  continuationNoData: "この監査エントリにはcontinuationデータがありません。",
 } as const;
 
 export type LocaleKey = keyof typeof ja;
