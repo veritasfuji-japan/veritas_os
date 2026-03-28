@@ -392,6 +392,26 @@ def _format_llm_error(code: str, detail: str) -> str:
 # Affect 注入
 # =========================
 
+_AFFECT_HINT_MAX_LEN = 200
+
+# Control characters (C0/C1) minus common whitespace (\t, \n, \r).
+_RE_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+
+
+def _sanitize_affect_hint(hint: Optional[str]) -> Optional[str]:
+    """affect_hint をサニタイズする。
+
+    制御文字を除去し、長さを制限することでプロンプトインジェクションを軽減する。
+    """
+    if hint is None:
+        return None
+    text = str(hint).strip()
+    if not text:
+        return None
+    text = _RE_CONTROL_CHARS.sub("", text)
+    return text[:_AFFECT_HINT_MAX_LEN] or None
+
+
 def _inject_affect_into_system_prompt(
     system_prompt: str,
     affect_hint: Optional[str] = None,
@@ -407,7 +427,8 @@ def _inject_affect_into_system_prompt(
     if affect_style:
         style_key = affect_core.normalize_style(affect_style)
     else:
-        style_key = affect_core.normalize_style(affect_core.choose_style(affect_hint))
+        sanitized_hint = _sanitize_affect_hint(affect_hint)
+        style_key = affect_core.normalize_style(affect_core.choose_style(sanitized_hint))
 
     instr = (affect_core.style_instructions(style_key) or "").strip()
     if not instr:

@@ -12,7 +12,7 @@
 |--------|-------|
 | Python source files (non-test) | ~174 files, ~133k LOC |
 | Frontend source files | ~150 files, ~13.7k LOC |
-| Test count | 5,448 passing, 8 skipped |
+| Test count | 5,460 passing, 8 skipped |
 | Linting | All checks passed (ruff) |
 | Architecture | Layered (API → Core → Tools/Logging/Memory/Audit) |
 | Security posture | Strong — Ed25519 signing, AES-256-GCM, SSRF prevention, PII masking |
@@ -43,6 +43,9 @@
 | **Webhook failures logged at DEBUG** | HIGH | `eu_ai_act_compliance_module.py:688`, `eu_ai_act_oversight.py:160` | Upgraded to `logger.warning` |
 | **Third-party webhook failures at DEBUG** | HIGH | `eu_ai_act_compliance_module.py:1410` | Upgraded to `logger.warning` |
 | **World model snapshot failure at DEBUG** | MEDIUM | `debate.py:748` | Upgraded to `logger.warning` |
+| **IPv6 scope ID bypass potential** | MEDIUM | `web_search_security.py:204,244` | Strip `%` scope ID before `ip_address()` parsing in both `_is_private_or_local_host` and `_resolve_public_ips_uncached` |
+| **Prompt injection via `affect_hint`** | LOW | `llm_client.py:395-419` | Added `_sanitize_affect_hint()` — strips control chars, truncates to 200 chars before `choose_style()` |
+| **TOCTOU in memory dir validation** | LOW | `memory_store.py:45-47` | Added `Path.resolve()` after `mkdir()` to resolve symlinks before file operations |
 
 ### 1.3 Remaining Items for Future Work
 
@@ -50,10 +53,7 @@
 |-------|----------|----------|---------------|
 | **Private key stored unencrypted** | MEDIUM | `trustlog_signed.py` | Production: Use Vault/KMS/HSM; document in hardening guide |
 | **CSP `unsafe-inline`** | MEDIUM | `frontend/middleware.ts` | Collect Report-Only violations; migrate to nonce-based enforced CSP |
-| **IPv6 scope ID bypass potential** | MEDIUM | `web_search_security.py:206-209` | Strip `%` scope ID before `ip_address()` parsing |
-| **TOCTOU in memory dir validation** | LOW | `memory/store.py:92-107` | Use `Path.resolve(strict=True)` after symlink resolution |
 | **Auth store silent degradation** | LOW | `auth.py:200-240` | Add metrics/alerting for Redis fallback in staging |
-| **Prompt injection via `affect_hint`** | LOW | `llm_client.py:377-390` | Sanitize `affect_hint` input before system prompt injection |
 
 ---
 
@@ -74,7 +74,7 @@
 
 ### 2.3 Testing
 
-- **5,448 tests passing** with 8 skipped
+- **5,460 tests passing** with 8 skipped
 - **87% code coverage** (enforced in CI)
 - **Production markers**: `@pytest.mark.production`, `@pytest.mark.smoke`
 - **Strong**: Security-focused tests for sanitize, auth, SSRF, encryption
@@ -140,13 +140,13 @@
 - Multi-stage build with non-root user (`appuser`)
 - Health check with 30s interval
 - Explicit `STOPSIGNAL SIGTERM` for graceful shutdown
+- `restart: unless-stopped` on both services
+- CPU/memory resource limits via `deploy.resources` (backend: 2 CPU / 2 GB, frontend: 1 CPU / 1 GB)
 
 ### 4.3 Gaps
 
 - SBOM baseline hashes not committed (`security/sbom/baseline/`)
 - CodeQL upload disabled (results not in GitHub Security tab)
-- No restart policy in `docker-compose.yml`
-- No CPU/memory resource limits defined
 
 ---
 
@@ -197,7 +197,7 @@
 
 ## 7. Summary of Changes Made
 
-### Files Modified
+### Files Modified (Phase 1 — Prior Review)
 
 1. **`veritas_os/core/llm_client.py`**
    - Added `_env_float_bounded()` and `_env_int_bounded()` functions with min/max validation
@@ -220,9 +220,37 @@
    - Added 3 new tests for `_env_float_bounded` and `_env_int_bounded`
    - Tests verify: within-range values pass through, out-of-range values return defaults, extreme values on module reload return defaults
 
+### Files Modified (Phase 2 — Review Follow-up)
+
+6. **`veritas_os/tools/web_search_security.py`**
+   - Strip IPv6 scope ID (`%eth0`, `%25`, etc.) before `ipaddress.ip_address()` in both `_is_private_or_local_host` and `_resolve_public_ips_uncached`
+   - Prevents link-local addresses with scope IDs from bypassing non-global IP detection
+
+7. **`veritas_os/core/llm_client.py`**
+   - Added `_sanitize_affect_hint()` — strips C0/C1 control characters (preserving tabs/newlines), truncates to 200 chars
+   - `_inject_affect_into_system_prompt()` now calls sanitizer before `choose_style()`
+
+8. **`veritas_os/core/memory_store.py`**
+   - Added `Path.resolve(strict=True)` after `mkdir()` in `MemoryStore.__init__`
+   - Resolves symlinks at init time to prevent TOCTOU directory redirect attacks
+
+9. **`docker-compose.yml`**
+   - Added `restart: unless-stopped` to both backend and frontend services
+   - Added CPU/memory resource limits via `deploy.resources` (backend: 2 CPU / 2 GB, frontend: 1 CPU / 1 GB)
+
+10. **`veritas_os/tests/test_web_search_security.py`**
+    - Added `TestIPv6ScopeIdStripping` class (3 tests): scope ID stripping in both validation paths, global IP preservation
+
+11. **`veritas_os/tests/test_llm_client.py`**
+    - Added `TestSanitizeAffectHint` class (6 tests): None/empty, normal text, control char stripping, truncation, whitespace preservation
+    - Added `TestInjectAffectSanitisation` class (1 test): control chars do not reach final prompt
+
+12. **`veritas_os/tests/test_memory_store_hardening.py`**
+    - Added `TestSymlinkResolution` class (2 tests): resolved path verification, symlink parent resolution
+
 ### Test Results
 
 ```
-5,448 passed, 8 skipped, 4 warnings (all pre-existing)
+5,460 passed, 8 skipped, 4 warnings (all pre-existing)
 Linting: All checks passed (ruff)
 ```

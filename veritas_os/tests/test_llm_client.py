@@ -1039,3 +1039,51 @@ class TestSupportTier:
         assert "SupportTier" in llm_client.__all__
         assert "PROVIDER_SUPPORT_TIER" in llm_client.__all__
         assert "get_provider_support_tier" in llm_client.__all__
+
+
+# =======================================================
+# _sanitize_affect_hint tests
+# =======================================================
+
+
+class TestSanitizeAffectHint:
+    """Tests for affect_hint sanitisation before system prompt injection."""
+
+    def test_none_returns_none(self):
+        assert llm_client._sanitize_affect_hint(None) is None
+
+    def test_empty_returns_none(self):
+        assert llm_client._sanitize_affect_hint("") is None
+        assert llm_client._sanitize_affect_hint("   ") is None
+
+    def test_normal_text_passes_through(self):
+        assert llm_client._sanitize_affect_hint("丁寧") == "丁寧"
+        assert llm_client._sanitize_affect_hint("legal") == "legal"
+
+    def test_control_chars_stripped(self):
+        result = llm_client._sanitize_affect_hint("legal\x00\x01\x0e")
+        assert result == "legal"
+
+    def test_truncated_to_max_length(self):
+        long = "a" * 500
+        result = llm_client._sanitize_affect_hint(long)
+        assert result is not None
+        assert len(result) == llm_client._AFFECT_HINT_MAX_LEN
+
+    def test_tabs_and_newlines_preserved(self):
+        r"""Common whitespace (\t, \n, \r) should not be stripped."""
+        result = llm_client._sanitize_affect_hint("hello\tworld\nfoo")
+        assert "\t" in result
+        assert "\n" in result
+
+
+class TestInjectAffectSanitisation:
+    """Ensure _inject_affect_into_system_prompt uses sanitised hints."""
+
+    def test_control_chars_in_hint_do_not_reach_prompt(self):
+        result = llm_client._inject_affect_into_system_prompt(
+            "base prompt",
+            affect_hint="丁寧\x00\x01",
+        )
+        assert "\x00" not in result
+        assert "\x01" not in result

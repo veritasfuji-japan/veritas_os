@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: veritas-backend
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
@@ -20,10 +21,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2g
+        reservations:
+          cpus: "0.5"
+          memory: 512m
 
   frontend:
     image: node:20.19.0-bookworm
     container_name: veritas-frontend
+    restart: unless-stopped
     working_dir: /app
     command: >-
       sh -c "corepack enable && pnpm install --frozen-lockfile &&
@@ -41,3 +51,11 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
+        reservations:
+          cpus: "0.25"
+          memory: 256m

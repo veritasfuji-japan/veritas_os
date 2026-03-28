@@ -1076,3 +1076,28 @@ class TestUserIdBoundary:
             assert all(h["meta"]["user_id"] == "u1" for h in r1["episodic"])
         if r2.get("episodic"):
             assert all(h["meta"]["user_id"] == "u2" for h in r2["episodic"])
+
+
+# ---------------------------------------------------------------------------
+# TOCTOU symlink resolution tests
+# ---------------------------------------------------------------------------
+
+
+class TestSymlinkResolution:
+    """Verify MemoryStore resolves symlinks at init time (TOCTOU fix)."""
+
+    def test_path_resolved_after_init(self, tmp_path: Path) -> None:
+        """MemoryStore.path.parent must be an absolute resolved path."""
+        store = MemoryStore(tmp_path / "data" / "store.jsonl")
+        assert store.path.parent.is_absolute()
+        assert store.path.parent == store.path.parent.resolve()
+
+    def test_symlink_parent_resolved(self, tmp_path: Path) -> None:
+        """If parent dir is a symlink, MemoryStore should resolve through it."""
+        real_dir = tmp_path / "real_data"
+        real_dir.mkdir()
+        link_dir = tmp_path / "link_data"
+        link_dir.symlink_to(real_dir)
+        store = MemoryStore(link_dir / "store.jsonl")
+        # After resolution, the path should point through the real dir
+        assert "real_data" in str(store.path)
