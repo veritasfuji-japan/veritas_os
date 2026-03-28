@@ -294,6 +294,9 @@ class CapabilityConfig:
             "VERITAS_CAP_MEMORY_SENTENCE_TRANSFORMERS", False
         )
     )
+    enable_continuation_runtime: bool = field(
+        default_factory=lambda: _parse_bool("VERITAS_CAP_CONTINUATION_RUNTIME", False)
+    )
     emit_manifest_on_import: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_EMIT_MANIFEST", True)
     )
