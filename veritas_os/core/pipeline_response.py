@@ -31,7 +31,7 @@ def assemble_response(
     plan: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build the DecideResponse‑compatible dict from pipeline context."""
-    return {
+    res = {
         "ok": True,
         "error": None,
         "request_id": ctx.request_id,
@@ -63,6 +63,15 @@ def assemble_response(
         "planner": ctx.response_extras.get("planner", {"steps": [], "raw": None, "source": "fallback"}),
         "trust_log": ctx.raw.get("trust_log") if isinstance(ctx.raw, dict) else None,
     }
+
+    # Continuation runtime shadow output (flag on only; omitted entirely when off)
+    if ctx.continuation_snapshot is not None and ctx.continuation_receipt is not None:
+        res["continuation"] = {
+            "state": ctx.continuation_snapshot,
+            "receipt": ctx.continuation_receipt,
+        }
+
+    return res
 
 
 def coerce_to_decide_response(

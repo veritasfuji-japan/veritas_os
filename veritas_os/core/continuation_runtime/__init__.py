@@ -31,6 +31,11 @@ from .snapshot import (
 )
 from .receipt import ContinuationReceipt, RevalidationStatus, RevalidationOutcome
 from .lawpack import ContinuationLawPack, EvaluationMode
+from .revalidator import (
+    ContinuationRevalidator,
+    PresentCondition,
+    run_continuation_revalidation_shadow,
+)
 
 __all__ = [
     # lineage
@@ -52,4 +57,8 @@ __all__ = [
     "EvaluationMode",
     # reason codes
     "ReasonCode",
+    # revalidator
+    "ContinuationRevalidator",
+    "PresentCondition",
+    "run_continuation_revalidation_shadow",
 ]
