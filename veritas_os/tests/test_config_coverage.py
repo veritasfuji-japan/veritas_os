@@ -175,6 +175,8 @@ def test_parse_str_trim(monkeypatch):
 def test_veritas_config_post_init_defaults():
     """All path fields get defaults when None."""
     cfg = VeritasConfig(api_secret="test_secret_value")
+    assert cfg.runtime_root is not None
+    assert cfg.runtime_dir is not None
     assert cfg.log_dir is not None
     assert cfg.dataset_dir is not None
     assert cfg.data_dir is not None
@@ -182,6 +184,8 @@ def test_veritas_config_post_init_defaults():
     assert cfg.value_stats_path is not None
     assert cfg.trust_log_path is not None
     assert cfg.kv_path is not None
+    assert cfg.doctor_auto_log_path is not None
+    assert cfg.doctor_auto_err_path is not None
 
 
 def test_veritas_config_api_key_alias():
@@ -345,12 +349,28 @@ def test_pipeline_config_defaults():
 
 
 # ============================================================
-# data_dir defaults to log_dir
+# data_dir defaults to runtime data directory (separate from logs)
 # ============================================================
 
-def test_data_dir_defaults_to_log_dir():
+def test_data_dir_defaults_to_runtime_data_dir():
     cfg = VeritasConfig(api_secret="test_secret_value")
-    assert cfg.data_dir == cfg.log_dir
+    assert cfg.runtime_dir is not None
+    assert cfg.data_dir == cfg.runtime_dir / "data"
+    assert cfg.log_dir == cfg.runtime_dir / "logs"
+
+
+def test_default_runtime_artifact_paths_are_grouped_under_runtime():
+    """Runtime artifacts should be written under runtime/<namespace> tree."""
+    cfg = VeritasConfig(api_secret="test_secret_value")
+    assert cfg.runtime_dir is not None
+    assert cfg.memory_path == cfg.runtime_dir / "data" / "memory.json"
+    assert cfg.trust_log_path == cfg.runtime_dir / "logs" / "trust_log.json"
+    assert cfg.doctor_auto_log_path == (
+        cfg.runtime_dir / "logs" / "doctor" / "doctor_auto.log"
+    )
+    assert cfg.doctor_auto_err_path == (
+        cfg.runtime_dir / "logs" / "doctor" / "doctor_auto.err"
+    )
 
 
 # ============================================================
