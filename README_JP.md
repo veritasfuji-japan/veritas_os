@@ -21,6 +21,17 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision / Agent OS**
 
+### 主要ハイライト
+
+| | |
+|---|---|
+| **20以上のステージ意思決定パイプライン** | 構造化・高再現性・差分検知付きリプレイ |
+| **FUJI Gate（fail-closed）** | PII検出、プロンプトインジェクション防御、毒性フィルタ、ポリシールール |
+| **ハッシュチェーンTrustLog** | Ed25519署名、WORMミラー、Transparency logアンカー、W3C PROV輸出 |
+| **エンタープライズガバナンス** | 4-eyes承認、RBAC/ABAC、SSEアラート、外部シークレットマネージャー強制 |
+| **Mission Controlダッシュボード** | Next.js 16 — リアルタイムイベントストリーム、リスク分析、ガバナンス管理 |
+| **EU AI Act準拠** | コンプライアンスレポート生成、監査エクスポート、デプロイメント準備チェック |
+
 ### 独立技術DDスコア
 
 | カテゴリ | スコア |
@@ -51,6 +62,7 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 ## 目次
 
 - [ベータ版の位置づけ](#ベータ版の位置づけ)
+- [Continuation Runtime（Phase-1）](#continuation-runtimephase-1-observeshadow)
 - [なぜVERITASか](#なぜveritasか)
 - [できること](#できること)
 - [プロジェクト構成](#プロジェクト構成)
@@ -83,6 +95,29 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - バックエンド、フロントエンド、Replay、ガバナンス、コンプライアンスまで統合された広いアーキテクチャをすでに持っている状態です。
 - もはやアルファ試作ではなく、監査基盤を備えた実用寄りの段階です。
 - 一方で、ポリシーパック、デプロイ既定値、環境固有の統合については継続的な改善が前提です。
+
+### Continuation Runtime（Phase-1: Observe/Shadow）
+
+VERITAS は既存のステップレベル意思決定インフラの **横に（内部ではなく）** 動作する **チェーンレベル継続観測レイヤー** を含みます。これはエンフォースメントではなく、**観測のみ** です。
+
+| 側面 | 状態 |
+|---|---|
+| モード | Observe / shadow のみ — エンフォースメントなし、拒否ゲーティングなし |
+| FUJI | 変更なし — 各ステップの最終安全/ポリシーゲートのまま |
+| `gate.decision_status` | 変更なし — 新しい値なし、再解釈なし |
+| フィーチャーフラグOFF | レスポンス、ログ、UI、動作に変更なし |
+| 目的 | 個々のステップが通過しても、チェーンの継続状態が弱化した場合の検知（narrowed, degraded, escalated, halted, revoked） |
+
+主要概念:
+- **Snapshot**（状態）: 最小限のガバナンス可能な事実 — support basis、scope、burden、headroom、law version
+- **Receipt**（監査証人）: 再検証の実施方法、乖離フラグ、理由コード、レシートチェーン連結
+- Snapshot は Receipt ではない。Receipt は状態ストアではない。それぞれ別の責務。
+- 再検証はステップレベルのメリット評価の **前** に実行される（pre-merit placement）
+- `should_refuse_before_effect` は Phase-1 では助言のみ
+
+有効化: `VERITAS_CAP_CONTINUATION_RUNTIME=1`（デフォルト: OFF）
+
+参照: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
 
 ## なぜVERITASか
 
@@ -771,7 +806,9 @@ make validate
 - **TrustLogデータ**: TrustLogは**デフォルトで暗号化**されています（secure-by-default）。全エントリはPII/シークレットの自動リダクション後に暗号化されてから永続化されます。`VERITAS_ENCRYPTION_KEY` の設定が必須であり、未設定の場合は書き込みが失敗します。
 - **PII/シークレットの自動リダクション**: メール、電話、住所、APIキー、Bearerトークン、シークレット文字列は保存前に自動マスキングされます — 手動の `redact()` 呼び出しは不要です。
 - **保存時暗号化（必須）**: `VERITAS_ENCRYPTION_KEY`（base64エンコードされた32バイト鍵）を設定してください。`generate_key()` で生成できます。鍵はvault/KMSに保存し、ソースコードにコミットしないでください。
-- **運用ログはGit管理対象外**: 例として `veritas_os/memory/*.jsonl` のランタイムログは `.gitignore` で除外され、匿名化サンプルは `veritas_os/sample_data/memory/` 配下にあります。
+- **運用ログはGit管理対象外**: ランタイムログ（例: `runtime/<namespace>/.../*.jsonl`）は `.gitignore` で除外されます。匿名化サンプルは `veritas_os/sample_data/memory/` 配下にあります。
+- **ランタイム名前空間は用途別に分離**: デフォルトのローカルパスは `runtime/dev`、`runtime/test`、`runtime/demo`、`runtime/prod` です。`VERITAS_RUNTIME_ROOT` と `VERITAS_RUNTIME_NAMESPACE` で上書き可能です。
+- **クリーンクローン用クリーンアップコマンド**: `python scripts/reset_repo_runtime.py --dry-run` と `python scripts/reset_repo_runtime.py --apply` で生成されたランタイムデータを削除できます。詳細は `docs/RUNTIME_DATA_POLICY.md` を参照してください。
 
 ### Fail-closed安全パイプライン
 
@@ -825,18 +862,18 @@ Core Proprietary EULA の下で、以下は禁止されます。
 
 ### 既存ユーザー向け移行ノート
 
-本変更は既存方針を、より明確な二層構造として明文化したものです。
+現在の構造は、既存方針をより明確な二層モデルとして明文化したものです。
 
 - Coreは既定でプロプライエタリのまま
 - インターフェース資産はディレクトリ単位で明示的にオープンライセンス化
-- 本変更でCoreロジック（Planner/Kernel/FUJI/TrustLogパイプライン内部）はオープンソース化されません
+- Coreロジック（Planner/Kernel/FUJI/TrustLogパイプライン内部）はオープンソース化されていません
 
 ### ライセンス分離ロードマップ（Plan B モノレポ → Plan A マルチレポ）
 
-Phase 1（このPR）:
+Phase 1（現行）:
 - モノレポ内でのディレクトリスコープライセンス（Core proprietary + interface MIT）
 
-Phase 2（次PR群）:
+Phase 2（今後）:
 - `veritas-spec`（OpenAPI/schema）
 - `veritas-sdk-python`, `veritas-sdk-js`
 - `veritas-cli`
