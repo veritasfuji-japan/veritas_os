@@ -293,6 +293,15 @@ export type ContinuationRevalidationStatus =
  *
  * Source of truth: veritas_os/core/continuation_runtime/snapshot.py
  */
+/**
+ * State-side (durable standing) of continuation runtime output.
+ *
+ * Contains only durable standing facts.  Boundary adjudication
+ * vocabulary (halted, narrowed, etc.) appears here only when a
+ * DurableConsequence has been recorded.
+ *
+ * Source of truth: veritas_os/core/continuation_runtime/snapshot.py
+ */
 export interface ContinuationStateSummary {
   claim_lineage_id: string;
   snapshot_id: string;
@@ -302,11 +311,22 @@ export interface ContinuationStateSummary {
   burden_state?: Record<string, unknown> | null;
   headroom_state?: Record<string, unknown> | null;
   scope?: Record<string, unknown> | null;
+  durable_consequence?: {
+    has_durable_halt?: boolean;
+    has_durable_scope_reduction?: boolean;
+    has_durable_class_change?: boolean;
+    has_irreversible_revocation?: boolean;
+    promotion_reason?: string;
+  } | null;
   [key: string]: unknown;
 }
 
 /**
- * Receipt-side (audit witness) of continuation runtime output.
+ * Receipt-side (proof-bearing audit witness) of continuation runtime output.
+ *
+ * The receipt is the primary record of boundary adjudication.  It carries
+ * the full adjudication vocabulary, durable-promotion assessment, and
+ * reopening eligibility.
  *
  * Source of truth: veritas_os/core/continuation_runtime/receipt.py
  */
@@ -323,6 +343,14 @@ export interface ContinuationReceiptSummary {
   prior_decision_continuity_ref?: string | null;
   parent_receipt_ref?: string | null;
   receipt_hash_or_attestation?: string | null;
+  /** Primary boundary adjudication outcome (receipt-first). */
+  boundary_outcome?: string | null;
+  /** Whether boundary outcome was promoted into durable state. */
+  is_durable_promotion?: boolean;
+  /** "provisional" or "durable_promotable". */
+  provisional_vs_durable?: string | null;
+  /** For narrowed: is the prior scope width restorable? */
+  reopening_eligible?: boolean;
   [key: string]: unknown;
 }
 

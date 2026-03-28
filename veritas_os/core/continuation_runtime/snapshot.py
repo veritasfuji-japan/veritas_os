@@ -4,15 +4,21 @@
 ClaimStateSnapshot — minimal governable state of a continuation claim.
 
 A snapshot is the *input* to the next revalidation.  It contains exactly
-the facts needed to determine whether the claim's standing should be
-maintained, narrowed, escalated, or revoked — no more.
+the durable standing facts — what remains true after adjudication.
 
-Separation rule:
-  - revalidation_status   → receipt, NOT snapshot
+Separation rule (receipt-first by default):
+  Any boundary outcome that has not yet durably changed the
+  continuation's lawful standing remains receipt-first.
+
+  - revalidation_status           → receipt, NOT snapshot
+  - boundary adjudication outcome → receipt-first; state only when durable
   - preceding_decision_continuity → receipt, NOT snapshot
-  - replay linkage        → receipt, NOT snapshot
-  - local_step_result     → receipt, NOT snapshot
-  - receipt hash          → receipt, NOT snapshot
+  - replay linkage                → receipt, NOT snapshot
+  - local_step_result             → receipt, NOT snapshot
+  - receipt hash / attestation    → receipt, NOT snapshot
+  - provisional vs durable assess → receipt, NOT snapshot
+  - halted / narrowed / degraded / escalated → receipt-first;
+    promoted to state only when ``DurableConsequence`` is present
 """
 from __future__ import annotations
 
@@ -135,6 +141,40 @@ class RevocationCondition:
 
 
 # =====================================================================
+# DurableConsequence — explicit record of why a boundary outcome
+# was promoted from receipt to state
+# =====================================================================
+
+
+@dataclass
+class DurableConsequence:
+    """Tracks which durable state consequences caused a boundary outcome
+    to be promoted into ``claim_status``.
+
+    A boundary outcome (halted, narrowed, degraded, escalated) defaults
+    to receipt-first.  It becomes state-relevant **only** when it has
+    durably changed lawful standing, available scope, continuation rights,
+    onward carryability, or continuation class.
+
+    When ``claim_status`` is LIVE or REVOKED, ``durable_consequence`` may
+    be ``None`` (those are inherently state-level).
+    """
+
+    has_durable_halt: bool = False
+    has_durable_scope_reduction: bool = False
+    has_durable_class_change: bool = False
+    has_irreversible_revocation: bool = False
+    promotion_reason: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DurableConsequence":
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
+
+
+# =====================================================================
 # ClaimStateSnapshot
 # =====================================================================
 
@@ -142,6 +182,16 @@ class RevocationCondition:
 @dataclass
 class ClaimStateSnapshot:
     """Minimal governable state of a continuation claim at a point in time.
+
+    Contains only *durable* standing facts — what remains true after
+    adjudication.  Boundary adjudication vocabulary (the *process* of
+    arriving at an outcome) belongs in ``ContinuationReceipt``.
+
+    ``claim_status`` reflects durable standing:
+      - LIVE / REVOKED are inherently state-level.
+      - HALTED, NARROWED, DEGRADED, ESCALATED appear here **only** when
+        the revalidator has determined a durable consequence exists.
+        In that case ``durable_consequence`` records the promotion reason.
 
     Replaced at each revalidation; only the current snapshot is
     authoritative for runtime logic.
@@ -161,6 +211,11 @@ class ClaimStateSnapshot:
     law_version: str = ""
     revocation_conditions: List[RevocationCondition] = field(default_factory=list)
     claim_status: ClaimStatus = ClaimStatus.LIVE
+
+    # durable consequence — present when a boundary outcome was promoted
+    # from receipt into state (None when claim_status is LIVE or REVOKED
+    # without a non-obvious promotion path).
+    durable_consequence: Optional[DurableConsequence] = None
 
     # optional lightweight metadata (permitted but minimal)
     state_digest: Optional[str] = None
@@ -185,6 +240,11 @@ class ClaimStateSnapshot:
             "law_version": self.law_version,
             "revocation_conditions": [rc.to_dict() for rc in self.revocation_conditions],
             "claim_status": self.claim_status.value,
+            "durable_consequence": (
+                self.durable_consequence.to_dict()
+                if self.durable_consequence is not None
+                else None
+            ),
             "state_digest": self.state_digest,
             "effective_from": self.effective_from,
             "effective_until": self.effective_until,
@@ -210,4 +270,8 @@ class ClaimStateSnapshot:
             ]
         if "claim_status" in data and isinstance(data["claim_status"], str):
             data["claim_status"] = ClaimStatus(data["claim_status"])
+        if "durable_consequence" in data and isinstance(data["durable_consequence"], dict):
+            data["durable_consequence"] = DurableConsequence.from_dict(
+                data["durable_consequence"]
+            )
         return cls(**data)

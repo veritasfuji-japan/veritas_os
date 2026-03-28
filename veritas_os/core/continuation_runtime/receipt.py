@@ -1,14 +1,22 @@
 # veritas_os/core/continuation_runtime/receipt.py
 # -*- coding: utf-8 -*-
 """
-ContinuationReceipt — audit witness emitted per revalidation pass.
+ContinuationReceipt — proof-bearing audit witness per revalidation pass.
 
-A receipt records *how* the claim's standing was examined, what was
-found, and what the runtime would have recommended.  Receipts are
-append-only and form a chain-level audit trail.
+A receipt is the *primary* record of boundary adjudication: what was
+evaluated, what outcome was reached, and whether that outcome has durable
+state consequences.  Receipts are append-only and form a chain-level
+audit trail.
+
+Receipt-first rule:
+  Any boundary outcome (halted, narrowed, degraded, escalated) that has
+  not yet durably changed the continuation's lawful standing should
+  remain receipt-first.  Only outcomes with explicit ``DurableConsequence``
+  get promoted into ``ClaimStateSnapshot.claim_status``.
 
 The receipt is NOT a state store — runtime logic reads the snapshot for
-current state; receipts are for audit, replay, and divergence analysis.
+current durable standing; receipts are for audit, replay, divergence
+analysis, and proof-bearing adjudication witness.
 """
 from __future__ import annotations
 
@@ -57,10 +65,13 @@ class RevalidationOutcome(str, Enum):
 
 @dataclass
 class ContinuationReceipt:
-    """Audit witness emitted after each revalidation pass.
+    """Proof-bearing audit witness emitted after each revalidation pass.
 
-    Contains everything an auditor, replay engine, or divergence
-    analyzer needs to understand what happened during revalidation.
+    The receipt is the *primary* record of boundary adjudication.  It
+    contains everything an auditor, replay engine, or divergence
+    analyzer needs to understand what happened during revalidation,
+    including the explicit promotion assessment (receipt-first vs
+    state-promoted).
     """
 
     # identity
@@ -92,6 +103,30 @@ class ContinuationReceipt:
     burden_headroom_digest: Optional[str] = None
 
     # ------------------------------------------------------------------
+    # Proof-bearing boundary adjudication (receipt-first semantics)
+    # ------------------------------------------------------------------
+
+    # Primary boundary outcome — the adjudication vocabulary lives here.
+    # This is the receipt's own determination, independent of whether it
+    # was promoted into snapshot.claim_status.
+    boundary_outcome: Optional[str] = None
+
+    # Whether the boundary outcome was promoted into durable state.
+    # True only when a DurableConsequence was recorded in the snapshot.
+    is_durable_promotion: bool = False
+
+    # "provisional" (receipt-only, may be re-opened) or
+    # "durable_promotable" (has durably altered standing/scope/rights).
+    provisional_vs_durable: Optional[str] = None
+
+    # For narrowed: is the prior scope width restorable?
+    # Reopening test: if boundary conditions resolve and standing/burden/
+    # authority/continuity basis are unchanged, can prior width reopen?
+    #   True  → receipt-level narrowing (provisional)
+    #   False → durable narrowing (promoted to state)
+    reopening_eligible: bool = True
+
+    # ------------------------------------------------------------------
     # Serialization helpers
     # ------------------------------------------------------------------
 
@@ -116,6 +151,10 @@ class ContinuationReceipt:
             "support_basis_digest": self.support_basis_digest,
             "scope_digest": self.scope_digest,
             "burden_headroom_digest": self.burden_headroom_digest,
+            "boundary_outcome": self.boundary_outcome,
+            "is_durable_promotion": self.is_durable_promotion,
+            "provisional_vs_durable": self.provisional_vs_durable,
+            "reopening_eligible": self.reopening_eligible,
         }
         return d
 

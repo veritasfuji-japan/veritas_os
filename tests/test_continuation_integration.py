@@ -319,24 +319,39 @@ class TestDivergenceObservability:
     must be observable in structured output."""
 
     def test_divergence_flag_true_when_not_live(self):
+        """Divergence observable via receipt boundary_outcome regardless
+        of whether boundary was promoted to state.
+        """
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
-        statuses_that_diverge = [
-            {"context": {"restricted_actions": ["x"]}, "expect": ClaimStatus.NARROWED},
+        cases_that_diverge = [
+            # NARROWED: durable scope reduction → state NARROWED
+            {
+                "context": {"restricted_actions": ["x"]},
+                "expect_state": ClaimStatus.NARROWED,
+                "expect_boundary": "narrowed",
+            },
+            # DEGRADED: receipt-first → state LIVE
             {
                 "context": {
                     "required_evidence": ["e1", "e2", "e3"],
                     "satisfied_evidence": ["e1"],
                 },
-                "expect": ClaimStatus.DEGRADED,
+                "expect_state": ClaimStatus.LIVE,
+                "expect_boundary": "degraded",
             },
-            {"context": {"escalation_required": True}, "expect": ClaimStatus.ESCALATED},
+            # ESCALATED: receipt-first → state LIVE
+            {
+                "context": {"escalation_required": True},
+                "expect_state": ClaimStatus.LIVE,
+                "expect_boundary": "escalated",
+            },
         ]
 
-        for case in statuses_that_diverge:
+        for case in cases_that_diverge:
             _, snap, rcpt = run_continuation_revalidation_shadow(
                 chain_id="div-obs",
                 step_index=1,
@@ -344,7 +359,12 @@ class TestDivergenceObservability:
                 context=case["context"],
                 prior_decision_status="allow",
             )
-            assert snap.claim_status == case["expect"], f"Expected {case['expect']}"
+            assert snap.claim_status == case["expect_state"], (
+                f"State expected {case['expect_state']}"
+            )
+            assert rcpt.boundary_outcome == case["expect_boundary"], (
+                f"Receipt boundary expected {case['expect_boundary']}"
+            )
             assert rcpt.divergence_flag is True
 
     def test_divergence_flag_false_when_live(self):

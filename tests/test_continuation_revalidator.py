@@ -161,8 +161,13 @@ class TestContinuationRevalidator:
         assert receipt.divergence_flag is True
 
     def test_escalation_required_yields_escalated(self):
-        """escalation_required in scope → ESCALATED."""
+        """escalation_required in scope → ESCALATED in receipt (receipt-first).
+
+        State reflects LIVE because escalation is a boundary condition,
+        not a durable standing change.
+        """
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         rv = self._make_revalidator()
         lineage = self._make_lineage()
@@ -172,11 +177,20 @@ class TestContinuationRevalidator:
 
         snapshot, receipt = rv.revalidate(lineage, condition)
 
-        assert snapshot.claim_status == ClaimStatus.ESCALATED
+        # Receipt-first: boundary outcome is ESCALATED
+        assert receipt.revalidation_status == RevalidationStatus.ESCALATED
+        assert receipt.boundary_outcome == "escalated"
+        # State: receipt-only (no durable consequence)
+        assert snapshot.claim_status == ClaimStatus.LIVE
 
     def test_burden_threshold_exceeded_yields_degraded(self):
-        """Burden below threshold → DEGRADED."""
+        """Burden below threshold → DEGRADED in receipt (receipt-first).
+
+        State reflects LIVE because burden pressure is recoverable,
+        not a durable standing change.
+        """
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         rv = self._make_revalidator()
         lineage = self._make_lineage()
@@ -190,7 +204,11 @@ class TestContinuationRevalidator:
 
         snapshot, receipt = rv.revalidate(lineage, condition)
 
-        assert snapshot.claim_status == ClaimStatus.DEGRADED
+        # Receipt-first: boundary outcome is DEGRADED
+        assert receipt.revalidation_status == RevalidationStatus.DEGRADED
+        assert receipt.boundary_outcome == "degraded"
+        # State: receipt-only (no durable consequence)
+        assert snapshot.claim_status == ClaimStatus.LIVE
 
     def test_snapshot_has_law_version(self):
         """Snapshot records which law_version was applied."""
@@ -537,7 +555,8 @@ class TestDivergenceObservation:
     is observable in the output."""
 
     def test_local_allow_with_continuation_degraded(self):
-        """Local step allows, but continuation is degraded → divergence visible."""
+        """Local step allows, but continuation is degraded → divergence visible
+        in receipt. State remains LIVE (degraded is receipt-first)."""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -554,8 +573,10 @@ class TestDivergenceObservation:
             prior_decision_status="allow",  # local step passed
         )
 
-        # Continuation is degraded while local step was allow
-        assert snapshot.to_dict()["claim_status"] == "degraded"
+        # Receipt: boundary outcome is degraded
+        assert receipt.boundary_outcome == "degraded"
+        # State: receipt-first (not durable)
+        assert snapshot.to_dict()["claim_status"] == "live"
         assert receipt.divergence_flag is True
         assert receipt.prior_decision_continuity_ref == "allow"
         # Advisory only — should_refuse is False for degraded
@@ -1020,6 +1041,7 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.NARROWED
 
     def test_degraded_consistency(self):
+        """Degraded: receipt-first boundary, state remains LIVE."""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1029,20 +1051,27 @@ class TestClaimStatusConsistency:
                 "satisfied_evidence": ["e1"],
             },
         )
-        assert snap.claim_status == ClaimStatus.DEGRADED
+        # Receipt carries the boundary outcome
         assert rcpt.revalidation_status == RevalidationStatus.DEGRADED
-        assert lineage.current_claim_status == ClaimStatus.DEGRADED
+        assert rcpt.boundary_outcome == "degraded"
+        # State: receipt-first (not durable)
+        assert snap.claim_status == ClaimStatus.LIVE
+        assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_escalated_consistency(self):
+        """Escalated: receipt-first boundary, state remains LIVE."""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         lineage, snap, rcpt = self._run(
             context={"escalation_required": True},
         )
-        assert snap.claim_status == ClaimStatus.ESCALATED
+        # Receipt carries the boundary outcome
         assert rcpt.revalidation_status == RevalidationStatus.ESCALATED
-        assert lineage.current_claim_status == ClaimStatus.ESCALATED
+        assert rcpt.boundary_outcome == "escalated"
+        # State: receipt-first (not durable)
+        assert snap.claim_status == ClaimStatus.LIVE
+        assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_revoked_consistency(self):
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus

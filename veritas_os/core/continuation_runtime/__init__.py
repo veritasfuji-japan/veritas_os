@@ -23,6 +23,7 @@ from .reason_codes import ReasonCode
 from .lineage import ContinuationClaimLineage, ClaimStatus
 from .snapshot import (
     ClaimStateSnapshot,
+    DurableConsequence,
     SupportBasis,
     Scope,
     BurdenState,
@@ -43,6 +44,7 @@ __all__ = [
     "ClaimStatus",
     # snapshot
     "ClaimStateSnapshot",
+    "DurableConsequence",
     "SupportBasis",
     "Scope",
     "BurdenState",
