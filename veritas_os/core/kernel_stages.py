@@ -4,6 +4,11 @@
 kernel.decide() から責務を分離したステージモジュール
 
 各ステージは独立してテスト可能で、設定値はconfig.pyから取得します。
+
+責務境界:
+- kernel.py は最終的な意思決定エンジンを保持
+- この helper はステージ単位の補助計算を保持
+- pipeline.py は実行順制御と副作用オーケストレーションを保持
 """
 from __future__ import annotations
 
