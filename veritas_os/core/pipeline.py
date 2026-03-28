@@ -550,6 +550,103 @@ async def _safe_web_search(query: str, *, max_results: int = 5) -> Optional[dict
     )
 
 
+def _build_decision_payload(ctx: PipelineContext) -> Dict[str, Any]:
+    """Build and validate the final decision payload (pre-persistence boundary)."""
+    plan = ctx.plan
+    res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)
+    payload = coerce_to_decide_response(res, DecideResponse=DecideResponse)
+    return payload
+
+
+def _run_post_decision_persistence_phase(
+    ctx: PipelineContext,
+    payload: Dict[str, Any],
+    *,
+    effective_get_memory_store: Any,
+    stage_failures: List[str],
+) -> None:
+    """Run post-decision persistence and artifact generation side effects.
+
+    Side-effect groups intentionally stay best-effort and keep the existing
+    degraded-stage observability contract via ``stage_failures``.
+    """
+    # Evidence finalization is part of response artifact completion done
+    # immediately before persistence outputs are written.
+    finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
+    duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
+
+    # 1) Audit log persistence
+    try:
+        persist_audit_log(
+            ctx,
+            append_trust_log_fn=append_trust_log,
+            write_shadow_decide_fn=write_shadow_decide,
+        )
+    except Exception as e:
+        stage_failures.append(f"audit_log:{type(e).__name__}")
+        logger.warning("[pipeline] audit_log persist failed (best-effort): %s", e)
+
+    # 2) Memory persistence
+    try:
+        persist_to_memory(
+            ctx,
+            payload,
+            _get_memory_store=effective_get_memory_store,
+            _memory_put=_memory_put,
+        )
+    except Exception as e:
+        stage_failures.append(f"memory_persist:{type(e).__name__}")
+        logger.warning("[pipeline] memory persist failed (best-effort): %s", e)
+
+    # 3) Reason / reflection persistence
+    try:
+        persist_reason_and_reflection(
+            ctx, payload,
+            VAL_JSON=VAL_JSON, META_LOG=META_LOG,
+            _load_valstats=_load_valstats, _save_valstats=_save_valstats,
+        )
+    except Exception as e:
+        stage_failures.append(f"reason_reflection:{type(e).__name__}")
+        logger.warning("[pipeline] reason/reflection persist failed (best-effort): %s", e)
+
+    # 4) Disk persistence
+    try:
+        persist_decision_to_disk(
+            ctx, payload, duration_ms=duration_ms,
+            LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
+            _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
+        )
+    except Exception as e:
+        stage_failures.append(f"disk_persist:{type(e).__name__}")
+        logger.warning("[pipeline] disk persist failed (best-effort): %s", e)
+
+    # 5) World state persistence
+    try:
+        persist_world_state(ctx, payload)
+    except Exception as e:
+        stage_failures.append(f"world_state:{type(e).__name__}")
+        logger.warning("[pipeline] world_state persist failed (best-effort): %s", e)
+
+    # 6) Dataset persistence
+    try:
+        persist_dataset_record(
+            ctx, payload, duration_ms=duration_ms,
+            build_dataset_record_fn=build_dataset_record,
+            append_dataset_record_fn=append_dataset_record,
+        )
+    except Exception as e:
+        stage_failures.append(f"dataset_record:{type(e).__name__}")
+        logger.warning("[pipeline] dataset_record persist failed (best-effort): %s", e)
+
+    # 7) Replay snapshot generation
+    should_run_web = getattr(ctx, "_should_run_web", False)
+    try:
+        build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
+    except Exception as e:
+        stage_failures.append(f"replay_snapshot:{type(e).__name__}")
+        logger.warning("[pipeline] replay snapshot failed (best-effort): %s", e)
+
+
 # _normalize_web_payload -> pipeline_web_adapter.py に移動済み
 
 # =========================================================
@@ -771,79 +868,21 @@ async def run_decide_pipeline(
     )
 
     # =================================================================
-    # Stage 7: Response assembly  (-> pipeline_response)
-    # - core decision contract
-    # - audit/debug/internal envelope
-    # - backward-compatible aliases
+    # Stage 7: Decision payload completion  (-> pipeline_response)
+    # - decision payload contract is complete at this boundary
     # =================================================================
-    plan = ctx.plan
-    res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)
-    payload = coerce_to_decide_response(res, DecideResponse=DecideResponse)
+    payload = _build_decision_payload(ctx)
 
     # =================================================================
-    # Stage 8: Persist / telemetry  (-> pipeline_persist)
+    # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
+    # - best-effort side effects and artifact generation only
     # =================================================================
-    try:
-        persist_audit_log(ctx, append_trust_log_fn=append_trust_log, write_shadow_decide_fn=write_shadow_decide)
-    except Exception as e:
-        _stage_failures.append(f"audit_log:{type(e).__name__}")
-        logger.warning("[pipeline] audit_log persist failed (best-effort): %s", e)
-
-    try:
-        persist_to_memory(ctx, payload, _get_memory_store=effective_get_memory_store, _memory_put=_memory_put)
-    except Exception as e:
-        _stage_failures.append(f"memory_persist:{type(e).__name__}")
-        logger.warning("[pipeline] memory persist failed (best-effort): %s", e)
-
-    try:
-        persist_reason_and_reflection(
-            ctx, payload,
-            VAL_JSON=VAL_JSON, META_LOG=META_LOG,
-            _load_valstats=_load_valstats, _save_valstats=_save_valstats,
-        )
-    except Exception as e:
-        _stage_failures.append(f"reason_reflection:{type(e).__name__}")
-        logger.warning("[pipeline] reason/reflection persist failed (best-effort): %s", e)
-
-    # FINALIZE evidence
-    finalize_evidence(payload, web_evidence=ctx.web_evidence, evidence_max=EVIDENCE_MAX)
-
-    duration_ms = max(1, int((time.time() - ctx.started_at) * 1000))
-    try:
-        persist_decision_to_disk(
-            ctx, payload, duration_ms=duration_ms,
-            LOG_DIR=LOG_DIR, DATASET_DIR=DATASET_DIR,
-            _HAS_ATOMIC_IO=_HAS_ATOMIC_IO, _atomic_write_json=_atomic_write_json,
-        )
-    except Exception as e:
-        _stage_failures.append(f"disk_persist:{type(e).__name__}")
-        logger.warning("[pipeline] disk persist failed (best-effort): %s", e)
-
-    try:
-        persist_world_state(ctx, payload)
-    except Exception as e:
-        _stage_failures.append(f"world_state:{type(e).__name__}")
-        logger.warning("[pipeline] world_state persist failed (best-effort): %s", e)
-
-    try:
-        persist_dataset_record(
-            ctx, payload, duration_ms=duration_ms,
-            build_dataset_record_fn=build_dataset_record,
-            append_dataset_record_fn=append_dataset_record,
-        )
-    except Exception as e:
-        _stage_failures.append(f"dataset_record:{type(e).__name__}")
-        logger.warning("[pipeline] dataset_record persist failed (best-effort): %s", e)
-
-    # =================================================================
-    # Stage 8b: Replay snapshot
-    # =================================================================
-    should_run_web = getattr(ctx, "_should_run_web", False)
-    try:
-        build_replay_snapshot(ctx, payload, should_run_web=should_run_web)
-    except Exception as e:
-        _stage_failures.append(f"replay_snapshot:{type(e).__name__}")
-        logger.warning("[pipeline] replay snapshot failed (best-effort): %s", e)
+    _run_post_decision_persistence_phase(
+        ctx,
+        payload,
+        effective_get_memory_store=effective_get_memory_store,
+        stage_failures=_stage_failures,
+    )
 
     # =================================================================
     # Observability: record pipeline health summary

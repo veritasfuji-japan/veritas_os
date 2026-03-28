@@ -1124,5 +1124,56 @@ async def test_run_decide_pipeline_trustlog_and_shadow_exception_swallowed(monke
     assert "gate" in payload
 
 
+@pytest.mark.anyio
+async def test_run_decide_pipeline_decision_boundary_calls_post_persist(
+    monkeypatch,
+    patched_pipeline,
+):
+    """Decision payload completion and post-decision persistence are separated."""
+    pipeline = patched_pipeline
+    call_order: List[str] = []
+    persisted_payload: Dict[str, Any] = {}
+
+    def fake_build_decision_payload(ctx):
+        call_order.append("build_decision")
+        return {
+            "ok": True,
+            "request_id": ctx.request_id,
+            "query": ctx.query,
+            "chosen": {"id": "x"},
+            "alternatives": [],
+            "evidence": [],
+            "gate": {"decision_status": "allow"},
+            "values": {"scores": {}, "total": 0.0, "top_factors": [], "rationale": ""},
+            "extras": {"metrics": {}},
+            "decision_status": "allow",
+            "rejection_reason": None,
+        }
+
+    def fake_post_persist(ctx, payload, *, effective_get_memory_store, stage_failures):
+        del ctx, effective_get_memory_store, stage_failures
+        call_order.append("post_persist")
+        persisted_payload.update(payload)
+
+    monkeypatch.setattr(
+        pipeline,
+        "_build_decision_payload",
+        fake_build_decision_payload,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_run_post_decision_persistence_phase",
+        fake_post_persist,
+        raising=False,
+    )
+
+    body = {"query": "decision boundary test", "context": {"user_id": "u-boundary"}}
+    payload = await pipeline.run_decide_pipeline(DummyReqModel(body), DummyRequest())
+
+    assert call_order == ["build_decision", "post_persist"]
+    assert persisted_payload["request_id"] == payload["request_id"]
+    assert payload["query"] == "decision boundary test"
+
 
 
