@@ -851,9 +851,49 @@ def test_env_parsing_failsafe_on_module_reload(monkeypatch):
         importlib.reload(llm_client)
 
 
-# ------------------------------------------------------------
-# _http_post response size enforcement
-# ------------------------------------------------------------
+def test_env_float_bounded_clamps_out_of_range(monkeypatch):
+    """_env_float_bounded returns default when value is out of range."""
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "999.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 10.0
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "-5.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 10.0
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "50.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 50.0
+
+
+def test_env_int_bounded_clamps_out_of_range(monkeypatch):
+    """_env_int_bounded returns default when value is out of range."""
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "999")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 3
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "-1")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 3
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "5")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 5
+
+
+def test_env_bounded_on_reload_rejects_extreme_values(monkeypatch):
+    """Reload with extreme timeout values returns defaults due to bounds checking."""
+    monkeypatch.setenv("LLM_TIMEOUT", "99999")
+    monkeypatch.setenv("LLM_CONNECT_TIMEOUT", "0")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "100")
+    monkeypatch.setenv("LLM_RETRY_DELAY", "-1")
+
+    reloaded = importlib.reload(llm_client)
+    try:
+        assert reloaded.LLM_TIMEOUT == 60.0
+        assert reloaded.LLM_CONNECT_TIMEOUT == 10.0
+        assert reloaded.LLM_MAX_RETRIES == 3
+        assert reloaded.LLM_RETRY_DELAY == 2.0
+    finally:
+        monkeypatch.delenv("LLM_TIMEOUT", raising=False)
+        monkeypatch.delenv("LLM_CONNECT_TIMEOUT", raising=False)
+        monkeypatch.delenv("LLM_MAX_RETRIES", raising=False)
+        monkeypatch.delenv("LLM_RETRY_DELAY", raising=False)
+        importlib.reload(llm_client)
 
 
 def test_http_post_rejects_oversized_response(monkeypatch):

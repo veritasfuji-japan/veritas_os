@@ -745,7 +745,7 @@ def run_debate(
     try:
         world_snap = world_model.snapshot("veritas_agi")
     except Exception:
-        logger.debug("run_debate: world_model.snapshot failed", exc_info=True)
+        logger.warning("run_debate: world_model.snapshot failed", exc_info=True)
         world_snap = {}
 
     if not options:
