@@ -1,0 +1,11 @@
+# SBOM Baseline — Node.js Dependencies
+#
+# This file contains the SHA256 hash of the generated Node.js CycloneDX SBOM.
+# It is used by the nightly SBOM workflow to detect dependency drift.
+#
+# To regenerate this baseline after intentional dependency changes:
+#   pnpm dlx @cyclonedx/cyclonedx-npm --output-file security/sbom/node.cdx.json --spec-version 1.5
+#   sha256sum security/sbom/node.cdx.json > security/sbom/baseline/node.cdx.sha256
+#
+# PLACEHOLDER — Replace with actual hash after first SBOM generation.
+0000000000000000000000000000000000000000000000000000000000000000  security/sbom/node.cdx.json
