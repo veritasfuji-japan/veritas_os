@@ -81,8 +81,8 @@ describe("toFujiGateDetailView", () => {
 
   it("extracts risk score from fuji.risk_score when gate.risk is absent", () => {
     const result = makeResponse({
-      fuji: { decision_status: "deny", risk_score: 0.8 } as never,
-      gate: { decision_status: "deny" } as never,
+      fuji: { decision_status: "rejected", risk_score: 0.8 } as never,
+      gate: { decision_status: "rejected" } as never,
     });
     const view = toFujiGateDetailView(result);
     expect(view.riskScore).toBe(0.8);
@@ -90,7 +90,7 @@ describe("toFujiGateDetailView", () => {
 
   it("extracts reasons array", () => {
     const result = makeResponse({
-      fuji: { decision_status: "deny", reasons: ["PII detected", "Low evidence"] } as never,
+      fuji: { decision_status: "rejected", reasons: ["PII detected", "Low evidence"] } as never,
     });
     const view = toFujiGateDetailView(result);
     expect(view.reasons).toEqual(["PII detected", "Low evidence"]);
@@ -98,7 +98,7 @@ describe("toFujiGateDetailView", () => {
 
   it("filters non-string reasons", () => {
     const result = makeResponse({
-      fuji: { decision_status: "deny", reasons: ["Valid", 42, null, "Also valid"] } as never,
+      fuji: { decision_status: "block", reasons: ["Valid", 42, null, "Also valid"] } as never,
     });
     const view = toFujiGateDetailView(result);
     expect(view.reasons).toEqual(["Valid", "Also valid"]);
@@ -107,7 +107,7 @@ describe("toFujiGateDetailView", () => {
   it("extracts violations with fallback fields", () => {
     const result = makeResponse({
       fuji: {
-        decision_status: "deny",
+        decision_status: "block",
         violations: [
           { rule: "PII_RULE", detail: "Email detected", severity: "high" },
           { code: "ILLICIT", description: "Harmful content", level: "critical" },

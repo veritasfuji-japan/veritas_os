@@ -26,14 +26,14 @@ describe("FujiGateStatusPanel", () => {
       <FujiGateStatusPanel
         result={{
           fuji: {
-            decision_status: "deny",
+            decision_status: "block",
             risk_score: 0.85,
             reasons: ["PII detected"],
             violations: [
               { rule: "PII_RULE", detail: "Email found", severity: "high" },
             ],
           },
-          gate: { decision_status: "deny", risk: 0.85 },
+          gate: { decision_status: "block", risk: 0.85 },
         } as never}
       />,
     );
@@ -51,5 +51,47 @@ describe("FujiGateStatusPanel", () => {
       />,
     );
     expect(screen.queryByTestId("fuji-drilldown")).not.toBeInTheDocument();
+  });
+
+  it("applies destructive color for 'rejected' decision", () => {
+    const { container } = render(
+      <FujiGateStatusPanel
+        result={{
+          fuji: { decision_status: "rejected" },
+          gate: { decision_status: "rejected", risk: 0.9 },
+        } as never}
+      />,
+    );
+    const statusEl = container.querySelector(".text-destructive");
+    expect(statusEl).toBeInTheDocument();
+    expect(statusEl?.textContent).toBe("rejected");
+  });
+
+  it("applies destructive color for 'block' decision", () => {
+    const { container } = render(
+      <FujiGateStatusPanel
+        result={{
+          fuji: { decision_status: "block" },
+          gate: { decision_status: "block", risk: 0.95 },
+        } as never}
+      />,
+    );
+    const statusEl = container.querySelector(".text-destructive");
+    expect(statusEl).toBeInTheDocument();
+    expect(statusEl?.textContent).toBe("block");
+  });
+
+  it("applies amber color for 'abstain' decision", () => {
+    const { container } = render(
+      <FujiGateStatusPanel
+        result={{
+          fuji: { decision_status: "abstain" },
+          gate: { decision_status: "abstain" },
+        } as never}
+      />,
+    );
+    const statusEl = container.querySelector(".text-amber-400");
+    expect(statusEl).toBeInTheDocument();
+    expect(statusEl?.textContent).toBe("abstain");
   });
 });
