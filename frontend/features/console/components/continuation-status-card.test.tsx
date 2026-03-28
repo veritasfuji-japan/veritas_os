@@ -78,9 +78,8 @@ describe("ContinuationStatusCard", () => {
 
   it("does not show divergence banner when not diverged", () => {
     render(<ContinuationStatusCard result={makeResult()} />);
-    expect(
-      screen.queryByText(/chain continuation is weakened/i),
-    ).not.toBeInTheDocument();
+    // Japanese default: "弱化" is part of the divergence banner text
+    expect(screen.queryByText(/弱化/)).not.toBeInTheDocument();
   });
 
   it("shows divergence banner when diverged", () => {
@@ -96,9 +95,8 @@ describe("ContinuationStatusCard", () => {
         })}
       />,
     );
-    expect(
-      screen.getByText(/chain continuation is weakened/i),
-    ).toBeInTheDocument();
+    // Default locale is "ja" — t() returns first (Japanese) argument
+    expect(screen.getByText(/弱化/)).toBeInTheDocument();
     expect(screen.getByText("DEGRADED")).toBeInTheDocument();
   });
 
