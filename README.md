@@ -21,6 +21,17 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 
 > Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
 
+### Key Highlights
+
+| | |
+|---|---|
+| **20+ stage decision pipeline** | Structured, reproducible, with divergence-detecting replay |
+| **FUJI Gate (fail-closed)** | PII detection, prompt injection defense, toxicity filter, policy rules |
+| **Hash-chained TrustLog** | Ed25519-signed, WORM mirror, Transparency log anchor, W3C PROV export |
+| **Enterprise governance** | 4-eyes approval, RBAC/ABAC, SSE alerts, external secret manager enforcement |
+| **Mission Control dashboard** | Next.js 16 — real-time event stream, risk analytics, governance management |
+| **EU AI Act compliance** | Built-in reporting, audit export, deployment readiness checks |
+
 ### Independent Technical DD Score
 
 | Category | Score |
@@ -45,11 +56,13 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: [`README_JP.md`](README_JP.md)
 - **User Manual (JP)**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
-- **Code review document map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+- **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+- **Operations Runbook**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
 
 ## Contents
 
 - [Beta at a Glance](#beta-at-a-glance)
+- [Continuation Runtime (Phase-1)](#continuation-runtime-phase-1-observeshadow)
 - [Why VERITAS?](#why-veritas)
 - [What It Does](#what-it-does)
 - [Project Structure](#project-structure)
@@ -877,7 +890,7 @@ See [`LICENSE`](LICENSE), [`TRADEMARKS`](TRADEMARKS), and [`NOTICE`](NOTICE).
 
 ### Transition note for existing users
 
-This PR formalizes existing intent into a clearer two-tier structure:
+The current structure formalizes existing intent into a clearer two-tier model:
 
 - Core remains proprietary by default.
 - Interface assets are explicitly open-licensed by directory.
@@ -885,10 +898,10 @@ This PR formalizes existing intent into a clearer two-tier structure:
 
 ### Roadmap: phased move from mono-repo licensing (Plan B) to multi-repo split (Plan A)
 
-Phase 1 (this PR):
+Phase 1 (current):
 - Directory-scoped licensing in this mono-repo (Core proprietary + interface MIT)
 
-Phase 2 (next PRs):
+Phase 2 (upcoming):
 - `veritas-spec` (OpenAPI/schema)
 - `veritas-sdk-python`, `veritas-sdk-js`
 - `veritas-cli`
