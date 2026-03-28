@@ -83,6 +83,29 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - The project is **not** positioned as an alpha prototype anymore; it already contains substantial operational and audit infrastructure.
 - You should still expect active iteration in policy packs, deployment defaults, and environment-specific integrations.
 
+### Continuation Runtime (Phase-1: Observe/Shadow)
+
+VERITAS now includes a **chain-level continuation observation layer** that runs beside (not inside) the existing step-level decision infrastructure. This is **not** enforcement — it is observation only.
+
+| Aspect | Status |
+|---|---|
+| Mode | Observe / shadow only — no enforcement, no refusal gating |
+| FUJI | Unchanged — remains the final safety/policy gate for each step |
+| `gate.decision_status` | Unchanged — no new values, no reinterpretation |
+| Feature flag off | Zero change to response, logs, UI, or behavior |
+| Purpose | Detect when a chain's continuation standing weakens (narrowed, degraded, escalated, halted, revoked) even though individual steps pass |
+
+Key concepts:
+- **Snapshot** (state): minimal governable facts — support basis, scope, burden, headroom, law version
+- **Receipt** (audit witness): how revalidation was conducted, divergence flags, reason codes, receipt chain linkage
+- The snapshot is not a receipt. The receipt is not a state store. They are separate responsibilities.
+- Revalidation runs **before** step-level merit evaluation (pre-merit placement)
+- `should_refuse_before_effect` is advisory only in phase-1
+
+Enable with: `VERITAS_CAP_CONTINUATION_RUNTIME=1` (default: off)
+
+See: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
+
 ## Why VERITAS?
 
 Most "agent frameworks" optimize autonomy and tool use.
