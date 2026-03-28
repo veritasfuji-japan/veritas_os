@@ -4,11 +4,11 @@ from __future__ import annotations
 import logging
 import os
 import stat
+import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# リポジトリルート: .../veritas_clean_test2/veritas_os
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # scripts ディレクトリ
@@ -48,10 +48,37 @@ def _validate_resolved_path(path: Path) -> Path:
     return resolved
 
 
+def _resolve_runtime_env() -> str:
+    """Return normalized runtime namespace.
+
+    Supported namespaces: ``dev``, ``test``, ``demo``, ``prod``.
+    Any unsupported value falls back to ``dev``.
+    """
+    env = (os.getenv("VERITAS_RUNTIME_ENV") or "dev").strip().lower()
+    if env not in {"dev", "test", "demo", "prod"}:
+        logger.warning(
+            "Unsupported VERITAS_RUNTIME_ENV=%r; falling back to 'dev'.",
+            env,
+        )
+        return "dev"
+    return env
+
+
+def _resolve_runtime_root() -> Path:
+    """Resolve base runtime root directory with environment separation."""
+    explicit = os.getenv("VERITAS_RUNTIME_ROOT")
+    if explicit:
+        root = Path(explicit).expanduser()
+    elif _resolve_runtime_env() == "test":
+        root = Path(tempfile.gettempdir()) / "veritas_os" / "runtime" / "test"
+    else:
+        root = REPO_ROOT / "runtime" / _resolve_runtime_env()
+    return _validate_resolved_path(root)
+
+
 def _resolve_log_root() -> Path:
     """Resolve the base log root with optional encrypted-path enforcement."""
     encrypted_root = os.getenv("VERITAS_ENCRYPTED_LOG_ROOT")
-    data_base = os.getenv("VERITAS_DATA_DIR")
     log_root_env = os.getenv("VERITAS_LOG_ROOT")
     require_encrypted = _as_bool_env(
         os.getenv("VERITAS_REQUIRE_ENCRYPTED_LOG_DIR")
@@ -59,10 +86,10 @@ def _resolve_log_root() -> Path:
 
     if encrypted_root:
         log_root = Path(encrypted_root).expanduser()
-    elif data_base:
-        log_root = Path(data_base).expanduser()
+    elif log_root_env:
+        log_root = Path(log_root_env).expanduser()
     else:
-        log_root = Path(log_root_env or str(SCRIPTS_DIR / "logs")).expanduser()
+        log_root = _resolve_runtime_root() / "logs"
 
     # ★ セキュリティ修正: パストラバーサル・機密ディレクトリへの書き込みを防止
     _validate_resolved_path(log_root)
@@ -97,7 +124,6 @@ def _ensure_secure_permissions(path: Path) -> None:
         logger.warning("Failed to set permissions on %s: %s", path, exc)
 
 
-# ★ 追加: VERITAS_DATA_DIR があればそちらを最優先で使う
 LOG_ROOT = _resolve_log_root()
 
 # trust_log など通常ログ
@@ -116,9 +142,9 @@ DATASET_DIR = DASH_DIR
 
 # ---- ValueCore 用データ ----
 
-# プロジェクト直下 .../veritas_clean_test2/data
+# Runtime-separated state/data path
 PROJECT_ROOT = REPO_ROOT.parent
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = _resolve_runtime_root() / "state"
 
 # ValueCore のEMA等
 VAL_JSON = DATA_DIR / "value_stats.json"

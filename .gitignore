@@ -32,6 +32,14 @@ secrets.local.json
 
 # --- VERITAS のローカルデータ / ログ ---
 datasets/
+datasets/generated/
+data/runtime/
+runtime/
+!runtime/
+!runtime/**/
+!runtime/**/.gitkeep
+storage/
+cache/
 scripts/doctor_report.json
 trust_log.json
 trust_log.jsonl
@@ -63,6 +71,9 @@ reports/
 scripts/logs/
 *.log
 *.csv
+*.jsonl
+*.sqlite
+*.db
 
 # バックアップ系
 backups/
@@ -87,6 +98,8 @@ coverage-html/
 # Build artifacts
 *.egg-info/
 uv.lock
+dist/
+build/
 
 # --- Node / Frontend ---
 node_modules/

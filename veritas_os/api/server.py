@@ -8,9 +8,11 @@ import importlib
 import json
 import logging
 import math
+import os
 import queue
 import re
 import secrets
+import tempfile
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -177,7 +179,14 @@ except Exception as _utils_import_err:
 #
 # これらは import 時に必ず存在させる。実体は lazy import で後から差し替える。
 
-_DEFAULT_LOG_DIR = (REPO_ROOT / "logs").resolve()
+_runtime_env = (os.getenv("VERITAS_RUNTIME_ENV") or "dev").strip().lower()
+if _runtime_env not in {"dev", "test", "demo", "prod"}:
+    _runtime_env = "dev"
+if _runtime_env == "test":
+    _runtime_root = Path(tempfile.gettempdir()) / "veritas_os" / "runtime" / "test"
+else:
+    _runtime_root = (REPO_ROOT / "runtime" / _runtime_env).resolve()
+_DEFAULT_LOG_DIR = (_runtime_root / "logs").resolve()
 _DEFAULT_LOG_JSON = _DEFAULT_LOG_DIR / "trust_log.json"
 _DEFAULT_LOG_JSONL = _DEFAULT_LOG_DIR / "trust_log.jsonl"
 _DEFAULT_SHADOW_DIR = _DEFAULT_LOG_DIR / "DASH"

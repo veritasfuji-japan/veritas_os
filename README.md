@@ -790,6 +790,10 @@ the complete strategy, verification matrix, and remaining production risks.
 - **Operational logs are excluded from Git**: runtime logs (for example,
   `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live
   under `veritas_os/sample_data/memory/`.
+- **Fresh clone runtime policy**: runtime artifacts are namespace-separated under
+  `runtime/{dev,test,demo,prod}/` and only `.gitkeep` is committed. Use
+  `python scripts/reset_repo_runtime.py --dry-run` / `--apply` to purge local
+  runtime state. See `docs/RUNTIME_DATA_POLICY.md` for details.
 
 ### Fail-closed safety pipeline
 

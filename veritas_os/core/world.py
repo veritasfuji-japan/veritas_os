@@ -153,25 +153,35 @@ def _validate_path_safety(path: Path, context: str = "path") -> Path:
 
 def _resolve_data_dir() -> Path:
     """tests / users の両方に優しい data dir resolver"""
+    runtime_env = (os.getenv("VERITAS_RUNTIME_ENV") or "dev").strip().lower()
+    if runtime_env not in {"dev", "test", "demo", "prod"}:
+        runtime_env = "dev"
+    repo_root = Path(__file__).resolve().parents[2]
+
     base = _first_env(
         "VERITAS_DATA_DIR",
         "VERITAS_DIR",
         "VERITAS_HOME",
         "VERITAS_PATH",
     )
-    path = Path(base if base else "~/veritas").expanduser()
+    if base:
+        path = Path(base).expanduser()
+    elif runtime_env == "test":
+        path = Path(tempfile.gettempdir()) / "veritas_os" / "runtime" / "test" / "state"
+    else:
+        path = repo_root / "runtime" / runtime_env / "state"
     try:
         return _validate_path_safety(path, "data directory")
     except ValueError:
         # Fall back to default on validation failure
-        default_path = Path.home() / "veritas"
+        default_path = repo_root / "runtime" / "dev" / "state"
         logger.warning("Using default data directory: %s", default_path)
         return default_path
 
 
 def _resolve_world_path() -> Path:
     """Resolve the world state file path with security validation."""
-    default_path = Path.home() / "veritas" / "world_state.json"
+    default_path = _resolve_data_dir() / "world_state.json"
 
     # 1) ファイルパスを直指定できる系を最優先
     explicit = (
@@ -795,8 +805,11 @@ def update_from_decision(
                     done += 1
             metrics["active_plan_done"] = int(done or metrics.get("active_plan_done", 0))
 
+        chosen_title = ""
+        if isinstance(chosen, dict):
+            chosen_title = str(chosen.get("title") or "").strip()
         last["query"] = query
-        last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
+        last["chosen_title"] = chosen_title
         last["decision_status"] = gate.get("decision_status") or "unknown"
         proj["last_decision_at"] = _now_iso()
 
@@ -1075,8 +1088,6 @@ __all__ = [
     "_ensure_project",   # ✅ tests expect
     "_world_file_lock",  # テスト・外部利用向け
 ]
-
-
 
 
 

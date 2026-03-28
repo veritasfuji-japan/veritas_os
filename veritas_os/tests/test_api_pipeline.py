@@ -407,7 +407,7 @@ def patched_pipeline(monkeypatch, tmp_path):
     def fake_plan_for_veritas_agi(context: Dict[str, Any], query: str) -> Dict[str, Any]:
         return {
             "steps": [
-                {"id": "s1", "title": "First step", "description": "Do something small but concrete."},
+                {"id": "s1", "title": "Action step A", "description": "Do something small but concrete."},
                 {"id": "s2", "title": "Second step", "description": "Evaluate and iterate."},
             ],
             "source": "test-planner",
