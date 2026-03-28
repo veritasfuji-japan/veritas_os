@@ -2,9 +2,12 @@ import { type DecideResponse } from "@veritas/types";
 import { useEffect, useMemo, useState } from "react";
 import { toPipelineStageViews } from "../adapters/decision-view";
 import { PIPELINE_STAGES } from "../constants";
+import { type ConsoleExecutionStatus } from "../types";
 
 interface PipelineVisualizerProps {
   loading: boolean;
+  executionStatus: ConsoleExecutionStatus;
+  latestEvent: string | null;
   result: DecideResponse | null;
   error: string | null;
 }
@@ -13,7 +16,13 @@ interface PipelineVisualizerProps {
  * Renders live decision pipeline cards and per-stage details.
  * While loading, cards progress sequentially so operators can track execution.
  */
-export function PipelineVisualizer({ loading, result, error }: PipelineVisualizerProps): JSX.Element {
+export function PipelineVisualizer({
+  loading,
+  executionStatus,
+  latestEvent,
+  result,
+  error,
+}: PipelineVisualizerProps): JSX.Element {
   const [activeIndex, setActiveIndex] = useState(0);
   const [selectedStage, setSelectedStage] = useState<(typeof PIPELINE_STAGES)[number]>(PIPELINE_STAGES[0]);
 
@@ -40,9 +49,11 @@ export function PipelineVisualizer({ loading, result, error }: PipelineVisualize
     <section aria-label="pipeline visualizer" className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">Pipeline Operations View</h2>
-        <span className="text-xs text-muted-foreground">
-          {loading ? "Live execution in progress" : "Latest execution snapshot"}
-        </span>
+        <div className="text-right text-xs text-muted-foreground">
+          <p>{loading ? "Live execution in progress" : "Latest execution snapshot"}</p>
+          <p className="uppercase tracking-wide">state: {executionStatus}</p>
+          {latestEvent ? <p className="max-w-[32rem] truncate">latest event: {latestEvent}</p> : null}
+        </div>
       </div>
       <ol className="grid gap-2 text-xs md:grid-cols-8">
         {cards.map((card, index) => {
