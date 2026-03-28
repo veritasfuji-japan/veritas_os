@@ -61,7 +61,7 @@ def _resolve_log_root() -> Path:
     if encrypted_root:
         log_root = Path(encrypted_root).expanduser()
     elif data_base:
-        log_root = Path(data_base).expanduser() / "logs"
+        log_root = Path(data_base).expanduser()
     elif log_root_env:
         log_root = Path(log_root_env).expanduser()
     else:
