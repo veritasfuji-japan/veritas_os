@@ -32,6 +32,8 @@ secrets.local.json
 
 # --- VERITAS のローカルデータ / ログ ---
 datasets/
+datasets/generated/
+data/runtime/
 scripts/doctor_report.json
 trust_log.json
 trust_log.jsonl
@@ -61,8 +63,16 @@ veritas_os/memory/skills*
 logs/
 reports/
 scripts/logs/
+runtime/**/*
+!runtime/**/.gitkeep
+storage/
+cache/
 *.log
 *.csv
+*.jsonl
+*.sqlite
+*.db
+*.tmp
 
 # バックアップ系
 backups/
@@ -94,6 +104,9 @@ node_modules/
 *.tsbuildinfo
 test-results/
 playwright-report/
+node_modules/.cache/
+dist/
+build/
 
 # Governance runtime artifacts
 veritas_os/api/governance_history.jsonl

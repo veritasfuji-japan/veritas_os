@@ -35,10 +35,23 @@ def _classify_load_exception(exc: OSError) -> str:
 
 
 def _default_memory_dir() -> Path:
-    """Return the project-local memory directory path."""
-    base_dir = Path(__file__).resolve().parents[2]
-    veritas_dir = base_dir / "veritas_os"
-    return veritas_dir / "memory"
+    """Return the runtime-scoped memory directory path."""
+    repo_root = Path(__file__).resolve().parents[2]
+    runtime_root = Path(
+        (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip() or (repo_root / "runtime")
+    ).expanduser()
+    runtime_namespace = (
+        (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
+        or (os.getenv("VERITAS_ENV") or "").strip().lower()
+        or "dev"
+    )
+    if runtime_namespace == "production":
+        runtime_namespace = "prod"
+    elif runtime_namespace in {"testing", "test"}:
+        runtime_namespace = "test"
+    elif runtime_namespace in {"development"}:
+        runtime_namespace = "dev"
+    return runtime_root / runtime_namespace / "memory"
 
 
 def _set_memory_dir_health(
@@ -141,7 +154,6 @@ def _resolve_memory_dir() -> Path:
 
 
 HOME_MEMORY = _resolve_memory_dir()
-HOME_MEMORY.mkdir(mode=0o700, parents=True, exist_ok=True)
 
 BASE = HOME_MEMORY
 
@@ -186,6 +198,7 @@ class MemoryStore:
     """
 
     def __init__(self, dim: int = 384) -> None:
+        BASE.mkdir(mode=0o700, parents=True, exist_ok=True)
         self._lock = threading.RLock()  # リエントラントロック
         self._health_lock = threading.Lock()
         self._health_status: Dict[str, Any] = {
