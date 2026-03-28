@@ -495,3 +495,44 @@ class TestRebindingGuardEdgeCases:
         sec._validate_rebinding_guard(
             "https://example.com", {"8.8.8.8", "1.1.1.1"}
         )
+
+
+class TestIPv6ScopeIdStripping:
+    """IPv6 scope IDs (e.g. %eth0) must be stripped before validation."""
+
+    def test_is_private_or_local_host_blocks_link_local_with_scope_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Link-local with %scope must be detected as non-global, not skipped."""
+        monkeypatch.setattr(
+            sec,
+            "_resolve_host_infos",
+            lambda _h: [(None, None, None, None, ("fe80::1%eth0", 0))],
+        )
+        assert sec._is_private_or_local_host("evil.example.com") is True
+
+    def test_resolve_public_ips_uncached_rejects_link_local_with_scope_id(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """_resolve_public_ips_uncached must reject link-local even with scope."""
+        monkeypatch.setattr(
+            sec.socket,
+            "getaddrinfo",
+            lambda *_a, **_k: [(None, None, None, None, ("fe80::1%25", 0))],
+        )
+        with pytest.raises(ValueError, match="non-global"):
+            sec._resolve_public_ips_uncached("evil.example.com")
+
+    def test_scope_id_stripping_preserves_global_ip(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Global addresses must still pass after scope-ID stripping logic."""
+        monkeypatch.setattr(
+            sec.socket,
+            "getaddrinfo",
+            lambda *_a, **_k: [
+                (None, None, None, None, ("2001:4860:4860::8888", 0)),
+            ],
+        )
+        result = sec._resolve_public_ips_uncached("dns.google")
+        assert "2001:4860:4860::8888" in result

@@ -45,6 +45,11 @@ class MemoryStore:
     def __init__(self, path: Path):
         self.path = path
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # Resolve symlinks after directory creation to prevent TOCTOU
+        # attacks where a symlink could redirect writes outside the
+        # intended directory.
+        resolved_parent = self.path.parent.resolve(strict=True)
+        self.path = resolved_parent / self.path.name
 
         # キャッシュ関連
         self._cache_data: Optional[List[Dict[str, Any]]] = None
