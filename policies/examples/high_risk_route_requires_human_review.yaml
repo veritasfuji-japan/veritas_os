@@ -1,0 +1,35 @@
+schema_version: "1.0"
+policy_id: "policy.high_risk_route.human_review"
+version: "2026.03.28"
+title: "High-risk route requires human review"
+description: "High-risk routes must be routed to human review with explicit evidence and approvers."
+scope:
+  domains: ["governance", "decisioning"]
+  routes: ["/api/decide", "/api/routes_decide"]
+  actors: ["planner", "kernel"]
+conditions:
+  - field: "risk.level"
+    operator: "in"
+    value: ["high", "critical"]
+requirements:
+  required_evidence: ["risk_assessment", "impact_assessment"]
+  required_reviewers: ["governance_officer", "safety_reviewer"]
+  minimum_approval_count: 2
+constraints:
+  - field: "runtime.auto_execute"
+    operator: "eq"
+    value: false
+outcome:
+  decision: "require_human_review"
+  reason: "High-risk routes must be reviewed by authorized humans before execution."
+obligations:
+  - "record_trust_log"
+  - "attach_review_ticket"
+  - "notify_governance_channel"
+test_vectors:
+  - name: "high-risk route blocked for auto execution"
+    input:
+      route: "/api/decide"
+      risk:
+        level: "critical"
+    expected_outcome: "require_human_review"
