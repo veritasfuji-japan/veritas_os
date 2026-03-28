@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .lineage import ContinuationClaimLineage, ClaimStatus
 from .snapshot import (
     ClaimStateSnapshot,
+    DurableConsequence,
     SupportBasis,
     Scope,
     BurdenState,
@@ -147,8 +148,8 @@ class ContinuationRevalidator:
             condition, support_basis, prior_snapshot
         )
 
-        # 5. Determine claim status and reason codes
-        claim_status, reason_codes = self._determine_status(
+        # 5. Determine boundary outcome and reason codes (receipt-first)
+        boundary_status, reason_codes = self._determine_status(
             support_basis=support_basis,
             scope=scope,
             burden_state=burden_state,
@@ -157,7 +158,16 @@ class ContinuationRevalidator:
             prior_status=lineage.current_claim_status,
         )
 
-        # 6. Build snapshot
+        # 5b. Assess durability — determine whether the boundary outcome
+        #     has durably changed standing, scope, or continuation rights.
+        durable_consequence, claim_status = self._assess_durability(
+            boundary_status=boundary_status,
+            scope=scope,
+            headroom_state=headroom_state,
+            revocation_conditions=revocation_conditions,
+        )
+
+        # 6. Build snapshot (durable standing only)
         snapshot = ClaimStateSnapshot(
             claim_lineage_id=lineage.claim_lineage_id,
             prior_snapshot_id=(
@@ -170,20 +180,35 @@ class ContinuationRevalidator:
             law_version=self._law_pack.law_version_id,
             revocation_conditions=revocation_conditions,
             claim_status=claim_status,
+            durable_consequence=durable_consequence,
         )
 
-        # 7. Map claim status to revalidation status/outcome
-        reval_status = self._map_revalidation_status(claim_status)
-        reval_outcome = self._map_revalidation_outcome(claim_status)
+        # 7. Map boundary outcome to revalidation status/outcome
+        reval_status = self._map_revalidation_status(boundary_status)
+        reval_outcome = self._map_revalidation_outcome(boundary_status)
 
         # 8. Determine divergence and advisory refusal
-        should_refuse = claim_status in (
+        should_refuse = boundary_status in (
             ClaimStatus.HALTED,
             ClaimStatus.REVOKED,
         )
-        divergence = claim_status != ClaimStatus.LIVE
+        divergence = boundary_status != ClaimStatus.LIVE
 
-        # 9. Build receipt
+        # 8b. Provisional vs durable assessment
+        is_durable = durable_consequence is not None
+        if boundary_status == ClaimStatus.LIVE:
+            prov_vs_dur = None
+        elif is_durable:
+            prov_vs_dur = "durable_promotable"
+        else:
+            prov_vs_dur = "provisional"
+
+        # 8c. Reopening eligibility (narrowed-specific)
+        reopening = self._assess_reopening_eligible(
+            boundary_status, scope, is_durable
+        )
+
+        # 9. Build receipt (proof-bearing boundary adjudication witness)
         receipt = ContinuationReceipt(
             claim_lineage_id=lineage.claim_lineage_id,
             snapshot_id=snapshot.snapshot_id,
@@ -202,6 +227,10 @@ class ContinuationRevalidator:
             burden_headroom_digest=self._digest_burden_headroom(
                 burden_state, headroom_state
             ),
+            boundary_outcome=boundary_status.value,
+            is_durable_promotion=is_durable,
+            provisional_vs_durable=prov_vs_dur,
+            reopening_eligible=reopening,
         )
 
         # 10. Coherence guard: snapshot and receipt must agree on status
@@ -429,6 +458,91 @@ class ContinuationRevalidator:
         return ClaimStatus.LIVE, reason_codes
 
     # ------------------------------------------------------------------
+    # Durability assessment (receipt-first boundary rule)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _assess_durability(
+        *,
+        boundary_status: ClaimStatus,
+        scope: Scope,
+        headroom_state: HeadroomState,
+        revocation_conditions: List[RevocationCondition],
+    ) -> Tuple[Optional[DurableConsequence], ClaimStatus]:
+        """Decide whether a boundary outcome has durable state consequence.
+
+        Receipt-first rule: any boundary outcome that has not yet durably
+        changed lawful standing, available scope, continuation rights,
+        onward carryability, or continuation class remains receipt-only.
+
+        Returns ``(durable_consequence, state_claim_status)``.
+        When the outcome is receipt-only, ``durable_consequence`` is None
+        and ``state_claim_status`` falls back to LIVE (standing preserved).
+        """
+        # LIVE and REVOKED are inherently state-level.
+        if boundary_status == ClaimStatus.LIVE:
+            return None, ClaimStatus.LIVE
+
+        if boundary_status == ClaimStatus.REVOKED:
+            return DurableConsequence(
+                has_irreversible_revocation=True,
+                promotion_reason="irreversible support loss",
+            ), ClaimStatus.REVOKED
+
+        # HALTED: durable when headroom has irreversibly collapsed.
+        if boundary_status == ClaimStatus.HALTED:
+            if headroom_state.remaining <= headroom_state.threshold_suspension:
+                return DurableConsequence(
+                    has_durable_halt=True,
+                    promotion_reason="headroom irreversibly collapsed",
+                ), ClaimStatus.HALTED
+            # Runtime interruption without irreversible collapse → receipt-only.
+            return None, ClaimStatus.LIVE
+
+        # NARROWED: durable when scope reduction is not re-openable.
+        if boundary_status == ClaimStatus.NARROWED:
+            if scope.restricted_action_classes:
+                return DurableConsequence(
+                    has_durable_scope_reduction=True,
+                    promotion_reason="durable scope restriction present",
+                ), ClaimStatus.NARROWED
+            return None, ClaimStatus.LIVE
+
+        # DEGRADED: receipt-first by default in Phase-1.
+        # Burden pressure is recoverable; not a durable standing change.
+        if boundary_status == ClaimStatus.DEGRADED:
+            return None, ClaimStatus.DEGRADED
+
+        # ESCALATED: receipt-first by default in Phase-1.
+        # Escalation requirement is a boundary condition, not a durable
+        # standing transformation — unless it has already locked scope.
+        if boundary_status == ClaimStatus.ESCALATED:
+            return None, ClaimStatus.ESCALATED
+
+        # Unrecognised status — conservative: treat as state-level.
+        return None, boundary_status
+
+    @staticmethod
+    def _assess_reopening_eligible(
+        boundary_status: ClaimStatus,
+        scope: Scope,
+        is_durable: bool,
+    ) -> bool:
+        """Reopening test for narrowed outcomes.
+
+        "If the immediate boundary condition resolves, and standing /
+        burden / authority / continuity basis have no deeper change,
+        should the prior scope width reopen?"
+
+        - Yes → receipt-level narrowing (provisional, reopening eligible)
+        - No  → durable narrowing (promoted to state, not reopenable)
+        """
+        if boundary_status != ClaimStatus.NARROWED:
+            return True  # default: non-narrowed outcomes are not scope-locked
+        # If the narrowing is durable, prior width cannot reopen.
+        return not is_durable
+
+    # ------------------------------------------------------------------
     # Status mapping (ClaimStatus → RevalidationStatus / Outcome)
     # ------------------------------------------------------------------
 
@@ -491,8 +605,14 @@ class ContinuationRevalidator:
     ) -> None:
         """Ensure snapshot and receipt do not contradict each other.
 
-        Prevents: runtime claims standing while receipt shows lawful
-        continuity loss (strong-coupling requirement).
+        Receipt-first coherence rules:
+          - REVOKED is always durable: bi-directional agreement required.
+          - HALTED in snapshot → receipt must also show HALTED (state
+            cannot claim durable halt without receipt evidence).
+          - HALTED in receipt → snapshot may be LIVE (receipt-first:
+            halt can be receipt-only when not durable).  When the halt IS
+            promoted to state, ``is_durable_promotion`` must be True.
+          - snapshot_id must match.
         """
         # snapshot.claim_status == REVOKED ↔ receipt shows REVOKED
         if snapshot.claim_status == ClaimStatus.REVOKED:
@@ -508,18 +628,23 @@ class ContinuationRevalidator:
                     f"snapshot status is {snapshot.claim_status}"
                 )
 
-        # snapshot.claim_status == HALTED ↔ receipt shows HALTED
+        # snapshot.claim_status == HALTED → receipt must also show HALTED
+        # (state cannot claim halt without receipt evidence)
         if snapshot.claim_status == ClaimStatus.HALTED:
             if receipt.revalidation_status != RevalidationStatus.HALTED:
                 raise ValueError(
                     "Coherence violation: snapshot is HALTED but "
                     f"receipt status is {receipt.revalidation_status}"
                 )
+
+        # receipt shows HALTED but snapshot is not HALTED: this is valid
+        # under receipt-first semantics (halt is receipt-only, not durable).
+        # However, if receipt claims durable promotion, snapshot must agree.
         if receipt.revalidation_status == RevalidationStatus.HALTED:
-            if snapshot.claim_status != ClaimStatus.HALTED:
+            if receipt.is_durable_promotion and snapshot.claim_status != ClaimStatus.HALTED:
                 raise ValueError(
-                    "Coherence violation: receipt is HALTED but "
-                    f"snapshot status is {snapshot.claim_status}"
+                    "Coherence violation: receipt claims durable HALTED "
+                    f"promotion but snapshot status is {snapshot.claim_status}"
                 )
 
         # Shared snapshot_id

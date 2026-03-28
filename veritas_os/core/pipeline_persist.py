@@ -209,6 +209,10 @@ def persist_audit_log(
             audit_entry["continuation_local_step_result"] = _c_rcpt.get("local_step_result")
             audit_entry["continuation_divergence_flag"] = _c_rcpt.get("divergence_flag")
             audit_entry["continuation_reason_codes"] = _c_rcpt.get("revalidation_reason_codes")
+            # Proof-bearing receipt fields (receipt-first boundary semantics)
+            audit_entry["continuation_boundary_outcome"] = _c_rcpt.get("boundary_outcome")
+            audit_entry["continuation_is_durable_promotion"] = _c_rcpt.get("is_durable_promotion")
+            audit_entry["continuation_provisional_vs_durable"] = _c_rcpt.get("provisional_vs_durable")
 
         audit_entry = redact_payload(audit_entry)
         append_trust_log_fn(audit_entry)
