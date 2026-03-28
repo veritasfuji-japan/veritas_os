@@ -208,6 +208,29 @@ class ContinuationRevalidator:
             boundary_status, scope, is_durable
         )
 
+        # 8d. Explicit boundary occurrence flags
+        halt_occurred = boundary_status == ClaimStatus.HALTED
+        narrowing_occurred = boundary_status == ClaimStatus.NARROWED
+
+        # 8e. Halt classification (when halt occurred)
+        halt_classification = self._classify_halt(
+            boundary_status, headroom_state, is_durable,
+        ) if halt_occurred else None
+
+        # 8f. Granular divergence detail
+        divergence_detail = self._compute_divergence_detail(
+            boundary_status=boundary_status,
+            is_durable=is_durable,
+            local_step_result=condition.prior_decision_status,
+        )
+
+        # 8g. Boundary predicates and prior state reference
+        boundary_predicates = [rc.value for rc in reason_codes]
+        prior_state_ref = (
+            prior_snapshot.snapshot_id if prior_snapshot
+            else lineage.latest_snapshot_id
+        )
+
         # 9. Build receipt (proof-bearing boundary adjudication witness)
         receipt = ContinuationReceipt(
             claim_lineage_id=lineage.claim_lineage_id,
@@ -231,6 +254,12 @@ class ContinuationRevalidator:
             is_durable_promotion=is_durable,
             provisional_vs_durable=prov_vs_dur,
             reopening_eligible=reopening,
+            halt_occurred=halt_occurred,
+            narrowing_occurred=narrowing_occurred,
+            halt_classification=halt_classification,
+            divergence_detail=divergence_detail,
+            boundary_predicates=boundary_predicates,
+            prior_state_ref=prior_state_ref,
         )
 
         # 10. Coherence guard: snapshot and receipt must agree on status
@@ -543,6 +572,84 @@ class ContinuationRevalidator:
         return not is_durable
 
     # ------------------------------------------------------------------
+    # Halt classification
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _classify_halt(
+        boundary_status: ClaimStatus,
+        headroom_state: HeadroomState,
+        is_durable: bool,
+    ) -> Optional[str]:
+        """Classify a halt into one of four categories.
+
+        Returns one of:
+          - ``"durable_state_transformation"`` — headroom irreversibly collapsed
+          - ``"bounded_interruption"``         — headroom breach, not collapsed
+          - ``"safety_pause"``                 — approaching suspension threshold
+          - ``"temporary_refusal"``            — other non-durable halt
+          - ``None`` if no halt occurred
+        """
+        if boundary_status != ClaimStatus.HALTED:
+            return None
+        if is_durable:
+            return "durable_state_transformation"
+        # Non-durable halt — differentiate by headroom proximity.
+        if headroom_state.remaining <= headroom_state.threshold_escalation:
+            return "safety_pause"
+        if headroom_state.remaining < 1.0:
+            return "bounded_interruption"
+        return "temporary_refusal"
+
+    # ------------------------------------------------------------------
+    # Divergence detail computation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _compute_divergence_detail(
+        *,
+        boundary_status: ClaimStatus,
+        is_durable: bool,
+        local_step_result: Optional[str],
+    ) -> Optional[str]:
+        """Compute granular divergence classification.
+
+        Distinguishes the specific combination of local-step outcome and
+        boundary outcome for precise audit / replay categorisation.
+        """
+        if boundary_status == ClaimStatus.LIVE:
+            # No divergence from live boundary.
+            # But local step might have failed while continuation is live.
+            if local_step_result and local_step_result.lower() in (
+                "deny", "block", "reject", "fail",
+            ):
+                return "local_fail_continuation_live"
+            return None
+
+        # Local step assumed passing unless explicitly denied
+        local_pass = not (
+            local_step_result
+            and local_step_result.lower() in ("deny", "block", "reject", "fail")
+        )
+
+        if not local_pass:
+            return "local_fail_continuation_live" if boundary_status == ClaimStatus.LIVE else None
+
+        # Local pass + non-LIVE boundary
+        if boundary_status == ClaimStatus.REVOKED:
+            return "local_pass_revoked"
+        if boundary_status == ClaimStatus.HALTED:
+            return "local_pass_durable_halt" if is_durable else "local_pass_receipt_halt"
+        if boundary_status == ClaimStatus.NARROWED:
+            return "local_pass_durable_narrowing" if is_durable else "local_pass_receipt_narrowing"
+        if boundary_status == ClaimStatus.DEGRADED:
+            return "local_pass_receipt_degraded"
+        if boundary_status == ClaimStatus.ESCALATED:
+            return "local_pass_receipt_escalated"
+
+        return None
+
+    # ------------------------------------------------------------------
     # Status mapping (ClaimStatus → RevalidationStatus / Outcome)
     # ------------------------------------------------------------------
 
@@ -651,6 +758,35 @@ class ContinuationRevalidator:
         if receipt.snapshot_id != snapshot.snapshot_id:
             raise ValueError(
                 "Coherence violation: receipt.snapshot_id != snapshot.snapshot_id"
+            )
+
+        # State-live + receipt-loss contradiction prevention:
+        # If the receipt's boundary_outcome indicates lawful continuity
+        # loss (REVOKED) but snapshot claims standing is LIVE, that is a
+        # contradiction — REVOKED must always be durable-promoted.
+        if (
+            receipt.boundary_outcome == ClaimStatus.REVOKED.value
+            and snapshot.claim_status == ClaimStatus.LIVE
+        ):
+            raise ValueError(
+                "Coherence violation: receipt boundary_outcome is REVOKED "
+                "but snapshot claim_status is LIVE — lawful continuity "
+                "loss must always be promoted to durable state"
+            )
+
+        # Durable promotion consistency for any boundary outcome:
+        # If receipt says durable promotion occurred, the snapshot's
+        # claim_status must not be LIVE (it should reflect the promoted
+        # outcome), UNLESS the boundary outcome itself is LIVE.
+        if (
+            receipt.is_durable_promotion
+            and snapshot.claim_status == ClaimStatus.LIVE
+            and receipt.boundary_outcome != ClaimStatus.LIVE.value
+        ):
+            raise ValueError(
+                "Coherence violation: receipt claims durable promotion "
+                f"for boundary_outcome={receipt.boundary_outcome} but "
+                "snapshot claim_status is LIVE"
             )
 
 

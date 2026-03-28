@@ -213,6 +213,11 @@ def persist_audit_log(
             audit_entry["continuation_boundary_outcome"] = _c_rcpt.get("boundary_outcome")
             audit_entry["continuation_is_durable_promotion"] = _c_rcpt.get("is_durable_promotion")
             audit_entry["continuation_provisional_vs_durable"] = _c_rcpt.get("provisional_vs_durable")
+            # Receipt-first enrichment fields
+            audit_entry["continuation_halt_occurred"] = _c_rcpt.get("halt_occurred")
+            audit_entry["continuation_narrowing_occurred"] = _c_rcpt.get("narrowing_occurred")
+            audit_entry["continuation_halt_classification"] = _c_rcpt.get("halt_classification")
+            audit_entry["continuation_divergence_detail"] = _c_rcpt.get("divergence_detail")
 
         audit_entry = redact_payload(audit_entry)
         append_trust_log_fn(audit_entry)
