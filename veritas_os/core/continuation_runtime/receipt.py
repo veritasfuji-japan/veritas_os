@@ -127,6 +127,47 @@ class ContinuationReceipt:
     reopening_eligible: bool = True
 
     # ------------------------------------------------------------------
+    # Explicit boundary occurrence flags (receipt-first enrichment)
+    # ------------------------------------------------------------------
+
+    # Did a halt occur at the boundary (regardless of durability)?
+    halt_occurred: bool = False
+
+    # Did narrowing occur at the boundary (regardless of durability)?
+    narrowing_occurred: bool = False
+
+    # Halt classification — identifies the nature of the halt so that
+    # downstream consumers can distinguish temporary interruptions from
+    # durable state transformations without re-parsing the full receipt.
+    #   "bounded_interruption"        — headroom breach, not collapsed
+    #   "temporary_refusal"           — refusal to proceed, recoverable
+    #   "safety_pause"                — pause pending revalidation
+    #   "durable_state_transformation" — irreversible headroom collapse
+    #   None when no halt occurred.
+    halt_classification: Optional[str] = None
+
+    # Granular divergence detail — identifies the specific combination
+    # of local-step outcome and boundary outcome so that auditors and
+    # replay engines can precisely categorise the divergence.
+    #   "local_pass_receipt_halt"           — local ok, receipt-level halt
+    #   "local_pass_receipt_narrowing"      — local ok, receipt-level narrowing
+    #   "local_pass_durable_narrowing"      — local ok, durable scope reduction
+    #   "local_pass_durable_halt"           — local ok, durable halt consequence
+    #   "local_pass_revoked"                — local ok, revoked
+    #   "local_pass_receipt_degraded"       — local ok, receipt-level degraded
+    #   "local_pass_receipt_escalated"      — local ok, receipt-level escalated
+    #   "local_fail_continuation_live"      — local fail, continuation still live
+    #   None when no divergence.
+    divergence_detail: Optional[str] = None
+
+    # The predicates (reason codes as strings) under which the boundary
+    # determination was reached — "under what predicates".
+    boundary_predicates: List[str] = field(default_factory=list)
+
+    # Reference to the prior snapshot against which adjudication ran.
+    prior_state_ref: Optional[str] = None
+
+    # ------------------------------------------------------------------
     # Serialization helpers
     # ------------------------------------------------------------------
 
@@ -155,6 +196,12 @@ class ContinuationReceipt:
             "is_durable_promotion": self.is_durable_promotion,
             "provisional_vs_durable": self.provisional_vs_durable,
             "reopening_eligible": self.reopening_eligible,
+            "halt_occurred": self.halt_occurred,
+            "narrowing_occurred": self.narrowing_occurred,
+            "halt_classification": self.halt_classification,
+            "divergence_detail": self.divergence_detail,
+            "boundary_predicates": list(self.boundary_predicates),
+            "prior_state_ref": self.prior_state_ref,
         }
         return d
 
