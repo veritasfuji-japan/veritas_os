@@ -26,7 +26,6 @@ Compatibility guidance:
 from __future__ import annotations
 
 import logging
-import re
 import subprocess as _subprocess
 import time
 import uuid
@@ -115,6 +114,10 @@ from .kernel_qa import (
     handle_knowledge_qa as _handle_knowledge_qa,
     SIMPLE_QA_PATTERNS,
     AGI_BLOCK_KEYWORDS,
+)
+from .kernel_intent import (
+    detect_intent as _detect_intent_impl,
+    gen_options_by_intent as _gen_options_by_intent_impl,
 )
 
 reason_core: ReasonCapability | None = (
@@ -224,51 +227,21 @@ def _safe_load_persona() -> Dict[str, Any]:
 
 
 # ============================================================
-# Intent 検出（事前コンパイル済み正規表現）
+# Intent ヒューリスティック（helper module へ分離）
+# - kernel.py: 決定エンジン本体の責務（選択・ゲート・理由生成）
+# - kernel_intent.py: 非コア寄りの intent 判定と候補テンプレート生成
+# - pipeline.py: 入力準備と副作用オーケストレーション
 # ============================================================
-
-INTENT_PATTERNS = {
-    "weather": re.compile(r"(天気|気温|降水|雨|晴れ|weather|forecast)", re.I),
-    "health": re.compile(r"(疲れ|だる|体調|休む|回復|睡眠|寝|サウナ)", re.I),
-    "learn": re.compile(r"(とは|仕組み|なぜ|how|why|教えて|違い|比較)", re.I),
-    "plan": re.compile(r"(計画|進め|やるべき|todo|最小ステップ|スケジュール|plan)", re.I),
-}
-
-INTENT_OPTION_TEMPLATES = {
-    "weather": [
-        "天気アプリ/サイトで明日の予報を確認する",
-        "降水確率が高い時間にリマインドを設定する",
-        "傘・レインウェア・防水靴を準備する",
-    ],
-    "health": [
-        "今日は休息し回復を最優先にする",
-        "15分の軽い散歩で血流を上げる",
-        "短時間サウナ＋十分な水分補給を行う",
-    ],
-    "learn": [
-        "一次情報（公式/論文）を調べる",
-        "要点を3行に要約する",
-        "学んだことを1つだけ行動に落とす",
-    ],
-    "plan": [
-        "最小ステップで前進する",
-        "情報収集を優先する",
-        "今日は休息し回復に充てる",
-    ],
-}
 
 
 def _detect_intent(q: str) -> str:
-    q = (q or "").strip().lower()
-    for name, pattern in INTENT_PATTERNS.items():
-        if pattern.search(q):
-            return name
-    return "plan"
+    """Backward-compatible wrapper for intent detection heuristics."""
+    return _detect_intent_impl(q)
 
 
 def _gen_options_by_intent(intent: str) -> List[OptionDict]:
-    templates = INTENT_OPTION_TEMPLATES.get(intent, INTENT_OPTION_TEMPLATES["plan"])
-    return [_mk_option(title) for title in templates]
+    """Backward-compatible wrapper for intent option templates."""
+    return _gen_options_by_intent_impl(intent)
 
 
 # ============================================================

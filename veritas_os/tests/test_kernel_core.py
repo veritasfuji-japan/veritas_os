@@ -113,6 +113,25 @@ def test_detect_intent_basic():
     assert kernel._detect_intent("今日やるべきことを整理したい") == "plan"
 
 
+def test_intent_wrappers_delegate_to_helper(monkeypatch):
+    """kernel の互換ラッパが helper 実装へ委譲することを確認。"""
+
+    monkeypatch.setattr(kernel, "_detect_intent_impl", lambda q: "learn")
+    assert kernel._detect_intent("任意の質問") == "learn"
+
+    called = {"intent": None}
+
+    def _fake_gen_options(intent):
+        called["intent"] = intent
+        return [{"id": "x", "title": "T", "description": "", "score": 1.0}]
+
+    monkeypatch.setattr(kernel, "_gen_options_by_intent_impl", _fake_gen_options)
+    opts = kernel._gen_options_by_intent("weather")
+
+    assert called["intent"] == "weather"
+    assert opts[0]["title"] == "T"
+
+
 def test_gen_options_by_intent_and_filter_weather():
     # weather intent のデフォルトオプション
     opts = kernel._gen_options_by_intent("weather")

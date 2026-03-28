@@ -5,6 +5,7 @@ VERITAS Kernel - QA処理モジュール
 
 Simple QA と Knowledge QA の検出・ハンドリングを担当。
 責任分界: QA系の早期リターン処理に特化。
+kernel.py は decision 本体、pipeline.py はオーケストレーションを担当。
 
 主要関数:
 - detect_simple_qa: 時刻/曜日/日付などの単純QAを検出
