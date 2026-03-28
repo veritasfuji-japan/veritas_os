@@ -8,11 +8,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# リポジトリルート: .../veritas_clean_test2/veritas_os
+# リポジトリルート: .../<repo>/veritas_os
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # scripts ディレクトリ
 SCRIPTS_DIR = REPO_ROOT / "scripts"
+PROJECT_ROOT = REPO_ROOT.parent
 
 # ---- ログ周り ----
 
@@ -60,9 +61,13 @@ def _resolve_log_root() -> Path:
     if encrypted_root:
         log_root = Path(encrypted_root).expanduser()
     elif data_base:
-        log_root = Path(data_base).expanduser()
+        log_root = Path(data_base).expanduser() / "logs"
+    elif log_root_env:
+        log_root = Path(log_root_env).expanduser()
     else:
-        log_root = Path(log_root_env or str(SCRIPTS_DIR / "logs")).expanduser()
+        runtime_namespace = _resolve_runtime_namespace()
+        runtime_root = _resolve_runtime_root()
+        log_root = runtime_root / runtime_namespace / "logs"
 
     # ★ セキュリティ修正: パストラバーサル・機密ディレクトリへの書き込みを防止
     _validate_resolved_path(log_root)
@@ -83,6 +88,35 @@ def _resolve_log_root() -> Path:
             ) from exc
 
     return log_root
+
+
+def _resolve_runtime_namespace() -> str:
+    """Return runtime namespace for data separation (dev/test/demo/prod)."""
+    explicit = (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
+    if explicit:
+        return explicit
+
+    env_profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
+    mapping = {
+        "production": "prod",
+        "prod": "prod",
+        "staging": "dev",
+        "stage": "dev",
+        "development": "dev",
+        "dev": "dev",
+        "test": "test",
+        "testing": "test",
+        "demo": "demo",
+    }
+    return mapping.get(env_profile, "dev")
+
+
+def _resolve_runtime_root() -> Path:
+    """Resolve repository runtime root with optional environment override."""
+    env_root = (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip()
+    if env_root:
+        return Path(env_root).expanduser()
+    return PROJECT_ROOT / "runtime"
 
 
 def _ensure_secure_permissions(path: Path) -> None:
@@ -115,10 +149,10 @@ SHADOW_DIR = DASH_DIR
 DATASET_DIR = DASH_DIR
 
 # ---- ValueCore 用データ ----
-
-# プロジェクト直下 .../veritas_clean_test2/data
-PROJECT_ROOT = REPO_ROOT.parent
-DATA_DIR = PROJECT_ROOT / "data"
+RUNTIME_NAMESPACE = _resolve_runtime_namespace()
+RUNTIME_ROOT = _resolve_runtime_root()
+RUNTIME_DIR = RUNTIME_ROOT / RUNTIME_NAMESPACE
+DATA_DIR = RUNTIME_DIR / "data"
 
 # ValueCore のEMA等
 VAL_JSON = DATA_DIR / "value_stats.json"
@@ -148,6 +182,9 @@ __all__ = [
     "SHADOW_DIR",
     "DATASET_DIR",
     "PROJECT_ROOT",
+    "RUNTIME_NAMESPACE",
+    "RUNTIME_ROOT",
+    "RUNTIME_DIR",
     "DATA_DIR",
     "VAL_JSON",
     "META_LOG",

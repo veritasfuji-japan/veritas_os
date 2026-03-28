@@ -17,6 +17,7 @@ VERITAS WorldOS - Unified World State Management
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import math
@@ -159,7 +160,21 @@ def _resolve_data_dir() -> Path:
         "VERITAS_HOME",
         "VERITAS_PATH",
     )
-    path = Path(base if base else "~/veritas").expanduser()
+    if base:
+        path = Path(base).expanduser()
+    else:
+        runtime_root = Path(
+            (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip()
+            or (Path(__file__).resolve().parents[2] / "runtime")
+        ).expanduser()
+        runtime_namespace = (
+            (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
+            or (os.getenv("VERITAS_ENV") or "").strip().lower()
+            or "dev"
+        )
+        if runtime_namespace == "production":
+            runtime_namespace = "prod"
+        path = runtime_root / runtime_namespace / "data"
     try:
         return _validate_path_safety(path, "data directory")
     except ValueError:
@@ -171,7 +186,18 @@ def _resolve_data_dir() -> Path:
 
 def _resolve_world_path() -> Path:
     """Resolve the world state file path with security validation."""
-    default_path = Path.home() / "veritas" / "world_state.json"
+    runtime_root = Path(
+        (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip()
+        or (Path(__file__).resolve().parents[2] / "runtime")
+    ).expanduser()
+    runtime_namespace = (
+        (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
+        or (os.getenv("VERITAS_ENV") or "").strip().lower()
+        or "dev"
+    )
+    if runtime_namespace == "production":
+        runtime_namespace = "prod"
+    default_path = runtime_root / runtime_namespace / "data" / "world_state.json"
 
     # 1) ファイルパスを直指定できる系を最優先
     explicit = (
@@ -371,6 +397,27 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _current_repo_fingerprint() -> str:
+    """Return a stable fingerprint derived from the current repository root.
+
+    The fingerprint is used to prevent cross-clone reuse when multiple
+    repositories accidentally point to the same runtime world-state path.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    canonical = str(repo_root.resolve())
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def _build_fresh_world_state() -> Dict[str, Any]:
+    """Return a fresh world-state payload with current metadata."""
+    state = deepcopy(DEFAULT_WORLD)
+    now = _now_iso()
+    state["meta"]["created_at"] = now
+    state["meta"]["repo_fingerprint"] = _current_repo_fingerprint()
+    state["updated_at"] = now
+    return _ensure_v2_shape(state)
+
+
 # _clip01 は utils.py からインポート
 
 
@@ -386,6 +433,7 @@ def _ensure_v2_shape(state: dict) -> dict:
     meta.setdefault("version", "2.0")
     meta.setdefault("created_at", _now_iso())
     meta.setdefault("last_users", {})
+    meta.setdefault("repo_fingerprint", _current_repo_fingerprint())
 
     veritas = state.setdefault("veritas", {})
     veritas.setdefault("progress", 0.0)
@@ -560,16 +608,25 @@ def _load_world() -> Dict[str, Any]:
                     "history": {"decisions": [], "transitions": []},
                 }
 
-            return _ensure_v2_shape(data)
+            normalized = _ensure_v2_shape(data)
+            current_fp = _current_repo_fingerprint()
+            stored_fp = str(
+                ((normalized.get("meta") or {}).get("repo_fingerprint") or "")
+            ).strip()
+            if stored_fp != current_fp:
+                logger.warning(
+                    "World state fingerprint mismatch detected (stored=%s, current=%s). "
+                    "Resetting state to prevent cross-clone contamination.",
+                    stored_fp or "<missing>",
+                    current_fp,
+                )
+                return _build_fresh_world_state()
+            return normalized
 
-        default_state = deepcopy(DEFAULT_WORLD)
-        default_state["meta"]["created_at"] = _now_iso()
-        return _ensure_v2_shape(default_state)
+        return _build_fresh_world_state()
 
     except Exception:
-        default_state = deepcopy(DEFAULT_WORLD)
-        default_state["meta"]["created_at"] = _now_iso()
-        return _ensure_v2_shape(default_state)
+        return _build_fresh_world_state()
 
 
 def _save_world(world: Dict[str, Any]) -> None:
@@ -796,7 +853,9 @@ def update_from_decision(
             metrics["active_plan_done"] = int(done or metrics.get("active_plan_done", 0))
 
         last["query"] = query
-        last["chosen_title"] = (chosen or {}).get("title") or str(chosen)[:80]
+        chosen_payload = chosen or {}
+        raw_title = chosen_payload.get("title") or chosen_payload.get("name")
+        last["chosen_title"] = str(raw_title).strip() if raw_title else ""
         last["decision_status"] = gate.get("decision_status") or "unknown"
         proj["last_decision_at"] = _now_iso()
 
@@ -1075,8 +1134,6 @@ __all__ = [
     "_ensure_project",   # ✅ tests expect
     "_world_file_lock",  # テスト・外部利用向け
 ]
-
-
 
 
 
