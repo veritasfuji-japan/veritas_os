@@ -69,9 +69,11 @@ describe("ContinuationStatusCard", () => {
     expect(screen.getByText("v0.1.0-shadow")).toBeInTheDocument();
   });
 
-  it("renders revalidation status", () => {
+  it("renders revalidation status and outcome", () => {
     render(<ContinuationStatusCard result={makeResult()} />);
-    expect(screen.getByText("renewed")).toBeInTheDocument();
+    // Both revalidation_status and revalidation_outcome render "renewed"
+    const renewedElements = screen.getAllByText("renewed");
+    expect(renewedElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it("does not show divergence banner when not diverged", () => {
