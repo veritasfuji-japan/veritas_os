@@ -706,6 +706,38 @@ async def run_decide_pipeline(
     )
 
     # =================================================================
+    # Stage 5.9: Continuation revalidation (shadow / sidecar)
+    # =================================================================
+    # Runs *before* step-level merit evaluation (FUJI / gate).
+    # Feature flag off → zero computation, zero side effects.
+    try:
+        from .config import capability_cfg as _cap_cfg
+        if _cap_cfg.enable_continuation_runtime:
+            from .continuation_runtime.revalidator import (
+                run_continuation_revalidation_shadow as _run_cont_reval,
+            )
+            _cont_lineage, _cont_snap, _cont_rcpt = _run_cont_reval(
+                chain_id=ctx.body.get("chain_id", ctx.request_id),
+                step_index=ctx.body.get("step_index", 0),
+                query=ctx.query,
+                context=ctx.context,
+                prior_decision_status=ctx.decision_status,
+            )
+            ctx.continuation_snapshot = _cont_snap.to_dict()
+            ctx.continuation_receipt = _cont_rcpt.to_dict()
+            logger.debug(
+                "[continuation] shadow revalidation: status=%s divergence=%s",
+                _cont_snap.claim_status.value,
+                _cont_rcpt.divergence_flag,
+            )
+    except Exception as _cont_err:
+        _stage_failures.append(f"continuation_shadow:{type(_cont_err).__name__}")
+        logger.warning(
+            "[pipeline] continuation shadow revalidation failed (best-effort): %s",
+            _cont_err,
+        )
+
+    # =================================================================
     # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
     # =================================================================
     stage_fuji_precheck(ctx)

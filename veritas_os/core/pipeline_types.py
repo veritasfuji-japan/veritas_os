@@ -90,6 +90,10 @@ class PipelineContext:
     rejection_reason: Optional[str] = None
     modifications: List[Any] = field(default_factory=list)
 
+    # --- Continuation runtime (shadow / observe only) ---
+    continuation_snapshot: Optional[Dict[str, Any]] = None
+    continuation_receipt: Optional[Dict[str, Any]] = None
+
     # --- Stage flags ---
     _should_run_web: bool = False
 
