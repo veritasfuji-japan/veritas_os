@@ -12,6 +12,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
     chatMessages: [],
     query: "",
     loading: false,
+    executionStatus: "idle",
     error: null,
     setQuery: vi.fn(),
     runDecision: vi.fn().mockResolvedValue(undefined),

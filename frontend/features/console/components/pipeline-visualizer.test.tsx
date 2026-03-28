@@ -15,7 +15,7 @@ describe("PipelineVisualizer", () => {
   });
 
   it("renders all pipeline stages and supports stage drilldown", () => {
-    render(<PipelineVisualizer loading={false} result={null} error={null} />);
+    render(<PipelineVisualizer loading={false} executionStatus="idle" latestEvent={null} result={null} error={null} />);
 
     expect(screen.getByText("Pipeline Operations View")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /1\. Input/i })).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe("PipelineVisualizer", () => {
     vi.useFakeTimers();
     const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
 
-    const { unmount } = render(<PipelineVisualizer loading result={null} error={null} />);
+    const { unmount } = render(<PipelineVisualizer loading executionStatus="submitting" latestEvent={null} result={null} error={null} />);
 
     act(() => {
       vi.advanceTimersByTime(1300);

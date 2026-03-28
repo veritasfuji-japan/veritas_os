@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type DecideResponse, isDecideResponse } from "@veritas/types";
-import { veritasFetch } from "../../../lib/api-client";
+import { ApiError, classifyHttpStatus, veritasFetchWithOptions } from "../../../lib/api-client";
 import { toAssistantMessage } from "../analytics/utils";
-import { type ChatMessage } from "../types";
+import { type ChatMessage, type ConsoleExecutionStatus } from "../types";
 import { type LocaleKey } from "../../../locales/ja";
 
 interface UseDecideParams {
@@ -17,11 +17,14 @@ interface UseDecideParams {
 interface UseDecideResult {
   loading: boolean;
   error: string | null;
+  executionStatus: ConsoleExecutionStatus;
+  latestEvent: string | null;
   setError: (error: string | null) => void;
+  notifySseActivity: (eventSummary: string) => void;
   runDecision: (nextQuery?: string) => Promise<void>;
 }
 
-const DECIDE_TIMEOUT_MS = 20_000;
+const DECIDE_TIMEOUT_MS = 45_000;
 
 /**
  * Encapsulates decide API communication and user-facing error handling.
@@ -39,6 +42,8 @@ export function useDecide({
 }: UseDecideParams): UseDecideResult {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [executionStatus, setExecutionStatus] = useState<ConsoleExecutionStatus>("idle");
+  const [latestEvent, setLatestEvent] = useState<string | null>(null);
   const activeControllerRef = useRef<AbortController | null>(null);
   const requestSequenceRef = useRef(0);
   const latestRequestIdRef = useRef(0);
@@ -51,13 +56,20 @@ export function useDecide({
     };
   }, []);
 
+  const notifySseActivity = useCallback((eventSummary: string): void => {
+    setLatestEvent(eventSummary);
+    setExecutionStatus((current) => (current === "submitting" || current === "streaming" ? "streaming" : current));
+  }, []);
+
   const runDecision = async (nextQuery?: string): Promise<void> => {
     const queryToUse = (nextQuery ?? query).trim();
     setQuery(queryToUse);
     setError(null);
+    setLatestEvent(null);
 
     if (!queryToUse) {
       setError(tk("queryRequired"));
+      setExecutionStatus("failed");
       return;
     }
 
@@ -70,20 +82,23 @@ export function useDecide({
     latestRequestIdRef.current = requestId;
     const isLatestRequest = (): boolean => latestRequestIdRef.current === requestId;
     setLoading(true);
+    setExecutionStatus("submitting");
 
     try {
-      const response = await veritasFetch(
+      const response = await veritasFetchWithOptions(
         "/api/veritas/v1/decide",
-        {
-          method: "POST",
-          signal: controller.signal,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: queryToUse,
-            context: {},
-          }),
+        { 
+          init: {
+            method: "POST",
+            signal: controller.signal,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: queryToUse,
+              context: {},
+            }),
+          },
+          timeoutMs: DECIDE_TIMEOUT_MS,
         },
-        DECIDE_TIMEOUT_MS,
       );
 
       if (!isLatestRequest()) {
@@ -93,6 +108,7 @@ export function useDecide({
       if (response.status === 401) {
         const authError = tk("authError");
         setError(authError);
+        setExecutionStatus("failed");
         setChatMessages((prev) => [
           ...prev,
           {
@@ -108,6 +124,7 @@ export function useDecide({
       if (response.status === 503) {
         const unavailable = tk("serviceUnavailable");
         setError(unavailable);
+        setExecutionStatus("failed");
         setChatMessages((prev) => [
           ...prev,
           {
@@ -121,11 +138,19 @@ export function useDecide({
       }
 
       if (!response.ok) {
-        const nextError = t(
-          `HTTP ${response.status}: リクエストに失敗しました。時間をおいて再試行してください。`,
-          `HTTP ${response.status}: Request failed. Please try again later.`,
-        );
+        const errorKind = classifyHttpStatus(response.status);
+        const nextError = errorKind === "auth"
+          ? tk("authError")
+          : errorKind === "validation"
+            ? tk("validationError")
+            : errorKind === "server"
+              ? tk("serverError")
+              : t(
+                `HTTP ${response.status}: リクエストに失敗しました。時間をおいて再試行してください。`,
+                `HTTP ${response.status}: Request failed. Please try again later.`,
+              );
         setError(nextError);
+        setExecutionStatus("failed");
         setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: nextError }]);
         setResult(null);
         return;
@@ -135,26 +160,38 @@ export function useDecide({
       if (!isDecideResponse(payload)) {
         const schemaError = tk("schemaMismatch");
         setError(schemaError);
+        setExecutionStatus("failed");
         setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: schemaError }]);
         setResult(null);
         return;
       }
 
       setResult(payload);
+      setExecutionStatus("completed");
       setChatMessages((prev) => [
         ...prev,
         { id: nextMessageId(), role: "assistant", content: toAssistantMessage(payload, t) },
       ]);
     } catch (caught: unknown) {
-      if (caught instanceof DOMException && caught.name === "AbortError") {
+      if (caught instanceof ApiError && caught.kind === "cancelled") {
         if (isLatestRequest()) {
-          const timeoutError = t(
-            "タイムアウト: 意思決定リクエストが時間内に完了しませんでした。",
-            "Timeout: decision request did not complete in time.",
-          );
+          setExecutionStatus("idle");
+        }
+        return;
+      }
+      if (caught instanceof ApiError && caught.kind === "timeout") {
+        if (isLatestRequest()) {
+          const timeoutError = tk("timeoutError");
           setError(timeoutError);
+          setExecutionStatus("timeout");
           setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: timeoutError }]);
           setResult(null);
+        }
+        return;
+      }
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        if (isLatestRequest()) {
+          setExecutionStatus("idle");
         }
         return;
       }
@@ -163,6 +200,7 @@ export function useDecide({
       }
       const networkError = tk("networkError");
       setError(networkError);
+      setExecutionStatus("failed");
       setChatMessages((prev) => [...prev, { id: nextMessageId(), role: "assistant", content: networkError }]);
       setResult(null);
     } finally {
@@ -172,5 +210,5 @@ export function useDecide({
     }
   };
 
-  return { loading, error, setError, runDecision };
+  return { loading, error, executionStatus, latestEvent, setError, notifySseActivity, runDecision };
 }

@@ -2,7 +2,7 @@ import { type LocaleKey } from "../../../locales/ja";
 import { sanitizeText } from "../../../lib/utils";
 import { Button, Card } from "@veritas/design-system";
 import { DANGER_PRESETS, isDangerPresetsEnabled } from "../constants";
-import { type ChatMessage } from "../types";
+import { type ChatMessage, type ConsoleExecutionStatus } from "../types";
 
 interface ChatPanelProps {
   t: (ja: string, en: string) => string;
@@ -10,6 +10,7 @@ interface ChatPanelProps {
   chatMessages: ChatMessage[];
   query: string;
   loading: boolean;
+  executionStatus: ConsoleExecutionStatus;
   error: string | null;
   setQuery: (value: string) => void;
   runDecision: (nextQuery?: string) => Promise<void>;
@@ -27,6 +28,7 @@ export function ChatPanel({
   chatMessages,
   query,
   loading,
+  executionStatus,
   error,
   setQuery,
   runDecision,
@@ -100,6 +102,12 @@ export function ChatPanel({
         <Button type="submit" disabled={loading}>
           {loading ? tk("sending") : tk("send")}
         </Button>
+
+        {executionStatus === "submitting" || executionStatus === "streaming" ? (
+          <p className="text-xs text-muted-foreground">
+            {executionStatus === "streaming" ? tk("streamingStatus") : tk("submittingStatus")}
+          </p>
+        ) : null}
 
         {error ? (
           <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-2 text-sm text-red-300">
