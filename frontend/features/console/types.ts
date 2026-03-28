@@ -6,6 +6,14 @@ export interface ChatMessage {
   content: string;
 }
 
+export type ConsoleExecutionStatus =
+  | "idle"
+  | "submitting"
+  | "streaming"
+  | "completed"
+  | "failed"
+  | "timeout";
+
 export interface StepAnalytics {
   name: string;
   executed: boolean;

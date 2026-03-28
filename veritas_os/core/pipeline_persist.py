@@ -31,6 +31,61 @@ from .pipeline_helpers import _warn
 logger = logging.getLogger(__name__)
 
 
+def _compact_world_state_for_persist(
+    world_state: Dict[str, Any],
+    user_id: str,
+) -> Dict[str, Any]:
+    """Build a minimal world-state snapshot for decide artifacts.
+
+    The purpose is to keep decide_*.json reproducible while avoiding leakage of
+    historical users/projects from previous runs or shared runtime paths.
+    """
+    compact: Dict[str, Any] = {
+        "schema_version": world_state.get("schema_version"),
+        "updated_at": world_state.get("updated_at"),
+        "meta": {},
+        "projects": [],
+        "veritas": world_state.get("veritas", {}),
+        "metrics": world_state.get("metrics", {}),
+    }
+
+    meta = world_state.get("meta") if isinstance(world_state.get("meta"), dict) else {}
+    last_users = meta.get("last_users") if isinstance(meta.get("last_users"), dict) else {}
+    compact["meta"] = {
+        "version": meta.get("version"),
+        "created_at": meta.get("created_at"),
+        "repo_fingerprint": meta.get("repo_fingerprint"),
+        "last_users": {user_id: last_users.get(user_id)} if user_id in last_users else {},
+    }
+
+    projects = world_state.get("projects")
+    if isinstance(projects, list):
+        compact["projects"] = [
+            project
+            for project in projects
+            if isinstance(project, dict)
+            and str(project.get("owner_user_id", "")) == user_id
+        ][:1]
+
+    return compact
+
+
+def _sanitize_context_for_persist(
+    context: Dict[str, Any],
+    user_id: str,
+) -> Dict[str, Any]:
+    """Return a safe context snapshot for decide_*.json persistence."""
+    safe_context: Dict[str, Any] = {}
+    for key, value in context.items():
+        if key == "world_state" and isinstance(value, dict):
+            safe_context[key] = _compact_world_state_for_persist(value, user_id)
+            continue
+        if key in {"projects", "history"}:
+            continue
+        safe_context[key] = value
+    return safe_context
+
+
 def _collect_external_dependency_evidence() -> Dict[str, Any]:
     """Collect runtime dependency versions used for replay audit evidence."""
     package_names = (
@@ -397,6 +452,12 @@ def persist_decision_to_disk(
 
         fuji_full = payload.get("fuji") or {}
         world_snapshot = (ctx.context or {}).get("world")
+        context_for_persist: Dict[str, Any] = {}
+        if isinstance(ctx.context, dict):
+            context_for_persist = _sanitize_context_for_persist(
+                ctx.context,
+                str((ctx.context or {}).get("user_id") or ctx.user_id or "anon"),
+            )
 
         persist = redact_payload(
             {
@@ -419,7 +480,7 @@ def persist_decision_to_disk(
                 "evidence": evidence_list[-5:] if evidence_list else [],
                 "memory_evidence_count": int(meta_payload.get("memory_evidence_count", 0) or 0),
                 "mem_evidence_count": int(meta_payload.get("mem_evidence_count", 0) or 0),
-                "context": ctx.context,
+                "context": context_for_persist,
                 "world": world_snapshot,
                 "fast_mode": bool(
                     (payload.get("extras") or {}).get("fast_mode", ctx.fast_mode)

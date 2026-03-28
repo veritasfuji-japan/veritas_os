@@ -29,6 +29,8 @@ export const ja = {
   timeoutError: "タイムアウト: リクエストが時間内に完了しませんでした。",
   serverError: "サーバーエラー: しばらくしてから再試行してください。",
   validationError: "入力エラー: リクエスト内容を確認してください。",
+  submittingStatus: "実行中…（リクエスト送信中）",
+  streamingStatus: "実行中…（イベント受信中）",
 } as const;
 
 export type LocaleKey = keyof typeof ja;

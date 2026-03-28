@@ -90,7 +90,7 @@ describe("useDecide", () => {
     const { result } = renderHook(() =>
       useDecide({
         t: (_ja, en) => en,
-        tk: () => "",
+        tk: (key) => key,
         query: "q",
         setQuery,
         setResult,
@@ -128,7 +128,7 @@ describe("useDecide", () => {
     const { result } = renderHook(() =>
       useDecide({
         t: (_ja, en) => en,
-        tk: () => "",
+        tk: (key) => key,
         query: "q",
         setQuery,
         setResult,
@@ -140,7 +140,7 @@ describe("useDecide", () => {
       await result.current.runDecision("question");
     });
 
-    expect(result.current.error).toBe("HTTP 500: Request failed. Please try again later.");
+    expect(result.current.error).toBe("serverError");
     expect(result.current.error).not.toContain("stack trace");
     expect(setResult).toHaveBeenCalledWith(null);
   });
@@ -165,7 +165,7 @@ describe("useDecide", () => {
     const { result } = renderHook(() =>
       useDecide({
         t: (_ja, en) => en,
-        tk: () => "",
+        tk: (key) => key,
         query: "q",
         setQuery,
         setResult,

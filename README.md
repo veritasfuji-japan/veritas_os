@@ -788,8 +788,15 @@ the complete strategy, verification matrix, and remaining production risks.
   32-byte key). Use `generate_key()` to create one. Store keys in a vault/KMS, never in
   source control.
 - **Operational logs are excluded from Git**: runtime logs (for example,
-  `veritas_os/memory/*.jsonl`) are ignored via `.gitignore`; anonymized samples live
+  `runtime/<namespace>/.../*.jsonl`) are ignored via `.gitignore`; anonymized samples live
   under `veritas_os/sample_data/memory/`.
+- **Runtime namespaces are separated by purpose**: default local paths are
+  `runtime/dev`, `runtime/test`, `runtime/demo`, `runtime/prod`. You can override with
+  `VERITAS_RUNTIME_ROOT` and `VERITAS_RUNTIME_NAMESPACE`.
+- **Fresh-clone cleanup command**: use
+  `python scripts/reset_repo_runtime.py --dry-run` and
+  `python scripts/reset_repo_runtime.py --apply` to remove generated runtime data.
+  See also `docs/RUNTIME_DATA_POLICY.md`.
 
 ### Fail-closed safety pipeline
 

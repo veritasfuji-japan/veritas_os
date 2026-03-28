@@ -31,4 +31,6 @@ export const en: Record<LocaleKey, string> = {
   timeoutError: "Timeout: request did not complete in time.",
   serverError: "Server error: please try again later.",
   validationError: "Validation error: please check your input.",
+  submittingStatus: "Running… (submitting request)",
+  streamingStatus: "Running… (receiving events)",
 };

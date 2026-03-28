@@ -91,6 +91,40 @@ def test_load_world_migrates_legacy_format(tmp_path, monkeypatch):
     assert st.last_decision_status == "ok"
 
 
+def test_load_world_resets_on_repo_fingerprint_mismatch(tmp_path, monkeypatch):
+    world = setup_tmp_world(tmp_path, monkeypatch)
+    world_path = world.WORLD_PATH
+
+    contaminated = {
+        "schema_version": "2.0.0",
+        "updated_at": "2025-01-01T00:00:00+00:00",
+        "meta": {
+            "version": "2.0",
+            "created_at": "2025-01-01T00:00:00+00:00",
+            "last_users": {"legacy_user": {"last_seen": "2025-01-01T00:00:00+00:00"}},
+            "repo_fingerprint": "different_repo",
+        },
+        "projects": [
+            {
+                "project_id": "legacy_user:default",
+                "title": "Default Project for legacy_user",
+                "status": "active",
+            }
+        ],
+        "veritas": {"progress": 0.5, "decision_count": 10, "last_risk": 0.1},
+        "metrics": {"value_ema": 0.9, "latency_ms_median": 100.0, "error_rate": 0.0},
+        "external_knowledge": {"agi_research_events": [], "agi_research": {}},
+        "history": {"decisions": [{"chosen_title": "legacy"}], "transitions": []},
+    }
+    world_path.write_text(json.dumps(contaminated), encoding="utf-8")
+
+    loaded = world.get_state("user-reset")
+    assert loaded["meta"]["last_users"] == {}
+    assert loaded["history"]["decisions"] == []
+    assert loaded["projects"] == []
+    assert loaded["meta"]["repo_fingerprint"] == world._current_repo_fingerprint()
+
+
 def test_update_from_decision_updates_metrics(tmp_path, monkeypatch):
     world = setup_tmp_world(tmp_path, monkeypatch)
 
@@ -118,6 +152,20 @@ def test_update_from_decision_updates_metrics(tmp_path, monkeypatch):
     assert st_after.last_query == "Do something"
     assert "Test Option" in st_after.last_chosen_title
     assert st_after.last_decision_status == "ok"
+
+
+def test_update_from_decision_does_not_store_fallback_chosen_title(tmp_path, monkeypatch):
+    world = setup_tmp_world(tmp_path, monkeypatch)
+
+    st_after = world.update_from_decision(
+        user_id="userC",
+        query="Do something",
+        chosen={"id": "opt1"},
+        gate={"risk": 0.1, "decision_status": "ok", "status": "ok"},
+        values={"total": 0.7},
+    )
+
+    assert st_after.last_chosen_title == ""
 
 
 def test_inject_state_into_context_and_snapshot(tmp_path, monkeypatch):
@@ -204,4 +252,3 @@ def test_next_hint_for_veritas_agi_initial_stage(tmp_path, monkeypatch):
         "design_benchmarks",
         "external_review",
     }
-

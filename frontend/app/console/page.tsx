@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
 import { renderValue, toArray } from "../../features/console/analytics/utils";
@@ -32,7 +32,7 @@ export default function DecisionConsolePage(): JSX.Element {
   } = useConsoleState();
   const [activeResultTab, setActiveResultTab] = useState<"insights" | "raw">("insights");
 
-  const { loading, error, runDecision } = useDecide({
+  const { loading, error, executionStatus, latestEvent, notifySseActivity, runDecision } = useDecide({
     t,
     tk,
     query,
@@ -40,6 +40,30 @@ export default function DecisionConsolePage(): JSX.Element {
     setResult,
     setChatMessages,
   });
+
+  useEffect(() => {
+    if (typeof EventSource === "undefined") {
+      return () => undefined;
+    }
+    const stream = new EventSource("/api/veritas/v1/events");
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { type?: string; ts?: string; summary?: string };
+        const eventType = payload.type ?? "event";
+        const eventAt = payload.ts ?? new Date().toISOString();
+        const eventSummary = payload.summary ?? eventType;
+        notifySseActivity(`${eventType} @ ${eventAt} — ${eventSummary}`);
+      } catch {
+        // Ignore malformed event payloads.
+      }
+    };
+    stream.onerror = () => {
+      stream.close();
+    };
+    return () => {
+      stream.close();
+    };
+  }, [notifySseActivity]);
 
   const decisionId = String((result?.chosen as Record<string, unknown> | undefined)?.id ?? result?.request_id ?? "");
 
@@ -63,12 +87,19 @@ export default function DecisionConsolePage(): JSX.Element {
         chatMessages={chatMessages}
         query={query}
         loading={loading}
+        executionStatus={executionStatus}
         error={error}
         setQuery={setQuery}
         runDecision={runDecision}
       />
 
-      <PipelineVisualizer loading={loading} result={result} error={error} />
+      <PipelineVisualizer
+        loading={loading}
+        executionStatus={executionStatus}
+        latestEvent={latestEvent}
+        result={result}
+        error={error}
+      />
 
       <FujiGateStatusPanel result={result} />
 
