@@ -633,7 +633,7 @@ class ContinuationRevalidator:
         )
 
         if not local_pass:
-            return "local_fail_continuation_live" if boundary_status == ClaimStatus.LIVE else None
+            return None
 
         # Local pass + non-LIVE boundary
         if boundary_status == ClaimStatus.REVOKED:
