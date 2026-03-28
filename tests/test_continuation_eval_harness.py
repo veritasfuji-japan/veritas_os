@@ -235,10 +235,14 @@ def _compute_metrics() -> EvalMetrics:
             if snap.claim_status == ClaimStatus.REVOKED:
                 metrics.support_loss_detected += 1
 
-        # Burden/headroom drift
+        # Burden/headroom drift — check receipt boundary_outcome since
+        # degraded is receipt-first (state may remain LIVE)
         if scenario.has_burden_drift:
             metrics.burden_drift_total += 1
-            if snap.claim_status in (ClaimStatus.DEGRADED, ClaimStatus.HALTED):
+            if (
+                rcpt.boundary_outcome in ("degraded", "halted")
+                or snap.claim_status in (ClaimStatus.DEGRADED, ClaimStatus.HALTED)
+            ):
                 metrics.burden_drift_detected += 1
 
         # State/receipt separation check

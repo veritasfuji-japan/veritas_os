@@ -105,8 +105,8 @@ class TestReplayStepPassClaimDegraded:
         _, snap0, _ = results[0]
         _, snap1, rcpt1 = results[1]
 
-        assert snap0.claim_status == ClaimStatus.DEGRADED
-        assert snap1.claim_status == ClaimStatus.DEGRADED
+        assert snap0.claim_status == ClaimStatus.LIVE  # degraded is receipt-first
+        assert snap1.claim_status == ClaimStatus.LIVE  # degraded is receipt-first
         assert rcpt1.divergence_flag is True
 
     def test_burden_state_carried_forward(self):
@@ -142,7 +142,7 @@ class TestReplayStepPassClaimEscalated:
         ])
 
         _, snap1, rcpt1 = results[1]
-        assert snap1.claim_status == ClaimStatus.ESCALATED
+        assert snap1.claim_status == ClaimStatus.LIVE  # escalated is receipt-first
         assert rcpt1.divergence_flag is True
 
 
@@ -281,19 +281,27 @@ class TestReplayReceiptChainContinuityGrounding:
             assert rcpt.prior_decision_continuity_ref == "allow"
 
     def test_divergence_progressive_weakening(self):
-        """Chain shows progressive weakening visible in receipt chain."""
+        """Chain shows progressive weakening: state shows durable standing,
+        receipt shows boundary progression."""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
             {"context": {}},  # LIVE
-            {"context": {"restricted_actions": ["x"]}},  # NARROWED
-            {"context": {"escalation_required": True}},  # ESCALATED
+            {"context": {"restricted_actions": ["x"]}},  # NARROWED (durable)
+            {"context": {"escalation_required": True}},  # ESCALATED (receipt-only)
         ])
 
+        # State (durable standing)
         statuses = [snap.claim_status for _, snap, _ in results]
         assert statuses[0] == ClaimStatus.LIVE
-        assert statuses[1] == ClaimStatus.NARROWED
-        assert statuses[2] == ClaimStatus.ESCALATED
+        assert statuses[1] == ClaimStatus.NARROWED  # durable scope reduction
+        assert statuses[2] == ClaimStatus.LIVE      # escalated is receipt-only
+
+        # Receipt boundary outcomes
+        boundaries = [rcpt.boundary_outcome for _, _, rcpt in results]
+        assert boundaries[0] == "live"
+        assert boundaries[1] == "narrowed"
+        assert boundaries[2] == "escalated"
 
         # Divergence should be observable from step 1 onward
         divergences = [rcpt.divergence_flag for _, _, rcpt in results]

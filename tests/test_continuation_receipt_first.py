@@ -510,7 +510,7 @@ class TestDurabilityAssessment:
             revocation_conditions=[],
         )
         assert dc is None
-        assert status == ClaimStatus.DEGRADED
+        assert status == ClaimStatus.LIVE
 
     def test_escalated_receipt_only(self):
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
@@ -524,4 +524,4 @@ class TestDurabilityAssessment:
             revocation_conditions=[],
         )
         assert dc is None
-        assert status == ClaimStatus.ESCALATED
+        assert status == ClaimStatus.LIVE

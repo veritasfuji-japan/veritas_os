@@ -511,13 +511,13 @@ class ContinuationRevalidator:
         # DEGRADED: receipt-first by default in Phase-1.
         # Burden pressure is recoverable; not a durable standing change.
         if boundary_status == ClaimStatus.DEGRADED:
-            return None, ClaimStatus.DEGRADED
+            return None, ClaimStatus.LIVE
 
         # ESCALATED: receipt-first by default in Phase-1.
         # Escalation requirement is a boundary condition, not a durable
         # standing transformation — unless it has already locked scope.
         if boundary_status == ClaimStatus.ESCALATED:
-            return None, ClaimStatus.ESCALATED
+            return None, ClaimStatus.LIVE
 
         # Unrecognised status — conservative: treat as state-level.
         return None, boundary_status

@@ -188,7 +188,11 @@ class TestGolden4EscalationNeeded:
             "escalation_required": True,
         })
 
-        assert snap.claim_status == ClaimStatus.ESCALATED
+        # Receipt-first: boundary outcome is ESCALATED
+        assert rcpt.revalidation_status.value == "escalated"
+        assert rcpt.boundary_outcome == "escalated"
+        # State: receipt-first (not durable)
+        assert snap.claim_status == ClaimStatus.LIVE
         assert rcpt.divergence_flag is True
 
     def test_scope_escalation_flag(self):
@@ -340,13 +344,22 @@ class TestGolden7ReceiptChainContinuityWeakening:
         return lineage, results
 
     def test_progressive_status_weakening(self):
+        """State shows durable standing; receipt shows boundary progression."""
         _, results = self._run_weakening_chain()
 
-        statuses = [snap.claim_status for snap, _ in results]
-        assert statuses[0] == ClaimStatus.LIVE
-        assert statuses[1] == ClaimStatus.NARROWED
-        assert statuses[2] == ClaimStatus.ESCALATED
-        assert statuses[3] == ClaimStatus.REVOKED
+        # State (durable standing): ESCALATED is receipt-only → LIVE
+        state_statuses = [snap.claim_status for snap, _ in results]
+        assert state_statuses[0] == ClaimStatus.LIVE
+        assert state_statuses[1] == ClaimStatus.NARROWED  # durable scope reduction
+        assert state_statuses[2] == ClaimStatus.LIVE      # escalated is receipt-only
+        assert state_statuses[3] == ClaimStatus.REVOKED   # irreversible
+
+        # Receipt (boundary outcomes): full adjudication vocabulary
+        receipt_outcomes = [rcpt.boundary_outcome for _, rcpt in results]
+        assert receipt_outcomes[0] == "live"
+        assert receipt_outcomes[1] == "narrowed"
+        assert receipt_outcomes[2] == "escalated"
+        assert receipt_outcomes[3] == "revoked"
 
     def test_divergence_flags_track_weakening(self):
         _, results = self._run_weakening_chain()
