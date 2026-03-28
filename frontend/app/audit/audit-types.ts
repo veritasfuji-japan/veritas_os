@@ -62,7 +62,7 @@ export interface TimelineRow {
 /*  Selected audit detail tabs                                         */
 /* ------------------------------------------------------------------ */
 
-export type DetailTab = "summary" | "metadata" | "hash" | "related" | "raw";
+export type DetailTab = "summary" | "metadata" | "hash" | "related" | "continuation" | "raw";
 
 export interface SelectedAuditDetail {
   item: TrustLogItem;

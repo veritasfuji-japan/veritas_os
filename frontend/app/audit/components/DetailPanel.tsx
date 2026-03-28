@@ -45,8 +45,36 @@ export function DetailPanel({
     { value: "metadata", label: t("メタデータ", "Metadata") },
     { value: "hash", label: t("ハッシュ", "Hash") },
     { value: "related", label: t("関連ID", "Related") },
+    { value: "continuation", label: t("継続", "Continuation") },
     { value: "raw", label: "Raw JSON" },
   ];
+
+  // ── Continuation runtime helpers ────────────────────────────────
+  const hasContinuation = selected
+    ? typeof selected.continuation_claim_status === "string"
+    : false;
+
+  const claimStatus = selected?.continuation_claim_status as string | undefined;
+  const revalStatus = selected?.continuation_revalidation_status as string | undefined;
+  const revalOutcome = selected?.continuation_revalidation_outcome as string | undefined;
+  const divergenceFlag = selected?.continuation_divergence_flag as boolean | undefined;
+  const shouldRefuse = selected?.continuation_should_refuse as boolean | undefined;
+  const reasonCodes = selected?.continuation_reason_codes as string[] | undefined;
+  const lawVersion = selected?.continuation_law_version_id as string | undefined;
+  const supportDigest = selected?.continuation_support_basis_digest as string | undefined;
+  const burdenDigest = selected?.continuation_burden_headroom_digest as string | undefined;
+  const localStepResult = selected?.continuation_local_step_result as string | undefined;
+
+  /** Color for claim status based on severity. */
+  function claimStatusColor(status: string | undefined): string {
+    if (!status) return "text-muted-foreground";
+    if (status === "live") return "text-success";
+    if (status === "narrowed" || status === "degraded") return "text-warning";
+    return "text-danger"; // escalated, halted, revoked
+  }
+
+  /** Whether there is step-pass + chain-weakening divergence. */
+  const isDiverged = divergenceFlag === true;
 
   return (
     <Card title="Selected Audit" titleSize="md" variant="elevated">
@@ -223,6 +251,100 @@ export function DetailPanel({
                   {getString(selected, "policy_version")}
                 </span>
               </p>
+            </div>
+          )}
+
+          {/* Tab: Continuation */}
+          {detailTab === "continuation" && (
+            <div className="space-y-3">
+              {!hasContinuation ? (
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    "この監査エントリにはcontinuationデータがありません。VERITAS_CAP_CONTINUATION_RUNTIME が無効か、このリクエスト以前のバージョンです。",
+                    "No continuation data for this audit entry. The continuation runtime flag may be off or this predates the feature.",
+                  )}
+                </p>
+              ) : (
+                <>
+                  {/* Divergence banner */}
+                  {isDiverged && (
+                    <div className="rounded border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                      {t(
+                        "ステップは通過したが、chain-level continuation は弱化・停止・失効していました。",
+                        "Step passed but chain-level continuation was weakened, halted, or revoked.",
+                      )}
+                    </div>
+                  )}
+
+                  {/* State side */}
+                  <div className="rounded border border-border p-3">
+                    <p className="mb-2 text-xs font-semibold">
+                      {t("State（スナップショット）", "State (Snapshot)")}
+                    </p>
+                    <div className="grid gap-2 text-xs md:grid-cols-2">
+                      <p>
+                        <strong>{t("請求ステータス", "Claim Status")}:</strong>{" "}
+                        <span className={`font-semibold ${claimStatusColor(claimStatus)}`}>
+                          {claimStatus?.toUpperCase() ?? "-"}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>{t("法バージョン", "Law Version")}:</strong>{" "}
+                        <span className="font-mono">{lawVersion ?? "-"}</span>
+                      </p>
+                      <p>
+                        <strong>{t("支持基盤", "Support Basis")}:</strong>{" "}
+                        <span className="font-mono text-2xs">{supportDigest ?? "-"}</span>
+                      </p>
+                      <p>
+                        <strong>{t("負担/余裕", "Burden / Headroom")}:</strong>{" "}
+                        <span className="font-mono text-2xs">{burdenDigest ?? "-"}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Receipt side */}
+                  <div className="rounded border border-border p-3">
+                    <p className="mb-2 text-xs font-semibold">
+                      {t("Receipt（監査証跡）", "Receipt (Audit Witness)")}
+                    </p>
+                    <div className="grid gap-2 text-xs md:grid-cols-2">
+                      <p>
+                        <strong>{t("再検証ステータス", "Revalidation Status")}:</strong>{" "}
+                        <span className="font-mono">{revalStatus ?? "-"}</span>
+                      </p>
+                      <p>
+                        <strong>{t("再検証結果", "Revalidation Outcome")}:</strong>{" "}
+                        <span className="font-mono">{revalOutcome ?? "-"}</span>
+                      </p>
+                      <p>
+                        <strong>{t("効果前拒否推奨", "Should Refuse Before Effect")}:</strong>{" "}
+                        <span className={shouldRefuse ? "font-semibold text-danger" : ""}>
+                          {shouldRefuse === true ? "YES" : shouldRefuse === false ? "no" : "-"}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>{t("乖離フラグ", "Divergence Flag")}:</strong>{" "}
+                        <span className={isDiverged ? "font-semibold text-warning" : ""}>
+                          {divergenceFlag === true ? "YES" : divergenceFlag === false ? "no" : "-"}
+                        </span>
+                      </p>
+                      <p>
+                        <strong>{t("ローカルステップ結果", "Local Step Result")}:</strong>{" "}
+                        <span className="font-mono">{localStepResult ?? "-"}</span>
+                      </p>
+                      {reasonCodes && reasonCodes.length > 0 && (
+                        <p className="md:col-span-2">
+                          <strong>{t("理由コード", "Reason Codes")}:</strong>{" "}
+                          <span className="font-mono text-2xs">
+                            {reasonCodes.join(", ")}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

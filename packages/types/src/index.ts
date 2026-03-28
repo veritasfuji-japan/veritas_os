@@ -100,7 +100,12 @@ export type {
   TrustFeedbackResponse,
   TrustLog,
   TrustVerifyResponse,
-  ValuesOut
+  ValuesOut,
+  ContinuationClaimStatus,
+  ContinuationRevalidationStatus,
+  ContinuationStateSummary,
+  ContinuationReceiptSummary,
+  ContinuationOutput,
 } from "./decision";
 
 export type {

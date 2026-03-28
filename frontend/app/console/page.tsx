@@ -15,6 +15,7 @@ import { PipelineVisualizer } from "../../features/console/components/pipeline-v
 import { ResultSection } from "../../features/console/components/result-section";
 import { StepExpansionPanel } from "../../features/console/components/step-expansion-panel";
 import { ReplayDiffViewer } from "../../features/console/components/replay-diff-viewer";
+import { ContinuationStatusCard } from "../../features/console/components/continuation-status-card";
 import { useConsoleState } from "../../features/console/state/useConsoleState";
 
 export default function DecisionConsolePage(): JSX.Element {
@@ -102,6 +103,8 @@ export default function DecisionConsolePage(): JSX.Element {
       />
 
       <FujiGateStatusPanel result={result} />
+
+      {result && <ContinuationStatusCard result={result} />}
 
       <StepExpansionPanel result={result} />
 

@@ -33,4 +33,7 @@ export const en: Record<LocaleKey, string> = {
   validationError: "Validation error: please check your input.",
   submittingStatus: "Running… (submitting request)",
   streamingStatus: "Running… (receiving events)",
+  continuationStatus: "Continuation Status",
+  continuationDiverged: "Step passed but chain continuation is weakened",
+  continuationNoData: "No continuation data for this audit entry.",
 };
