@@ -83,6 +83,35 @@ def _parse_str(env_key: str, default: str = "") -> str:
     return (os.getenv(env_key, default) or "").strip()
 
 
+def _resolve_runtime_namespace() -> str:
+    """Resolve runtime namespace (dev/test/demo/prod) from environment."""
+    explicit = _parse_str("VERITAS_RUNTIME_NAMESPACE")
+    if explicit:
+        return explicit.lower()
+
+    env_profile = _parse_str("VERITAS_ENV").lower()
+    mapping = {
+        "production": "prod",
+        "prod": "prod",
+        "staging": "dev",
+        "stage": "dev",
+        "development": "dev",
+        "dev": "dev",
+        "test": "test",
+        "testing": "test",
+        "demo": "demo",
+    }
+    return mapping.get(env_profile, "dev")
+
+
+def _resolve_runtime_root(repo_root: Path) -> Path:
+    """Resolve runtime root from environment or repository default."""
+    env_root = _parse_str("VERITAS_RUNTIME_ROOT")
+    if env_root:
+        return Path(env_root).expanduser()
+    return repo_root.parent / "runtime"
+
+
 # =============================================================================
 # スコアリング設定（kernel.py から外部化）
 # =============================================================================
@@ -370,12 +399,17 @@ class VeritasConfig:
 
     data_dir: Path | None = None
     log_dir: Path | None = None
+    runtime_root: Path | None = None
+    runtime_namespace: str = field(default_factory=_resolve_runtime_namespace)
+    runtime_dir: Path | None = None
     dataset_dir: Path | None = None
     memory_path: Path | None = None
     value_stats_path: Path | None = None
 
     trust_log_path: Path | None = None
     kv_path: Path | None = None
+    doctor_auto_log_path: Path | None = None
+    doctor_auto_err_path: Path | None = None
 
     # ==== Weights / meta ====
     telos_default_WT: float = 0.6
@@ -407,31 +441,39 @@ class VeritasConfig:
         if not self.api_key:
             self.api_key = self.api_key_str
 
-        # ベースは常に veritas_os
-        base = self.repo_root  # .../veritas_clean_test2/veritas_os
+        # runtime ルート / namespace / ディレクトリ
+        if self.runtime_root is None:
+            self.runtime_root = _resolve_runtime_root(self.repo_root)
+        if self.runtime_dir is None:
+            self.runtime_dir = self.runtime_root / self.runtime_namespace
 
         # --- PATH 決定 ---
         if self.log_dir is None:
-            self.log_dir = base / "scripts" / "logs"
+            self.log_dir = self.runtime_dir / "logs"
 
         if self.dataset_dir is None:
-            self.dataset_dir = base / "scripts" / "datasets"
+            self.dataset_dir = self.runtime_dir / "datasets"
 
         if self.data_dir is None:
-            # 互換用：data_dir も logs と同じ場所に寄せる
-            self.data_dir = self.log_dir
+            self.data_dir = self.runtime_dir / "data"
 
         if self.memory_path is None:
-            self.memory_path = self.log_dir / "memory.json"
+            self.memory_path = self.data_dir / "memory.json"
 
         if self.value_stats_path is None:
-            self.value_stats_path = self.log_dir / "value_stats.json"
+            self.value_stats_path = self.data_dir / "value_stats.json"
 
         if self.trust_log_path is None:
             self.trust_log_path = self.log_dir / "trust_log.json"
 
         if self.kv_path is None:
-            self.kv_path = self.log_dir / "kv.sqlite3"
+            self.kv_path = self.data_dir / "kv.sqlite3"
+
+        if self.doctor_auto_log_path is None:
+            self.doctor_auto_log_path = self.log_dir / "doctor" / "doctor_auto.log"
+
+        if self.doctor_auto_err_path is None:
+            self.doctor_auto_err_path = self.log_dir / "doctor" / "doctor_auto.err"
 
     def validate_api_secret_non_empty(self) -> None:
         """Validate that ``VERITAS_API_SECRET`` is configured securely.
@@ -517,6 +559,7 @@ class VeritasConfig:
                 self.dataset_dir.mkdir(parents=True, exist_ok=True)
                 self.data_dir.mkdir(parents=True, exist_ok=True)
                 self.kv_path.parent.mkdir(parents=True, exist_ok=True)
+                self.doctor_auto_log_path.parent.mkdir(parents=True, exist_ok=True)
                 self._dirs_ensured = True
             except OSError as e:
                 logging.getLogger(__name__).warning(
