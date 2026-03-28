@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
@@ -148,6 +149,7 @@ class SourcePolicy(BaseModel):
     version: str = Field(min_length=1, max_length=50)
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=4000)
+    effective_date: str | None = Field(default=None)
     scope: PolicyScope
     conditions: List[Expression] = Field(default_factory=list)
     requirements: PolicyRequirements = Field(default_factory=PolicyRequirements)
@@ -155,6 +157,8 @@ class SourcePolicy(BaseModel):
     outcome: PolicyOutcome
     obligations: List[str] = Field(default_factory=list)
     test_vectors: List[PolicyExample] = Field(default_factory=list)
+    source_refs: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("policy_id", "version", "title", "description")
     @classmethod
@@ -168,6 +172,36 @@ class SourcePolicy(BaseModel):
             return []
         if isinstance(value, str):
             return [value]
+        return value
+
+    @field_validator("source_refs", mode="before")
+    @classmethod
+    def _ensure_source_refs_list(cls, value: Any) -> Any:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        return value
+
+    @field_validator("source_refs")
+    @classmethod
+    def _normalize_source_refs(cls, values: List[str]) -> List[str]:
+        return [item.strip() for item in values if item and item.strip()]
+
+    @field_validator("effective_date")
+    @classmethod
+    def _validate_effective_date(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        date.fromisoformat(normalized)
+        return normalized
+
+    @field_validator("metadata")
+    @classmethod
+    def _ensure_metadata_mapping(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(value, dict):
+            raise ValueError("metadata must be an object")
         return value
 
     @field_validator("obligations")

@@ -21,6 +21,7 @@ class CanonicalPolicyIR(TypedDict):
     version: str
     title: str
     description: str
+    effective_date: str | None
     scope: Dict[str, List[str]]
     conditions: List[CanonicalExpression]
     requirements: Dict[str, Any]
@@ -28,3 +29,5 @@ class CanonicalPolicyIR(TypedDict):
     outcome: Dict[str, str]
     obligations: List[str]
     test_vectors: List[Dict[str, Any]]
+    source_refs: List[str]
+    metadata: Dict[str, Any]

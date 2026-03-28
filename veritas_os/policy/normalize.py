@@ -39,6 +39,17 @@ def _normalize_expression_list(values: List[Dict[str, Any]]) -> List[CanonicalEx
     return expressions
 
 
+def _normalize_json_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _normalize_json_value(value[key])
+            for key in sorted(value.keys())
+        }
+    if isinstance(value, list):
+        return [_normalize_json_value(item) for item in value]
+    return value
+
+
 def to_canonical_ir(policy: SourcePolicy) -> CanonicalPolicyIR:
     """Normalize a validated `SourcePolicy` into deterministic canonical IR."""
     policy_dict = policy.model_dump(mode="python")
@@ -59,6 +70,7 @@ def to_canonical_ir(policy: SourcePolicy) -> CanonicalPolicyIR:
         "version": policy_dict["version"],
         "title": policy_dict["title"],
         "description": policy_dict["description"],
+        "effective_date": policy_dict["effective_date"],
         "scope": {
             "domains": _dedupe_sorted(policy_dict["scope"]["domains"]),
             "routes": _dedupe_sorted(policy_dict["scope"]["routes"]),
@@ -77,4 +89,6 @@ def to_canonical_ir(policy: SourcePolicy) -> CanonicalPolicyIR:
         },
         "obligations": _dedupe_sorted(policy_dict["obligations"]),
         "test_vectors": test_vectors,
+        "source_refs": _dedupe_sorted(policy_dict["source_refs"]),
+        "metadata": _normalize_json_value(policy_dict["metadata"]),
     }
