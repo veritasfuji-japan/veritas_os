@@ -290,6 +290,34 @@ class TestAssembleResponse:
         assert res["rejection_reason"] == "blocked"
         assert res["trust_log"] == [{"stage": "gate"}]
 
+    def test_assembly_declares_layered_top_level_contract_keys(self) -> None:
+        from veritas_os.core.pipeline_response import (
+            assemble_response,
+            CORE_DECISION_FIELDS,
+            AUDIT_DEBUG_INTERNAL_FIELDS,
+            BACKWARD_COMPAT_FIELDS,
+        )
+
+        ctx = PipelineContext(
+            query="layer-check",
+            request_id="req-layer",
+            chosen={"title": "A"},
+            alternatives=[{"title": "A"}],
+            decision_status="allow",
+            response_extras={"memory_citations": [{"id": "m1"}], "memory_used_count": 1},
+        )
+        res = assemble_response(
+            ctx,
+            load_persona_fn=lambda: {"name": "layered"},
+            plan={"steps": ["s1"]},
+        )
+
+        for key in CORE_DECISION_FIELDS + AUDIT_DEBUG_INTERNAL_FIELDS + BACKWARD_COMPAT_FIELDS:
+            assert key in res
+
+        # Compatibility alias contract: legacy "options" mirrors "alternatives".
+        assert res["options"] == res["alternatives"]
+
 
 class TestCoerceToDecideResponse:
     """DecideResponse coercion stage."""

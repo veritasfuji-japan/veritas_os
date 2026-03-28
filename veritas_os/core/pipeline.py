@@ -772,6 +772,9 @@ async def run_decide_pipeline(
 
     # =================================================================
     # Stage 7: Response assembly  (-> pipeline_response)
+    # - core decision contract
+    # - audit/debug/internal envelope
+    # - backward-compatible aliases
     # =================================================================
     plan = ctx.plan
     res = assemble_response(ctx, load_persona_fn=load_persona, plan=plan)

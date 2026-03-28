@@ -557,6 +557,11 @@ class DecideResponse(BaseModel):
     - evidence / critique / debate / alternatives が dict / str / BaseModel 混在でも落ちない
     - list_type エラーの根絶（dict/tuple/set/generator も安全に list 化）
     - alternatives/options のミラー互換
+
+    Response layers (for readability, payload shape stays flat):
+    1) Core decision contract fields
+    2) Audit / debug / internal fields
+    3) Backward-compatible legacy fields
     """
     model_config = ConfigDict(extra="allow")
 
@@ -568,7 +573,7 @@ class DecideResponse(BaseModel):
     chosen: Dict[str, Any] = Field(default_factory=dict)
 
     alternatives: List[Alt] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
-    # 互換のために残す（通常は alternatives と同じ）
+    # 互換/レガシー用途のエイリアス（通常は alternatives と同じ）
     options: List[Alt] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
     values: Optional[ValuesOut] = None
@@ -606,11 +611,11 @@ class DecideResponse(BaseModel):
         ),
     )
 
-    # MemoryOS メタ
+    # Audit / debug / internal: MemoryOS メタ
     memory_citations: List[Any] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     memory_used_count: int = 0
 
-    # PlannerOS / ReasonOS
+    # Audit / debug / internal: PlannerOS / ReasonOS
     plan: Optional[Dict[str, Any]] = None
     planner: Optional[Dict[str, Any]] = None
     reason: Optional[Any] = None

@@ -336,8 +336,12 @@ export interface ContinuationOutput {
 }
 
 export interface DecideResponse extends DecideResponseMeta {
+  /* ------------------------------------------------------------------ */
+  /* Core decision contract fields                                      */
+  /* ------------------------------------------------------------------ */
   chosen: Record<string, unknown>;
   alternatives: DecisionAlternative[];
+  /** Backward-compatible alias of alternatives for legacy clients. */
   options: DecisionAlternative[];
   decision_status: DecisionStatus;
   rejection_reason: string | null;
@@ -361,6 +365,9 @@ export interface DecideResponse extends DecideResponseMeta {
    */
   debate: Array<DebateView | Record<string, unknown>>;
 
+  /* ------------------------------------------------------------------ */
+  /* Audit / debug / internal fields                                   */
+  /* ------------------------------------------------------------------ */
   extras: Record<string, unknown>;
   reason: unknown;
   rsi_note: Record<string, unknown> | null;
