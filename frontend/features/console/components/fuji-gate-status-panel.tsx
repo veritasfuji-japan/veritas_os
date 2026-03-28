@@ -5,9 +5,9 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
   const view = toFujiGateDetailView(result);
 
   const decisionColor =
-    view.decision === "deny"
+    view.decision === "rejected" || view.decision === "block"
       ? "text-destructive"
-      : view.decision === "hold" || view.decision === "modify"
+      : view.decision === "modify" || view.decision === "abstain"
         ? "text-amber-400"
         : view.decision === "allow"
           ? "text-emerald-400"
@@ -21,7 +21,7 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
       )}
       <div className="mt-2 grid gap-2 text-xs md:grid-cols-5">
         <div className="rounded border border-border/70 bg-background/70 p-2">
-          <p className="text-muted-foreground">allow / modify / rejected</p>
+          <p className="text-muted-foreground">decision status</p>
           <p className={`font-semibold ${decisionColor}`}>{view.decision}</p>
         </div>
         <div className="rounded border border-border/70 bg-background/70 p-2">

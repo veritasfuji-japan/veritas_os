@@ -364,6 +364,23 @@ export function isTrustLog(value: unknown): value is TrustLog {
     return false;
   }
 
+  const VALID_CHAIN_VERIFICATION: ReadonlySet<string> = new Set(["verified", "degraded", "broken", "unknown"]);
+  if (
+    value.chain_verification !== undefined
+    && value.chain_verification !== null
+    && (typeof value.chain_verification !== "string" || !VALID_CHAIN_VERIFICATION.has(value.chain_verification))
+  ) {
+    return false;
+  }
+
+  if (
+    value.chain_verification_reason !== undefined
+    && value.chain_verification_reason !== null
+    && typeof value.chain_verification_reason !== "string"
+  ) {
+    return false;
+  }
+
   return true;
 }
 

@@ -470,4 +470,93 @@ describe("api validators", () => {
       }),
     ).toBe(false);
   });
+
+  it("accepts trust log item with valid chain_verification field", () => {
+    for (const status of ["verified", "degraded", "broken", "unknown"]) {
+      expect(
+        isTrustLogItem({
+          request_id: "req-1",
+          created_at: "2026-02-12T00:00:00Z",
+          sources: [],
+          critics: [],
+          checks: [],
+          approver: "system",
+          chain_verification: status,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it("accepts trust log item with null chain_verification", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        chain_verification: null,
+        chain_verification_reason: null,
+      }),
+    ).toBe(true);
+  });
+
+  it("rejects trust log item with invalid chain_verification enum value", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        chain_verification: "invalid_status",
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item with non-string chain_verification", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        chain_verification: 42,
+      }),
+    ).toBe(false);
+  });
+
+  it("rejects trust log item with non-string chain_verification_reason", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        chain_verification: "verified",
+        chain_verification_reason: 123,
+      }),
+    ).toBe(false);
+  });
+
+  it("accepts trust log item with string chain_verification_reason", () => {
+    expect(
+      isTrustLogItem({
+        request_id: "req-1",
+        created_at: "2026-02-12T00:00:00Z",
+        sources: [],
+        critics: [],
+        checks: [],
+        approver: "system",
+        chain_verification: "verified",
+        chain_verification_reason: "Hash chain verified successfully",
+      }),
+    ).toBe(true);
+  });
 });
