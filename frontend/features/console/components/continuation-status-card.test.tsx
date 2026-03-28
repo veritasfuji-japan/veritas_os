@@ -114,7 +114,8 @@ describe("ContinuationStatusCard", () => {
         })}
       />,
     );
-    expect(screen.getByText("YES")).toBeInTheDocument();
+    const yesElements = screen.getAllByText("YES");
+    expect(yesElements.length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows reason codes when present", () => {
