@@ -65,10 +65,19 @@ def _resolve_runtime_env() -> str:
 
 
 def _resolve_runtime_root() -> Path:
-    """Resolve base runtime root directory with environment separation."""
+    """Resolve base runtime root directory with environment separation.
+
+    Priority:
+    1) ``VERITAS_RUNTIME_ROOT`` (explicit runtime namespace root)
+    2) ``VERITAS_DATA_DIR`` (backward-compatible override)
+    3) default namespace root (repo-local, except test=tempdir)
+    """
     explicit = os.getenv("VERITAS_RUNTIME_ROOT")
+    data_dir = os.getenv("VERITAS_DATA_DIR")
     if explicit:
         root = Path(explicit).expanduser()
+    elif data_dir:
+        root = Path(data_dir).expanduser()
     elif _resolve_runtime_env() == "test":
         root = Path(tempfile.gettempdir()) / "veritas_os" / "runtime" / "test"
     else:
