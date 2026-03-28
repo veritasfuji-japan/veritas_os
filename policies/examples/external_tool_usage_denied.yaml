@@ -1,0 +1,38 @@
+schema_version: "1.0"
+policy_id: "policy.external_tool_usage.denied"
+version: "2026.03.28"
+title: "Deny external tool usage under restricted conditions"
+description: "Disallow external tool invocation when tenant data classification is restricted."
+scope:
+  domains: ["tooling", "security"]
+  routes: ["/api/tools", "/api/decide"]
+  actors: ["kernel", "tool_adapter"]
+conditions:
+  - field: "tool.external"
+    operator: "eq"
+    value: true
+  - field: "data.classification"
+    operator: "in"
+    value: ["restricted", "secret"]
+requirements:
+  required_evidence: ["data_classification_label"]
+  required_reviewers: ["security_officer"]
+  minimum_approval_count: 1
+constraints:
+  - field: "tool.name"
+    operator: "not_in"
+    value: ["internal_search", "approved_registry"]
+outcome:
+  decision: "deny"
+  reason: "External tools are prohibited for restricted data handling contexts."
+obligations:
+  - "emit_security_alert"
+  - "record_denial_reason"
+test_vectors:
+  - name: "external tool denied for restricted data"
+    input:
+      tool:
+        external: true
+      data:
+        classification: "restricted"
+    expected_outcome: "deny"

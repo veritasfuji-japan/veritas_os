@@ -1,0 +1,35 @@
+schema_version: "1.0"
+policy_id: "policy.mandatory_evidence.halt"
+version: "2026.03.28"
+title: "Missing mandatory evidence causes halt"
+description: "Critical decisions must halt when mandatory evidence is missing from the request context."
+scope:
+  domains: ["governance", "audit"]
+  routes: ["/api/decide"]
+  actors: ["planner", "kernel", "fuji"]
+conditions:
+  - field: "decision.criticality"
+    operator: "in"
+    value: ["high", "critical"]
+requirements:
+  required_evidence: ["source_citation", "impact_assessment", "approval_ticket"]
+  required_reviewers: ["audit_reviewer", "governance_officer"]
+  minimum_approval_count: 1
+constraints:
+  - field: "evidence.missing_count"
+    operator: "gt"
+    value: 0
+outcome:
+  decision: "halt"
+  reason: "Execution must halt until all mandatory evidence artifacts are present."
+obligations:
+  - "open_evidence_gap_incident"
+  - "record_halt_event"
+test_vectors:
+  - name: "missing evidence halts critical decision"
+    input:
+      decision:
+        criticality: "critical"
+      evidence:
+        missing_count: 2
+    expected_outcome: "halt"
