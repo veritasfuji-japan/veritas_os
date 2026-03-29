@@ -110,6 +110,18 @@ from ..config import capability_cfg, emit_capability_manifest
 from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
 from veritas_os.tools import call_tool as _call_tool
 
+try:
+    from veritas_os.observability.metrics import (
+        record_fuji_decision,
+        record_fuji_violations,
+    )
+except Exception:  # pragma: no cover - optional observability dependency
+    def record_fuji_decision(decision_status: Any) -> None:
+        return None
+
+    def record_fuji_violations(violation_types: Sequence[Any] | None) -> None:
+        return None
+
 _FUJI_YAML_EXPLICITLY_ENABLED = os.getenv("VERITAS_CAP_FUJI_YAML_POLICY") in {
     "1",
     "true",
@@ -930,6 +942,9 @@ def fuji_gate(
             code=code,
             trust_log_id=_resolve_trust_log_id(ctx),
         )
+
+    record_fuji_decision(decision_status)
+    record_fuji_violations(violations)
 
     return {
         "status": status,                    # 内部状態
