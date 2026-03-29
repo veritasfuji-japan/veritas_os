@@ -30,6 +30,7 @@ _LAZY_EXPORTS: Dict[str, str] = {
     "llm_client": ".llm_client",
     "reason_core": ".reason",
     "debate_core": ".debate",
+    "pipeline_core": ".pipeline",
 }
 
 # cache for loaded modules/objects
@@ -114,6 +115,5 @@ def try_import_experiments(force: bool = False) -> Optional[Any]:
         EXPERIMENTS_OK = False
         EXPERIMENTS_IMPORT_ERROR = f"{type(e).__name__}: {e}"
         return None
-
 
 
