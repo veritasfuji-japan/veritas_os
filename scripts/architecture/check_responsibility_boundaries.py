@@ -193,6 +193,10 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     """Check one rule and return violation messages, one per forbidden import found."""
     path = core_dir / f"{rule.source_module}.py"
+    if not path.exists():
+        pkg_init = core_dir / rule.source_module / "__init__.py"
+        if pkg_init.exists():
+            path = pkg_init
     try:
         source = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -229,6 +233,10 @@ def collect_module_docstring_issues(
     issues: list[DocAlignmentIssue] = []
     for module_name in modules:
         path = core_dir / f"{module_name}.py"
+        if not path.exists():
+            pkg_init = core_dir / module_name / "__init__.py"
+            if pkg_init.exists():
+                path = pkg_init
         try:
             docstring = _load_module_docstring(path)
         except FileNotFoundError:

@@ -64,7 +64,7 @@ RISK_FLOOR_SELF_HARM = 0.80  # self_harm 検出時の最低リスク
 RISK_FLOOR_FLAG = 0.20  # uncertainty/evidence 不足時のフラグリスク
 RISK_DENY_THRESHOLD = 0.70  # deny 判定の閾値
 
-from .types import (
+from ..types import (
     FujiInternalStatus,
     FujiDecisionStatus,
     FujiV1Status,
@@ -76,7 +76,7 @@ from .types import (
     EvidenceDict,
     ISOTimestamp,
 )
-from .utils import _safe_float, _to_text
+from ..utils import _safe_float, _to_text
 from .fuji_codes import build_fuji_rejection
 from .fuji_injection import _detect_prompt_injection as _detect_prompt_injection_impl
 from .fuji_helpers import (
@@ -106,7 +106,7 @@ from .fuji_policy import (
     _policy_path,
     _strict_policy_load_enabled,
 )
-from .config import capability_cfg, emit_capability_manifest
+from ..config import capability_cfg, emit_capability_manifest
 from veritas_os.logging.trust_log import append_trust_event as _append_trust_event
 from veritas_os.tools import call_tool as _call_tool
 
@@ -161,7 +161,7 @@ def append_trust_event(event: Dict[str, Any]) -> None:
 # ★ リファクタリング: config.fuji_cfg から設定を取得
 # =========================================================
 try:
-    from .config import fuji_cfg as _fuji_cfg
+    from ..config import fuji_cfg as _fuji_cfg
     DEFAULT_MIN_EVIDENCE = _fuji_cfg.default_min_evidence
     MAX_UNCERTAINTY = _fuji_cfg.max_uncertainty
     _ENV_POC_MODE = _fuji_cfg.poc_mode
