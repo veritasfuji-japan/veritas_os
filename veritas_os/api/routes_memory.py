@@ -8,8 +8,10 @@ from datetime import datetime, timezone
 from json import JSONDecodeError
 from typing import Any, Dict, Optional, Tuple
 
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Depends, Header, Response
 
+from veritas_os.api.auth import require_permission
+from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
     MemoryEraseRequest,
     MemoryGetRequest,
@@ -161,7 +163,7 @@ def _validate_memory_kinds(kinds: Any) -> Tuple[Optional[list[str]], Optional[st
 # Endpoints
 # ------------------------------------------------------------------
 
-@router.post("/v1/memory/put")
+@router.post("/v1/memory/put", dependencies=[Depends(require_permission(Permission.memory_write))])
 def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     """Store memory data and surface stage-level partial failures explicitly."""
     srv = _get_server()
@@ -286,7 +288,7 @@ def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Opt
     return response
 
 
-@router.post("/v1/memory/search")
+@router.post("/v1/memory/search", dependencies=[Depends(require_permission(Permission.memory_read))])
 def memory_search(payload: MemorySearchRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     srv = _get_server()
     store = srv.get_memory_store()
@@ -358,7 +360,7 @@ def memory_search(payload: MemorySearchRequest, response: Response = None, x_api
         }
 
 
-@router.post("/v1/memory/get")
+@router.post("/v1/memory/get", dependencies=[Depends(require_permission(Permission.memory_read))])
 def memory_get(body: MemoryGetRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     srv = _get_server()
     store = srv.get_memory_store()
@@ -387,7 +389,7 @@ def memory_get(body: MemoryGetRequest, response: Response = None, x_api_key: Opt
         }
 
 
-@router.post("/v1/memory/erase")
+@router.post("/v1/memory/erase", dependencies=[Depends(require_permission(Permission.memory_write))])
 def memory_erase(body: MemoryEraseRequest, response: Response = None, x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> Dict[str, Any]:
     """Erase a tenant's memories with legal-hold protection and audit log."""
     srv = _get_server()
