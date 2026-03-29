@@ -40,7 +40,7 @@ export function ChatPanel({
       <div className="mb-4 rounded-md border border-border bg-background/60 p-3">
         <p className="mb-2 text-xs font-medium text-muted-foreground">{tk("chatHistory")}</p>
         {chatMessages.length > 0 ? (
-          <ul className="space-y-2" aria-label="chat messages">
+          <ul className="space-y-2" aria-label={tk("chatMessagesAriaLabel")}>
             {chatMessages.map((message) => (
               <li
                 key={message.id}

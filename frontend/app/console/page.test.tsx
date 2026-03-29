@@ -63,7 +63,7 @@ describe("DecisionConsolePage", () => {
       expect(screen.getByText("Rejected reasons")).toBeInTheDocument();
       expect(screen.getByText("Cost-Benefit Analytics")).toBeInTheDocument();
       expect(screen.getByText("Total Token Cost")).toBeInTheDocument();
-      expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
+      expect(screen.getByRole("list", { name: "チャットメッセージ一覧" })).toBeInTheDocument();
       expect(screen.getByText("ユーザー")).toBeInTheDocument();
       expect(screen.getByText("アシスタント")).toBeInTheDocument();
     });
