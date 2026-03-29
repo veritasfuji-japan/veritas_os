@@ -69,13 +69,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-from .utils import (  # noqa: F401 – _redact_text/redact_payload re-exported for backward compat
+from ..utils import (  # noqa: F401 – _redact_text/redact_payload re-exported for backward compat
     _redact_text,
     redact_payload,
     utc_now,
     utc_now_iso_z,
 )
-from . import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
+from .. import self_healing  # noqa: F401 - tests monkeypatch pipeline.self_healing
 
 # ---- pipeline サブモジュール（分割済み） ----
 from .pipeline_helpers import (
@@ -298,21 +298,21 @@ def _check_required_modules() -> None:
 # ---- kernel (REQUIRED) ----
 veritas_core: Any = None
 try:
-    from . import kernel as veritas_core
+    from .. import kernel as veritas_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[ERROR][pipeline] kernel import failed (REQUIRED): {repr(e)}")
 
 # ---- fuji (REQUIRED) ----
 fuji_core: Any = None
 try:
-    from . import fuji as fuji_core
+    from .. import fuji as fuji_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[ERROR][pipeline] fuji import failed (REQUIRED): {repr(e)}")
 
 # ---- memory (RECOMMENDED) ----
 mem: Any = None
 try:
-    from . import memory as mem
+    from .. import memory as mem
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] memory import failed (RECOMMENDED): {repr(e)}")
 
@@ -326,7 +326,7 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 # ---- world model (RECOMMENDED) ----
 world_model: Any = None
 try:
-    from . import world as world_model
+    from .. import world as world_model
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] world import failed (RECOMMENDED): {repr(e)}")
 
@@ -340,7 +340,7 @@ except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
 # ---- debate (RECOMMENDED) ----
 debate_core: Any = None
 try:
-    from . import debate as debate_core
+    from .. import debate as debate_core
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover
     _warn(f"[WARN][pipeline] debate import failed (RECOMMENDED): {repr(e)}")
 
@@ -808,7 +808,7 @@ async def run_decide_pipeline(
     # Runs *before* step-level merit evaluation (FUJI / gate).
     # Feature flag off → zero computation, zero side effects.
     try:
-        from .config import capability_cfg as _cap_cfg
+        from ..config import capability_cfg as _cap_cfg
         if _cap_cfg.enable_continuation_runtime:
             from .continuation_runtime.revalidator import (
                 run_continuation_revalidation_shadow as _run_cont_reval,

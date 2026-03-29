@@ -41,7 +41,7 @@ import time
 import threading
 import logging
 
-from .config import capability_cfg, emit_capability_manifest, cfg
+from ..config import capability_cfg, emit_capability_manifest, cfg
 from .memory_security import (
     PICKLE_MIGRATION_GUIDE_PATH,
     emit_legacy_pickle_runtime_blocked,
@@ -110,7 +110,7 @@ from .memory_distillation import (
 # -- Store compat hooks --
 from .memory_store_compat import install_memory_store_compat_hooks
 
-from . import llm_client
+from .. import llm_client
 import sys
 
 logger = logging.getLogger(__name__)
@@ -183,7 +183,7 @@ try:
     from veritas_os.core.models import memory_model as memory_model_core  # type: ignore
 except (ImportError, ModuleNotFoundError):
     try:
-        from .models import memory_model as memory_model_core  # type: ignore
+        from . import models as memory_model_core  # type: ignore
     except (ImportError, ModuleNotFoundError):
         memory_model_core = None
 
