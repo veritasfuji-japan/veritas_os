@@ -58,6 +58,12 @@ import httpx
 from veritas_os.core import affect as affect_core
 from veritas_os.core.utils import _redact_text
 
+try:
+    from veritas_os.observability.metrics import observe_llm_call_duration
+except Exception:  # pragma: no cover - optional observability dependency
+    def observe_llm_call_duration(provider: str, duration_seconds: float) -> None:
+        return None
+
 log = logging.getLogger(__name__)
 
 
@@ -961,7 +967,12 @@ def chat_completion(
     This compatibility alias exists so internal modules can consistently call
     one function name (`chat_completion`) even if implementation details evolve.
     """
-    return chat(system_prompt=system_prompt, user_prompt=user_prompt, **kwargs)
+    provider = str(kwargs.get("provider") or LLM_PROVIDER)
+    started_at = time.perf_counter()
+    try:
+        return chat(system_prompt=system_prompt, user_prompt=user_prompt, **kwargs)
+    finally:
+        observe_llm_call_duration(provider=provider, duration_seconds=time.perf_counter() - started_at)
 
 
 __all__ = [

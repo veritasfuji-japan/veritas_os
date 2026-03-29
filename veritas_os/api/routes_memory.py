@@ -22,6 +22,18 @@ from veritas_os.api.constants import VALID_MEMORY_KINDS
 
 logger = logging.getLogger(__name__)
 
+try:
+    from veritas_os.observability.metrics import (
+        record_memory_operation,
+        set_memory_store_entries,
+    )
+except Exception:  # pragma: no cover - optional observability dependency
+    def record_memory_operation(operation: str, kind: str) -> None:
+        return None
+
+    def set_memory_store_entries(user_id: str, entries: Any) -> None:
+        return None
+
 router = APIRouter()
 
 
@@ -74,6 +86,29 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
+
+
+def _observe_memory_store_entries(store: Any, user_id: str) -> None:
+    """Best-effort gauge update for user memory entry count."""
+    if not user_id:
+        return
+    try:
+        if hasattr(store, "count"):
+            count = store.count(user_id=user_id)
+            set_memory_store_entries(user_id=user_id, entries=count)
+            return
+        if hasattr(store, "search"):
+            hits = _store_search(
+                store,
+                query="",
+                k=10000,
+                kinds=None,
+                min_sim=0.0,
+                user_id=user_id,
+            )
+            set_memory_store_entries(user_id=user_id, entries=len(hits or []))
+    except MEMORY_ROUTE_EXCEPTIONS:
+        return
 
 
 # ------------------------------------------------------------------
@@ -189,6 +224,7 @@ def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Opt
         }
 
     key = body.key or f"memory_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
+    record_memory_operation("put", body.kind or "semantic")
     value = body.value or {}
 
     text = body.text.strip()
@@ -278,6 +314,7 @@ def memory_put(body: MemoryPutRequest, response: Response = None, x_api_key: Opt
             "legal_hold": legal_hold,
         },
     }
+    _observe_memory_store_entries(store, user_id)
     if errors:
         response["errors"] = errors
         if not ok:
@@ -310,6 +347,12 @@ def memory_search(payload: MemorySearchRequest, response: Response = None, x_api
         k = payload.k
         min_sim = payload.min_sim
         user_id = srv._resolve_memory_user_id(payload.user_id, x_api_key)
+        metric_kind = "semantic"
+        if isinstance(kinds, list) and kinds:
+            metric_kind = str(kinds[0] or "semantic")
+        elif isinstance(kinds, str) and kinds.strip():
+            metric_kind = kinds
+        record_memory_operation("search", metric_kind)
 
         validated_kinds, kinds_error = _validate_memory_kinds(kinds)
         if kinds_error:
@@ -347,6 +390,7 @@ def memory_search(payload: MemorySearchRequest, response: Response = None, x_api
                     norm_hits.append(h)
                 continue
 
+        _observe_memory_store_entries(store, user_id)
         return {"ok": True, "hits": norm_hits, "count": len(norm_hits)}
 
     except MEMORY_ROUTE_EXCEPTIONS as e:
@@ -376,8 +420,10 @@ def memory_get(body: MemoryGetRequest, response: Response = None, x_api_key: Opt
 
     try:
         uid = srv._resolve_memory_user_id(body.user_id, x_api_key)
+        record_memory_operation("get", "semantic")
         key = body.key
         value = _store_get(store, uid, key)
+        _observe_memory_store_entries(store, uid)
         return {"ok": True, "value": value}
     except MEMORY_ROUTE_EXCEPTIONS as e:
         logger.error("memory_get failed: %s", e)

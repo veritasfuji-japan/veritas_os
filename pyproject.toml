@@ -64,8 +64,14 @@ system = [
   "trio==0.26.2",
   "starlette==0.49.1",
 ]
+observability = [
+  "opentelemetry-api>=1.20",
+  "opentelemetry-sdk>=1.20",
+  "opentelemetry-exporter-otlp>=1.20",
+  "prometheus-client>=0.20",
+]
 full = [
-  "veritas-os[ml,reports,anthropic,system]",
+  "veritas-os[ml,reports,anthropic,system,observability]",
 ]
 
 [project.urls]

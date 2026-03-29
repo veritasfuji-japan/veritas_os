@@ -69,6 +69,19 @@ from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+
+try:
+    from veritas_os.observability.metrics import (
+        observe_pipeline_stage_duration,
+        set_degraded_subsystems,
+    )
+except Exception:  # pragma: no cover - optional observability dependency
+    def observe_pipeline_stage_duration(stage: str, duration_seconds: float) -> None:
+        return None
+
+    def set_degraded_subsystems(count: Any) -> None:
+        return None
+
 from ..utils import (  # noqa: F401 – _redact_text/redact_payload re-exported for backward compat
     _redact_text,
     redact_payload,
@@ -708,12 +721,14 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 1: Input normalization  (-> pipeline_inputs)
     # =================================================================
+    _stage_started_at = time.perf_counter()
     ctx = normalize_pipeline_inputs(
         req,
         request,
         _get_request_params=_get_request_params,
         _to_dict_fn=to_dict,
     )
+    observe_pipeline_stage_duration("input_norm", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 2: MemoryOS retrieval  (-> pipeline_retrieval)
@@ -751,12 +766,14 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 4: Core decision + self-healing  (-> pipeline_execute)
     # =================================================================
+    _stage_started_at = time.perf_counter()
     await stage_core_execute(
         ctx,
         call_core_decide_fn=call_core_decide,
         append_trust_log_fn=append_trust_log,
         veritas_core=veritas_core,
     )
+    observe_pipeline_stage_duration("kernel_execute", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 4b: Absorb raw results  (-> pipeline_decide_stages)
@@ -837,9 +854,11 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
     # =================================================================
+    _stage_started_at = time.perf_counter()
     stage_fuji_precheck(ctx)
     stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
     stage_gate_decision(ctx)
+    observe_pipeline_stage_duration("fuji_gate", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 6b: Value learning EMA  (-> pipeline_decide_stages)
@@ -877,12 +896,14 @@ async def run_decide_pipeline(
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
     # - best-effort side effects and artifact generation only
     # =================================================================
+    _stage_started_at = time.perf_counter()
     _run_post_decision_persistence_phase(
         ctx,
         payload,
         effective_get_memory_store=effective_get_memory_store,
         stage_failures=_stage_failures,
     )
+    observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Observability: record pipeline health summary
@@ -895,6 +916,7 @@ async def run_decide_pipeline(
             metrics["pipeline_total_ms"] = total_ms
             if _stage_failures:
                 metrics["degraded_stages"] = _stage_failures
+    set_degraded_subsystems(len(_stage_failures))
     if _stage_failures:
         logger.info(
             "[pipeline] completed with degraded stages (%d ms): %s",
