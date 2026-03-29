@@ -101,4 +101,8 @@ markers = [
   "production: production-like validation requiring real services",
   "smoke: lightweight smoke tests for deployment verification",
   "external: tests that depend on external network services",
+  "unit: 単体テスト",
+  "integration: 統合テスト",
+  "scenario: ビジネスシナリオテスト",
+  "eu_ai_act: EU AI Act コンプライアンス関連",
 ]

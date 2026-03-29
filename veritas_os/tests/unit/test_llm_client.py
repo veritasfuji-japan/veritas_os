@@ -1,0 +1,1105 @@
+# -*- coding: utf-8 -*-
+"""LLM クライアント 単体テスト
+
+LLM クライアント / プロバイダー切替 / 安全性テスト。"""
+
+from __future__ import annotations
+
+import pytest
+
+pytestmark = pytest.mark.unit
+
+
+# ============================================================
+# Source: test_llm_client.py
+# ============================================================
+
+# tests/test_llm_client.py
+import importlib
+import warnings
+from unittest.mock import MagicMock
+
+import pytest
+import httpx
+
+from veritas_os.core import llm_client
+from veritas_os.core.llm_client import (
+    LLMProvider,
+    LLMError,
+    SupportTier,
+    PROVIDER_SUPPORT_TIER,
+    get_provider_support_tier,
+    _format_request,
+    _parse_response,
+    _get_api_key,
+    _get_endpoint,
+    _get_headers,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_circuit_breaker():
+    """Reset the circuit breaker state between tests."""
+    llm_client._circuit_state.clear()
+    yield
+    llm_client._circuit_state.clear()
+
+
+# ------------------------------------------------------------
+# ヘルパークラス
+# ------------------------------------------------------------
+
+class _DummyResponse:
+    def __init__(self, status_code: int, data: dict, text: str = ""):
+        self.status_code = status_code
+        self._data = data
+        self.text = text or ""
+        self.headers = {}
+        self.content = (text or "").encode("utf-8")
+
+    def json(self):
+        return self._data
+
+
+# ------------------------------------------------------------
+# _get_api_key / _get_endpoint のテスト
+# ------------------------------------------------------------
+
+def test_get_api_key_openai_and_fallback(monkeypatch):
+    # OPENAI_API_KEY 優先
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-openai")
+    monkeypatch.delenv("OPEN_API_KEY", raising=False)
+    assert _get_api_key(LLMProvider.OPENAI.value) == "sk-openai"
+
+    # OPEN_API_KEY フォールバック
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPEN_API_KEY", "sk-openai-fallback")
+    assert _get_api_key(LLMProvider.OPENAI.value) == "sk-openai-fallback"
+
+
+def test_get_api_key_other_providers(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak-test")
+    monkeypatch.setenv("GOOGLE_API_KEY", "gk-test")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "ork-test")
+
+    assert _get_api_key(LLMProvider.ANTHROPIC.value) == "ak-test"
+    assert _get_api_key(LLMProvider.GOOGLE.value) == "gk-test"
+    assert _get_api_key(LLMProvider.OPENROUTER.value) == "ork-test"
+    # Ollama は None
+    assert _get_api_key(LLMProvider.OLLAMA.value) is None
+
+
+def test_get_endpoint_each_provider():
+    assert _get_endpoint(LLMProvider.OPENAI.value) == "https://api.openai.com/v1/chat/completions"
+    assert _get_endpoint(LLMProvider.ANTHROPIC.value) == "https://api.anthropic.com/v1/messages"
+    assert _get_endpoint(LLMProvider.GOOGLE.value) == "https://generativelanguage.googleapis.com/v1beta/models"
+    assert _get_endpoint(LLMProvider.OPENROUTER.value) == "https://openrouter.ai/api/v1/chat/completions"
+    assert _get_endpoint(LLMProvider.OLLAMA.value) == "http://localhost:11434/api/chat"
+
+
+def test_chat_completion_alias_calls_chat(monkeypatch):
+    called = {}
+
+    def fake_chat(**kwargs):
+        called.update(kwargs)
+        return {"text": "ok"}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+    out = llm_client.chat_completion(system_prompt="SYS", user_prompt="USER", max_tokens=12)
+
+    assert out == {"text": "ok"}
+    assert called["system_prompt"] == "SYS"
+    assert called["user_prompt"] == "USER"
+    assert called["max_tokens"] == 12
+
+
+# ------------------------------------------------------------
+# _format_request のテスト
+# ------------------------------------------------------------
+
+def test_format_request_openai_with_extra_messages():
+    extra = [
+        {"role": "assistant", "content": "prev answer"},
+        {"content": "implicit user"},  # role 無し → user 扱い
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.OPENAI,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gpt-4.1-mini",
+        temperature=0.1,
+        max_tokens=100,
+        extra_messages=extra,
+    )
+
+    assert payload["model"] == "gpt-4.1-mini"
+    assert payload["temperature"] == 0.1
+    assert payload["max_tokens"] == 100
+
+    msgs = payload["messages"]
+    assert msgs[0] == {"role": "system", "content": "SYS"}
+    assert msgs[1] == {"role": "user", "content": "USER"}
+    assert msgs[2] == {"role": "assistant", "content": "prev answer"}
+    assert msgs[3] == {"role": "user", "content": "implicit user"}
+
+
+def test_format_request_anthropic_with_extra_messages():
+    extra = [
+        {"role": "assistant", "content": "A1"},
+        {"content": "no role"},  # role 省略 → user 扱い
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.ANTHROPIC,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="claude-3",
+        temperature=0.2,
+        max_tokens=256,
+        extra_messages=extra,
+    )
+
+    assert payload["model"] == "claude-3"
+    assert payload["max_tokens"] == 256
+    assert payload["temperature"] == 0.2
+    assert payload["system"] == "SYS"
+
+    msgs = payload["messages"]
+    assert msgs[0] == {"role": "user", "content": "USER"}
+    assert msgs[1] == {"role": "assistant", "content": "A1"}
+    assert msgs[2] == {"role": "user", "content": "no role"}
+
+
+def test_format_request_gemini_combines_text():
+    extra = [
+        {"role": "assistant", "content": "A1"},
+        {"role": "user", "content": "Q2"},
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.GOOGLE,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gemini-pro",
+        temperature=0.5,
+        max_tokens=256,
+        extra_messages=extra,
+    )
+
+    assert payload["generationConfig"]["temperature"] == 0.5
+    assert payload["generationConfig"]["maxOutputTokens"] == 256
+
+    contents = payload["contents"]
+    assert len(contents) == 1
+    text = contents[0]["parts"][0]["text"]
+
+    assert "SYS" in text
+    assert "USER" in text
+    assert "[assistant]" in text
+    assert "A1" in text
+    assert "[user]" in text
+    assert "Q2" in text
+
+
+def test_format_request_gemini_many_extra_messages_keeps_order():
+    extra = [
+        {"role": "assistant", "content": f"A{i}"} for i in range(5)
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.GOOGLE,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gemini-pro",
+        temperature=0.5,
+        max_tokens=256,
+        extra_messages=extra,
+    )
+
+    text = payload["contents"][0]["parts"][0]["text"]
+    assert "[assistant]\nA0" in text
+    assert "[assistant]\nA4" in text
+    assert text.index("A0") < text.index("A1") < text.index("A2") < text.index("A3") < text.index("A4")
+
+
+def test_format_request_ollama_with_extra_messages():
+    extra = [
+        {"role": "assistant", "content": "A1"},
+        {"content": "implicit"},
+    ]
+
+    payload = _format_request(
+        provider=LLMProvider.OLLAMA,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="llama3",
+        temperature=0.7,
+        max_tokens=128,
+        extra_messages=extra,
+    )
+
+    assert payload["model"] == "llama3"
+    assert "options" in payload
+    assert payload["options"]["temperature"] == 0.7
+
+    msgs = payload["messages"]
+    assert msgs[0] == {"role": "system", "content": "SYS"}
+    assert msgs[1] == {"role": "user", "content": "USER"}
+    assert msgs[2] == {"role": "assistant", "content": "A1"}
+    assert msgs[3] == {"role": "user", "content": "implicit"}
+
+
+def test_format_request_ignores_non_dict_extra_messages():
+    payload = _format_request(
+        provider=LLMProvider.OPENAI,
+        system_prompt="SYS",
+        user_prompt="USER",
+        model="gpt-4.1-mini",
+        temperature=0.1,
+        max_tokens=100,
+        extra_messages=["invalid", {"role": "assistant", "content": 123}],
+    )
+
+    assert payload["messages"] == [
+        {"role": "system", "content": "SYS"},
+        {"role": "user", "content": "USER"},
+        {"role": "assistant", "content": "123"},
+    ]
+
+
+# ------------------------------------------------------------
+# _parse_response のテスト
+# ------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "provider,data,expected",
+    [
+        (
+            LLMProvider.OPENAI,
+            {"choices": [{"message": {"content": "hello from openai"}}]},
+            "hello from openai",
+        ),
+        (
+            LLMProvider.OPENROUTER,
+            {"choices": [{"message": {"content": "hello from openrouter"}}]},
+            "hello from openrouter",
+        ),
+        (
+            LLMProvider.OLLAMA,
+            {"message": {"role": "assistant", "content": "hello from ollama"}},
+            "hello from ollama",
+        ),
+        (
+            LLMProvider.ANTHROPIC,
+            {"content": [{"type": "text", "text": "hello from claude"}]},
+            "hello from claude",
+        ),
+        (
+            LLMProvider.GOOGLE,
+            {
+                "candidates": [
+                    {"content": {"parts": [{"text": "hello from gemini"}]}}
+                ]
+            },
+            "hello from gemini",
+        ),
+    ],
+)
+def test_parse_response_various_providers(provider, data, expected):
+    text = _parse_response(provider, data)
+    assert text == expected
+
+
+def test_parse_response_anthropic_invalid_raises():
+    with pytest.raises(LLMError, match=r"^LLM_PARSE_ERROR: provider=anthropic cause=IndexError$"):
+        _parse_response(LLMProvider.ANTHROPIC, {"content": []})
+
+
+def test_parse_response_gemini_invalid_raises():
+    with pytest.raises(LLMError, match=r"^LLM_PARSE_ERROR: provider=google cause=IndexError$"):
+        _parse_response(LLMProvider.GOOGLE, {"candidates": []})
+
+
+def test_parse_response_ollama_invalid_raises():
+    with pytest.raises(
+        LLMError,
+        match=r"^LLM_PARSE_ERROR: provider=ollama cause=UnexpectedResponseShape$",
+    ):
+        _parse_response(LLMProvider.OLLAMA, {})
+
+
+def test_parse_response_openai_like_invalid_raises_structured_message():
+    with pytest.raises(
+        LLMError,
+        match=r"^LLM_PARSE_ERROR: provider=openai_like cause=KeyError$",
+    ):
+        _parse_response(LLMProvider.OPENAI, {})
+
+
+# ------------------------------------------------------------
+# _get_headers のテスト
+# ------------------------------------------------------------
+
+def test_get_headers_openai_success(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-123")
+    h = _get_headers(LLMProvider.OPENAI.value)
+    assert h["Authorization"] == "Bearer sk-123"
+    assert h["Content-Type"] == "application/json"
+
+
+def test_get_headers_openai_missing_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPEN_API_KEY", raising=False)
+    with pytest.raises(LLMError):
+        _get_headers(LLMProvider.OPENAI.value)
+
+
+def test_get_headers_anthropic(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak-123")
+    h = _get_headers(LLMProvider.ANTHROPIC.value)
+    assert h["x-api-key"] == "ak-123"
+    assert h["anthropic-version"] == "2023-06-01"
+
+
+def test_get_headers_anthropic_missing(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    with pytest.raises(LLMError):
+        _get_headers(LLMProvider.ANTHROPIC.value)
+
+
+def test_get_headers_google(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "gk-123")
+    h = _get_headers(LLMProvider.GOOGLE.value)
+    assert h["Content-Type"] == "application/json"
+
+
+def test_get_headers_google_missing(monkeypatch):
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    with pytest.raises(LLMError):
+        _get_headers(LLMProvider.GOOGLE.value)
+
+
+def test_get_headers_openrouter(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "ork-123")
+    h = _get_headers(LLMProvider.OPENROUTER.value)
+    assert h["Authorization"] == "Bearer ork-123"
+
+
+def test_get_headers_openrouter_missing(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(LLMError):
+        _get_headers(LLMProvider.OPENROUTER.value)
+
+
+def test_get_headers_ollama():
+    h = _get_headers(LLMProvider.OLLAMA.value)
+    assert h["Content-Type"] == "application/json"
+
+
+# ------------------------------------------------------------
+# chat() の成功パス（各プロバイダー）
+# ------------------------------------------------------------
+
+def test_chat_openai_success(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fake_post(url, headers, json, timeout):
+        assert url == "https://api.openai.com/v1/chat/completions"
+        assert "Authorization" in headers
+        data = {
+            "choices": [
+                {
+                    "message": {"content": "OK from OpenAI"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(
+        system_prompt="SYS",
+        user_prompt="USER",
+        provider=LLMProvider.OPENAI.value,
+        model="gpt-4.1-mini",
+    )
+
+    assert res["text"] == "OK from OpenAI"
+    assert res["provider"] == LLMProvider.OPENAI.value
+    assert res["model"] == "gpt-4.1-mini"
+    assert res["finish_reason"] == "stop"
+    assert res["usage"]["prompt_tokens"] == 10
+    assert res["usage"]["completion_tokens"] == 5
+
+
+def test_chat_anthropic_success(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ak-test")
+
+    def fake_post(url, headers, json, timeout):
+        assert url == "https://api.anthropic.com/v1/messages"
+        assert headers["x-api-key"] == "ak-test"
+        data = {
+            "content": [{"type": "text", "text": "hi from claude"}],
+            "stop_reason": "end",
+            "usage": {"input_tokens": 1},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(
+        system_prompt="SYS",
+        user_prompt="USER",
+        provider=LLMProvider.ANTHROPIC.value,
+        model="claude-3-sonnet",
+    )
+
+    assert res["text"] == "hi from claude"
+    assert res["provider"] == LLMProvider.ANTHROPIC.value
+    assert res["finish_reason"] == "end"
+    assert res["usage"]["input_tokens"] == 1
+
+
+def test_chat_gemini_success(monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY", "gk-test")
+    seen = {}
+
+    def fake_post(url, headers, json, timeout):
+        # model が URL に埋め込まれ、API keyはヘッダー経由
+        seen["url"] = url
+        seen["headers"] = headers
+        assert "gemini-pro" in url
+        assert "key=" not in url  # URLにキーは含まれない
+        assert headers.get("x-goog-api-key") == "gk-test"  # ヘッダーで認証
+        data = {
+            "candidates": [
+                {"content": {"parts": [{"text": "hi from gemini"}]}}
+            ],
+            "usageMetadata": {"input": 123},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(
+        system_prompt="SYS",
+        user_prompt="USER",
+        provider=LLMProvider.GOOGLE.value,
+        model="gemini-pro",
+    )
+
+    assert "generateContent" in seen["url"]
+    assert res["text"] == "hi from gemini"
+    assert res["provider"] == LLMProvider.GOOGLE.value
+    assert res["usage"]["input"] == 123
+
+
+def test_chat_ollama_success(monkeypatch):
+    def fake_post(url, headers, json, timeout):
+        assert url == "http://localhost:11434/api/chat"
+        data = {
+            "message": {"role": "assistant", "content": "hi local"},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(
+        system_prompt="SYS",
+        user_prompt="USER",
+        provider=LLMProvider.OLLAMA.value,
+        model="llama3",
+    )
+
+    assert res["text"] == "hi local"
+    assert res["provider"] == LLMProvider.OLLAMA.value
+    # usage / finish_reason は None のはず
+    assert res["usage"] is None
+    assert res["finish_reason"] is None
+
+
+def test_chat_openrouter_success(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "ork-test")
+
+    def fake_post(url, headers, json, timeout):
+        assert url == "https://openrouter.ai/api/v1/chat/completions"
+        assert headers["Authorization"] == "Bearer ork-test"
+        data = {
+            "choices": [
+                {
+                    "message": {"content": "hi from openrouter"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {"tokens": 42},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(
+        system_prompt="SYS",
+        user_prompt="USER",
+        provider=LLMProvider.OPENROUTER.value,
+        model="openai/gpt-4o-mini",
+    )
+
+    assert res["text"] == "hi from openrouter"
+    assert res["finish_reason"] == "stop"
+    assert res["usage"]["tokens"] == 42
+
+
+def test_chat_uses_default_provider_and_model(monkeypatch):
+    # デフォルトは LLM_PROVIDER / LLM_MODEL を使う
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setattr(llm_client, "LLM_PROVIDER", LLMProvider.OPENAI.value)
+    monkeypatch.setattr(llm_client, "LLM_MODEL", "gpt-4.1-mini")
+
+    def fake_post(url, headers, json, timeout):
+        assert json["model"] == "gpt-4.1-mini"
+        data = {
+            "choices": [
+                {"message": {"content": "default path"}, "finish_reason": "stop"}
+            ],
+            "usage": {},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    res = llm_client.chat(system_prompt="SYS", user_prompt="USER")
+    assert res["text"] == "default path"
+    assert res["model"] == "gpt-4.1-mini"
+
+
+# ------------------------------------------------------------
+# chat() のリトライ・エラーパス
+# ------------------------------------------------------------
+
+def test_chat_openai_rate_limit_then_success(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    calls = {"n": 0}
+
+    def fake_post(url, headers, json, timeout):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _DummyResponse(
+                status_code=429,
+                data={},
+                text="rate limited",
+            )
+        data = {
+            "choices": [
+                {
+                    "message": {"content": "after retry"},
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {},
+        }
+        return _DummyResponse(status_code=200, data=data, text="ok")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda *_args, **_kwargs: None)
+
+    res = llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+    assert res["text"] == "after retry"
+    assert calls["n"] == 2
+
+
+def test_chat_http_error_raises(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fake_post(url, headers, json, timeout):
+        return _DummyResponse(
+            status_code=500,
+            data={"error": "server error"},
+            text="server error",
+        )
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    with pytest.raises(LLMError) as exc:
+        llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+
+    assert "500" in str(exc.value)
+
+
+def test_redact_response_preview_masks_pii_and_limits_text():
+    text = "mail=test.user@example.com phone=090-1234-5678 " + ("x" * 300)
+
+    preview = llm_client._redact_response_preview(text, limit=80)
+
+    assert len(preview) <= 80
+    assert "test.user@example.com" not in preview
+    assert "090-1234-5678" not in preview
+    assert "mail=" not in preview
+
+
+def test_chat_4xx_logs_redacted_preview(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fake_post(url, headers, json, timeout):
+        return _DummyResponse(
+            status_code=400,
+            data={"error": "bad request"},
+            text="contact=alice@example.com phone=03-1234-5678",
+        )
+
+    warning_mock = MagicMock()
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+    monkeypatch.setattr(llm_client.log, "warning", warning_mock)
+
+    with pytest.raises(LLMError) as exc:
+        llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+
+    assert "API error (status=400)" in str(exc.value)
+    assert warning_mock.call_count >= 1
+    warning_messages = "\n".join(str(call) for call in warning_mock.call_args_list)
+    assert "alice@example.com" not in warning_messages
+    assert "03-1234-5678" not in warning_messages
+
+
+def test_chat_request_exception_retries_and_fails(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    def fake_post(url, headers, json, timeout):
+        raise httpx.TimeoutException("boom timeout")
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+    monkeypatch.setattr(llm_client.time, "sleep", lambda *_a, **_k: None)
+    monkeypatch.setattr(llm_client, "LLM_MAX_RETRIES", 2)
+
+    with pytest.raises(LLMError) as exc:
+        llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+
+    msg = str(exc.value)
+    assert "failed after" in msg
+    assert "Timeout" in msg
+
+
+def test_chat_unexpected_error_wraps(monkeypatch):
+    """_parse_response などで例外 → LLMError で wrap されるか"""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+    class BadResponse(_DummyResponse):
+        def json(self):
+            # json() 自体が壊れているケース
+            raise ValueError("bad json")
+
+    def fake_post(url, headers, json, timeout):
+        return BadResponse(status_code=200, data={})
+
+    monkeypatch.setattr(llm_client, "_http_post", fake_post)
+
+    with pytest.raises(LLMError) as exc:
+        llm_client.chat("SYS", "USER", provider=LLMProvider.OPENAI.value)
+
+    assert "Failed to parse LLM response as JSON" in str(exc.value)
+
+
+# ------------------------------------------------------------
+# ショートカット関数のテスト
+# ------------------------------------------------------------
+
+def test_chat_openai_shortcut(monkeypatch):
+    called = {}
+
+    def fake_chat(system_prompt, user_prompt, provider, **kwargs):
+        called["provider"] = provider
+        called["system"] = system_prompt
+        called["user"] = user_prompt
+        return {"text": "ok", "provider": provider, "model": kwargs.get("model")}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+
+    res = llm_client.chat_openai("SYS", "USER")
+    assert called["provider"] == LLMProvider.OPENAI.value
+    assert called["system"] == "SYS"
+    assert called["user"] == "USER"
+    assert res["provider"] == LLMProvider.OPENAI.value
+
+
+def test_chat_gpt4_mini_shortcut(monkeypatch):
+    called = {}
+
+    def fake_chat_openai(system_prompt, user_prompt, **kwargs):
+        called["system"] = system_prompt
+        called["user"] = user_prompt
+        called["model"] = kwargs.get("model")
+        return {"text": "ok", "provider": "openai", "model": kwargs.get("model")}
+
+    monkeypatch.setattr(llm_client, "chat_openai", fake_chat_openai)
+
+    res = llm_client.chat_gpt4_mini("SYS", "USER")
+    assert called["model"] == "gpt-4.1-mini"
+    assert res["model"] == "gpt-4.1-mini"
+
+
+def test_chat_claude_shortcut(monkeypatch):
+    called = {}
+
+    def fake_chat(system_prompt, user_prompt, provider, **kwargs):
+        called["provider"] = provider
+        called["model"] = kwargs.get("model")
+        return {"text": "ok", "provider": provider, "model": kwargs.get("model")}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+
+    res = llm_client.chat_claude("SYS", "USER")
+    assert called["provider"] == LLMProvider.ANTHROPIC.value
+    assert called["model"] == "claude-opus-4-6"
+    assert res["model"] == "claude-opus-4-6"
+
+
+def test_chat_gemini_shortcut(monkeypatch):
+    called = {}
+
+    def fake_chat(system_prompt, user_prompt, provider, **kwargs):
+        called["provider"] = provider
+        called["model"] = kwargs.get("model")
+        return {"text": "ok", "provider": provider, "model": kwargs.get("model")}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+
+    res = llm_client.chat_gemini("SYS", "USER")
+    assert called["provider"] == LLMProvider.GOOGLE.value
+    assert called["model"] == "gemini-1.5-pro"
+    assert res["model"] == "gemini-1.5-pro"
+
+
+def test_chat_local_shortcut(monkeypatch):
+    called = {}
+
+    def fake_chat(system_prompt, user_prompt, provider, **kwargs):
+        called["provider"] = provider
+        called["model"] = kwargs.get("model")
+        return {"text": "ok", "provider": provider, "model": kwargs.get("model")}
+
+    monkeypatch.setattr(llm_client, "chat", fake_chat)
+
+    res = llm_client.chat_local("SYS", "USER")
+    assert called["provider"] == LLMProvider.OLLAMA.value
+    assert called["model"] == "llama3"
+    assert res["model"] == "llama3"
+
+
+
+def test_validate_model_name_rejects_control_chars():
+    with pytest.raises(LLMError):
+        llm_client._validate_model_name(
+            provider=LLMProvider.OPENAI.value,
+            model="gpt-4.1-mini\x00",
+        )
+
+
+def test_validate_model_name_rejects_disallowed_prefix_for_openai():
+    with pytest.raises(LLMError):
+        llm_client._validate_model_name(
+            provider=LLMProvider.OPENAI.value,
+            model="claude-3-sonnet",
+        )
+
+
+def test_validate_model_name_accepts_ollama_custom_model():
+    validated = llm_client._validate_model_name(
+        provider=LLMProvider.OLLAMA.value,
+        model="my-local/model:latest",
+    )
+
+    assert validated == "my-local/model:latest"
+
+
+def test_chat_rejects_invalid_openai_model_before_http(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    post_mock = MagicMock()
+    monkeypatch.setattr(llm_client, "_http_post", post_mock)
+
+    with pytest.raises(LLMError):
+        llm_client.chat(
+            system_prompt="SYS",
+            user_prompt="USER",
+            provider=LLMProvider.OPENAI.value,
+            model="../gpt-4.1-mini",
+        )
+
+    post_mock.assert_not_called()
+
+
+def test_env_parsing_safe_helpers_return_default_for_invalid_values(monkeypatch):
+    monkeypatch.setenv("VERITAS_TEST_SAFE_INT", "invalid-int")
+    monkeypatch.setenv("VERITAS_TEST_SAFE_FLOAT", "invalid-float")
+
+    assert llm_client._env_int("VERITAS_TEST_SAFE_INT", 7) == 7
+    assert llm_client._env_float("VERITAS_TEST_SAFE_FLOAT", 1.5) == 1.5
+
+
+def test_env_parsing_failsafe_on_module_reload(monkeypatch):
+    original_timeout = llm_client.LLM_TIMEOUT
+    original_connect_timeout = llm_client.LLM_CONNECT_TIMEOUT
+    original_retries = llm_client.LLM_MAX_RETRIES
+    original_retry_delay = llm_client.LLM_RETRY_DELAY
+    original_max_response_bytes = llm_client.LLM_MAX_RESPONSE_BYTES
+
+    monkeypatch.setenv("LLM_TIMEOUT", "not-a-number")
+    monkeypatch.setenv("LLM_CONNECT_TIMEOUT", "bad")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "oops")
+    monkeypatch.setenv("LLM_RETRY_DELAY", "bad-float")
+    monkeypatch.setenv("LLM_MAX_RESPONSE_BYTES", "nope")
+
+    reloaded = importlib.reload(llm_client)
+    try:
+        assert reloaded.LLM_TIMEOUT == 60.0
+        assert reloaded.LLM_CONNECT_TIMEOUT == 10.0
+        assert reloaded.LLM_MAX_RETRIES == 3
+        assert reloaded.LLM_RETRY_DELAY == 2.0
+        assert reloaded.LLM_MAX_RESPONSE_BYTES == 16 * 1024 * 1024
+    finally:
+        monkeypatch.setenv("LLM_TIMEOUT", str(original_timeout))
+        monkeypatch.setenv("LLM_CONNECT_TIMEOUT", str(original_connect_timeout))
+        monkeypatch.setenv("LLM_MAX_RETRIES", str(original_retries))
+        monkeypatch.setenv("LLM_RETRY_DELAY", str(original_retry_delay))
+        monkeypatch.setenv("LLM_MAX_RESPONSE_BYTES", str(original_max_response_bytes))
+        importlib.reload(llm_client)
+
+
+def test_env_float_bounded_clamps_out_of_range(monkeypatch):
+    """_env_float_bounded returns default when value is out of range."""
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "999.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 10.0
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "-5.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 10.0
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED", "50.0")
+    assert llm_client._env_float_bounded("VERITAS_TEST_BOUNDED", 10.0, 1.0, 100.0) == 50.0
+
+
+def test_env_int_bounded_clamps_out_of_range(monkeypatch):
+    """_env_int_bounded returns default when value is out of range."""
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "999")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 3
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "-1")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 3
+
+    monkeypatch.setenv("VERITAS_TEST_BOUNDED_INT", "5")
+    assert llm_client._env_int_bounded("VERITAS_TEST_BOUNDED_INT", 3, 0, 10) == 5
+
+
+def test_env_bounded_on_reload_rejects_extreme_values(monkeypatch):
+    """Reload with extreme timeout values returns defaults due to bounds checking."""
+    monkeypatch.setenv("LLM_TIMEOUT", "99999")
+    monkeypatch.setenv("LLM_CONNECT_TIMEOUT", "0")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "100")
+    monkeypatch.setenv("LLM_RETRY_DELAY", "-1")
+
+    reloaded = importlib.reload(llm_client)
+    try:
+        assert reloaded.LLM_TIMEOUT == 60.0
+        assert reloaded.LLM_CONNECT_TIMEOUT == 10.0
+        assert reloaded.LLM_MAX_RETRIES == 3
+        assert reloaded.LLM_RETRY_DELAY == 2.0
+    finally:
+        monkeypatch.delenv("LLM_TIMEOUT", raising=False)
+        monkeypatch.delenv("LLM_CONNECT_TIMEOUT", raising=False)
+        monkeypatch.delenv("LLM_MAX_RETRIES", raising=False)
+        monkeypatch.delenv("LLM_RETRY_DELAY", raising=False)
+        importlib.reload(llm_client)
+
+
+def test_http_post_rejects_oversized_response(monkeypatch):
+    """_http_post raises LLMError when response body exceeds LLM_MAX_RESPONSE_BYTES."""
+    oversized_body = b"x" * 200
+
+    fake_resp = MagicMock(spec=httpx.Response)
+    fake_resp.content = oversized_body
+
+    monkeypatch.setattr(llm_client, "_get_http_client", lambda: MagicMock(
+        post=MagicMock(return_value=fake_resp),
+    ))
+    monkeypatch.setattr(llm_client, "LLM_MAX_RESPONSE_BYTES", 100)
+
+    with pytest.raises(llm_client.LLMError, match="LLM_RESPONSE_TOO_LARGE"):
+        llm_client._http_post("https://example.com/api")
+
+
+def test_http_post_allows_normal_sized_response(monkeypatch):
+    """_http_post returns response when body is within LLM_MAX_RESPONSE_BYTES."""
+    normal_body = b"x" * 50
+
+    fake_resp = MagicMock(spec=httpx.Response)
+    fake_resp.content = normal_body
+
+    monkeypatch.setattr(llm_client, "_get_http_client", lambda: MagicMock(
+        post=MagicMock(return_value=fake_resp),
+    ))
+    monkeypatch.setattr(llm_client, "LLM_MAX_RESPONSE_BYTES", 100)
+
+    result = llm_client._http_post("https://example.com/api")
+    assert result is fake_resp
+
+
+# ------------------------------------------------------------
+# Support tier のテスト
+# ------------------------------------------------------------
+
+
+class TestSupportTier:
+    """Tests for LLM provider support tier definitions."""
+
+    def test_support_tier_enum_values(self):
+        assert SupportTier.PRODUCTION.value == "production"
+        assert SupportTier.PLANNED.value == "planned"
+        assert SupportTier.EXPERIMENTAL.value == "experimental"
+
+    def test_all_providers_have_tier(self):
+        """Every LLMProvider must have an entry in PROVIDER_SUPPORT_TIER."""
+        for p in LLMProvider:
+            assert p.value in PROVIDER_SUPPORT_TIER, (
+                f"Provider '{p.value}' missing from PROVIDER_SUPPORT_TIER"
+            )
+
+    def test_openai_is_production(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OPENAI.value] is SupportTier.PRODUCTION
+
+    def test_anthropic_is_planned(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.ANTHROPIC.value] is SupportTier.PLANNED
+
+    def test_google_is_planned(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.GOOGLE.value] is SupportTier.PLANNED
+
+    def test_ollama_is_experimental(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OLLAMA.value] is SupportTier.EXPERIMENTAL
+
+    def test_openrouter_is_experimental(self):
+        assert PROVIDER_SUPPORT_TIER[LLMProvider.OPENROUTER.value] is SupportTier.EXPERIMENTAL
+
+    def test_get_provider_support_tier_known(self):
+        assert get_provider_support_tier("openai") == SupportTier.PRODUCTION
+        assert get_provider_support_tier("anthropic") == SupportTier.PLANNED
+        assert get_provider_support_tier("ollama") == SupportTier.EXPERIMENTAL
+
+    def test_get_provider_support_tier_unknown_defaults_to_experimental(self):
+        assert get_provider_support_tier("unknown-provider") == SupportTier.EXPERIMENTAL
+
+    def test_production_provider_no_warning(self, monkeypatch):
+        """OpenAI (production) should not emit a UserWarning."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+
+        dummy = _DummyResponse(
+            200,
+            {"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.OPENAI.value,
+                model="gpt-4.1-mini",
+            )
+        tier_warnings = [x for x in w if "tier" in str(x.message)]
+        assert len(tier_warnings) == 0
+
+    def test_planned_provider_emits_warning(self, monkeypatch):
+        """Anthropic (planned) should emit a UserWarning."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "ak-test")
+
+        dummy = _DummyResponse(
+            200,
+            {"content": [{"type": "text", "text": "ok"}]},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.ANTHROPIC.value,
+                model="claude-opus-4-6",
+            )
+        tier_warnings = [x for x in w if "planned" in str(x.message)]
+        assert len(tier_warnings) == 1
+        assert "anthropic" in str(tier_warnings[0].message)
+
+    def test_experimental_provider_emits_warning(self, monkeypatch):
+        """Ollama (experimental) should emit a UserWarning."""
+        dummy = _DummyResponse(
+            200,
+            {"message": {"role": "assistant", "content": "ok"}},
+        )
+        monkeypatch.setattr(llm_client, "_http_post", lambda *a, **kw: dummy)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            llm_client.chat(
+                system_prompt="sys",
+                user_prompt="usr",
+                provider=LLMProvider.OLLAMA.value,
+                model="llama3",
+            )
+        tier_warnings = [x for x in w if "experimental" in str(x.message)]
+        assert len(tier_warnings) == 1
+        assert "ollama" in str(tier_warnings[0].message)
+
+    def test_support_tier_exported_in_all(self):
+        """SupportTier and helpers are part of the public API."""
+        assert "SupportTier" in llm_client.__all__
+        assert "PROVIDER_SUPPORT_TIER" in llm_client.__all__
+        assert "get_provider_support_tier" in llm_client.__all__
+
+
+# =======================================================
+# _sanitize_affect_hint tests
+# =======================================================
+
+
+class TestSanitizeAffectHint:
+    """Tests for affect_hint sanitisation before system prompt injection."""
+
+    def test_none_returns_none(self):
+        assert llm_client._sanitize_affect_hint(None) is None
+
+    def test_empty_returns_none(self):
+        assert llm_client._sanitize_affect_hint("") is None
+        assert llm_client._sanitize_affect_hint("   ") is None
+
+    def test_normal_text_passes_through(self):
+        assert llm_client._sanitize_affect_hint("丁寧") == "丁寧"
+        assert llm_client._sanitize_affect_hint("legal") == "legal"
+
+    def test_control_chars_stripped(self):
+        result = llm_client._sanitize_affect_hint("legal\x00\x01\x0e")
+        assert result == "legal"
+
+    def test_truncated_to_max_length(self):
+        long = "a" * 500
+        result = llm_client._sanitize_affect_hint(long)
+        assert result is not None
+        assert len(result) == llm_client._AFFECT_HINT_MAX_LEN
+
+    def test_tabs_and_newlines_preserved(self):
+        r"""Common whitespace (\t, \n, \r) should not be stripped."""
+        result = llm_client._sanitize_affect_hint("hello\tworld\nfoo")
+        assert "\t" in result
+        assert "\n" in result
+
+
+class TestInjectAffectSanitisation:
+    """Ensure _inject_affect_into_system_prompt uses sanitised hints."""
+
+    def test_control_chars_in_hint_do_not_reach_prompt(self):
+        result = llm_client._inject_affect_into_system_prompt(
+            "base prompt",
+            affect_hint="丁寧\x00\x01",
+        )
+        assert "\x00" not in result
+        assert "\x01" not in result

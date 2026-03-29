@@ -76,3 +76,19 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "external: tests that depend on external network services",
     )
+    config.addinivalue_line(
+        "markers",
+        "unit: 単体テスト",
+    )
+    config.addinivalue_line(
+        "markers",
+        "integration: 統合テスト",
+    )
+    config.addinivalue_line(
+        "markers",
+        "scenario: ビジネスシナリオテスト",
+    )
+    config.addinivalue_line(
+        "markers",
+        "eu_ai_act: EU AI Act コンプライアンス関連",
+    )
