@@ -21,6 +21,12 @@ from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
 
 logger = logging.getLogger(__name__)
 
+try:
+    from veritas_os.observability.metrics import record_auth_rejection
+except Exception:  # pragma: no cover - optional observability dependency
+    def record_auth_rejection(reason: str) -> None:
+        return None
+
 
 # ==============================
 # Auth failure tracking / metrics
@@ -34,6 +40,7 @@ def _record_auth_reject_reason(reason_code: str) -> None:
     """Track reject reason counters for operational audit metrics."""
     with _AUTH_REJECT_REASON_LOCK:
         _AUTH_REJECT_REASON_METRICS[reason_code] = _AUTH_REJECT_REASON_METRICS.get(reason_code, 0) + 1
+    record_auth_rejection(reason_code)
 
 
 def _snapshot_auth_reject_reason_metrics() -> Dict[str, int]:
