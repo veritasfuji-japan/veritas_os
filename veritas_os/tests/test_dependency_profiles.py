@@ -28,7 +28,7 @@ _REQUIREMENTS = _ROOT / "veritas_os" / "requirements.txt"
 
 # --- Expected extras groups ---------------------------------------------------
 
-EXPECTED_EXTRAS = {"ml", "reports", "anthropic", "system", "full"}
+EXPECTED_EXTRAS = {"ml", "reports", "anthropic", "system", "observability", "full"}
 
 EXPECTED_CORE = {
     "fastapi",
@@ -54,6 +54,10 @@ EXPECTED_OPTIONAL = {
     "psutil",
     "trio",
     "starlette",
+    "opentelemetry-api",
+    "opentelemetry-sdk",
+    "opentelemetry-exporter-otlp",
+    "prometheus-client",
 }
 
 
@@ -130,6 +134,12 @@ class TestPyprojectExtras:
             for spec in specs:
                 if spec.startswith("veritas-os"):
                     continue  # self-referencing extra
+                if group == "observability":
+                    assert ">=" in spec or "==" in spec, (
+                        f"Observability extras [{group}] entry '{spec}' "
+                        "must define a minimum or exact version"
+                    )
+                    continue
                 assert "==" in spec, (
                     f"Extras [{group}] entry '{spec}' is not pinned with =="
                 )
