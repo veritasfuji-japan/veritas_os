@@ -9,6 +9,7 @@ stops, and response coercion/validation lives in
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, Request
@@ -34,6 +35,15 @@ from veritas_os.api import decide_service as _svc
 
 logger = logging.getLogger(__name__)
 
+try:
+    from veritas_os.observability.metrics import record_decide, set_telos_score
+except Exception:  # pragma: no cover - optional observability dependency
+    def record_decide(status: Any, mode: Any, intent: Any, duration_seconds: float | None = None) -> None:
+        return None
+
+    def set_telos_score(user_id: Any, score: Any) -> None:
+        return None
+
 router = APIRouter()
 
 # Rejection status set, shared across handlers.
@@ -54,14 +64,38 @@ def _get_server():
 
 @router.post("/v1/decide", response_model=DecideResponse, dependencies=[Depends(require_permission(Permission.decide))])
 async def decide(req: DecideRequest, request: Request):
+    started_at = time.perf_counter()
+    mode = "fast" if bool(getattr(req, "fast_mode", False)) else "normal"
+    intent = "unknown"
+    req_context = getattr(req, "context", None)
+    if isinstance(req_context, dict):
+        intent = req_context.get("intent") or intent
+
+    def _record(status: str) -> None:
+        record_decide(
+            status=status,
+            mode=mode,
+            intent=intent,
+            duration_seconds=time.perf_counter() - started_at,
+        )
+
     srv = _get_server()
     p = srv.get_decision_pipeline()
     if p is None:
         _log_decide_failure("decision_pipeline unavailable", srv._pipeline_state.err)
+        # Best-effort recovery for subsequent requests when availability is
+        # temporarily degraded by test/runtime mutation of lazy state.
+        if (
+            getattr(srv._pipeline_state, "obj", None) is None
+            and getattr(srv._pipeline_state, "attempted", False)
+            and getattr(srv._pipeline_state, "err", None) is not None
+        ):
+            srv._pipeline_state = srv._LazyState()
         try:
             srv._publish_event("decide.completed", {"ok": False, "error": DECIDE_GENERIC_ERROR})
         except Exception:
             logger.debug("event publish failed on pipeline unavailable (best-effort)", exc_info=True)
+        _record("unavailable")
         return _svc.error_response(503, error=DECIDE_GENERIC_ERROR)
 
     try:
@@ -76,6 +110,7 @@ async def decide(req: DecideRequest, request: Request):
             )
         except Exception:
             logger.debug("event publish failed on pipeline error (best-effort)", exc_info=True)
+        _record("error")
         return _svc.error_response(503, error=DECIDE_GENERIC_ERROR, failure_category=failure_category)
 
     if isinstance(payload, dict):
@@ -89,6 +124,7 @@ async def decide(req: DecideRequest, request: Request):
 
     coerced, stop_response = _svc.apply_compliance_stop(coerced, srv._publish_event)
     if stop_response is not None:
+        _record("compliance_stop")
         return stop_response
 
     try:
@@ -101,6 +137,17 @@ async def decide(req: DecideRequest, request: Request):
         )
     except Exception:
         logger.debug("post-pipeline event publish failed (best-effort)", exc_info=True)
+
+    fuji = coerced.get("fuji") if isinstance(coerced, dict) else {}
+    status = "allow"
+    if isinstance(fuji, dict):
+        status = str(fuji.get("decision_status") or fuji.get("status") or status)
+
+    user_id = getattr(getattr(request, "state", None), "user_id", None)
+    if user_id is None and isinstance(req_context, dict):
+        user_id = req_context.get("user_id")
+    set_telos_score(user_id=user_id or "anonymous", score=coerced.get("telos_score"))
+    _record(status)
 
     return _svc.validate_and_respond(
         DecideResponse, coerced,
