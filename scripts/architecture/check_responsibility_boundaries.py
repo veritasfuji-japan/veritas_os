@@ -192,11 +192,7 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
 
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     """Check one rule and return violation messages, one per forbidden import found."""
-    path = core_dir / f"{rule.source_module}.py"
-    if not path.exists():
-        pkg_init = core_dir / rule.source_module / "__init__.py"
-        if pkg_init.exists():
-            path = pkg_init
+    path = _resolve_module_source_path(core_dir, rule.source_module)
     try:
         source = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -218,6 +214,19 @@ def _parse_imported_names(path: Path) -> set[str]:
     return _collect_imported_names(tree)
 
 
+def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
+    """Resolve module source path, supporting both module.py and package __init__.py."""
+    module_file = core_dir / f"{module_name}.py"
+    if module_file.exists():
+        return module_file
+
+    package_init = core_dir / module_name / "__init__.py"
+    if package_init.exists():
+        return package_init
+
+    return module_file
+
+
 def _load_module_docstring(path: Path) -> str:
     """Return the module docstring for a Python source file."""
     source = path.read_text(encoding="utf-8")
@@ -232,11 +241,7 @@ def collect_module_docstring_issues(
     """Validate core module docstrings keep boundary guidance visible."""
     issues: list[DocAlignmentIssue] = []
     for module_name in modules:
-        path = core_dir / f"{module_name}.py"
-        if not path.exists():
-            pkg_init = core_dir / module_name / "__init__.py"
-            if pkg_init.exists():
-                path = pkg_init
+        path = _resolve_module_source_path(core_dir, module_name)
         try:
             docstring = _load_module_docstring(path)
         except FileNotFoundError:
@@ -301,12 +306,12 @@ def collect_boundary_issues(
             BoundaryIssue(
                 code="doc_alignment_error",
                 message=issue.message,
-                path=issue.path or core_dir / f"{issue.source_module}.py",
+                path=issue.path or _resolve_module_source_path(core_dir, issue.source_module),
                 source_module=issue.source_module,
             )
         )
     for rule in rules:
-        path = core_dir / f"{rule.source_module}.py"
+        path = _resolve_module_source_path(core_dir, rule.source_module)
         try:
             imported = _parse_imported_names(path)
         except FileNotFoundError:
@@ -368,7 +373,7 @@ def _collect_violations(
     """Collect structured violation details for remediation guidance output."""
     violation_details: list[ViolationDetail] = []
     for rule in rules:
-        path = core_dir / f"{rule.source_module}.py"
+        path = _resolve_module_source_path(core_dir, rule.source_module)
         try:
             source = path.read_text(encoding="utf-8")
         except FileNotFoundError:
