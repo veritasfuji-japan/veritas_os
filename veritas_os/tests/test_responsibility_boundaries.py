@@ -15,11 +15,22 @@ from veritas_os.core import fuji, memory, planner
 CORE_DIR = Path(__file__).resolve().parents[1] / "core"
 
 
+def _core_module_path(module_name: str) -> Path:
+    """Resolve flat core module path or package __init__.py path."""
+    flat_path = CORE_DIR / f"{module_name}.py"
+    if flat_path.exists():
+        return flat_path
+    package_init = CORE_DIR / module_name / "__init__.py"
+    if package_init.exists():
+        return package_init
+    return flat_path
+
+
 MODULE_FILES: Dict[str, Path] = {
-    "planner": CORE_DIR / "planner.py",
-    "kernel": CORE_DIR / "kernel.py",
-    "fuji": CORE_DIR / "fuji.py",
-    "memory": CORE_DIR / "memory.py",
+    "planner": _core_module_path("planner"),
+    "kernel": _core_module_path("kernel"),
+    "fuji": _core_module_path("fuji"),
+    "memory": _core_module_path("memory"),
 }
 
 

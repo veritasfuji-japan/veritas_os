@@ -221,6 +221,26 @@ def test_collect_boundary_issues_classifies_boundary_violation(tmp_path: Path) -
     assert issues[0].forbidden_module == "kernel"
 
 
+def test_collect_boundary_issues_supports_package_module_sources(tmp_path: Path) -> None:
+    """Package modules (module/__init__.py) should not be treated as missing."""
+    _write_guarded_core_docstrings(tmp_path)
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+    _write_module(tmp_path / "kernel.py", "# kernel module\n")
+    (tmp_path / "fuji").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "memory").mkdir(parents=True, exist_ok=True)
+    _write_module(tmp_path / "fuji" / "__init__.py", "# fuji package module\n")
+    _write_module(tmp_path / "memory" / "__init__.py", "# memory package module\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+
+    package_input_invalid = [
+        issue
+        for issue in issues
+        if issue.code == "input_invalid" and issue.source_module in {"fuji", "memory"}
+    ]
+    assert package_input_invalid == []
+
+
 def test_collect_doc_alignment_issues_preserves_module_context(tmp_path: Path) -> None:
     """Structured doc drift issues should keep the affected module name."""
     doc_path = tmp_path / "core_responsibility_boundaries.md"
