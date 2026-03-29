@@ -268,8 +268,11 @@ def test_locked_memory_non_posix_uses_lockfile(
 
 
 def test_memory_py_line_count_regression() -> None:
-    """memory.py should stay under 850 lines after decomposition."""
-    memory_path = Path(__file__).resolve().parents[1] / "core" / "memory.py"
+    """Memory facade should stay under 850 lines after decomposition."""
+    core_dir = Path(__file__).resolve().parents[1] / "core"
+    memory_path = core_dir / "memory.py"
+    if not memory_path.exists():
+        memory_path = core_dir / "memory" / "__init__.py"
     line_count = len(memory_path.read_text(encoding="utf-8").splitlines())
     assert line_count < 850, (
         f"memory.py has {line_count} lines; keep it under 850 "

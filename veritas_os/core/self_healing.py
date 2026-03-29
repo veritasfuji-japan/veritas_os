@@ -19,7 +19,7 @@ import time
 from typing import Any, Dict, Optional
 
 from .atomic_io import atomic_write_json
-from .fuji_codes import FujiAction
+from .fuji.fuji_codes import FujiAction
 from veritas_os.logging.paths import LOG_DIR
 
 logger = logging.getLogger(__name__)
