@@ -171,6 +171,8 @@ export default function GovernanceControlPage(): JSX.Element {
               draftApprovalStatus={state.draftApprovalStatus}
               changeCount={state.changeCount}
               canApprove={state.canApprove}
+              ticketId={state.draft.approval_workflow.human_review_ticket}
+              approverIdentityBinding={state.draft.approval_workflow.approver_identity_binding}
               onApprove={state.approveChanges}
               onReject={state.rejectChanges}
             />

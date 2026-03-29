@@ -35,6 +35,18 @@ const policyResponse = {
       redact_before_log: true,
       max_log_size: 1000,
     },
+    rollout_controls: {
+      strategy: "canary",
+      canary_percent: 10,
+      stage: 1,
+      staged_enforcement: true,
+    },
+    approval_workflow: {
+      human_review_ticket: "GOV-999",
+      human_review_required: true,
+      approver_identity_binding: true,
+      approver_identities: ["admin-a", "admin-b"],
+    },
     updated_at: "2026-01-01T00:00:00+00:00",
     updated_by: "admin",
   },

@@ -61,6 +61,8 @@ export const DIFF_CATEGORY_LABELS: Record<DiffChange["category"], string> = {
   threshold: "しきい値変更",
   escalation: "エスカレーション変更",
   retention: "監査ログ変更",
+  rollout: "ロールアウト制御変更",
+  approval: "承認ワークフロー変更",
   meta: "メタ情報変更",
 };
 

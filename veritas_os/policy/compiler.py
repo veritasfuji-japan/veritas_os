@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 from typing import Any, Dict
 
@@ -32,6 +33,12 @@ def _utc_now_iso8601() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
         "+00:00", "Z"
     )
+
+
+def _manifest_signature_hex(manifest_path: Path) -> str:
+    """Return deterministic SHA-256 signature hex for manifest payload."""
+    payload = manifest_path.read_bytes()
+    return hashlib.sha256(payload).hexdigest()
 
 
 def compile_policy_to_bundle(
@@ -77,6 +84,8 @@ def compile_policy_to_bundle(
     )
     manifest_path = bundle_dir / "manifest.json"
     write_stable_json(manifest_path, manifest)
+    signature_path = bundle_dir / "manifest.sig"
+    signature_path.write_text(_manifest_signature_hex(manifest_path) + "\n", encoding="utf-8")
 
     archive_path = create_bundle_archive(bundle_dir)
 

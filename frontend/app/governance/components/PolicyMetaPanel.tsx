@@ -44,6 +44,16 @@ export function PolicyMetaPanel({ savedPolicy, draft, draftApprovalStatus, hasCh
           <p className="text-muted-foreground">last_applied</p>
           <p className="font-mono font-semibold">{draft.last_applied ?? "N/A"}</p>
         </div>
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground">rollout strategy</p>
+          <p className="font-mono font-semibold">
+            {draft.rollout_controls.strategy} ({draft.rollout_controls.canary_percent}% / stage {draft.rollout_controls.stage})
+          </p>
+        </div>
+        <div className="rounded-lg border px-3 py-2">
+          <p className="text-muted-foreground">approval ticket</p>
+          <p className="font-mono font-semibold">{draft.approval_workflow.human_review_ticket || "N/A"}</p>
+        </div>
       </div>
       {hasChanges ? (
         <p className="mt-2 text-xs text-warning">{t(`${changeCount} 件の未適用変更があります。適用前に承認してください。`, `${changeCount} unapplied change(s). Approve before applying.`)}</p>

@@ -17,7 +17,7 @@ export interface DiffChange {
   path: string;
   old: string;
   next: string;
-  category: "rule" | "threshold" | "escalation" | "retention" | "meta";
+  category: "rule" | "threshold" | "escalation" | "retention" | "rollout" | "approval" | "meta";
 }
 
 export interface HistoryEntry {

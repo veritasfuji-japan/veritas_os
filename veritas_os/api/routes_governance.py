@@ -160,3 +160,39 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
             status_code=500,
             content={"ok": False, "error": "Failed to load governance policy history"},
         )
+
+
+@router.get("/v1/governance/decisions/export")
+def governance_decision_export(
+    limit: int = Query(default=100, ge=1, le=1000),
+    status: str | None = Query(default=None),
+):
+    """Export recent decisions for governance/audit integrations."""
+    srv = _get_server()
+    try:
+        page = srv.get_trust_log_page(cursor=None, limit=limit)
+        items = page.get("items", []) if isinstance(page, dict) else []
+        normalized: list[dict[str, Any]] = []
+        for entry in items:
+            if not isinstance(entry, dict):
+                continue
+            decision_status = str(entry.get("decision_status") or entry.get("status") or "unknown")
+            if status and decision_status != status:
+                continue
+            normalized.append(
+                {
+                    "request_id": str(entry.get("request_id") or ""),
+                    "decision_status": decision_status,
+                    "risk": entry.get("risk"),
+                    "created_at": str(entry.get("created_at") or entry.get("ts") or ""),
+                    "approver": str(entry.get("approver") or entry.get("updated_by") or "system"),
+                    "trace_sha256": entry.get("sha256"),
+                }
+            )
+        return {"ok": True, "count": len(normalized), "items": normalized}
+    except Exception as e:
+        logger.error("governance_decision_export failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to export governance decisions"},
+        )

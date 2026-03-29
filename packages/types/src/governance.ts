@@ -47,6 +47,22 @@ export interface LogRetention {
   max_log_size: number;
 }
 
+/** Progressive rollout controls for canary/staged policy enforcement. */
+export interface RolloutControls {
+  strategy: "disabled" | "canary" | "staged" | "full";
+  canary_percent: number;
+  stage: number;
+  staged_enforcement: boolean;
+}
+
+/** Human-review and approver identity-binding workflow settings. */
+export interface ApprovalWorkflowConfig {
+  human_review_ticket: string;
+  human_review_required: boolean;
+  approver_identity_binding: boolean;
+  approver_identities: string[];
+}
+
 /**
  * Full governance policy object returned by the backend.
  *
@@ -58,6 +74,8 @@ export interface GovernancePolicy {
   risk_thresholds: RiskThresholds;
   auto_stop: AutoStop;
   log_retention: LogRetention;
+  rollout_controls: RolloutControls;
+  approval_workflow: ApprovalWorkflowConfig;
   updated_at: string;
   updated_by: string;
 }
