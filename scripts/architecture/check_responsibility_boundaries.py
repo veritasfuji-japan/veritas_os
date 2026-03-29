@@ -190,13 +190,20 @@ def _collect_imported_names(tree: ast.Module) -> set[str]:
     return imported
 
 
+def _resolve_module_source_path(core_dir: Path, module_name: str) -> Path:
+    """Resolve a source module path, supporting both module.py and package __init__.py."""
+    module_path = core_dir / f"{module_name}.py"
+    if module_path.exists():
+        return module_path
+    package_init = core_dir / module_name / "__init__.py"
+    if package_init.exists():
+        return package_init
+    return module_path
+
+
 def _check_rule(core_dir: Path, rule: BoundaryRule) -> list[str]:
     """Check one rule and return violation messages, one per forbidden import found."""
-    path = core_dir / f"{rule.source_module}.py"
-    if not path.exists():
-        pkg_init = core_dir / rule.source_module / "__init__.py"
-        if pkg_init.exists():
-            path = pkg_init
+    path = _resolve_module_source_path(core_dir, rule.source_module)
     try:
         source = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -232,11 +239,7 @@ def collect_module_docstring_issues(
     """Validate core module docstrings keep boundary guidance visible."""
     issues: list[DocAlignmentIssue] = []
     for module_name in modules:
-        path = core_dir / f"{module_name}.py"
-        if not path.exists():
-            pkg_init = core_dir / module_name / "__init__.py"
-            if pkg_init.exists():
-                path = pkg_init
+        path = _resolve_module_source_path(core_dir, module_name)
         try:
             docstring = _load_module_docstring(path)
         except FileNotFoundError:
@@ -306,7 +309,7 @@ def collect_boundary_issues(
             )
         )
     for rule in rules:
-        path = core_dir / f"{rule.source_module}.py"
+        path = _resolve_module_source_path(core_dir, rule.source_module)
         try:
             imported = _parse_imported_names(path)
         except FileNotFoundError:

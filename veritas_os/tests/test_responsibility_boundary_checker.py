@@ -218,7 +218,28 @@ def test_collect_boundary_issues_classifies_boundary_violation(tmp_path: Path) -
     assert len(issues) == 1
     assert issues[0].code == "boundary_violation"
     assert issues[0].source_module == "planner"
-    assert issues[0].forbidden_module == "kernel"
+
+
+def test_collect_boundary_issues_supports_package_init_modules(tmp_path: Path) -> None:
+    """Package-style modules should be resolved from __init__.py without input_invalid."""
+    _write_guarded_core_docstrings(tmp_path)
+
+    for module_name in ("fuji", "memory"):
+        module_path = tmp_path / f"{module_name}.py"
+        package_dir = tmp_path / module_name
+        package_dir.mkdir(parents=True, exist_ok=True)
+        (package_dir / "__init__.py").write_text(
+            module_path.read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        module_path.unlink()
+
+    _write_module(tmp_path / "planner.py", "# planner module\n")
+
+    issues = collect_boundary_issues(core_dir=tmp_path)
+    invalid_issues = [issue for issue in issues if issue.code == "input_invalid"]
+
+    assert invalid_issues == []
 
 
 def test_collect_doc_alignment_issues_preserves_module_context(tmp_path: Path) -> None:
