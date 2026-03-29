@@ -10,11 +10,21 @@ interface ApprovalWorkflowProps {
   draftApprovalStatus: ApprovalStatus;
   changeCount: number;
   canApprove: boolean;
+  ticketId: string;
+  approverIdentityBinding: boolean;
   onApprove: () => void;
   onReject: () => void;
 }
 
-export function ApprovalWorkflow({ draftApprovalStatus, changeCount, canApprove, onApprove, onReject }: ApprovalWorkflowProps): JSX.Element {
+export function ApprovalWorkflow({
+  draftApprovalStatus,
+  changeCount,
+  canApprove,
+  ticketId,
+  approverIdentityBinding,
+  onApprove,
+  onReject,
+}: ApprovalWorkflowProps): JSX.Element {
   const { t } = useI18n();
   const approvalBlocked = !canApprove || draftApprovalStatus === "rejected";
 
@@ -28,6 +38,9 @@ export function ApprovalWorkflow({ draftApprovalStatus, changeCount, canApprove,
         <button type="button" className="rounded border border-success/60 bg-success/10 px-3 py-2 text-sm text-success" onClick={onApprove} disabled={!canApprove || draftApprovalStatus === "approved"}>approve</button>
         <button type="button" className="rounded border border-danger/60 bg-danger/10 px-3 py-2 text-sm text-danger" onClick={onReject} disabled={!canApprove || draftApprovalStatus === "rejected"}>reject</button>
       </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        ticket: <span className="font-mono">{ticketId || "unlinked"}</span> / identity binding: {approverIdentityBinding ? "enabled" : "disabled"}
+      </p>
       {approvalBlocked ? (
         <p className="mt-2 rounded border border-warning/50 bg-warning/10 px-2 py-1 text-xs text-warning">
           {t(

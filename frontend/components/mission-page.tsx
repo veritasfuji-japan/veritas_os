@@ -167,6 +167,12 @@ const DECISION_EVIDENCE_ROUTE: DecisionEvidenceRouteModel = {
   reportingTarget: "24h incident report bundle (audit + governance)",
 };
 
+const POLICY_DIFF_IMPACT_PREVIEW = {
+  status: "connected",
+  previewTarget: "/governance",
+  summary: "Policy diff/impact preview is now linked to Mission Control action flow.",
+};
+
 /**
  * MissionPage renders the operational command-center view.
  *
@@ -248,6 +254,14 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
             <li><span className="font-semibold">Evidence:</span> {DECISION_EVIDENCE_ROUTE.evidenceAnchor}</li>
             <li><span className="font-semibold">Report:</span> {DECISION_EVIDENCE_ROUTE.reportingTarget}</li>
           </ol>
+        </Card>
+
+        <Card title="Policy diff / impact preview" titleSize="sm" variant="glass" className="border-border/70" accent="warning">
+          <div className="space-y-1 text-xs">
+            <p>Status: <span className="font-semibold text-warning">{POLICY_DIFF_IMPACT_PREVIEW.status}</span></p>
+            <p>{POLICY_DIFF_IMPACT_PREVIEW.summary}</p>
+            <p className="text-muted-foreground">Route: {POLICY_DIFF_IMPACT_PREVIEW.previewTarget}</p>
+          </div>
         </Card>
       </section>
 

@@ -38,9 +38,9 @@ def build_manifest(
         },
         "bundle_contents": sorted(bundle_files, key=lambda item: item["path"]),
         "signing": {
-            "status": "unsigned",
-            "signature_ref": None,
-            "key_id": None,
+            "status": "signed-local",
+            "signature_ref": "manifest.sig",
+            "key_id": "local-sha256",
             "extensions": {},
         },
     }

@@ -39,6 +39,18 @@ const MOCK_POLICY = {
       redact_before_log: true,
       max_log_size: 10000,
     },
+    rollout_controls: {
+      strategy: "disabled",
+      canary_percent: 0,
+      stage: 0,
+      staged_enforcement: false,
+    },
+    approval_workflow: {
+      human_review_ticket: "",
+      human_review_required: false,
+      approver_identity_binding: true,
+      approver_identities: [],
+    },
     updated_at: "2026-02-12T00:00:00+00:00",
     updated_by: "system",
   },

@@ -7,6 +7,7 @@ into runtime-evaluable policy structures used by governance and pipeline code.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
@@ -54,6 +55,18 @@ def _read_json_file(path: Path) -> Dict[str, Any]:
     return data
 
 
+def verify_manifest_signature(bundle_dir: str | Path) -> bool:
+    """Verify ``manifest.sig`` for a compiled bundle."""
+    root = Path(bundle_dir)
+    manifest_path = root / "manifest.json"
+    signature_path = root / "manifest.sig"
+    if not manifest_path.exists() or not signature_path.exists():
+        return False
+    expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    observed = signature_path.read_text(encoding="utf-8").strip()
+    return expected == observed
+
+
 def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
     """Convert canonical policy IR mapping into a runtime-ready policy object."""
     return RuntimePolicy(
@@ -80,6 +93,8 @@ def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
 def load_runtime_bundle(bundle_dir: str | Path) -> RuntimePolicyBundle:
     """Load a compiled bundle directory and adapt it for runtime evaluation."""
     root = Path(bundle_dir)
+    if not verify_manifest_signature(root):
+        raise ValueError("manifest signature verification failed")
     manifest = _read_json_file(root / "manifest.json")
     canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
 

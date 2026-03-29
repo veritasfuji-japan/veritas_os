@@ -6,7 +6,12 @@ from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
 from .hash import canonical_ir_json, semantic_policy_hash
 from .models import OutcomeAction, PolicyValidationError, SourcePolicy
 from .normalize import to_canonical_ir
-from .runtime_adapter import RuntimePolicy, RuntimePolicyBundle, load_runtime_bundle
+from .runtime_adapter import (
+    RuntimePolicy,
+    RuntimePolicyBundle,
+    load_runtime_bundle,
+    verify_manifest_signature,
+)
 from .schema import load_and_validate_policy, validate_source_policy
 
 __all__ = [
@@ -26,6 +31,7 @@ __all__ = [
     "semantic_policy_hash",
     "RuntimePolicy",
     "RuntimePolicyBundle",
+    "verify_manifest_signature",
     "to_canonical_ir",
     "validate_source_policy",
 ]

@@ -22,6 +22,8 @@ function categorizePath(path: string): DiffChange["category"] {
   if (path.startsWith("risk_thresholds")) return "threshold";
   if (path.startsWith("auto_stop")) return "escalation";
   if (path.startsWith("log_retention")) return "retention";
+  if (path.startsWith("rollout_controls")) return "rollout";
+  if (path.startsWith("approval_workflow")) return "approval";
   return "meta";
 }
 

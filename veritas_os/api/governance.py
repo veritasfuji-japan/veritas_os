@@ -87,12 +87,32 @@ class LogRetention(BaseModel):
     max_log_size: int = Field(default=10000, ge=100, le=1_000_000)
 
 
+class RolloutControls(BaseModel):
+    """Progressive enforcement controls for governance policy rollout."""
+
+    strategy: Literal["disabled", "canary", "staged", "full"] = "disabled"
+    canary_percent: int = Field(default=0, ge=0, le=100)
+    stage: int = Field(default=0, ge=0, le=10)
+    staged_enforcement: bool = False
+
+
+class ApprovalWorkflowConfig(BaseModel):
+    """Human review + approver identity binding metadata."""
+
+    human_review_ticket: str = ""
+    human_review_required: bool = False
+    approver_identity_binding: bool = True
+    approver_identities: list[str] = Field(default_factory=list)
+
+
 class GovernancePolicy(BaseModel):
     version: str = "governance_v1"
     fuji_rules: FujiRules = Field(default_factory=FujiRules)
     risk_thresholds: RiskThresholds = Field(default_factory=RiskThresholds)
     auto_stop: AutoStop = Field(default_factory=AutoStop)
     log_retention: LogRetention = Field(default_factory=LogRetention)
+    rollout_controls: RolloutControls = Field(default_factory=RolloutControls)
+    approval_workflow: ApprovalWorkflowConfig = Field(default_factory=ApprovalWorkflowConfig)
     updated_at: str = ""
     updated_by: str = "system"
 
@@ -102,6 +122,8 @@ _NESTED_POLICY_MODELS = {
     "risk_thresholds": RiskThresholds,
     "auto_stop": AutoStop,
     "log_retention": LogRetention,
+    "rollout_controls": RolloutControls,
+    "approval_workflow": ApprovalWorkflowConfig,
 }
 
 

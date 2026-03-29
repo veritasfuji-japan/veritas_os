@@ -252,6 +252,43 @@ function validateGovernancePolicy(value: unknown, pathPrefix: string): Governanc
   issues.push(...validateRiskThresholds(value.risk_thresholds, `${pathPrefix}.risk_thresholds`));
   issues.push(...validateAutoStop(value.auto_stop, `${pathPrefix}.auto_stop`));
   issues.push(...validateLogRetention(value.log_retention, `${pathPrefix}.log_retention`));
+  if (!isRecord(value.rollout_controls)) {
+    issues.push(issue("format", `${pathPrefix}.rollout_controls`, "object である必要があります。"));
+  } else {
+    const strategy = value.rollout_controls.strategy;
+    if (typeof strategy !== "string") {
+      issues.push(issue("format", `${pathPrefix}.rollout_controls.strategy`, "string である必要があります。"));
+    }
+    if (!hasNumberField(value.rollout_controls, "canary_percent")) {
+      issues.push(issue("format", `${pathPrefix}.rollout_controls.canary_percent`, "number である必要があります。"));
+    }
+    if (!hasNumberField(value.rollout_controls, "stage")) {
+      issues.push(issue("format", `${pathPrefix}.rollout_controls.stage`, "number である必要があります。"));
+    }
+    if (!hasBooleanField(value.rollout_controls, "staged_enforcement")) {
+      issues.push(issue("format", `${pathPrefix}.rollout_controls.staged_enforcement`, "boolean である必要があります。"));
+    }
+  }
+
+  if (!isRecord(value.approval_workflow)) {
+    issues.push(issue("format", `${pathPrefix}.approval_workflow`, "object である必要があります。"));
+  } else {
+    if (!hasStringField(value.approval_workflow, "human_review_ticket")) {
+      issues.push(issue("format", `${pathPrefix}.approval_workflow.human_review_ticket`, "string である必要があります。"));
+    }
+    if (!hasBooleanField(value.approval_workflow, "human_review_required")) {
+      issues.push(issue("format", `${pathPrefix}.approval_workflow.human_review_required`, "boolean である必要があります。"));
+    }
+    if (!hasBooleanField(value.approval_workflow, "approver_identity_binding")) {
+      issues.push(issue("format", `${pathPrefix}.approval_workflow.approver_identity_binding`, "boolean である必要があります。"));
+    }
+    if (
+      !Array.isArray(value.approval_workflow.approver_identities)
+      || !value.approval_workflow.approver_identities.every((item) => typeof item === "string")
+    ) {
+      issues.push(issue("format", `${pathPrefix}.approval_workflow.approver_identities`, "string の配列である必要があります。"));
+    }
+  }
 
   if (!hasStringField(value, "updated_at")) {
     issues.push(issue("format", `${pathPrefix}.updated_at`, "string である必要があります。"));

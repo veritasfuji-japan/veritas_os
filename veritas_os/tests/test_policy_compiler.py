@@ -7,6 +7,7 @@ import pytest
 
 from veritas_os.policy.compiler import compile_policy_to_bundle
 from veritas_os.policy.models import PolicyValidationError
+from veritas_os.policy.runtime_adapter import load_runtime_bundle
 
 EXAMPLES_DIR = Path("policies/examples")
 
@@ -27,6 +28,7 @@ def test_compile_policy_success_generates_artifacts(tmp_path: Path) -> None:
     assert (result.bundle_dir / "compiled" / "canonical_ir.json").exists()
     assert (result.bundle_dir / "compiled" / "explain.json").exists()
     assert (result.bundle_dir / "signatures" / "UNSIGNED").exists()
+    assert (result.bundle_dir / "manifest.sig").exists()
     assert result.archive_path.exists()
 
 
@@ -66,7 +68,7 @@ def test_manifest_contents_and_explanation_metadata(tmp_path: Path) -> None:
     assert manifest["semantic_hash"] == result.semantic_hash
     assert manifest["outcome_summary"]["decision"] == "deny"
     assert manifest["bundle_contents"]
-    assert manifest["signing"]["status"] == "unsigned"
+    assert manifest["signing"]["status"] == "signed-local"
 
     assert explain["purpose"]
     assert explain["application"]["human_summary"]
@@ -114,3 +116,26 @@ def test_bundle_structure_paths_are_valid(tmp_path: Path) -> None:
     assert "compiled/canonical_ir.json" in paths
     assert "compiled/explain.json" in paths
     assert "signatures/UNSIGNED" in paths
+
+
+def test_runtime_adapter_verifies_manifest_signature(tmp_path: Path) -> None:
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T09:00:00Z",
+    )
+    bundle = load_runtime_bundle(result.bundle_dir)
+    assert bundle.semantic_hash == result.semantic_hash
+
+
+def test_runtime_adapter_rejects_tampered_manifest_signature(tmp_path: Path) -> None:
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T09:10:00Z",
+    )
+    manifest = _load_json(result.manifest_path)
+    manifest["compiler_version"] = "tampered"
+    result.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="signature verification failed"):
+        load_runtime_bundle(result.bundle_dir)

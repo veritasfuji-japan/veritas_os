@@ -50,6 +50,8 @@ class TestGetPolicy:
         assert "risk_thresholds" in policy
         assert "auto_stop" in policy
         assert "log_retention" in policy
+        assert "rollout_controls" in policy
+        assert "approval_workflow" in policy
 
     def test_get_requires_api_key(self):
         resp = client.get("/v1/governance/policy")
@@ -251,6 +253,35 @@ class TestGovernanceModule:
         """Merged nested section is validated before assignment and save."""
         with pytest.raises(ValidationError):
             gov_mod.update_policy(_approved({"risk_thresholds": {"allow_upper": 1.5}}))
+
+    def test_update_policy_updates_rollout_controls(self):
+        result = gov_mod.update_policy(_approved({"rollout_controls": {"strategy": "canary", "canary_percent": 10}}))
+        assert result["rollout_controls"]["strategy"] == "canary"
+        assert result["rollout_controls"]["canary_percent"] == 10
+
+    def test_update_policy_updates_approval_workflow(self):
+        result = gov_mod.update_policy(
+            _approved(
+                {
+                    "approval_workflow": {
+                        "human_review_ticket": "GOV-123",
+                        "human_review_required": True,
+                        "approver_identity_binding": True,
+                        "approver_identities": ["alice", "bob"],
+                    }
+                }
+            )
+        )
+        assert result["approval_workflow"]["human_review_ticket"] == "GOV-123"
+        assert result["approval_workflow"]["human_review_required"] is True
+
+
+def test_governance_decision_export_endpoint() -> None:
+    resp = client.get("/v1/governance/decisions/export?limit=5", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert "items" in body
 
 
 
@@ -953,4 +984,3 @@ class TestRouteValidationResponses:
         body = resp.json()
         assert body["ok"] is True
         assert isinstance(body["history"], list)
-
