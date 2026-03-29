@@ -493,6 +493,17 @@ from veritas_os.api.auth import (  # noqa: E402,F401
     _check_and_register_nonce,
     verify_signature,
     _check_multiworker_auth_store,
+    _parse_api_keys_config,
+    _is_valid_api_key,
+    resolve_role_for_key,
+    _resolve_role_from_request,
+    require_permission,
+)
+from veritas_os.api.rbac import (  # noqa: E402,F401
+    Role,
+    Permission,
+    ROLE_PERMISSIONS,
+    RBACPolicy,
 )
 
 # Keep _log_api_key_source_once in server.py so tests that patch server.logger work

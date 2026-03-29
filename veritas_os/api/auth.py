@@ -17,6 +17,7 @@ from fastapi import Header, HTTPException, Query, Request, Security, WebSocket
 from fastapi.security.api_key import APIKeyHeader
 
 from veritas_os.api.utils import _errstr, redact
+from veritas_os.api.rbac import Permission, Role, ROLE_PERMISSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -466,6 +467,120 @@ def _get_expected_api_key() -> str:
     return key
 
 
+# ==============================
+# Multi-key RBAC resolution
+# ==============================
+
+import json as _json
+from typing import List
+
+
+def _parse_api_keys_config() -> List[dict]:
+    """Parse VERITAS_API_KEYS JSON env var into a list of {key, role} dicts.
+
+    Returns an empty list when the env var is unset or empty.
+    Raises ValueError on malformed JSON or invalid role values.
+    """
+    raw = (os.getenv("VERITAS_API_KEYS") or "").strip()
+    if not raw:
+        return []
+    try:
+        entries = _json.loads(raw)
+    except _json.JSONDecodeError as exc:
+        raise ValueError(f"VERITAS_API_KEYS is not valid JSON: {exc}") from exc
+    if not isinstance(entries, list):
+        raise ValueError("VERITAS_API_KEYS must be a JSON array")
+    valid_roles = {r.value for r in Role}
+    result: List[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or "key" not in entry or "role" not in entry:
+            raise ValueError("Each VERITAS_API_KEYS entry must have 'key' and 'role' fields")
+        role_str = str(entry["role"]).strip().lower()
+        if role_str not in valid_roles:
+            raise ValueError(f"Invalid role '{entry['role']}' in VERITAS_API_KEYS; valid roles: {sorted(valid_roles)}")
+        key_str = str(entry["key"]).strip()
+        if not key_str:
+            raise ValueError("Empty key in VERITAS_API_KEYS entry")
+        result.append({"key": key_str, "role": role_str})
+    return result
+
+
+def resolve_role_for_key(api_key: str) -> Role:
+    """Resolve the Role for an authenticated API key.
+
+    Priority:
+    1. VERITAS_API_KEYS (JSON, multi-key) — exact match → role from config
+    2. VERITAS_API_KEY (single legacy key) — match → admin
+    3. No match → raises ValueError
+    """
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise ValueError("empty api key")
+
+    # Check multi-key config first
+    try:
+        multi_keys = _parse_api_keys_config()
+    except ValueError:
+        multi_keys = []
+
+    for entry in multi_keys:
+        if secrets.compare_digest(api_key, entry["key"]):
+            return Role(entry["role"])
+
+    # Backward compat: single VERITAS_API_KEY → admin
+    expected = _get_expected_api_key()
+    if expected and secrets.compare_digest(api_key, expected):
+        return Role.admin
+
+    raise ValueError("api key does not match any configured key")
+
+
+def _resolve_role_from_request(
+    x_api_key: str | None,
+) -> Role:
+    """Resolve role from the request API key, defaulting to admin for legacy keys."""
+    key = (x_api_key or "").strip()
+    if not key:
+        return Role.admin  # Will be caught by require_api_key first
+    try:
+        return resolve_role_for_key(key)
+    except ValueError:
+        return Role.admin  # Fallback; auth check already validated the key
+
+
+def require_permission(permission: Permission):
+    """FastAPI dependency factory that enforces a specific RBAC permission.
+
+    Usage::
+
+        @router.get("/v1/some/endpoint",
+                     dependencies=[Depends(require_permission(Permission.decide))])
+        def some_endpoint(): ...
+    """
+    def _check(
+        request: Request = None,  # type: ignore[assignment]
+        x_api_key: str | None = Security(api_key_scheme),
+    ):
+        role = _resolve_role_from_request(x_api_key)
+        allowed = ROLE_PERMISSIONS.get(role, frozenset())
+        if permission not in allowed:
+            _record_auth_reject_reason("insufficient_permission")
+            logger.warning(
+                "RBAC denied: role=%s permission=%s",
+                role.value,
+                permission.value,
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{role.value}' does not have '{permission.value}' permission",
+            )
+        # Attach role to request state for downstream use (e.g. TrustLog extras)
+        if request is not None:
+            request.state.rbac_role = role.value  # type: ignore[attr-defined]
+        return True
+    return _check
+
+
 def _get_trusted_proxies() -> frozenset:
     """Return the set of trusted proxy IPs from VERITAS_TRUSTED_PROXIES env var."""
     raw = os.getenv("VERITAS_TRUSTED_PROXIES", "").strip()
@@ -511,14 +626,44 @@ def _enforce_auth_failure_rate_limit(client_ip: str) -> None:
         raise HTTPException(status_code=429, detail="Too many auth failures")
 
 
+def _is_valid_api_key(candidate: str) -> bool:
+    """Check if *candidate* matches any configured API key (multi or single)."""
+    candidate = candidate.strip()
+    if not candidate:
+        return False
+
+    # Check multi-key config
+    try:
+        multi_keys = _parse_api_keys_config()
+        for entry in multi_keys:
+            if secrets.compare_digest(candidate, entry["key"]):
+                return True
+    except ValueError:
+        pass
+
+    # Fallback to single-key
+    expected = (_get_expected_api_key() or "").strip()
+    if expected and secrets.compare_digest(candidate, expected):
+        return True
+
+    return False
+
+
 def require_api_key(
     request: Request = None,  # type: ignore[assignment]
     x_api_key: Optional[str] = Security(api_key_scheme),
     x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
 ):
     """テスト契約: サーバ側の API Key が未設定なら 500, ヘッダが無い/不一致なら 401"""
+    # Check if any key is configured (multi or single)
+    has_multi = False
+    try:
+        has_multi = bool(_parse_api_keys_config())
+    except ValueError:
+        pass
     expected = (_get_expected_api_key() or "").strip()
-    if not expected:
+
+    if not expected and not has_multi:
         _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
@@ -527,7 +672,7 @@ def require_api_key(
         _record_auth_reject_reason("api_key_missing")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
-    if not secrets.compare_digest(x_api_key.strip(), expected):
+    if not _is_valid_api_key(x_api_key):
         _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -567,8 +712,13 @@ def require_api_key_header_or_query(
     x_forwarded_for: Optional[str] = Header(default=None, alias="X-Forwarded-For"),
 ):
     """Authenticate SSE requests with header-first policy."""
+    has_multi = False
+    try:
+        has_multi = bool(_parse_api_keys_config())
+    except ValueError:
+        pass
     expected = (_get_expected_api_key() or "").strip()
-    if not expected:
+    if not expected and not has_multi:
         _record_auth_reject_reason("api_key_server_unconfigured")
         raise HTTPException(status_code=500, detail="Server API key not configured")
 
@@ -592,7 +742,7 @@ def require_api_key_header_or_query(
         _record_auth_reject_reason("api_key_missing")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Missing API key")
-    if not secrets.compare_digest(candidate, expected):
+    if not _is_valid_api_key(candidate):
         _record_auth_reject_reason("api_key_invalid")
         _enforce_auth_failure_rate_limit(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -627,7 +777,7 @@ def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
 
     header_candidate = (websocket.headers.get("X-API-Key") or "").strip()
     if header_candidate:
-        return secrets.compare_digest(header_candidate, expected)
+        return _is_valid_api_key(header_candidate)
 
     query_candidate = (websocket.query_params.get("api_key") or "").strip()
     if not query_candidate:
@@ -639,7 +789,7 @@ def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
         "WebSocket auth accepted query api_key due to VERITAS_ALLOW_WS_QUERY_API_KEY=1. "
         "This mode increases credential exposure risk.",
     )
-    return secrets.compare_digest(query_candidate, expected)
+    return _is_valid_api_key(query_candidate)
 
 
 def _allow_ws_query_api_key() -> bool:

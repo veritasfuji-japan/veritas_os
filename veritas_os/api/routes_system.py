@@ -12,10 +12,12 @@ import time
 from pathlib import Path
 from typing import Any, Dict
 
-from fastapi import APIRouter, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from veritas_os.api.auth import require_permission
+from veritas_os.api.rbac import Permission
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
 from veritas_os.api.pipeline_orchestrator import (
     get_runtime_config,
@@ -378,7 +380,7 @@ def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> tuple[list[Pat
     return newest, total_count
 
 
-@router.get("/v1/metrics")
+@router.get("/v1/metrics", dependencies=[Depends(require_permission(Permission.compliance_read))])
 def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
@@ -531,13 +533,13 @@ async def trustlog_ws(websocket: WebSocket):
 # Compliance config
 # ------------------------------------------------------------------
 
-@router.get("/v1/compliance/config")
+@router.get("/v1/compliance/config", dependencies=[Depends(require_permission(Permission.compliance_read))])
 def compliance_get_config() -> Dict[str, Any]:
     """Return runtime compliance config for UI toggle."""
     return {"ok": True, "config": get_runtime_config()}
 
 
-@router.put("/v1/compliance/config")
+@router.put("/v1/compliance/config", dependencies=[Depends(require_permission(Permission.config_write))])
 def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
     """Update runtime compliance config."""
     srv = _get_server()
@@ -553,7 +555,7 @@ def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
 # Reports
 # ------------------------------------------------------------------
 
-@router.get("/v1/report/eu_ai_act/{decision_id}")
+@router.get("/v1/report/eu_ai_act/{decision_id}", dependencies=[Depends(require_permission(Permission.governance_read))])
 def report_eu_ai_act(decision_id: str):
     """Generate an enterprise-ready EU AI Act compliance report."""
     srv = _get_server()
@@ -570,7 +572,7 @@ def report_eu_ai_act(decision_id: str):
         )
 
 
-@router.get("/v1/report/governance")
+@router.get("/v1/report/governance", dependencies=[Depends(require_permission(Permission.governance_read))])
 def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="to")):
     """Generate internal governance report for the requested date range."""
     srv = _get_server()
@@ -597,7 +599,7 @@ def report_governance(from_: str = Query(alias="from"), to: str = Query(alias="t
 # System halt / resume (Art. 14(4))
 # ------------------------------------------------------------------
 
-@router.post("/v1/system/halt")
+@router.post("/v1/system/halt", dependencies=[Depends(require_permission(Permission.config_write))])
 def system_halt(body: SystemHaltRequest):
     """Halt the AI decision system (Art. 14(4) emergency stop)."""
     srv = _get_server()
@@ -614,7 +616,7 @@ def system_halt(body: SystemHaltRequest):
         )
 
 
-@router.post("/v1/system/resume")
+@router.post("/v1/system/resume", dependencies=[Depends(require_permission(Permission.config_write))])
 def system_resume(body: SystemResumeRequest):
     """Resume the AI decision system after a halt (Art. 14(4))."""
     srv = _get_server()
@@ -631,7 +633,7 @@ def system_resume(body: SystemResumeRequest):
         )
 
 
-@router.get("/v1/system/halt-status")
+@router.get("/v1/system/halt-status", dependencies=[Depends(require_permission(Permission.compliance_read))])
 def system_halt_status():
     """Return the current halt status of the AI decision system."""
     srv = _get_server()
@@ -646,7 +648,7 @@ def system_halt_status():
         )
 
 
-@router.get("/v1/compliance/deployment-readiness")
+@router.get("/v1/compliance/deployment-readiness", dependencies=[Depends(require_permission(Permission.compliance_read))])
 def compliance_deployment_readiness():
     """Check deployment readiness for EU AI Act compliance (P1-5)."""
     srv = _get_server()

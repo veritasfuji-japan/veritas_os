@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
+from veritas_os.api.auth import require_permission
+from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import TrustFeedbackRequest
 
 logger = logging.getLogger(__name__)
@@ -53,14 +55,14 @@ def _prov_actor_for_entry(entry: Dict[str, Any]) -> str:
 # Trust Log read endpoints
 # ------------------------------------------------------------------
 
-@router.get("/v1/trust/logs")
+@router.get("/v1/trust/logs", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trust_logs(cursor: Optional[str] = None, limit: int = 50):
     """TrustLog をページング取得する。"""
     srv = _get_server()
     return srv.get_trust_log_page(cursor=cursor, limit=limit)
 
 
-@router.get("/v1/trust/stats")
+@router.get("/v1/trust/stats", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trust_log_stats():
     """Return TrustLog append success/failure counters for operational monitoring."""
     try:
@@ -75,7 +77,7 @@ def trust_log_stats():
         )
 
 
-@router.get("/v1/trust/{request_id}/prov")
+@router.get("/v1/trust/{request_id}/prov", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trust_prov_export(request_id: str) -> Dict[str, Any]:
     """Export one decision trace as W3C PROV JSON for external audit tooling."""
     srv = _get_server()
@@ -103,7 +105,7 @@ def trust_prov_export(request_id: str) -> Dict[str, Any]:
         )
 
 
-@router.get("/v1/trust/{request_id}")
+@router.get("/v1/trust/{request_id}", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trust_log_by_request(request_id: str):
     """request_id 単位で TrustLog を取得する。"""
     srv = _get_server()
@@ -114,7 +116,7 @@ def trust_log_by_request(request_id: str):
 # Trust Feedback
 # ------------------------------------------------------------------
 
-@router.post("/v1/trust/feedback")
+@router.post("/v1/trust/feedback", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trust_feedback(body: TrustFeedbackRequest):
     """人間からのフィードバックを trust_log に記録する簡易API。"""
     srv = _get_server()
@@ -155,7 +157,7 @@ def trust_feedback(body: TrustFeedbackRequest):
 # TrustLog verify / export
 # ------------------------------------------------------------------
 
-@router.get("/v1/trustlog/verify")
+@router.get("/v1/trustlog/verify", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trustlog_verify() -> Dict[str, Any]:
     """Verify signed append-only TrustLog integrity and signatures."""
     srv = _get_server()
@@ -169,7 +171,7 @@ def trustlog_verify() -> Dict[str, Any]:
         )
 
 
-@router.get("/v1/trustlog/export")
+@router.get("/v1/trustlog/export", dependencies=[Depends(require_permission(Permission.trust_log_read))])
 def trustlog_export() -> Dict[str, Any]:
     """Export signed append-only TrustLog entries for external audit."""
     srv = _get_server()

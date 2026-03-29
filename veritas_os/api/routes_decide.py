@@ -11,9 +11,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
+from veritas_os.api.auth import require_permission
+from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.pipeline_orchestrator import resolve_dynamic_steps
 from veritas_os.api.utils import (
@@ -50,7 +52,7 @@ def _get_server():
 # /v1/decide
 # ------------------------------------------------------------------
 
-@router.post("/v1/decide", response_model=DecideResponse)
+@router.post("/v1/decide", response_model=DecideResponse, dependencies=[Depends(require_permission(Permission.decide))])
 async def decide(req: DecideRequest, request: Request):
     srv = _get_server()
     p = srv.get_decision_pipeline()
@@ -224,7 +226,7 @@ def _call_fuji(fc: Any, action: str, context: dict) -> dict:
     raise RuntimeError("fuji_core has neither validate_action nor validate")
 
 
-@router.post("/v1/fuji/validate", response_model=FujiDecision)
+@router.post("/v1/fuji/validate", response_model=FujiDecision, dependencies=[Depends(require_permission(Permission.decide))])
 def fuji_validate(payload: dict):
     srv = _get_server()
     if not _is_direct_fuji_api_enabled():

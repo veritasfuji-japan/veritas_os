@@ -6,8 +6,11 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
+
+from veritas_os.api.auth import require_permission
+from veritas_os.api.rbac import Permission
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -83,7 +86,7 @@ def _emit_governance_change_alert(previous: Dict[str, Any], updated: Dict[str, A
 # Endpoints
 # ------------------------------------------------------------------
 
-@router.get("/v1/governance/value-drift")
+@router.get("/v1/governance/value-drift", dependencies=[Depends(require_permission(Permission.governance_read))])
 def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le=1.0)):
     """Return ValueCore drift metrics against a Telos baseline."""
     srv = _get_server()
@@ -98,7 +101,7 @@ def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le
         )
 
 
-@router.get("/v1/governance/policy")
+@router.get("/v1/governance/policy", dependencies=[Depends(require_permission(Permission.governance_read))])
 def governance_get():
     """Return the current governance policy."""
     srv = _get_server()
@@ -113,7 +116,7 @@ def governance_get():
         )
 
 
-@router.put("/v1/governance/policy")
+@router.put("/v1/governance/policy", dependencies=[Depends(require_permission(Permission.governance_write))])
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     srv = _get_server()
@@ -147,7 +150,7 @@ def governance_put(body: dict):
         )
 
 
-@router.get("/v1/governance/policy/history")
+@router.get("/v1/governance/policy/history", dependencies=[Depends(require_permission(Permission.governance_read))])
 def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
     """Return recent governance policy change history (newest first)."""
     srv = _get_server()
@@ -162,7 +165,7 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
         )
 
 
-@router.get("/v1/governance/decisions/export")
+@router.get("/v1/governance/decisions/export", dependencies=[Depends(require_permission(Permission.governance_read))])
 def governance_decision_export(
     limit: int = Query(default=100, ge=1, le=1000),
     status: str | None = Query(default=None),
