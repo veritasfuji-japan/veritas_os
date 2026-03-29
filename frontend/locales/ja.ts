@@ -9,6 +9,7 @@ export const ja = {
   schemaMismatch: "schema不一致: レスポンスがオブジェクトではありません。",
   networkError: "ネットワークエラー: バックエンドへ接続できません。",
   chatHistory: "チャット履歴",
+  chatMessagesAriaLabel: "チャットメッセージ一覧",
   noMessagesYet: "まだメッセージはありません。",
   chatRoleUser: "ユーザー",
   chatRoleAssistant: "アシスタント",

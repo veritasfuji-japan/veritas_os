@@ -11,6 +11,7 @@ export const en: Record<LocaleKey, string> = {
   schemaMismatch: "Schema mismatch: response is not an object.",
   networkError: "Network error: cannot reach backend.",
   chatHistory: "Chat history",
+  chatMessagesAriaLabel: "Chat messages",
   noMessagesYet: "No messages yet.",
   chatRoleUser: "User",
   chatRoleAssistant: "Assistant",
