@@ -104,6 +104,16 @@ from veritas_os.api.log_path_resolver import (
     effective_shadow_dir,
 )
 from veritas_os.api.trust_log_runtime import TrustLogRuntime
+
+try:
+    from veritas_os.observability.middleware import observe_request_metrics
+    from veritas_os.observability.exporters import configure_metrics_exporter
+except Exception:  # pragma: no cover - optional observability dependency
+    observe_request_metrics = None  # type: ignore
+
+    def configure_metrics_exporter(app: Any, auth_dependency: Optional[Any] = None) -> str:
+        return "none"
+
 from veritas_os.api.dependency_resolver import (
     LazyState,
     resolve_cfg,
@@ -631,7 +641,10 @@ app.middleware("http")(add_rate_limit_headers)
 app.middleware("http")(track_inflight_requests)
 app.middleware("http")(limit_body_size)
 app.middleware("http")(add_security_headers)
+if observe_request_metrics is not None:
+    app.middleware("http")(observe_request_metrics)
 
+configure_metrics_exporter(app, auth_dependency=require_api_key)
 
 # ==============================
 # 422 error handler
