@@ -16,6 +16,9 @@ import os
 import time
 from typing import Any
 
+from veritas_os.policy.evaluator import evaluate_runtime_policies
+from veritas_os.policy.runtime_adapter import load_runtime_bundle
+
 from .pipeline_types import (
     PipelineContext,
     HIGH_RISK_THRESHOLD,
@@ -38,6 +41,47 @@ def _build_fail_closed_fuji_precheck(reason: str) -> dict[str, Any]:
         "risk": 1.0,
         "modifications": [],
     }
+
+
+def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
+    """Evaluate optional compiled policy bundle and expose structured output.
+
+    Integration point:
+    - `ctx.context["compiled_policy_bundle_dir"]` may point to a compiled bundle.
+    - Result is written to `ctx.response_extras["governance"]["compiled_policy"]`.
+    - Enforcement is opt-in via `ctx.context["policy_runtime_enforce"]`.
+    """
+    bundle_dir = (ctx.context or {}).get("compiled_policy_bundle_dir")
+    if not bundle_dir:
+        return
+
+    try:
+        runtime_bundle = load_runtime_bundle(bundle_dir)
+        decision = evaluate_runtime_policies(runtime_bundle, ctx.context or {}).to_dict()
+    except (OSError, ValueError, TypeError) as exc:
+        logger.warning("compiled policy runtime bridge failed: %s", exc)
+        return
+
+    governance = ctx.response_extras.setdefault("governance", {})
+    if not isinstance(governance, dict):
+        governance = {}
+        ctx.response_extras["governance"] = governance
+    governance["compiled_policy"] = decision
+
+    if not bool((ctx.context or {}).get("policy_runtime_enforce", False)):
+        return
+
+    outcome = decision.get("final_outcome")
+    if outcome in {"deny", "halt"}:
+        ctx.fuji_dict["status"] = "rejected"
+        ctx.fuji_dict.setdefault("reasons", []).append(
+            f"compiled_policy:{outcome}"
+        )
+    elif outcome in {"escalate", "require_human_review"}:
+        ctx.fuji_dict["status"] = "modify"
+        ctx.fuji_dict.setdefault("reasons", []).append(
+            f"compiled_policy:{outcome}"
+        )
 
 
 def stage_fuji_precheck(ctx: PipelineContext) -> None:
@@ -79,6 +123,7 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
         **(ctx.fuji_dict if isinstance(ctx.fuji_dict, dict) else {}),
         **(fuji_pre if isinstance(fuji_pre, dict) else {}),
     }
+    _apply_compiled_policy_runtime_bridge(ctx)
 
     fuji_status = ctx.fuji_dict.get("status", "allow")
     try:
