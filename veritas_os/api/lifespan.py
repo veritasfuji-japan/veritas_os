@@ -7,6 +7,8 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable
 
+from veritas_os.storage.factory import create_memory_store, create_trust_log_store
+
 
 @asynccontextmanager
 async def run_lifespan(
@@ -27,7 +29,6 @@ async def run_lifespan(
     This helper keeps server bootstrap concerns out of ``server.py`` while
     preserving behavior and backward compatibility.
     """
-    del app
     import veritas_os.api.middleware as middleware
     import veritas_os.api.server as server
 
@@ -35,6 +36,11 @@ async def run_lifespan(
     middleware._inflight_count = 0
     server._shutting_down = False
     server._inflight_count = 0
+
+
+    # Storage DI: initialize backend instances once per application lifecycle.
+    app.state.trust_log_store = create_trust_log_store()
+    app.state.memory_store = create_memory_store()
 
     startup_validation()
     runtime_health_check()

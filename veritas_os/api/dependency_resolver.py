@@ -6,6 +6,10 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Callable, Optional, Tuple
 
+from fastapi import Request
+
+from veritas_os.storage.base import MemoryStore, TrustLogStore
+
 
 class SupportsLazyState:
     """Protocol-like structural type for lazy import cache state."""
@@ -196,3 +200,19 @@ def resolve_memory_store(
             state.obj = None
             logger.warning("memory store import failed: %s", state.err)
             return None, current_memory_store
+
+
+def get_trust_log_store(request: Request) -> TrustLogStore:
+    """Resolve TrustLogStore instance from FastAPI app state."""
+    store = getattr(request.app.state, "trust_log_store", None)
+    if store is None:
+        raise RuntimeError("trust_log_store is not initialized in app.state")
+    return store
+
+
+def get_memory_store(request: Request) -> MemoryStore:
+    """Resolve MemoryStore instance from FastAPI app state."""
+    store = getattr(request.app.state, "memory_store", None)
+    if store is None:
+        raise RuntimeError("memory_store is not initialized in app.state")
+    return store
