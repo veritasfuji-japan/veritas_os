@@ -90,14 +90,14 @@ ALLOWED_DEPENDENCY_GUIDE: dict[str, tuple[str, ...]] = {
         "veritas_os.core.memory",
     ),
     "fuji": (
-        "veritas_os.core.fuji.fuji_policy",
-        "veritas_os.core.fuji.fuji_helpers",
-        "veritas_os.core.fuji.fuji_safety_head",
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
     ),
     "memory": (
-        "veritas_os.core.memory.memory_store",
-        "veritas_os.core.memory.memory_helpers",
-        "veritas_os.core.memory.memory_security",
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_security",
     ),
 }
 
@@ -114,18 +114,18 @@ RECOMMENDED_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "veritas_os.core.pipeline_contracts",
     ),
     "fuji": (
-        "veritas_os.core.fuji.fuji_policy",
-        "veritas_os.core.fuji.fuji_policy_rollout",
-        "veritas_os.core.fuji.fuji_helpers",
-        "veritas_os.core.fuji.fuji_safety_head",
+        "veritas_os.core.fuji_policy",
+        "veritas_os.core.fuji_policy_rollout",
+        "veritas_os.core.fuji_helpers",
+        "veritas_os.core.fuji_safety_head",
     ),
     "memory": (
-        "veritas_os.core.memory.memory_store",
-        "veritas_os.core.memory.memory_helpers",
-        "veritas_os.core.memory.memory_search_helpers",
-        "veritas_os.core.memory.memory_summary_helpers",
-        "veritas_os.core.memory.memory_lifecycle",
-        "veritas_os.core.memory.memory_security",
+        "veritas_os.core.memory_store",
+        "veritas_os.core.memory_helpers",
+        "veritas_os.core.memory_search_helpers",
+        "veritas_os.core.memory_summary_helpers",
+        "veritas_os.core.memory_lifecycle",
+        "veritas_os.core.memory_security",
     ),
 }
 
@@ -150,12 +150,12 @@ DOCSTRING_GUARD_MODULES: tuple[str, ...] = (
 )
 MODULE_DOCSTRING_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
     "pipeline": (
-        "veritas_os.core.pipeline.pipeline_inputs",
-        "veritas_os.core.pipeline.pipeline_execute",
-        "veritas_os.core.pipeline.pipeline_policy",
-        "veritas_os.core.pipeline.pipeline_response",
-        "veritas_os.core.pipeline.pipeline_persist",
-        "veritas_os.core.pipeline.pipeline_replay",
+        "veritas_os.core.pipeline_inputs",
+        "veritas_os.core.pipeline_execute",
+        "veritas_os.core.pipeline_policy",
+        "veritas_os.core.pipeline_response",
+        "veritas_os.core.pipeline_persist",
+        "veritas_os.core.pipeline_replay",
     ),
     "kernel": RECOMMENDED_EXTENSION_POINTS["kernel"],
     "fuji": RECOMMENDED_EXTENSION_POINTS["fuji"],
