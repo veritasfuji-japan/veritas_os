@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "./i18n-provider";
@@ -67,10 +67,36 @@ describe("LiveEventStream", () => {
     const pinButton = screen.getAllByRole("button", { name: "pin" })[0];
     fireEvent.click(pinButton);
     expect(screen.getByRole("button", { name: "pinned" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "pinned" })).toHaveAttribute("aria-pressed", "true");
 
     const muteButton = screen.getAllByRole("button", { name: "mute" })[0];
     fireEvent.click(muteButton);
     expect(screen.queryByText("FUJI reject")).not.toBeInTheDocument();
+  });
+
+  it("filters events by search query and keeps pinned event at top", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createPersistentReadableStream() }));
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await screen.findByText(/Connected|接続済み/);
+
+    const search = screen.getByRole("searchbox", { name: /Search events|イベント検索/ });
+    fireEvent.change(search, { target: { value: "sign-off" } });
+    expect(screen.queryByText("FUJI reject")).not.toBeInTheDocument();
+    expect(screen.getByText("policy update pending")).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "" } });
+    const policyCard = screen.getByText("policy update pending").closest("div.rounded-lg");
+    expect(policyCard).not.toBeNull();
+    fireEvent.click(within(policyCard as HTMLElement).getByRole("button", { name: "pin" }));
+
+    const links = screen.getAllByRole("link");
+    expect(links[0]).toHaveAttribute("href", "/governance");
   });
 
   it("appends valid SSE events and keeps clickable route", async () => {

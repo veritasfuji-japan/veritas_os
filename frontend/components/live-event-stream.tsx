@@ -167,6 +167,7 @@ export function LiveEventStream(): JSX.Element {
   const [connected, setConnected] = useState(false);
   const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [ackedIds, setAckedIds] = useState<Set<string>>(new Set());
   const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
@@ -267,11 +268,33 @@ export function LiveEventStream(): JSX.Element {
 
   const filteredEvents = useMemo(() => {
     const withoutMuted = events.filter((event) => !mutedIds.has(event.id));
-    if (activeFilter === "all") {
-      return withoutMuted;
-    }
-    return withoutMuted.filter((event) => event.severity === activeFilter);
-  }, [activeFilter, events, mutedIds]);
+    const severityFiltered = activeFilter === "all"
+      ? withoutMuted
+      : withoutMuted.filter((event) => event.severity === activeFilter);
+
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const queryFiltered = normalizedQuery.length === 0
+      ? severityFiltered
+      : severityFiltered.filter((event) => {
+        const searchableText = [
+          EVENT_TYPE_LABEL[event.type],
+          event.summary,
+          event.request_id,
+          event.decision_id,
+          event.owner,
+        ].join(" ").toLowerCase();
+        return searchableText.includes(normalizedQuery);
+      });
+
+    return [...queryFiltered].sort((left, right) => {
+      const leftPinned = pinnedIds.has(left.id);
+      const rightPinned = pinnedIds.has(right.id);
+      if (leftPinned === rightPinned) {
+        return 0;
+      }
+      return leftPinned ? -1 : 1;
+    });
+  }, [activeFilter, events, mutedIds, pinnedIds, searchQuery]);
 
   const toggle = (setState: Dispatch<SetStateAction<Set<string>>>, id: string): void => {
     setState((current) => {
@@ -307,6 +330,19 @@ export function LiveEventStream(): JSX.Element {
             </button>
           ))}
         </div>
+      </div>
+      <div className="mb-3">
+        <label className="sr-only" htmlFor="event-search-input">
+          {t("イベント検索", "Search events")}
+        </label>
+        <input
+          id="event-search-input"
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder={t("イベントを検索...", "Search events...")}
+          className="w-full rounded-md border border-border/70 bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+        />
       </div>
 
       {authRecoveryAt !== null ? (
@@ -366,6 +402,7 @@ export function LiveEventStream(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => toggle(setAckedIds, event.id)}
+                    aria-pressed={isAcked}
                     className="rounded border border-border px-2 py-1"
                   >
                     {isAcked ? "acknowledged" : "acknowledge"}
@@ -380,6 +417,7 @@ export function LiveEventStream(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => toggle(setPinnedIds, event.id)}
+                    aria-pressed={isPinned}
                     className="rounded border border-border px-2 py-1"
                   >
                     {isPinned ? "pinned" : "pin"}
