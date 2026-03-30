@@ -47,9 +47,9 @@ Variables prefixed with `VERITAS_` are project-specific.
 | `VERITAS_AUTH_REDIS_URL` | `""` | Redis connection URL when using redis backend |
 | `VERITAS_AUTH_STORE_FAILURE_MODE` | `closed` | `closed` (deny on error) or `open` (allow on error) — **never** use `open` in production |
 | `VERITAS_AUTH_ALLOW_FAIL_OPEN` | `false` | Explicit opt-in to allow fail-open (test environments only) |
-| `VERITAS_ALLOW_SSE_QUERY_API_KEY` | `false` | Permit API key in SSE query parameters (⚠️ security risk) |
+| `VERITAS_ALLOW_SSE_QUERY_API_KEY` | `false` | Permit API key in SSE query parameters (⚠️ security risk, ignored in production profiles) |
 | `VERITAS_ACK_SSE_QUERY_API_KEY_RISK` | `false` | Acknowledgment of SSE query API key risk |
-| `VERITAS_ALLOW_WS_QUERY_API_KEY` | `false` | Permit API key in WebSocket query parameters (⚠️ security risk) |
+| `VERITAS_ALLOW_WS_QUERY_API_KEY` | `false` | Permit API key in WebSocket query parameters (⚠️ security risk, ignored in production profiles) |
 | `VERITAS_ACK_WS_QUERY_API_KEY_RISK` | `false` | Acknowledgment of WebSocket query API key risk |
 | `VERITAS_TRUSTED_PROXIES` | `""` | Comma-separated trusted proxy IPs for X-Forwarded-For handling |
 

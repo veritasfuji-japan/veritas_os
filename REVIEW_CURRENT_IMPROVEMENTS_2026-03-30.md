@@ -81,3 +81,18 @@
 - `dashboard_server.py` の権限設定失敗ログで、資格情報ファイルパス（`...password...`）を含む可変値を出力しないよう修正。
 - 監査上必要な事象（権限設定失敗）は維持しつつ、ログ上の機微情報露出リスクを低減。
 - 単体テストで「警告ログにパス文字列が含まれないこと」を検証。
+
+### 2026-03-30 追加追記（SSE/WS query API key の本番 fail-closed 強化）
+
+- **実施した改善**
+  - `VERITAS_ALLOW_*_QUERY_API_KEY` と `VERITAS_ACK_*_QUERY_API_KEY_RISK` の2フラグが同時に有効でも、`VERITAS_ENV=prod|production` または `NODE_ENV=production` では **query API key 認証を無効化** するよう変更。
+  - SSE (`/v1/events`) / WebSocket (`/v1/ws/trustlog`) ともに、production runtime ではヘッダ認証（`X-API-Key`）のみ許可する fail-closed 動作へ統一。
+  - 本番で query 有効化フラグが誤設定された場合、セキュリティ警告ログを出力して設定無効化を明示。
+
+- **追加テスト**
+  - SSE: production runtime では dual opt-in フラグ有効時でも query `api_key` を拒否することを単体テストで検証。
+  - WebSocket: production runtime では dual opt-in フラグ有効時でも query `api_key` を拒否することを単体テストで検証。
+
+- **セキュリティ警告（更新）**
+  - 開発/検証環境では query API key 許可フラグを有効化すると、引き続き URL 経由の機密情報露出リスクがある。
+  - 本番環境では fail-closed 化により誤設定耐性を高めたが、運用上は引き続き `X-API-Key` ヘッダ運用を標準とし、query 経路は移行用途に限定すること。
