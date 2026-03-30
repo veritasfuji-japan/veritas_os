@@ -47,6 +47,10 @@ PATH_VARIABLE_PATTERN = re.compile(
     r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
     r"([\"'`])(?P<path>/api/veritas/v1/[^\"'`]+)\2"
 )
+PATH_ALIAS_PATTERN = re.compile(
+    r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+    r"(?P<ref>[A-Za-z_][A-Za-z0-9_]*)\s*;"
+)
 METHOD_PATTERN = re.compile(r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']')
 ROUTE_POLICY_PATTERN = re.compile(
     r'pathPattern:\s*/\^(?P<pattern>.+?)\$/\s*,\s*method:\s*"(?P<method>[A-Z]+)"',
@@ -97,6 +101,19 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 match.group("name"): match.group("path")
                 for match in PATH_VARIABLE_PATTERN.finditer(content)
             }
+            alias_variables = {
+                match.group("name"): match.group("ref")
+                for match in PATH_ALIAS_PATTERN.finditer(content)
+            }
+            for _ in range(len(alias_variables)):
+                updated = False
+                for alias, ref in alias_variables.items():
+                    resolved = path_variables.get(ref)
+                    if resolved and path_variables.get(alias) != resolved:
+                        path_variables[alias] = resolved
+                        updated = True
+                if not updated:
+                    break
 
             for match in VERITAS_FETCH_CALL_PATTERN.finditer(content):
                 method_match = METHOD_PATTERN.search(match.group("tail"))

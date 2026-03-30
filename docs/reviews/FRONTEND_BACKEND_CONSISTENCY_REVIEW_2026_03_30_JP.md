@@ -126,3 +126,17 @@
 セキュリティ補足:
 - 本変更は検出精度の向上のみであり、BFF の許可境界や認可ロジック自体は変更していない。
 - したがって、権限昇格・経路露出の新規リスクは増やしていない（監視の見落としリスクを低減）。
+
+### 7.2 2026-03-30 追加改善（最小差分）
+
+無駄な機能追加を避け、既存チェックの抽出精度に限定して最小改善を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `const apiUrl = baseUrl; const endpoint = apiUrl;` のような **URL 定数エイリアス連鎖** を解決し、`fetch(endpoint)` でも `/api/veritas/v1/*` 経路を抽出できるよう改善。
+  - 実装は 1 ファイル内の静的代入のみを対象とし、責務境界（Planner / Kernel / Fuji / MemoryOS）を跨ぐ変更は行っていない。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - URL 定数の one-hop / chained alias を経由した `fetch` 呼び出しを検証するテストを追加。
+
+セキュリティ補足:
+- 本改善は「検査の見落とし低減」のみを目的とし、BFF の許可行列・認可判定・公開 API の挙動自体は不変。
+- そのため新規の経路露出は発生しないが、将来 alias が動的生成に拡大した場合は静的解析の限界を越えるため、過信せず実行時監査を併用すること。
