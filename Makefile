@@ -94,6 +94,7 @@ quality-checks:
 	@python scripts/quality/check_operational_docs_consistency.py
 	@python scripts/quality/check_frontend_docs_consistency.py
 	@python scripts/quality/check_review_improvements_consistency.py
+	@python scripts/quality/check_frontend_api_contract_consistency.py
 	@python scripts/security/check_memory_dir_allowlist.py
 	@python scripts/security/check_httpx_raw_upload_usage.py
 	@python scripts/security/check_subprocess_shell_usage.py

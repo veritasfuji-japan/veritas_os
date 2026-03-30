@@ -97,3 +97,18 @@
 - 継続課題:
   - provenance の UI 展開計画がある場合の BFF 公開方針を明文化。
   - OpenAPI 契約検証を「critical path 以外」に段階拡張。
+
+## 7. 2026-03-30 改善実施（本レビュー対応）
+
+無駄な機能追加は避け、指摘C（OpenAPI 回帰の検証範囲）に限定して以下を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py` を追加。
+  - `frontend/` の静的な `/api/veritas/v1/*` 利用（`veritasFetch` / `EventSource`）を抽出。
+  - 抽出した経路・メソッドを BFF 許可行列（`route-auth.ts`）と OpenAPI（`openapi.yaml`）へ自動突合。
+  - 不一致時に CI で失敗させ、フロント/BFF/OpenAPI のドリフトを早期検知。
+- `Makefile` の `quality-checks` に本チェックを組み込み。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py` にユニットテストを追加。
+
+セキュリティ補足:
+- 本改善は「未許可経路の BFF 露出」を防ぐ監視強化であり、BFF 境界を緩める変更は含まない。
+- なお provenance 経路（`/v1/trust/{request_id}/prov`）を今後 BFF 公開する場合は、引き続き最小権限・最小レスポンス原則を必須とする。
