@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.scenario
+pytestmark = [pytest.mark.scenario]
+
+_crypto = pytest.importorskip("cryptography", reason="cryptography package required")
 
 
 class TestContinuationChain:
