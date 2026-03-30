@@ -52,7 +52,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_live_no_durable_consequence(self):
-        """LIVE outcome: no durable consequence, no boundary_outcome promotion."""
+        """LIVEアウトカムでは永続的結果も境界昇格もないことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -70,7 +70,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_halted_is_receipt_first_and_durable_when_headroom_collapsed(self):
-        """Headroom collapse → halted in receipt AND state (durable halt)."""
+        """ヘッドルーム崩壊時にレシートと状態の両方で停止（永続的停止）となることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         # Set required_evidence with none satisfied → current_level=0.0 → headroom=0.0
@@ -97,7 +97,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_narrowed_receipt_first_with_durable_scope_reduction(self):
-        """Scope restriction → narrowed in receipt AND state (durable narrowing)."""
+        """スコープ制限時にレシートと状態の両方で縮小（永続的縮小）となることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition(context={
@@ -118,7 +118,7 @@ class TestReceiptFirstBoundary:
         assert snap.durable_consequence.has_durable_scope_reduction is True
 
     def test_narrowed_reopening_eligible_when_not_durable(self):
-        """Narrowed reopening test: durable → not reopenable."""
+        """縮小再開テスト: 永続的なら再開不可であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -142,7 +142,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_degraded_receipt_first(self):
-        """Burden exceeded → degraded in receipt; state reflects degraded."""
+        """負担超過時にレシートでdegradedとなることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         # 2 required, 1 satisfied → current_level=0.5; threshold=0.8
@@ -167,7 +167,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_escalated_receipt_first(self):
-        """Escalation required → escalated in receipt."""
+        """エスカレーション必要時にレシートでescalatedとなることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition(context={
@@ -186,7 +186,7 @@ class TestReceiptFirstBoundary:
     # ------------------------------------------------------------------
 
     def test_revoked_always_durable(self):
-        """Support loss → revoked in both receipt and state (irreversible)."""
+        """サポート喪失時にレシートと状態の両方で取消（不可逆）となることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         # Empty chain_id so authority isn't auto-filled; empty policy_ref
@@ -236,7 +236,7 @@ class TestProofBearingReceipt:
         return PresentCondition(**defaults)
 
     def test_receipt_has_boundary_outcome(self):
-        """Every receipt must carry a boundary_outcome."""
+        """全レシートがboundary_outcomeを持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         snap, receipt = rv.revalidate(lineage, self._make_condition())
@@ -244,7 +244,7 @@ class TestProofBearingReceipt:
         assert receipt.boundary_outcome == "live"
 
     def test_receipt_has_provisional_vs_durable(self):
-        """Non-LIVE outcomes carry provisional_vs_durable assessment."""
+        """非LIVEアウトカムがprovisional_vs_durable評価を持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition(context={
@@ -254,7 +254,7 @@ class TestProofBearingReceipt:
         assert receipt.provisional_vs_durable in ("provisional", "durable_promotable")
 
     def test_receipt_has_digest_summaries(self):
-        """Receipt carries digest summaries for audit."""
+        """レシートが監査用ダイジェスト要約を持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         snap, receipt = rv.revalidate(lineage, self._make_condition())
@@ -263,7 +263,7 @@ class TestProofBearingReceipt:
         assert receipt.burden_headroom_digest is not None
 
     def test_receipt_carries_reason_codes(self):
-        """Non-LIVE receipts carry reason codes."""
+        """非LIVEレシートが理由コードを持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition(context={
@@ -277,7 +277,7 @@ class TestDurableConsequence:
     """DurableConsequence tracking in snapshot."""
 
     def test_durable_consequence_absent_for_live(self):
-        """LIVE standing has no durable consequence."""
+        """LIVE状態では永続的結果がないことを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import (
             ClaimStateSnapshot,
         )
@@ -285,7 +285,7 @@ class TestDurableConsequence:
         assert snap.durable_consequence is None
 
     def test_durable_consequence_serialization_roundtrip(self):
-        """DurableConsequence survives to_dict / from_dict."""
+        """DurableConsequenceがto_dict/from_dictを経ても保持されることを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import (
             ClaimStateSnapshot,
             DurableConsequence,
@@ -308,7 +308,7 @@ class TestDurableConsequence:
         assert restored.durable_consequence.promotion_reason == "headroom collapsed"
 
     def test_durable_consequence_none_serialization_roundtrip(self):
-        """None durable_consequence survives roundtrip."""
+        """None durable_consequenceがラウンドトリップを経ても保持されることを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import ClaimStateSnapshot
         snap = ClaimStateSnapshot()
         d = snap.to_dict()
@@ -321,7 +321,7 @@ class TestReceiptSerialization:
     """Receipt proof-bearing fields survive serialization."""
 
     def test_receipt_new_fields_roundtrip(self):
-        """New receipt fields survive to_dict / from_dict."""
+        """新規レシートフィールドがto_dict/from_dictを経ても保持されることを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import ContinuationReceipt
         receipt = ContinuationReceipt(
             boundary_outcome="halted",
@@ -354,7 +354,7 @@ class TestCoherenceGuardReceiptFirst:
         return ContinuationReceipt(**kwargs)
 
     def test_revoked_must_agree_bidirectionally(self):
-        """REVOKED must be in both snapshot and receipt."""
+        """REVOKEDがスナップショットとレシートの両方に存在する必要があることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -371,7 +371,7 @@ class TestCoherenceGuardReceiptFirst:
             ContinuationRevalidator._assert_coherence(snap, receipt)
 
     def test_halted_receipt_only_is_valid(self):
-        """Receipt shows HALTED, snapshot shows LIVE → valid (receipt-first)."""
+        """レシートがHALTEDでスナップショットがLIVEの場合に有効であることを検証する（レシート優先）。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -388,7 +388,7 @@ class TestCoherenceGuardReceiptFirst:
         ContinuationRevalidator._assert_coherence(snap, receipt)
 
     def test_halted_durable_promotion_requires_snapshot_agreement(self):
-        """Receipt claims durable HALTED but snapshot is LIVE → violation."""
+        """レシートが永続的HALTEDを主張しスナップショットがLIVEの場合に違反となることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -405,7 +405,7 @@ class TestCoherenceGuardReceiptFirst:
             ContinuationRevalidator._assert_coherence(snap, receipt)
 
     def test_halted_snapshot_requires_receipt_evidence(self):
-        """Snapshot HALTED without receipt HALTED → violation."""
+        """スナップショットがHALTEDでレシートがHALTEDでない場合に違反となることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -425,6 +425,7 @@ class TestDurabilityAssessment:
     """Direct tests for _assess_durability static method."""
 
     def test_live_no_durable(self):
+        """LIVE状態では永続性がないことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -439,6 +440,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.LIVE
 
     def test_revoked_always_durable(self):
+        """REVOKEDは常に永続的であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -454,6 +456,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.REVOKED
 
     def test_halted_durable_when_collapsed(self):
+        """ヘッドルーム崩壊時にHALTEDが永続的であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -469,7 +472,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.HALTED
 
     def test_halted_not_durable_when_headroom_positive(self):
-        """Halted with positive headroom → receipt-only, no durable consequence."""
+        """正のヘッドルームでの停止がレシートのみで永続的結果なしであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -484,6 +487,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.LIVE
 
     def test_narrowed_durable_when_restrictions_present(self):
+        """制限がある場合にNARROWEDが永続的であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -499,6 +503,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.NARROWED
 
     def test_degraded_receipt_only(self):
+        """DEGRADEDがレシートのみであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -513,6 +518,7 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.LIVE
 
     def test_escalated_receipt_only(self):
+        """ESCALATEDがレシートのみであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState

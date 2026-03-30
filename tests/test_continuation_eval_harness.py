@@ -277,42 +277,42 @@ class TestEvalHarness:
     """Evaluation harness as pytest tests."""
 
     def test_divergence_detection_rate_is_perfect(self):
-        """All known divergence scenarios must be detected."""
+        """既知の全ての乖離シナリオが検出されることを検証する。"""
         metrics = _compute_metrics()
         assert metrics.divergence_detection_rate == 1.0
 
     def test_false_alarm_rate_is_zero(self):
-        """No false alarms on non-divergent scenarios."""
+        """非乖離シナリオで誤報が発生しないことを検証する。"""
         metrics = _compute_metrics()
         assert metrics.false_alarm_rate == 0.0
 
     def test_support_loss_capture_rate_is_perfect(self):
-        """All support-loss scenarios captured."""
+        """全てのサポート喪失シナリオが検出されることを検証する。"""
         metrics = _compute_metrics()
         assert metrics.support_loss_capture_rate == 1.0
 
     def test_burden_headroom_drift_usefulness_is_perfect(self):
-        """All burden/headroom drift scenarios detected."""
+        """全ての負担/ヘッドルームドリフトシナリオが検出されることを検証する。"""
         metrics = _compute_metrics()
         assert metrics.burden_headroom_drift_usefulness == 1.0
 
     def test_replay_explanatory_usefulness_is_perfect(self):
-        """All receipts have sufficient data for replay explanation."""
+        """全レシートがリプレイ説明に十分なデータを持つことを検証する。"""
         metrics = _compute_metrics()
         assert metrics.replay_explanatory_usefulness == 1.0
 
     def test_state_receipt_separation_clarity_is_perfect(self):
-        """State and receipt never contaminate each other."""
+        """状態とレシートが互いに汚染しないことを検証する。"""
         metrics = _compute_metrics()
         assert metrics.state_receipt_separation_clarity == 1.0
 
     def test_scenario_count_minimum(self):
-        """Harness has at least 8 scenarios."""
+        """ハーネスが最低8つのシナリオを持つことを検証する。"""
         metrics = _compute_metrics()
         assert metrics.total_scenarios >= 8
 
     def test_metrics_printable_report(self):
-        """Metrics can be rendered as a human-readable report."""
+        """メトリクスが人間可読なレポートとして出力可能であることを検証する。"""
         metrics = _compute_metrics()
         report = {
             "total_scenarios": metrics.total_scenarios,
