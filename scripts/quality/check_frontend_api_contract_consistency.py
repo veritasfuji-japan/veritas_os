@@ -31,8 +31,21 @@ VERITAS_FETCH_CALL_PATTERN = re.compile(
     r"veritasFetch\(\s*([\"'`])(?P<path>/api/veritas/v1/[^\"'`]+)\1(?P<tail>[^\)]*)\)",
     re.DOTALL,
 )
+FETCH_CALL_PATTERN = re.compile(
+    r"fetch\(\s*([\"'`])(?P<path>/api/veritas/v1/[^\"'`]+)\1(?P<tail>[^\)]*)\)",
+    re.DOTALL,
+)
 EVENTSOURCE_CALL_PATTERN = re.compile(
     r"EventSource\(\s*([\"'`])(?P<path>/api/veritas/v1/[^\"'`]+)\1",
+)
+IDENTIFIER_CALL_PATTERN = re.compile(
+    r"(?P<fn>veritasFetch|fetch|EventSource)\(\s*(?P<var>[A-Za-z_][A-Za-z0-9_]*)"
+    r"(?P<tail>[^\)]*)\)",
+    re.DOTALL,
+)
+PATH_VARIABLE_PATTERN = re.compile(
+    r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+    r"([\"'`])(?P<path>/api/veritas/v1/[^\"'`]+)\2"
 )
 METHOD_PATTERN = re.compile(r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']')
 ROUTE_POLICY_PATTERN = re.compile(
@@ -80,8 +93,23 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 continue
 
             content = file_path.read_text(encoding="utf-8")
+            path_variables = {
+                match.group("name"): match.group("path")
+                for match in PATH_VARIABLE_PATTERN.finditer(content)
+            }
 
             for match in VERITAS_FETCH_CALL_PATTERN.finditer(content):
+                method_match = METHOD_PATTERN.search(match.group("tail"))
+                method = method_match.group("method") if method_match else "GET"
+                usages.append(
+                    FrontendRouteUsage(
+                        method=method,
+                        raw_path=match.group("path"),
+                        file_path=file_path,
+                    )
+                )
+
+            for match in FETCH_CALL_PATTERN.finditer(content):
                 method_match = METHOD_PATTERN.search(match.group("tail"))
                 method = method_match.group("method") if method_match else "GET"
                 usages.append(
@@ -97,6 +125,23 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                     FrontendRouteUsage(
                         method="GET",
                         raw_path=match.group("path"),
+                        file_path=file_path,
+                    )
+                )
+
+            for match in IDENTIFIER_CALL_PATTERN.finditer(content):
+                path = path_variables.get(match.group("var"))
+                if not path:
+                    continue
+                if match.group("fn") == "EventSource":
+                    method = "GET"
+                else:
+                    method_match = METHOD_PATTERN.search(match.group("tail"))
+                    method = method_match.group("method") if method_match else "GET"
+                usages.append(
+                    FrontendRouteUsage(
+                        method=method,
+                        raw_path=path,
                         file_path=file_path,
                     )
                 )
@@ -150,15 +195,13 @@ def load_openapi_route_matchers() -> list[RouteMatcher]:
 
     return matchers
 
-
-
-
 def _display_source_path(file_path: pathlib.Path) -> str:
     """Return repo-relative source path when possible, else keep original string."""
     try:
         return str(file_path.relative_to(REPO_ROOT))
     except ValueError:
         return str(file_path)
+
 
 def _matches_any(path: str, method: str, matchers: list[RouteMatcher]) -> bool:
     """Return True if any matcher supports the given method/path combination."""
