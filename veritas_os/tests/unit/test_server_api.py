@@ -1810,6 +1810,20 @@ def test_events_accepts_query_api_key_only_when_dual_flags_enabled(monkeypatch):
     ) is True
 
 
+def test_events_rejects_query_api_key_in_production_even_with_dual_flags(monkeypatch):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "1")
+    monkeypatch.setenv("VERITAS_ACK_SSE_QUERY_API_KEY_RISK", "true")
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    with pytest.raises(HTTPException) as exc:
+        server.require_api_key_header_or_query(
+            x_api_key=None,
+            api_key=_TEST_API_KEY,
+        )
+    assert exc.value.status_code == 401
+
+
 def test_events_rejects_query_api_key_without_risk_ack(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     monkeypatch.setenv("VERITAS_ALLOW_SSE_QUERY_API_KEY", "1")
@@ -1858,6 +1872,22 @@ def test_websocket_auth_accepts_query_api_key_only_when_dual_flags_enabled(monke
     )
 
     assert server._authenticate_websocket_api_key(ws) is True
+
+
+def test_websocket_auth_rejects_query_api_key_in_production_even_with_dual_flags(
+    monkeypatch,
+):
+    monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+    monkeypatch.setenv("VERITAS_ALLOW_WS_QUERY_API_KEY", "1")
+    monkeypatch.setenv("VERITAS_ACK_WS_QUERY_API_KEY_RISK", "true")
+    monkeypatch.setenv("NODE_ENV", "production")
+
+    ws = SimpleNamespace(
+        headers={},
+        query_params={"api_key": _TEST_API_KEY},
+    )
+
+    assert server._authenticate_websocket_api_key(ws) is False
 
 
 def test_websocket_auth_rejects_query_api_key_without_risk_ack(monkeypatch):
