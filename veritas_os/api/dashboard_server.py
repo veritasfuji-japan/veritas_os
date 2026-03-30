@@ -142,6 +142,72 @@ def _get_ephemeral_password_file_path() -> Path:
     return base_dir / "runtime_secrets" / "dashboard_ephemeral_password"
 
 
+def _get_ephemeral_password_warning_age_seconds() -> int | None:
+    """Return age threshold for stale ephemeral-password warning.
+
+    Returns:
+        int | None:
+            - Threshold in seconds when warning should be emitted.
+            - ``None`` when age-based warning is explicitly disabled.
+
+    Security note:
+        Long-lived shared credentials increase blast radius when leaked.
+        This helper keeps compatibility (warning-only) while nudging
+        operators toward explicit rotation.
+    """
+    raw_value = os.getenv(
+        "DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS", "86400"
+    ).strip()
+    if not raw_value:
+        return 86_400
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS=%r; "
+            "using default 86400.",
+            raw_value,
+        )
+        return 86_400
+
+    if parsed_value < 0:
+        logger.warning(
+            "Negative DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS=%r; "
+            "disabling stale-password warning.",
+            raw_value,
+        )
+        return None
+
+    return parsed_value
+
+
+def _warn_if_ephemeral_password_is_stale(password_file: Path) -> None:
+    """Warn when shared ephemeral password age exceeds configured threshold.
+
+    Security note:
+        Log output intentionally avoids file paths and computed timing values
+        to prevent accidental disclosure of credential-related metadata.
+    """
+    max_age_seconds = _get_ephemeral_password_warning_age_seconds()
+    if max_age_seconds is None:
+        return
+
+    try:
+        modified_at = password_file.stat().st_mtime
+    except OSError:
+        return
+
+    age_seconds = time.time() - modified_at
+    if age_seconds <= max_age_seconds:
+        return
+
+    logger.warning(
+        "Shared ephemeral dashboard credentials appear stale. "
+        "Rotate credentials or set explicit dashboard password."
+    )
+
+
 def _load_or_create_shared_ephemeral_password() -> str:
     """Load or atomically create a shared ephemeral password.
 
@@ -162,6 +228,7 @@ def _load_or_create_shared_ephemeral_password() -> str:
     if password_file.exists():
         existing_password = password_file.read_text(encoding="utf-8").strip()
         if existing_password:
+            _warn_if_ephemeral_password_is_stale(password_file)
             return existing_password
 
     generated_password = secrets.token_urlsafe(24)
@@ -175,6 +242,7 @@ def _load_or_create_shared_ephemeral_password() -> str:
     except FileExistsError:
         raced_password = password_file.read_text(encoding="utf-8").strip()
         if raced_password:
+            _warn_if_ephemeral_password_is_stale(password_file)
             return raced_password
     except OSError as exc:
         logger.warning(

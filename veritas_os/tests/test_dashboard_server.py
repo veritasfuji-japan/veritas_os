@@ -227,6 +227,33 @@ def test_get_ephemeral_password_file_path_defaults_under_veritas_home(monkeypatc
     )
 
 
+def test_get_ephemeral_password_warning_age_seconds_defaults(
+    monkeypatch,
+):
+    """Warning age threshold should default to 86400 seconds."""
+    monkeypatch.delenv(
+        "DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS",
+        raising=False,
+    )
+
+    threshold = dashboard_server._get_ephemeral_password_warning_age_seconds()
+
+    assert threshold == 86_400
+
+
+def test_get_ephemeral_password_warning_age_seconds_disables_on_negative(
+    monkeypatch, caplog
+):
+    """Negative warning threshold should disable stale-password warning."""
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS", "-1")
+    caplog.set_level("WARNING")
+
+    threshold = dashboard_server._get_ephemeral_password_warning_age_seconds()
+
+    assert threshold is None
+    assert "disabling stale-password warning" in caplog.text
+
+
 def test_load_or_create_shared_ephemeral_password_reuses_existing(monkeypatch, tmp_path):
     """Existing shared password should be reused to avoid worker divergence."""
     password_file = tmp_path / "dashboard_password"
@@ -236,6 +263,29 @@ def test_load_or_create_shared_ephemeral_password_reuses_existing(monkeypatch, t
     assert dashboard_server._load_or_create_shared_ephemeral_password() == (
         "existing-password"
     )
+
+
+def test_load_or_create_shared_ephemeral_password_warns_when_stale(
+    monkeypatch, tmp_path, caplog
+):
+    """Stale shared password should trigger rotation warning."""
+    password_file = tmp_path / "dashboard_password"
+    password_file.write_text("existing-password", encoding="utf-8")
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS", "60")
+    caplog.set_level("WARNING")
+    monkeypatch.setattr(
+        dashboard_server.time,
+        "time",
+        lambda: password_file.stat().st_mtime + 120,
+    )
+
+    password = dashboard_server._load_or_create_shared_ephemeral_password()
+
+    assert password == "existing-password"
+    assert "appear stale" in caplog.text
+    assert str(password_file) not in caplog.text
+    assert "age_seconds" not in caplog.text
 
 
 def test_load_or_create_shared_ephemeral_password_creates_new(monkeypatch, tmp_path):
