@@ -95,4 +95,35 @@
 
 - **セキュリティ警告（更新）**
   - 開発/検証環境では query API key 許可フラグを有効化すると、引き続き URL 経由の機密情報露出リスクがある。
-  - 本番環境では fail-closed 化により誤設定耐性を高めたが、運用上は引き続き `X-API-Key` ヘッダ運用を標準とし、query 経路は移行用途に限定すること。
+- 本番環境では fail-closed 化により誤設定耐性を高めたが、運用上は引き続き `X-API-Key` ヘッダ運用を標準とし、query 経路は移行用途に限定すること。
+
+### 2026-03-30 追加追記（CSP `unsafe-inline` 互換モードの本番 fail-closed 強化）
+
+- **実施した改善**
+  - CSP 適用判定を見直し、`VERITAS_ENV=prod|production` **または** `NODE_ENV=production` のランタイムでは、nonce ベース CSP を既定で強制するよう変更。
+  - 互換モード（`script-src 'unsafe-inline'`）は、`VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT=true` を明示した場合のみ有効化する「一時的エスケープハッチ」へ変更。
+  - 本番ランタイムでエスケープハッチが有効な場合は、セキュリティ警告ログを出力して誤運用を可視化。
+
+- **追加テスト**
+  - `NODE_ENV=production` 単体でも nonce 強制が有効になることを検証。
+  - 本番ランタイムでエスケープハッチを有効化した場合のみ nonce 強制が無効化されることを検証。
+  - 本番ランタイムでエスケープハッチ有効時に警告ヘルパー/警告ログが発火することを検証。
+
+- **セキュリティ警告（更新）**
+  - `VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT=true` は XSS 耐性を下げるため、**本番では原則禁止**。
+  - やむを得ず一時利用する場合は、期限付き運用（期限・担当者・ロールバック条件）を明文化し、解除を必須タスクとして追跡すること。
+
+### 2026-03-30 追加追記（CSP strict rollout 判定の運用境界修正）
+
+- **実施した改善**
+  - strict CSP の自動強制条件を `VERITAS_ENV=prod|production` または `VERITAS_CSP_ENFORCE_NONCE=true` に限定し、`NODE_ENV=production` 単体では警告のみ（互換維持）に修正。
+  - 互換モードのエスケープハッチ（`VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT=true`）警告は維持しつつ、`NODE_ENV=production` で strict 未完了の場合も警告して移行漏れを検知可能にした。
+
+- **追加テスト**
+  - `NODE_ENV=production` 単体では nonce 強制が有効化されないことを単体テストで検証。
+  - `VERITAS_ENV=production` かつエスケープハッチ無効時は警告しないことを単体テストで検証。
+  - `NODE_ENV=production` で strict 未完了時に警告ヘルパーが `true` を返すことを単体テストで検証。
+
+- **セキュリティ警告（継続）**
+  - `NODE_ENV=production` 警告状態を放置すると、`script-src 'unsafe-inline'` 互換モードが残る可能性があり、XSS リスクが高止まりする。
+  - 本番判定は必ず `VERITAS_ENV=production` を明示し、段階移行完了後は `VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT` を未設定に固定すること。

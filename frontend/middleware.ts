@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const NONCE_BYTES = 16;
 const ENFORCE_NONCE_ENV = "VERITAS_CSP_ENFORCE_NONCE";
+const ALLOW_UNSAFE_INLINE_COMPAT_ENV = "VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT";
 
 /**
  * Generates a CSP nonce for the current response.
@@ -17,36 +18,52 @@ export function generateNonce(): string {
  *
  * Security behavior:
  * - Strict nonce CSP is enabled by explicit rollout flag.
- * - VERITAS production profile always enforces nonce CSP as a fail-closed mode.
- * - NODE_ENV=production alone is warning-only so rollout stays compatible
- *   with Next.js bootstrap behavior until the dedicated VERITAS profile is set.
+ * - VERITAS production profile enforces nonce CSP by default in a fail-closed mode.
+ * - Compatibility mode can be re-enabled only through
+ *   VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT=true as a temporary migration escape hatch.
+ * - NODE_ENV=production alone remains warning-only to avoid accidental rollout
+ *   in environments that have not completed nonce compatibility validation.
  */
 export function shouldEnforceNonceCsp(): boolean {
+  if (process.env[ALLOW_UNSAFE_INLINE_COMPAT_ENV] === "true") {
+    return false;
+  }
+
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
   if (veritasEnv === "prod" || veritasEnv === "production") {
     return true;
   }
+
   return process.env[ENFORCE_NONCE_ENV] === "true";
 }
 
 /**
  * Returns whether runtime should emit a security warning for CSP rollout.
  *
- * Warns only when NODE_ENV=production while strict nonce rollout is still
- * disabled outside a VERITAS production profile.
+ * Warns when:
+ * - production runtime explicitly re-enables unsafe-inline via escape hatch, or
+ * - NODE_ENV=production is used without strict nonce rollout.
  */
 export function shouldWarnInsecureProductionCspConfig(): boolean {
-  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
-  if (nodeEnv !== "production") {
-    return false;
-  }
-
   const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
-  if (veritasEnv === "prod" || veritasEnv === "production") {
-    return false;
+  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+  const isVeritasProductionRuntime =
+    veritasEnv === "prod" ||
+    veritasEnv === "production";
+  const isNodeProductionRuntime = nodeEnv === "production";
+
+  if (
+    (isVeritasProductionRuntime || isNodeProductionRuntime) &&
+    process.env[ALLOW_UNSAFE_INLINE_COMPAT_ENV] === "true"
+  ) {
+    return true;
   }
 
-  return process.env[ENFORCE_NONCE_ENV] !== "true";
+  return (
+    isNodeProductionRuntime &&
+    !isVeritasProductionRuntime &&
+    process.env[ENFORCE_NONCE_ENV] !== "true"
+  );
 }
 
 /**
@@ -122,8 +139,9 @@ const BFF_SESSION_TOKEN_ENV = "VERITAS_BFF_SESSION_TOKEN";
 export function middleware(request: NextRequest): NextResponse {
   if (shouldWarnInsecureProductionCspConfig()) {
     console.warn(
-      "[security-warning] CSP nonce strict mode is disabled under NODE_ENV=production. " +
-        "Set VERITAS_ENV=production (preferred) or VERITAS_CSP_ENFORCE_NONCE=true after compatibility validation.",
+      "[security-warning] CSP strict nonce rollout is not fully enforced for this production runtime. " +
+        "Unset VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT and set VERITAS_ENV=production " +
+        "(or VERITAS_CSP_ENFORCE_NONCE=true) after compatibility validation.",
     );
   }
 
