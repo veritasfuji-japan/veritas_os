@@ -127,3 +127,21 @@
 - **セキュリティ警告（継続）**
   - `NODE_ENV=production` 警告状態を放置すると、`script-src 'unsafe-inline'` 互換モードが残る可能性があり、XSS リスクが高止まりする。
   - 本番判定は必ず `VERITAS_ENV=production` を明示し、段階移行完了後は `VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT` を未設定に固定すること。
+
+### 2026-03-30 追加追記（責務境界チェックの改善テーマ自動マッピング）
+
+- **実施した改善**
+  - `scripts/architecture/check_responsibility_boundaries.py` の JSON レポートに `improvement_theme` を追加し、責務境界違反を PR 単位で扱いやすいテーマへ自動分類するようにした。
+  - 分類ルール:
+    - `boundary_violation` は原則 `architecture`。
+    - ただし `fuji` / `memory` の責務境界違反は安全性影響を重視して `security` に昇格。
+    - `permission_denied` は `security`、`doc_alignment_error` / `input_invalid` は `operations`。
+  - これにより、既存の責務境界 CI 結果を「セキュリティ・運用・アーキテクチャ」テーマに接続しやすくした。
+
+- **追加テスト**
+  - machine report に `improvement_theme` が出力されることを検証。
+  - `fuji` / `memory` の責務境界違反が `security` に分類されることを単体テストで検証。
+
+- **セキュリティ警告（継続）**
+  - 本改善は triage 導線の強化であり、実際の責務境界違反を無害化するものではない。
+  - `fuji` / `memory` の違反検知時は、従来どおりリリースブロック相当で扱い、根本修正を優先すること。
