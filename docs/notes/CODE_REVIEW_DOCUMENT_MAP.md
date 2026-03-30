@@ -2,84 +2,85 @@
 title: コードレビュー文書マップ（整理版）
 doc_type: review_document_index
 latest: true
-updated_at: 2026-03-23
+updated_at: 2026-03-30
 ---
 
 # コードレビュー文書マップ（整理版）
 
-最終更新: 2026-03-23
+最終更新: 2026-03-30
 
-この文書は、リポジトリ内に点在しているコードレビュー関連 Markdown の
-**参照順序**と**用途**を整理するためのインデックスです。
+コードレビュー関連 Markdown の探索コストを下げるため、
+`docs/review` / `docs/reviews` / `docs/notes` の役割を明示します。
 
 ---
 
-## 1. まず最初に見る文書（現行の正）
+## 1. ディレクトリ責務
+
+- `docs/review/`: 運用中（active）のレビュー文書。
+- `docs/reviews/`: 日付付き監査・再評価レポート（アーカイブ）。
+- `docs/notes/`: 補助メモ・履歴・参照マップ。
+
+> 以後、レビュー着手時は `docs/review/README.md` を起点にする。
+
+---
+
+## 2. まず最初に見る文書（現行の正）
 
 1. `docs/review/CODEX_START_HERE.md`
-   - レビュー着手用の1ページガイド（参照優先順 / 必須コマンド / 禁止事項 / PRテンプレート）
 2. `docs/review/CODE_REVIEW_STATUS.md`
-   - 修正進捗の追跡（Fix/Deferred/Accepted）
-   - 実装対応の最新状態を把握する基準
 3. `docs/review/CODE_REVIEW_2026_02_11_RUNTIME_CHECK.md`
-   - 実行可能な範囲での最新ランタイム確認結果
-   - 環境依存で未実施の項目も明示
-
-> 運用上は、上記 3 ファイルを「一次情報」として扱います。
+4. `docs/review/README.md`
 
 ### README / Runbook の正本
+
 - 導入判断・責務境界・beta positioning の正本: `README_JP.md`
-- degraded 状態の運用意味・アラート方針・復旧手順の正本: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
+- degraded 状態の運用意味・アラート方針・復旧手順の正本:
+  `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
 - `veritas_os/README_JP.md` は補助説明であり、production readiness の最終判断根拠として単独利用しない。
 
 ---
 
-## 2. 参照目的別の読み分け
+## 3. 参照目的別の読み分け
 
 ### A. 直近の包括レビューを読みたい
-- `docs/review/CODE_REVIEW_2026_02_16_COMPLETENESS_JP.md`（履歴アーカイブ。最新判定は `CODE_REVIEW_STATUS.md` に統合済み）
-- `docs/review/CODE_REVIEW_2026_02_11.md`
-- `docs/review/CODE_REVIEW_2026_02_10.md`
 
-### B. 旧レビューの網羅版を遡りたい
+- `docs/reviews/full_code_review_20260327.md`
+- `docs/reviews/system_improvement_review_ja_20260327.md`
+- `docs/review/CODE_REVIEW_STATUS.md`
+
+### B. セキュリティ・脅威モデル視点で確認したい
+
+- `docs/reviews/THREAT_MODEL_STRIDE_LINDDUN_20260314.md`
+- `docs/review/SECURITY_AUDIT_2026_03_12.md`
+
+### C. 旧レビューの履歴を遡りたい
+
 - `docs/review/CODE_REVIEW_FULL.md`
 - `docs/review/CODE_REVIEW_FULL_2026_02_08.md`
 - `docs/review/CODE_REVIEW_2025.md`
 
-### C. レポート形式で確認したい
-- `docs/review/CODE_REVIEW_REPORT.md`
-- `docs/notes/CODE_REVIEW_REPORT_20260204.md`
-- `docs/notes/code_review_20260205.md`
+---
 
-### D. 原則ベースで確認したい
-- `docs/notes/VERITAS_CODE_REVIEW_PRINCIPLES.md`
+## 4. 命名ルール（今後）
+
+- 運用中レビュー（`docs/review`）:
+  - `CODE_REVIEW_YYYY_MM_DD*.md`
+  - 固定名: `CODE_REVIEW_STATUS.md`
+- アーカイブ（`docs/reviews`）:
+  - `*_YYYYMMDD.md`
+  - 日本語版は必要に応じて `*_ja_YYYYMMDD.md`
 
 ---
 
-## 3. 命名ルール（今後）
+## 5. 運用ルール（軽量）
 
-今後レビュー文書を追加する場合は、次の形式を推奨します。
-
-- 日次/都度レビュー: `docs/review/CODE_REVIEW_YYYY_MM_DD.md`
-- 実行確認付きレビュー: `docs/review/CODE_REVIEW_YYYY_MM_DD_RUNTIME_CHECK.md`
-- 進捗管理（単一運用）: `docs/review/CODE_REVIEW_STATUS.md`（固定名）
-
-これにより、同種文書の探索コストを下げ、重複管理を避けます。
+- 新しいレビューを追加したら、このマップか `docs/review/README.md` に追記。
+- 履歴文書は原則 immutable（修正時は reassessment 文書を追加）。
+- Issue/PR から参照する際は、まず `docs/review/CODE_REVIEW_STATUS.md` をリンク。
 
 ---
 
-## 4. 運用ルール（軽量）
-
-- 新しいレビューを追加したら、このマップに 1 行追記する。
-- 既存内容の上書きではなく、日時付き文書で履歴を残す。
-- Issue/PR から参照する際は、まず `docs/review/CODE_REVIEW_STATUS.md` をリンクする。
-
----
-
-## 5. セキュリティ観点の注意
-
-レビュー文書には、脆弱性情報や運用上の弱点が記載される場合があります。
-公開リポジトリで扱うため、以下を徹底してください。
+## 6. セキュリティ観点の注意
 
 - 実鍵・トークン・内部 URL・個人情報は記載しない。
 - PoC 手順は悪用可能性を下げる粒度で記述する。

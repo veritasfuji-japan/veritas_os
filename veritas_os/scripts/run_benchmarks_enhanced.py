@@ -45,6 +45,26 @@ BENCH_DIR = REPO_ROOT / "benchmarks"
 LOG_ROOT  = REPO_ROOT / "scripts" / "logs" / "benchmarks"
 LOG_ROOT.mkdir(parents=True, exist_ok=True)
 
+_API_KEY_PLACEHOLDER = "YOUR_API_KEY_HERE"
+
+
+def _resolve_api_key(raw_api_key: Optional[str] = None) -> str:
+    """Return a validated API key for benchmark requests.
+
+    Security policy:
+    - Empty keys are rejected.
+    - Placeholder values are rejected to prevent accidental unauthenticated
+      benchmark runs.
+    """
+    candidate = API_KEY if raw_api_key is None else raw_api_key
+    normalized = (candidate or "").strip()
+    if not normalized or normalized == _API_KEY_PLACEHOLDER:
+        raise ValueError(
+            "VERITAS_API_KEY is not configured. "
+            "Set a valid non-placeholder API key before running benchmarks."
+        )
+    return normalized
+
 
 def run_one_bench(
     path: Path,
@@ -99,7 +119,7 @@ def run_one_bench(
     url = f"{BASE_URL}/v1/decide"
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
+        "X-API-Key": _resolve_api_key(),
     }
 
     logger.info(f"Running: {bench_id} ({name})")
@@ -318,6 +338,12 @@ def main():
     )
     
     args = parser.parse_args()
+
+    try:
+        _resolve_api_key()
+    except ValueError as exc:
+        logger.error(str(exc))
+        return 1
     
     # ログレベル調整
     if args.verbose:

@@ -3,7 +3,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatPanel } from "./chat-panel";
 
 const t = (_ja: string, en: string) => en;
-const tk = (key: string) => key;
+const translations: Record<string, string> = {
+  chatMessagesAriaLabel: "Chat messages",
+  messageLabel: "messageLabel",
+  noMessagesYet: "noMessagesYet",
+  send: "send",
+  sending: "sending",
+};
+const tk = (key: string) => translations[key] ?? key;
 
 function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
   const defaults = {
@@ -39,7 +46,7 @@ describe("ChatPanel", () => {
     });
     expect(screen.getByText("Hello")).toBeInTheDocument();
     expect(screen.getByText("Hi there")).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "chat messages" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Chat messages" })).toBeInTheDocument();
   });
 
   it("strips HTML tags from message content for XSS protection", () => {
