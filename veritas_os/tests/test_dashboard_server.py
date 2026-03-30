@@ -283,7 +283,9 @@ def test_load_or_create_shared_ephemeral_password_warns_when_stale(
     password = dashboard_server._load_or_create_shared_ephemeral_password()
 
     assert password == "existing-password"
-    assert "appears stale" in caplog.text
+    assert "appear stale" in caplog.text
+    assert str(password_file) not in caplog.text
+    assert "age_seconds" not in caplog.text
 
 
 def test_load_or_create_shared_ephemeral_password_creates_new(monkeypatch, tmp_path):

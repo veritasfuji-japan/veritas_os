@@ -183,7 +183,12 @@ def _get_ephemeral_password_warning_age_seconds() -> int | None:
 
 
 def _warn_if_ephemeral_password_is_stale(password_file: Path) -> None:
-    """Warn when shared ephemeral password age exceeds configured threshold."""
+    """Warn when shared ephemeral password age exceeds configured threshold.
+
+    Security note:
+        Log output intentionally avoids file paths and computed timing values
+        to prevent accidental disclosure of credential-related metadata.
+    """
     max_age_seconds = _get_ephemeral_password_warning_age_seconds()
     if max_age_seconds is None:
         return
@@ -198,11 +203,8 @@ def _warn_if_ephemeral_password_is_stale(password_file: Path) -> None:
         return
 
     logger.warning(
-        "Shared ephemeral DASHBOARD_PASSWORD appears stale "
-        "(age_seconds=%s, threshold_seconds=%s). "
-        "Rotate credentials or set explicit DASHBOARD_PASSWORD.",
-        int(age_seconds),
-        max_age_seconds,
+        "Shared ephemeral dashboard credentials appear stale. "
+        "Rotate credentials or set explicit dashboard password."
     )
 
 
