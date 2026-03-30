@@ -112,3 +112,17 @@
 セキュリティ補足:
 - 本改善は「未許可経路の BFF 露出」を防ぐ監視強化であり、BFF 境界を緩める変更は含まない。
 - なお provenance 経路（`/v1/trust/{request_id}/prov`）を今後 BFF 公開する場合は、引き続き最小権限・最小レスポンス原則を必須とする。
+
+### 7.1 2026-03-30 追加改善（この依頼で実施）
+
+上記の自動突合チェックに対し、実運用で使われる `fetch(...)` の抽出漏れを最小範囲で補強した。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `veritasFetch` / `EventSource` に加えて、`fetch("/api/veritas/v1/...")` の直接呼び出しを抽出対象に追加。
+  - `const streamUrl = "/api/veritas/v1/events"` のような **定数経由の URL 参照** を `fetch(streamUrl)` / `veritasFetch(streamUrl)` / `EventSource(streamUrl)` で解決できるよう改善。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - 直接 `fetch` と定数経由 URL の両方を検証するテストを追加し、回帰を防止。
+
+セキュリティ補足:
+- 本変更は検出精度の向上のみであり、BFF の許可境界や認可ロジック自体は変更していない。
+- したがって、権限昇格・経路露出の新規リスクは増やしていない（監視の見落としリスクを低減）。

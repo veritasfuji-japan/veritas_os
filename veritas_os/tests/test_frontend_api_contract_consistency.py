@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pathlib
+import textwrap
 
 from scripts.quality import check_frontend_api_contract_consistency as checker
 
@@ -51,3 +52,37 @@ def test_validate_consistency_reports_missing_bff_and_openapi() -> None:
     assert len(errors) == 2
     assert "BFF allowlist missing GET /v1/trust/abc/prov" in errors[0]
     assert "OpenAPI path/method missing GET /v1/trust/abc/prov" in errors[1]
+
+
+def test_collect_frontend_usages_extracts_fetch_and_variable_path(tmp_path: pathlib.Path) -> None:
+    """Collector should detect fetch() calls with literal and variable paths."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "sample.tsx"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const streamUrl = "/api/veritas/v1/events";
+            const trustUrl = "/api/veritas/v1/trust/logs";
+
+            async function load() {
+              await fetch(streamUrl, { method: "GET" });
+              await fetch("/api/veritas/v1/metrics", { method: "GET" });
+              await veritasFetch(trustUrl);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("GET", "/api/veritas/v1/events") in found
+    assert ("GET", "/api/veritas/v1/metrics") in found
+    assert ("GET", "/api/veritas/v1/trust/logs") in found
