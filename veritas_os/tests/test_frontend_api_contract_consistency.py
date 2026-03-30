@@ -86,3 +86,34 @@ def test_collect_frontend_usages_extracts_fetch_and_variable_path(tmp_path: path
     assert ("GET", "/api/veritas/v1/events") in found
     assert ("GET", "/api/veritas/v1/metrics") in found
     assert ("GET", "/api/veritas/v1/trust/logs") in found
+
+
+def test_collect_frontend_usages_resolves_variable_aliases(tmp_path: pathlib.Path) -> None:
+    """Collector should resolve one-hop and chained aliases for API path constants."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "alias.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const baseUrl = "/api/veritas/v1/compliance/config";
+            const apiUrl = baseUrl;
+            const endpoint = apiUrl;
+
+            async function load() {
+              await fetch(endpoint, { method: "GET" });
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("GET", "/api/veritas/v1/compliance/config") in found
