@@ -176,4 +176,21 @@
 
 - **セキュリティ警告（継続）**
   - 本改善は「可視化と運用統制」の強化であり、実装上の脆弱性を直接緩和するものではない。
-  - query `api_key` や CSP 互換モードの例外運用が残る場合、必ず期限付きで追跡し、解除完了までリスク受容を明示すること。
+- query `api_key` や CSP 互換モードの例外運用が残る場合、必ず期限付きで追跡し、解除完了までリスク受容を明示すること。
+
+### 2026-03-30 追加追記（CSP Report-Only 違反収集のコード内既定化）
+
+- **実施した改善**
+  - frontend middleware の `Content-Security-Policy-Report-Only` に `report-uri` を追加し、違反収集先をコード上で既定化。
+  - 既定値は同一オリジンの `/api/veritas/csp-report` とし、`VERITAS_CSP_REPORT_ONLY_ENDPOINT` で明示上書き可能にした。
+  - `VERITAS_CSP_REPORT_ONLY_ENDPOINT` が同一オリジン相対パス（`/` 始まり）でない場合にセキュリティ警告ログを出すガードを追加し、外部 collector への誤送信リスクを可視化。
+
+- **追加テスト**
+  - Report-Only CSP に既定 `report-uri /api/veritas/csp-report` が含まれることを単体テストで検証。
+  - `VERITAS_CSP_REPORT_ONLY_ENDPOINT` 指定時に `report-uri` が上書きされることを単体テストで検証。
+  - report endpoint 警告ヘルパーが「未指定/相対パスは警告なし、絶対URLは警告あり」を返すことを単体テストで検証。
+  - 絶対URL指定時に middleware がセキュリティ警告を出力することを単体テストで検証。
+
+- **セキュリティ警告（更新）**
+  - CSP 違反レポートは URL 断片やユーザー操作由来の情報を含み得るため、`VERITAS_CSP_REPORT_ONLY_ENDPOINT` の外部送信先設定はデータ取扱い承認を前提にすること。
+  - 既定の同一オリジン収集先（`/api/veritas/csp-report`）を維持し、外部 collector は期限付き・目的限定で運用すること。

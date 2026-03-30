@@ -5,6 +5,8 @@ import {
   buildCspReportOnly,
   generateNonce,
   middleware,
+  resolveCspReportOnlyEndpoint,
+  shouldWarnInsecureCspReportOnlyEndpoint,
   shouldEnforceNonceCsp,
   shouldWarnInsecureProductionCspConfig,
 } from "./middleware";
@@ -49,6 +51,16 @@ describe("middleware CSP", () => {
     expect(csp).toContain("default-src 'self'");
     expect(scriptDirective).toContain("'nonce-sample-nonce'");
     expect(scriptDirective).not.toContain("'unsafe-inline'");
+    expect(csp).toContain("report-uri /api/veritas/csp-report");
+  });
+
+  it("uses configured report-only endpoint when explicitly provided", () => {
+    vi.stubEnv("VERITAS_CSP_REPORT_ONLY_ENDPOINT", "/security/csp-report");
+
+    expect(resolveCspReportOnlyEndpoint()).toBe("/security/csp-report");
+    expect(buildCspReportOnly("sample-nonce")).toContain(
+      "report-uri /security/csp-report",
+    );
   });
 
   it("defaults nonce enforcement flag to false in non-production profile", () => {
@@ -106,6 +118,22 @@ describe("middleware CSP", () => {
     expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
 
+  it("warn helper returns false for unset report-only endpoint override", () => {
+    expect(shouldWarnInsecureCspReportOnlyEndpoint()).toBe(false);
+  });
+
+  it("warn helper returns false for same-origin report-only endpoint override", () => {
+    vi.stubEnv("VERITAS_CSP_REPORT_ONLY_ENDPOINT", "/security/csp-report");
+
+    expect(shouldWarnInsecureCspReportOnlyEndpoint()).toBe(false);
+  });
+
+  it("warn helper returns true for cross-origin report-only endpoint override", () => {
+    vi.stubEnv("VERITAS_CSP_REPORT_ONLY_ENDPOINT", "https://collector.example/csp");
+
+    expect(shouldWarnInsecureCspReportOnlyEndpoint()).toBe(true);
+  });
+
   it("sets CSP headers and forwards nonce to the Next.js request", () => {
     const response = middleware({ headers: new Headers() } as never);
     const csp = response.headers.get("Content-Security-Policy") ?? "";
@@ -152,5 +180,16 @@ describe("middleware CSP", () => {
     middleware({ headers: new Headers() } as never);
 
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("emits warning when report-only endpoint is cross-origin", () => {
+    vi.stubEnv("VERITAS_CSP_REPORT_ONLY_ENDPOINT", "https://collector.example/csp");
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+
+    middleware({ headers: new Headers() } as never);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 });

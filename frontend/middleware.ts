@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 const NONCE_BYTES = 16;
 const ENFORCE_NONCE_ENV = "VERITAS_CSP_ENFORCE_NONCE";
 const ALLOW_UNSAFE_INLINE_COMPAT_ENV = "VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT";
+const REPORT_ONLY_ENDPOINT_ENV = "VERITAS_CSP_REPORT_ONLY_ENDPOINT";
 
 /**
  * Generates a CSP nonce for the current response.
@@ -67,6 +68,21 @@ export function shouldWarnInsecureProductionCspConfig(): boolean {
 }
 
 /**
+ * Returns whether report-only CSP endpoint config is security-risky.
+ *
+ * Warns when:
+ * - `VERITAS_CSP_REPORT_ONLY_ENDPOINT` is configured, and
+ * - the configured endpoint is not a same-origin relative path.
+ */
+export function shouldWarnInsecureCspReportOnlyEndpoint(): boolean {
+  const configuredEndpoint = (process.env[REPORT_ONLY_ENDPOINT_ENV] ?? "").trim();
+  if (!configuredEndpoint) {
+    return false;
+  }
+  return !configuredEndpoint.startsWith("/");
+}
+
+/**
  * Builds an enforced CSP policy string.
  *
  * Compatibility mode keeps `unsafe-inline` for scripts to avoid blocking
@@ -98,6 +114,8 @@ export function buildCspEnforced(nonce: string, enforceNonce: boolean): string {
  * Builds a strict report-only CSP policy string bound to a nonce.
  */
 export function buildCspReportOnly(nonce: string): string {
+  const reportOnlyEndpoint = resolveCspReportOnlyEndpoint();
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -109,9 +127,28 @@ export function buildCspReportOnly(nonce: string): string {
     "font-src 'self' data:",
     "connect-src 'self'",
     "form-action 'self'",
+    `report-uri ${reportOnlyEndpoint}`,
     "upgrade-insecure-requests",
     "block-all-mixed-content",
   ].join("; ");
+}
+
+/**
+ * Resolves the CSP report-only collection endpoint.
+ *
+ * Security behavior:
+ * - Defaults to same-origin `/api/veritas/csp-report` to keep violation reports
+ *   within the BFF boundary.
+ * - Allows explicit override through `VERITAS_CSP_REPORT_ONLY_ENDPOINT`.
+ * - Falls back to the safe default when the override is empty.
+ */
+export function resolveCspReportOnlyEndpoint(): string {
+  const configuredEndpoint = process.env[REPORT_ONLY_ENDPOINT_ENV] ?? "";
+  const normalizedEndpoint = configuredEndpoint.trim();
+  if (normalizedEndpoint) {
+    return normalizedEndpoint;
+  }
+  return "/api/veritas/csp-report";
 }
 
 /**
@@ -142,6 +179,13 @@ export function middleware(request: NextRequest): NextResponse {
       "[security-warning] CSP strict nonce rollout is not fully enforced for this production runtime. " +
         "Unset VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT and set VERITAS_ENV=production " +
         "(or VERITAS_CSP_ENFORCE_NONCE=true) after compatibility validation.",
+    );
+  }
+  if (shouldWarnInsecureCspReportOnlyEndpoint()) {
+    console.warn(
+      "[security-warning] VERITAS_CSP_REPORT_ONLY_ENDPOINT is not a same-origin relative path. " +
+        "External CSP report collectors may leak URL metadata and should be used only with explicit " +
+        "data handling approval.",
     );
   }
 
