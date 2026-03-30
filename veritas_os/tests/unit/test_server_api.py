@@ -3152,7 +3152,7 @@ def test_require_api_key_wrong():
     assert resp.status_code == 401
 
 
-def test_require_api_key_server_not_configured(monkeypatch):
+def test_require_api_key_server_not_configured_v2(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", "")
     monkeypatch.setattr(server, "API_KEY_DEFAULT", "")
     monkeypatch.setattr(server, "cfg", SimpleNamespace(api_key=""))
@@ -3164,14 +3164,14 @@ def test_require_api_key_server_not_configured(monkeypatch):
 # 22-23. enforce_rate_limit
 # ----------------------------------------------------------------
 
-def test_enforce_rate_limit_missing_key():
+def test_enforce_rate_limit_missing_key_v2():
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
         server.enforce_rate_limit(x_api_key=None)
     assert exc.value.status_code == 401
 
 
-def test_enforce_rate_limit_exceeded(monkeypatch):
+def test_enforce_rate_limit_exceeded_v2(monkeypatch):
     key = "rl-test-key"
     server._rate_bucket.clear()
     server._rate_bucket[key] = (server._RATE_LIMIT, time.time())
@@ -3208,7 +3208,7 @@ def _run_async(coro):
         loop.close()
 
 
-def test_verify_signature_missing_secret(monkeypatch):
+def test_verify_signature_missing_secret_v2(monkeypatch):
     monkeypatch.setattr(server, "API_SECRET", b"")
     monkeypatch.setenv("VERITAS_API_SECRET", "")
     from fastapi import HTTPException
@@ -3220,7 +3220,7 @@ def test_verify_signature_missing_secret(monkeypatch):
     assert exc.value.status_code == 500
 
 
-def test_verify_signature_missing_headers(monkeypatch):
+def test_verify_signature_missing_headers_v2(monkeypatch):
     monkeypatch.setattr(server, "API_SECRET", b"secret-for-test-1234567890abcdef")
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
@@ -3230,7 +3230,7 @@ def test_verify_signature_missing_headers(monkeypatch):
     assert exc.value.status_code == 401
 
 
-def test_verify_signature_invalid_timestamp(monkeypatch):
+def test_verify_signature_invalid_timestamp_v2(monkeypatch):
     monkeypatch.setattr(server, "API_SECRET", b"secret-for-test-1234567890abcdef")
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
@@ -3241,7 +3241,7 @@ def test_verify_signature_invalid_timestamp(monkeypatch):
     assert exc.value.status_code == 401
 
 
-def test_verify_signature_timestamp_out_of_range(monkeypatch):
+def test_verify_signature_timestamp_out_of_range_v2(monkeypatch):
     monkeypatch.setattr(server, "API_SECRET", b"secret-for-test-1234567890abcdef")
     old_ts = str(int(time.time()) - 9999)
     from fastapi import HTTPException

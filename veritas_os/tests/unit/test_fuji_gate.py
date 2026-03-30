@@ -1649,7 +1649,7 @@ SIMPLE_POLICY = {
 # =========================================================
 
 
-class TestPolicyBlockedKeywords:
+class TestPolicyBlockedKeywords_v2:
     def test_from_policy(self):
         policy = {
             "blocked_keywords": {
@@ -1684,7 +1684,7 @@ class TestPolicyBlockedKeywords:
 # =========================================================
 
 
-class TestRedactTextForTrustLog:
+class TestRedactTextForTrustLog_v2:
     def test_no_redaction_when_disabled(self):
         policy = {"audit": {"redact_before_log": False}}
         assert fuji._redact_text_for_trust_log("my text", policy) == "my text"
@@ -1722,7 +1722,7 @@ class TestRedactTextForTrustLog:
 # =========================================================
 
 
-class TestSelectFujiCode:
+class TestSelectFujiCode_v2:
     def test_prompt_injection(self):
         code = fuji._select_fuji_code(
             violations=[],
@@ -1752,7 +1752,7 @@ class TestSelectFujiCode:
 # =========================================================
 
 
-class TestIsHighRiskContext:
+class TestIsHighRiskContext_v2:
     def test_high_stakes(self):
         assert fuji._is_high_risk_context(
             risk=0.1, stakes=0.8, categories=[], text=""
@@ -1784,7 +1784,7 @@ class TestIsHighRiskContext:
 # =========================================================
 
 
-class TestBuildFollowups:
+class TestBuildFollowups_v2:
     def test_returns_three_items(self):
         result = fuji._build_followups("query text", {})
         assert len(result) == 3
@@ -1808,7 +1808,7 @@ class TestBuildFollowups:
 # =========================================================
 
 
-class TestDetectPromptInjection:
+class TestDetectPromptInjection_v2:
     def test_no_injection(self):
         result = fuji._detect_prompt_injection("What is the weather?")
         assert result["score"] == 0.0
@@ -1858,7 +1858,7 @@ class TestDetectPromptInjection:
 # =========================================================
 
 
-class TestPolicyPath:
+class TestPolicyPath_v2:
     def test_default_path(self, monkeypatch):
         monkeypatch.delenv("VERITAS_FUJI_POLICY", raising=False)
         p = fuji._policy_path()
@@ -1902,7 +1902,7 @@ class TestLoadPolicy:
 # =========================================================
 
 
-class TestFallbackSafetyHead:
+class TestFallbackSafetyHead_v2:
     def test_safe_text(self):
         result = fuji._fallback_safety_head("Hello, how are you?")
         assert result.risk_score < 0.5
@@ -2022,7 +2022,7 @@ class TestFujiCoreDecide:
 # =========================================================
 
 
-class TestFujiGate:
+class TestFujiGate_v2:
     def test_basic_gate(self, monkeypatch):
         monkeypatch.setattr(fuji, "call_tool", MagicMock(side_effect=RuntimeError("no tool")))
         monkeypatch.setattr(fuji, "append_trust_event", MagicMock())
@@ -2111,7 +2111,7 @@ class TestUtilityFunctions:
 # =========================================================
 
 
-class TestPosthocCheck:
+class TestPosthocCheck_v2:
     def test_ok_when_sufficient(self):
         result = fuji.posthoc_check(
             {"chosen": {"uncertainty": 0.1}},
@@ -2945,7 +2945,7 @@ from veritas_os.core.fuji_injection import (
 )
 
 
-class TestNormalizeInjectionText:
+class TestNormalizeInjectionText_v2:
     def test_basic_normalization(self):
         result = _normalize_injection_text("  Hello  World  ")
         assert result == "hello world"
@@ -2973,7 +2973,7 @@ class TestNormalizeInjectionText:
         assert _normalize_injection_text(None) == ""
 
 
-class TestDetectPromptInjection:
+class TestDetectPromptInjection_v3:
     def test_clean_text(self):
         result = _detect_prompt_injection("Hello, how are you?")
         assert result["score"] == 0.0
@@ -3105,7 +3105,7 @@ from veritas_os.core.fuji_policy import (
 )
 
 
-class TestPolicyBlockedKeywords:
+class TestPolicyBlockedKeywords_v3:
     def test_fallback_when_no_policy_keywords(self):
         hard, sensitive = _policy_blocked_keywords({})
         assert hard == {w.lower() for w in BANNED_KEYWORDS_FALLBACK}
@@ -3129,7 +3129,7 @@ class TestPolicyBlockedKeywords:
         assert "x" in sensitive
 
 
-class TestApplyPolicy:
+class TestApplyPolicy_v2:
     def _default_call(self, risk=0.1, categories=None, stakes=0.5, telos=0.0):
         return _apply_policy(
             risk=risk,
@@ -3251,7 +3251,7 @@ class TestFallbackPolicy:
         assert "version" in result
 
 
-class TestLoadPolicy:
+class TestLoadPolicy_v2:
     def test_returns_default_when_yaml_disabled(self):
         with mock.patch("veritas_os.core.fuji_policy.capability_cfg") as cfg:
             cfg.enable_fuji_yaml_policy = False
@@ -3264,7 +3264,7 @@ class TestLoadPolicy:
         assert "version" in result
 
 
-class TestLoadPolicyFromStr:
+class TestLoadPolicyFromStr_v2:
     def test_returns_default_when_yaml_disabled(self):
         with mock.patch("veritas_os.core.fuji_policy.capability_cfg") as cfg:
             cfg.enable_fuji_yaml_policy = False
@@ -3296,7 +3296,7 @@ class TestBuildPiiPatternsFromPolicy:
         _build_pii_patterns_from_policy({"pii": {"patterns": "not_dict"}})
 
 
-class TestPolicyPath:
+class TestPolicyPath_v3:
     def test_returns_default_path_without_env(self):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("VERITAS_FUJI_POLICY", None)
@@ -3555,7 +3555,7 @@ from veritas_os.core.fuji_safety_head import (
 )
 
 
-class TestNormalizeText:
+class TestNormalizeText_v2:
     def test_basic(self):
         assert _normalize_text("  Hello ") == "hello"
 
@@ -3569,7 +3569,7 @@ class TestNormalizeText:
         assert _normalize_text(None) == ""
 
 
-class TestFallbackSafetyHead:
+class TestFallbackSafetyHead_v3:
     def test_safe_text(self):
         result = _fallback_safety_head("今日は天気が良いです")
         assert result.risk_score == pytest.approx(RISK_BASELINE)

@@ -854,7 +854,7 @@ def test_detect_simple_qa_weekday_and_date_patterns():
     assert kernel._detect_simple_qa("今日は何日？") is not None
 
 
-def test_detect_knowledge_qa_patterns():
+def test_detect_knowledge_qa_patterns_v2():
     """
     _detect_knowledge_qa が what/who/where / 〜とは？ を拾うパス。
     """
@@ -1993,7 +1993,7 @@ def _stub_affect(monkeypatch):
 # run_env_tool
 # ============================================================
 
-def test_run_env_tool_success(monkeypatch):
+def test_run_env_tool_success_v2(monkeypatch):
     monkeypatch.setattr(kernel, "call_tool", lambda kind, **kw: {"data": 1})
     result = kernel.run_env_tool("web_search", query="test")
     assert result["ok"] is True

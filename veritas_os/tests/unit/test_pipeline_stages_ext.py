@@ -1807,7 +1807,7 @@ from veritas_os.core import pipeline as pl
 # =========================================================
 
 
-class TestCheckRequiredModules:
+class TestCheckRequiredModules_v2:
     """_check_required_modules must raise ImportError when core modules are
     absent and succeed silently when they are present."""
 
@@ -2017,7 +2017,7 @@ class TestSafeWebSearch:
 # =========================================================
 
 
-class TestGetRequestParams:
+class TestGetRequestParams_v2:
     def test_both_query_params_and_params(self):
         class Req:
             query_params = {"a": "1"}
@@ -2412,7 +2412,7 @@ class TestBackwardCompatAliases:
 # =========================================================
 
 
-class TestWarn:
+class TestWarn_v2:
     def test_info_prefix(self, monkeypatch, caplog):
         import logging
 
@@ -2482,7 +2482,7 @@ class TestAllowProb:
 # =========================================================
 
 
-class TestGetMemoryStore:
+class TestGetMemoryStore_v2:
     def test_returns_none_when_mem_is_none(self, monkeypatch):
         monkeypatch.setattr(pl, "mem", None)
         assert pl._get_memory_store() is None
@@ -3072,7 +3072,7 @@ class TestGetRequestParamsExceptions:
 # =========================================================
 
 
-class TestSafePaths:
+class TestSafePaths_v2:
     def test_fallback_when_logging_paths_missing(self, monkeypatch):
         """Lines 337-343: exception fallback when logging.paths unavailable."""
         import importlib
@@ -3231,7 +3231,7 @@ class TestSaveValstats:
 # =========================================================
 
 
-class TestAllowProb:
+class TestAllowProb_v2:
     def test_returns_float_normally(self):
         """_allow_prob returns float from predict_gate_label."""
         with patch.object(p, "predict_gate_label", return_value={"allow": 0.75}):
@@ -3258,7 +3258,7 @@ class TestAllowProb:
 # =========================================================
 
 
-class TestDedupeAlts:
+class TestDedupeAlts_v2:
     def test_normal_dedup(self):
         """Normal dedup works via veritas_core or fallback."""
         alts = [
@@ -3415,7 +3415,7 @@ class TestCallCoreDecide:
 # =========================================================
 
 
-class TestGetMemoryStore:
+class TestGetMemoryStore_v3:
     def test_returns_none_when_mem_is_none(self, monkeypatch):
         """Line 571: returns None immediately when mem is None."""
         monkeypatch.setattr(p, "mem", None)
@@ -3459,7 +3459,7 @@ class TestGetMemoryStore:
 # =========================================================
 
 
-class TestMemorySearch:
+class TestMemorySearch_v2:
     def test_search_no_search_attr(self):
         """Line 606: raises RuntimeError when no search method."""
 
@@ -3518,7 +3518,7 @@ class TestMemorySearch:
 # =========================================================
 
 
-class TestMemoryPut:
+class TestMemoryPut_v2:
     def test_put_no_put_attr(self):
         """Lines 631-632: returns None when no put method."""
 
@@ -3588,7 +3588,7 @@ class TestMemoryPut:
 # =========================================================
 
 
-class TestMemoryAddUsage:
+class TestMemoryAddUsage_v2:
     def test_no_add_usage_attr(self):
         """Line 663-664: returns None when no add_usage method."""
 
@@ -3636,7 +3636,7 @@ class TestMemoryAddUsage:
 # =========================================================
 
 
-class TestSafeWebSearch:
+class TestSafeWebSearch_v2:
     def test_returns_none_when_no_fn(self, monkeypatch):
         """Lines 694-697: returns None when no callable web_search."""
         monkeypatch.setattr(p, "_tool_web_search", None)
@@ -3692,7 +3692,7 @@ class TestSafeWebSearch:
 # =========================================================
 
 
-class TestNormalizeWebPayload:
+class TestNormalizeWebPayload_v2:
     def test_none_returns_none(self):
         """None input → None output."""
         assert p._normalize_web_payload(None) is None
@@ -3756,7 +3756,7 @@ class TestNormalizeWebPayload:
 # =========================================================
 
 
-class TestNormEvidenceItemSimple:
+class TestNormEvidenceItemSimple_v2:
     def test_returns_none_for_non_dict(self):
         """Returns None for non-dict input."""
         assert p._norm_evidence_item_simple("not a dict") is None
@@ -7437,7 +7437,7 @@ from veritas_os.core.pipeline_web_adapter import (
 )
 
 
-class TestNormalizeWebPayload:
+class TestNormalizeWebPayload_v3:
     def test_none(self):
         assert _normalize_web_payload(None) is None
 
