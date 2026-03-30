@@ -5035,12 +5035,12 @@ import pytest
 from veritas_os.core.pipeline_execute import stage_core_execute
 from veritas_os.core.pipeline_gate import (
     _allow_prob,
-    _dedupe_alts,
+    _dedupe_alts as _gate_dedupe_alts,
     _dedupe_alts_fallback,
     _load_memory_model,
     _load_valstats,
     _mem_model_path,
-    _save_valstats,
+    _save_valstats as _gate_save_valstats,
 )
 from veritas_os.core.pipeline_types import PipelineContext
 
@@ -5251,7 +5251,7 @@ def test_save_valstats_then_load_roundtrip(tmp_path: Path) -> None:
     p = tmp_path / "stats" / "valstats.json"
     payload = {"ema": 0.8, "alpha": 0.4, "n": 4, "history": [0.8]}
 
-    _save_valstats(payload, p)
+    _gate_save_valstats(payload, p)
 
     loaded = json.loads(p.read_text(encoding="utf-8"))
     assert loaded["ema"] == 0.8
@@ -5269,7 +5269,7 @@ def test_dedupe_fallback_and_kernel_helper_degradation() -> None:
     assert len(fallback) == 2
 
     kernel = types.SimpleNamespace(_dedupe_alts=lambda _x: "not-a-list")
-    deduped = _dedupe_alts(alts, veritas_core=kernel)  # type: ignore[arg-type]
+    deduped = _gate_dedupe_alts(alts, veritas_core=kernel)  # type: ignore[arg-type]
     assert len(deduped) == 2
 
 

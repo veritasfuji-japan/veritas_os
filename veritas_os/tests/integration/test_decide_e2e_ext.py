@@ -1234,7 +1234,7 @@ class DummyReq:
         return self._body
 
 
-class DummyRequest:
+class DummyRequest2:
     """FastAPI Request の代わりに query_params だけ持つダミー"""
 
     def __init__(self, query_params=None) -> None:
@@ -1577,7 +1577,7 @@ async def test_run_decide_pipeline_happy_path(monkeypatch, tmp_path):
         # options は空にして、plan / episodic から alternatives 生成分岐を踏む
     }
     req = DummyReq(body)
-    request = DummyRequest(query_params={"fast": "1"})  # fast モード分岐も踏む
+    request = DummyRequest2(query_params={"fast": "1"})  # fast モード分岐も踏む
 
     payload = await pipeline.run_decide_pipeline(req, request)
 
@@ -1761,7 +1761,7 @@ async def test_run_decide_pipeline_error_paths(monkeypatch, tmp_path):
         },
     }
     req = DummyReq(body)
-    request = DummyRequest(query_params={})
+    request = DummyRequest2(query_params={})
 
     payload = await pipeline.run_decide_pipeline(req, request)
 
@@ -2017,7 +2017,7 @@ async def test_run_decide_pipeline_with_explicit_options_and_no_ml_gate(
         },
     }
     req = DummyReq(body)
-    request = DummyRequest(query_params={})
+    request = DummyRequest2(query_params={})
 
     payload = await pipeline.run_decide_pipeline(req, request)
 
