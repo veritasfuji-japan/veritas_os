@@ -36,6 +36,7 @@ updated_at: 2026-03-30
 - 導入判断・責務境界・beta positioning の正本: `README_JP.md`
 - degraded 状態の運用意味・アラート方針・復旧手順の正本:
   `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
+- `veritas_os/README_JP.md` は補助説明であり、production readiness の最終判断根拠として単独利用しない。
 
 ---
 
