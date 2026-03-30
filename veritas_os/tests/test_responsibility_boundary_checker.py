@@ -14,6 +14,7 @@ from scripts.architecture.check_responsibility_boundaries import (
     build_machine_report,
     build_remediation_guide,
     check_boundaries,
+    classify_issue_theme,
     collect_boundary_issues,
     collect_doc_alignment_issues,
     collect_module_docstring_issues,
@@ -541,6 +542,8 @@ def test_build_machine_report_counts_by_code(tmp_path: Path) -> None:
     assert report["summary"]["permission_denied"] == 1
     assert report["summary"]["input_invalid"] == 0
     assert report["summary"]["doc_alignment_error"] == 0
+    assert report["issues"][0]["improvement_theme"] == "architecture"
+    assert report["issues"][1]["improvement_theme"] == "security"
     assert report["issues"][0]["allowed_dependencies"] == [
         "veritas_os.core.memory",
         "veritas_os.core.world",
@@ -949,3 +952,24 @@ def test_check_boundaries_includes_doc_alignment_issues(tmp_path: Path) -> None:
     issues = check_boundaries(core_dir=tmp_path, doc_path=doc_path)
 
     assert any("Preferred extension points out of sync" in issue for issue in issues)
+
+
+def test_classify_issue_theme_promotes_fuji_and_memory_violations_to_security() -> None:
+    """Fuji/Memory boundary breaks should map to security triage theme."""
+    fuji_issue = BoundaryIssue(
+        code="boundary_violation",
+        message="violation",
+        path=Path("veritas_os/core/fuji.py"),
+        source_module="fuji",
+        forbidden_module="kernel",
+    )
+    memory_issue = BoundaryIssue(
+        code="boundary_violation",
+        message="violation",
+        path=Path("veritas_os/core/memory.py"),
+        source_module="memory",
+        forbidden_module="planner",
+    )
+
+    assert classify_issue_theme(fuji_issue) == "security"
+    assert classify_issue_theme(memory_issue) == "security"

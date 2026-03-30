@@ -43,6 +43,23 @@ class BoundaryIssue:
     forbidden_module: str | None = None
 
 
+THEME_BY_ISSUE_CODE: dict[str, str] = {
+    "boundary_violation": "architecture",
+    "doc_alignment_error": "operations",
+    "input_invalid": "operations",
+    "permission_denied": "security",
+}
+
+
+def classify_issue_theme(issue: BoundaryIssue) -> str:
+    """Classify boundary issues into improvement themes for PR-level triage."""
+    if issue.code == "boundary_violation":
+        if issue.source_module in {"fuji", "memory"}:
+            return "security"
+        return "architecture"
+    return THEME_BY_ISSUE_CODE.get(issue.code, "operations")
+
+
 @dataclass(frozen=True)
 class DocAlignmentIssue:
     """Structured mismatch between the checker config and architecture docs."""
@@ -473,6 +490,7 @@ def build_machine_report(issues: Iterable[BoundaryIssue]) -> str:
                 "forbidden_module": issue.forbidden_module,
                 "path": str(issue.path),
                 "message": issue.message,
+                "improvement_theme": classify_issue_theme(issue),
                 "allowed_dependencies": list(
                     ALLOWED_DEPENDENCY_GUIDE.get(issue.source_module, ())
                 ),
