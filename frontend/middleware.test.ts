@@ -69,11 +69,11 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("enforces nonce from NODE_ENV=production alone", () => {
+  it("does not enforce nonce from NODE_ENV=production alone", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
 
-    expect(shouldEnforceNonceCsp()).toBe(true);
+    expect(shouldEnforceNonceCsp()).toBe(false);
   });
 
   it("allows temporary unsafe-inline compatibility override via explicit escape hatch", () => {
@@ -90,11 +90,20 @@ describe("middleware CSP", () => {
     expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
 
-  it("warn helper returns false for production runtime without unsafe-inline escape hatch", () => {
+  it("warn helper returns false for VERITAS production runtime without unsafe-inline escape hatch", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "false");
 
     expect(shouldWarnInsecureProductionCspConfig()).toBe(false);
+  });
+
+  it("warn helper returns true when NODE_ENV=production is used without strict rollout", () => {
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "false");
+
+    expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
 
   it("sets CSP headers and forwards nonce to the Next.js request", () => {
@@ -133,6 +142,7 @@ describe("middleware CSP", () => {
   });
 
   it("does not emit warning when production runtime keeps strict nonce CSP", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "false");
     const warnSpy = vi
