@@ -149,14 +149,14 @@ def _load_or_create_shared_ephemeral_password() -> str:
     workers start simultaneously.
     """
     password_file = _get_ephemeral_password_file_path()
-    password_dir = password_file.parent
-    password_dir.mkdir(parents=True, exist_ok=True)
+    secret_dir = password_file.parent
+    secret_dir.mkdir(parents=True, exist_ok=True)
     try:
-        os.chmod(password_dir, 0o700)
+        os.chmod(secret_dir, 0o700)
     except OSError:
         logger.warning(
-            "Failed to set secure permissions on dashboard password directory: %s",
-            password_dir,
+            "Failed to set secure permissions on dashboard credential "
+            "directory."
         )
 
     if password_file.exists():

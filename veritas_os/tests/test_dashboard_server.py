@@ -266,6 +266,27 @@ def test_load_or_create_shared_ephemeral_password_hardens_directory_permissions(
     assert mode == 0o700
 
 
+def test_load_or_create_shared_ephemeral_password_warning_masks_path(
+    monkeypatch, tmp_path, caplog
+):
+    """Permission warning should avoid logging credential file paths."""
+    password_dir = tmp_path / "runtime_secrets"
+    password_file = password_dir / "dashboard_password"
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+    caplog.set_level("WARNING")
+
+    def _raise_os_error(*_args, **_kwargs):
+        raise OSError("denied")
+
+    monkeypatch.setattr(dashboard_server.os, "chmod", _raise_os_error)
+
+    dashboard_server._load_or_create_shared_ephemeral_password()
+
+    assert "credential directory" in caplog.text
+    assert str(password_dir) not in caplog.text
+    assert str(password_file) not in caplog.text
+
+
 
 def test_warn_if_ephemeral_password_with_multi_workers_logs_warning(
     monkeypatch, caplog
