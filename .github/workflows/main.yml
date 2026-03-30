@@ -55,6 +55,9 @@ jobs:
       - name: Frontend docs consistency check
         run: python scripts/quality/check_frontend_docs_consistency.py
 
+      - name: Review improvements consistency check
+        run: python scripts/quality/check_review_improvements_consistency.py
+
       - name: Memory directory allowlist check
         env:
           VERITAS_ENV: "production"
