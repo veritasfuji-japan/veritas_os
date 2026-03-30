@@ -69,23 +69,30 @@ describe("middleware CSP", () => {
     expect(shouldEnforceNonceCsp()).toBe(true);
   });
 
-  it("does not enforce nonce from NODE_ENV=production alone", () => {
+  it("enforces nonce from NODE_ENV=production alone", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("VERITAS_ENV", "");
+
+    expect(shouldEnforceNonceCsp()).toBe(true);
+  });
+
+  it("allows temporary unsafe-inline compatibility override via explicit escape hatch", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "true");
 
     expect(shouldEnforceNonceCsp()).toBe(false);
   });
 
-  it("warn helper returns true when NODE_ENV=production without rollout or VERITAS prod profile", () => {
+  it("warn helper returns true when production runtime enables unsafe-inline escape hatch", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "true");
 
     expect(shouldWarnInsecureProductionCspConfig()).toBe(true);
   });
 
-  it("warn helper returns false when VERITAS production profile is set", () => {
+  it("warn helper returns false for production runtime without unsafe-inline escape hatch", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "false");
 
     expect(shouldWarnInsecureProductionCspConfig()).toBe(false);
   });
@@ -115,7 +122,7 @@ describe("middleware CSP", () => {
 
   it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "true");
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -125,10 +132,9 @@ describe("middleware CSP", () => {
     expect(warnSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("does not emit warning when explicit CSP strict rollout flag is enabled", () => {
+  it("does not emit warning when production runtime keeps strict nonce CSP", () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERITAS_ENV", "");
-    vi.stubEnv("VERITAS_CSP_ENFORCE_NONCE", "true");
+    vi.stubEnv("VERITAS_CSP_ALLOW_UNSAFE_INLINE_COMPAT", "false");
     const warnSpy = vi
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
