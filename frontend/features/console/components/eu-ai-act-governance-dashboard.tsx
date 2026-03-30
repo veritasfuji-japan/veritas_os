@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { veritasFetch } from "../../../lib/api-client";
+import { startManagedEventStream } from "../../../lib/managed-sse";
 
 interface ComplianceConfig {
   eu_ai_act_mode: boolean;
@@ -69,7 +70,7 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
     if (typeof EventSource === "undefined") {
       return () => undefined;
     }
-    const stream = new EventSource("/api/veritas/v1/events");
+
     const acceptedTypes = new Set([
       "trustlog.debate",
       "trustlog.critique",
@@ -77,32 +78,26 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
       "compliance.pending_review",
     ]);
 
-    stream.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data) as SSEEventPayload;
-        const type = String(parsed.type || "");
-        if (!acceptedTypes.has(type)) {
-          return;
+    return startManagedEventStream("/api/veritas/v1/events", {
+      onMessage: (event) => {
+        try {
+          const parsed = JSON.parse(event.data) as SSEEventPayload;
+          const type = String(parsed.type || "");
+          if (!acceptedTypes.has(type)) {
+            return;
+          }
+          const nextEntry: TrustLogEvent = {
+            id: typeof parsed.id === "number" ? parsed.id : undefined,
+            type,
+            ts: String(parsed.ts || new Date().toISOString()),
+            payload: parsed.payload ?? {},
+          };
+          setLogs((prev) => [nextEntry, ...prev].slice(0, 40));
+        } catch {
+          // ignore malformed event frames
         }
-        const nextEntry: TrustLogEvent = {
-          id: typeof parsed.id === "number" ? parsed.id : undefined,
-          type,
-          ts: String(parsed.ts || new Date().toISOString()),
-          payload: parsed.payload ?? {},
-        };
-        setLogs((prev) => [nextEntry, ...prev].slice(0, 40));
-      } catch {
-        // ignore malformed event frames
-      }
-    };
-
-    stream.onerror = () => {
-      stream.close();
-    };
-
-    return () => {
-      stream.close();
-    };
+      },
+    });
   }, []);
 
   const label = useMemo(

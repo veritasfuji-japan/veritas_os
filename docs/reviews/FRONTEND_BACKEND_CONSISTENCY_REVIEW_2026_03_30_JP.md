@@ -140,3 +140,21 @@
 セキュリティ補足:
 - 本改善は「検査の見落とし低減」のみを目的とし、BFF の許可行列・認可判定・公開 API の挙動自体は不変。
 - そのため新規の経路露出は発生しないが、将来 alias が動的生成に拡大した場合は静的解析の限界を越えるため、過信せず実行時監査を併用すること。
+
+### 7.3 2026-03-30 追加改善（最小・運用安定化）
+
+無駄な機能追加を避け、指摘B（`/v1/events` の認証運用依存）に限定して最小改善を実施。
+
+- `frontend/lib/managed-sse.ts` を追加。
+  - `fetch(..., credentials: "same-origin")` による事前疎通確認を行い、`401/403` の場合は **60秒の待機** を挟んで再試行する制御を共通化。
+  - `EventSource` のエラー時は指数バックオフで再接続し、無制御な再接続ループを抑制。
+- `frontend/app/console/page.tsx`
+  - 既存の直接 `EventSource` 接続を上記共通制御へ置換。
+- `frontend/features/console/components/eu-ai-act-governance-dashboard.tsx`
+  - 同様に直接 `EventSource` 接続を共通制御へ置換。
+- `frontend/lib/managed-sse.test.ts`
+  - `401` 時に待機してから再接続すること、`withCredentials: true` で接続することを検証するテストを追加。
+
+セキュリティ補足:
+- 本変更は cookie 認証前提（`__veritas_bff`）を壊さず、未認証時の過剰な再試行を抑える安定化である。
+- BFF の許可行列・公開経路は変更していないため、API 露出面の増加はない。
