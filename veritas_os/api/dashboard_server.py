@@ -27,7 +27,6 @@ import os
 import secrets
 import threading
 import time
-import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -133,7 +132,14 @@ def _get_ephemeral_password_file_path() -> Path:
     configured_path = os.getenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", "").strip()
     if configured_path:
         return Path(configured_path)
-    return Path(tempfile.gettempdir()) / "veritas_dashboard_ephemeral_password"
+
+    veritas_home = os.getenv("VERITAS_HOME", "").strip()
+    if veritas_home:
+        base_dir = Path(veritas_home).expanduser()
+    else:
+        base_dir = Path.home() / ".veritas_os"
+
+    return base_dir / "runtime_secrets" / "dashboard_ephemeral_password"
 
 
 def _load_or_create_shared_ephemeral_password() -> str:
@@ -143,7 +149,15 @@ def _load_or_create_shared_ephemeral_password() -> str:
     workers start simultaneously.
     """
     password_file = _get_ephemeral_password_file_path()
-    password_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_dir = password_file.parent
+    secret_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(secret_dir, 0o700)
+    except OSError:
+        logger.warning(
+            "Failed to set secure permissions on dashboard credential "
+            "directory."
+        )
 
     if password_file.exists():
         existing_password = password_file.read_text(encoding="utf-8").strip()

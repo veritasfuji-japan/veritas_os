@@ -217,6 +217,16 @@ def test_get_ephemeral_password_file_path_uses_env_override(monkeypatch):
     assert dashboard_server._get_ephemeral_password_file_path() == Path(custom_path)
 
 
+def test_get_ephemeral_password_file_path_defaults_under_veritas_home(monkeypatch):
+    """Default path should be under VERITAS_HOME runtime secrets directory."""
+    monkeypatch.delenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", raising=False)
+    monkeypatch.setenv("VERITAS_HOME", "/srv/veritas")
+
+    assert dashboard_server._get_ephemeral_password_file_path() == Path(
+        "/srv/veritas/runtime_secrets/dashboard_ephemeral_password"
+    )
+
+
 def test_load_or_create_shared_ephemeral_password_reuses_existing(monkeypatch, tmp_path):
     """Existing shared password should be reused to avoid worker divergence."""
     password_file = tmp_path / "dashboard_password"
@@ -240,6 +250,41 @@ def test_load_or_create_shared_ephemeral_password_creates_new(monkeypatch, tmp_p
     assert password_file.read_text(encoding="utf-8") == generated
     mode = os.stat(password_file).st_mode & 0o777
     assert mode == 0o600
+
+
+def test_load_or_create_shared_ephemeral_password_hardens_directory_permissions(
+    monkeypatch, tmp_path
+):
+    """Directory for shared password should be owner-only."""
+    password_dir = tmp_path / "runtime_secrets"
+    password_file = password_dir / "dashboard_password"
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+
+    dashboard_server._load_or_create_shared_ephemeral_password()
+
+    mode = os.stat(password_dir).st_mode & 0o777
+    assert mode == 0o700
+
+
+def test_load_or_create_shared_ephemeral_password_warning_masks_path(
+    monkeypatch, tmp_path, caplog
+):
+    """Permission warning should avoid logging credential file paths."""
+    password_dir = tmp_path / "runtime_secrets"
+    password_file = password_dir / "dashboard_password"
+    monkeypatch.setenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", str(password_file))
+    caplog.set_level("WARNING")
+
+    def _raise_os_error(*_args, **_kwargs):
+        raise OSError("denied")
+
+    monkeypatch.setattr(dashboard_server.os, "chmod", _raise_os_error)
+
+    dashboard_server._load_or_create_shared_ephemeral_password()
+
+    assert "credential directory" in caplog.text
+    assert str(password_dir) not in caplog.text
+    assert str(password_file) not in caplog.text
 
 
 
