@@ -158,3 +158,16 @@
 セキュリティ補足:
 - 本変更は cookie 認証前提（`__veritas_bff`）を壊さず、未認証時の過剰な再試行を抑える安定化である。
 - BFF の許可行列・公開経路は変更していないため、API 露出面の増加はない。
+
+### 7.4 2026-03-31 追加改善（CI 回帰修正）
+
+`frontend` の品質ゲートで 1 件失敗していたため、最小差分でテストのモック順序を実運用の呼び出し順へ合わせた。
+
+- `frontend/app/governance/page.test.tsx`
+  - `EUAIActGovernanceDashboard` 初期化時の `compliance/config` 取得に加え、
+    `managed-sse` 導入で追加された `/api/veritas/v1/events` の事前プローブ呼び出しをモックに反映。
+  - その後に `governance/policy`（不正 payload）を返すようにし、
+    期待どおり「レスポンス検証エラー」を検証できるよう修正。
+
+セキュリティ補足:
+- 本修正はテストの整合性のみを対象としており、実行時の認可・公開 API・BFF 境界は変更していない。
