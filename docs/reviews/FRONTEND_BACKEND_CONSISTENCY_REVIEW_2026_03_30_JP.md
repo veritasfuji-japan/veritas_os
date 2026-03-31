@@ -241,3 +241,17 @@
 セキュリティ補足:
 - 本改善は契約整合性チェックの抽出精度向上のみを対象とし、BFF 許可行列・認可ロジック・公開 API の挙動は不変。
 - 新規の API 露出は増加していない。静的解析の限界（動的生成キー/値）は引き続き残るため、CI と実行時監査の併用を継続すること。
+
+### 7.10 2026-03-31 追加改善（最小・options 参照の括弧表記対応）
+
+無駄な機能追加は行わず、指摘C（静的突合チェックの検証精度）に限定して最小改善を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `fetch(endpoint, (putOptions))` のような **options 変数が括弧で包まれた表記** でも method を静的抽出できるよう、options 参照の正規表現を最小修正。
+  - これによりコード整形や可読性目的の括弧付与で `GET` へ誤フォールバックするケースを抑制。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - `fetch(endpoint, (putOptions))` で `PUT` を正しく抽出できる回帰テストを追加。
+
+セキュリティ補足:
+- 本改善は契約整合性チェックの判定精度向上のみを対象とし、BFF 許可行列・認可ロジック・公開 API は不変。
+- 新規の API 露出は増加していない。静的解析の限界（動的に組み立てた options）は引き続き残るため、CI と実行時監査の併用を継続すること。
