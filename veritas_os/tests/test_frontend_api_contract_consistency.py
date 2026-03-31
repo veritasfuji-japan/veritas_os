@@ -150,3 +150,35 @@ def test_collect_frontend_usages_resolves_method_options_aliases(
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("PUT", "/api/veritas/v1/governance/policy") in found
+
+
+def test_collect_frontend_usages_resolves_options_type_cast_reference(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should resolve method when options arg uses TypeScript cast."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "method-cast.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/governance/policy";
+            const patchOptions = { method: "PATCH" };
+
+            async function savePolicy() {
+              await fetch(endpoint, patchOptions as RequestInit);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("PATCH", "/api/veritas/v1/governance/policy") in found
