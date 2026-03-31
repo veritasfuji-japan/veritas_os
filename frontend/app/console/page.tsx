@@ -17,6 +17,7 @@ import { StepExpansionPanel } from "../../features/console/components/step-expan
 import { ReplayDiffViewer } from "../../features/console/components/replay-diff-viewer";
 import { ContinuationStatusCard } from "../../features/console/components/continuation-status-card";
 import { useConsoleState } from "../../features/console/state/useConsoleState";
+import { startManagedEventStream } from "../../lib/managed-sse";
 
 export default function DecisionConsolePage(): JSX.Element {
   const { t, tk } = useI18n();
@@ -46,24 +47,20 @@ export default function DecisionConsolePage(): JSX.Element {
     if (typeof EventSource === "undefined") {
       return () => undefined;
     }
-    const stream = new EventSource("/api/veritas/v1/events");
-    stream.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data) as { type?: string; ts?: string; summary?: string };
-        const eventType = payload.type ?? "event";
-        const eventAt = payload.ts ?? new Date().toISOString();
-        const eventSummary = payload.summary ?? eventType;
-        notifySseActivity(`${eventType} @ ${eventAt} — ${eventSummary}`);
-      } catch {
-        // Ignore malformed event payloads.
-      }
-    };
-    stream.onerror = () => {
-      stream.close();
-    };
-    return () => {
-      stream.close();
-    };
+
+    return startManagedEventStream("/api/veritas/v1/events", {
+      onMessage: (event) => {
+        try {
+          const payload = JSON.parse(event.data) as { type?: string; ts?: string; summary?: string };
+          const eventType = payload.type ?? "event";
+          const eventAt = payload.ts ?? new Date().toISOString();
+          const eventSummary = payload.summary ?? eventType;
+          notifySseActivity(`${eventType} @ ${eventAt} — ${eventSummary}`);
+        } catch {
+          // Ignore malformed event payloads.
+        }
+      },
+    });
   }, [notifySseActivity]);
 
   const decisionId = String((result?.chosen as Record<string, unknown> | undefined)?.id ?? result?.request_id ?? "");
