@@ -51,7 +51,10 @@ PATH_ALIAS_PATTERN = re.compile(
     r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
     r"(?P<ref>[A-Za-z_][A-Za-z0-9_]*)\s*;"
 )
-METHOD_PATTERN = re.compile(r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']')
+METHOD_PATTERN = re.compile(
+    r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']',
+    re.IGNORECASE,
+)
 OPTIONS_METHOD_PATTERN = re.compile(
     r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{"
     r"(?P<body>.*?)\}\s*;",
