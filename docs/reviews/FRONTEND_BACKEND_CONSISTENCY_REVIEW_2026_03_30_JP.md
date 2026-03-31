@@ -213,3 +213,17 @@
 セキュリティ補足:
 - 本改善は契約整合性チェックの見落とし低減のみを目的とし、BFF の許可行列・認可判定・公開 API の挙動は不変。
 - 新規の API 公開面は増加していないが、静的解析である以上、動的に組み立てたメソッド値は引き続き検出限界があるため、CI と実行時監査の併用を継続すること。
+
+### 7.8 2026-03-31 追加改善（最小・TypeScript `as const` メソッド指定対応）
+
+無駄な機能追加は行わず、指摘C（静的突合チェックの検証精度）に限定して最小改善を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `const postOptions = { method: "POST" as const }` のような **TypeScript の `as const` 付き method リテラル**を静的抽出できるよう、method 抽出正規表現を最小修正。
+  - これにより options 定数経由の `fetch(endpoint, postOptions)` でも `POST` を正確に推定し、`GET` への誤フォールバックを抑制。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - `method: "POST" as const` を使った options 参照の回帰テストを追加し、再発を防止。
+
+セキュリティ補足:
+- 本改善は契約整合性チェックの抽出精度向上のみを対象とし、BFF 許可行列・認可ロジック・公開 API は不変。
+- 新規の API 露出は増加していないが、動的に算出される method は静的解析の限界があるため、引き続き CI と実行時監査を併用すること。
