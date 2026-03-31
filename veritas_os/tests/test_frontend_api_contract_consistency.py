@@ -214,3 +214,35 @@ def test_collect_frontend_usages_normalizes_lowercase_method_literals(
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("POST", "/api/veritas/v1/decide") in found
+
+
+def test_collect_frontend_usages_resolves_method_with_const_assertion(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should resolve method when literal uses TypeScript const assertion."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "method-const-assertion.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/governance/policy";
+            const postOptions = { method: "POST" as const };
+
+            async function savePolicy() {
+              await fetch(endpoint, postOptions);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("POST", "/api/veritas/v1/governance/policy") in found
