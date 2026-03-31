@@ -60,6 +60,10 @@ OPTIONS_METHOD_PATTERN = re.compile(
 OPTIONS_IDENTIFIER_PATTERN = re.compile(
     r"^\s*,\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
 )
+OPTIONS_IDENTIFIER_CAST_PATTERN = re.compile(
+    r"^\s*,\s*\(?\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s+"
+    r"(?:as|satisfies)\b"
+)
 ROUTE_POLICY_PATTERN = re.compile(
     r'pathPattern:\s*/\^(?P<pattern>.+?)\$/\s*,\s*method:\s*"(?P<method>[A-Z]+)"',
 )
@@ -205,6 +209,11 @@ def _infer_method(tail: str, options_methods: dict[str, str]) -> str:
     options_identifier_match = OPTIONS_IDENTIFIER_PATTERN.search(tail)
     if options_identifier_match:
         option_name = options_identifier_match.group("name")
+        if option_name in options_methods:
+            return options_methods[option_name]
+    options_identifier_cast_match = OPTIONS_IDENTIFIER_CAST_PATTERN.search(tail)
+    if options_identifier_cast_match:
+        option_name = options_identifier_cast_match.group("name")
         if option_name in options_methods:
             return options_methods[option_name]
 

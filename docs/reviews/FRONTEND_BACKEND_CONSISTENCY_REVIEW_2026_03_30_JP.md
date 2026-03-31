@@ -185,3 +185,17 @@
 セキュリティ補足:
 - 本改善は契約整合性チェックの検出品質向上のみを対象とし、BFF 許可行列・認可ロジック・公開 API は不変。
 - したがって新たな API 露出リスクは増やしていない。
+
+### 7.6 2026-03-31 追加改善（最小・TypeScript 型キャスト対応）
+
+無駄な機能追加は行わず、指摘C（静的突合チェックの検証精度）に限定して最小改善を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `fetch(url, options as RequestInit)` / `veritasFetch(url, options as RequestInit)` のような **TypeScript の型キャスト付き options 参照** から method を静的解決できるよう改善。
+  - 既存の `options` 変数解決ロジックへ最小分岐を追加し、`GET` への誤推定を抑制。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - `fetch(endpoint, patchOptions as RequestInit)` で `PATCH` が正しく抽出される回帰テストを追加。
+
+セキュリティ補足:
+- 本改善は抽出器の判定精度のみを向上させるもので、BFF 許可境界・認可判定・公開 API 挙動は不変。
+- 新規経路の公開や権限昇格リスクは追加していない。
