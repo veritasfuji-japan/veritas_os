@@ -62,7 +62,7 @@ OPTIONS_METHOD_PATTERN = re.compile(
     re.DOTALL,
 )
 OPTIONS_IDENTIFIER_PATTERN = re.compile(
-    r"^\s*,\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+    r"^\s*,\s*\(?\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\)?"
 )
 OPTIONS_IDENTIFIER_CAST_PATTERN = re.compile(
     r"^\s*,\s*\(?\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s+"

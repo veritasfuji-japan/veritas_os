@@ -278,3 +278,35 @@ def test_collect_frontend_usages_resolves_quoted_method_key(
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("POST", "/api/veritas/v1/decide") in found
+
+
+def test_collect_frontend_usages_resolves_parenthesized_options_identifier(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should resolve method when options identifier is parenthesized."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "parenthesized-options.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/governance/policy";
+            const putOptions = { method: "PUT" };
+
+            async function savePolicy() {
+              await fetch(endpoint, (putOptions));
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("PUT", "/api/veritas/v1/governance/policy") in found
