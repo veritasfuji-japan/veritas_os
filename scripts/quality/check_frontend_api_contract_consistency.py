@@ -52,7 +52,8 @@ PATH_ALIAS_PATTERN = re.compile(
     r"(?P<ref>[A-Za-z_][A-Za-z0-9_]*)\s*;"
 )
 METHOD_PATTERN = re.compile(
-    r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\'](?:\s+as\s+const)?',
+    r'[\"\']?method[\"\']?\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']'
+    r'(?:\s+as\s+const)?',
     re.IGNORECASE,
 )
 OPTIONS_METHOD_PATTERN = re.compile(

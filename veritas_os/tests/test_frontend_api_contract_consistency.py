@@ -246,3 +246,35 @@ def test_collect_frontend_usages_resolves_method_with_const_assertion(
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("POST", "/api/veritas/v1/governance/policy") in found
+
+
+def test_collect_frontend_usages_resolves_quoted_method_key(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should resolve method when options object uses a quoted key."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "quoted-method-key.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/decide";
+            const postOptions = { "method": "POST" };
+
+            async function decide() {
+              await fetch(endpoint, postOptions);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("POST", "/api/veritas/v1/decide") in found
