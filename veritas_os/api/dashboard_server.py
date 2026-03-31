@@ -27,7 +27,6 @@ import os
 import secrets
 import threading
 import time
-import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -133,7 +132,80 @@ def _get_ephemeral_password_file_path() -> Path:
     configured_path = os.getenv("DASHBOARD_EPHEMERAL_PASSWORD_FILE", "").strip()
     if configured_path:
         return Path(configured_path)
-    return Path(tempfile.gettempdir()) / "veritas_dashboard_ephemeral_password"
+
+    veritas_home = os.getenv("VERITAS_HOME", "").strip()
+    if veritas_home:
+        base_dir = Path(veritas_home).expanduser()
+    else:
+        base_dir = Path.home() / ".veritas_os"
+
+    return base_dir / "runtime_secrets" / "dashboard_ephemeral_password"
+
+
+def _get_ephemeral_password_warning_age_seconds() -> int | None:
+    """Return age threshold for stale ephemeral-password warning.
+
+    Returns:
+        int | None:
+            - Threshold in seconds when warning should be emitted.
+            - ``None`` when age-based warning is explicitly disabled.
+
+    Security note:
+        Long-lived shared credentials increase blast radius when leaked.
+        This helper keeps compatibility (warning-only) while nudging
+        operators toward explicit rotation.
+    """
+    raw_value = os.getenv(
+        "DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS", "86400"
+    ).strip()
+    if not raw_value:
+        return 86_400
+
+    try:
+        parsed_value = int(raw_value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "Invalid DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS=%r; "
+            "using default 86400.",
+            raw_value,
+        )
+        return 86_400
+
+    if parsed_value < 0:
+        logger.warning(
+            "Negative DASHBOARD_EPHEMERAL_PASSWORD_WARN_AGE_SECONDS=%r; "
+            "disabling stale-password warning.",
+            raw_value,
+        )
+        return None
+
+    return parsed_value
+
+
+def _warn_if_ephemeral_password_is_stale(password_file: Path) -> None:
+    """Warn when shared ephemeral password age exceeds configured threshold.
+
+    Security note:
+        Log output intentionally avoids file paths and computed timing values
+        to prevent accidental disclosure of credential-related metadata.
+    """
+    max_age_seconds = _get_ephemeral_password_warning_age_seconds()
+    if max_age_seconds is None:
+        return
+
+    try:
+        modified_at = password_file.stat().st_mtime
+    except OSError:
+        return
+
+    age_seconds = time.time() - modified_at
+    if age_seconds <= max_age_seconds:
+        return
+
+    logger.warning(
+        "Shared ephemeral dashboard credentials appear stale. "
+        "Rotate credentials or set explicit dashboard password."
+    )
 
 
 def _load_or_create_shared_ephemeral_password() -> str:
@@ -143,11 +215,20 @@ def _load_or_create_shared_ephemeral_password() -> str:
     workers start simultaneously.
     """
     password_file = _get_ephemeral_password_file_path()
-    password_file.parent.mkdir(parents=True, exist_ok=True)
+    secret_dir = password_file.parent
+    secret_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(secret_dir, 0o700)
+    except OSError:
+        logger.warning(
+            "Failed to set secure permissions on dashboard credential "
+            "directory."
+        )
 
     if password_file.exists():
         existing_password = password_file.read_text(encoding="utf-8").strip()
         if existing_password:
+            _warn_if_ephemeral_password_is_stale(password_file)
             return existing_password
 
     generated_password = secrets.token_urlsafe(24)
@@ -161,6 +242,7 @@ def _load_or_create_shared_ephemeral_password() -> str:
     except FileExistsError:
         raced_password = password_file.read_text(encoding="utf-8").strip()
         if raced_password:
+            _warn_if_ephemeral_password_is_stale(password_file)
             return raced_password
     except OSError as exc:
         logger.warning(

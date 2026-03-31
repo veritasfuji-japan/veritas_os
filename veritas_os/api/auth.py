@@ -757,7 +757,24 @@ def require_api_key_header_or_query(
 
 
 def _allow_sse_query_api_key() -> bool:
-    """Return True only when dual opt-in flags enable SSE query auth."""
+    """Return True only when dual opt-in flags enable SSE query auth.
+
+    Security note:
+        Query-string credentials are blocked in production profiles even when
+        migration flags are set. This keeps production authentication
+        fail-closed and limits accidental credential leakage via URLs.
+    """
+    if _is_production_runtime():
+        if _is_query_api_key_flag_requested(
+            allow_key="VERITAS_ALLOW_SSE_QUERY_API_KEY",
+            ack_key="VERITAS_ACK_SSE_QUERY_API_KEY_RISK",
+        ):
+            logger.warning(
+                "[security-warning] SSE query api_key flags were ignored in production runtime. "
+                "Use X-API-Key header authentication.",
+            )
+        return False
+
     allow_raw = (os.getenv("VERITAS_ALLOW_SSE_QUERY_API_KEY") or "").strip().lower()
     allow_query_auth = allow_raw in {"1", "true", "yes", "on"}
     if not allow_query_auth:
@@ -800,7 +817,24 @@ def _authenticate_websocket_api_key(websocket: WebSocket) -> bool:
 
 
 def _allow_ws_query_api_key() -> bool:
-    """Return True only when dual opt-in flags allow WebSocket query auth."""
+    """Return True only when dual opt-in flags allow WebSocket query auth.
+
+    Security note:
+        Query-string credentials are blocked in production profiles even when
+        migration flags are set. This keeps production authentication
+        fail-closed and limits accidental credential leakage via URLs.
+    """
+    if _is_production_runtime():
+        if _is_query_api_key_flag_requested(
+            allow_key="VERITAS_ALLOW_WS_QUERY_API_KEY",
+            ack_key="VERITAS_ACK_WS_QUERY_API_KEY_RISK",
+        ):
+            logger.warning(
+                "[security-warning] WebSocket query api_key flags were ignored in production runtime. "
+                "Use X-API-Key header authentication.",
+            )
+        return False
+
     allow_raw = (os.getenv("VERITAS_ALLOW_WS_QUERY_API_KEY") or "").strip().lower()
     allow_query_auth = allow_raw in {"1", "true", "yes", "on"}
     if not allow_query_auth:
@@ -817,6 +851,21 @@ def _allow_ws_query_api_key() -> bool:
         return False
 
     return True
+
+
+def _is_production_runtime() -> bool:
+    """Return True when environment indicates a production runtime profile."""
+    profile = (os.getenv("VERITAS_ENV") or "").strip().lower()
+    node_env = (os.getenv("NODE_ENV") or "").strip().lower()
+    return profile in {"prod", "production"} or node_env == "production"
+
+
+def _is_query_api_key_flag_requested(*, allow_key: str, ack_key: str) -> bool:
+    """Return True when both query-auth opt-in flags are explicitly enabled."""
+    truthy_values = {"1", "true", "yes", "on"}
+    allow_raw = (os.getenv(allow_key) or "").strip().lower()
+    ack_raw = (os.getenv(ack_key) or "").strip().lower()
+    return allow_raw in truthy_values and ack_raw in truthy_values
 
 
 # ---- HMAC signature / replay (optional) ----
