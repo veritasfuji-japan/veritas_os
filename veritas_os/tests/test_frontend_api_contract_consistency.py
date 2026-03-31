@@ -310,3 +310,38 @@ def test_collect_frontend_usages_resolves_parenthesized_options_identifier(
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("PUT", "/api/veritas/v1/governance/policy") in found
+
+
+def test_collect_frontend_usages_resolves_method_after_nested_object(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should parse method even when nested objects appear before it."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "nested-options.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/governance/policy";
+            const requestOptions = {
+              headers: { "content-type": "application/json" },
+              method: "PATCH",
+            };
+
+            async function savePolicy() {
+              await fetch(endpoint, requestOptions);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("PATCH", "/api/veritas/v1/governance/policy") in found
