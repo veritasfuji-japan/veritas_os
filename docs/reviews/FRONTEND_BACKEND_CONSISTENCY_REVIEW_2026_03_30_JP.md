@@ -171,3 +171,17 @@
 
 セキュリティ補足:
 - 本修正はテストの整合性のみを対象としており、実行時の認可・公開 API・BFF 境界は変更していない。
+
+### 7.5 2026-03-31 追加改善（最小・抽出精度補強）
+
+無駄な機能追加は行わず、指摘C（静的突合チェックの検証精度）に限定して最小改善を実施。
+
+- `scripts/quality/check_frontend_api_contract_consistency.py`
+  - `fetch(url, optionsVar)` / `veritasFetch(url, optionsVar)` 形式で、`optionsVar` が `const putOptions = { method: "PUT" }` のような **定数オブジェクト（およびそのエイリアス）** を参照するケースを解決。
+  - これにより method の静的推定漏れ（GET 誤判定）を抑え、BFF/OpenAPI との突合精度を改善。
+- `veritas_os/tests/test_frontend_api_contract_consistency.py`
+  - options オブジェクトのエイリアス連鎖経由で `PUT` が正しく抽出されることを検証する回帰テストを追加。
+
+セキュリティ補足:
+- 本改善は契約整合性チェックの検出品質向上のみを対象とし、BFF 許可行列・認可ロジック・公開 API は不変。
+- したがって新たな API 露出リスクは増やしていない。
