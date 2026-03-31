@@ -56,10 +56,8 @@ METHOD_PATTERN = re.compile(
     r'(?:\s+as\s+const)?',
     re.IGNORECASE,
 )
-OPTIONS_METHOD_PATTERN = re.compile(
-    r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{"
-    r"(?P<body>.*?)\}\s*;",
-    re.DOTALL,
+OPTIONS_OBJECT_START_PATTERN = re.compile(
+    r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{",
 )
 OPTIONS_IDENTIFIER_PATTERN = re.compile(
     r"^\s*,\s*\(?\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\)?"
@@ -121,13 +119,7 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 match.group("name"): match.group("ref")
                 for match in PATH_ALIAS_PATTERN.finditer(content)
             }
-            options_methods = {
-                match.group("name"): _extract_method_from_options_body(match.group("body"))
-                for match in OPTIONS_METHOD_PATTERN.finditer(content)
-            }
-            options_methods = {
-                key: value for key, value in options_methods.items() if value is not None
-            }
+            options_methods = _extract_options_methods(content)
             for _ in range(len(alias_variables)):
                 updated = False
                 for alias, ref in alias_variables.items():
@@ -202,6 +194,69 @@ def _extract_method_from_options_body(body: str) -> str | None:
     if not method_match:
         return None
     return method_match.group("method").upper()
+
+
+def _extract_options_methods(content: str) -> dict[str, str]:
+    """Extract statically declared options-object methods with brace balancing.
+
+    Regex-only parsing can stop at the first nested `}` and miss trailing
+    `method` keys (for example when `headers` appears before `method`).
+    This helper keeps scope minimal by scanning only local object literals.
+    """
+    methods: dict[str, str] = {}
+    for match in OPTIONS_OBJECT_START_PATTERN.finditer(content):
+        name = match.group("name")
+        body_start = match.end()
+        body_end = _find_matching_brace(content, body_start - 1)
+        if body_end is None:
+            continue
+        body = content[body_start:body_end]
+        method = _extract_method_from_options_body(body)
+        if method:
+            methods[name] = method
+    return methods
+
+
+def _find_matching_brace(content: str, open_index: int) -> int | None:
+    """Return the index of the matching closing brace for `content[open_index]`.
+
+    The scan ignores brace-like characters in string literals to avoid
+    premature termination for common JSON/header strings.
+    """
+    if open_index < 0 or open_index >= len(content) or content[open_index] != "{":
+        return None
+
+    depth = 0
+    in_string: str | None = None
+    escaped = False
+
+    for idx in range(open_index, len(content)):
+        char = content[idx]
+
+        if in_string:
+            if escaped:
+                escaped = False
+                continue
+            if char == "\\":
+                escaped = True
+                continue
+            if char == in_string:
+                in_string = None
+            continue
+
+        if char in {'"', "'", "`"}:
+            in_string = char
+            continue
+
+        if char == "{":
+            depth += 1
+            continue
+        if char == "}":
+            depth -= 1
+            if depth == 0:
+                return idx
+
+    return None
 
 
 def _infer_method(tail: str, options_methods: dict[str, str]) -> str:
