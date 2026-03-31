@@ -117,3 +117,36 @@ def test_collect_frontend_usages_resolves_variable_aliases(tmp_path: pathlib.Pat
 
     found = {(usage.method, usage.raw_path) for usage in usages}
     assert ("GET", "/api/veritas/v1/compliance/config") in found
+
+
+def test_collect_frontend_usages_resolves_method_options_aliases(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Collector should resolve method from options objects and their aliases."""
+    frontend_root = tmp_path / "frontend"
+    source_file = frontend_root / "app" / "method-alias.ts"
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_text(
+        textwrap.dedent(
+            """
+            const endpoint = "/api/veritas/v1/governance/policy";
+            const putOptions = { method: "PUT", headers: { "content-type": "application/json" } };
+            const requestOptions = putOptions;
+
+            async function savePolicy() {
+              await fetch(endpoint, requestOptions);
+            }
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    original_frontend_root = checker.FRONTEND_ROOT
+    checker.FRONTEND_ROOT = frontend_root
+    try:
+        usages = checker.collect_frontend_usages()
+    finally:
+        checker.FRONTEND_ROOT = original_frontend_root
+
+    found = {(usage.method, usage.raw_path) for usage in usages}
+    assert ("PUT", "/api/veritas/v1/governance/policy") in found

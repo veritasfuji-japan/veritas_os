@@ -52,6 +52,14 @@ PATH_ALIAS_PATTERN = re.compile(
     r"(?P<ref>[A-Za-z_][A-Za-z0-9_]*)\s*;"
 )
 METHOD_PATTERN = re.compile(r'method\s*:\s*[\"\'](?P<method>GET|POST|PUT|PATCH|DELETE)[\"\']')
+OPTIONS_METHOD_PATTERN = re.compile(
+    r"(?:const|let|var)\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{"
+    r"(?P<body>.*?)\}\s*;",
+    re.DOTALL,
+)
+OPTIONS_IDENTIFIER_PATTERN = re.compile(
+    r"^\s*,\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)"
+)
 ROUTE_POLICY_PATTERN = re.compile(
     r'pathPattern:\s*/\^(?P<pattern>.+?)\$/\s*,\s*method:\s*"(?P<method>[A-Z]+)"',
 )
@@ -105,6 +113,13 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 match.group("name"): match.group("ref")
                 for match in PATH_ALIAS_PATTERN.finditer(content)
             }
+            options_methods = {
+                match.group("name"): _extract_method_from_options_body(match.group("body"))
+                for match in OPTIONS_METHOD_PATTERN.finditer(content)
+            }
+            options_methods = {
+                key: value for key, value in options_methods.items() if value is not None
+            }
             for _ in range(len(alias_variables)):
                 updated = False
                 for alias, ref in alias_variables.items():
@@ -115,9 +130,18 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 if not updated:
                     break
 
+            for _ in range(len(alias_variables)):
+                updated = False
+                for alias, ref in alias_variables.items():
+                    resolved_method = options_methods.get(ref)
+                    if resolved_method and options_methods.get(alias) != resolved_method:
+                        options_methods[alias] = resolved_method
+                        updated = True
+                if not updated:
+                    break
+
             for match in VERITAS_FETCH_CALL_PATTERN.finditer(content):
-                method_match = METHOD_PATTERN.search(match.group("tail"))
-                method = method_match.group("method") if method_match else "GET"
+                method = _infer_method(match.group("tail"), options_methods)
                 usages.append(
                     FrontendRouteUsage(
                         method=method,
@@ -127,8 +151,7 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 )
 
             for match in FETCH_CALL_PATTERN.finditer(content):
-                method_match = METHOD_PATTERN.search(match.group("tail"))
-                method = method_match.group("method") if method_match else "GET"
+                method = _infer_method(match.group("tail"), options_methods)
                 usages.append(
                     FrontendRouteUsage(
                         method=method,
@@ -153,8 +176,7 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 if match.group("fn") == "EventSource":
                     method = "GET"
                 else:
-                    method_match = METHOD_PATTERN.search(match.group("tail"))
-                    method = method_match.group("method") if method_match else "GET"
+                    method = _infer_method(match.group("tail"), options_methods)
                 usages.append(
                     FrontendRouteUsage(
                         method=method,
@@ -164,6 +186,29 @@ def collect_frontend_usages() -> list[FrontendRouteUsage]:
                 )
 
     return usages
+
+
+def _extract_method_from_options_body(body: str) -> str | None:
+    """Extract HTTP method from an object literal body if statically available."""
+    method_match = METHOD_PATTERN.search(body)
+    if not method_match:
+        return None
+    return method_match.group("method").upper()
+
+
+def _infer_method(tail: str, options_methods: dict[str, str]) -> str:
+    """Infer HTTP method from inline options or options variable usage."""
+    method_match = METHOD_PATTERN.search(tail)
+    if method_match:
+        return method_match.group("method").upper()
+
+    options_identifier_match = OPTIONS_IDENTIFIER_PATTERN.search(tail)
+    if options_identifier_match:
+        option_name = options_identifier_match.group("name")
+        if option_name in options_methods:
+            return options_methods[option_name]
+
+    return "GET"
 
 
 def load_bff_route_matchers() -> list[RouteMatcher]:
