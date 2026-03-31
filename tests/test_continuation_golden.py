@@ -60,6 +60,7 @@ class TestGolden1SupportLost:
     has evaporated — authority and policy are gone."""
 
     def test_claim_revoked_despite_local_allow(self):
+        """ローカルステップがallowでもサポート喪失によりクレームが取消されることを検証する。"""
         _, snap, rcpt = _run_golden(
             {"authorization": "", "policy_ref": ""},
             chain_id="",  # no chain_id → no authority fallback
@@ -71,6 +72,7 @@ class TestGolden1SupportLost:
         assert rcpt.should_refuse_before_effect is True
 
     def test_reason_codes_indicate_support_loss(self):
+        """理由コードにサポート喪失が含まれることを検証する。"""
         _, _, rcpt = _run_golden(
             {"authorization": "", "policy_ref": ""},
             chain_id="",
@@ -82,6 +84,7 @@ class TestGolden1SupportLost:
         )
 
     def test_support_basis_empty_in_snapshot(self):
+        """スナップショットでサポート基盤が空であることを検証する。"""
         _, snap, _ = _run_golden(
             {"authorization": "", "policy_ref": ""},
             chain_id="",
@@ -102,6 +105,7 @@ class TestGolden2BurdenHeadroomCollapse:
     and headroom has collapsed to zero."""
 
     def test_halted_due_to_headroom_collapse(self):
+        """ヘッドルーム崩壊により停止状態になることを検証する。"""
         _, snap, rcpt = _run_golden({
             "required_evidence": ["e1", "e2", "e3", "e4", "e5"],
             "satisfied_evidence": [],
@@ -113,6 +117,7 @@ class TestGolden2BurdenHeadroomCollapse:
         assert rcpt.should_refuse_before_effect is True
 
     def test_burden_state_reflects_unmet_evidence(self):
+        """負担状態が未充足エビデンスを反映していることを検証する。"""
         _, snap, _ = _run_golden({
             "required_evidence": ["e1", "e2", "e3"],
             "satisfied_evidence": [],
@@ -124,6 +129,7 @@ class TestGolden2BurdenHeadroomCollapse:
         assert len(snap.burden_state.satisfied_evidence) == 0
 
     def test_headroom_zero_in_snapshot(self):
+        """スナップショットでヘッドルームがゼロであることを検証する。"""
         _, snap, _ = _run_golden({
             "required_evidence": ["e1", "e2"],
             "satisfied_evidence": [],
@@ -133,6 +139,7 @@ class TestGolden2BurdenHeadroomCollapse:
         assert snap.headroom_state.remaining == 0.0
 
     def test_reason_code_headroom_collapsed(self):
+        """ヘッドルーム崩壊の理由コードが設定されることを検証する。"""
         _, _, rcpt = _run_golden({
             "required_evidence": ["e1", "e2"],
             "satisfied_evidence": [],
@@ -151,6 +158,7 @@ class TestGolden3ScopeNarrowing:
     """The local step is fine, but the chain's scope has been restricted."""
 
     def test_narrowed_due_to_restricted_actions(self):
+        """制限アクションによりスコープが縮小されることを検証する。"""
         _, snap, rcpt = _run_golden({
             "restricted_actions": ["execute", "deploy"],
         })
@@ -160,6 +168,7 @@ class TestGolden3ScopeNarrowing:
         assert rcpt.should_refuse_before_effect is False  # narrowed, not halted
 
     def test_scope_reflects_restrictions(self):
+        """スコープが制限を正しく反映していることを検証する。"""
         _, snap, _ = _run_golden({
             "restricted_actions": ["execute", "deploy"],
         })
@@ -168,6 +177,7 @@ class TestGolden3ScopeNarrowing:
         assert "deploy" in snap.scope.restricted_action_classes
 
     def test_reason_code_action_class(self):
+        """アクションクラスの理由コードが設定されることを検証する。"""
         _, _, rcpt = _run_golden({
             "restricted_actions": ["execute"],
         })
@@ -184,6 +194,7 @@ class TestGolden4EscalationNeeded:
     """The local step is fine, but escalation is required."""
 
     def test_escalated_despite_local_allow(self):
+        """ローカルallowにもかかわらずエスカレーションが必要であることを検証する。"""
         _, snap, rcpt = _run_golden({
             "escalation_required": True,
         })
@@ -196,6 +207,7 @@ class TestGolden4EscalationNeeded:
         assert rcpt.divergence_flag is True
 
     def test_scope_escalation_flag(self):
+        """スコープのエスカレーションフラグが設定されることを検証する。"""
         _, snap, _ = _run_golden({
             "escalation_required": True,
         })
@@ -212,6 +224,7 @@ class TestGolden5Halted:
     """The local step passes, but headroom is at threshold_suspension."""
 
     def test_halted_with_zero_headroom(self):
+        """ヘッドルームゼロで停止状態になることを検証する。"""
         _, snap, rcpt = _run_golden({
             "required_evidence": ["e1", "e2", "e3"],
             "satisfied_evidence": [],
@@ -224,6 +237,7 @@ class TestGolden5Halted:
         assert rcpt.should_refuse_before_effect is True
 
     def test_halted_receipt_has_audit_digests(self):
+        """停止レシートに監査ダイジェストが含まれることを検証する。"""
         _, _, rcpt = _run_golden({
             "required_evidence": ["e1", "e2"],
             "satisfied_evidence": [],
@@ -244,6 +258,7 @@ class TestGolden6Revoked:
     """Local step passes, but continuation is fully revoked."""
 
     def test_revoked_with_full_support_loss(self):
+        """完全なサポート喪失により取消されることを検証する。"""
         lineage, snap, rcpt = _run_golden(
             {"authorization": "", "policy_ref": ""},
             chain_id="",
@@ -256,6 +271,7 @@ class TestGolden6Revoked:
         assert lineage.is_revoked is True
 
     def test_revoked_lineage_has_timestamp(self):
+        """取消されたリネージュにタイムスタンプがあることを検証する。"""
         lineage, _, _ = _run_golden(
             {"authorization": "", "policy_ref": ""},
             chain_id="",
@@ -264,7 +280,7 @@ class TestGolden6Revoked:
         assert lineage.revoked_at is not None
 
     def test_revoked_is_terminal_in_chain(self):
-        """After revocation, subsequent steps remain revoked."""
+        """取消後の後続ステップも取消状態のままであることを検証する。"""
         rv = ContinuationRevalidator()
         lineage = ContinuationClaimLineage(chain_id="", origin_ref="step:0")
 
@@ -344,7 +360,7 @@ class TestGolden7ReceiptChainContinuityWeakening:
         return lineage, results
 
     def test_progressive_status_weakening(self):
-        """State shows durable standing; receipt shows boundary progression."""
+        """状態が永続的な立場を示し、レシートが境界の進行を示すことを検証する。"""
         _, results = self._run_weakening_chain()
 
         # State (durable standing): ESCALATED is receipt-only → LIVE
@@ -362,12 +378,14 @@ class TestGolden7ReceiptChainContinuityWeakening:
         assert receipt_outcomes[3] == "revoked"
 
     def test_divergence_flags_track_weakening(self):
+        """乖離フラグが弱体化を追跡することを検証する。"""
         _, results = self._run_weakening_chain()
 
         divergences = [rcpt.divergence_flag for _, rcpt in results]
         assert divergences == [False, True, True, True]
 
     def test_receipt_chain_is_linked(self):
+        """レシートチェーンがリンクされていることを検証する。"""
         _, results = self._run_weakening_chain()
 
         for i in range(1, len(results)):
@@ -376,15 +394,14 @@ class TestGolden7ReceiptChainContinuityWeakening:
             assert curr_rcpt.parent_receipt_ref == prev_rcpt.receipt_id
 
     def test_all_prior_decisions_were_allow(self):
-        """Every step had prior_decision_status='allow', proving
-        local step outcome did not influence continuation standing."""
+        """全ステップのprior_decision_statusがallowであり、ローカルステップ結果が継続判定に影響しないことを検証する。"""
         _, results = self._run_weakening_chain()
 
         for _, rcpt in results:
             assert rcpt.prior_decision_continuity_ref == "allow"
 
     def test_snapshot_replaced_at_each_step(self):
-        """Only latest snapshot is authoritative — each step creates new."""
+        """最新のスナップショットのみが権威あるものであり、各ステップで新規作成されることを検証する。"""
         lineage, results = self._run_weakening_chain()
 
         snapshot_ids = [snap.snapshot_id for snap, _ in results]
@@ -394,6 +411,7 @@ class TestGolden7ReceiptChainContinuityWeakening:
         assert lineage.latest_snapshot_id == results[-1][0].snapshot_id
 
     def test_law_version_consistent_across_chain(self):
+        """チェーン全体でlaw_versionが一貫していることを検証する。"""
         _, results = self._run_weakening_chain()
 
         for snap, rcpt in results:
@@ -401,6 +419,7 @@ class TestGolden7ReceiptChainContinuityWeakening:
             assert rcpt.law_version_id == "v0.1.0-shadow"
 
     def test_audit_digests_present_in_every_receipt(self):
+        """全レシートに監査ダイジェストが存在することを検証する。"""
         _, results = self._run_weakening_chain()
 
         for _, rcpt in results:
@@ -409,8 +428,7 @@ class TestGolden7ReceiptChainContinuityWeakening:
             assert rcpt.burden_headroom_digest is not None
 
     def test_advisory_only_for_non_terminal_steps(self):
-        """Phase-1: should_refuse_before_effect is advisory only for
-        non-terminal statuses. HALTED/REVOKED set it True (advisory)."""
+        """Phase-1: 非終端ステータスではshould_refuse_before_effectが助言のみであることを検証する。"""
         _, results = self._run_weakening_chain()
 
         for snap, rcpt in results:
