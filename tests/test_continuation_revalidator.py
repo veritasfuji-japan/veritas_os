@@ -51,7 +51,7 @@ class TestContinuationRevalidator:
         return PresentCondition(**defaults)
 
     def test_basic_revalidation_returns_snapshot_and_receipt(self):
-        """Revalidation always returns both snapshot and receipt."""
+        """再検証が常にスナップショットとレシートの両方を返すことを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import ClaimStateSnapshot
         from veritas_os.core.continuation_runtime.receipt import ContinuationReceipt
 
@@ -65,7 +65,7 @@ class TestContinuationRevalidator:
         assert isinstance(receipt, ContinuationReceipt)
 
     def test_snapshot_receipt_share_snapshot_id(self):
-        """Snapshot and receipt must reference the same snapshot_id."""
+        """スナップショットとレシートが同じsnapshot_idを参照することを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -75,7 +75,7 @@ class TestContinuationRevalidator:
         assert receipt.snapshot_id == snapshot.snapshot_id
 
     def test_snapshot_receipt_share_lineage_id(self):
-        """Both reference the same claim_lineage_id."""
+        """両方が同じclaim_lineage_idを参照することを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -86,7 +86,7 @@ class TestContinuationRevalidator:
         assert receipt.claim_lineage_id == lineage.claim_lineage_id
 
     def test_live_status_yields_renewed(self):
-        """Default conditions → LIVE / RENEWED, no divergence."""
+        """デフォルト条件でLIVE/RENEWED、乖離なしとなることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -102,7 +102,7 @@ class TestContinuationRevalidator:
         assert receipt.should_refuse_before_effect is False
 
     def test_lineage_updated_after_revalidation(self):
-        """Lineage mutable pointers are updated after revalidation."""
+        """再検証後にリネージュの可変ポインタが更新されることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -113,7 +113,7 @@ class TestContinuationRevalidator:
         assert lineage.current_claim_status == snapshot.claim_status
 
     def test_revoked_is_terminal(self):
-        """Once revoked, stays revoked regardless of new conditions."""
+        """一度取消されると新条件に関わらず取消状態のままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         rv = self._make_revalidator()
@@ -129,7 +129,7 @@ class TestContinuationRevalidator:
         assert receipt.should_refuse_before_effect is True
 
     def test_support_basis_lost_yields_revoked(self):
-        """No authority AND no policy → REVOKED."""
+        """権限もポリシーもない場合にREVOKEDとなることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         rv = self._make_revalidator()
@@ -146,7 +146,7 @@ class TestContinuationRevalidator:
         assert receipt.should_refuse_before_effect is True
 
     def test_scope_restriction_yields_narrowed(self):
-        """Restricted action classes present → NARROWED."""
+        """制限アクションクラスが存在する場合にNARROWEDとなることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         rv = self._make_revalidator()
@@ -161,11 +161,7 @@ class TestContinuationRevalidator:
         assert receipt.divergence_flag is True
 
     def test_escalation_required_yields_escalated(self):
-        """escalation_required in scope → ESCALATED in receipt (receipt-first).
-
-        State reflects LIVE because escalation is a boundary condition,
-        not a durable standing change.
-        """
+        """スコープのescalation_requiredによりレシートでESCALATEDとなることを検証する（レシート優先）。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -184,11 +180,7 @@ class TestContinuationRevalidator:
         assert snapshot.claim_status == ClaimStatus.LIVE
 
     def test_burden_threshold_exceeded_yields_degraded(self):
-        """Burden below threshold → DEGRADED in receipt (receipt-first).
-
-        State reflects LIVE because burden pressure is recoverable,
-        not a durable standing change.
-        """
+        """負担が閾値以下でレシートにDEGRADEDとなることを検証する（レシート優先）。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -211,7 +203,7 @@ class TestContinuationRevalidator:
         assert snapshot.claim_status == ClaimStatus.LIVE
 
     def test_snapshot_has_law_version(self):
-        """Snapshot records which law_version was applied."""
+        """スナップショットに適用されたlaw_versionが記録されることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -222,7 +214,7 @@ class TestContinuationRevalidator:
         assert snapshot.law_version == "v0.1.0-shadow"
 
     def test_receipt_has_law_version_id(self):
-        """Receipt records law_version_id."""
+        """レシートにlaw_version_idが記録されることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -232,7 +224,7 @@ class TestContinuationRevalidator:
         assert receipt.law_version_id == "v0.1.0-shadow"
 
     def test_snapshot_has_scope(self):
-        """Snapshot scope is explicit, not implicit."""
+        """スナップショットのスコープが明示的であることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -243,7 +235,7 @@ class TestContinuationRevalidator:
         assert isinstance(snapshot.scope.allowed_action_classes, list)
 
     def test_snapshot_has_burden_state(self):
-        """Snapshot carries burden_state (not optional)."""
+        """スナップショットがburden_stateを持つことを検証する（必須フィールド）。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -254,7 +246,7 @@ class TestContinuationRevalidator:
         assert hasattr(snapshot.burden_state, "threshold")
 
     def test_snapshot_has_support_basis(self):
-        """Snapshot carries structured support_basis (not empty)."""
+        """スナップショットが構造化されたsupport_basisを持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -266,7 +258,7 @@ class TestContinuationRevalidator:
         assert sb.authority or sb.policy
 
     def test_receipt_has_digests(self):
-        """Receipt carries digest summaries for audit."""
+        """レシートが監査用ダイジェスト要約を持つことを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         condition = self._make_condition()
@@ -278,7 +270,7 @@ class TestContinuationRevalidator:
         assert receipt.burden_headroom_digest is not None
 
     def test_snapshot_serialization_roundtrip(self):
-        """Snapshot survives to_dict → from_dict."""
+        """スナップショットがto_dict→from_dictを経ても保持されることを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import ClaimStateSnapshot
 
         rv = self._make_revalidator()
@@ -295,7 +287,7 @@ class TestContinuationRevalidator:
         assert restored.law_version == snapshot.law_version
 
     def test_receipt_serialization_roundtrip(self):
-        """Receipt survives to_dict → from_dict."""
+        """レシートがto_dict→from_dictを経ても保持されることを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import ContinuationReceipt
 
         rv = self._make_revalidator()
@@ -312,7 +304,7 @@ class TestContinuationRevalidator:
         assert restored.divergence_flag == receipt.divergence_flag
 
     def test_coherence_violation_raises(self):
-        """Coherence guard detects snapshot/receipt mismatch."""
+        """整合性ガードがスナップショット/レシートの不整合を検出することを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             ContinuationRevalidator,
         )
@@ -336,7 +328,7 @@ class TestContinuationRevalidator:
             ContinuationRevalidator._assert_coherence(snap, rcpt)
 
     def test_divergence_observable_when_claim_weakened(self):
-        """Divergence flag is True when claim_status != LIVE."""
+        """claim_statusがLIVE以外の場合に乖離フラグがTrueであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         rv = self._make_revalidator()
@@ -360,6 +352,7 @@ class TestRunContinuationRevalidationShadow:
     """Tests for the pipeline integration helper function."""
 
     def test_returns_three_objects(self):
+        """3つのオブジェクト（リネージュ、スナップショット、レシート）を返すことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -381,6 +374,7 @@ class TestRunContinuationRevalidationShadow:
         assert isinstance(receipt, ContinuationReceipt)
 
     def test_creates_lineage_when_none_provided(self):
+        """リネージュが未提供の場合に自動生成されることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -419,7 +413,7 @@ class TestOutputStructure:
         return snapshot.to_dict(), receipt.to_dict()
 
     def test_state_side_required_fields(self):
-        """State side must contain all required fields."""
+        """状態側に全ての必須フィールドが含まれることを検証する。"""
         snap_d, _ = self._run_revalidation()
 
         assert "claim_lineage_id" in snap_d
@@ -432,7 +426,7 @@ class TestOutputStructure:
         assert "law_version" in snap_d
 
     def test_receipt_side_required_fields(self):
-        """Receipt side must contain all required fields."""
+        """レシート側に全ての必須フィールドが含まれることを検証する。"""
         _, rcpt_d = self._run_revalidation()
 
         assert "receipt_id" in rcpt_d
@@ -445,7 +439,7 @@ class TestOutputStructure:
         assert "divergence_flag" in rcpt_d
 
     def test_state_and_receipt_are_separate(self):
-        """Snapshot and receipt are separate dicts, not merged."""
+        """スナップショットとレシートが別々の辞書であり統合されていないことを検証する。"""
         snap_d, rcpt_d = self._run_revalidation()
 
         # Receipt fields must NOT appear in snapshot
@@ -459,7 +453,7 @@ class TestOutputStructure:
         assert "headroom_state" not in rcpt_d
 
     def test_continuation_is_not_bool_or_enum_only(self):
-        """Continuation must be a rich structure, not a bool/enum."""
+        """継続がbool/enumではなくリッチな構造体であることを検証する。"""
         snap_d, rcpt_d = self._run_revalidation()
 
         # Both must be dicts with multiple fields
@@ -467,7 +461,7 @@ class TestOutputStructure:
         assert isinstance(rcpt_d, dict) and len(rcpt_d) > 5
 
     def test_law_version_present(self):
-        """law_version must be non-empty."""
+        """law_versionが空でないことを検証する。"""
         snap_d, rcpt_d = self._run_revalidation()
 
         assert snap_d["law_version"] != ""
@@ -483,7 +477,7 @@ class TestFeatureFlagOff:
     """Verify that flag off → zero computation in PipelineContext."""
 
     def test_pipeline_context_defaults_none(self):
-        """PipelineContext continuation fields default to None."""
+        """PipelineContextの継続フィールドがデフォルトでNoneであることを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
 
         ctx = PipelineContext()
@@ -492,7 +486,7 @@ class TestFeatureFlagOff:
         assert ctx.continuation_receipt is None
 
     def test_flag_off_default(self):
-        """VERITAS_CAP_CONTINUATION_RUNTIME defaults to False."""
+        """VERITAS_CAP_CONTINUATION_RUNTIMEがデフォルトでFalseであることを検証する。"""
         # Ensure env var is not set
         env_val = os.environ.pop("VERITAS_CAP_CONTINUATION_RUNTIME", None)
         try:
@@ -503,7 +497,7 @@ class TestFeatureFlagOff:
                 os.environ["VERITAS_CAP_CONTINUATION_RUNTIME"] = env_val
 
     def test_response_omits_continuation_when_flag_off(self):
-        """assemble_response omits 'continuation' key when ctx has no snapshot."""
+        """ctxにスナップショットがない場合にassemble_responseがcontinuationキーを省略することを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
         from veritas_os.core.pipeline_response import assemble_response
 
@@ -522,7 +516,7 @@ class TestFeatureFlagOff:
         assert "continuation" not in res
 
     def test_response_includes_continuation_when_present(self):
-        """assemble_response includes 'continuation' when snapshot/receipt set."""
+        """スナップショット/レシートが設定されている場合にcontinuationが含まれることを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
         from veritas_os.core.pipeline_response import assemble_response
 
@@ -555,8 +549,7 @@ class TestDivergenceObservation:
     is observable in the output."""
 
     def test_local_allow_with_continuation_degraded(self):
-        """Local step allows, but continuation is degraded → divergence visible
-        in receipt. State remains LIVE (degraded is receipt-first)."""
+        """ローカルステップがallowだが継続がdegradedの場合にレシートで乖離が可視であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -583,7 +576,7 @@ class TestDivergenceObservation:
         assert receipt.should_refuse_before_effect is False
 
     def test_local_allow_with_continuation_revoked(self):
-        """Local step allows, but continuation is revoked → divergence + advisory refuse."""
+        """ローカルステップがallowだが継続がrevokedの場合に乖離と助言的拒否を検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -611,6 +604,7 @@ class TestContinuationClaimLineageCreation:
     """ContinuationClaimLineage creation and invariants."""
 
     def test_creation_defaults(self):
+        """リネージュのデフォルト値を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import (
             ContinuationClaimLineage,
             ClaimStatus,
@@ -624,6 +618,7 @@ class TestContinuationClaimLineageCreation:
         assert lineage.latest_snapshot_id is None
 
     def test_creation_with_chain_id(self):
+        """chain_id指定でのリネージュ生成を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ContinuationClaimLineage
 
         lineage = ContinuationClaimLineage(chain_id="c-1", origin_ref="step:0")
@@ -631,6 +626,7 @@ class TestContinuationClaimLineageCreation:
         assert lineage.origin_ref == "step:0"
 
     def test_serialization_roundtrip(self):
+        """リネージュのシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import (
             ContinuationClaimLineage,
             ClaimStatus,
@@ -648,6 +644,7 @@ class TestContinuationClaimLineageCreation:
         assert restored.chain_id == "c-rt"
 
     def test_claim_status_enum_values(self):
+        """ClaimStatusの列挙値を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         expected = {"live", "narrowed", "degraded", "escalated", "halted", "revoked"}
@@ -659,6 +656,7 @@ class TestClaimStateSnapshotCreation:
     """ClaimStateSnapshot creation and structural invariants."""
 
     def test_creation_defaults(self):
+        """スナップショットのデフォルト値を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import ClaimStateSnapshot
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
@@ -672,7 +670,7 @@ class TestClaimStateSnapshotCreation:
         assert snap.law_version == ""
 
     def test_snapshot_does_not_contain_receipt_fields(self):
-        """Snapshot must NOT carry revalidation_status, divergence, etc."""
+        """スナップショットにrevalidation_statusやdivergence等のレシートフィールドが含まれないことを検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import ClaimStateSnapshot
 
         snap = ClaimStateSnapshot()
@@ -688,6 +686,7 @@ class TestClaimStateSnapshotCreation:
         assert "receipt_hash_or_attestation" not in d
 
     def test_support_basis_sub_structure(self):
+        """SupportBasisのサブ構造体のシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import SupportBasis
 
         sb = SupportBasis(authority="chain:x", policy="default", evidence="ev:2")
@@ -697,6 +696,7 @@ class TestClaimStateSnapshotCreation:
         assert restored.policy == "default"
 
     def test_scope_sub_structure(self):
+        """Scopeのサブ構造体のシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import Scope
 
         scope = Scope(
@@ -710,6 +710,7 @@ class TestClaimStateSnapshotCreation:
         assert "execute" in restored.restricted_action_classes
 
     def test_burden_state_sub_structure(self):
+        """BurdenStateのサブ構造体のシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import BurdenState
 
         bs = BurdenState(
@@ -724,6 +725,7 @@ class TestClaimStateSnapshotCreation:
         assert len(restored.required_evidence) == 2
 
     def test_headroom_state_sub_structure(self):
+        """HeadroomStateのサブ構造体のシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import HeadroomState
 
         hs = HeadroomState(remaining=0.7, threshold_escalation=0.3, threshold_suspension=0.0)
@@ -732,6 +734,7 @@ class TestClaimStateSnapshotCreation:
         assert restored.remaining == 0.7
 
     def test_revocation_condition_sub_structure(self):
+        """RevocationConditionのサブ構造体のシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import RevocationCondition
 
         rc = RevocationCondition(
@@ -742,6 +745,7 @@ class TestClaimStateSnapshotCreation:
         assert restored.is_met is True
 
     def test_full_serialization_roundtrip(self):
+        """全フィールドを含むスナップショットの完全なシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.snapshot import (
             ClaimStateSnapshot,
             SupportBasis,
@@ -777,6 +781,7 @@ class TestContinuationReceiptGeneration:
     """ContinuationReceipt generation and structural invariants."""
 
     def test_creation_defaults(self):
+        """レシートのデフォルト値を検証する。"""
         from veritas_os.core.continuation_runtime.receipt import (
             ContinuationReceipt,
             RevalidationStatus,
@@ -791,7 +796,7 @@ class TestContinuationReceiptGeneration:
         assert rcpt.should_refuse_before_effect is False
 
     def test_receipt_does_not_contain_state_fields(self):
-        """Receipt must NOT carry support_basis, burden_state, etc."""
+        """レシートにsupport_basisやburden_state等の状態フィールドが含まれないことを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import ContinuationReceipt
 
         rcpt = ContinuationReceipt()
@@ -803,7 +808,7 @@ class TestContinuationReceiptGeneration:
         assert "revocation_conditions" not in d
 
     def test_revalidation_status_on_receipt_side(self):
-        """revalidation_status belongs to receipt, not snapshot."""
+        """revalidation_statusがレシート側に属することを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import (
             ContinuationReceipt,
             RevalidationStatus,
@@ -815,7 +820,7 @@ class TestContinuationReceiptGeneration:
         assert rcpt.revalidation_status == RevalidationStatus.DEGRADED
 
     def test_revalidation_outcome_on_receipt_side(self):
-        """revalidation_outcome belongs to receipt, not snapshot."""
+        """revalidation_outcomeがレシート側に属することを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import (
             ContinuationReceipt,
             RevalidationOutcome,
@@ -827,7 +832,7 @@ class TestContinuationReceiptGeneration:
         assert rcpt.revalidation_outcome == RevalidationOutcome.ESCALATED
 
     def test_prior_decision_continuity_on_receipt_side(self):
-        """prior_decision_continuity_ref belongs to receipt, not snapshot."""
+        """prior_decision_continuity_refがレシート側に属することを検証する。"""
         from veritas_os.core.continuation_runtime.receipt import ContinuationReceipt
 
         rcpt = ContinuationReceipt(
@@ -836,6 +841,7 @@ class TestContinuationReceiptGeneration:
         assert rcpt.prior_decision_continuity_ref == "allow"
 
     def test_receipt_serialization_roundtrip_with_reason_codes(self):
+        """理由コード付きレシートのシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.receipt import (
             ContinuationReceipt,
             RevalidationStatus,
@@ -863,6 +869,7 @@ class TestContinuationReceiptGeneration:
         assert restored.divergence_flag is True
 
     def test_receipt_revalidation_status_enum_values(self):
+        """RevalidationStatusの列挙値を検証する。"""
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         expected = {"renewed", "narrowed", "degraded", "escalated", "halted", "revoked", "failed"}
@@ -874,6 +881,7 @@ class TestContinuationLawPackResolution:
     """ContinuationLawPack resolution and invariants."""
 
     def test_default_law_pack(self):
+        """デフォルトのlaw packの値を検証する。"""
         from veritas_os.core.continuation_runtime.lawpack import (
             ContinuationLawPack,
             EvaluationMode,
@@ -886,6 +894,7 @@ class TestContinuationLawPackResolution:
         assert len(pack.rule_refs) > 0
 
     def test_law_pack_serialization_roundtrip(self):
+        """LawPackのシリアライズ往復を検証する。"""
         from veritas_os.core.continuation_runtime.lawpack import (
             ContinuationLawPack,
             EvaluationMode,
@@ -904,6 +913,7 @@ class TestContinuationLawPackResolution:
         assert len(restored.rule_refs) == 2
 
     def test_evaluation_mode_enum_values(self):
+        """EvaluationModeの列挙値を検証する。"""
         from veritas_os.core.continuation_runtime.lawpack import EvaluationMode
 
         expected = {"shadow", "advisory", "enforce"}
@@ -911,6 +921,7 @@ class TestContinuationLawPackResolution:
         assert actual == expected
 
     def test_law_pack_rule_refs_non_empty_in_default(self):
+        """デフォルトlaw packのrule_refsが空でないことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import _default_law_pack
 
         pack = _default_law_pack()
@@ -924,6 +935,7 @@ class TestReasonCodeMapping:
     """Reason code mapping and coverage."""
 
     def test_all_reason_codes_exist(self):
+        """全ての理由コードが存在することを検証する。"""
         from veritas_os.core.continuation_runtime.reason_codes import ReasonCode
 
         expected = {
@@ -941,7 +953,7 @@ class TestReasonCodeMapping:
         assert actual == expected
 
     def test_revoked_yields_support_lost_reason(self):
-        """Revocation due to support loss carries correct reason code."""
+        """サポート喪失による取消が正しい理由コードを持つことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -960,6 +972,7 @@ class TestReasonCodeMapping:
         )
 
     def test_burden_exceeded_yields_correct_reason(self):
+        """負担超過が正しい理由コードを生成することを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -978,6 +991,7 @@ class TestReasonCodeMapping:
         assert ReasonCode.BURDEN_THRESHOLD_EXCEEDED in receipt.revalidation_reason_codes
 
     def test_escalation_yields_action_class_not_allowed(self):
+        """エスカレーションがACTION_CLASS_NOT_ALLOWEDを生成することを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -993,6 +1007,7 @@ class TestReasonCodeMapping:
         assert ReasonCode.ACTION_CLASS_NOT_ALLOWED in receipt.revalidation_reason_codes
 
     def test_narrowed_yields_action_class_not_allowed(self):
+        """縮小がACTION_CLASS_NOT_ALLOWEDを生成することを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -1021,6 +1036,7 @@ class TestClaimStatusConsistency:
         return run_continuation_revalidation_shadow(**defaults)
 
     def test_live_consistency(self):
+        """LIVE状態でのスナップショット・レシート・リネージュの整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1030,6 +1046,7 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_narrowed_consistency(self):
+        """NARROWED状態でのスナップショット・レシート・リネージュの整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1041,7 +1058,7 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.NARROWED
 
     def test_degraded_consistency(self):
-        """Degraded: receipt-first boundary, state remains LIVE."""
+        """DEGRADED: レシート優先境界で状態はLIVEのままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1059,7 +1076,7 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_escalated_consistency(self):
-        """Escalated: receipt-first boundary, state remains LIVE."""
+        """ESCALATED: レシート優先境界で状態はLIVEのままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1074,6 +1091,7 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_revoked_consistency(self):
+        """REVOKED状態でのスナップショット・レシート・リネージュの整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1088,7 +1106,7 @@ class TestClaimStatusConsistency:
         assert lineage.revoked_at is not None
 
     def test_halted_consistency(self):
-        """Headroom collapsed → HALTED."""
+        """ヘッドルーム崩壊によるHALTEDの整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 

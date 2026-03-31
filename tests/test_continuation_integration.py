@@ -28,13 +28,13 @@ class TestFeatureFlagOffInvariance:
     the continuation runtime must be fully inert."""
 
     def test_flag_defaults_to_false(self):
-        """Default is off — no env var needed."""
+        """デフォルトでオフであり環境変数不要であることを検証する。"""
         from veritas_os.core.config import _parse_bool
 
         assert _parse_bool("VERITAS_CAP_CONTINUATION_RUNTIME", False) is False
 
     def test_pipeline_context_has_no_continuation_by_default(self):
-        """PipelineContext continuation fields are None when flag off."""
+        """フラグオフ時にPipelineContextの継続フィールドがNoneであることを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
 
         ctx = PipelineContext()
@@ -42,7 +42,7 @@ class TestFeatureFlagOffInvariance:
         assert ctx.continuation_receipt is None
 
     def test_response_omits_continuation_key_when_flag_off(self):
-        """assemble_response must not include 'continuation' when off."""
+        """フラグオフ時にassemble_responseがcontinuationキーを含まないことを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
         from veritas_os.core.pipeline_response import assemble_response
 
@@ -64,7 +64,7 @@ class TestFeatureFlagOffInvariance:
         assert "continuation" not in res
 
     def test_gate_decision_status_unchanged_when_flag_off(self):
-        """gate.decision_status is exactly what PipelineContext provides."""
+        """gate.decision_statusがPipelineContextの値と完全一致することを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
         from veritas_os.core.pipeline_response import assemble_response
 
@@ -131,6 +131,7 @@ class TestFeatureFlagOnAddsContinuation:
         )
 
     def test_response_includes_continuation_block(self):
+        """レスポンスにcontinuationブロックが含まれることを検証する。"""
         from veritas_os.core.pipeline_response import assemble_response
 
         ctx = self._make_ctx_with_continuation()
@@ -145,6 +146,7 @@ class TestFeatureFlagOnAddsContinuation:
         assert "receipt" in res["continuation"]
 
     def test_state_and_receipt_are_separate_in_response(self):
+        """レスポンス内で状態とレシートが分離されていることを検証する。"""
         from veritas_os.core.pipeline_response import assemble_response
 
         ctx = self._make_ctx_with_continuation()
@@ -166,8 +168,7 @@ class TestFeatureFlagOnAddsContinuation:
         assert "revalidation_status" not in state
 
     def test_gate_decision_status_unchanged_when_flag_on(self):
-        """gate.decision_status must remain exactly as ctx provides,
-        regardless of continuation state."""
+        """継続状態に関係なくgate.decision_statusがctxの値と一致することを検証する。"""
         from veritas_os.core.pipeline_response import assemble_response
 
         ctx = self._make_ctx_with_continuation(
@@ -184,7 +185,7 @@ class TestFeatureFlagOnAddsContinuation:
         assert res["decision_status"] == "allow"
 
     def test_fuji_output_unchanged_when_continuation_present(self):
-        """FUJI dict is exactly what ctx provides, unmodified."""
+        """FUJI辞書がctxの提供値から変更されていないことを検証する。"""
         from veritas_os.core.pipeline_types import PipelineContext
         from veritas_os.core.pipeline_response import assemble_response
 
@@ -227,8 +228,7 @@ class TestPreMeritRevalidation:
     merit evaluation and produces its own artifacts independently."""
 
     def test_revalidation_produces_snapshot_before_any_decision(self):
-        """run_continuation_revalidation_shadow works without any
-        prior_decision_status — proving it doesn't need step outcome."""
+        """prior_decision_statusなしで再検証が動作し、ステップ結果に依存しないことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -246,7 +246,7 @@ class TestPreMeritRevalidation:
         assert rcpt.prior_decision_continuity_ref is None
 
     def test_revalidation_does_not_read_or_modify_decision_status(self):
-        """Revalidation result is independent of prior_decision_status value."""
+        """再検証結果がprior_decision_statusの値に依存しないことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -271,7 +271,7 @@ class TestPreMeritRevalidation:
         assert snap_allow.claim_status == snap_block.claim_status
 
     def test_snapshot_receipt_pair_always_emitted(self):
-        """Every revalidation must produce both snapshot and receipt."""
+        """全ての再検証がスナップショットとレシートの両方を生成することを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -290,8 +290,7 @@ class TestPreMeritRevalidation:
         assert rcpt.snapshot_id == snap.snapshot_id
 
     def test_continuation_does_not_enforce(self):
-        """Phase-1: even when should_refuse_before_effect is True,
-        this is advisory only — no enforcement mechanism exists."""
+        """Phase-1ではshould_refuse_before_effectがTrueでも助言のみで強制機構がないことを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -319,9 +318,7 @@ class TestDivergenceObservability:
     must be observable in structured output."""
 
     def test_divergence_flag_true_when_not_live(self):
-        """Divergence observable via receipt boundary_outcome regardless
-        of whether boundary was promoted to state.
-        """
+        """境界が状態に昇格されたかに関わらずレシートのboundary_outcomeで乖離が観測可能であることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )
@@ -368,6 +365,7 @@ class TestDivergenceObservability:
             assert rcpt.divergence_flag is True
 
     def test_divergence_flag_false_when_live(self):
+        """LIVE状態では乖離フラグがFalseであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import (
             run_continuation_revalidation_shadow,
         )

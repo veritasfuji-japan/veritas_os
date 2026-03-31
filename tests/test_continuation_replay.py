@@ -55,6 +55,7 @@ class TestReplayStepPassClaimNarrowed:
     """Step passes but claim is narrowed due to scope restriction."""
 
     def test_narrowed_transition(self):
+        """LIVEからNARROWEDへの遷移を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -72,6 +73,7 @@ class TestReplayStepPassClaimNarrowed:
         assert rcpt1.divergence_flag is True
 
     def test_receipt_chain_linkage(self):
+        """レシートチェーンのリンクが正しいことを検証する。"""
         results = _run_chain([
             {"context": {}},
             {"context": {"restricted_actions": ["execute"]}},
@@ -87,6 +89,7 @@ class TestReplayStepPassClaimDegraded:
     """Step passes but claim is degraded due to burden threshold."""
 
     def test_degraded_transition(self):
+        """負担閾値超過によるDEGRADED遷移を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         # Step 0 establishes burden; step 1 carries it forward unmet
@@ -110,6 +113,7 @@ class TestReplayStepPassClaimDegraded:
         assert rcpt1.divergence_flag is True
 
     def test_burden_state_carried_forward(self):
+        """負担状態がステップ間で引き継がれることを検証する。"""
         results = _run_chain([
             {
                 "context": {
@@ -134,6 +138,7 @@ class TestReplayStepPassClaimEscalated:
     """Step passes but claim is escalated."""
 
     def test_escalated_transition(self):
+        """エスカレーションによるESCALATED遷移を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
@@ -150,6 +155,7 @@ class TestReplayStepPassClaimHalted:
     """Step passes but claim is halted (headroom collapsed)."""
 
     def test_halted_transition(self):
+        """ヘッドルーム崩壊によるHALTED遷移を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         # Step 0 establishes zero burden → HALTED
@@ -171,7 +177,7 @@ class TestReplayStepPassClaimHalted:
         assert rcpt0.should_refuse_before_effect is True
 
     def test_halted_is_terminal(self):
-        """Once halted, remains halted even with good conditions."""
+        """一度停止すると良好な条件でも停止状態のままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
@@ -193,6 +199,7 @@ class TestReplayStepPassClaimRevoked:
     """Step passes but claim is revoked (support fully lost)."""
 
     def test_revoked_transition(self):
+        """サポート完全喪失によるREVOKED遷移を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         # Use empty chain_id so authority fallback doesn't rescue support
@@ -213,7 +220,7 @@ class TestReplayStepPassClaimRevoked:
         assert lineage.is_revoked is True
 
     def test_revoked_is_terminal(self):
-        """Once revoked, stays revoked regardless of conditions."""
+        """一度取消されると条件に関わらず取消状態のままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         # Step 0 triggers revocation with empty chain_id
@@ -235,6 +242,7 @@ class TestReplayReceiptChainContinuityGrounding:
     """Receipt chain must demonstrate continuity grounding across steps."""
 
     def test_receipt_chain_forms_linked_list(self):
+        """レシートチェーンが連結リストを形成することを検証する。"""
         results = _run_chain([
             {"context": {}},
             {"context": {}},
@@ -248,6 +256,7 @@ class TestReplayReceiptChainContinuityGrounding:
             assert curr_rcpt.parent_receipt_ref == prev_rcpt.receipt_id
 
     def test_snapshot_id_advances_each_step(self):
+        """各ステップでスナップショットIDが更新されることを検証する。"""
         results = _run_chain([
             {"context": {}},
             {"context": {}},
@@ -258,6 +267,7 @@ class TestReplayReceiptChainContinuityGrounding:
         assert len(set(snapshot_ids)) == 3  # all unique
 
     def test_lineage_tracks_latest_snapshot(self):
+        """リネージュが最新のスナップショットを追跡することを検証する。"""
         results = _run_chain([
             {"context": {}},
             {"context": {}},
@@ -268,6 +278,7 @@ class TestReplayReceiptChainContinuityGrounding:
         assert lineage.latest_snapshot_id == last_snap.snapshot_id
 
     def test_prior_decision_continuity_carried_in_receipt(self):
+        """先行判定の継続参照がレシートに含まれることを検証する。"""
         results = _run_chain([
             {"context": {}, "prior_decision_status": "allow"},
             {"context": {}, "prior_decision_status": "allow"},
@@ -281,8 +292,7 @@ class TestReplayReceiptChainContinuityGrounding:
             assert rcpt.prior_decision_continuity_ref == "allow"
 
     def test_divergence_progressive_weakening(self):
-        """Chain shows progressive weakening: state shows durable standing,
-        receipt shows boundary progression."""
+        """チェーンの段階的弱体化を検証する: 状態は永続的立場、レシートは境界進行を示す。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
@@ -308,6 +318,7 @@ class TestReplayReceiptChainContinuityGrounding:
         assert divergences == [False, True, True]
 
     def test_law_version_recorded_in_every_snapshot_and_receipt(self):
+        """全スナップショットとレシートにlaw_versionが記録されることを検証する。"""
         results = _run_chain([
             {"context": {}},
             {"context": {}},
