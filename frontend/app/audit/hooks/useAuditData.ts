@@ -18,7 +18,6 @@ import {
   type DetailTab,
   type ExportFormat,
   type RedactionMode,
-  type SearchField,
 } from "../audit-types";
 import { PAGE_LIMIT } from "../constants";
 
