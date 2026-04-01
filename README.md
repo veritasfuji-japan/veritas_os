@@ -56,32 +56,51 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: [`README_JP.md`](README_JP.md)
 - **User Manual (JP)**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
+- **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Security Policy**: [`SECURITY.md`](SECURITY.md)
 - **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - **Operations Runbook**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
 
+## 🚀 Quick Start (TL;DR)
+
+```bash
+# Clone & start with Docker Compose (recommended)
+git clone https://github.com/veritasfuji-japan/veritas_os.git
+cd veritas_os
+cp .env.example .env        # Edit: set OPENAI_API_KEY, VERITAS_API_KEY, VERITAS_API_SECRET
+docker compose up --build
+
+# Backend: http://localhost:8000 (Swagger UI: /docs)
+# Frontend: http://localhost:3000 (Mission Control)
+```
+
+> **Prerequisites**: Docker 20+ and Docker Compose v2. For local dev: Python 3.11+, Node.js 20+, pnpm.
+
 ## Contents
 
-- [Beta at a Glance](#beta-at-a-glance)
-- [Continuation Runtime (Phase-1)](#continuation-runtime-phase-1-observeshadow)
-- [Why VERITAS?](#why-veritas)
-- [What It Does](#what-it-does)
-- [Project Structure](#project-structure)
-- [Frontend — Mission Control Dashboard](#frontend--mission-control-dashboard)
-- [API Overview](#api-overview)
-- [Quickstart](#quickstart)
-- [Docker Compose (Full Stack)](#docker-compose-full-stack)
-- [Docker (Backend Only)](#docker-backend-only)
-- [Architecture (High-Level)](#architecture-high-level)
-- [TrustLog (Hash-Chained Audit Log)](#trustlog-hash-chained-audit-log)
-- [Tests](#tests)
-- [Security Notes (Important)](#security-notes-important)
-- [Roadmap (Near-Term)](#roadmap-near-term)
-- [License](#license)
-- [Citation (BibTeX)](#citation-bibtex)
+- [Beta at a Glance](#-beta-at-a-glance)
+- [Why VERITAS?](#-why-veritas)
+- [What It Does](#-what-it-does)
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [Frontend — Mission Control Dashboard](#-frontend--mission-control-dashboard)
+- [API Overview](#-api-overview)
+- [Docker Compose (Full Stack)](#-docker-compose-full-stack)
+- [Docker (Backend Only)](#-docker-backend-only)
+- [Architecture (High-Level)](#-architecture-high-level)
+- [TrustLog (Hash-Chained Audit Log)](#-trustlog-hash-chained-audit-log)
+- [Continuation Runtime (Phase-1)](#-continuation-runtime-phase-1-observeshadow)
+- [Tests](#-tests)
+- [Environment Variables Reference](#-environment-variables-reference)
+- [Security Notes (Important)](#-security-notes-important)
+- [Roadmap (Near-Term)](#-roadmap-near-term)
+- [License](#-license)
+- [Contributing](#-contributing)
+- [Citation (BibTeX)](#-citation-bibtex)
 
 ---
 
-## Beta at a Glance
+## 📊 Beta at a Glance
 
 | Area | Current beta posture |
 |---|---|
@@ -96,30 +115,7 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - The project is **not** positioned as an alpha prototype anymore; it already contains substantial operational and audit infrastructure.
 - You should still expect active iteration in policy packs, deployment defaults, and environment-specific integrations.
 
-### Continuation Runtime (Phase-1: Observe/Shadow)
-
-VERITAS now includes a **chain-level continuation observation layer** that runs beside (not inside) the existing step-level decision infrastructure. This is **not** enforcement — it is observation only.
-
-| Aspect | Status |
-|---|---|
-| Mode | Observe / shadow only — no enforcement, no refusal gating |
-| FUJI | Unchanged — remains the final safety/policy gate for each step |
-| `gate.decision_status` | Unchanged — no new values, no reinterpretation |
-| Feature flag off | Zero change to response, logs, UI, or behavior |
-| Purpose | Detect when a chain's continuation standing weakens (narrowed, degraded, escalated, halted, revoked) even though individual steps pass |
-
-Key concepts:
-- **Snapshot** (state): minimal governable facts — support basis, scope, burden, headroom, law version
-- **Receipt** (audit witness): how revalidation was conducted, divergence flags, reason codes, receipt chain linkage
-- The snapshot is not a receipt. The receipt is not a state store. They are separate responsibilities.
-- Revalidation runs **before** step-level merit evaluation (pre-merit placement)
-- `should_refuse_before_effect` is advisory only in phase-1
-
-Enable with: `VERITAS_CAP_CONTINUATION_RUNTIME=1` (default: off)
-
-See: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
-
-## Why VERITAS?
+## 🎯 Why VERITAS?
 
 Most "agent frameworks" optimize autonomy and tool use.
 VERITAS optimizes for **governance**:
@@ -139,7 +135,7 @@ VERITAS optimizes for **governance**:
 
 ---
 
-## What It Does
+## 💡 What It Does
 
 ### `/v1/decide` — Full Decision Loop (Structured JSON)
 
@@ -201,7 +197,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```text
 veritas_os/                  ← Monorepo root
@@ -231,7 +227,7 @@ veritas_os/                  ← Monorepo root
 │   ├── prompts/             ← Prompt templates for LLM interactions
 │   ├── reporting/           ← Report generation utilities
 │   ├── benchmarks/          ← Performance benchmark data
-│   └── tests/               ← 5000+ Python tests
+│   └── tests/               ← 5800+ Python tests
 ├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -257,7 +253,7 @@ veritas_os/                  ← Monorepo root
 
 ---
 
-## Frontend — Mission Control Dashboard
+## 🖥️ Frontend — Mission Control Dashboard
 
 The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides operational visibility into the decision pipeline.
 
@@ -295,7 +291,7 @@ The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides 
 
 ---
 
-## API Overview
+## 📡 API Overview
 
 All protected endpoints require `X-API-Key`. The full list of endpoints:
 
@@ -400,7 +396,7 @@ EU AI Act report generation already reads `replay_{decision_id}_*.json`, so invo
 
 ---
 
-## Quickstart
+## 🚀 Quick Start
 
 ### Option A: Docker Compose (Recommended)
 
@@ -498,7 +494,7 @@ Open Swagger UI at `http://127.0.0.1:8000/docs`, authorize with `X-API-Key`, and
 
 ---
 
-## Docker Compose (Full Stack)
+## 🐳 Docker Compose (Full Stack)
 
 `docker-compose.yml` orchestrates both services:
 
@@ -527,7 +523,7 @@ Environment variables (set in `.env` or shell):
 
 ---
 
-## Docker (Backend Only)
+## 🐳 Docker (Backend Only)
 
 Pull the latest image:
 
@@ -551,7 +547,7 @@ Dockerfile `CMD` accordingly before building the image.
 
 ---
 
-## Architecture (High-Level)
+## 🏗️ Architecture (High-Level)
 
 ```text
 ┌──────────────────────────────────────────────────────┐
@@ -654,7 +650,7 @@ Features: shared `httpx.Client` with connection pooling (`LLM_POOL_MAX_CONNECTIO
 
 ---
 
-## TrustLog (Hash-Chained Audit Log)
+## 🔗 TrustLog (Hash-Chained Audit Log)
 
 TrustLog is a **secure-by-default**, encrypted, hash-chained audit log.
 
@@ -707,7 +703,32 @@ Key features:
 
 ---
 
-## Tests
+## 🔄 Continuation Runtime (Phase-1: Observe/Shadow)
+
+VERITAS includes a **chain-level continuation observation layer** that runs beside (not inside) the existing step-level decision infrastructure. This is **not** enforcement — it is observation only.
+
+| Aspect | Status |
+|---|---|
+| Mode | Observe / shadow only — no enforcement, no refusal gating |
+| FUJI | Unchanged — remains the final safety/policy gate for each step |
+| `gate.decision_status` | Unchanged — no new values, no reinterpretation |
+| Feature flag off | Zero change to response, logs, UI, or behavior |
+| Purpose | Detect when a chain's continuation standing weakens (narrowed, degraded, escalated, halted, revoked) even though individual steps pass |
+
+Key concepts:
+- **Snapshot** (state): minimal governable facts — support basis, scope, burden, headroom, law version
+- **Receipt** (audit witness): how revalidation was conducted, divergence flags, reason codes, receipt chain linkage
+- The snapshot is not a receipt. The receipt is not a state store. They are separate responsibilities.
+- Revalidation runs **before** step-level merit evaluation (pre-merit placement)
+- `should_refuse_before_effect` is advisory only in phase-1
+
+Enable with: `VERITAS_CAP_CONTINUATION_RUNTIME=1` (default: off)
+
+See: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
+
+---
+
+## 🧪 Tests
 
 ### Backend (Python)
 
@@ -782,7 +803,71 @@ the complete strategy, verification matrix, and remaining production risks.
 
 ---
 
-## Security Notes (Important)
+## ⚙️ Environment Variables Reference
+
+All environment variables in one place. Set these in `.env` (git-ignored) or your secrets manager.
+
+### Required
+
+| Variable | Description | Example |
+|---|---|---|
+| `OPENAI_API_KEY` | OpenAI API key | `sk-...` |
+| `VERITAS_API_KEY` | Backend API authentication key | Random string |
+| `VERITAS_API_SECRET` | HMAC signing secret (32+ chars) | Random 64-char hex |
+| `VERITAS_ENCRYPTION_KEY` | TrustLog encryption key (base64-encoded 32 bytes) | Use `generate_key()` |
+
+### LLM Provider
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_PROVIDER` | `openai` | LLM provider (`openai`, `anthropic`, `google`, `ollama`, `openrouter`) |
+| `LLM_MODEL` | `gpt-4.1-mini` | Model name |
+| `LLM_POOL_MAX_CONNECTIONS` | `20` | httpx connection pool size |
+| `LLM_MAX_RETRIES` | `3` | Retry count with exponential backoff |
+
+### Network & CORS
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORS allow-list |
+| `VERITAS_API_BASE_URL` | `http://backend:8000` | Frontend BFF → backend URL (server-only) |
+| `VERITAS_MAX_REQUEST_BODY_SIZE` | `10485760` (10 MB) | Max request body size |
+
+### Safety & Governance
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_ENABLE_DIRECT_FUJI_API` | `0` | Enable `/v1/fuji/validate` endpoint |
+| `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` | Block startup without Vault/KMS |
+| `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web search toxicity filter (fail-closed) |
+| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime (Phase-1 observe) |
+
+### TrustLog & Audit
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` | Require transparency log anchoring (fail-closed) |
+| `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` | WORM mirror write failure raises error |
+
+### Replay
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_REPLAY_STRICT` | `0` | Enforce deterministic replay settings |
+| `VERITAS_REPLAY_REQUIRE_MODEL_VERSION` | `1` | Reject snapshots without model_version |
+
+### Runtime
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_RUNTIME_ROOT` | `runtime/` | Root directory for runtime data |
+| `VERITAS_RUNTIME_NAMESPACE` | `dev` | Runtime namespace (`dev`/`test`/`demo`/`prod`) |
+
+> See [`.env.example`](.env.example) for a complete template.
+
+---
+
+## 🔐 Security Notes (Important)
 
 > [!WARNING]
 > VERITAS is designed to fail closed, but **safe-by-default does not mean safe-without-configuration**. Before any beta deployment, verify secrets handling, encryption keys, WORM/transparency settings, and network exposure in your own environment.
@@ -851,7 +936,7 @@ the complete strategy, verification matrix, and remaining production risks.
 
 ---
 
-## Roadmap (Near-Term)
+## 🗺️ Roadmap (Near-Term)
 
 - CI (GitHub Actions): pytest + coverage + artifact reports
 - Security hardening: input validation & secret/log hygiene
@@ -861,7 +946,7 @@ the complete strategy, verification matrix, and remaining production risks.
 
 ---
 
-## License
+## 📄 License
 
 This repository is a **multi-license repository** with clear directory scope.
 
@@ -912,7 +997,18 @@ For academic use, please cite the Zenodo DOI.
 
 ---
 
-## Citation (BibTeX)
+## 🤝 Contributing
+
+We welcome contributions! Please see [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines, including:
+
+- Repository license model (Core is proprietary; interfaces are MIT)
+- Development setup and coding standards
+- Pull request workflow and review process
+- Security vulnerability reporting via [`SECURITY.md`](SECURITY.md)
+
+---
+
+## 📝 Citation (BibTeX)
 
 ```bibtex
 @software{veritas_os_2025,
@@ -926,7 +1022,7 @@ For academic use, please cite the Zenodo DOI.
 
 ---
 
-## Contact
+## 📞 Contact
 
 * Issues: [https://github.com/veritasfuji-japan/veritas_os/issues](https://github.com/veritasfuji-japan/veritas_os/issues)
 * Email: [veritas.fuji@gmail.com](mailto:veritas.fuji@gmail.com)
