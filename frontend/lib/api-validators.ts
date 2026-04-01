@@ -2,11 +2,31 @@ import type {
   AuditLevel,
   GovernancePolicy,
   GovernancePolicyResponse,
+  RequestLogResponse,
   RiskThresholds,
   TrustLog,
+  TrustLogItem,
+  TrustLogsResponse,
+  VerificationResult,
 } from "@veritas/types";
 
-export type { AuditLevel, GovernancePolicy, GovernancePolicyResponse, TrustLog };
+import {
+  isTrustLog,
+  isTrustLogItem,
+  isTrustLogsResponse as _isTrustLogsResponseFromTypes,
+  isRequestLogResponse as _isRequestLogResponseFromTypes,
+} from "@veritas/types";
+
+export type {
+  AuditLevel,
+  GovernancePolicy,
+  GovernancePolicyResponse,
+  RequestLogResponse,
+  TrustLog,
+  TrustLogItem,
+  TrustLogsResponse,
+  VerificationResult,
+};
 
 export interface GovernanceValidationIssue {
   category: "format" | "semantic";
@@ -27,27 +47,6 @@ interface GovernanceValidationFailure {
 export type GovernanceValidationResult = GovernanceValidationSuccess | GovernanceValidationFailure;
 
 const AUDIT_LEVELS: ReadonlySet<AuditLevel> = new Set<AuditLevel>(["none", "minimal", "summary", "standard", "full", "strict"]);
-
-/** @deprecated Use TrustLog from @veritas/types directly. */
-export type TrustLogItem = TrustLog;
-
-export interface TrustLogsResponse {
-  items: TrustLog[];
-  cursor: string;
-  next_cursor: string | null;
-  limit: number;
-  has_more: boolean;
-}
-
-export type VerificationResult = "ok" | "broken" | "not_found";
-
-export interface RequestLogResponse {
-  request_id: string;
-  items: TrustLog[];
-  count: number;
-  chain_ok: boolean;
-  verification_result: VerificationResult;
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -347,112 +346,20 @@ export function isGovernancePolicyResponse(value: unknown): value is GovernanceP
   return validateGovernancePolicyResponse(value).ok;
 }
 
-function isStringArray(value: unknown): boolean {
-  return Array.isArray(value) && value.every((s) => typeof s === "string");
-}
+// ----------------------------------------------------------------
+// Trust-log validators: re-exported from @veritas/types
+// ----------------------------------------------------------------
+
+export { isTrustLog, isTrustLogItem };
 
 /**
- * Runtime type guard for TrustLog payloads.
- * Validates the shared TrustLog type from @veritas/types,
- * used for both /v1/decide embedded trust_log and /v1/trust/logs list items.
+ * Runtime type guard for TrustLogsResponse payloads.
+ * Re-exported from @veritas/types for backward compatibility.
  */
-export function isTrustLog(value: unknown): value is TrustLog {
-  if (!isRecord(value)) {
-    return false;
-  }
+export const isTrustLogsResponse = _isTrustLogsResponseFromTypes;
 
-  if (typeof value.request_id !== "string") {
-    return false;
-  }
-
-  if (typeof value.created_at !== "string") {
-    return false;
-  }
-
-  if (!isStringArray(value.sources) || !isStringArray(value.critics) || !isStringArray(value.checks)) {
-    return false;
-  }
-
-  if (typeof value.approver !== "string") {
-    return false;
-  }
-
-  if (value.fuji !== undefined && value.fuji !== null && !isRecord(value.fuji)) {
-    return false;
-  }
-
-  if (value.sha256 !== undefined && value.sha256 !== null && typeof value.sha256 !== "string") {
-    return false;
-  }
-
-  if (value.sha256_prev !== undefined && value.sha256_prev !== null && typeof value.sha256_prev !== "string") {
-    return false;
-  }
-
-  if (value.query !== undefined && value.query !== null && typeof value.query !== "string") {
-    return false;
-  }
-
-  if (value.gate_status !== undefined && value.gate_status !== null && typeof value.gate_status !== "string") {
-    return false;
-  }
-
-  if (value.gate_risk !== undefined && value.gate_risk !== null && typeof value.gate_risk !== "number") {
-    return false;
-  }
-
-  const VALID_CHAIN_VERIFICATION: ReadonlySet<string> = new Set(["verified", "degraded", "broken", "unknown"]);
-  if (
-    value.chain_verification !== undefined
-    && value.chain_verification !== null
-    && (typeof value.chain_verification !== "string" || !VALID_CHAIN_VERIFICATION.has(value.chain_verification))
-  ) {
-    return false;
-  }
-
-  if (
-    value.chain_verification_reason !== undefined
-    && value.chain_verification_reason !== null
-    && typeof value.chain_verification_reason !== "string"
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-/** @deprecated Use isTrustLog instead. */
-export const isTrustLogItem = isTrustLog;
-
-export function isTrustLogsResponse(value: unknown): value is TrustLogsResponse {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  return (
-    Array.isArray(value.items)
-    && value.items.every((item) => isTrustLog(item))
-    && hasStringField(value, "cursor")
-    && (value.next_cursor === null || typeof value.next_cursor === "string")
-    && hasNumberField(value, "limit")
-    && hasBooleanField(value, "has_more")
-  );
-}
-
-export function isRequestLogResponse(value: unknown): value is RequestLogResponse {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  const VALID_VERIFICATION_RESULTS: ReadonlySet<string> = new Set(["ok", "broken", "not_found"]);
-
-  return (
-    hasStringField(value, "request_id")
-    && Array.isArray(value.items)
-    && value.items.every((item) => isTrustLog(item))
-    && hasNumberField(value, "count")
-    && hasBooleanField(value, "chain_ok")
-    && hasStringField(value, "verification_result")
-    && VALID_VERIFICATION_RESULTS.has(value.verification_result as string)
-  );
-}
+/**
+ * Runtime type guard for RequestLogResponse payloads.
+ * Re-exported from @veritas/types for backward compatibility.
+ */
+export const isRequestLogResponse = _isRequestLogResponseFromTypes;

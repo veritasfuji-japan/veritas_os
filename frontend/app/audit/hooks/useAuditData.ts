@@ -7,7 +7,7 @@ import {
   isTrustLogsResponse,
   type RequestLogResponse,
   type TrustLogItem,
-} from "../../../lib/api-validators";
+} from "@veritas/types";
 import { useI18n } from "../../../components/i18n-provider";
 import {
   classifyChain,

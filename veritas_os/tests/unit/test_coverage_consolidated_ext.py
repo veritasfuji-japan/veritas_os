@@ -767,8 +767,8 @@ class TestServerTrustFeedback:
         monkeypatch.setattr(server, "get_value_core", lambda: None)
         resp = _client.post("/v1/trust/feedback", headers=_AUTH, json={"score": 0.5})
         body = resp.json()
-        assert body["status"] == "error"
-        assert "unavailable" in body["detail"]
+        assert body["ok"] is False
+        assert "unavailable" in body["error"]
 
     def test_trust_feedback_success(self, monkeypatch):
         calls = []
@@ -781,7 +781,7 @@ class TestServerTrustFeedback:
             "user_id": "u1", "score": 0.8, "note": "good",
         })
         body = resp.json()
-        assert body["status"] == "ok"
+        assert body["ok"] is True
         assert body["user_id"] == "u1"
         assert len(calls) == 1
 
@@ -797,7 +797,7 @@ class TestServerTrustFeedback:
             "score": "not-a-number",
         })
         body = resp.json()
-        assert body["status"] == "ok"
+        assert body["ok"] is True
         assert calls[0]["score"] == 0.5
 
     def test_trust_feedback_no_append_method(self, monkeypatch):
@@ -805,8 +805,8 @@ class TestServerTrustFeedback:
         monkeypatch.setattr(server, "get_value_core", lambda: SimpleNamespace())
         resp = _client.post("/v1/trust/feedback", headers=_AUTH, json={"score": 0.5})
         body = resp.json()
-        assert body["status"] == "error"
-        assert "not found" in body["detail"]
+        assert body["ok"] is False
+        assert "not found" in body["error"]
 
 
 class TestServerMetrics:
@@ -1418,7 +1418,7 @@ class TestServerExtraCoverage:
         monkeypatch.setattr(server, "get_value_core", lambda: BadVC)
         resp = _client.post("/v1/trust/feedback", headers=_AUTH, json={"score": 0.5})
         body = resp.json()
-        assert body["status"] == "error"
+        assert body["ok"] is False
 
     def test_redact_sanitize_fails_fallback(self, monkeypatch):
         def bad_mask(t):

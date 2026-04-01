@@ -7,7 +7,7 @@
  * Future API integration points are marked with `@api-hook` comments.
  */
 
-import type { TrustLogItem } from "../../lib/api-validators";
+import type { TrustLogItem } from "@veritas/types";
 
 /* ------------------------------------------------------------------ */
 /*  Chain verification                                                 */

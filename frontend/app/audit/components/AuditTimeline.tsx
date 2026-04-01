@@ -4,7 +4,7 @@ import { Card } from "@veritas/design-system";
 import { useI18n } from "../../../components/i18n-provider";
 import { classifyChain, getString, type DetailTab } from "../audit-types";
 import { STATUS_COLORS, STATUS_DOT } from "../constants";
-import type { TrustLogItem } from "../../../lib/api-validators";
+import type { TrustLogItem } from "@veritas/types";
 
 interface AuditTimelineProps {
   filteredItems: TrustLogItem[];

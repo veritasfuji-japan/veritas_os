@@ -196,11 +196,174 @@ export interface TrustLog {
   query?: string | null;
   gate_status?: string | null;
   gate_risk?: number | null;
-  /** Optional chain verification status from audit verification endpoint. */
+  /**
+   * Chain verification status from audit verification endpoint.
+   *
+   * Source of truth: veritas_os/api/schemas.py — TrustLog.chain_verification
+   */
   chain_verification?: "verified" | "degraded" | "broken" | "unknown" | null;
   /** Human-readable reason when verification is degraded/broken. */
   chain_verification_reason?: string | null;
   [key: string]: unknown;
+}
+
+/** @deprecated Use TrustLog from @veritas/types directly. */
+export type TrustLogItem = TrustLog;
+
+/**
+ * Verification result for trust log hash-chain integrity.
+ *
+ * Source of truth: veritas_os/api/schemas.py — VerificationResultLiteral
+ */
+export type VerificationResult = "ok" | "broken" | "not_found";
+
+/**
+ * Paginated response envelope for GET /v1/trust/logs.
+ *
+ * Source of truth: veritas_os/api/schemas.py — TrustLogsResponse
+ */
+export interface TrustLogsResponse {
+  items: TrustLog[];
+  cursor: string | null;
+  next_cursor: string | null;
+  limit: number;
+  has_more: boolean;
+}
+
+/**
+ * Response envelope for GET /v1/trust/{request_id}.
+ *
+ * Source of truth: veritas_os/api/schemas.py — RequestLogResponse
+ */
+export interface RequestLogResponse {
+  request_id: string;
+  items: TrustLog[];
+  count: number;
+  chain_ok: boolean;
+  verification_result: VerificationResult | string;
+}
+
+/**
+ * Runtime type guard for TrustLog payloads.
+ *
+ * Validates the shared TrustLog type, used for both /v1/decide embedded
+ * trust_log and /v1/trust/logs list items.
+ *
+ * Source of truth: veritas_os/api/schemas.py — TrustLog
+ */
+export function isTrustLog(value: unknown): value is TrustLog {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (typeof value.request_id !== "string") {
+    return false;
+  }
+
+  if (typeof value.created_at !== "string") {
+    return false;
+  }
+
+  if (!isStringArray(value.sources) || !isStringArray(value.critics) || !isStringArray(value.checks)) {
+    return false;
+  }
+
+  if (typeof value.approver !== "string") {
+    return false;
+  }
+
+  if (value.fuji !== undefined && value.fuji !== null && !isRecord(value.fuji)) {
+    return false;
+  }
+
+  if (value.sha256 !== undefined && value.sha256 !== null && typeof value.sha256 !== "string") {
+    return false;
+  }
+
+  if (value.sha256_prev !== undefined && value.sha256_prev !== null && typeof value.sha256_prev !== "string") {
+    return false;
+  }
+
+  if (value.query !== undefined && value.query !== null && typeof value.query !== "string") {
+    return false;
+  }
+
+  if (value.gate_status !== undefined && value.gate_status !== null && typeof value.gate_status !== "string") {
+    return false;
+  }
+
+  if (value.gate_risk !== undefined && value.gate_risk !== null && typeof value.gate_risk !== "number") {
+    return false;
+  }
+
+  const VALID_CHAIN_VERIFICATION: ReadonlySet<string> = new Set(["verified", "degraded", "broken", "unknown"]);
+  if (
+    value.chain_verification !== undefined
+    && value.chain_verification !== null
+    && (typeof value.chain_verification !== "string" || !VALID_CHAIN_VERIFICATION.has(value.chain_verification))
+  ) {
+    return false;
+  }
+
+  if (
+    value.chain_verification_reason !== undefined
+    && value.chain_verification_reason !== null
+    && typeof value.chain_verification_reason !== "string"
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/** @deprecated Use isTrustLog instead. */
+export const isTrustLogItem = isTrustLog;
+
+/**
+ * Runtime type guard for TrustLogsResponse payloads.
+ *
+ * Source of truth: veritas_os/api/schemas.py — TrustLogsResponse
+ */
+export function isTrustLogsResponse(value: unknown): value is TrustLogsResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    Array.isArray(value.items)
+    && value.items.every((item: unknown) => isTrustLog(item))
+    && (value.cursor === null || typeof value.cursor === "string")
+    && (value.next_cursor === null || typeof value.next_cursor === "string")
+    && typeof value.limit === "number" && Number.isFinite(value.limit)
+    && typeof value.has_more === "boolean"
+  );
+}
+
+/**
+ * Runtime type guard for RequestLogResponse payloads.
+ *
+ * Source of truth: veritas_os/api/schemas.py — RequestLogResponse
+ */
+export function isRequestLogResponse(value: unknown): value is RequestLogResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const VALID_VERIFICATION_RESULTS: ReadonlySet<string> = new Set(["ok", "broken", "not_found"]);
+
+  return (
+    typeof value.request_id === "string"
+    && Array.isArray(value.items)
+    && value.items.every((item: unknown) => isTrustLog(item))
+    && typeof value.count === "number" && Number.isFinite(value.count)
+    && typeof value.chain_ok === "boolean"
+    && typeof value.verification_result === "string"
+    && VALID_VERIFICATION_RESULTS.has(value.verification_result)
+  );
+}
+
+function isStringArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every((s: unknown) => typeof s === "string");
 }
 
 /**
@@ -956,10 +1119,12 @@ export interface ReplayResponse {
 /**
  * Response from POST /v1/trust/feedback.
  *
- * Source of truth: openapi.yaml — /v1/trust/feedback 200 response
+ * Source of truth: veritas_os/api/schemas.py — TrustFeedbackResponse
  */
 export interface TrustFeedbackResponse {
   ok: boolean;
+  user_id?: string | null;
+  error?: string | null;
   [key: string]: unknown;
 }
 
@@ -1048,11 +1213,13 @@ export interface PolicyHistoryEntry {
 /**
  * Response from GET /v1/governance/policy/history.
  *
- * Source of truth: openapi.yaml — /v1/governance/policy/history 200 response
+ * Source of truth: veritas_os/api/schemas.py — GovernancePolicyHistoryResponse
  */
 export interface GovernancePolicyHistoryResponse {
   ok: boolean;
+  count?: number;
   history: PolicyHistoryEntry[];
+  error?: string | null;
   [key: string]: unknown;
 }
 
