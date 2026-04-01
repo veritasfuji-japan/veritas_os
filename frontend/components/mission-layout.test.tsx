@@ -19,8 +19,9 @@ describe("MissionLayout", () => {
       "href",
       "/governance"
     );
-    expect(screen.getByText("Environment")).toBeInTheDocument();
-    expect(screen.getByText("Latest Event")).toBeInTheDocument();
+    expect(screen.getByText("環境")).toBeInTheDocument();
+    expect(screen.getByText("最新イベント")).toBeInTheDocument();
+    expect(screen.getByText("稼働中")).toBeInTheDocument();
     expect(screen.getByText("可読性を優先した運用ビュー")).toBeInTheDocument();
   });
 });

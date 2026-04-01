@@ -130,19 +130,22 @@ const NAV_ITEMS = [
 
 const HEADER_METRICS = [
   {
-    title: "Environment",
+    titleJa: "環境",
+    titleEn: "Environment",
     valueJa: "本番準備済みサンドボックス",
     valueEn: "Production-ready Sandbox",
     status: "success" as const,
   },
   {
-    title: "Connection",
+    titleJa: "接続",
+    titleEn: "Connection",
     valueJa: "Neural Mesh 安定 · 99.982%",
     valueEn: "Neural Mesh Stable · 99.982%",
     status: "info" as const,
   },
   {
-    title: "Latest Event",
+    titleJa: "最新イベント",
+    titleEn: "Latest Event",
     valueJa: "Policy Sync #4821 完了",
     valueEn: "Policy Sync #4821 Completed",
     status: "primary" as const,
@@ -213,12 +216,17 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
           {/* Live indicator */}
           <div className="flex items-center gap-1.5 rounded-full border border-sidebar-border px-2 py-1">
             <span className="status-dot-live h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-            <span className="text-[10px] font-medium uppercase tracking-wide text-sidebar-muted">Live</span>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-sidebar-muted">
+              {t("稼働中", "Live")}
+            </span>
           </div>
         </div>
 
         {/* Navigation ── */}
-        <nav aria-label="Main navigation" className="flex-1 overflow-y-auto px-3 py-4">
+        <nav
+          aria-label={t("メインナビゲーション", "Main navigation")}
+          className="flex-1 overflow-y-auto px-3 py-4"
+        >
           <div className="mb-2 px-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-sidebar-muted">
               {t("ナビゲーション", "Navigation")}
@@ -324,7 +332,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
         <div className="grid gap-3 md:grid-cols-3">
           {HEADER_METRICS.map((metric) => (
             <div
-              key={metric.title}
+              key={metric.titleEn}
               className="flex items-center gap-3 rounded-lg border border-border/50 bg-background/60 px-4 py-2.5 shadow-xs"
             >
               <span
@@ -333,7 +341,7 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
               />
               <div className="min-w-0">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  {metric.title}
+                  {t(metric.titleJa, metric.titleEn)}
                 </p>
                 <p className={`truncate text-xs font-medium ${STATUS_TEXT[metric.status]}`}>
                   {t(metric.valueJa, metric.valueEn)}
