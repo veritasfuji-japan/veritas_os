@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { cn } from "../lib/utils";
 import { useI18n } from "./i18n-provider";
 import { TraceabilityRail } from "./traceability-rail";
 
@@ -233,13 +234,13 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
                   <Link
                     href={item.href}
                     aria-current={isActive ? "page" : undefined}
-                    className={[
+                    className={cn(
                       "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ds-color-focus-ring))] focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                       isActive
                         ? "bg-primary/12 text-primary"
                         : "text-sidebar-foreground hover:bg-white/5 hover:text-white",
-                    ].join(" ")}
+                    )}
                   >
                     {/* Active bar */}
                     {isActive && (
@@ -251,18 +252,18 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
 
                     {/* Icon */}
                     <Icon
-                      className={[
+                      className={cn(
                         "h-[18px] w-[18px] shrink-0 transition-colors",
                         isActive ? "text-primary" : "text-sidebar-muted group-hover:text-sidebar-foreground",
-                      ].join(" ")}
+                      )}
                     />
 
                     {/* Label */}
                     <div className="min-w-0 flex-1">
-                      <p className={[
+                      <p className={cn(
                         "text-sm font-medium leading-tight",
-                        isActive ? "text-primary" : "",
-                      ].join(" ")}>
+                        isActive && "text-primary",
+                      )}>
                         {item.label}
                       </p>
                       <p className="truncate text-[11px] text-sidebar-muted">
@@ -271,12 +272,12 @@ export function MissionLayout({ children }: MissionLayoutProps): JSX.Element {
                     </div>
 
                     {/* Badge */}
-                    <span className={[
+                    <span className={cn(
                       "shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest",
                       isActive
                         ? "bg-primary/15 text-primary"
                         : "bg-white/5 text-sidebar-muted",
-                    ].join(" ")}>
+                    )}>
                       {t(item.shortJa, item.shortEn)}
                     </span>
 

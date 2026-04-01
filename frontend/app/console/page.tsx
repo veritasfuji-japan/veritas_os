@@ -134,13 +134,13 @@ export default function DecisionConsolePage(): JSX.Element {
                   window.location.href = `/console?decision_id=${encodeURIComponent(decisionId)}`;
                 }}
               >
-                Replay
+                {tk("replay")}
               </button>
             </div>
             <div className="space-y-2">
-              <div className="flex gap-2 text-xs">
-                <button type="button" className="rounded border border-border px-2 py-1" onClick={() => setActiveResultTab("insights")}>Insights</button>
-                <button type="button" className="rounded border border-border px-2 py-1" onClick={() => setActiveResultTab("raw")}>Raw JSON</button>
+              <div role="tablist" className="flex gap-2 text-xs">
+                <button type="button" role="tab" aria-selected={activeResultTab === "insights"} className="rounded border border-border px-2 py-1" onClick={() => setActiveResultTab("insights")}>{tk("insights")}</button>
+                <button type="button" role="tab" aria-selected={activeResultTab === "raw"} className="rounded border border-border px-2 py-1" onClick={() => setActiveResultTab("raw")}>{tk("rawJson")}</button>
               </div>
               {activeResultTab === "insights" ? (
                 <ResultSection title="trust_log" value={result.trust_log ?? null} />
@@ -152,9 +152,9 @@ export default function DecisionConsolePage(): JSX.Element {
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border p-4 text-sm text-muted-foreground">
-            <p className="font-semibold text-foreground">Start with a real decision question.</p>
-            <p className="mt-1">Try prompts like: &quot;Should we delay launch by 2 weeks for security hardening?&quot; or &quot;Choose vendor A vs B under strict budget and compliance constraints.&quot;</p>
-            <p className="mt-1">You will see stage progression, FUJI safety checks, chosen vs alternatives, rejection reasons, and direct TrustLog/Replay links.</p>
+            <p className="font-semibold text-foreground">{tk("startPromptTitle")}</p>
+            <p className="mt-1">{tk("startPromptHint")}</p>
+            <p className="mt-1">{tk("startPromptExplainer")}</p>
           </div>
         )}
       </Card>

@@ -34,13 +34,13 @@ export default function RiskIntelligencePage(): JSX.Element {
       >
         <div className="flex flex-wrap gap-2 text-xs">
           <Link href="/console" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40 inline-flex items-center gap-1">
-            <span aria-hidden>⚡</span> Decision
+            <span aria-hidden>⚡</span> {tk("navDecision")}
           </Link>
           <Link href="/audit" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40 inline-flex items-center gap-1">
-            <span aria-hidden>📋</span> TrustLog
+            <span aria-hidden>📋</span> {tk("navTrustLog")}
           </Link>
           <Link href="/governance" className="rounded border border-border/60 px-2 py-1 hover:bg-muted/40 inline-flex items-center gap-1">
-            <span aria-hidden>🛡</span> Governance
+            <span aria-hidden>🛡</span> {tk("navGovernance")}
           </Link>
         </div>
       </Card>

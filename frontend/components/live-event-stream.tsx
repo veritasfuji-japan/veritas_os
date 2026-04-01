@@ -2,6 +2,7 @@
 
 import { Card } from "@veritas/design-system";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "../lib/utils";
 import { useI18n } from "./i18n-provider";
 
 type EventFilter = "all" | "critical" | "degraded" | "health";
@@ -162,7 +163,7 @@ function buildLink(event: LiveEvent): string {
 }
 
 export function LiveEventStream(): JSX.Element {
-  const { t } = useI18n();
+  const { t, tk } = useI18n();
   const [events, setEvents] = useState<LiveEvent[]>(SEED_EVENTS);
   const [connected, setConnected] = useState(false);
   const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
@@ -312,7 +313,7 @@ export function LiveEventStream(): JSX.Element {
     <Card title="Live Event Feed" titleSize="md" variant="glass" className="border-primary/20">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs">
-          <span className={["h-2 w-2 rounded-full", connected ? "bg-emerald-500 status-dot-live" : "bg-amber-500"].join(" ")} />
+          <span className={cn("h-2 w-2 rounded-full", connected ? "bg-emerald-500 status-dot-live" : "bg-amber-500")} />
           <span>{connected ? t("接続済み", "Connected") : t("再接続中...", "Reconnecting...")}</span>
         </div>
         <div className="flex gap-1">
@@ -321,10 +322,11 @@ export function LiveEventStream(): JSX.Element {
               key={filter}
               type="button"
               onClick={() => setActiveFilter(filter)}
-              className={[
+              aria-pressed={activeFilter === filter}
+              className={cn(
                 "rounded-md border px-2 py-1 text-[11px] capitalize",
                 activeFilter === filter ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground",
-              ].join(" ")}
+              )}
             >
               {filter}
             </button>
@@ -379,10 +381,10 @@ export function LiveEventStream(): JSX.Element {
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className={["rounded border px-1.5 py-0.5 font-semibold", SEVERITY_STYLE[event.severity]].join(" ")}>
+                        <span className={cn("rounded border px-1.5 py-0.5 font-semibold", SEVERITY_STYLE[event.severity])}>
                           {event.severity}
                         </span>
-                        <span className={["rounded px-1.5 py-0.5 text-[10px] font-semibold", STAGE_STYLE[event.stage]].join(" ")}>
+                        <span className={cn("rounded px-1.5 py-0.5 text-[10px] font-semibold", STAGE_STYLE[event.stage])}>
                           {STAGE_LABEL[event.stage]}
                         </span>
                         <span className="font-semibold">{EVENT_TYPE_LABEL[event.type]}</span>
@@ -405,14 +407,15 @@ export function LiveEventStream(): JSX.Element {
                     aria-pressed={isAcked}
                     className="rounded border border-border px-2 py-1"
                   >
-                    {isAcked ? "acknowledged" : "acknowledge"}
+                    {isAcked ? tk("acknowledged") : tk("acknowledge")}
                   </button>
                   <button
                     type="button"
                     onClick={() => toggle(setMutedIds, event.id)}
+                    aria-label={tk("mute")}
                     className="rounded border border-border px-2 py-1"
                   >
-                    mute
+                    {tk("mute")}
                   </button>
                   <button
                     type="button"
@@ -420,7 +423,7 @@ export function LiveEventStream(): JSX.Element {
                     aria-pressed={isPinned}
                     className="rounded border border-border px-2 py-1"
                   >
-                    {isPinned ? "pinned" : "pin"}
+                    {isPinned ? tk("pinned") : tk("pin")}
                   </button>
                 </div>
               </div>
