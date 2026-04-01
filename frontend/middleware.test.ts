@@ -4,8 +4,11 @@ import {
   buildCspEnforced,
   buildCspReportOnly,
   generateNonce,
+  isProductionRuntime,
   middleware,
   resolveCspReportOnlyEndpoint,
+  shouldIssueDefaultBffSessionCookie,
+  shouldUseSecureCookie,
   shouldWarnInsecureCspReportOnlyEndpoint,
   shouldEnforceNonceCsp,
   shouldWarnInsecureProductionCspConfig,
@@ -134,6 +137,48 @@ describe("middleware CSP", () => {
     expect(shouldWarnInsecureCspReportOnlyEndpoint()).toBe(true);
   });
 
+  it("detects production runtime from VERITAS_ENV", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+
+    expect(isProductionRuntime()).toBe(true);
+  });
+
+  it("detects production runtime from NODE_ENV", () => {
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(isProductionRuntime()).toBe(true);
+  });
+
+  it("does not treat development runtime as production", () => {
+    vi.stubEnv("VERITAS_ENV", "development");
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(isProductionRuntime()).toBe(false);
+  });
+
+  it("allows shared BFF session cookie issuance in non-production", () => {
+    vi.stubEnv("VERITAS_ENV", "development");
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(shouldIssueDefaultBffSessionCookie()).toBe(true);
+  });
+
+  it("denies shared BFF session cookie issuance in production by default", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_BFF_ALLOW_GLOBAL_SESSION_IN_PROD", "false");
+
+    expect(shouldIssueDefaultBffSessionCookie()).toBe(false);
+  });
+
+  it("allows shared BFF session cookie issuance in production only with explicit override", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_BFF_ALLOW_GLOBAL_SESSION_IN_PROD", "true");
+
+    expect(shouldIssueDefaultBffSessionCookie()).toBe(true);
+  });
+
   it("sets CSP headers and forwards nonce to the Next.js request", () => {
     const response = middleware({ headers: new Headers() } as never);
     const csp = response.headers.get("Content-Security-Policy") ?? "";
@@ -155,6 +200,56 @@ describe("middleware CSP", () => {
     expect(forwardedNonce).not.toBe("");
     expect(reportOnlyScriptDirective).toContain(`'nonce-${forwardedNonce}'`);
     expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
+  });
+
+  it("uses x-forwarded-proto to determine secure cookie semantics", () => {
+    const request = {
+      headers: new Headers({ "x-forwarded-proto": "https" }),
+      nextUrl: { protocol: "http:" },
+    } as never;
+
+    expect(shouldUseSecureCookie(request)).toBe(true);
+  });
+
+  it("falls back to request protocol for secure cookie semantics", () => {
+    const request = {
+      headers: new Headers(),
+      nextUrl: { protocol: "https:" },
+    } as never;
+
+    expect(shouldUseSecureCookie(request)).toBe(true);
+  });
+
+  it("does not mint shared BFF cookie in production unless explicitly allowed", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "session-token");
+    vi.stubEnv("VERITAS_BFF_ALLOW_GLOBAL_SESSION_IN_PROD", "false");
+
+    const response = middleware({
+      headers: new Headers({ "x-forwarded-proto": "https" }),
+      cookies: { get: () => undefined },
+      nextUrl: { protocol: "https:" },
+    } as never);
+
+    expect(response.cookies.get("__veritas_bff")).toBeUndefined();
+  });
+
+  it("mints shared BFF cookie with secure flag when explicitly allowed in production", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "session-token");
+    vi.stubEnv("VERITAS_BFF_ALLOW_GLOBAL_SESSION_IN_PROD", "true");
+
+    const response = middleware({
+      headers: new Headers({ "x-forwarded-proto": "https" }),
+      cookies: { get: () => undefined },
+      nextUrl: { protocol: "http:" },
+    } as never);
+
+    const cookie = response.cookies.get("__veritas_bff");
+    expect(cookie?.value).toBe("session-token");
+    expect(cookie?.secure).toBe(true);
   });
 
   it("emits a security warning when NODE_ENV=production without CSP strict rollout", () => {
