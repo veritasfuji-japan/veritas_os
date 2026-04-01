@@ -2,7 +2,7 @@
 
 import { type Dispatch, type SetStateAction } from "react";
 import { Card } from "@veritas/design-system";
-import type { RequestLogResponse } from "../../../lib/api-validators";
+import type { RequestLogResponse } from "@veritas/types";
 import { useI18n } from "../../../components/i18n-provider";
 import type { CrossSearchParams, SearchField } from "../audit-types";
 

@@ -1455,7 +1455,7 @@ def test_trust_feedback_ok(monkeypatch):
     )
     assert r.status_code == 200
     data = r.json()
-    assert data["status"] == "ok"
+    assert data["ok"] is True
     assert data["user_id"] == "user123"
 
     assert len(calls) == 1
@@ -1489,8 +1489,8 @@ def test_trust_feedback_error(monkeypatch):
     )
     assert r.status_code == 200
     data = r.json()
-    assert data["status"] == "error"
-    assert "detail" in data
+    assert data["ok"] is False
+    assert "error" in data
 
 
 # -------------------------------------------------
@@ -2005,7 +2005,7 @@ def test_trust_feedback_coerces_bad_score_to_default():
         headers={"X-API-Key": "test-api-key"},
     )
     assert r.status_code == 200
-    assert r.json()["status"] in ("ok", "error")
+    assert r.json()["ok"] in (True, False)
 
 
 def test_memory_put_accepts_string_value():

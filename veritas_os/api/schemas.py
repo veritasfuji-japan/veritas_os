@@ -280,6 +280,39 @@ class TrustLog(BaseModel):
     gate_status: Optional[str] = None
     gate_risk: Optional[float] = None
 
+    # ハッシュチェーン検証結果（/v1/trust/verify 経由で付与される）
+    chain_verification: Optional[
+        Literal["verified", "degraded", "broken", "unknown"]
+    ] = None
+    chain_verification_reason: Optional[str] = None
+
+
+# =========================
+# Response envelope — Trust Log
+# =========================
+
+VerificationResultLiteral = Literal["ok", "broken", "not_found"]
+
+
+class TrustLogsResponse(BaseModel):
+    """Paginated response envelope for GET /v1/trust/logs."""
+
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    cursor: Optional[str] = None
+    next_cursor: Optional[str] = None
+    limit: int = 50
+    has_more: bool = False
+
+
+class RequestLogResponse(BaseModel):
+    """Response envelope for GET /v1/trust/{request_id}."""
+
+    request_id: str = ""
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+    chain_ok: bool = False
+    verification_result: str = "not_found"
+
 
 # =========================
 # API I/O（Request）
@@ -1042,3 +1075,28 @@ class TrustFeedbackRequest(BaseModel):
             return max(0.0, min(1.0, float(v)))
         except (TypeError, ValueError):
             return 0.5
+
+
+class TrustFeedbackResponse(BaseModel):
+    """Response envelope for POST /v1/trust/feedback."""
+
+    ok: bool = True
+    user_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+class GovernancePolicyResponse(BaseModel):
+    """Response envelope for GET/PUT /v1/governance/policy."""
+
+    ok: bool = True
+    policy: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
+
+
+class GovernancePolicyHistoryResponse(BaseModel):
+    """Response envelope for GET /v1/governance/policy/history."""
+
+    ok: bool = True
+    count: int = 0
+    history: List[Dict[str, Any]] = Field(default_factory=list)
+    error: Optional[str] = None

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@veritas/design-system";
-import type { TrustLogItem } from "../../../lib/api-validators";
+import type { TrustLogItem } from "@veritas/types";
 import { useI18n } from "../../../components/i18n-provider";
 import {
   buildHumanSummary,

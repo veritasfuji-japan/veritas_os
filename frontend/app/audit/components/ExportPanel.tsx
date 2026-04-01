@@ -4,7 +4,7 @@ import { Card } from "@veritas/design-system";
 import { useI18n } from "../../../components/i18n-provider";
 import type { ExportFormat, RedactionMode, RegulatoryReport } from "../audit-types";
 import { computeAuditSummary } from "../audit-types";
-import type { TrustLogItem } from "../../../lib/api-validators";
+import type { TrustLogItem } from "@veritas/types";
 
 interface ExportPanelProps {
   sortedItems: TrustLogItem[];

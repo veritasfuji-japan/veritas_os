@@ -3,7 +3,7 @@
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../../components/i18n-provider";
 import { STATUS_DOT } from "../constants";
-import type { TrustLogItem } from "../../../lib/api-validators";
+import type { TrustLogItem } from "@veritas/types";
 
 interface VerificationPanelProps {
   decisionIds: string[];
