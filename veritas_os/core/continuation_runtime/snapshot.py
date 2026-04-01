@@ -71,6 +71,7 @@ class Scope:
     allowed_action_classes: List[str] = field(default_factory=list)
     restricted_action_classes: List[str] = field(default_factory=list)
     escalation_required: bool = False
+    restrictions_durable: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -111,6 +112,7 @@ class HeadroomState:
     remaining: float = 1.0
     threshold_escalation: float = 0.3
     threshold_suspension: float = 0.0
+    collapse_irreversible: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

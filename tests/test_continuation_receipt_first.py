@@ -74,9 +74,11 @@ class TestReceiptFirstBoundary:
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         # Set required_evidence with none satisfied → current_level=0.0 → headroom=0.0
+        # Mark collapse as irreversible to trigger durable promotion.
         condition = self._make_condition(context={
             "required_evidence": ["doc_a"],
             "satisfied_evidence": [],
+            "headroom_collapse_irreversible": True,
         })
         snap, receipt = rv.revalidate(lineage, condition)
 
@@ -92,6 +94,28 @@ class TestReceiptFirstBoundary:
         assert snap.durable_consequence.has_durable_halt is True
         assert snap.durable_consequence.promotion_reason != ""
 
+    def test_halted_receipt_only_when_collapse_reversible(self):
+        """可逆的ヘッドルーム崩壊ではレシートのみ停止（状態はLIVE維持）を検証する。"""
+        rv = self._make_revalidator()
+        lineage = self._make_lineage()
+        # headroom=0 but collapse is NOT irreversible → receipt-only halt
+        condition = self._make_condition(context={
+            "required_evidence": ["doc_a"],
+            "satisfied_evidence": [],
+        })
+        snap, receipt = rv.revalidate(lineage, condition)
+
+        # Receipt records the halt
+        assert receipt.boundary_outcome == "halted"
+        assert receipt.revalidation_status.value == "halted"
+        assert receipt.halt_occurred is True
+        # But it's not promoted to state
+        assert receipt.is_durable_promotion is False
+        assert receipt.provisional_vs_durable == "provisional"
+        # State remains LIVE (standing preserved)
+        assert snap.claim_status.value == "live"
+        assert snap.durable_consequence is None
+
     # ------------------------------------------------------------------
     # NARROWED: receipt-first, durable when scope restrictions present
     # ------------------------------------------------------------------
@@ -102,6 +126,7 @@ class TestReceiptFirstBoundary:
         lineage = self._make_lineage()
         condition = self._make_condition(context={
             "restricted_actions": ["execute"],
+            "restrictions_durable": True,
         })
         snap, receipt = rv.revalidate(lineage, condition)
 
@@ -116,6 +141,28 @@ class TestReceiptFirstBoundary:
         assert snap.claim_status.value == "narrowed"
         assert snap.durable_consequence is not None
         assert snap.durable_consequence.has_durable_scope_reduction is True
+
+    def test_narrowed_receipt_only_when_restrictions_not_durable(self):
+        """一時的スコープ制限ではレシートのみ縮小（状態はLIVE維持）を検証する。"""
+        rv = self._make_revalidator()
+        lineage = self._make_lineage()
+        # Restricted actions present but NOT marked durable → receipt-only
+        condition = self._make_condition(context={
+            "restricted_actions": ["execute"],
+        })
+        snap, receipt = rv.revalidate(lineage, condition)
+
+        # Receipt records the narrowing
+        assert receipt.boundary_outcome == "narrowed"
+        assert receipt.revalidation_status.value == "narrowed"
+        assert receipt.narrowing_occurred is True
+        # But it's not promoted to state
+        assert receipt.is_durable_promotion is False
+        assert receipt.provisional_vs_durable == "provisional"
+        assert receipt.reopening_eligible is True  # provisional = reopenable
+        # State remains LIVE (standing preserved)
+        assert snap.claim_status.value == "live"
+        assert snap.durable_consequence is None
 
     def test_narrowed_reopening_eligible_when_not_durable(self):
         """縮小再開テスト: 永続的なら再開不可であることを検証する。"""
@@ -456,7 +503,26 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.REVOKED
 
     def test_halted_durable_when_collapsed(self):
-        """ヘッドルーム崩壊時にHALTEDが永続的であることを検証する。"""
+        """ヘッドルーム不可逆崩壊時にHALTEDが永続的であることを検証する。"""
+        from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
+        from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
+
+        dc, status = ContinuationRevalidator._assess_durability(
+            boundary_status=ClaimStatus.HALTED,
+            scope=Scope(),
+            headroom_state=HeadroomState(
+                remaining=0.0, threshold_suspension=0.0,
+                collapse_irreversible=True,
+            ),
+            revocation_conditions=[],
+        )
+        assert dc is not None
+        assert dc.has_durable_halt is True
+        assert status == ClaimStatus.HALTED
+
+    def test_halted_not_durable_when_collapse_reversible(self):
+        """可逆的ヘッドルーム崩壊での停止がレシートのみであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -467,9 +533,8 @@ class TestDurabilityAssessment:
             headroom_state=HeadroomState(remaining=0.0, threshold_suspension=0.0),
             revocation_conditions=[],
         )
-        assert dc is not None
-        assert dc.has_durable_halt is True
-        assert status == ClaimStatus.HALTED
+        assert dc is None
+        assert status == ClaimStatus.LIVE
 
     def test_halted_not_durable_when_headroom_positive(self):
         """正のヘッドルームでの停止がレシートのみで永続的結果なしであることを検証する。"""
@@ -487,7 +552,26 @@ class TestDurabilityAssessment:
         assert status == ClaimStatus.LIVE
 
     def test_narrowed_durable_when_restrictions_present(self):
-        """制限がある場合にNARROWEDが永続的であることを検証する。"""
+        """永続的制限がある場合にNARROWEDが永続的であることを検証する。"""
+        from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
+        from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
+
+        dc, status = ContinuationRevalidator._assess_durability(
+            boundary_status=ClaimStatus.NARROWED,
+            scope=Scope(
+                restricted_action_classes=["execute"],
+                restrictions_durable=True,
+            ),
+            headroom_state=HeadroomState(),
+            revocation_conditions=[],
+        )
+        assert dc is not None
+        assert dc.has_durable_scope_reduction is True
+        assert status == ClaimStatus.NARROWED
+
+    def test_narrowed_not_durable_when_restrictions_provisional(self):
+        """一時的制限でのNARROWEDがレシートのみであることを検証する。"""
         from veritas_os.core.continuation_runtime.revalidator import ContinuationRevalidator
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.snapshot import Scope, HeadroomState
@@ -498,9 +582,8 @@ class TestDurabilityAssessment:
             headroom_state=HeadroomState(),
             revocation_conditions=[],
         )
-        assert dc is not None
-        assert dc.has_durable_scope_reduction is True
-        assert status == ClaimStatus.NARROWED
+        assert dc is None
+        assert status == ClaimStatus.LIVE
 
     def test_degraded_receipt_only(self):
         """DEGRADEDがレシートのみであることを検証する。"""

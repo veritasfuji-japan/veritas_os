@@ -141,7 +141,7 @@ class ContinuationRevalidator:
 
         # 3. Evaluate burden / headroom from context
         burden_state = self._evaluate_burden(condition, prior_snapshot)
-        headroom_state = self._evaluate_headroom(burden_state)
+        headroom_state = self._evaluate_headroom(burden_state, condition)
 
         # 4. Check revocation conditions
         revocation_conditions = self._check_revocation_conditions(
@@ -321,6 +321,7 @@ class ContinuationRevalidator:
             allowed_action_classes=ctx.get("allowed_actions", ["query", "decide"]),
             restricted_action_classes=ctx.get("restricted_actions", []),
             escalation_required=ctx.get("escalation_required", False),
+            restrictions_durable=ctx.get("restrictions_durable", False),
         )
 
     def _evaluate_burden(
@@ -367,17 +368,23 @@ class ContinuationRevalidator:
             current_level=current_level,
         )
 
-    def _evaluate_headroom(self, burden_state: BurdenState) -> HeadroomState:
+    def _evaluate_headroom(
+        self, burden_state: BurdenState, condition: PresentCondition,
+    ) -> HeadroomState:
         """Derive headroom from burden state.
 
         Headroom = how much margin remains before burden thresholds
         are breached.
         """
         remaining = burden_state.current_level
+        ctx = condition.context or {}
         return HeadroomState(
             remaining=remaining,
             threshold_escalation=0.3,
             threshold_suspension=0.0,
+            collapse_irreversible=ctx.get(
+                "headroom_collapse_irreversible", False,
+            ),
         )
 
     def _check_revocation_conditions(
@@ -518,9 +525,15 @@ class ContinuationRevalidator:
                 promotion_reason="irreversible support loss",
             ), ClaimStatus.REVOKED
 
-        # HALTED: durable when headroom has irreversibly collapsed.
+        # HALTED: durable only when headroom has irreversibly collapsed.
+        # A halt from recoverable conditions (e.g. unsatisfied evidence
+        # that could still arrive) is receipt-only; the continuation's
+        # lawful next-standing hasn't durably changed.
         if boundary_status == ClaimStatus.HALTED:
-            if headroom_state.remaining <= headroom_state.threshold_suspension:
+            if (
+                headroom_state.remaining <= headroom_state.threshold_suspension
+                and headroom_state.collapse_irreversible
+            ):
                 return DurableConsequence(
                     has_durable_halt=True,
                     promotion_reason="headroom irreversibly collapsed",
@@ -528,9 +541,14 @@ class ContinuationRevalidator:
             # Runtime interruption without irreversible collapse → receipt-only.
             return None, ClaimStatus.LIVE
 
-        # NARROWED: durable when scope reduction is not re-openable.
+        # NARROWED: durable only when scope reduction is itself durable
+        # (not re-openable once the immediate boundary condition resolves).
+        # Reopening test: if the condition resolves and standing/burden/
+        # authority/continuity basis are unchanged, can prior width reopen?
+        #   Yes → receipt-level narrowing (provisional)
+        #   No  → durable narrowing promotable to state
         if boundary_status == ClaimStatus.NARROWED:
-            if scope.restricted_action_classes:
+            if scope.restricted_action_classes and scope.restrictions_durable:
                 return DurableConsequence(
                     has_durable_scope_reduction=True,
                     promotion_reason="durable scope restriction present",
