@@ -11,7 +11,7 @@ export default function CommandDashboardPage(): JSX.Element {
     <div className="space-y-6">
       <LiveEventStream />
       <MissionPage
-        title={t("コマンドダッシュボード", "Command Dashboard")}
+        title="Command Dashboard"
         subtitle={t(
           "ミッション全体の健全性を俯瞰監視し、異常シグナルを即時に検出します。",
           "Monitor overall mission health at a glance and detect abnormal signals immediately.",
