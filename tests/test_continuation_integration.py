@@ -325,10 +325,10 @@ class TestDivergenceObservability:
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         cases_that_diverge = [
-            # NARROWED: durable scope reduction → state NARROWED
+            # NARROWED: receipt-first → state LIVE (restrictions not durable)
             {
                 "context": {"restricted_actions": ["x"]},
-                "expect_state": ClaimStatus.NARROWED,
+                "expect_state": ClaimStatus.LIVE,
                 "expect_boundary": "narrowed",
             },
             # DEGRADED: receipt-first → state LIVE

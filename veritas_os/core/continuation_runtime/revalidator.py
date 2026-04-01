@@ -165,6 +165,7 @@ class ContinuationRevalidator:
             scope=scope,
             headroom_state=headroom_state,
             revocation_conditions=revocation_conditions,
+            prior_status=lineage.current_claim_status,
         )
 
         # 6. Build snapshot (durable standing only)
@@ -371,10 +372,17 @@ class ContinuationRevalidator:
     def _evaluate_headroom(
         self, burden_state: BurdenState, condition: PresentCondition,
     ) -> HeadroomState:
-        """Derive headroom from burden state.
+        """Derive headroom from burden state and present conditions.
 
         Headroom = how much margin remains before burden thresholds
-        are breached.
+        are breached.  ``remaining`` is derived from
+        ``burden_state.current_level``.
+
+        Additionally reads an explicit irreversibility marker
+        (``headroom_collapse_irreversible``) from ``condition.context``.
+        When True the headroom collapse is treated as irreversible,
+        which is the prerequisite for promoting a HALTED boundary
+        outcome from receipt-only to durable state.
         """
         remaining = burden_state.current_level
         ctx = condition.context or {}
@@ -504,6 +512,7 @@ class ContinuationRevalidator:
         scope: Scope,
         headroom_state: HeadroomState,
         revocation_conditions: List[RevocationCondition],
+        prior_status: ClaimStatus = ClaimStatus.LIVE,
     ) -> Tuple[Optional[DurableConsequence], ClaimStatus]:
         """Decide whether a boundary outcome has durable state consequence.
 
@@ -529,7 +538,14 @@ class ContinuationRevalidator:
         # A halt from recoverable conditions (e.g. unsatisfied evidence
         # that could still arrive) is receipt-only; the continuation's
         # lawful next-standing hasn't durably changed.
+        # Terminal carry-forward: if prior status was already HALTED the
+        # halt was already deemed durable in a prior pass — honour it.
         if boundary_status == ClaimStatus.HALTED:
+            if prior_status == ClaimStatus.HALTED:
+                return DurableConsequence(
+                    has_durable_halt=True,
+                    promotion_reason="terminal halt carried forward",
+                ), ClaimStatus.HALTED
             if (
                 headroom_state.remaining <= headroom_state.threshold_suspension
                 and headroom_state.collapse_irreversible

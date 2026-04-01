@@ -66,11 +66,11 @@ class TestReceiptFirstBoundary:
         assert receipt.reopening_eligible is True
 
     # ------------------------------------------------------------------
-    # HALTED: receipt-first, durable when headroom collapsed
+    # HALTED: receipt-first, durable only when collapse is irreversible
     # ------------------------------------------------------------------
 
     def test_halted_is_receipt_first_and_durable_when_headroom_collapsed(self):
-        """ヘッドルーム崩壊時にレシートと状態の両方で停止（永続的停止）となることを検証する。"""
+        """不可逆ヘッドルーム崩壊時にレシートと状態の両方で停止（永続的停止）となることを検証する。"""
         rv = self._make_revalidator()
         lineage = self._make_lineage()
         # Set required_evidence with none satisfied → current_level=0.0 → headroom=0.0
@@ -117,7 +117,7 @@ class TestReceiptFirstBoundary:
         assert snap.durable_consequence is None
 
     # ------------------------------------------------------------------
-    # NARROWED: receipt-first, durable when scope restrictions present
+    # NARROWED: receipt-first, durable only when restrictions_durable=True
     # ------------------------------------------------------------------
 
     def test_narrowed_receipt_first_with_durable_scope_reduction(self):

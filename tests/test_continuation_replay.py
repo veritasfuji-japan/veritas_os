@@ -55,21 +55,22 @@ class TestReplayStepPassClaimNarrowed:
     """Step passes but claim is narrowed due to scope restriction."""
 
     def test_narrowed_transition(self):
-        """LIVEからNARROWEDへの遷移を検証する。"""
+        """レシートでNARROWED記録、状態はレシート優先でLIVE維持を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         results = _run_chain([
             {"context": {}},  # step 0: LIVE
-            {"context": {"restricted_actions": ["execute"]}},  # step 1: NARROWED
+            {"context": {"restricted_actions": ["execute"]}},  # step 1: receipt NARROWED
         ])
 
         _, snap0, rcpt0 = results[0]
         _, snap1, rcpt1 = results[1]
 
         assert snap0.claim_status == ClaimStatus.LIVE
-        assert snap1.claim_status == ClaimStatus.NARROWED
+        # Receipt records narrowing; state stays LIVE (not durable)
         assert rcpt1.revalidation_status == RevalidationStatus.NARROWED
+        assert snap1.claim_status == ClaimStatus.LIVE
         assert rcpt1.divergence_flag is True
 
     def test_receipt_chain_linkage(self):
@@ -155,10 +156,10 @@ class TestReplayStepPassClaimHalted:
     """Step passes but claim is halted (headroom collapsed)."""
 
     def test_halted_transition(self):
-        """ヘッドルーム崩壊によるHALTED遷移を検証する。"""
+        """レシートでHALTED記録、不可逆マーカーなしで状態はLIVE維持を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
-        # Step 0 establishes zero burden → HALTED
+        # Step 0 establishes zero burden → receipt HALTED, state LIVE
         results = _run_chain([
             {
                 "context": {
@@ -166,18 +167,19 @@ class TestReplayStepPassClaimHalted:
                     "satisfied_evidence": [],
                     "burden_current_level": 0.0,
                 },
-            },  # step 0: HALTED (0/3 → headroom 0.0)
-            {"context": {}},  # step 1: still HALTED (terminal)
+            },  # step 0: receipt HALTED (0/3 → headroom 0.0, reversible)
+            {"context": {}},  # step 1: LIVE (prior was LIVE, not terminal)
         ])
 
         _, snap0, rcpt0 = results[0]
         _, snap1, rcpt1 = results[1]
-        assert snap0.claim_status == ClaimStatus.HALTED
-        assert snap1.claim_status == ClaimStatus.HALTED
+        # Receipt records halt; state stays LIVE (reversible collapse)
+        assert snap0.claim_status == ClaimStatus.LIVE
+        assert snap1.claim_status == ClaimStatus.LIVE
         assert rcpt0.should_refuse_before_effect is True
 
     def test_halted_is_terminal(self):
-        """一度停止すると良好な条件でも停止状態のままであることを検証する。"""
+        """不可逆停止の場合、良好な条件でも停止状態のままであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
@@ -186,12 +188,15 @@ class TestReplayStepPassClaimHalted:
                     "required_evidence": ["e1", "e2", "e3"],
                     "satisfied_evidence": [],
                     "burden_current_level": 0.0,
+                    "headroom_collapse_irreversible": True,
                 },
             },
             {"context": {}},  # good conditions, but halted is terminal
         ])
 
+        _, snap0, _ = results[0]
         _, snap1, _ = results[1]
+        assert snap0.claim_status == ClaimStatus.HALTED
         assert snap1.claim_status == ClaimStatus.HALTED
 
 
@@ -292,19 +297,19 @@ class TestReplayReceiptChainContinuityGrounding:
             assert rcpt.prior_decision_continuity_ref == "allow"
 
     def test_divergence_progressive_weakening(self):
-        """チェーンの段階的弱体化を検証する: 状態は永続的立場、レシートは境界進行を示す。"""
+        """チェーンの段階的弱体化を検証する: レシートは境界進行を示し、状態はレシート優先でLIVE維持。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
 
         results = _run_chain([
             {"context": {}},  # LIVE
-            {"context": {"restricted_actions": ["x"]}},  # NARROWED (durable)
+            {"context": {"restricted_actions": ["x"]}},  # receipt NARROWED (not durable)
             {"context": {"escalation_required": True}},  # ESCALATED (receipt-only)
         ])
 
-        # State (durable standing)
+        # State (durable standing): both NARROWED and ESCALATED are receipt-only
         statuses = [snap.claim_status for _, snap, _ in results]
         assert statuses[0] == ClaimStatus.LIVE
-        assert statuses[1] == ClaimStatus.NARROWED  # durable scope reduction
+        assert statuses[1] == ClaimStatus.LIVE      # narrowing not marked durable
         assert statuses[2] == ClaimStatus.LIVE      # escalated is receipt-only
 
         # Receipt boundary outcomes

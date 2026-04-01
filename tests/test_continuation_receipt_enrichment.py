@@ -136,12 +136,13 @@ class TestHaltClassification:
     """Halt classification categories."""
 
     def test_durable_halt_classified_as_durable_state_transformation(self):
-        """ヘッドルーム崩壊がdurable_state_transformationに分類されることを検証する。"""
+        """不可逆ヘッドルーム崩壊がdurable_state_transformationに分類されることを検証する。"""
         rv = _make_revalidator()
         lineage = _make_lineage()
         condition = _make_condition(context={
             "required_evidence": ["doc_a"],
             "satisfied_evidence": [],
+            "headroom_collapse_irreversible": True,
         })
         _, receipt = rv.revalidate(lineage, condition)
         assert receipt.halt_classification == "durable_state_transformation"
