@@ -105,16 +105,19 @@ class TestGolden2BurdenHeadroomCollapse:
     and headroom has collapsed to zero."""
 
     def test_halted_due_to_headroom_collapse(self):
-        """ヘッドルーム崩壊により停止状態になることを検証する。"""
+        """ヘッドルーム崩壊時にレシートでHALTED記録、不可逆マーカーなしで状態はLIVE維持を検証する。"""
         _, snap, rcpt = _run_golden({
             "required_evidence": ["e1", "e2", "e3", "e4", "e5"],
             "satisfied_evidence": [],
             "burden_current_level": 0.0,
         })
 
-        assert snap.claim_status == ClaimStatus.HALTED
+        # Receipt records the halt (receipt-first); state stays LIVE
+        # because collapse is not marked irreversible.
+        assert rcpt.revalidation_status == RevalidationStatus.HALTED
         assert rcpt.divergence_flag is True
         assert rcpt.should_refuse_before_effect is True
+        assert snap.claim_status == ClaimStatus.LIVE
 
     def test_burden_state_reflects_unmet_evidence(self):
         """負担状態が未充足エビデンスを反映していることを検証する。"""
@@ -163,9 +166,12 @@ class TestGolden3ScopeNarrowing:
             "restricted_actions": ["execute", "deploy"],
         })
 
-        assert snap.claim_status == ClaimStatus.NARROWED
+        # Receipt records narrowing; state stays LIVE because
+        # restrictions are not marked durable.
+        assert rcpt.revalidation_status == RevalidationStatus.NARROWED
         assert rcpt.divergence_flag is True
         assert rcpt.should_refuse_before_effect is False  # narrowed, not halted
+        assert snap.claim_status == ClaimStatus.LIVE
 
     def test_scope_reflects_restrictions(self):
         """スコープが制限を正しく反映していることを検証する。"""
@@ -224,14 +230,15 @@ class TestGolden5Halted:
     """The local step passes, but headroom is at threshold_suspension."""
 
     def test_halted_with_zero_headroom(self):
-        """ヘッドルームゼロで停止状態になることを検証する。"""
+        """ヘッドルームゼロでレシートはHALTED、不可逆マーカーなしで状態はLIVE維持を検証する。"""
         _, snap, rcpt = _run_golden({
             "required_evidence": ["e1", "e2", "e3"],
             "satisfied_evidence": [],
             "burden_current_level": 0.0,
         })
 
-        assert snap.claim_status == ClaimStatus.HALTED
+        # Receipt records halt; state stays LIVE (reversible collapse).
+        assert snap.claim_status == ClaimStatus.LIVE
         assert rcpt.revalidation_status == RevalidationStatus.HALTED
         assert rcpt.revalidation_outcome == RevalidationOutcome.HALTED
         assert rcpt.should_refuse_before_effect is True
@@ -363,10 +370,10 @@ class TestGolden7ReceiptChainContinuityWeakening:
         """状態が永続的な立場を示し、レシートが境界の進行を示すことを検証する。"""
         _, results = self._run_weakening_chain()
 
-        # State (durable standing): ESCALATED is receipt-only → LIVE
+        # State (durable standing): NARROWED and ESCALATED are receipt-only → LIVE
         state_statuses = [snap.claim_status for snap, _ in results]
         assert state_statuses[0] == ClaimStatus.LIVE
-        assert state_statuses[1] == ClaimStatus.NARROWED  # durable scope reduction
+        assert state_statuses[1] == ClaimStatus.LIVE      # narrowing not durable
         assert state_statuses[2] == ClaimStatus.LIVE      # escalated is receipt-only
         assert state_statuses[3] == ClaimStatus.REVOKED   # irreversible
 

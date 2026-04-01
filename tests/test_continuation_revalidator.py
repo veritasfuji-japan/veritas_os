@@ -146,8 +146,9 @@ class TestContinuationRevalidator:
         assert receipt.should_refuse_before_effect is True
 
     def test_scope_restriction_yields_narrowed(self):
-        """制限アクションクラスが存在する場合にNARROWEDとなることを検証する。"""
+        """制限アクションクラスが存在する場合にレシートでNARROWED、状態はレシート優先でLIVEを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         rv = self._make_revalidator()
         lineage = self._make_lineage()
@@ -157,8 +158,11 @@ class TestContinuationRevalidator:
 
         snapshot, receipt = rv.revalidate(lineage, condition)
 
-        assert snapshot.claim_status == ClaimStatus.NARROWED
+        # Receipt records boundary outcome
+        assert receipt.revalidation_status == RevalidationStatus.NARROWED
         assert receipt.divergence_flag is True
+        # State stays LIVE: restrictions are not marked durable
+        assert snapshot.claim_status == ClaimStatus.LIVE
 
     def test_escalation_required_yields_escalated(self):
         """スコープのescalation_requiredによりレシートでESCALATEDとなることを検証する（レシート優先）。"""
@@ -328,8 +332,9 @@ class TestContinuationRevalidator:
             ContinuationRevalidator._assert_coherence(snap, rcpt)
 
     def test_divergence_observable_when_claim_weakened(self):
-        """claim_statusがLIVE以外の場合に乖離フラグがTrueであることを検証する。"""
+        """境界がLIVE以外の場合にレシートの乖離フラグがTrueであることを検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
+        from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         rv = self._make_revalidator()
         lineage = self._make_lineage()
@@ -339,7 +344,8 @@ class TestContinuationRevalidator:
 
         snapshot, receipt = rv.revalidate(lineage, condition)
 
-        assert snapshot.claim_status != ClaimStatus.LIVE
+        # Receipt boundary is NARROWED (divergence from LIVE)
+        assert receipt.revalidation_status == RevalidationStatus.NARROWED
         assert receipt.divergence_flag is True
 
 
@@ -1046,16 +1052,19 @@ class TestClaimStatusConsistency:
         assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_narrowed_consistency(self):
-        """NARROWED状態でのスナップショット・レシート・リネージュの整合性を検証する。"""
+        """NARROWED: レシート優先境界で状態はLIVE維持（永続マーカーなし）の整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
         lineage, snap, rcpt = self._run(
             context={"restricted_actions": ["execute"]},
         )
-        assert snap.claim_status == ClaimStatus.NARROWED
+        # Receipt carries the boundary outcome
         assert rcpt.revalidation_status == RevalidationStatus.NARROWED
-        assert lineage.current_claim_status == ClaimStatus.NARROWED
+        assert rcpt.boundary_outcome == "narrowed"
+        # State: receipt-first (restrictions not marked durable)
+        assert snap.claim_status == ClaimStatus.LIVE
+        assert lineage.current_claim_status == ClaimStatus.LIVE
 
     def test_degraded_consistency(self):
         """DEGRADED: レシート優先境界で状態はLIVEのままであることを検証する。"""
@@ -1106,7 +1115,7 @@ class TestClaimStatusConsistency:
         assert lineage.revoked_at is not None
 
     def test_halted_consistency(self):
-        """ヘッドルーム崩壊によるHALTEDの整合性を検証する。"""
+        """HALTED: レシート優先境界で状態はLIVE維持（不可逆マーカーなし）の整合性を検証する。"""
         from veritas_os.core.continuation_runtime.lineage import ClaimStatus
         from veritas_os.core.continuation_runtime.receipt import RevalidationStatus
 
@@ -1117,6 +1126,9 @@ class TestClaimStatusConsistency:
                 "burden_current_level": 0.0,
             },
         )
-        assert snap.claim_status == ClaimStatus.HALTED
+        # Receipt carries the boundary outcome
         assert rcpt.revalidation_status == RevalidationStatus.HALTED
-        assert lineage.current_claim_status == ClaimStatus.HALTED
+        assert rcpt.boundary_outcome == "halted"
+        # State: receipt-first (collapse not marked irreversible)
+        assert snap.claim_status == ClaimStatus.LIVE
+        assert lineage.current_claim_status == ClaimStatus.LIVE
