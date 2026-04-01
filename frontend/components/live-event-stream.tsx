@@ -412,7 +412,7 @@ export function LiveEventStream(): JSX.Element {
                   <button
                     type="button"
                     onClick={() => toggle(setMutedIds, event.id)}
-                    aria-label={tk("mute")}
+                    aria-label={t(`${EVENT_TYPE_LABEL[event.type]} をミュート`, `Mute ${EVENT_TYPE_LABEL[event.type]}`)}
                     className="rounded border border-border px-2 py-1"
                   >
                     {tk("mute")}
