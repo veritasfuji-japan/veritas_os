@@ -13,7 +13,7 @@ test.describe("Console: decision flow", () => {
   }) => {
     await expect(page.getByText("Pipeline Operations View")).toBeVisible();
     await expect(
-      page.getByText("Start with a real decision question."),
+      page.getByText(/Start with a real decision question|実際の意思決定を問いかけましょう/),
     ).toBeVisible();
     // Evidence, FUJI, TrustLog stages visible
     await expect(page.locator("li", { hasText: "Evidence" })).toBeVisible();
@@ -42,15 +42,15 @@ test.describe("Console: decision flow", () => {
     page,
   }) => {
     // With no result, the tab area should not be visible
-    const insightsButton = page.getByRole("button", { name: "Insights" });
-    const rawButton = page.getByRole("button", { name: "Raw JSON" });
+    const insightsTab = page.getByRole("tab", { name: /Insights|インサイト/ });
+    const rawTab = page.getByRole("tab", { name: /Raw JSON|生 JSON/ });
     // These are only shown when result exists — verify placeholder instead
     await expect(
-      page.getByText("Start with a real decision question."),
+      page.getByText(/Start with a real decision question|実際の意思決定を問いかけましょう/),
     ).toBeVisible();
     // If tabs existed (with result), they would be toggleable
-    expect(await insightsButton.count()).toBe(0);
-    expect(await rawButton.count()).toBe(0);
+    expect(await insightsTab.count()).toBe(0);
+    expect(await rawTab.count()).toBe(0);
   });
 
   test("submitting query shows loading or error state", async ({ page }) => {

@@ -60,16 +60,16 @@ describe("LiveEventStream", () => {
 
     await screen.findByText(/Connected|接続済み/);
 
-    const ackButton = screen.getAllByRole("button", { name: "acknowledge" })[0];
+    const ackButton = screen.getAllByRole("button", { name: /acknowledge|確認/ })[0];
     fireEvent.click(ackButton);
-    expect(screen.getByRole("button", { name: "acknowledged" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /acknowledged|確認済み/ })).toBeInTheDocument();
 
-    const pinButton = screen.getAllByRole("button", { name: "pin" })[0];
+    const pinButton = screen.getAllByRole("button", { name: /^pin$|^ピン留め$/ })[0];
     fireEvent.click(pinButton);
-    expect(screen.getByRole("button", { name: "pinned" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "pinned" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /pinned|ピン留め済み/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /pinned|ピン留め済み/ })).toHaveAttribute("aria-pressed", "true");
 
-    const muteButton = screen.getAllByRole("button", { name: "mute" })[0];
+    const muteButton = screen.getAllByRole("button", { name: /mute|ミュート/ })[0];
     fireEvent.click(muteButton);
     expect(screen.queryByText("FUJI reject")).not.toBeInTheDocument();
   });
@@ -93,7 +93,7 @@ describe("LiveEventStream", () => {
     fireEvent.change(search, { target: { value: "" } });
     const policyCard = screen.getByText("policy update pending").closest("div.rounded-lg");
     expect(policyCard).not.toBeNull();
-    fireEvent.click(within(policyCard as HTMLElement).getByRole("button", { name: "pin" }));
+    fireEvent.click(within(policyCard as HTMLElement).getByRole("button", { name: /^pin$|^ピン留め$/ }));
 
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/governance");

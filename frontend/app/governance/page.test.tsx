@@ -150,8 +150,8 @@ describe("GovernanceControlPage", () => {
 
     fireEvent.click(screen.getByRole("switch", { name: "PII Check" }));
     expect(screen.getByText("Approval Workflow")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "approve" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "reject" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /approve|承認/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /reject|拒否/ })).toBeInTheDocument();
   });
 
   it("shows Risk Impact Analysis after load", async () => {
