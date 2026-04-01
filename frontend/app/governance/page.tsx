@@ -29,7 +29,7 @@ export default function GovernanceControlPage(): JSX.Element {
     <div className="space-y-6">
       {state.pendingConfirm ? (
         <ConfirmDialog
-          open={true}
+          open
           title={t("確認", "Confirm")}
           description={state.pendingConfirm.description}
           confirmLabel={t("確認する", "Confirm")}
