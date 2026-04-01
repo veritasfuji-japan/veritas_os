@@ -11,6 +11,10 @@ from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
 from veritas_os.api.rbac import Permission
+from veritas_os.api.schemas import (
+    GovernancePolicyResponse,
+    GovernancePolicyHistoryResponse,
+)
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -101,7 +105,11 @@ def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le
         )
 
 
-@router.get("/v1/governance/policy", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get(
+    "/v1/governance/policy",
+    response_model=GovernancePolicyResponse,
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
 def governance_get():
     """Return the current governance policy."""
     srv = _get_server()
@@ -116,7 +124,11 @@ def governance_get():
         )
 
 
-@router.put("/v1/governance/policy", dependencies=[Depends(require_permission(Permission.governance_write))])
+@router.put(
+    "/v1/governance/policy",
+    response_model=GovernancePolicyResponse,
+    dependencies=[Depends(require_permission(Permission.governance_write))],
+)
 def governance_put(body: dict):
     """Update the governance policy (partial merge)."""
     srv = _get_server()
@@ -150,7 +162,11 @@ def governance_put(body: dict):
         )
 
 
-@router.get("/v1/governance/policy/history", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get(
+    "/v1/governance/policy/history",
+    response_model=GovernancePolicyHistoryResponse,
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
 def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
     """Return recent governance policy change history (newest first)."""
     srv = _get_server()

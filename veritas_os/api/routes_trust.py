@@ -10,7 +10,12 @@ from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
 from veritas_os.api.rbac import Permission
-from veritas_os.api.schemas import TrustFeedbackRequest
+from veritas_os.api.schemas import (
+    TrustFeedbackRequest,
+    TrustFeedbackResponse,
+    TrustLogsResponse,
+    RequestLogResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +60,11 @@ def _prov_actor_for_entry(entry: Dict[str, Any]) -> str:
 # Trust Log read endpoints
 # ------------------------------------------------------------------
 
-@router.get("/v1/trust/logs", dependencies=[Depends(require_permission(Permission.trust_log_read))])
+@router.get(
+    "/v1/trust/logs",
+    response_model=TrustLogsResponse,
+    dependencies=[Depends(require_permission(Permission.trust_log_read))],
+)
 def trust_logs(cursor: Optional[str] = None, limit: int = 50):
     """TrustLog をページング取得する。"""
     srv = _get_server()
@@ -105,7 +114,11 @@ def trust_prov_export(request_id: str) -> Dict[str, Any]:
         )
 
 
-@router.get("/v1/trust/{request_id}", dependencies=[Depends(require_permission(Permission.trust_log_read))])
+@router.get(
+    "/v1/trust/{request_id}",
+    response_model=RequestLogResponse,
+    dependencies=[Depends(require_permission(Permission.trust_log_read))],
+)
 def trust_log_by_request(request_id: str):
     """request_id 単位で TrustLog を取得する。"""
     srv = _get_server()
@@ -116,14 +129,18 @@ def trust_log_by_request(request_id: str):
 # Trust Feedback
 # ------------------------------------------------------------------
 
-@router.post("/v1/trust/feedback", dependencies=[Depends(require_permission(Permission.trust_log_read))])
+@router.post(
+    "/v1/trust/feedback",
+    response_model=TrustFeedbackResponse,
+    dependencies=[Depends(require_permission(Permission.trust_log_read))],
+)
 def trust_feedback(body: TrustFeedbackRequest):
     """人間からのフィードバックを trust_log に記録する簡易API。"""
     srv = _get_server()
     vc = srv.get_value_core()
     if vc is None:
         logger.warning("trust_feedback: value_core unavailable: %s", srv._value_core_state.err)
-        return {"status": "error", "detail": "value_core unavailable"}
+        return {"ok": False, "error": "value_core unavailable"}
 
     try:
         uid = str(body.user_id or "anon")[:500]
@@ -144,13 +161,13 @@ def trust_feedback(body: TrustFeedbackRequest):
                 "trustlog.appended",
                 {"kind": "feedback", "user_id": uid, "source": source},
             )
-            return {"status": "ok", "user_id": uid}
+            return {"ok": True, "user_id": uid}
 
-        return {"status": "error", "detail": "value_core.append_trust_log not found"}
+        return {"ok": False, "error": "value_core.append_trust_log not found"}
 
     except Exception as e:
         logger.error("[Trust] feedback failed: %s", e)
-        return {"status": "error", "detail": "internal error in trust_feedback"}
+        return {"ok": False, "error": "internal error in trust_feedback"}
 
 
 # ------------------------------------------------------------------
