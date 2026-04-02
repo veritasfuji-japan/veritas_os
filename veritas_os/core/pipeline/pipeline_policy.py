@@ -69,7 +69,14 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
     governance["compiled_policy"] = decision
 
     outcome = decision.get("final_outcome")
-    if not bool((ctx.context or {}).get("policy_runtime_enforce", False)):
+    enforce = (ctx.context or {}).get("policy_runtime_enforce")
+    if enforce is None:
+        enforce = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    if not bool(enforce):
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(
                 "compiled policy outcome=%s observed but not enforced "

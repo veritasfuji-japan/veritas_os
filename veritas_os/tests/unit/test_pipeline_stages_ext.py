@@ -7456,6 +7456,154 @@ def test_pipeline_bridge_warns_when_not_enforced(
     ) in caplog.text
 
 
+def test_pipeline_bridge_enforcement_deny_sets_rejected(tmp_path: Path) -> None:
+    """Enforcement: deny outcome sets fuji_dict status to rejected."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    ctx = PipelineContext(
+        query="use external tool",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            "policy_runtime_enforce": True,
+            "domain": "security",
+            "route": "/api/tools",
+            "actor": "kernel",
+            "tool": {"external": True, "name": "unapproved_webhook"},
+            "data": {"classification": "restricted"},
+            "evidence": {"available": ["data_classification_label"]},
+            "approvals": {"approved_by": ["security_officer"]},
+        },
+    )
+
+    stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "rejected"
+    assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
+
+
+def test_pipeline_bridge_enforcement_escalate_sets_modify(tmp_path: Path) -> None:
+    """Enforcement: escalate outcome sets fuji_dict status to modify."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    escalate_policy = RuntimePolicy(
+        policy_id="policy.test.escalate",
+        version="1",
+        title="Escalate",
+        description="Escalate for test.",
+        effective_date=None,
+        scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
+        conditions=[{"field": "risk.level", "operator": "eq", "value": "medium"}],
+        requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
+        constraints=[],
+        outcome={"decision": "escalate", "reason": "Anomaly detected."},
+        obligations=["notify_governance_channel"],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.test.escalate",
+        version="1",
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-02T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[escalate_policy],
+    )
+
+    from unittest.mock import patch
+
+    with patch(
+        "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
+        return_value=bundle,
+    ):
+        ctx = PipelineContext(
+            query="anomaly check",
+            context={
+                "compiled_policy_bundle_dir": "/mock/bundle",
+                "policy_runtime_enforce": True,
+                "domain": "governance",
+                "route": "/api/decide",
+                "actor": "planner",
+                "risk": {"level": "medium"},
+            },
+        )
+
+        stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "modify"
+    assert "compiled_policy:escalate" in ctx.fuji_dict["reasons"]
+
+
+def test_pipeline_bridge_enforcement_require_human_review_sets_modify(
+    tmp_path: Path,
+) -> None:
+    """Enforcement: require_human_review outcome sets fuji_dict status to modify."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "high_risk_route_requires_human_review.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    ctx = PipelineContext(
+        query="high risk decision",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            "policy_runtime_enforce": True,
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "planner",
+            "risk": {"level": "critical"},
+            "runtime": {"auto_execute": False},
+            "evidence": {"available": ["risk_assessment", "impact_assessment"]},
+            "approvals": {"approved_by": ["governance_officer", "safety_reviewer"]},
+        },
+    )
+
+    stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "modify"
+    assert "compiled_policy:require_human_review" in ctx.fuji_dict["reasons"]
+
+
+def test_pipeline_bridge_env_var_enforcement_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """VERITAS_POLICY_RUNTIME_ENFORCE env var is used when context flag is absent."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    monkeypatch.setenv("VERITAS_POLICY_RUNTIME_ENFORCE", "true")
+
+    ctx = PipelineContext(
+        query="use external tool",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            # policy_runtime_enforce NOT set — env var should be used
+            "domain": "security",
+            "route": "/api/tools",
+            "actor": "kernel",
+            "tool": {"external": True, "name": "unapproved_webhook"},
+            "data": {"classification": "restricted"},
+            "evidence": {"available": ["data_classification_label"]},
+            "approvals": {"approved_by": ["security_officer"]},
+        },
+    )
+
+    stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "rejected"
+    assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
+
+
 # ============================================================
 # Source: test_pipeline_web_adapter.py
 # ============================================================
