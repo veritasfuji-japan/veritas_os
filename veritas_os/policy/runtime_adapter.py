@@ -23,6 +23,7 @@ class RuntimePolicy:
     version: str
     title: str
     description: str
+    effective_date: str | None
     scope: Dict[str, List[str]]
     conditions: List[Dict[str, Any]]
     constraints: List[Dict[str, Any]]
@@ -74,6 +75,7 @@ def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
         version=canonical_ir["version"],
         title=canonical_ir["title"],
         description=canonical_ir["description"],
+        effective_date=canonical_ir.get("effective_date"),
         scope={
             "domains": list(canonical_ir["scope"]["domains"]),
             "routes": list(canonical_ir["scope"]["routes"]),

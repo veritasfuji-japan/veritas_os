@@ -290,6 +290,7 @@ def test_multiple_policy_precedence_resolution() -> None:
             version="1",
             title="Allow",
             description="Allow",
+            effective_date=None,
             scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
             conditions=[{"field": "risk.level", "operator": "in", "value": ["high", "critical"]}],
             requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
@@ -305,6 +306,7 @@ def test_multiple_policy_precedence_resolution() -> None:
             version="1",
             title="Escalate",
             description="Escalate",
+            effective_date=None,
             scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
             conditions=[{"field": "risk.level", "operator": "in", "value": ["high", "critical"]}],
             requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
@@ -320,6 +322,7 @@ def test_multiple_policy_precedence_resolution() -> None:
             version="1",
             title="Deny",
             description="Deny",
+            effective_date=None,
             scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
             conditions=[{"field": "risk.level", "operator": "in", "value": ["high", "critical"]}],
             requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
@@ -354,3 +357,87 @@ def test_multiple_policy_precedence_resolution() -> None:
     assert len(decision["triggered_policies"]) == 3
     assert "notify_governance_channel" in decision["obligations"]
     assert "emit_security_alert" in decision["obligations"]
+
+
+def test_future_effective_date_policy_is_skipped() -> None:
+    """Policies whose effective_date is in the future must not trigger."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    future_policy = RuntimePolicy(
+        policy_id="policy.future.deny",
+        version="1",
+        title="Future deny",
+        description="Should not fire yet.",
+        effective_date="2099-01-01",
+        scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
+        conditions=[{"field": "risk.level", "operator": "eq", "value": "high"}],
+        requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
+        constraints=[],
+        outcome={"decision": "deny", "reason": "Future policy."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.future.deny",
+        version="1",
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-02T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[future_policy],
+    )
+    context = {
+        "domain": "governance",
+        "route": "/api/decide",
+        "actor": "planner",
+        "risk": {"level": "high"},
+    }
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    assert decision["final_outcome"] == "allow"
+    assert decision["triggered_policies"] == []
+
+
+def test_past_effective_date_policy_triggers_normally() -> None:
+    """Policies whose effective_date is today or past must trigger normally."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    past_policy = RuntimePolicy(
+        policy_id="policy.past.deny",
+        version="1",
+        title="Active deny",
+        description="Already effective.",
+        effective_date="2020-01-01",
+        scope={"domains": ["governance"], "routes": ["/api/decide"], "actors": ["planner"]},
+        conditions=[{"field": "risk.level", "operator": "eq", "value": "high"}],
+        requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
+        constraints=[],
+        outcome={"decision": "deny", "reason": "Past policy."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.past.deny",
+        version="1",
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-02T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[past_policy],
+    )
+    context = {
+        "domain": "governance",
+        "route": "/api/decide",
+        "actor": "planner",
+        "risk": {"level": "high"},
+    }
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    assert decision["final_outcome"] == "deny"
+    assert "policy.past.deny" in decision["triggered_policies"]

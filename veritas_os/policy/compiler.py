@@ -13,6 +13,7 @@ from .emit import write_stable_json
 from .explain import build_explanation_metadata
 from .hash import semantic_policy_hash
 from .manifest import build_manifest
+from .models import PolicyCompilationError
 from .normalize import to_canonical_ir
 from .schema import load_and_validate_policy
 
@@ -58,36 +59,42 @@ def compile_policy_to_bundle(
 
     policy_dir = out_dir / canonical_ir["policy_id"] / canonical_ir["version"]
     bundle_dir = policy_dir / "bundle"
-    bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    canonical_path = bundle_dir / "compiled" / "canonical_ir.json"
-    explain_path = bundle_dir / "compiled" / "explain.json"
-    unsigned_path = bundle_dir / "signatures" / "UNSIGNED"
+    try:
+        bundle_dir.mkdir(parents=True, exist_ok=True)
 
-    write_stable_json(canonical_path, canonical_ir)
-    explanation_metadata: Dict[str, Any] = build_explanation_metadata(canonical_ir)
-    write_stable_json(explain_path, explanation_metadata)
-    unsigned_path.parent.mkdir(parents=True, exist_ok=True)
-    unsigned_path.write_text(
-        "signature pending for future signing workflow\n",
-        encoding="utf-8",
-    )
+        canonical_path = bundle_dir / "compiled" / "canonical_ir.json"
+        explain_path = bundle_dir / "compiled" / "explain.json"
+        unsigned_path = bundle_dir / "signatures" / "UNSIGNED"
 
-    bundle_files = collect_bundle_files(bundle_dir)
-    manifest = build_manifest(
-        canonical_ir,
-        semantic_hash=semantic_hash,
-        compiler_version=compiler_version,
-        compiled_at=compiled_at or _utc_now_iso8601(),
-        source_files=[source_path.as_posix()],
-        bundle_files=bundle_files,
-    )
-    manifest_path = bundle_dir / "manifest.json"
-    write_stable_json(manifest_path, manifest)
-    signature_path = bundle_dir / "manifest.sig"
-    signature_path.write_text(_manifest_signature_hex(manifest_path) + "\n", encoding="utf-8")
+        write_stable_json(canonical_path, canonical_ir)
+        explanation_metadata: Dict[str, Any] = build_explanation_metadata(canonical_ir)
+        write_stable_json(explain_path, explanation_metadata)
+        unsigned_path.parent.mkdir(parents=True, exist_ok=True)
+        unsigned_path.write_text(
+            "signature pending for future signing workflow\n",
+            encoding="utf-8",
+        )
 
-    archive_path = create_bundle_archive(bundle_dir)
+        bundle_files = collect_bundle_files(bundle_dir)
+        manifest = build_manifest(
+            canonical_ir,
+            semantic_hash=semantic_hash,
+            compiler_version=compiler_version,
+            compiled_at=compiled_at or _utc_now_iso8601(),
+            source_files=[source_path.as_posix()],
+            bundle_files=bundle_files,
+        )
+        manifest_path = bundle_dir / "manifest.json"
+        write_stable_json(manifest_path, manifest)
+        signature_path = bundle_dir / "manifest.sig"
+        signature_path.write_text(_manifest_signature_hex(manifest_path) + "\n", encoding="utf-8")
+
+        archive_path = create_bundle_archive(bundle_dir)
+    except OSError as exc:
+        raise PolicyCompilationError(
+            f"failed to write bundle artifacts: {exc}"
+        ) from exc
 
     return CompileResult(
         bundle_dir=bundle_dir,
