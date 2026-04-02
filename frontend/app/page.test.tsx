@@ -6,6 +6,6 @@ describe("CommandDashboardPage", () => {
     render(<CommandDashboardPage />);
 
     expect(screen.getByText("Command Dashboard")).toBeInTheDocument();
-    expect(screen.getByText("Uptime Lattice")).toBeInTheDocument();
+    expect(screen.getByText("稼働格子")).toBeInTheDocument();
   });
 });

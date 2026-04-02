@@ -16,7 +16,11 @@ export default function CommandDashboardPage(): JSX.Element {
           "ミッション全体の健全性を俯瞰監視し、異常シグナルを即時に検出します。",
           "Monitor overall mission health at a glance and detect abnormal signals immediately.",
         )}
-        chips={["Uptime Lattice", "Signal Watch", "Anomaly Queue"]}
+        chips={[
+          t("稼働格子", "Uptime Lattice"),
+          t("シグナル監視", "Signal Watch"),
+          t("異常キュー", "Anomaly Queue"),
+        ]}
       />
     </div>
   );
