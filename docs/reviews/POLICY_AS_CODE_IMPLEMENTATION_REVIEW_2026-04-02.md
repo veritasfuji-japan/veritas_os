@@ -244,8 +244,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 **所見:**
 - `CompileResult` が `frozen=True` で出力も immutable。
 - `_utc_now_iso8601()` を外部注入可能（`--compiled-at`）にすることで再現可能ビルドを実現。
-- エラーハンドリングは `PolicyValidationError` のみで、ファイル I/O エラーは伝播する設計。
-  これは CLI ユースケースでは妥当だが、API 連携時には追加のエラーラッピングが望ましい。
+- ✅ ~~エラーハンドリングは `PolicyValidationError` のみで、ファイル I/O エラーは伝播する設計。~~ → `PolicyCompilationError`（`RuntimeError` 派生）でファイル I/O エラーをラップ。API 連携時にも構造化されたエラー応答が可能。
 
 ---
 
@@ -332,7 +331,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 ---
 
-### 3.8 ポリシー評価エンジン（`evaluator.py` — 311行）
+### 3.8 ポリシー評価エンジン（`evaluator.py` — 322行）
 
 **設計評価: ◎（本レビューの核心）**
 
@@ -342,6 +341,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 ```
 各ポリシーに対して:
+  0. _is_effective(policy)              ← effective_date が今日以前かチェック（将来日付はスキップ）
   1. scope_matches(policy, context)    ← domain/route/actor の一致判定
   2. conditions 全一致チェック          ← 「いつ発火するか」
   3. constraints 全一致チェック         ← 「追加ガード条件」
@@ -538,13 +538,13 @@ python -m veritas_os.scripts.compile_policy \
 
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
-| `test_policy_compiler.py` | 7 | 141 | コンパイル成功/失敗、成果物構造、決定性、署名 |
-| `test_policy_runtime_adapter.py` | 8 | 371 | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決 |
+| `test_policy_compiler.py` | 8 | 155 | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング |
+| `test_policy_runtime_adapter.py` | 10 | 440 | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング |
 | `test_policy_canonical_ir.py` | 8 | 197 | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性 |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
-| **合計** | **122** | **1,859** | |
+| **合計** | **125** | **1,942** | |
 
 ### 4.2 テストパターン分析
 
@@ -580,10 +580,12 @@ python -m veritas_os.scripts.compile_policy \
 | 4-eyes 検証 | ✅ | 正常/不正/重複/不足 |
 | 監査履歴 | ✅ | 追記/トリム/読み取り |
 | XSS 防御 | ✅ | HTMLタグ除去テスト |
+| effective_date フィルタリング | ✅ | 将来日付スキップ + 過去日付発火 |
+| コンパイラ I/O エラーラッピング | ✅ | OSError → PolicyCompilationError |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
-- `effective_date` が将来日付のポリシーの挙動テスト（現在は評価エンジンが `effective_date` をフィルタしない設計のため、メタデータ管理のみ）。
+- ✅ ~~`effective_date` が将来日付のポリシーの挙動テスト~~ → `effective_date` フィルタリングを evaluator に実装し、テスト2件追加済み
 - パイプライン bridge の enforcement 有効時の e2e テスト。
 
 ---
@@ -820,9 +822,9 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 85/100 | コンパイル〜評価〜パイプライン反映の全経路が動作 |
+| **機能完成度** | 87/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 85/100 | 主要パスカバー、複数ポリシー優先度解決テスト追加、全5 outcome テスト済み |
+| **テスト品質** | 87/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピングのテスト追加 |
 | **セキュリティ** | 75/100 | ReDoSガードレール済、署名は将来課題 |
 | **運用準備** | 65/100 | opt-in enforcement、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
@@ -860,6 +862,18 @@ python -m veritas_os.scripts.compile_policy \
 
 - **スキーマ検証テスト拡張**
   - `test_all_example_policies_validate` のパラメータに新規2ファイルを追加（3例→5例）
+
+- **`effective_date` フィルタリング実装**
+  - `RuntimePolicy` に `effective_date` フィールドを追加し、`adapt_canonical_ir()` で canonical IR から伝達
+  - `evaluator.py` に `_is_effective()` を追加: `effective_date` が将来日付のポリシーは評価ループからスキップ
+  - `None`（未設定）および不正な日付形式は安全側に評価（常にアクティブ）
+  - テスト2件追加: `test_future_effective_date_policy_is_skipped`, `test_past_effective_date_policy_triggers_normally`
+
+- **コンパイラ I/O エラーラッピング**
+  - `PolicyCompilationError`（`RuntimeError` 派生）を `models.py` に追加
+  - `compile_policy_to_bundle()` のファイル書き込み部分を `try/except OSError` でラップし、`PolicyCompilationError` に変換
+  - API 連携時に構造化されたエラー応答が可能に（`PolicyValidationError` とは独立したエラー型）
+  - テスト1件追加: `test_compile_wraps_io_error_as_policy_compilation_error`
 
 ---
 

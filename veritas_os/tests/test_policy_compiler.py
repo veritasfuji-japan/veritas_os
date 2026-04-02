@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from veritas_os.policy.compiler import compile_policy_to_bundle
-from veritas_os.policy.models import PolicyValidationError
+from veritas_os.policy.models import PolicyCompilationError, PolicyValidationError
 from veritas_os.policy.runtime_adapter import load_runtime_bundle
 
 EXAMPLES_DIR = Path("policies/examples")
@@ -139,3 +139,17 @@ def test_runtime_adapter_rejects_tampered_manifest_signature(tmp_path: Path) -> 
     result.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(ValueError, match="signature verification failed"):
         load_runtime_bundle(result.bundle_dir)
+
+
+def test_compile_wraps_io_error_as_policy_compilation_error(tmp_path: Path) -> None:
+    """OSError during bundle writing surfaces as PolicyCompilationError."""
+    read_only_dir = tmp_path / "readonly"
+    read_only_dir.mkdir()
+    read_only_dir.chmod(0o444)
+
+    with pytest.raises(PolicyCompilationError, match="failed to write bundle artifacts"):
+        compile_policy_to_bundle(
+            EXAMPLES_DIR / "low_risk_route_allow.yaml",
+            read_only_dir,
+            compiled_at="2026-04-02T00:00:00Z",
+        )

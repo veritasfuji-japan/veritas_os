@@ -16,6 +16,10 @@ class PolicyValidationError(ValueError):
     """Raised when a source policy fails strict validation."""
 
 
+class PolicyCompilationError(RuntimeError):
+    """Raised when a compilation I/O or artifact error occurs."""
+
+
 class OutcomeAction(str, Enum):
     """Allowed policy outcomes for governance decisions."""
 

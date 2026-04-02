@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, Dict, Iterable, List
 import re
 
@@ -177,6 +178,17 @@ def _choose_final_outcome(outcomes: Iterable[str]) -> str:
     return selected
 
 
+def _is_effective(policy: RuntimePolicy, today: date) -> bool:
+    """Return True when the policy's effective_date is today or in the past."""
+    effective = getattr(policy, "effective_date", None)
+    if not effective:
+        return True
+    try:
+        return date.fromisoformat(effective) <= today
+    except (ValueError, TypeError):
+        return True
+
+
 def evaluate_runtime_policies(
     runtime_bundle: RuntimePolicyBundle,
     context: Dict[str, Any],
@@ -193,7 +205,11 @@ def evaluate_runtime_policies(
     outcomes: List[str] = []
     policy_results: List[Dict[str, Any]] = []
 
+    today = date.today()
+
     for policy in runtime_bundle.runtime_policies:
+        if not _is_effective(policy, today):
+            continue
         applies = _scope_matches(policy, context)
         matched_conditions = [
             cond for cond in policy.conditions if _evaluate_expression(cond, context)
