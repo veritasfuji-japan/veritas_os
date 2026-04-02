@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List
+import re
 
 from .runtime_adapter import RuntimePolicy, RuntimePolicyBundle
 
@@ -14,6 +15,9 @@ OUTCOME_PRECEDENCE = {
     "halt": 3,
     "deny": 4,
 }
+
+_REGEX_MAX_PATTERN_LENGTH = 256
+_REGEX_MAX_TARGET_LENGTH = 1024
 
 
 @dataclass(frozen=True)
@@ -84,14 +88,24 @@ def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) ->
             return expected in actual
         return False
     if operator == "regex":
-        import re
-
-        return bool(
-            isinstance(actual, str)
-            and isinstance(expected, str)
-            and re.search(expected, actual)
-        )
+        return _safe_regex_search(expected, actual)
     return False
+
+
+def _safe_regex_search(expected: Any, actual: Any) -> bool:
+    """Evaluate regex expressions with lightweight guardrails for runtime safety."""
+    if not isinstance(expected, str) or not isinstance(actual, str):
+        return False
+    if len(expected) > _REGEX_MAX_PATTERN_LENGTH:
+        return False
+    if len(actual) > _REGEX_MAX_TARGET_LENGTH:
+        return False
+
+    try:
+        compiled = re.compile(expected)
+    except re.error:
+        return False
+    return compiled.search(actual) is not None
 
 
 def _scope_matches(policy: RuntimePolicy, context: Dict[str, Any]) -> bool:

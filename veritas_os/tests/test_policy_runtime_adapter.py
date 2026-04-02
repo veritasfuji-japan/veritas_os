@@ -177,3 +177,58 @@ def test_allow_and_escalate_outcomes_are_supported() -> None:
 
     assert allow_decision["final_outcome"] == "allow"
     assert escalate_decision["final_outcome"] == "escalate"
+
+
+def test_regex_condition_respects_runtime_guardrails() -> None:
+    regex_bundle = adapt_compiled_payload(
+        canonical_ir={
+            "schema_version": "1.0",
+            "policy_id": "policy.runtime.regex_guardrails",
+            "version": "1",
+            "title": "Regex guardrail",
+            "description": "Use regex condition.",
+            "effective_date": None,
+            "scope": {
+                "domains": ["governance"],
+                "routes": ["/api/decide"],
+                "actors": ["planner"],
+            },
+            "conditions": [
+                {"field": "request.text", "operator": "regex", "value": "safe"}
+            ],
+            "requirements": {
+                "required_evidence": [],
+                "required_reviewers": [],
+                "minimum_approval_count": 0,
+            },
+            "constraints": [],
+            "outcome": {"decision": "escalate", "reason": "Regex matched."},
+            "obligations": [],
+            "test_vectors": [],
+            "source_refs": [],
+            "metadata": {},
+        },
+        manifest={"schema_version": "0.1"},
+    )
+
+    allowed_decision = evaluate_runtime_policies(
+        regex_bundle,
+        {
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "planner",
+            "request": {"text": "safe input"},
+        },
+    ).to_dict()
+    oversized_input_decision = evaluate_runtime_policies(
+        regex_bundle,
+        {
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "planner",
+            "request": {"text": "a" * 1025},
+        },
+    ).to_dict()
+
+    assert allowed_decision["final_outcome"] == "escalate"
+    assert oversized_input_decision["final_outcome"] == "allow"
