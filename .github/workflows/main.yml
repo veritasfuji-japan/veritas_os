@@ -309,7 +309,12 @@ jobs:
       - name: Install Playwright browsers
         if: matrix.gate == 'e2e'
         working-directory: frontend
-        run: pnpm exec playwright install --with-deps chromium chromium-headless-shell
+        run: |
+          set -euo pipefail
+          if ! pnpm exec playwright install --with-deps chromium chromium-headless-shell; then
+            echo "Playwright --with-deps failed (apt restricted). Retrying browser-only install." >&2
+            pnpm exec playwright install chromium chromium-headless-shell
+          fi
 
       - name: Build frontend
         if: matrix.gate == 'e2e'
