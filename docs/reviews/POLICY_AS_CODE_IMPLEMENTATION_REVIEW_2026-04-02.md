@@ -122,11 +122,17 @@ evaluator は policy 単位で下記を判定する。
     - ネスト量指定子（例: `(a+)+`）を含む高コスト化しやすいパターンの拒否
     - 不正 regex（`re.error`）の安全失敗（match しない扱い）
   - 既存判定フローは維持し、`regex` 条件が危険/過大な入力の場合のみ不成立に倒す最小変更とした。
+  - pipeline bridge の非強制モードに運用警告を追加。
+    - `compiled_policy` の判定が `deny / halt / escalate / require_human_review` の場合、
+      `policy_runtime_enforce=false` で未反映のまま通過していることを warning ログで明示。
+    - FUJI の既存判定ロジックは変更せず、設定ミス検知性のみを向上させた。
 
 - **追加テスト**
   - 正常な `regex` 条件は従来どおり一致して発火すること。
   - 上限超過入力では `regex` 条件が発火せず、policy outcome が適用されないこと。
   - ネスト量指定子パターンでは `regex` 条件が発火せず、policy outcome が適用されないこと。
+  - `policy_runtime_enforce=false` かつ compiled policy の最終判定が `deny` のとき、
+    FUJI のステータスを強制変更しないこと、および warning が出ること。
 
 - **セキュリティ補足**
   - 本対応は ReDoS リスクを「低減」するものであり、完全排除ではない。
