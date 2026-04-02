@@ -2,17 +2,20 @@ import { test, expect, devices } from "@playwright/test";
 
 test.describe("i18n: language toggle", () => {
   const pages = [
-    { path: "/", heading: "Command Dashboard" },
+    { path: "/", headingJa: "コマンドダッシュボード", headingEn: "Command Dashboard" },
     { path: "/console", heading: "Decision Console" },
     { path: "/governance", heading: "Governance Control" },
     { path: "/audit", heading: "TrustLog Explorer" },
   ];
 
-  for (const { path, heading } of pages) {
+  for (const { path, heading, headingJa, headingEn } of pages) {
+    const jaHeading = headingJa ?? heading ?? "";
+    const enHeading = headingEn ?? heading ?? "";
+
     test(`${path} renders heading in both languages`, async ({ page }) => {
       await page.goto(path);
       await expect(
-        page.getByRole("heading", { name: heading }),
+        page.getByRole("heading", { name: jaHeading }),
       ).toBeVisible();
 
       // Toggle language via localStorage and reload
@@ -21,7 +24,7 @@ test.describe("i18n: language toggle", () => {
       });
       await page.reload();
       await expect(
-        page.getByRole("heading", { name: heading }),
+        page.getByRole("heading", { name: enHeading }),
       ).toBeVisible();
 
       // Switch back to Japanese
@@ -30,7 +33,7 @@ test.describe("i18n: language toggle", () => {
       });
       await page.reload();
       await expect(
-        page.getByRole("heading", { name: heading }),
+        page.getByRole("heading", { name: jaHeading }),
       ).toBeVisible();
     });
   }

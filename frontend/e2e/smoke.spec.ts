@@ -46,7 +46,9 @@ test.describe("Smoke: 3-minute demo flow", () => {
   // 4. Navigation works across all pages
   test("Navigation sidebar links work", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Command Dashboard" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /(コマンドダッシュボード|Command Dashboard)/ }),
+    ).toBeVisible();
 
     // Click Console
     await page.getByRole("link", { name: /Decision Console/i }).click();
