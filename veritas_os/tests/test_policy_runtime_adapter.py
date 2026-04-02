@@ -232,3 +232,48 @@ def test_regex_condition_respects_runtime_guardrails() -> None:
 
     assert allowed_decision["final_outcome"] == "escalate"
     assert oversized_input_decision["final_outcome"] == "allow"
+
+
+def test_regex_condition_rejects_nested_quantifier_pattern() -> None:
+    regex_bundle = adapt_compiled_payload(
+        canonical_ir={
+            "schema_version": "1.0",
+            "policy_id": "policy.runtime.regex_nested_quantifier_guardrails",
+            "version": "1",
+            "title": "Regex nested quantifier guardrail",
+            "description": "Reject potentially expensive regex patterns.",
+            "effective_date": None,
+            "scope": {
+                "domains": ["governance"],
+                "routes": ["/api/decide"],
+                "actors": ["planner"],
+            },
+            "conditions": [
+                {"field": "request.text", "operator": "regex", "value": "(a+)+$"}
+            ],
+            "requirements": {
+                "required_evidence": [],
+                "required_reviewers": [],
+                "minimum_approval_count": 0,
+            },
+            "constraints": [],
+            "outcome": {"decision": "escalate", "reason": "Regex matched."},
+            "obligations": [],
+            "test_vectors": [],
+            "source_refs": [],
+            "metadata": {},
+        },
+        manifest={"schema_version": "0.1"},
+    )
+
+    guarded_decision = evaluate_runtime_policies(
+        regex_bundle,
+        {
+            "domain": "governance",
+            "route": "/api/decide",
+            "actor": "planner",
+            "request": {"text": "a" * 200},
+        },
+    ).to_dict()
+
+    assert guarded_decision["final_outcome"] == "allow"
