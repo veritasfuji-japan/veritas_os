@@ -282,35 +282,6 @@ def test_regex_condition_rejects_nested_quantifier_pattern() -> None:
 def test_multiple_policy_precedence_resolution() -> None:
     """When multiple policies trigger, the highest-precedence outcome wins."""
 
-    def _make_ir(policy_id: str, decision: str, reason: str):
-        return {
-            "schema_version": "1.0",
-            "policy_id": policy_id,
-            "version": "1",
-            "title": policy_id,
-            "description": policy_id,
-            "effective_date": None,
-            "scope": {
-                "domains": ["governance"],
-                "routes": ["/api/decide"],
-                "actors": ["planner"],
-            },
-            "conditions": [
-                {"field": "risk.level", "operator": "in", "value": ["high", "critical"]}
-            ],
-            "requirements": {
-                "required_evidence": [],
-                "required_reviewers": [],
-                "minimum_approval_count": 0,
-            },
-            "constraints": [],
-            "outcome": {"decision": decision, "reason": reason},
-            "obligations": [],
-            "test_vectors": [],
-            "source_refs": [],
-            "metadata": {},
-        }
-
     from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
 
     policies = [
