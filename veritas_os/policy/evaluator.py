@@ -18,6 +18,9 @@ OUTCOME_PRECEDENCE = {
 
 _REGEX_MAX_PATTERN_LENGTH = 256
 _REGEX_MAX_TARGET_LENGTH = 1024
+_REGEX_NESTED_QUANTIFIER_GUARD = re.compile(
+    r"\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*]"
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,8 @@ def _safe_regex_search(expected: Any, actual: Any) -> bool:
     if len(expected) > _REGEX_MAX_PATTERN_LENGTH:
         return False
     if len(actual) > _REGEX_MAX_TARGET_LENGTH:
+        return False
+    if _REGEX_NESTED_QUANTIFIER_GUARD.search(expected):
         return False
 
     try:
