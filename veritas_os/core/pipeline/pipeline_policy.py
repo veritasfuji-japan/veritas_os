@@ -68,10 +68,16 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
         ctx.response_extras["governance"] = governance
     governance["compiled_policy"] = decision
 
+    outcome = decision.get("final_outcome")
     if not bool((ctx.context or {}).get("policy_runtime_enforce", False)):
+        if outcome in {"deny", "halt", "escalate", "require_human_review"}:
+            logger.warning(
+                "compiled policy outcome=%s observed but not enforced "
+                "(policy_runtime_enforce=false)",
+                outcome,
+            )
         return
 
-    outcome = decision.get("final_outcome")
     if outcome in {"deny", "halt"}:
         ctx.fuji_dict["status"] = "rejected"
         ctx.fuji_dict.setdefault("reasons", []).append(
