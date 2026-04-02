@@ -1,0 +1,34 @@
+schema_version: "1.0"
+policy_id: "policy.low_risk_route.allow"
+version: "2026.04.02"
+title: "Allow low-risk route execution"
+description: "Low-risk routes with verified evidence may proceed without additional human review."
+scope:
+  domains: ["governance", "decisioning"]
+  routes: ["/api/decide"]
+  actors: ["planner", "kernel"]
+conditions:
+  - field: "risk.level"
+    operator: "in"
+    value: ["low", "minimal"]
+requirements:
+  required_evidence: ["risk_assessment"]
+  required_reviewers: ["governance_officer"]
+  minimum_approval_count: 1
+constraints:
+  - field: "runtime.auto_execute"
+    operator: "eq"
+    value: true
+outcome:
+  decision: "allow"
+  reason: "Low-risk route with verified evidence is permitted for automatic execution."
+obligations:
+  - "record_trust_log"
+test_vectors:
+  - name: "low-risk route with evidence is allowed"
+    input:
+      risk:
+        level: "low"
+      runtime:
+        auto_execute: true
+    expected_outcome: "allow"

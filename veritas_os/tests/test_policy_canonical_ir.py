@@ -28,6 +28,8 @@ def test_valid_example_policy_parses_successfully() -> None:
         "high_risk_route_requires_human_review.yaml",
         "external_tool_usage_denied.yaml",
         "missing_mandatory_evidence_halt.yaml",
+        "low_risk_route_allow.yaml",
+        "anomaly_detection_escalate.yaml",
     ],
 )
 def test_all_example_policies_validate(example_name: str) -> None:

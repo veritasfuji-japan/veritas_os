@@ -11,7 +11,7 @@
 | パイプライン統合 | `veritas_os/core/pipeline/pipeline_policy.py`（301行） |
 | ガバナンスAPI | `veritas_os/api/routes_governance.py`（217行）, `veritas_os/api/governance.py`（473行） |
 | テスト基盤 | テストファイル6件（1,765行, 119テスト関数） |
-| ポリシー定義例 | `policies/examples/*.yaml`（3ファイル, 108行） |
+| ポリシー定義例 | `policies/examples/*.yaml`（5ファイル, 178行） |
 | フロントエンド | `frontend/app/governance/`, `packages/types/src/governance.ts` |
 | CLI | `veritas_os/scripts/compile_policy.py`（52行） |
 
@@ -539,12 +539,12 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 7 | 141 | コンパイル成功/失敗、成果物構造、決定性、署名 |
-| `test_policy_runtime_adapter.py` | 7 | 279 | ランタイム評価（全5 outcome）、ReDoS ガード |
-| `test_policy_canonical_ir.py` | 6 | 195 | スキーマ検証、正規化決定性、ハッシュ安定性 |
-| `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成、決定論性 |
+| `test_policy_runtime_adapter.py` | 8 | 371 | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決 |
+| `test_policy_canonical_ir.py` | 8 | 197 | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性 |
+| `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
-| **合計** | **119** | **1,765** | |
+| **合計** | **122** | **1,859** | |
 
 ### 4.2 テストパターン分析
 
@@ -560,16 +560,16 @@ python -m veritas_os.scripts.compile_policy \
 
 | 観点 | カバー状況 | 備考 |
 |------|-----------|------|
-| コンパイル成功 | ✅ | 全3例でテスト済み |
+| コンパイル成功 | ✅ | 全5例でテスト済み |
 | コンパイル失敗 | ✅ | 不正スキーマ、不正enum |
 | 成果物構造 | ✅ | パス、SHA-256、サイズ |
 | 決定性 | ✅ | 同一入力→同一出力 |
 | 署名検証成功 | ✅ | ロード時の自動検証 |
 | 署名改ざん検出 | ✅ | 改ざん後のロード拒否 |
-| outcome: allow | ✅ | in-memory ペイロード |
+| outcome: allow | ✅ | in-memory ペイロード + YAML ポリシー例 |
 | outcome: deny | ✅ | 外部ツール拒否 |
 | outcome: halt | ✅ | エビデンス不足 |
-| outcome: escalate | ✅ | in-memory ペイロード |
+| outcome: escalate | ✅ | in-memory ペイロード + YAML ポリシー例 |
 | outcome: require_human_review | ✅ | 高リスクルート |
 | エビデンスギャップ | ✅ | 不足検出 + 詳細 |
 | 承認不足 | ✅ | 不足検出 + 詳細 |
@@ -582,9 +582,8 @@ python -m veritas_os.scripts.compile_policy \
 | XSS 防御 | ✅ | HTMLタグ除去テスト |
 
 **改善余地:**
-- 複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。
-- `effective_date` が将来日付のポリシーの挙動テスト。
-- `regex` 演算子の正常ケース（単純パターン一致）の明示的テスト。
+- ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
+- `effective_date` が将来日付のポリシーの挙動テスト（現在は評価エンジンが `effective_date` をフィルタしない設計のため、メタデータ管理のみ）。
 - パイプライン bridge の enforcement 有効時の e2e テスト。
 
 ---
@@ -633,10 +632,38 @@ python -m veritas_os.scripts.compile_policy \
 | outcome | `halt` |
 | obligations | エビデンスギャップインシデント開設, 停止イベント記録 |
 
+### 5.4 例4: 低リスクルートの自動実行許可
+
+**ファイル:** `low_risk_route_allow.yaml`
+
+| 項目 | 値 |
+|------|-----|
+| policy_id | `policy.low_risk_route.allow` |
+| scope | governance/decisioning, /api/decide, planner/kernel |
+| condition | `risk.level in [low, minimal]` |
+| constraint | `runtime.auto_execute == true` |
+| requirements | エビデンス1件 + レビュアー1名 + 1名承認 |
+| outcome | `allow` |
+| obligations | trust_log記録 |
+
+### 5.5 例5: 異常検知時のエスカレーション
+
+**ファイル:** `anomaly_detection_escalate.yaml`
+
+| 項目 | 値 |
+|------|-----|
+| policy_id | `policy.anomaly_detection.escalate` |
+| scope | governance/monitoring, /api/decide, planner/kernel |
+| condition | `anomaly.detected == true` |
+| constraint | `risk.level in [medium, high]` |
+| requirements | エビデンス1件 + レビュアー1名 + 1名承認 |
+| outcome | `escalate` |
+| obligations | ガバナンスチャネル通知, エスカレーションイベント記録 |
+
 **所見:**
 - 3つの例が `deny`, `halt`, `require_human_review` の異なる outcome をカバーしており、テンプレートとして適切。
 - 各例にテストベクトルが1件ずつ埋め込まれており、自動テスト生成の入力として機能する。
-- `allow` と `escalate` のポリシー例がないため、追加を推奨。
+- ✅ `allow` と `escalate` のポリシー例を追加済み（`low_risk_route_allow.yaml`, `anomaly_detection_escalate.yaml`）。全5 outcome カバー完了。
 
 ---
 
@@ -779,7 +806,7 @@ python -m veritas_os.scripts.compile_policy \
 | **高（GA必須）** | 署名強化 | `manifest.sig` を公開鍵暗号署名へ移行 | GA リリース前 |
 | **高（GA必須）** | Enforcement デフォルト | 本番で `policy_runtime_enforce=true` を強制 | GA リリース前 |
 | **中** | Transparency Log | ポリシー変更・評価結果の外部ログ連携 | GA 後 v1.1 |
-| **中** | `allow`/`escalate` ポリシー例 | 全 outcome カバーのサンプルポリシー追加 | GA 後 v1.1 |
+| **中** | ~~`allow`/`escalate` ポリシー例~~ | ✅ 全 outcome カバーのサンプルポリシー追加済み | 完了 |
 | **中** | ポリシーパック管理 | 複数ポリシーの一括配布・バージョン管理 | GA 後 v1.2 |
 | **低** | 段階的 enforcement | canary → staged → full の自動化 | GA 後 v1.2 |
 | **低** | RE2 エンジン | 外部供給ポリシー対応時の regex 安全性強化 | 外部ポリシー許可時 |
@@ -795,7 +822,7 @@ python -m veritas_os.scripts.compile_policy \
 |--------|--------|------|
 | **機能完成度** | 85/100 | コンパイル〜評価〜パイプライン反映の全経路が動作 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 80/100 | 主要パスカバー、境界テスト追加余地あり |
+| **テスト品質** | 85/100 | 主要パスカバー、複数ポリシー優先度解決テスト追加、全5 outcome テスト済み |
 | **セキュリティ** | 75/100 | ReDoSガードレール済、署名は将来課題 |
 | **運用準備** | 65/100 | opt-in enforcement、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
@@ -820,6 +847,19 @@ python -m veritas_os.scripts.compile_policy \
 - **非強制モード警告**
   - compiled policy 判定が `deny/halt/escalate/require_human_review` かつ `policy_runtime_enforce=false` 時に warning ログ出力
   - FUJI の既存判定ロジックは変更せず、設定ミス検知性のみ向上
+
+- **`allow`/`escalate` ポリシー例追加**
+  - `policies/examples/low_risk_route_allow.yaml`: 低リスクルートの自動実行許可ポリシー
+  - `policies/examples/anomaly_detection_escalate.yaml`: 異常検知時のエスカレーションポリシー
+  - 全5 outcome（allow / deny / halt / escalate / require_human_review）のサンプルが揃い、テンプレートとしての網羅性を確保
+  - テストベクトル内蔵により、自動テスト生成（`generated_tests.py`）で自動検証
+
+- **複数ポリシー優先度解決テスト追加**
+  - `test_multiple_policy_precedence_resolution`: allow / escalate / deny の3ポリシーが同時に発火した際に deny（最高優先度）が選択されることを検証
+  - 全トリガポリシーの obligation が集約されることを検証
+
+- **スキーマ検証テスト拡張**
+  - `test_all_example_policies_validate` のパラメータに新規2ファイルを追加（3例→5例）
 
 ---
 

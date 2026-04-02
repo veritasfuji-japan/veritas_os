@@ -1,0 +1,35 @@
+schema_version: "1.0"
+policy_id: "policy.anomaly_detection.escalate"
+version: "2026.04.02"
+title: "Escalate on anomaly detection"
+description: "When anomaly indicators are detected in a request context, escalate for senior review."
+scope:
+  domains: ["governance", "monitoring"]
+  routes: ["/api/decide"]
+  actors: ["planner", "kernel"]
+conditions:
+  - field: "anomaly.detected"
+    operator: "eq"
+    value: true
+requirements:
+  required_evidence: ["anomaly_report"]
+  required_reviewers: ["governance_officer"]
+  minimum_approval_count: 1
+constraints:
+  - field: "risk.level"
+    operator: "in"
+    value: ["medium", "high"]
+outcome:
+  decision: "escalate"
+  reason: "Anomaly detected; escalating for senior governance review."
+obligations:
+  - "notify_governance_channel"
+  - "record_escalation_event"
+test_vectors:
+  - name: "anomaly detected triggers escalation"
+    input:
+      anomaly:
+        detected: true
+      risk:
+        level: "medium"
+    expected_outcome: "escalate"
