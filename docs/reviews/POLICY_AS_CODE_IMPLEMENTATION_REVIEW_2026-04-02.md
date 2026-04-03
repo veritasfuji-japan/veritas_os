@@ -357,7 +357,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 |--------|------|---------|
 | `eq` / `neq` | 等値/非等値 | any |
 | `in` / `not_in` | リスト包含/非包含 | list/set チェック |
-| `gt` / `gte` / `lt` / `lte` | 数値比較 | float 変換ガード |
+| `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`） |
 | `contains` | 文字列/リスト包含 | 型チェック |
 | `regex` | 正規表現マッチ | ReDoS ガードレール付き |
 
@@ -541,13 +541,13 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 8 | 155 | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング |
-| `test_policy_runtime_adapter.py` | 13 | 480+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出 |
+| `test_policy_runtime_adapter.py` | 23 | 580+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性 |
 | `test_policy_canonical_ir.py` | 13 | 240+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
 | `test_pipeline_stages_ext.py`（bridge） | 7 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック） |
-| **合計** | **140** | **2,030+** | |
+| **合計** | **150** | **2,130+** | |
 
 ### 4.2 テストパターン分析
 
@@ -597,6 +597,7 @@ python -m veritas_os.scripts.compile_policy \
 | 空ファイル検出 | ✅ | 空 YAML/JSON の拒否 |
 | 不正 YAML/JSON 検出 | ✅ | パースエラー → PolicyValidationError |
 | 非マッピングファイル検出 | ✅ | リスト等の YAML → PolicyValidationError |
+| 数値比較型安全性（float 変換ガード） | ✅ | int/float/文字列数値の型変換、非数値文字列・Noneの安全失敗（10パターン） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -746,8 +747,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,249行 | 適切（過剰でない） |
-| テスト行数 | 1,850行+ | テスト:実装比 = 1.5:1（良好） |
-| テスト関数数 | 140 | 十分な網羅性 |
+| テスト行数 | 1,950行+ | テスト:実装比 = 1.5:1（良好） |
+| テスト関数数 | 150 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -841,7 +842,7 @@ python -m veritas_os.scripts.compile_policy \
 |--------|--------|------|
 | **機能完成度** | 90/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 92/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト追加 |
+| **テスト品質** | 93/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト追加 |
 | **セキュリティ** | 78/100 | ReDoSガードレール（拒否時 warning ログ付き）、ランタイムアダプタのエラーハンドリング強化、署名は将来課題 |
 | **運用準備** | 73/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
@@ -930,6 +931,13 @@ python -m veritas_os.scripts.compile_policy \
   - `yaml.YAMLError` / `json.JSONDecodeError` を個別にキャッチし、エラー原因を明確化
   - 非マッピングデータ（リスト等）のエラーメッセージに実際の型名を含めるよう改善
   - テスト5件追加: `test_load_policy_file_not_found`, `test_load_policy_empty_file`, `test_load_policy_invalid_yaml`, `test_load_policy_invalid_json`, `test_load_policy_non_mapping_yaml`
+
+- **数値比較演算子の型安全性強化（`evaluator.py`）**
+  - `_safe_numeric_compare()` を新設: `gt` / `gte` / `lt` / `lte` 演算子の比較を float 変換付きで実行
+  - `actual` / `expected` を `float()` で変換し、`ValueError` / `TypeError` 時は安全に `False` を返却
+  - 文字列数値（例: `"10"` vs `5`）の型混在コンテキストでも正しく比較可能に
+  - `None` / 非数値文字列が `actual` に含まれる場合の TypeError クラッシュを防止
+  - テスト10件追加（parametrize）: int/float/文字列数値/非数値文字列/None の各組み合わせパターン
 
 ---
 

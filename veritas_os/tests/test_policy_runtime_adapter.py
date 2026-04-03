@@ -8,6 +8,7 @@ import pytest
 from veritas_os.policy.compiler import compile_policy_to_bundle
 from veritas_os.policy.evaluator import evaluate_runtime_policies
 from veritas_os.policy.runtime_adapter import (
+    RuntimePolicyBundle,
     adapt_canonical_ir,
     adapt_compiled_payload,
     load_runtime_bundle,
@@ -482,3 +483,93 @@ def test_adapt_canonical_ir_missing_key() -> None:
     incomplete_ir = {"policy_id": "test", "version": "1.0"}
     with pytest.raises(ValueError, match="missing required key"):
         adapt_canonical_ir(incomplete_ir)
+
+
+# --- Numeric comparison type safety tests ---
+
+
+def _make_numeric_test_bundle(
+    operator: str, value: object
+) -> RuntimePolicyBundle:
+    """Build a minimal bundle with a single numeric condition."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy
+
+    policy = RuntimePolicy(
+        policy_id="policy.numeric.test",
+        version="1",
+        title="Numeric test",
+        description="Tests numeric comparison type coercion.",
+        effective_date=None,
+        scope={
+            "domains": ["governance"],
+            "routes": ["/api/decide"],
+            "actors": ["planner"],
+        },
+        conditions=[{"field": "score", "operator": operator, "value": value}],
+        constraints=[],
+        requirements={
+            "required_evidence": [],
+            "required_reviewers": [],
+            "minimum_approval_count": 0,
+        },
+        outcome={"decision": "deny", "reason": "numeric test fired"},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    return RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id=policy.policy_id,
+        version=policy.version,
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-03T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[policy],
+    )
+
+
+BASE_NUMERIC_CONTEXT = {
+    "domain": "governance",
+    "route": "/api/decide",
+    "actor": "planner",
+}
+
+
+@pytest.mark.parametrize(
+    "operator, policy_value, ctx_value, expected_triggered",
+    [
+        # int vs int
+        ("gt", 5, 10, True),
+        ("gt", 5, 3, False),
+        # float vs int
+        ("gte", 7.0, 7, True),
+        ("lt", 5, 3.0, True),
+        # string number coerced to float
+        ("gt", 5, "10", True),
+        ("lte", 10, "10", True),
+        ("gt", 5, "3", False),
+        # non-numeric string safely returns False
+        ("gt", 5, "abc", False),
+        ("lt", 5, "xyz", False),
+        # None actual safely returns False
+        ("gt", 5, None, False),
+    ],
+)
+def test_numeric_comparison_type_coercion(
+    operator: str,
+    policy_value: object,
+    ctx_value: object,
+    expected_triggered: bool,
+) -> None:
+    """Numeric operators (gt/gte/lt/lte) coerce values to float and handle type errors."""
+    bundle = _make_numeric_test_bundle(operator, policy_value)
+    context = {**BASE_NUMERIC_CONTEXT, "score": ctx_value}
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    if expected_triggered:
+        assert decision["final_outcome"] == "deny"
+        assert "policy.numeric.test" in decision["triggered_policies"]
+    else:
+        assert decision["final_outcome"] == "allow"
