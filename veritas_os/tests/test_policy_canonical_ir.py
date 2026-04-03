@@ -195,3 +195,44 @@ def test_semantic_hash_is_stable_for_equivalent_policies() -> None:
     hash_b = semantic_policy_hash(to_canonical_ir(policy_b))
 
     assert hash_a == hash_b
+
+
+# --- Schema loader error handling tests ---
+
+
+def test_load_policy_file_not_found(tmp_path: Path) -> None:
+    """PolicyValidationError for missing file."""
+    with pytest.raises(PolicyValidationError, match="not found"):
+        load_and_validate_policy(tmp_path / "nonexistent.yaml")
+
+
+def test_load_policy_empty_file(tmp_path: Path) -> None:
+    """PolicyValidationError for empty YAML file."""
+    empty = tmp_path / "empty.yaml"
+    empty.write_text("", encoding="utf-8")
+    with pytest.raises(PolicyValidationError, match="empty"):
+        load_and_validate_policy(empty)
+
+
+def test_load_policy_invalid_yaml(tmp_path: Path) -> None:
+    """PolicyValidationError for malformed YAML."""
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(":\n  - :\n    - {[invalid", encoding="utf-8")
+    with pytest.raises(PolicyValidationError, match="invalid YAML"):
+        load_and_validate_policy(bad)
+
+
+def test_load_policy_invalid_json(tmp_path: Path) -> None:
+    """PolicyValidationError for malformed JSON."""
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    with pytest.raises(PolicyValidationError, match="invalid JSON"):
+        load_and_validate_policy(bad)
+
+
+def test_load_policy_non_mapping_yaml(tmp_path: Path) -> None:
+    """PolicyValidationError when YAML decodes to a list."""
+    bad = tmp_path / "list.yaml"
+    bad.write_text("- item1\n- item2\n", encoding="utf-8")
+    with pytest.raises(PolicyValidationError, match="mapping object"):
+        load_and_validate_policy(bad)

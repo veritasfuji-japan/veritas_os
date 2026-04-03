@@ -327,7 +327,8 @@ load_and_validate → to_canonical_ir → semantic_hash
 **所見:**
 - 署名検証がロード前に必ず実行される設計は良い。
 - ただし、SHA-256 整合チェックは「改ざん検知」であり「真正性保証」ではない点に注意（後述のセキュリティ項目参照）。
-- `_read_json_file()` がファイル読み込み後に型チェック（`isinstance(data, dict)`）を行っており、不正な JSON 構造を弾く。
+- ✅ `_read_json_file()` が `json.JSONDecodeError` / `UnicodeDecodeError` / `OSError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損時に明確なエラーメッセージを提供。
+- ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
 
 ---
 
@@ -375,6 +376,7 @@ allow (0) < require_human_review (1) < escalate (2) < halt (3) < deny (4)
 - 検査対象文字列長上限: 1,024 文字（コンテキストフィールドの実用上限。URL/パス/分類ラベル等は通常100文字以下）
 - ネスト量指定子（`(a+)+` 等）のガード: `_REGEX_NESTED_QUANTIFIER_GUARD` で検出・拒否
 - `re.error` のキャッチ: コンパイルエラー時は安全に `False` を返却
+- ✅ 全ガードレール発動時に `logger.warning()` で理由を出力（監査証跡・運用可視化）
 
 **出力構造（`PolicyEvaluationResult`）:**
 
@@ -539,13 +541,13 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 8 | 155 | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング |
-| `test_policy_runtime_adapter.py` | 10 | 440 | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング |
-| `test_policy_canonical_ir.py` | 8 | 197 | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性 |
+| `test_policy_runtime_adapter.py` | 13 | 480+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出 |
+| `test_policy_canonical_ir.py` | 13 | 240+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
 | `test_pipeline_stages_ext.py`（bridge） | 7 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック） |
-| **合計** | **132** | **1,942+** | |
+| **合計** | **140** | **2,030+** | |
 
 ### 4.2 テストパターン分析
 
@@ -588,6 +590,13 @@ python -m veritas_os.scripts.compile_policy \
 | パイプライン bridge enforcement (escalate→modify) | ✅ | escalate outcome で fuji status が modify に |
 | パイプライン bridge enforcement (require_human_review→modify) | ✅ | require_human_review outcome で fuji status が modify に |
 | env var enforcement フォールバック | ✅ | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による制御 |
+| バンドルファイル不正JSON検出 | ✅ | JSONDecodeError → ValueError ラップ |
+| バンドル署名不一致検出 | ✅ | manifest.sig 不在時のロード拒否 |
+| canonical IR 不整合検出 | ✅ | 必須キー欠落時の ValueError |
+| ポリシーファイル不在検出 | ✅ | FileNotFoundError → PolicyValidationError |
+| 空ファイル検出 | ✅ | 空 YAML/JSON の拒否 |
+| 不正 YAML/JSON 検出 | ✅ | パースエラー → PolicyValidationError |
+| 非マッピングファイル検出 | ✅ | リスト等の YAML → PolicyValidationError |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -681,7 +690,7 @@ python -m veritas_os.scripts.compile_policy \
 
 | 対策 | 実装箇所 | 評価 |
 |------|---------|------|
-| ReDoS ガードレール | `evaluator.py` | ◎ パターン長256/入力長1024/ネスト量指定子検出 |
+| ReDoS ガードレール | `evaluator.py` | ◎ パターン長256/入力長1024/ネスト量指定子検出 + 拒否時 warning ログ出力 |
 | Manifest 完全性検証 | `runtime_adapter.py` | ○ SHA-256 整合チェック |
 | XSS 防止（updated_by） | `governance.py` | ◎ HTMLタグ除去 + 制御文字除去 + 長さ制限 |
 | RBAC/ABAC | `routes_governance.py` | ◎ ロール + テナントスコープ |
@@ -737,8 +746,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,249行 | 適切（過剰でない） |
-| テスト行数 | 1,765行 | テスト:実装比 = 1.4:1（良好） |
-| テスト関数数 | 119 | 十分な網羅性 |
+| テスト行数 | 1,850行+ | テスト:実装比 = 1.5:1（良好） |
+| テスト関数数 | 140 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -830,11 +839,11 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 89/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定 |
+| **機能完成度** | 90/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 90/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パスのテスト追加 |
-| **セキュリティ** | 75/100 | ReDoSガードレール済、署名は将来課題 |
-| **運用準備** | 70/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ファイルベース永続化が制約 |
+| **テスト品質** | 92/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト追加 |
+| **セキュリティ** | 78/100 | ReDoSガードレール（拒否時 warning ログ付き）、ランタイムアダプタのエラーハンドリング強化、署名は将来課題 |
+| **運用準備** | 73/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
 
 ### 11.2 成熟度判定
@@ -896,6 +905,31 @@ python -m veritas_os.scripts.compile_policy \
     - `test_pipeline_bridge_enforcement_escalate_sets_modify`: escalate → modify
     - `test_pipeline_bridge_enforcement_require_human_review_sets_modify`: require_human_review → modify
     - （既存 `test_pipeline_bridge_enforcement_updates_fuji_status` で halt → rejected はカバー済み）
+
+### 11.4 改善実施ログ（2026-04-03）
+
+以下は本日の改善で実施した項目:
+
+- **ランタイムアダプタ エラーハンドリング強化（`runtime_adapter.py`）**
+  - `_read_json_file()`: `json.JSONDecodeError` および `UnicodeDecodeError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損・改ざんを明確なエラーメッセージで検出
+  - `adapt_canonical_ir()`: canonical IR の必須キー欠落時に `KeyError` を `ValueError` に変換。不完全な IR の原因特定を容易化
+  - テスト3件追加: `test_load_runtime_bundle_invalid_json`, `test_load_runtime_bundle_missing_manifest`, `test_adapt_canonical_ir_missing_key`
+
+- **ReDoS ガードレール 可観測性向上（`evaluator.py`）**
+  - `_safe_regex_search()`: パターン長超過・入力長超過・ネスト量指定子検出・コンパイルエラーの各拒否時に `logger.warning()` を追加
+  - セキュリティ監査証跡として ReDoS ガードレールの発動を可視化。運用時のポリシー設定ミスの検出性を向上
+
+- **ポリシー評価 監査ログ追加（`evaluator.py`）**
+  - `evaluate_runtime_policies()`: 評価完了時に `final_outcome`・`applicable_policies`・`triggered_policies` を `logger.info()` で出力
+  - `_is_effective()` で将来日付スキップ時に `logger.debug()` で理由を出力
+  - ガバナンス監査において「どのポリシーが適用され、何が最終判定に影響したか」を追跡可能に
+
+- **スキーマローダー エラーハンドリング強化（`schema.py`）**
+  - `_load_source_file()`: `FileNotFoundError` / `UnicodeDecodeError` / `OSError` をキャッチし、`PolicyValidationError` にラップ
+  - 空ファイル検出（`raw.strip()` チェック）を追加
+  - `yaml.YAMLError` / `json.JSONDecodeError` を個別にキャッチし、エラー原因を明確化
+  - 非マッピングデータ（リスト等）のエラーメッセージに実際の型名を含めるよう改善
+  - テスト5件追加: `test_load_policy_file_not_found`, `test_load_policy_empty_file`, `test_load_policy_invalid_yaml`, `test_load_policy_invalid_json`, `test_load_policy_non_mapping_yaml`
 
 ---
 

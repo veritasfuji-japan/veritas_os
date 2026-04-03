@@ -22,14 +22,40 @@ def _load_source_file(path: Path) -> Dict[str, Any]:
             f"unsupported policy file extension '{path.suffix}'"
         )
 
-    raw = path.read_text(encoding="utf-8")
-    if suffix in {".yaml", ".yml"}:
-        loaded = yaml.safe_load(raw)
-    else:
-        loaded = json.loads(raw)
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise PolicyValidationError(f"policy file not found: {path}") from exc
+    except UnicodeDecodeError as exc:
+        raise PolicyValidationError(
+            f"policy file is not valid UTF-8: {path}"
+        ) from exc
+    except OSError as exc:
+        raise PolicyValidationError(
+            f"failed to read policy file {path}: {exc}"
+        ) from exc
+
+    if not raw.strip():
+        raise PolicyValidationError(f"policy file is empty: {path}")
+
+    try:
+        if suffix in {".yaml", ".yml"}:
+            loaded = yaml.safe_load(raw)
+        else:
+            loaded = json.loads(raw)
+    except yaml.YAMLError as exc:
+        raise PolicyValidationError(
+            f"invalid YAML in policy file {path}: {exc}"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise PolicyValidationError(
+            f"invalid JSON in policy file {path}: {exc}"
+        ) from exc
 
     if not isinstance(loaded, dict):
-        raise PolicyValidationError("policy source must decode to a mapping object")
+        raise PolicyValidationError(
+            f"policy source must decode to a mapping object, got {type(loaded).__name__}"
+        )
     return loaded
 
 
