@@ -7604,9 +7604,60 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
     assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
 
 
-# ============================================================
-# Source: test_pipeline_web_adapter.py
-# ============================================================
+def test_pipeline_bridge_enforcement_logs_audit_info(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Enforcement decisions emit INFO-level audit logs with policy details."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    ctx = PipelineContext(
+        query="use external tool",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            "policy_runtime_enforce": True,
+            "domain": "security",
+            "route": "/api/tools",
+            "actor": "kernel",
+            "tool": {"external": True, "name": "unapproved_webhook"},
+            "data": {"classification": "restricted"},
+            "evidence": {"available": ["data_classification_label"]},
+            "approvals": {"approved_by": ["security_officer"]},
+        },
+    )
+
+    import logging
+
+    with caplog.at_level(logging.INFO):
+        stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "rejected"
+    assert any(
+        "compiled policy enforcement" in record.message and "status=rejected" in record.message
+        for record in caplog.records
+    )
+
+
+def test_value_ema_nan_falls_back_to_neutral() -> None:
+    """NaN/Inf value_ema safely falls back to 0.5 neutral value."""
+    from veritas_os.core.pipeline.pipeline_policy import stage_value_core
+    from veritas_os.core.pipeline_types import PipelineContext
+    import math
+
+    ctx = PipelineContext(query="test")
+    ctx.fuji_dict = {"status": "allow", "risk": 0.3}
+    ctx.response_extras = {"metrics": {"stage_latency": {}}}
+
+    def _load_valstats_nan():
+        return {"ema": float("nan")}
+
+    stage_value_core(ctx, _load_valstats=_load_valstats_nan, _clip01=lambda x: max(0.0, min(1.0, float(x))))
+
+    assert math.isfinite(ctx.value_ema)
+    assert ctx.value_ema == 0.5
 
 # tests for veritas_os/core/pipeline_web_adapter.py
 """Tests for web search payload normalization and extraction."""
