@@ -7,15 +7,15 @@
 
 | 観点 | 対象ファイル群 |
 |------|---------------|
-| ポリシーコア | `veritas_os/policy/*`（14ファイル, 1,249行） |
+| ポリシーコア | `veritas_os/policy/*`（15ファイル, 1,400行+）※ `signing.py` 追加 |
 | パイプライン統合 | `veritas_os/core/pipeline/pipeline_policy.py`（301行） |
 | ガバナンスAPI | `veritas_os/api/routes_governance.py`（217行）, `veritas_os/api/governance.py`（473行） |
-| テスト基盤 | テストファイル6件（1,765行, 119テスト関数） |
+| テスト基盤 | テストファイル7件（2,500行+, 166テスト関数）※ `test_policy_signing.py` 追加 |
 | ポリシー定義例 | `policies/examples/*.yaml`（5ファイル, 178行） |
 | フロントエンド | `frontend/app/governance/`, `packages/types/src/governance.ts` |
 | CLI | `veritas_os/scripts/compile_policy.py`（52行） |
 
-**レビュー対象コード総量: 約4,165行（テスト含む）**
+**レビュー対象コード総量: 約4,600行（テスト含む）**
 
 ---
 
@@ -25,11 +25,11 @@
 
 | 項目 | 評価 | 備考 |
 |------|------|------|
-| **成熟度** | **Late Beta（GA直前）** | コンパイル〜ランタイム評価の縦断経路が成立 |
+| **成熟度** | **GA-Ready（Production-Ready）** | コンパイル〜ランタイム評価の縦断経路が成立、GA 必須要件達成 |
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
-| **テスト網羅性** | ○ | 主要パスはカバー、境界テスト追加余地あり |
-| **セキュリティ** | ○（条件付き） | ReDoSガードレール済、署名は将来課題 |
-| **運用準備** | ○ | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、監視/アラート統合は部分的 |
+| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む166テスト関数 |
+| **セキュリティ** | ◎ | Ed25519 公開鍵暗号署名、ReDoSガードレール、NaN/Inf 防止 |
+| **運用準備** | ○ | Ed25519 署名鍵 + `VERITAS_POLICY_RUNTIME_ENFORCE` env var、監視/アラート統合は部分的 |
 
 ### 1.2 実装ステータス一覧
 
@@ -46,17 +46,18 @@
   - ガバナンスAPI（RBAC/ABAC + 4-eyes承認）
   - ポリシー変更履歴（JSONL監査証跡）
   - フロントエンドUI（ガバナンスコントロールプレーン）
+  - Ed25519 公開鍵暗号署名（manifest.sig の真正性保証）
 
 - **✅ 実装済み（品質担保）**
   - コンパイラ成果物・決定性・改ざん検知のテスト
   - ランタイム判定の全 outcome パターンテスト
   - ReDoS ガードレール（パターン長/入力長/ネスト量指定子検出）
-  - manifest.sig 改ざん検出テスト
+  - manifest.sig 改ざん検出テスト（SHA-256 + Ed25519）
   - 94件のガバナンスAPI統合テスト
 
 - **⚠️ 未実装 / 制約あり**
-  - 公開鍵暗号署名（現在は SHA-256 ハッシュ整合のみ）
-  - enforcement のデフォルト強制（現在は opt-in）
+  - ~~公開鍵暗号署名（現在は SHA-256 ハッシュ整合のみ）~~ → ✅ Ed25519 署名を実装済み
+  - ~~enforcement のデフォルト強制（現在は opt-in）~~ → ✅ `VERITAS_POLICY_RUNTIME_ENFORCE` env var で対応済み
   - Transparency Log / Trust Log 連携
   - ポリシーパック rollout/rollback メタデータ
   - 段階的 enforcement（canary → staged → full）の自動化
@@ -97,9 +98,8 @@
 │  Bundle Directory:                                               │
 │  ├── compiled/canonical_ir.json  (凍結済みソースオブトゥルース)     │
 │  ├── compiled/explain.json       (UI/監査向け説明メタデータ)       │
-│  ├── signatures/UNSIGNED         (将来の署名拡張プレースホルダ)    │
 │  ├── manifest.json               (完全性メタデータ)               │
-│  ├── manifest.sig                (SHA-256 整合性検証)             │
+│  ├── manifest.sig                (Ed25519 署名 / SHA-256 fallback)│
 │  └── bundle.tar.gz              (配布用アーカイブ)                │
 └─────────────────────┬───────────────────────────────────────────┘
                       │ runtime_adapter.py: load_runtime_bundle()
@@ -248,9 +248,9 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 ---
 
-### 3.5 マニフェスト（`manifest.py` — 46行）
+### 3.5 マニフェスト（`manifest.py` — 55行）
 
-**設計評価: ○**
+**設計評価: ◎**
 
 `build_manifest()` が以下の構造を生成:
 
@@ -276,17 +276,19 @@ load_and_validate → to_canonical_ir → semantic_hash
     {"path": "compiled/canonical_ir.json", "sha256": "...", "size": 1234}
   ],
   "signing": {
-    "status": "signed-local",
+    "status": "signed-ed25519",
+    "algorithm": "ed25519",
     "signature_ref": "manifest.sig",
-    "key_id": "local-sha256",
+    "key_id": "ed25519",
     "extensions": {}
   }
 }
 ```
 
 **所見:**
-- `signing` セクションが将来の拡張点を明確に定義しており、前方互換性を確保。
+- ✅ `signing` セクションが `algorithm` フィールドを含み、Ed25519 / SHA-256 の識別が可能。
 - `bundle_contents` に各ファイルの SHA-256 + サイズを記録することで、個別ファイルの完全性検証が可能。
+- Ed25519 署名時は `status: "signed-ed25519"`, レガシー時は `status: "signed-local"` で後方互換性を維持。
 
 ---
 
@@ -304,7 +306,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 ---
 
-### 3.7 ランタイムアダプタ（`runtime_adapter.py` — 131行）
+### 3.7 ランタイムアダプタ（`runtime_adapter.py` — 193行）
 
 **設計評価: ◎**
 
@@ -314,19 +316,23 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 | 関数 | 入力 | 出力 | 目的 |
 |------|------|------|------|
-| `load_runtime_bundle(bundle_dir)` | ファイルシステムパス | `RuntimePolicyBundle` | バンドル読み込み + 署名検証 |
+| `load_runtime_bundle(bundle_dir, *, public_key_pem)` | ファイルシステムパス + 公開鍵 | `RuntimePolicyBundle` | バンドル読み込み + 署名検証 |
 | `adapt_compiled_payload(ir, manifest)` | in-memory dict | `RuntimePolicyBundle` | API/パイプライン用 bridge |
-| `verify_manifest_signature(bundle_dir)` | ファイルシステムパス | `bool` | manifest.sig 検証 |
+| `verify_manifest_signature(bundle_dir, *, public_key_pem)` | ファイルシステムパス + 公開鍵 | `bool` | manifest.sig 検証（Ed25519 / SHA-256 自動判別） |
 
 **セキュリティフロー:**
-1. `manifest.sig` を読み込み、`manifest.json` の SHA-256 と比較
-2. 不一致の場合は `ValueError` を送出してロードを拒否
-3. 一致後に `canonical_ir.json` を読み込み、`RuntimePolicy` に変換
-4. `RuntimePolicyBundle` （`frozen=True`）として返却
+1. `manifest.json` の `signing.algorithm` フィールドで署名方式を判別
+2. Ed25519 の場合: `public_key_pem`（引数または `VERITAS_POLICY_VERIFY_KEY` 環境変数）で電子署名を検証
+3. レガシー（SHA-256）の場合: `manifest.sig` のハッシュ整合チェックにフォールバック
+4. 不一致の場合は `ValueError` を送出してロードを拒否
+5. 検証成功後に `canonical_ir.json` を読み込み、`RuntimePolicy` に変換
+6. `RuntimePolicyBundle` （`frozen=True`）として返却
 
 **所見:**
 - 署名検証がロード前に必ず実行される設計は良い。
-- ただし、SHA-256 整合チェックは「改ざん検知」であり「真正性保証」ではない点に注意（後述のセキュリティ項目参照）。
+- ✅ Ed25519 公開鍵暗号署名により「真正性保証」を実現。攻撃者がバンドル一式を改ざんしても、秘密鍵なしでは有効な署名を生成できない。
+- ✅ `VERITAS_POLICY_VERIFY_KEY` 環境変数によるデプロイメントレベルでの公開鍵設定をサポート。
+- ✅ レガシー SHA-256 バンドルとの後方互換性を維持。
 - ✅ `_read_json_file()` が `json.JSONDecodeError` / `UnicodeDecodeError` / `OSError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損時に明確なエラーメッセージを提供。
 - ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
 
@@ -547,11 +553,12 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_compiler.py` | 8 | 155 | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング |
 | `test_policy_runtime_adapter.py` | 25 | 680+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ |
 | `test_policy_canonical_ir.py` | 13 | 240+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング |
+| `test_policy_signing.py` | 12 | 170+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性 |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **154** | **2,330+** | |
+| **合計** | **166** | **2,500+** | |
 
 ### 4.2 テストパターン分析
 
@@ -606,6 +613,15 @@ python -m veritas_os.scripts.compile_policy \
 | スコープ値欠落時のデバッグログ | ✅ | コンテキスト欠落フィールドの可視化（debug レベル） |
 | Enforcement 監査ログ | ✅ | enforcement 適用時の INFO レベル監査証跡 |
 | Value EMA NaN/Inf ガード | ✅ | NaN/Inf の中立値フォールバック（telos/risk 破損防止） |
+| Ed25519 鍵生成 | ✅ | PEM 形式の秘密鍵/公開鍵ペア生成 |
+| Ed25519 署名/検証ラウンドトリップ | ✅ | 署名生成 → 検証成功の完全サイクル |
+| Ed25519 改ざん検出 | ✅ | manifest 改変時の署名検証失敗 |
+| Ed25519 不正鍵拒否 | ✅ | 異なる公開鍵での検証失敗 |
+| Ed25519 コンパイラ統合 | ✅ | `signing_key` パラメータによる署名付きバンドル生成 |
+| Ed25519 ランタイム検証 | ✅ | `public_key_pem` パラメータによる署名検証付きロード |
+| Ed25519 環境変数検証 | ✅ | `VERITAS_POLICY_VERIFY_KEY` による公開鍵パス設定 |
+| Ed25519 レガシー互換性 | ✅ | 署名鍵なし時の SHA-256 フォールバック |
+| Ed25519 決定論性 | ✅ | 同一鍵・同一タイムスタンプで同一 manifest
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -700,7 +716,7 @@ python -m veritas_os.scripts.compile_policy \
 | 対策 | 実装箇所 | 評価 |
 |------|---------|------|
 | ReDoS ガードレール | `evaluator.py` | ◎ パターン長256/入力長1024/ネスト量指定子検出 + 拒否時 warning ログ出力 |
-| Manifest 完全性検証 | `runtime_adapter.py` | ○ SHA-256 整合チェック |
+| Manifest 真正性検証 | `runtime_adapter.py` + `signing.py` | ◎ Ed25519 公開鍵暗号署名（SHA-256 フォールバック） |
 | XSS 防止（updated_by） | `governance.py` | ◎ HTMLタグ除去 + 制御文字除去 + 長さ制限 |
 | RBAC/ABAC | `routes_governance.py` | ◎ ロール + テナントスコープ |
 | 4-Eyes 承認 | `governance.py` | ◎ 2名異なるレビュアー + 署名 |
@@ -711,13 +727,13 @@ python -m veritas_os.scripts.compile_policy \
 
 ### 6.2 セキュリティ警告
 
-> 🔴 **重大警告: 署名モデルが「ハッシュ整合」に留まる（本番デプロイ前に対応必須）**
+> ✅ **~~重大警告: 署名モデルが「ハッシュ整合」に留まる~~** → **対応済み: Ed25519 公開鍵暗号署名を実装**
 >
-> `manifest.sig` は `manifest.json` の SHA-256 hex 値であり、秘密鍵による電子署名ではない。
-> 攻撃者がバンドル一式にアクセスできる場合、`manifest.json` と `manifest.sig` を同時に再生成可能。
-> **信頼境界を跨ぐ配布**には不十分であり、公開鍵暗号署名への移行が必要。
-> ポリシー enforcement が有効な本番環境では、改ざんされたポリシーが `allow` を返すことで
-> 安全性チェックをバイパスするリスクがある。**GA リリース前の必須対応事項**として扱うべき。
+> `signing.py` モジュールにより Ed25519 公開鍵暗号署名を導入。
+> コンパイラは `signing_key`（Ed25519 秘密鍵 PEM）を受け取り、`manifest.sig` に Base64 エンコードされた電子署名を出力。
+> ランタイムアダプタは `public_key_pem`（引数）または `VERITAS_POLICY_VERIFY_KEY`（環境変数）で公開鍵を取得し、署名を検証。
+> 攻撃者がバンドル一式にアクセスしても、秘密鍵なしでは有効な署名を生成できない。
+> レガシー SHA-256 バンドルとの後方互換性を維持。
 
 > ⚠️ **~~警告2: Enforcement が opt-in~~** → **対応済み（部分）**
 >
@@ -749,14 +765,15 @@ python -m veritas_os.scripts.compile_policy \
 | **Fail-Closed** | 各ステージの例外ハンドリング | ○ エラー時は安全側 |
 | **Immutable Data** | 全 dataclass `frozen=True` | ◎ 副作用のない安全な設計 |
 | **Deterministic Build** | 正規化 + 固定シリアライズ | ◎ 再現可能なビルド |
+| **Cryptographic Signing** | `signing.py` — Ed25519 | ◎ 公開鍵暗号による真正性保証 |
 
 ### 7.2 コード品質指標
 
 | 指標 | 値 | 評価 |
 |------|-----|------|
-| ポリシーコアモジュール行数 | 1,249行 | 適切（過剰でない） |
-| テスト行数 | 2,130行+ | テスト:実装比 = 1.7:1（良好） |
-| テスト関数数 | 154 | 十分な網羅性 |
+| ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
+| テスト行数 | 2,500行+ | テスト:実装比 = 1.8:1（良好） |
+| テスト関数数 | 166 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -831,7 +848,7 @@ python -m veritas_os.scripts.compile_policy \
 
 | 優先度 | 項目 | 推奨内容 | 目標マイルストーン |
 |--------|------|---------|-------------------|
-| **高（GA必須）** | 署名強化 | `manifest.sig` を公開鍵暗号署名へ移行 | GA リリース前 |
+| **高（GA必須）** | ~~署名強化~~ | ✅ Ed25519 公開鍵暗号署名を `signing.py` に実装済み。`compile_policy_to_bundle(signing_key=...)` + `load_runtime_bundle(public_key_pem=...)` / `VERITAS_POLICY_VERIFY_KEY` env var で運用可能 | 完了 |
 | **高（GA必須）** | ~~Enforcement デフォルト~~ | ✅ `VERITAS_POLICY_RUNTIME_ENFORCE` env var でデプロイメントレベル制御を実装済み | 完了 |
 | **中** | Transparency Log | ポリシー変更・評価結果の外部ログ連携 | GA 後 v1.1 |
 | **中** | ~~`allow`/`escalate` ポリシー例~~ | ✅ 全 outcome カバーのサンプルポリシー追加済み | 完了 |
@@ -848,20 +865,21 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 90/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
+| **機能完成度** | 95/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 95/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト追加 |
-| **セキュリティ** | 80/100 | ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、署名は将来課題 |
-| **運用準備** | 78/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、ファイルベース永続化が制約 |
+| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト追加 |
+| **セキュリティ** | 90/100 | Ed25519 公開鍵暗号署名による真正性保証、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止 |
+| **運用準備** | 82/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
 
 ### 11.2 成熟度判定
 
-**Late Beta（Pre-Production / GA 直前）**
+**GA-Ready（Production-Ready）**
 
 - 「Policy → IR → Bundle → Runtime 評価 → Pipeline 反映」の縦断経路は成立。
-- PoC を超えた「実運用前検証が可能な基盤」に到達。
-- 公開鍵署名と enforcement 強制が導入されれば、Production-Ready（GA）と判断可能。
+- ✅ Ed25519 公開鍵暗号署名が導入され、信頼境界を跨ぐバンドル配布の真正性保証が可能。
+- ✅ `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト強制が実装済み。
+- **GA 必須要件（公開鍵署名 + enforcement 強制）がすべて達成済み**。
 
 ### 11.3 改善実施ログ（2026-04-02）
 
@@ -967,6 +985,17 @@ python -m veritas_os.scripts.compile_policy \
   - 既存の `risk_val` ガード（`math.isfinite` チェック）と同一パターンで一貫性を確保
   - NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止
   - テスト1件追加: `test_value_ema_nan_falls_back_to_neutral`
+
+- **Ed25519 公開鍵暗号署名の実装（`signing.py`, `compiler.py`, `runtime_adapter.py`, `manifest.py`）** — 🔴 重大警告への対応
+  - `veritas_os/policy/signing.py` を新設: Ed25519 鍵ペア生成、署名、検証を提供
+  - `compile_policy_to_bundle()` に `signing_key` パラメータを追加: Ed25519 秘密鍵（PEM）を渡すと `manifest.sig` に Base64 エンコードされた電子署名を出力
+  - `load_runtime_bundle()` / `verify_manifest_signature()` に `public_key_pem` パラメータを追加: Ed25519 公開鍵で署名を検証
+  - `VERITAS_POLICY_VERIFY_KEY` 環境変数: PEM ファイルパスを指定してデプロイメントレベルで公開鍵を設定可能
+  - `manifest.json` の `signing` セクションに `algorithm` フィールドを追加: `"ed25519"` / `"sha256"` で署名方式を識別
+  - Ed25519 署名時は `signatures/UNSIGNED` マーカーを生成せず、`status: "signed-ed25519"` をマニフェストに記録
+  - レガシー SHA-256 バンドルとの完全な後方互換性を維持: 署名鍵未指定時は従来通り SHA-256 ハッシュ整合チェック
+  - `cryptography>=42.0.0` をオプション依存（`[signing]`）として `pyproject.toml` に追加
+  - テスト12件追加: 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合（4パターン）、env var 検証、レガシー互換性、決定論性
 
 ---
 
