@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+import logging
 from typing import Any, Dict, Iterable, List
 import re
 
 from .runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+logger = logging.getLogger(__name__)
 
 OUTCOME_PRECEDENCE = {
     "allow": 0,
@@ -101,15 +104,30 @@ def _safe_regex_search(expected: Any, actual: Any) -> bool:
     if not isinstance(expected, str) or not isinstance(actual, str):
         return False
     if len(expected) > _REGEX_MAX_PATTERN_LENGTH:
+        logger.warning(
+            "regex pattern rejected: length %d exceeds limit %d",
+            len(expected),
+            _REGEX_MAX_PATTERN_LENGTH,
+        )
         return False
     if len(actual) > _REGEX_MAX_TARGET_LENGTH:
+        logger.warning(
+            "regex target rejected: length %d exceeds limit %d",
+            len(actual),
+            _REGEX_MAX_TARGET_LENGTH,
+        )
         return False
     if _REGEX_NESTED_QUANTIFIER_GUARD.search(expected):
+        logger.warning(
+            "regex pattern rejected: nested quantifier detected in %.50r",
+            expected,
+        )
         return False
 
     try:
         compiled = re.compile(expected)
-    except re.error:
+    except re.error as exc:
+        logger.warning("regex compilation failed for pattern %.50r: %s", expected, exc)
         return False
     return compiled.search(actual) is not None
 
@@ -209,6 +227,11 @@ def evaluate_runtime_policies(
 
     for policy in runtime_bundle.runtime_policies:
         if not _is_effective(policy, today):
+            logger.debug(
+                "policy %s skipped: not yet effective (effective_date=%s)",
+                policy.policy_id,
+                policy.effective_date,
+            )
             continue
         applies = _scope_matches(policy, context)
         matched_conditions = [
@@ -313,6 +336,14 @@ def evaluate_runtime_policies(
         )
 
     final_outcome = _choose_final_outcome(outcomes)
+
+    logger.info(
+        "policy evaluation complete: outcome=%s applicable=%s triggered=%s",
+        final_outcome,
+        sorted(set(applicable)),
+        sorted(set(triggered)),
+    )
+
     return PolicyEvaluationResult(
         applicable_policies=sorted(set(applicable)),
         triggered_policies=sorted(set(triggered)),

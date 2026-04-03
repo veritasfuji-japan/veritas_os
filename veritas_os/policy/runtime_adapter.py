@@ -50,9 +50,16 @@ class RuntimePolicyBundle:
 
 
 def _read_json_file(path: Path) -> Dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise ValueError(f"failed to read policy bundle file {path}: {exc}") from exc
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"invalid JSON in policy bundle file {path}: {exc}") from exc
     if not isinstance(data, dict):
-        raise ValueError(f"expected mapping json at {path}")
+        raise ValueError(f"expected mapping json at {path}, got {type(data).__name__}")
     return data
 
 
@@ -70,26 +77,31 @@ def verify_manifest_signature(bundle_dir: str | Path) -> bool:
 
 def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
     """Convert canonical policy IR mapping into a runtime-ready policy object."""
-    return RuntimePolicy(
-        policy_id=canonical_ir["policy_id"],
-        version=canonical_ir["version"],
-        title=canonical_ir["title"],
-        description=canonical_ir["description"],
-        effective_date=canonical_ir.get("effective_date"),
-        scope={
-            "domains": list(canonical_ir["scope"]["domains"]),
-            "routes": list(canonical_ir["scope"]["routes"]),
-            "actors": list(canonical_ir["scope"]["actors"]),
-        },
-        conditions=[dict(item) for item in canonical_ir["conditions"]],
-        constraints=[dict(item) for item in canonical_ir["constraints"]],
-        requirements=dict(canonical_ir["requirements"]),
-        outcome=dict(canonical_ir["outcome"]),
-        obligations=list(canonical_ir["obligations"]),
-        test_vectors=[dict(item) for item in canonical_ir["test_vectors"]],
-        metadata=dict(canonical_ir.get("metadata", {})),
-        source_refs=list(canonical_ir.get("source_refs", [])),
-    )
+    try:
+        return RuntimePolicy(
+            policy_id=canonical_ir["policy_id"],
+            version=canonical_ir["version"],
+            title=canonical_ir["title"],
+            description=canonical_ir["description"],
+            effective_date=canonical_ir.get("effective_date"),
+            scope={
+                "domains": list(canonical_ir["scope"]["domains"]),
+                "routes": list(canonical_ir["scope"]["routes"]),
+                "actors": list(canonical_ir["scope"]["actors"]),
+            },
+            conditions=[dict(item) for item in canonical_ir["conditions"]],
+            constraints=[dict(item) for item in canonical_ir["constraints"]],
+            requirements=dict(canonical_ir["requirements"]),
+            outcome=dict(canonical_ir["outcome"]),
+            obligations=list(canonical_ir["obligations"]),
+            test_vectors=[dict(item) for item in canonical_ir["test_vectors"]],
+            metadata=dict(canonical_ir.get("metadata", {})),
+            source_refs=list(canonical_ir.get("source_refs", [])),
+        )
+    except KeyError as exc:
+        raise ValueError(
+            f"canonical IR missing required key {exc}"
+        ) from exc
 
 
 def load_runtime_bundle(bundle_dir: str | Path) -> RuntimePolicyBundle:

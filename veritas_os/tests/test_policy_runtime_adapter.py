@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+
+import pytest
 
 from veritas_os.policy.compiler import compile_policy_to_bundle
 from veritas_os.policy.evaluator import evaluate_runtime_policies
-from veritas_os.policy.runtime_adapter import adapt_compiled_payload, load_runtime_bundle
+from veritas_os.policy.runtime_adapter import (
+    adapt_canonical_ir,
+    adapt_compiled_payload,
+    load_runtime_bundle,
+)
 
 EXAMPLES_DIR = Path("policies/examples")
 
@@ -441,3 +448,37 @@ def test_past_effective_date_policy_triggers_normally() -> None:
 
     assert decision["final_outcome"] == "deny"
     assert "policy.past.deny" in decision["triggered_policies"]
+
+
+# --- Error handling tests ---
+
+
+def test_load_runtime_bundle_invalid_json(tmp_path: Path) -> None:
+    """load_runtime_bundle raises ValueError for malformed JSON."""
+    bundle_dir = tmp_path / "bad_bundle"
+    bundle_dir.mkdir()
+    # Create invalid JSON but valid signature so sig check passes
+    manifest_content = "{not valid json"
+    (bundle_dir / "manifest.json").write_text(manifest_content, encoding="utf-8")
+    sig = hashlib.sha256(manifest_content.encode("utf-8")).hexdigest()
+    (bundle_dir / "manifest.sig").write_text(sig, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid JSON"):
+        load_runtime_bundle(bundle_dir)
+
+
+def test_load_runtime_bundle_missing_manifest(tmp_path: Path) -> None:
+    """load_runtime_bundle raises ValueError when manifest.sig is missing."""
+    bundle_dir = tmp_path / "no_sig"
+    bundle_dir.mkdir()
+    (bundle_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="signature verification failed"):
+        load_runtime_bundle(bundle_dir)
+
+
+def test_adapt_canonical_ir_missing_key() -> None:
+    """adapt_canonical_ir raises ValueError for incomplete IR."""
+    incomplete_ir = {"policy_id": "test", "version": "1.0"}
+    with pytest.raises(ValueError, match="missing required key"):
+        adapt_canonical_ir(incomplete_ir)
