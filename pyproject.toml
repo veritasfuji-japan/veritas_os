@@ -70,8 +70,11 @@ observability = [
   "opentelemetry-exporter-otlp>=1.20",
   "prometheus-client>=0.20",
 ]
+signing = [
+  "cryptography>=42.0.0",
+]
 full = [
-  "veritas-os[ml,reports,anthropic,system,observability]",
+  "veritas-os[ml,reports,anthropic,system,observability,signing]",
 ]
 
 [project.urls]

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import hashlib
 from pathlib import Path
 from typing import Any, Dict
 
@@ -16,6 +15,7 @@ from .manifest import build_manifest
 from .models import PolicyCompilationError
 from .normalize import to_canonical_ir
 from .schema import load_and_validate_policy
+from .signing import sign_manifest, sha256_manifest_hex
 
 COMPILER_VERSION = "0.1.0"
 
@@ -36,20 +36,22 @@ def _utc_now_iso8601() -> str:
     )
 
 
-def _manifest_signature_hex(manifest_path: Path) -> str:
-    """Return deterministic SHA-256 signature hex for manifest payload."""
-    payload = manifest_path.read_bytes()
-    return hashlib.sha256(payload).hexdigest()
-
-
 def compile_policy_to_bundle(
     source_policy_path: str | Path,
     output_dir: str | Path,
     *,
     compiled_at: str | None = None,
     compiler_version: str = COMPILER_VERSION,
+    signing_key: bytes | None = None,
 ) -> CompileResult:
-    """Compile a source policy into deterministic bundle artifacts."""
+    """Compile a source policy into deterministic bundle artifacts.
+
+    Args:
+        signing_key: Optional Ed25519 private key in PEM format.  When
+            provided the manifest is signed with Ed25519 (authentic + tamper
+            proof).  When ``None`` the legacy SHA-256 hash integrity check is
+            used.
+    """
     source_path = Path(source_policy_path)
     out_dir = Path(output_dir)
 
@@ -65,18 +67,23 @@ def compile_policy_to_bundle(
 
         canonical_path = bundle_dir / "compiled" / "canonical_ir.json"
         explain_path = bundle_dir / "compiled" / "explain.json"
-        unsigned_path = bundle_dir / "signatures" / "UNSIGNED"
+        sig_marker_dir = bundle_dir / "signatures"
+        sig_marker_dir.mkdir(parents=True, exist_ok=True)
 
         write_stable_json(canonical_path, canonical_ir)
         explanation_metadata: Dict[str, Any] = build_explanation_metadata(canonical_ir)
         write_stable_json(explain_path, explanation_metadata)
-        unsigned_path.parent.mkdir(parents=True, exist_ok=True)
-        unsigned_path.write_text(
-            "signature pending for future signing workflow\n",
-            encoding="utf-8",
-        )
+
+        use_ed25519 = signing_key is not None
+        unsigned_path = sig_marker_dir / "UNSIGNED"
+        if not use_ed25519:
+            unsigned_path.write_text(
+                "signature pending for future signing workflow\n",
+                encoding="utf-8",
+            )
 
         bundle_files = collect_bundle_files(bundle_dir)
+
         manifest = build_manifest(
             canonical_ir,
             semantic_hash=semantic_hash,
@@ -84,11 +91,20 @@ def compile_policy_to_bundle(
             compiled_at=compiled_at or _utc_now_iso8601(),
             source_files=[source_path.as_posix()],
             bundle_files=bundle_files,
+            signing_algorithm="ed25519" if use_ed25519 else "sha256",
         )
         manifest_path = bundle_dir / "manifest.json"
         write_stable_json(manifest_path, manifest)
+
+        manifest_bytes = manifest_path.read_bytes()
         signature_path = bundle_dir / "manifest.sig"
-        signature_path.write_text(_manifest_signature_hex(manifest_path) + "\n", encoding="utf-8")
+
+        if use_ed25519:
+            sig_text = sign_manifest(manifest_bytes, signing_key)
+            signature_path.write_text(sig_text + "\n", encoding="utf-8")
+        else:
+            sig_text = sha256_manifest_hex(manifest_bytes)
+            signature_path.write_text(sig_text + "\n", encoding="utf-8")
 
         archive_path = create_bundle_archive(bundle_dir)
     except OSError as exc:
