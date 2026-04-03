@@ -55,9 +55,11 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
     if not bundle_dir:
         return
 
+    ctx_dict = ctx.context or {}
+
     try:
         runtime_bundle = load_runtime_bundle(bundle_dir)
-        decision = evaluate_runtime_policies(runtime_bundle, ctx.context or {}).to_dict()
+        decision = evaluate_runtime_policies(runtime_bundle, ctx_dict).to_dict()
     except (OSError, ValueError, TypeError) as exc:
         logger.warning("compiled policy runtime bridge failed: %s", exc)
         return
@@ -69,7 +71,14 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
     governance["compiled_policy"] = decision
 
     outcome = decision.get("final_outcome")
-    if not bool((ctx.context or {}).get("policy_runtime_enforce", False)):
+    enforce = ctx_dict.get("policy_runtime_enforce")
+    if enforce is None:
+        enforce = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+    if not bool(enforce):
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(
                 "compiled policy outcome=%s observed but not enforced "

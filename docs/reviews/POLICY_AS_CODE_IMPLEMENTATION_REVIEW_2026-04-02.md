@@ -29,7 +29,7 @@
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
 | **テスト網羅性** | ○ | 主要パスはカバー、境界テスト追加余地あり |
 | **セキュリティ** | ○（条件付き） | ReDoSガードレール済、署名は将来課題 |
-| **運用準備** | △ | enforcement opt-in、監視/アラート統合は部分的 |
+| **運用準備** | ○ | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、監視/アラート統合は部分的 |
 
 ### 1.2 実装ステータス一覧
 
@@ -544,7 +544,8 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
-| **合計** | **125** | **1,942** | |
+| `test_pipeline_stages_ext.py`（bridge） | 7 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック） |
+| **合計** | **132** | **1,942+** | |
 
 ### 4.2 テストパターン分析
 
@@ -582,11 +583,16 @@ python -m veritas_os.scripts.compile_policy \
 | XSS 防御 | ✅ | HTMLタグ除去テスト |
 | effective_date フィルタリング | ✅ | 将来日付スキップ + 過去日付発火 |
 | コンパイラ I/O エラーラッピング | ✅ | OSError → PolicyCompilationError |
+| パイプライン bridge enforcement (deny→rejected) | ✅ | deny outcome で fuji status が rejected に |
+| パイプライン bridge enforcement (halt→rejected) | ✅ | halt outcome で fuji status が rejected に |
+| パイプライン bridge enforcement (escalate→modify) | ✅ | escalate outcome で fuji status が modify に |
+| パイプライン bridge enforcement (require_human_review→modify) | ✅ | require_human_review outcome で fuji status が modify に |
+| env var enforcement フォールバック | ✅ | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による制御 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
 - ✅ ~~`effective_date` が将来日付のポリシーの挙動テスト~~ → `effective_date` フィルタリングを evaluator に実装し、テスト2件追加済み
-- パイプライン bridge の enforcement 有効時の e2e テスト。
+- ✅ ~~パイプライン bridge の enforcement 有効時の e2e テスト。~~ → 全4 outcome（deny→rejected, halt→rejected, escalate→modify, require_human_review→modify）の enforcement テスト + env var フォールバックテストを追加済み
 
 ---
 
@@ -695,11 +701,13 @@ python -m veritas_os.scripts.compile_policy \
 > ポリシー enforcement が有効な本番環境では、改ざんされたポリシーが `allow` を返すことで
 > 安全性チェックをバイパスするリスクがある。**GA リリース前の必須対応事項**として扱うべき。
 
-> ⚠️ **警告2: Enforcement が opt-in**
+> ⚠️ **~~警告2: Enforcement が opt-in~~** → **対応済み（部分）**
 >
 > `policy_runtime_enforce=false`（デフォルト）では compiled policy は観測のみ。
 > 設定ミス時にポリシー違反を reject できない可能性がある。
-> 本番環境では `true` 固定を推奨し、起動時バリデーションの追加を検討。
+> ✅ **対応**: 環境変数 `VERITAS_POLICY_RUNTIME_ENFORCE=true` によるデプロイメントレベルでの enforcement 有効化をサポート。
+> リクエスト単位の `ctx.context["policy_runtime_enforce"]` が未設定の場合に env var がフォールバックとして使用される。
+> 本番環境では `VERITAS_POLICY_RUNTIME_ENFORCE=true` を設定することで、全リクエストでの enforcement を保証可能。
 
 > ℹ️ **情報: ReDoS ガードレールは「低減」であり「完全排除」ではない**
 >
@@ -806,7 +814,7 @@ python -m veritas_os.scripts.compile_policy \
 | 優先度 | 項目 | 推奨内容 | 目標マイルストーン |
 |--------|------|---------|-------------------|
 | **高（GA必須）** | 署名強化 | `manifest.sig` を公開鍵暗号署名へ移行 | GA リリース前 |
-| **高（GA必須）** | Enforcement デフォルト | 本番で `policy_runtime_enforce=true` を強制 | GA リリース前 |
+| **高（GA必須）** | ~~Enforcement デフォルト~~ | ✅ `VERITAS_POLICY_RUNTIME_ENFORCE` env var でデプロイメントレベル制御を実装済み | 完了 |
 | **中** | Transparency Log | ポリシー変更・評価結果の外部ログ連携 | GA 後 v1.1 |
 | **中** | ~~`allow`/`escalate` ポリシー例~~ | ✅ 全 outcome カバーのサンプルポリシー追加済み | 完了 |
 | **中** | ポリシーパック管理 | 複数ポリシーの一括配布・バージョン管理 | GA 後 v1.2 |
@@ -822,11 +830,11 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 87/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応 |
+| **機能完成度** | 89/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 87/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピングのテスト追加 |
+| **テスト品質** | 90/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パスのテスト追加 |
 | **セキュリティ** | 75/100 | ReDoSガードレール済、署名は将来課題 |
-| **運用準備** | 65/100 | opt-in enforcement、ファイルベース永続化が制約 |
+| **運用準備** | 70/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
 
 ### 11.2 成熟度判定
@@ -874,6 +882,20 @@ python -m veritas_os.scripts.compile_policy \
   - `compile_policy_to_bundle()` のファイル書き込み部分を `try/except OSError` でラップし、`PolicyCompilationError` に変換
   - API 連携時に構造化されたエラー応答が可能に（`PolicyValidationError` とは独立したエラー型）
   - テスト1件追加: `test_compile_wraps_io_error_as_policy_compilation_error`
+
+- **Enforcement 環境変数フォールバック**
+  - `VERITAS_POLICY_RUNTIME_ENFORCE` 環境変数を `pipeline_policy.py` に追加
+  - リクエストコンテキストに `policy_runtime_enforce` が未設定の場合、env var の値をフォールバックとして使用
+  - リクエスト単位の `ctx.context["policy_runtime_enforce"]` が設定されている場合はそちらが優先
+  - 本番環境では `VERITAS_POLICY_RUNTIME_ENFORCE=true` を設定することで、全リクエストでの enforcement を保証可能
+  - テスト1件追加: `test_pipeline_bridge_env_var_enforcement_fallback`
+
+- **パイプライン bridge enforcement テスト拡充**
+  - 全4 outcome→status マッピングのテストを追加:
+    - `test_pipeline_bridge_enforcement_deny_sets_rejected`: deny → rejected
+    - `test_pipeline_bridge_enforcement_escalate_sets_modify`: escalate → modify
+    - `test_pipeline_bridge_enforcement_require_human_review_sets_modify`: require_human_review → modify
+    - （既存 `test_pipeline_bridge_enforcement_updates_fuji_status` で halt → rejected はカバー済み）
 
 ---
 
