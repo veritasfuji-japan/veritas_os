@@ -68,6 +68,25 @@ def _read_path(context: Dict[str, Any], field_path: str) -> Any:
     return current
 
 
+def _safe_numeric_compare(operator: str, actual: Any, expected: Any) -> bool:
+    """Evaluate numeric comparisons with float coercion and error handling."""
+    if actual is None:
+        return False
+    try:
+        a = float(actual)
+        b = float(expected)
+    except (ValueError, TypeError):
+        return False
+    if operator == "gt":
+        return a > b
+    if operator == "gte":
+        return a >= b
+    if operator == "lt":
+        return a < b
+    # lte
+    return a <= b
+
+
 def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) -> bool:
     field = str(expression.get("field", ""))
     operator = str(expression.get("operator", "eq"))
@@ -82,14 +101,8 @@ def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) ->
         return actual in expected if isinstance(expected, list) else False
     if operator == "not_in":
         return actual not in expected if isinstance(expected, list) else True
-    if operator == "gt":
-        return actual is not None and actual > expected
-    if operator == "gte":
-        return actual is not None and actual >= expected
-    if operator == "lt":
-        return actual is not None and actual < expected
-    if operator == "lte":
-        return actual is not None and actual <= expected
+    if operator in ("gt", "gte", "lt", "lte"):
+        return _safe_numeric_compare(operator, actual, expected)
     if operator == "contains":
         if isinstance(actual, (list, tuple, set, str)):
             return expected in actual
