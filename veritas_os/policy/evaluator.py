@@ -228,7 +228,7 @@ def evaluate_runtime_policies(
     for policy in runtime_bundle.runtime_policies:
         if not _is_effective(policy, today):
             logger.debug(
-                "policy %s skipped: effective_date %s is in the future",
+                "policy %s skipped: not yet effective (effective_date=%s)",
                 policy.policy_id,
                 policy.effective_date,
             )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -454,8 +455,6 @@ def test_past_effective_date_policy_triggers_normally() -> None:
 
 def test_load_runtime_bundle_invalid_json(tmp_path: Path) -> None:
     """load_runtime_bundle raises ValueError for malformed JSON."""
-    import hashlib
-
     bundle_dir = tmp_path / "bad_bundle"
     bundle_dir.mkdir()
     # Create invalid JSON but valid signature so sig check passes
