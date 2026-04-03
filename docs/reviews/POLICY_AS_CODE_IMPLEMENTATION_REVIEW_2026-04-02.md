@@ -400,6 +400,8 @@ class PolicyEvaluationResult:
 - fail-safe 昇格（allow → halt/require_human_review）は安全側に倒す設計として評価できる。
 - `_read_path()` がドット記法のパス探索を行い、ネストされたコンテキストにもアクセス可能。
 - `_listify()` が型変換のロバスト性を提供。
+- ✅ 未サポート演算子使用時に `logger.warning()` で演算子名・フィールド名を出力（silent failure を排除）。
+- ✅ `_scope_matches()` でコンテキストの scope フィールド（`domain`/`route`/`actor`）が欠落している場合に `logger.debug()` で可視化。デフォルト True 動作を維持しつつ、暗黙のマッチングを追跡可能に。
 
 ---
 
@@ -446,6 +448,8 @@ def _apply_compiled_policy_runtime_bridge(ctx):
 - 既存の FUJI/ValueCore ロジックを変更せず、「接続点のみ」を追加した最小侵襲設計。
 - `try/except` による fail-safe が各ステージに実装されており、policy 評価エラーがリクエスト処理をクラッシュさせない。
 - 非強制モード時の warning ログにより、設定ミスの検出性を向上。
+- ✅ enforcement 適用時に `logger.info()` で outcome・変更先 status・トリガポリシー ID を出力。ガバナンス監査証跡として enforcement 実行の追跡が可能に。
+- ✅ `value_ema` の NaN/Inf ガードを追加。既存の `risk_val` ガード（`math.isfinite`）と同一パターンで一貫性を確保し、NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止。
 
 ---
 
@@ -541,13 +545,13 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 8 | 155 | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング |
-| `test_policy_runtime_adapter.py` | 23 | 580+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性 |
+| `test_policy_runtime_adapter.py` | 25 | 680+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ |
 | `test_policy_canonical_ir.py` | 13 | 240+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
-| `test_pipeline_stages_ext.py`（bridge） | 7 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック） |
-| **合計** | **150** | **2,130+** | |
+| `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
+| **合計** | **154** | **2,330+** | |
 
 ### 4.2 テストパターン分析
 
@@ -598,6 +602,10 @@ python -m veritas_os.scripts.compile_policy \
 | 不正 YAML/JSON 検出 | ✅ | パースエラー → PolicyValidationError |
 | 非マッピングファイル検出 | ✅ | リスト等の YAML → PolicyValidationError |
 | 数値比較型安全性（float 変換ガード） | ✅ | int/float/文字列数値の型変換、非数値文字列・Noneの安全失敗（10パターン） |
+| 未知演算子の警告ログ出力 | ✅ | 未サポート演算子使用時の warning ログ + safe failure |
+| スコープ値欠落時のデバッグログ | ✅ | コンテキスト欠落フィールドの可視化（debug レベル） |
+| Enforcement 監査ログ | ✅ | enforcement 適用時の INFO レベル監査証跡 |
+| Value EMA NaN/Inf ガード | ✅ | NaN/Inf の中立値フォールバック（telos/risk 破損防止） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -747,8 +755,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,249行 | 適切（過剰でない） |
-| テスト行数 | 1,950行+ | テスト:実装比 = 1.5:1（良好） |
-| テスト関数数 | 150 | 十分な網羅性 |
+| テスト行数 | 2,130行+ | テスト:実装比 = 1.7:1（良好） |
+| テスト関数数 | 154 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -842,9 +850,9 @@ python -m veritas_os.scripts.compile_policy \
 |--------|--------|------|
 | **機能完成度** | 90/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 93/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト追加 |
-| **セキュリティ** | 78/100 | ReDoSガードレール（拒否時 warning ログ付き）、ランタイムアダプタのエラーハンドリング強化、署名は将来課題 |
-| **運用準備** | 73/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、ファイルベース永続化が制約 |
+| **テスト品質** | 95/100 | 主要パスカバー、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト追加 |
+| **セキュリティ** | 80/100 | ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、署名は将来課題 |
+| **運用準備** | 78/100 | `VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、ファイルベース永続化が制約 |
 | **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
 
 ### 11.2 成熟度判定
@@ -938,6 +946,27 @@ python -m veritas_os.scripts.compile_policy \
   - 文字列数値（例: `"10"` vs `5`）の型混在コンテキストでも正しく比較可能に
   - `None` / 非数値文字列が `actual` に含まれる場合の TypeError クラッシュを防止
   - テスト10件追加（parametrize）: int/float/文字列数値/非数値文字列/None の各組み合わせパターン
+
+- **未知演算子の警告ログ追加（`evaluator.py`）**
+  - `_evaluate_expression()`: サポートされていない演算子が使用された場合に `logger.warning()` で演算子名とフィールド名を出力
+  - silent failure（無言で False を返す）を排除し、ポリシー定義ミスの検出性を向上
+  - テスト1件追加: `test_unknown_operator_logs_warning_and_returns_false`
+
+- **スコープ値欠落時のデバッグログ追加（`evaluator.py`）**
+  - `_scope_matches()`: コンテキストに `domain` / `route` / `actor` が未設定の場合に `logger.debug()` で欠落フィールドを出力
+  - デフォルト True 動作（欠落時は一致扱い）を維持しつつ、暗黙のマッチングを可視化
+  - テスト1件追加: `test_scope_missing_fields_logs_debug`
+
+- **Enforcement 監査ログ追加（`pipeline_policy.py`）**
+  - `_apply_compiled_policy_runtime_bridge()`: enforcement 適用時（deny/halt→rejected, escalate/require_human_review→modify）に `logger.info()` で outcome、変更先 status、トリガポリシー ID を出力
+  - ガバナンス監査において「いつ、どのポリシーが、どのような enforcement を実行したか」を追跡可能に
+  - テスト1件追加: `test_pipeline_bridge_enforcement_logs_audit_info`
+
+- **Value EMA の NaN/Inf ガード追加（`pipeline_policy.py`）**
+  - `stage_value_core()`: `value_ema` が NaN または Inf の場合に安全に中立値 `0.5` にフォールバック
+  - 既存の `risk_val` ガード（`math.isfinite` チェック）と同一パターンで一貫性を確保
+  - NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止
+  - テスト1件追加: `test_value_ema_nan_falls_back_to_neutral`
 
 ---
 

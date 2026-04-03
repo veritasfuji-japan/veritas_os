@@ -12,6 +12,7 @@ Handles:
 from __future__ import annotations
 
 import logging
+import math
 import os
 import time
 from typing import Any
@@ -92,10 +93,20 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
         ctx.fuji_dict.setdefault("reasons", []).append(
             f"compiled_policy:{outcome}"
         )
+        logger.info(
+            "compiled policy enforcement: outcome=%s → status=rejected (policies=%s)",
+            outcome,
+            decision.get("triggered_policies", []),
+        )
     elif outcome in {"escalate", "require_human_review"}:
         ctx.fuji_dict["status"] = "modify"
         ctx.fuji_dict.setdefault("reasons", []).append(
             f"compiled_policy:{outcome}"
+        )
+        logger.info(
+            "compiled policy enforcement: outcome=%s → status=modify (policies=%s)",
+            outcome,
+            decision.get("triggered_policies", []),
         )
 
 
@@ -209,6 +220,8 @@ def stage_value_core(
     try:
         vs = _load_valstats()
         ctx.value_ema = float(vs.get("ema", 0.5))
+        if not math.isfinite(ctx.value_ema):
+            ctx.value_ema = 0.5  # fail-safe: NaN/Inf は中立値に戻す
     except (ValueError, TypeError):
         ctx.value_ema = 0.5
 

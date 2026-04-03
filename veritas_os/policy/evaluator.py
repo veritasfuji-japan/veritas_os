@@ -109,6 +109,7 @@ def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) ->
         return False
     if operator == "regex":
         return _safe_regex_search(expected, actual)
+    logger.warning("unknown operator %r in policy expression (field=%r)", operator, field)
     return False
 
 
@@ -149,6 +150,14 @@ def _scope_matches(policy: RuntimePolicy, context: Dict[str, Any]) -> bool:
     domain = context.get("domain")
     route = context.get("route")
     actor = context.get("actor")
+
+    if domain is None or route is None or actor is None:
+        missing = [k for k, v in (("domain", domain), ("route", route), ("actor", actor)) if v is None]
+        logger.debug(
+            "policy %s: scope fields %s absent in context, defaulting to match",
+            policy.policy_id,
+            missing,
+        )
 
     domain_match = domain in policy.scope["domains"] if domain is not None else True
     route_match = route in policy.scope["routes"] if route is not None else True

@@ -573,3 +573,127 @@ def test_numeric_comparison_type_coercion(
         assert "policy.numeric.test" in decision["triggered_policies"]
     else:
         assert decision["final_outcome"] == "allow"
+
+
+# --- Unknown operator warning test ---
+
+
+def test_unknown_operator_logs_warning_and_returns_false(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Unknown operators are logged as warnings and silently fail (no match)."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    policy = RuntimePolicy(
+        policy_id="policy.unknown_op.test",
+        version="1",
+        title="Unknown operator test",
+        description="Should warn and not trigger.",
+        effective_date=None,
+        scope={
+            "domains": ["governance"],
+            "routes": ["/api/decide"],
+            "actors": ["planner"],
+        },
+        conditions=[
+            {"field": "risk.level", "operator": "unknown_op", "value": "high"}
+        ],
+        constraints=[],
+        requirements={
+            "required_evidence": [],
+            "required_reviewers": [],
+            "minimum_approval_count": 0,
+        },
+        outcome={"decision": "deny", "reason": "Should not fire."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id=policy.policy_id,
+        version=policy.version,
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-03T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[policy],
+    )
+
+    context = {
+        "domain": "governance",
+        "route": "/api/decide",
+        "actor": "planner",
+        "risk": {"level": "high"},
+    }
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.evaluator"):
+        decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    assert decision["final_outcome"] == "allow"
+    assert "unknown operator" in caplog.text
+    assert "unknown_op" in caplog.text
+
+
+# --- Scope missing fields debug log test ---
+
+
+def test_scope_missing_fields_logs_debug(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Missing scope context fields are logged at DEBUG level."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    policy = RuntimePolicy(
+        policy_id="policy.scope_debug.test",
+        version="1",
+        title="Scope debug",
+        description="Test scope debug logging.",
+        effective_date=None,
+        scope={
+            "domains": ["governance"],
+            "routes": ["/api/decide"],
+            "actors": ["planner"],
+        },
+        conditions=[
+            {"field": "risk.level", "operator": "eq", "value": "high"}
+        ],
+        constraints=[],
+        requirements={
+            "required_evidence": [],
+            "required_reviewers": [],
+            "minimum_approval_count": 0,
+        },
+        outcome={"decision": "deny", "reason": "Test."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id=policy.policy_id,
+        version=policy.version,
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-03T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[policy],
+    )
+
+    # Context missing domain and actor — should still match but log debug
+    context = {
+        "route": "/api/decide",
+        "risk": {"level": "high"},
+    }
+    import logging
+
+    with caplog.at_level(logging.DEBUG, logger="veritas_os.policy.evaluator"):
+        decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    assert decision["final_outcome"] == "deny"
+    assert "scope fields" in caplog.text
+    assert "domain" in caplog.text
+    assert "actor" in caplog.text
