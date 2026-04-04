@@ -28,7 +28,7 @@ _REQUIREMENTS = _ROOT / "veritas_os" / "requirements.txt"
 
 # --- Expected extras groups ---------------------------------------------------
 
-EXPECTED_EXTRAS = {"ml", "reports", "anthropic", "system", "observability", "full"}
+EXPECTED_EXTRAS = {"ml", "reports", "anthropic", "system", "observability", "signing", "full"}
 
 EXPECTED_CORE = {
     "fastapi",
@@ -58,6 +58,7 @@ EXPECTED_OPTIONAL = {
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp",
     "prometheus-client",
+    "cryptography",
 }
 
 

@@ -71,7 +71,7 @@ observability = [
   "prometheus-client>=0.20",
 ]
 signing = [
-  "cryptography>=42.0.0",
+  "cryptography==46.0.6",
 ]
 full = [
   "veritas-os[ml,reports,anthropic,system,observability,signing]",
