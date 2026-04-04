@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 from typing import Any, Dict
 
@@ -16,6 +17,8 @@ from .models import PolicyCompilationError
 from .normalize import to_canonical_ir
 from .schema import load_and_validate_policy
 from .signing import sign_manifest, sha256_manifest_hex
+
+logger = logging.getLogger(__name__)
 
 COMPILER_VERSION = "0.1.0"
 
@@ -54,6 +57,12 @@ def compile_policy_to_bundle(
     """
     source_path = Path(source_policy_path)
     out_dir = Path(output_dir)
+
+    logger.info(
+        "compiling policy: source=%s output=%s",
+        source_path,
+        out_dir,
+    )
 
     policy = load_and_validate_policy(source_path)
     canonical_ir = to_canonical_ir(policy)
@@ -108,9 +117,22 @@ def compile_policy_to_bundle(
 
         archive_path = create_bundle_archive(bundle_dir)
     except OSError as exc:
+        logger.error(
+            "compilation failed for %s: %s",
+            source_path,
+            exc,
+        )
         raise PolicyCompilationError(
             f"failed to write bundle artifacts: {exc}"
         ) from exc
+
+    logger.info(
+        "compilation succeeded: policy_id=%s version=%s hash=%s signing=%s",
+        canonical_ir["policy_id"],
+        canonical_ir["version"],
+        semantic_hash,
+        "ed25519" if use_ed25519 else "sha256",
+    )
 
     return CompileResult(
         bundle_dir=bundle_dir,

@@ -160,6 +160,13 @@ def load_runtime_bundle(
 
     runtime_policy = adapt_canonical_ir(canonical_ir)
 
+    logger.info(
+        "bundle loaded: policy_id=%s version=%s hash=%s",
+        runtime_policy.policy_id,
+        runtime_policy.version,
+        manifest.get("semantic_hash", ""),
+    )
+
     return RuntimePolicyBundle(
         schema_version=str(manifest.get("schema_version", "0.1")),
         policy_id=runtime_policy.policy_id,
