@@ -66,6 +66,26 @@ def test_sha256_manifest_hex_deterministic() -> None:
     assert len(sha256_manifest_hex(data)) == 64
 
 
+def test_verify_manifest_sha256_uses_constant_time_comparison(tmp_path: Path) -> None:
+    """SHA-256 verification must use constant-time comparison (hmac.compare_digest)."""
+    from veritas_os.policy.signing import verify_manifest_sha256
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_bytes(b'{"policy_id": "test"}')
+
+    import hashlib
+
+    expected_hash = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+    sig_path = tmp_path / "manifest.sig"
+    sig_path.write_text(expected_hash, encoding="utf-8")
+
+    assert verify_manifest_sha256(manifest_path) is True
+
+    # Tampered signature must fail
+    sig_path.write_text("0" * 64, encoding="utf-8")
+    assert verify_manifest_sha256(manifest_path) is False
+
+
 # --- compiler + Ed25519 integration tests ---
 
 

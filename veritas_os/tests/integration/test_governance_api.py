@@ -846,6 +846,52 @@ class TestPolicyHistoryAppendAndTrim:
             records = gov_mod.get_policy_history(limit=999)
         assert len(records) == 5
 
+    def test_history_operations_are_thread_safe(self, tmp_path):
+        """Concurrent append and read must not corrupt the history file."""
+        import threading
+
+        history_path = tmp_path / "history.jsonl"
+        history_path.write_text("")
+
+        errors: list = []
+
+        def _writer(n: int) -> None:
+            try:
+                with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path), \
+                     patch.object(gov_mod, "_POLICY_HISTORY_MAX", 50):
+                    gov_mod._append_policy_history(
+                        {"version": f"prev-{n}"},
+                        {"version": f"new-{n}", "updated_at": f"2026-04-04T00:00:{n:02d}Z"},
+                    )
+            except Exception as exc:
+                errors.append(exc)
+
+        def _reader() -> None:
+            try:
+                with patch.object(gov_mod, "_POLICY_HISTORY_PATH", history_path), \
+                     patch.object(gov_mod, "_POLICY_HISTORY_MAX", 50):
+                    gov_mod.get_policy_history(limit=10)
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = []
+        for i in range(10):
+            threads.append(threading.Thread(target=_writer, args=(i,)))
+            threads.append(threading.Thread(target=_reader))
+
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+        assert not errors, f"Thread-safety errors: {errors}"
+        # All records should be valid JSON
+        lines = [
+            ln for ln in history_path.read_text().strip().splitlines() if ln.strip()
+        ]
+        for ln in lines:
+            json.loads(ln)  # must not raise
+
 
 class TestCallbackRegistration:
     """Tests for policy update callback register/unregister lifecycle."""
