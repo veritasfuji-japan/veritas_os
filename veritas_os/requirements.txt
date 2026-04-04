@@ -53,3 +53,6 @@ opentelemetry-api==1.28.2
 opentelemetry-sdk==1.28.2
 opentelemetry-exporter-otlp==1.28.2
 prometheus-client==0.20.0
+
+# --- Optional [signing]: Policy Bundle Signing ---
+cryptography==46.0.6

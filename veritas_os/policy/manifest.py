@@ -17,8 +17,16 @@ def build_manifest(
     compiled_at: str,
     source_files: List[str],
     bundle_files: List[Dict[str, Any]],
+    signing_algorithm: str = "sha256",
 ) -> Dict[str, Any]:
     """Build manifest metadata for bundle distribution and audit workflows."""
+    if signing_algorithm == "ed25519":
+        signing_status = "signed-ed25519"
+        key_id = "ed25519"
+    else:
+        signing_status = "signed-local"
+        key_id = "local-sha256"
+
     return {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "policy_id": canonical_ir["policy_id"],
@@ -38,9 +46,10 @@ def build_manifest(
         },
         "bundle_contents": sorted(bundle_files, key=lambda item: item["path"]),
         "signing": {
-            "status": "signed-local",
+            "status": signing_status,
+            "algorithm": signing_algorithm,
             "signature_ref": "manifest.sig",
-            "key_id": "local-sha256",
+            "key_id": key_id,
             "extensions": {},
         },
     }

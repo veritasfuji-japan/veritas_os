@@ -7,12 +7,16 @@ into runtime-evaluable policy structures used by governance and pipeline code.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
+import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
 from .ir import CanonicalPolicyIR
+from .signing import verify_manifest_ed25519, verify_manifest_sha256
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -63,16 +67,49 @@ def _read_json_file(path: Path) -> Dict[str, Any]:
     return data
 
 
-def verify_manifest_signature(bundle_dir: str | Path) -> bool:
-    """Verify ``manifest.sig`` for a compiled bundle."""
+def verify_manifest_signature(
+    bundle_dir: str | Path,
+    *,
+    public_key_pem: bytes | None = None,
+) -> bool:
+    """Verify ``manifest.sig`` for a compiled bundle.
+
+    When *public_key_pem* is provided (or the ``VERITAS_POLICY_VERIFY_KEY``
+    environment variable points to a PEM file), Ed25519 verification is used.
+    Otherwise falls back to legacy SHA-256 integrity check.
+    """
     root = Path(bundle_dir)
     manifest_path = root / "manifest.json"
     signature_path = root / "manifest.sig"
     if not manifest_path.exists() or not signature_path.exists():
         return False
-    expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    observed = signature_path.read_text(encoding="utf-8").strip()
-    return expected == observed
+
+    # Resolve public key from argument or env var
+    pub_key = public_key_pem
+    if pub_key is None:
+        key_path_str = os.environ.get("VERITAS_POLICY_VERIFY_KEY")
+        if key_path_str:
+            key_path = Path(key_path_str)
+            if key_path.is_file():
+                pub_key = key_path.read_bytes()
+
+    # Detect signing algorithm from manifest metadata
+    try:
+        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        algorithm = (
+            manifest_data.get("signing", {}).get("algorithm", "sha256")
+        )
+    except (json.JSONDecodeError, OSError):
+        algorithm = "sha256"
+
+    manifest_bytes = manifest_path.read_bytes()
+    sig_text = signature_path.read_text(encoding="utf-8").strip()
+
+    if algorithm == "ed25519" and pub_key is not None:
+        return verify_manifest_ed25519(manifest_bytes, sig_text, pub_key)
+
+    # Fallback: legacy SHA-256 integrity check
+    return verify_manifest_sha256(manifest_path)
 
 
 def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
@@ -104,10 +141,19 @@ def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
         ) from exc
 
 
-def load_runtime_bundle(bundle_dir: str | Path) -> RuntimePolicyBundle:
-    """Load a compiled bundle directory and adapt it for runtime evaluation."""
+def load_runtime_bundle(
+    bundle_dir: str | Path,
+    *,
+    public_key_pem: bytes | None = None,
+) -> RuntimePolicyBundle:
+    """Load a compiled bundle directory and adapt it for runtime evaluation.
+
+    Args:
+        public_key_pem: Optional Ed25519 public key in PEM format for
+            signature verification.  Falls back to SHA-256 integrity check.
+    """
     root = Path(bundle_dir)
-    if not verify_manifest_signature(root):
+    if not verify_manifest_signature(root, public_key_pem=public_key_pem):
         raise ValueError("manifest signature verification failed")
     manifest = _read_json_file(root / "manifest.json")
     canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
