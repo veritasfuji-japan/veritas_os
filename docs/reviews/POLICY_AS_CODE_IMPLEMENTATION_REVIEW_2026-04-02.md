@@ -10,7 +10,7 @@
 | ポリシーコア | `veritas_os/policy/*`（15ファイル, 1,400行+）※ `signing.py` 追加 |
 | パイプライン統合 | `veritas_os/core/pipeline/pipeline_policy.py`（301行） |
 | ガバナンスAPI | `veritas_os/api/routes_governance.py`（217行）, `veritas_os/api/governance.py`（473行） |
-| テスト基盤 | テストファイル7件（2,500行+, 166テスト関数）※ `test_policy_signing.py` 追加 |
+| テスト基盤 | テストファイル7件（2,600行+, 174テスト関数）※ `test_policy_signing.py` 追加 |
 | ポリシー定義例 | `policies/examples/*.yaml`（5ファイル, 178行） |
 | フロントエンド | `frontend/app/governance/`, `packages/types/src/governance.ts` |
 | CLI | `veritas_os/scripts/compile_policy.py`（52行） |
@@ -27,7 +27,7 @@
 |------|------|------|
 | **成熟度** | **GA-Ready（Production-Ready）** | コンパイル〜ランタイム評価の縦断経路が成立、GA 必須要件達成 |
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
-| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む166テスト関数 |
+| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む174テスト関数 |
 | **セキュリティ** | ◎ | Ed25519 公開鍵暗号署名、ReDoSガードレール、NaN/Inf 防止 |
 | **運用準備** | ○ | Ed25519 署名鍵 + `VERITAS_POLICY_RUNTIME_ENFORCE` env var、監視/アラート統合は部分的 |
 
@@ -247,6 +247,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - `_utc_now_iso8601()` を外部注入可能（`--compiled-at`）にすることで再現可能ビルドを実現。
 - ✅ ~~エラーハンドリングは `PolicyValidationError` のみで、ファイル I/O エラーは伝播する設計。~~ → `PolicyCompilationError`（`RuntimeError` 派生）でファイル I/O エラーをラップ。API 連携時にも構造化されたエラー応答が可能。
 - ✅ コンパイル開始・成功・失敗の `logger.info()` / `logger.error()` を追加。ガバナンス監査でコンパイルイベントの追跡が可能に。
+- ✅ `sign_manifest()` 呼び出しを `try/except (ValueError, RuntimeError)` でラップし、不正な署名鍵による例外を `PolicyCompilationError` に変換。未キャッチの暗号ライブラリ例外によるクラッシュを防止。
 
 ---
 
@@ -339,6 +340,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
 - ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。
+- ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
 
 ---
 
@@ -412,6 +414,7 @@ class PolicyEvaluationResult:
 - `_listify()` が型変換のロバスト性を提供。
 - ✅ 未サポート演算子使用時に `logger.warning()` で演算子名・フィールド名を出力（silent failure を排除）。
 - ✅ `_scope_matches()` でコンテキストの scope フィールド（`domain`/`route`/`actor`）が欠落している場合に `logger.debug()` で可視化。デフォルト True 動作を維持しつつ、暗黙のマッチングを追跡可能に。
+- ✅ `evaluate_runtime_policies()` の `context` パラメータに None ガードを追加。呼び出し元が `None` を渡した場合に `AttributeError` でクラッシュする問題を防止。
 
 ---
 
@@ -554,15 +557,15 @@ python -m veritas_os.scripts.compile_policy \
 
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
-| `test_policy_compiler.py` | 9 | 175+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ |
-| `test_policy_runtime_adapter.py` | 26 | 720+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ |
+| `test_policy_compiler.py` | 10 | 190+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング |
+| `test_policy_runtime_adapter.py` | 28 | 780+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 13 | 190+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告 |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **171** | **2,500+** | |
+| **合計** | **174** | **2,600+** | |
 
 ### 4.2 テストパターン分析
 
@@ -631,6 +634,9 @@ python -m veritas_os.scripts.compile_policy \
 | セマンティックハッシュ入力検証（非dict拒否） | ✅ | `canonical_ir` が dict でない場合の ValueError |
 | セマンティックハッシュ入力検証（policy_id欠落） | ✅ | `policy_id` キー欠落時の ValueError |
 | Ed25519→SHA-256 ダウングレード警告 | ✅ | マニフェストが ed25519 を宣言しているが公開鍵が未設定の場合の WARNING ログ出力 |
+| context None ガード | ✅ | `evaluate_runtime_policies()` に `None` を渡しても安全に動作 |
+| マニフェスト破損時の警告ログ | ✅ | `verify_manifest_signature()` で manifest.json パース失敗時の WARNING ログ出力 |
+| 署名鍵エラーラッピング | ✅ | 不正な signing_key による例外が `PolicyCompilationError` に変換 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -781,8 +787,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
-| テスト行数 | 2,500行+ | テスト:実装比 = 1.8:1（良好） |
-| テスト関数数 | 170 | 十分な網羅性 |
+| テスト行数 | 2,600行+ | テスト:実装比 = 1.9:1（良好） |
+| テスト関数数 | 174 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -874,10 +880,10 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 95/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
+| **機能完成度** | 96/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト追加 |
-| **セキュリティ** | 92/100 | Ed25519 公開鍵暗号署名による真正性保証、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証 |
+| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト追加 |
+| **セキュリティ** | 93/100 | Ed25519 公開鍵暗号署名による真正性保証、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング |
 | **運用準備** | 85/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、ファイルベース永続化が制約 |
 | **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
 
@@ -1047,6 +1053,28 @@ python -m veritas_os.scripts.compile_policy \
   - Runtime Adapter セクションに署名検証（Ed25519 / SHA-256 自動判別）と `effective_date` フィルタリングを追記
   - FUJI integration セクションに `VERITAS_POLICY_RUNTIME_ENFORCE` env var を追記
   - セキュリティ注意セクションを全面更新: Ed25519 署名による真正性保証、レガシーモードの制約、本番環境での enforcement 設定推奨を明記
+
+### 11.7 改善実施ログ（2026-04-04 第3弾）
+
+以下は本日追加実施した防御的プログラミング改善項目（機能完成度スコア向上: 95 → 96、セキュリティスコア向上: 92 → 93）:
+
+- **評価エンジン context None ガード追加（`evaluator.py`）**
+  - `evaluate_runtime_policies()` の `context` パラメータが `None` の場合に空辞書 `{}` にフォールバック
+  - 呼び出し元が `None` を渡した場合の `AttributeError: 'NoneType' object has no attribute 'get'` クラッシュを防止
+  - `pipeline_policy.py` の bridge ではガード済みだが、evaluator 単体呼び出し時の安全性を強化
+  - テスト1件追加: `test_evaluate_runtime_policies_none_context_returns_allow`
+
+- **コンパイラ署名鍵エラーハンドリング追加（`compiler.py`）**
+  - `sign_manifest()` 呼び出しを `try/except (ValueError, RuntimeError)` でラップ
+  - 不正な署名鍵（PEM 形式でないバイト列、Ed25519 以外の鍵等）による暗号ライブラリ例外を `PolicyCompilationError` に変換
+  - エラー時に `logger.error()` で署名失敗のソースパスと理由を出力
+  - テスト1件追加: `test_compile_wraps_signing_error_as_policy_compilation_error`
+
+- **マニフェスト破損時の警告ログ追加（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（`json.JSONDecodeError` / `OSError`）に `logger.warning()` でエラー内容を出力
+  - 従来はサイレントに SHA-256 フォールバックしていたが、バンドル破損・改ざんの検出性を向上
+  - 後方互換性を維持: 動作自体は変更せず（SHA-256 フォールバック維持）、警告ログの追加のみ
+  - テスト1件追加: `test_verify_manifest_signature_logs_warning_on_corrupt_manifest`
 
 ---
 

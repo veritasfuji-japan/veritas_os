@@ -713,3 +713,57 @@ def test_load_runtime_bundle_logs_success(
 
     assert "bundle loaded" in caplog.text
     assert "policy.low_risk_route.allow" in caplog.text
+
+
+def test_evaluate_runtime_policies_none_context_returns_allow() -> None:
+    """Passing ``None`` as context must not crash (defensive guard)."""
+    bundle = adapt_compiled_payload(
+        canonical_ir={
+            "schema_version": "1.0",
+            "policy_id": "policy.ctx.none",
+            "version": "1",
+            "title": "Ctx none guard",
+            "description": "Ensure None context is safe.",
+            "effective_date": None,
+            "scope": {
+                "domains": ["governance"],
+                "routes": ["/api/decide"],
+                "actors": ["planner"],
+            },
+            "conditions": [{"field": "risk.level", "operator": "eq", "value": "high"}],
+            "requirements": {
+                "required_evidence": [],
+                "required_reviewers": [],
+                "minimum_approval_count": 0,
+            },
+            "constraints": [],
+            "outcome": {"decision": "deny", "reason": "High risk."},
+            "obligations": [],
+            "test_vectors": [],
+            "source_refs": [],
+            "metadata": {},
+        },
+        manifest={"schema_version": "0.1"},
+    )
+    # None context should be coerced to {} and not raise AttributeError
+    result = evaluate_runtime_policies(bundle, None)  # type: ignore[arg-type]
+    assert result.final_outcome == "allow"
+
+
+def test_verify_manifest_signature_logs_warning_on_corrupt_manifest(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Corrupted manifest.json during algorithm detection emits WARNING log."""
+    import logging
+    from veritas_os.policy.runtime_adapter import verify_manifest_signature
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("NOT VALID JSON", encoding="utf-8")
+    sig_path = tmp_path / "manifest.sig"
+    sig_path.write_text("dummy", encoding="utf-8")
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
+        verify_manifest_signature(tmp_path)
+
+    assert "failed to parse manifest.json" in caplog.text
