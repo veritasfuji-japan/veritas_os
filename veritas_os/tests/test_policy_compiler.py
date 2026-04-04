@@ -103,6 +103,47 @@ def test_semantic_hash_stability_and_deterministic_outputs(tmp_path: Path) -> No
     assert left_canonical == right_canonical
 
 
+def test_bundle_archive_is_deterministic(tmp_path: Path) -> None:
+    """Tar archive must produce identical bytes across builds (normalized metadata)."""
+    import hashlib
+
+    fixed_at = "2026-03-28T04:00:00Z"
+    r1 = compile_policy_to_bundle(
+        EXAMPLES_DIR / "low_risk_route_allow.yaml",
+        tmp_path / "a",
+        compiled_at=fixed_at,
+    )
+    r2 = compile_policy_to_bundle(
+        EXAMPLES_DIR / "low_risk_route_allow.yaml",
+        tmp_path / "b",
+        compiled_at=fixed_at,
+    )
+    h1 = hashlib.sha256(r1.archive_path.read_bytes()).hexdigest()
+    h2 = hashlib.sha256(r2.archive_path.read_bytes()).hexdigest()
+    assert h1 == h2, "archive should be byte-identical for same input"
+
+
+def test_bundle_archive_excludes_symlinks(tmp_path: Path) -> None:
+    """Symlinks in the bundle directory must not be included in the archive."""
+    import tarfile
+
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "low_risk_route_allow.yaml",
+        tmp_path,
+        compiled_at="2026-04-04T00:00:00Z",
+    )
+    # Inject a symlink into the bundle directory
+    link = result.bundle_dir / "malicious_link"
+    link.symlink_to("/etc/passwd")
+
+    from veritas_os.policy.bundle import create_bundle_archive
+
+    archive_path = create_bundle_archive(result.bundle_dir)
+    with tarfile.open(archive_path, "r:gz") as tar:
+        names = tar.getnames()
+    assert not any("malicious_link" in n for n in names)
+
+
 def test_bundle_structure_paths_are_valid(tmp_path: Path) -> None:
     result = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",

@@ -188,9 +188,10 @@ def _append_policy_history(previous: Dict[str, Any], updated: Dict[str, Any]) ->
     line = json.dumps(record, ensure_ascii=False)
     try:
         _POLICY_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(_POLICY_HISTORY_PATH, "a", encoding="utf-8") as f:
-            f.write(line + "\n")
-        _trim_policy_history()
+        with _policy_lock:
+            with open(_POLICY_HISTORY_PATH, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+            _trim_policy_history()
     except Exception as e:
         logger.warning("Failed to append governance policy history: %s", e)
 
@@ -430,25 +431,26 @@ def get_policy_history(limit: int = 50) -> List[Dict[str, Any]]:
         limit: Maximum number of records to return (capped at _POLICY_HISTORY_MAX).
     """
     limit = max(1, min(limit, _POLICY_HISTORY_MAX))
-    if not _POLICY_HISTORY_PATH.exists():
-        return []
-    try:
-        lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines()
-        records: List[Dict[str, Any]] = []
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                records.append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-            if len(records) >= limit:
-                break
-        return records
-    except Exception as e:
-        logger.warning("Failed to read governance policy history: %s", e)
-        return []
+    with _policy_lock:
+        if not _POLICY_HISTORY_PATH.exists():
+            return []
+        try:
+            lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines()
+        except Exception as e:
+            logger.warning("Failed to read governance policy history: %s", e)
+            return []
+    records: List[Dict[str, Any]] = []
+    for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            records.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+        if len(records) >= limit:
+            break
+    return records
 
 
 def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str, Any]:

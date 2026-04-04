@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import logging
 from pathlib import Path
 from typing import Tuple
@@ -137,4 +138,4 @@ def verify_manifest_sha256(manifest_path: Path) -> bool:
         return False
     expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     observed = sig_path.read_text(encoding="utf-8").strip()
-    return expected == observed
+    return hmac.compare_digest(expected, observed)
