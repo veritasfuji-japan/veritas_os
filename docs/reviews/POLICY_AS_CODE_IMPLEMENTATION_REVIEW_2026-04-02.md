@@ -338,6 +338,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `_read_json_file()` が `json.JSONDecodeError` / `UnicodeDecodeError` / `OSError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損時に明確なエラーメッセージを提供。
 - ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
+- ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。
 
 ---
 
@@ -556,12 +557,12 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_compiler.py` | 9 | 175+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ |
 | `test_policy_runtime_adapter.py` | 26 | 720+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
-| `test_policy_signing.py` | 12 | 170+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性 |
+| `test_policy_signing.py` | 13 | 190+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告 |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **170** | **2,500+** | |
+| **合計** | **171** | **2,500+** | |
 
 ### 4.2 テストパターン分析
 
@@ -629,6 +630,7 @@ python -m veritas_os.scripts.compile_policy \
 | バンドルロード監査ログ | ✅ | バンドル読み込み成功時の INFO ログ出力 |
 | セマンティックハッシュ入力検証（非dict拒否） | ✅ | `canonical_ir` が dict でない場合の ValueError |
 | セマンティックハッシュ入力検証（policy_id欠落） | ✅ | `policy_id` キー欠落時の ValueError |
+| Ed25519→SHA-256 ダウングレード警告 | ✅ | マニフェストが ed25519 を宣言しているが公開鍵が未設定の場合の WARNING ログ出力 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -875,9 +877,9 @@ python -m veritas_os.scripts.compile_policy \
 | **機能完成度** | 95/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化 |
 | **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
 | **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト追加 |
-| **セキュリティ** | 90/100 | Ed25519 公開鍵暗号署名による真正性保証、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証 |
+| **セキュリティ** | 92/100 | Ed25519 公開鍵暗号署名による真正性保証、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証 |
 | **運用準備** | 85/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、ファイルベース永続化が制約 |
-| **ドキュメント** | 80/100 | 既存 docs/policy_as_code.md が包括的 |
+| **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
 
 ### 11.2 成熟度判定
 
@@ -1025,6 +1027,26 @@ python -m veritas_os.scripts.compile_policy \
   - `canonical_ir` に `policy_id` キーが存在しない場合は `ValueError` を送出
   - 不正な入力で静かにハッシュを計算してしまう問題を防止し、早期エラー検出を実現
   - テスト2件追加: `test_semantic_policy_hash_rejects_non_dict`, `test_semantic_policy_hash_rejects_missing_policy_id`
+
+### 11.6 改善実施ログ（2026-04-04 追加分）
+
+以下は本日追加実施した改善項目（セキュリティスコア向上: 90 → 92、ドキュメントスコア向上: 80 → 88）:
+
+- **Ed25519→SHA-256 ダウングレード警告追加（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず、公開鍵（`public_key_pem` 引数 / `VERITAS_POLICY_VERIFY_KEY` 環境変数）が未設定の場合に `logger.warning()` で警告を出力
+  - 署名方式のサイレントダウングレード（Ed25519 → SHA-256）を検出可能に。SHA-256 はハッシュ整合のみで真正性保証がないため、意図しないダウングレードはセキュリティリスクとなる
+  - 後方互換性を維持: 動作自体は変更せず、警告ログの追加のみ
+  - テスト1件追加: `test_ed25519_bundle_without_key_logs_downgrade_warning`
+
+- **`docs/policy_as_code.md` 大幅更新**
+  - 「署名本体は未実装」と記載されていた古い情報を修正。Ed25519 公開鍵暗号署名が実装済みであることを反映
+  - 「Ed25519 署名」セクションを新設: コンパイル時の署名、ランタイムでの署名検証、鍵ペア生成、環境変数の使用方法を文書化
+  - 環境変数テーブル追加: `VERITAS_POLICY_VERIFY_KEY`, `VERITAS_POLICY_RUNTIME_ENFORCE`
+  - 「Bundle Signing」セクションを更新: `manifest.sig` / `manifest.signing` の現状を反映
+  - Artifact 構造に `manifest.sig` を追加、`UNSIGNED` マーカーの Ed25519 時の挙動を明記
+  - Runtime Adapter セクションに署名検証（Ed25519 / SHA-256 自動判別）と `effective_date` フィルタリングを追記
+  - FUJI integration セクションに `VERITAS_POLICY_RUNTIME_ENFORCE` env var を追記
+  - セキュリティ注意セクションを全面更新: Ed25519 署名による真正性保証、レガシーモードの制約、本番環境での enforcement 設定推奨を明記
 
 ---
 

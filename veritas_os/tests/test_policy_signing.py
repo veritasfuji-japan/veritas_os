@@ -153,6 +153,29 @@ def test_verify_manifest_signature_via_env_var(
     assert verify_manifest_signature(result.bundle_dir) is True
 
 
+def test_ed25519_bundle_without_key_logs_downgrade_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """When a bundle declares ed25519 but no public key is supplied, a warning
+    about the security downgrade to SHA-256 must be emitted."""
+    private_pem, _ = generate_keypair()
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-04-03T07:00:00Z",
+        signing_key=private_pem,
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
+        # No public_key_pem → SHA-256 fallback even though manifest says ed25519
+        # SHA-256 will fail because the sig file contains a base64 ed25519 sig,
+        # not a sha256 hex digest.
+        ok = verify_manifest_signature(result.bundle_dir)
+    assert not ok  # SHA-256 check fails for ed25519-signed bundles
+    assert "falling back to SHA-256" in caplog.text
+
+
 def test_legacy_bundle_still_loads_without_key(tmp_path: Path) -> None:
     """Legacy SHA-256 bundles continue to work when no key is provided."""
     result = compile_policy_to_bundle(

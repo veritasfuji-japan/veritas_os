@@ -108,6 +108,12 @@ def verify_manifest_signature(
     if algorithm == "ed25519" and pub_key is not None:
         return verify_manifest_ed25519(manifest_bytes, sig_text, pub_key)
 
+    if algorithm == "ed25519" and pub_key is None:
+        logger.warning(
+            "manifest declares ed25519 signing but no public key is available; "
+            "falling back to SHA-256 integrity check (authenticity NOT verified)"
+        )
+
     # Fallback: legacy SHA-256 integrity check
     return verify_manifest_sha256(manifest_path)
 
