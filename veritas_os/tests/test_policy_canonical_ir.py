@@ -236,3 +236,18 @@ def test_load_policy_non_mapping_yaml(tmp_path: Path) -> None:
     bad.write_text("- item1\n- item2\n", encoding="utf-8")
     with pytest.raises(PolicyValidationError, match="mapping object"):
         load_and_validate_policy(bad)
+
+
+# --- Semantic hash input validation tests ---
+
+
+def test_semantic_policy_hash_rejects_non_dict() -> None:
+    """ValueError when canonical_ir is not a dict."""
+    with pytest.raises(ValueError, match="must be a dict"):
+        semantic_policy_hash("not a dict")  # type: ignore[arg-type]
+
+
+def test_semantic_policy_hash_rejects_missing_policy_id() -> None:
+    """ValueError when canonical_ir lacks policy_id."""
+    with pytest.raises(ValueError, match="missing required key"):
+        semantic_policy_hash({"version": "1"})

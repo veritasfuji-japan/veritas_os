@@ -153,3 +153,22 @@ def test_compile_wraps_io_error_as_policy_compilation_error(tmp_path: Path) -> N
             read_only_dir,
             compiled_at="2026-04-02T00:00:00Z",
         )
+
+
+def test_compile_logs_start_and_success(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Compiler emits INFO logs at start and on success."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="veritas_os.policy.compiler"):
+        compile_policy_to_bundle(
+            EXAMPLES_DIR / "low_risk_route_allow.yaml",
+            tmp_path,
+            compiled_at="2026-04-02T00:00:00Z",
+        )
+
+    assert "compiling policy" in caplog.text
+    assert "compilation succeeded" in caplog.text
+    assert "policy.low_risk_route.allow" in caplog.text

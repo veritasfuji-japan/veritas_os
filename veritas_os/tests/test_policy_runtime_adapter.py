@@ -697,3 +697,19 @@ def test_scope_missing_fields_logs_debug(
     assert "scope fields" in caplog.text
     assert "domain" in caplog.text
     assert "actor" in caplog.text
+
+
+def test_load_runtime_bundle_logs_success(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Successful bundle load emits INFO log with policy_id and version."""
+    import logging
+
+    result = _compile_bundle(tmp_path, "low_risk_route_allow.yaml")
+
+    with caplog.at_level(logging.INFO, logger="veritas_os.policy.runtime_adapter"):
+        load_runtime_bundle(result.bundle_dir)
+
+    assert "bundle loaded" in caplog.text
+    assert "policy.low_risk_route.allow" in caplog.text
