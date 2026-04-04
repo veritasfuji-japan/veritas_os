@@ -771,9 +771,10 @@ def test_verify_manifest_signature_logs_warning_on_corrupt_manifest(
 
 def test_verify_manifest_signature_returns_false_on_unreadable_files(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """verify_manifest_signature returns False (not crash) when files vanish after exists()."""
+    """verify_manifest_signature returns False (not crash) when file read fails."""
     import logging
     from veritas_os.policy.runtime_adapter import verify_manifest_signature
 
@@ -782,14 +783,18 @@ def test_verify_manifest_signature_returns_false_on_unreadable_files(
     manifest_path.write_text('{"signing":{"algorithm":"sha256"}}', encoding="utf-8")
     sig_path.write_text("dummy", encoding="utf-8")
 
-    # Make manifest unreadable to simulate file-system error after existence check
-    manifest_path.chmod(0o000)
+    # Simulate file-system error after the existence check by patching read_bytes
+    _orig_read_bytes = Path.read_bytes
+
+    def _failing_read_bytes(self: Path) -> bytes:
+        if self == manifest_path:
+            raise OSError("simulated I/O failure")
+        return _orig_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _failing_read_bytes)
 
     with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
         result = verify_manifest_signature(tmp_path)
-
-    # Restore permissions for cleanup
-    manifest_path.chmod(0o644)
 
     assert result is False
     assert "failed to read manifest" in caplog.text

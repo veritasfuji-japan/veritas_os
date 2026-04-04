@@ -112,7 +112,9 @@ def verify_manifest_signature(
         )
         return False
 
-    # Detect signing algorithm from manifest metadata
+    # Detect signing algorithm from manifest metadata.
+    # OSError is not caught here because manifest_bytes was already read above;
+    # only JSON parse / encoding errors are possible at this point.
     try:
         manifest_data = json.loads(manifest_bytes.decode("utf-8"))
         algorithm = (
