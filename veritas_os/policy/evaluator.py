@@ -234,6 +234,8 @@ def evaluate_runtime_policies(
     context: Dict[str, Any],
 ) -> PolicyEvaluationResult:
     """Evaluate adapted runtime policies for a request context."""
+    if context is None:
+        context = {}
     applicable: List[str] = []
     triggered: List[str] = []
     reasons: List[str] = []

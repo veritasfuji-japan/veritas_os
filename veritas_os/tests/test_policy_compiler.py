@@ -172,3 +172,16 @@ def test_compile_logs_start_and_success(
     assert "compiling policy" in caplog.text
     assert "compilation succeeded" in caplog.text
     assert "policy.low_risk_route.allow" in caplog.text
+
+
+def test_compile_wraps_signing_error_as_policy_compilation_error(
+    tmp_path: Path,
+) -> None:
+    """Invalid signing key surfaces as PolicyCompilationError."""
+    with pytest.raises(PolicyCompilationError, match="Ed25519 signing failed"):
+        compile_policy_to_bundle(
+            EXAMPLES_DIR / "low_risk_route_allow.yaml",
+            tmp_path,
+            compiled_at="2026-04-02T00:00:00Z",
+            signing_key=b"not-a-valid-pem-key",
+        )

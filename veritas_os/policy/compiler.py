@@ -109,7 +109,17 @@ def compile_policy_to_bundle(
         signature_path = bundle_dir / "manifest.sig"
 
         if use_ed25519:
-            sig_text = sign_manifest(manifest_bytes, signing_key)
+            try:
+                sig_text = sign_manifest(manifest_bytes, signing_key)
+            except (ValueError, RuntimeError) as exc:
+                logger.error(
+                    "Ed25519 signing failed for %s: %s",
+                    source_path,
+                    exc,
+                )
+                raise PolicyCompilationError(
+                    f"Ed25519 signing failed: {exc}"
+                ) from exc
             signature_path.write_text(sig_text + "\n", encoding="utf-8")
         else:
             sig_text = sha256_manifest_hex(manifest_bytes)

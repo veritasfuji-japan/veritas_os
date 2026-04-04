@@ -99,7 +99,12 @@ def verify_manifest_signature(
         algorithm = (
             manifest_data.get("signing", {}).get("algorithm", "sha256")
         )
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning(
+            "failed to parse manifest.json for algorithm detection: %s; "
+            "defaulting to sha256 integrity check",
+            exc,
+        )
         algorithm = "sha256"
 
     manifest_bytes = manifest_path.read_bytes()
