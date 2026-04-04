@@ -36,16 +36,16 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 
 | カテゴリ | スコア |
 |---|---|
-| Architecture | 82 |
-| Code Quality | 83 |
-| Security | 80 |
-| Testing | 88 |
-| Production Readiness | 80 |
-| Governance | 82 |
-| **Overall** | **82 / 100** |
-| **判定** | **A-（本番接近レベルのガバナンスインフラ）** |
+| Architecture | 83 |
+| Code Quality | 80 |
+| Security | 83 |
+| Testing | 82 |
+| Production Readiness | 84 |
+| Governance | 83 |
+| **Overall** | **83 / 100** |
+| **判定** | **A-（堅牢な安全基盤を備えた本番接近レベルのガバナンスインフラ）** |
 
-> 独立技術デューデリジェンスレビュー（2026-03-15）による評価。詳細: `docs/reviews/technical_dd_review_ja_20260315.md`
+> 全コード精読による独立技術デューデリジェンス再評価（2026-04-04）。前回レビュー: `docs/reviews/technical_dd_review_ja_20260315.md`
 
 ---
 
