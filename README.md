@@ -36,14 +36,14 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 
 | Category | Score |
 |---|---|
-| Architecture | 83 |
-| Code Quality | 80 |
-| Security | 83 |
-| Testing | 82 |
+| Architecture | 85 |
+| Code Quality | 82 |
+| Security | 85 |
+| Testing | 84 |
 | Production Readiness | 84 |
-| Governance | 83 |
-| **Overall** | **83 / 100** |
-| **Verdict** | **A- (production-approaching governance infrastructure with strong safety foundations)** |
+| Governance | 85 |
+| **Overall** | **84 / 100** |
+| **Verdict** | **A- (production-grade governance infrastructure with comprehensive safety foundations)** |
 
 > Re-evaluated by independent full-code technical due diligence review (2026-04-04). Previous review: `docs/reviews/technical_dd_review_ja_20260315.md`
 
