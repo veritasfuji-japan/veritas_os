@@ -27,7 +27,7 @@
 |------|------|------|
 | **成熟度** | **GA-Ready（Production-Ready）** | コンパイル〜ランタイム評価の縦断経路が成立、GA 必須要件達成 |
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
-| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む174テスト関数 |
+| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む179テスト関数 |
 | **セキュリティ** | ◎ | Ed25519 公開鍵暗号署名、ReDoSガードレール、NaN/Inf 防止 |
 | **運用準備** | ○ | Ed25519 署名鍵 + `VERITAS_POLICY_RUNTIME_ENFORCE` env var、監視/アラート統合は部分的 |
 
@@ -343,6 +343,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
 - ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
+- ✅ `verify_manifest_signature()` のファイル読み込みを一元化: マニフェストをバイト列として1回だけ読み込み、アルゴリズム検出と署名検証の両方に使用。従来は `read_text()` + `read_bytes()` の二重読み込みで TOCTOU 競合の余地があったが、これを解消。ファイル読み込みの `OSError` を個別にキャッチし `logger.warning()` 付きで `False` を返却。SHA-256 フォールバックも読み込み済みバイト列から直接計算し `hmac.compare_digest()` で定数時間比較。
 
 ---
 
@@ -561,14 +562,14 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
-| `test_policy_runtime_adapter.py` | 28 | 780+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ |
+| `test_policy_runtime_adapter.py` | 29 | 810+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 14 | 210+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **178** | **2,700+** | |
+| **合計** | **179** | **2,700+** | |
 
 ### 4.2 テストパターン分析
 
@@ -644,6 +645,7 @@ python -m veritas_os.scripts.compile_policy \
 | バンドルアーカイブバイト決定性 | ✅ | tar メタデータ正規化（mtime/uid/gid）による異環境での同一ハッシュ保証 |
 | バンドルアーカイブシンボリックリンク除外 | ✅ | symlink がアーカイブに含まれないことを検証 |
 | 監査履歴スレッドセーフ並行アクセス | ✅ | 10スレッド並行書き込み/読み取りでの整合性保証 |
+| 署名検証ファイル読み込みエラー耐性 | ✅ | `verify_manifest_signature()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -749,6 +751,7 @@ python -m veritas_os.scripts.compile_policy \
 | イミュータブル設計 | 全 dataclass | ◎ frozen=True で変更不可 |
 | シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
+| 署名検証 TOCTOU 防止 | `runtime_adapter.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保 |
 
 ### 6.2 セキュリティ警告
 
@@ -798,7 +801,7 @@ python -m veritas_os.scripts.compile_policy \
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
 | テスト行数 | 2,600行+ | テスト:実装比 = 1.9:1（良好） |
-| テスト関数数 | 174 | 十分な網羅性 |
+| テスト関数数 | 179 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -1111,6 +1114,25 @@ python -m veritas_os.scripts.compile_policy \
   - 並行スレッドによる書き込み/トリム/読み取りの TOCTOU（Time-of-Check-Time-of-Use）競合を排除
   - 監査証跡の一貫性を保証し、マルチスレッド環境でのデータ破損を防止
   - テスト1件追加: `test_history_operations_are_thread_safe`（10スレッド並行アクセス）
+
+---
+
+### 11.9 改善実施ログ（2026-04-04 第5弾）
+
+以下は本日追加実施した署名検証の堅牢性改善項目:
+
+- **署名検証のファイル読み込み一元化と TOCTOU 防止（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` のファイル読み込みロジックをリファクタリング:
+    - 従来は `manifest.json` を `read_text()`（JSON パース用）と `read_bytes()`（署名検証用）で二重に読み込んでおり、2回目の `read_bytes()` は `try/except` の外にあった。ファイルが存在チェック後に削除・権限変更された場合に未ハンドルの `OSError` でクラッシュする問題があった
+    - 改善後: マニフェストを `read_bytes()` で1回だけ読み込み、バイト列から `json.loads(bytes.decode("utf-8"))` でアルゴリズム検出を行い、同じバイト列を Ed25519 / SHA-256 署名検証にも使用
+    - 署名ファイル（`manifest.sig`）の読み込みも個別に `try/except OSError` で保護し、読み込み失敗時は `logger.warning()` 付きで `False` を返却
+    - SHA-256 フォールバックも読み込み済みバイト列から `hashlib.sha256()` + `hmac.compare_digest()` で直接計算。従来の `verify_manifest_sha256(manifest_path)` 呼び出し（3回目のファイル読み込み）を排除
+  - 効果:
+    - ファイル読み込み回数: 3回 → 1回（マニフェスト）+ 1回（署名）に削減
+    - TOCTOU 競合ウィンドウの解消: 二重読み込み間のファイル変更による不整合を防止
+    - ファイルシステム障害時の安全な失敗: `OSError` でクラッシュせず `False` を返却
+    - 定数時間比較の統一: SHA-256 フォールバックパスも `hmac.compare_digest()` を直接使用
+  - テスト1件追加: `test_verify_manifest_signature_returns_false_on_unreadable_files`
 
 ---
 

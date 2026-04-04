@@ -767,3 +767,29 @@ def test_verify_manifest_signature_logs_warning_on_corrupt_manifest(
         verify_manifest_signature(tmp_path)
 
     assert "failed to parse manifest.json" in caplog.text
+
+
+def test_verify_manifest_signature_returns_false_on_unreadable_files(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """verify_manifest_signature returns False (not crash) when files vanish after exists()."""
+    import logging
+    from veritas_os.policy.runtime_adapter import verify_manifest_signature
+
+    manifest_path = tmp_path / "manifest.json"
+    sig_path = tmp_path / "manifest.sig"
+    manifest_path.write_text('{"signing":{"algorithm":"sha256"}}', encoding="utf-8")
+    sig_path.write_text("dummy", encoding="utf-8")
+
+    # Make manifest unreadable to simulate file-system error after existence check
+    manifest_path.chmod(0o000)
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
+        result = verify_manifest_signature(tmp_path)
+
+    # Restore permissions for cleanup
+    manifest_path.chmod(0o644)
+
+    assert result is False
+    assert "failed to read manifest" in caplog.text

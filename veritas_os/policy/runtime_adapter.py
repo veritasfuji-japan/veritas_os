@@ -7,6 +7,8 @@ into runtime-evaluable policy structures used by governance and pipeline code.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -14,7 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
 from .ir import CanonicalPolicyIR
-from .signing import verify_manifest_ed25519, verify_manifest_sha256
+from .signing import verify_manifest_ed25519
 
 logger = logging.getLogger(__name__)
 
@@ -93,22 +95,36 @@ def verify_manifest_signature(
             if key_path.is_file():
                 pub_key = key_path.read_bytes()
 
+    # Read raw bytes once (used for both algorithm detection and verification)
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+    except OSError as exc:
+        logger.warning(
+            "failed to read manifest for signature verification: %s", exc
+        )
+        return False
+
+    try:
+        sig_text = signature_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logger.warning(
+            "failed to read signature file for verification: %s", exc
+        )
+        return False
+
     # Detect signing algorithm from manifest metadata
     try:
-        manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_data = json.loads(manifest_bytes.decode("utf-8"))
         algorithm = (
             manifest_data.get("signing", {}).get("algorithm", "sha256")
         )
-    except (json.JSONDecodeError, OSError) as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         logger.warning(
             "failed to parse manifest.json for algorithm detection: %s; "
             "defaulting to sha256 integrity check",
             exc,
         )
         algorithm = "sha256"
-
-    manifest_bytes = manifest_path.read_bytes()
-    sig_text = signature_path.read_text(encoding="utf-8").strip()
 
     if algorithm == "ed25519" and pub_key is not None:
         return verify_manifest_ed25519(manifest_bytes, sig_text, pub_key)
@@ -119,8 +135,9 @@ def verify_manifest_signature(
             "falling back to SHA-256 integrity check (authenticity NOT verified)"
         )
 
-    # Fallback: legacy SHA-256 integrity check
-    return verify_manifest_sha256(manifest_path)
+    # Fallback: legacy SHA-256 integrity check (constant-time comparison)
+    expected = hashlib.sha256(manifest_bytes).hexdigest()
+    return hmac.compare_digest(expected, sig_text)
 
 
 def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
