@@ -144,7 +144,7 @@ def _load() -> Dict[str, Any]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
             logger.warning("Failed to load governance policy: %s", e)
             return GovernancePolicy().model_dump()
 
@@ -271,7 +271,7 @@ def _load_value_history() -> List[Dict[str, Any]]:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
-        except Exception as e:
+        except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
             logger.warning("Failed to load value history from %s: %s", path, e)
             continue
 
@@ -436,7 +436,7 @@ def get_policy_history(limit: int = 50) -> List[Dict[str, Any]]:
             return []
         try:
             lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines()
-        except Exception as e:
+        except (OSError, UnicodeDecodeError) as e:
             logger.warning("Failed to read governance policy history: %s", e)
             return []
     records: List[Dict[str, Any]] = []

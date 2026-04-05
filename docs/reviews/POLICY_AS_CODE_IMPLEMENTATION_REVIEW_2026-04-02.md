@@ -752,6 +752,7 @@ python -m veritas_os.scripts.compile_policy \
 | シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
 | 署名検証 TOCTOU 防止 | `runtime_adapter.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保 |
+| 例外ハンドリング厳密化 | `signing.py`, `governance.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。予期しない例外の隠蔽を防止 |
 
 ### 6.2 セキュリティ警告
 
@@ -1133,6 +1134,25 @@ python -m veritas_os.scripts.compile_policy \
     - ファイルシステム障害時の安全な失敗: `OSError` でクラッシュせず `False` を返却
     - 定数時間比較の統一: SHA-256 フォールバックパスも `hmac.compare_digest()` を直接使用
   - テスト1件追加: `test_verify_manifest_signature_returns_false_on_unreadable_files`
+
+---
+
+### 11.10 改善実施ログ（2026-04-05）
+
+以下は本日の改善で実施した項目（セキュリティスコア向上: 95 → 96、設計品質スコア向上: 92 → 93）:
+
+- **Ed25519 署名検証の例外ハンドリング厳密化（`signing.py`）**
+  - `verify_manifest_ed25519()` の `except (InvalidSignature, Exception)` を `except (InvalidSignature, ValueError, TypeError)` に変更
+  - 従来は `Exception` が全例外をキャッチしていたため、暗号ライブラリの予期しないバグや `AttributeError` 等が静かに `False` として処理され、デバッグ困難な状態だった
+  - 改善後: `InvalidSignature`（署名不一致）、`ValueError`（不正な鍵/Base64 形式）、`TypeError`（型不正）のみをキャッチし、それ以外の予期しない例外はスタックトレース付きで伝播
+  - セキュリティクリティカルな署名検証関数で予期しない例外が隠蔽されるリスクを排除
+
+- **ガバナンスAPI 例外ハンドリング厳密化（`governance.py`）**
+  - `_load()`: `except Exception` → `except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError)` に変更。ファイル読み込み・JSON パース・バリデーションの失敗のみをキャッチし、予期しない例外（例: `PermissionError` 以外のアクセス制御問題）の隠蔽を防止
+  - `get_policy_history()`: `except Exception` → `except (OSError, UnicodeDecodeError)` に変更。ファイル読み込み失敗のみをキャッチ
+  - `_load_value_history()`: `except Exception` → `except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError)` に変更。ファイル読み込み・JSON パース失敗のみをキャッチ
+  - ポリシーモジュール（`runtime_adapter.py` の `_read_json_file()` 等）で確立された具体的例外キャッチパターンとの一貫性を確保
+  - 注: `_append_policy_history()`, `_trim_policy_history()`, `_notify_policy_update()` の書き込み/通知系操作は best-effort 動作が適切なため `except Exception` を維持
 
 ---
 
