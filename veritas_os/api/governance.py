@@ -164,8 +164,7 @@ def _save(data: Dict[str, Any]) -> None:
                     json.dump(data, f, ensure_ascii=False, indent=2)
                     f.write("\n")
                     f.flush()
-                    import os as _os
-                    _os.fsync(f.fileno())
+                    os.fsync(f.fileno())
                 tmp.replace(path)
             except Exception:
                 try:

@@ -1198,4 +1198,15 @@ python -m veritas_os.scripts.compile_policy \
 
 ---
 
+### 11.13 改善実施ログ（2026-04-05 第4弾）
+
+以下は本日追加実施したコード品質改善項目:
+
+- **ガバナンスAPI `_save()` の冗長インポート除去（`governance.py`）**
+  - `_save()` のアトミックライトフォールバックパスで `import os as _os`（ローカルインポート）を除去し、モジュール先頭の `import os`（line 14）を直接使用するよう変更
+  - `_os.fsync(f.fileno())` → `os.fsync(f.fileno())` に統一
+  - `os` は Python 標準ライブラリであり、インポート失敗の可能性がないため関数内でのローカルインポートは不要。section 11.12 で `pipeline_policy.py` に対して実施した `import math as _math` の冗長インポート除去と同一パターンの修正であり、コードベース全体での一貫性を確保
+
+---
+
 *本レビューは `veritas_os/policy/*`, `veritas_os/core/pipeline/pipeline_policy.py`, `veritas_os/api/routes_governance.py`, `veritas_os/api/governance.py`, および関連テストファイルの全コードを精読した上で作成した。*
