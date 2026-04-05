@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 try:
     from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
     _HAS_ATOMIC_IO = True
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     _HAS_ATOMIC_IO = False
 
 logger = logging.getLogger(__name__)

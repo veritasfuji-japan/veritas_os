@@ -756,7 +756,7 @@ python -m veritas_os.scripts.compile_policy \
 | シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
 | 署名検証 TOCTOU 防止 | `runtime_adapter.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保 |
-| 例外ハンドリング厳密化 | `signing.py`, `governance.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。予期しない例外の隠蔽を防止 |
+| 例外ハンドリング厳密化 | `signing.py`, `governance.py`, `pipeline_policy.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。オプション依存インポートの `except Exception` → `except ImportError` 修正。予期しない例外の隠蔽を防止 |
 
 ### 6.2 セキュリティ警告
 
@@ -1178,6 +1178,23 @@ python -m veritas_os.scripts.compile_policy \
   - リスト/タプル/セットに対する `contains` 動作は変更なし（任意の型の `expected` を検索可能）
   - パイプライン bridge の `except (OSError, ValueError, TypeError)` で TypeError はキャッチされていたが、評価全体が中断される問題があった。修正により個別式レベルでの安全失敗に改善
   - テスト1件追加: `test_contains_operator_non_string_expected_with_string_actual`
+
+---
+
+### 11.12 改善実施ログ（2026-04-05 第3弾）
+
+以下は本日追加実施したコード品質改善項目:
+
+- **ガバナンスAPI オプション依存インポートの例外ハンドリング修正（`governance.py`）**
+  - `atomic_write_json` のオプション依存インポートガードで `except Exception` → `except ImportError` に変更
+  - 従来は `Exception` が全例外をキャッチしていたため、`atomic_write_json` 内部の `AttributeError` / `SyntaxError` 等のプログラミングエラーが静かに `_HAS_ATOMIC_IO = False` として処理され、アトミックライト機能が無効化されるバグを隠蔽する可能性があった
+  - 改善後: `ImportError` のみをキャッチし、モジュール不在時のみフォールバック。それ以外の予期しない例外はスタックトレース付きで伝播
+  - section 11.10 で実施した `governance.py` 例外ハンドリング厳密化の残存箇所を解消
+
+- **パイプライン FUJI precheck の冗長インポート除去（`pipeline_policy.py`）**
+  - `stage_fuji_precheck()` 内の `import math as _math`（ローカルインポート）を除去し、モジュール先頭の `import math`（line 15）を直接使用するよう変更
+  - `_math.isfinite(risk_val)` → `math.isfinite(risk_val)` に統一
+  - `math` は Python 標準ライブラリであり、インポート失敗の可能性がないため try ブロック内でのローカルインポートは不要。`stage_value_core()` 内の `math.isfinite(value_ema)` と同一パターンに統一し、コードの一貫性を確保
 
 ---
 
