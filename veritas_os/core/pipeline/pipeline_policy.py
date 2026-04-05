@@ -61,7 +61,7 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
     try:
         runtime_bundle = load_runtime_bundle(bundle_dir)
         decision = evaluate_runtime_policies(runtime_bundle, ctx_dict).to_dict()
-    except (OSError, ValueError, TypeError) as exc:
+    except (OSError, ValueError, TypeError, KeyError) as exc:
         logger.warning("compiled policy runtime bridge failed: %s", exc)
         return
 

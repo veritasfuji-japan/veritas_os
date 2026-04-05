@@ -421,6 +421,7 @@ class PolicyEvaluationResult:
 - ✅ `evaluate_runtime_policies()` の `context` パラメータに None ガードを追加。呼び出し元が `None` を渡した場合に `AttributeError` でクラッシュする問題を防止。
 - ✅ `_safe_numeric_compare()` に `math.isfinite()` ガードを追加。`float("nan")` や `float("inf")` が float 変換に成功しても比較結果が不定になる問題を防止。`pipeline_policy.py` の `risk_val` / `value_ema` ガードと一貫したパターン。
 - ✅ `contains` 演算子で `actual` が文字列かつ `expected` が非文字列（例: 数値）の場合に `TypeError` を送出していた問題を修正。`isinstance(expected, str)` チェックを追加し、型不一致時は安全に `False` を返却。
+- ✅ `policy.outcome["decision"]` / `policy.outcome["reason"]` の直接辞書アクセスを `.get()` による防御的アクセスに変更。コンパイル済み JSON の破損・不完全な IR 構築時に `KeyError` でクラッシュする問題を防止。デフォルト値: `decision="allow"`（安全側）、`reason=""`（空文字列）。
 
 ---
 
@@ -469,6 +470,7 @@ def _apply_compiled_policy_runtime_bridge(ctx):
 - 非強制モード時の warning ログにより、設定ミスの検出性を向上。
 - ✅ enforcement 適用時に `logger.info()` で outcome・変更先 status・トリガポリシー ID を出力。ガバナンス監査証跡として enforcement 実行の追跡が可能に。
 - ✅ `value_ema` の NaN/Inf ガードを追加。既存の `risk_val` ガード（`math.isfinite`）と同一パターンで一貫性を確保し、NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止。
+- ✅ `_apply_compiled_policy_runtime_bridge()` の例外キャッチに `KeyError` を追加。コンパイル済み JSON が破損し evaluator 内部で `KeyError` が発生した場合でもリクエスト処理がクラッシュしない防御層を強化。
 
 ---
 
@@ -565,14 +567,14 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
-| `test_policy_runtime_adapter.py` | 38 | 880+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性** |
+| `test_policy_runtime_adapter.py` | 39 | 930+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **191** | **2,900+** | |
+| **合計** | **192** | **2,950+** | |
 
 ### 4.2 テストパターン分析
 
@@ -654,6 +656,7 @@ python -m veritas_os.scripts.compile_policy \
 | SHA-256 レガシー検証 TOCTOU 耐性 | ✅ | `verify_manifest_sha256()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
 | Ed25519 厳格モード拒否 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` 時に公開鍵なしで Ed25519 バンドルの検証が `ValueError` を送出 |
 | Ed25519 厳格モード許可 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` でも公開鍵が利用可能な場合は正常に検証成功 |
+| outcome 欠損キー防御 | ✅ | `policy.outcome` に `decision`/`reason` キーが欠落しても `KeyError` を送出せず安全にデフォルト値で動作 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -762,6 +765,8 @@ python -m veritas_os.scripts.compile_policy \
 | 署名検証 TOCTOU 防止 | `runtime_adapter.py` + `signing.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保。レガシー `verify_manifest_sha256()` も同一パターンで保護 |
 | 例外ハンドリング厳密化 | `signing.py`, `governance.py`, `pipeline_policy.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。オプション依存インポートの `except Exception` → `except ImportError` 修正。予期しない例外の隠蔽を防止 |
 | Ed25519 厳格モード | `runtime_adapter.py` | ◎ `VERITAS_POLICY_REQUIRE_ED25519` env var により Ed25519→SHA-256 サイレントダウングレードを防止。本番環境での設定ミスによる署名バイパスを排除 |
+| Outcome 防御的アクセス | `evaluator.py` | ◎ `policy.outcome` への直接辞書アクセスを `.get()` に変更。破損 IR による `KeyError` クラッシュを防止 |
+| Pipeline bridge KeyError 防御 | `pipeline_policy.py` | ◎ 例外キャッチに `KeyError` を追加。評価エンジン内部の `KeyError` がリクエスト処理をクラッシュさせることを防止 |
 
 ### 6.2 セキュリティ警告
 
@@ -810,8 +815,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
-| テスト行数 | 2,800行+ | テスト:実装比 = 2.0:1（良好） |
-| テスト関数数 | 188 | 十分な網羅性 |
+| テスト行数 | 2,950行+ | テスト:実装比 = 2.1:1（良好） |
+| テスト関数数 | 192 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -903,9 +908,9 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 97/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング、数値比較 NaN/Inf ガード、contains 演算子型安全性修正 |
-| **設計品質** | 92/100 | 関心の分離、イミュータブル設計、決定論が徹底、tar アーカイブメタデータ正規化による完全な再現可能ビルド |
-| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト・NaN/Inf数値比較ガードテスト・contains型安全性テスト追加 |
+| **機能完成度** | 98/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング、数値比較 NaN/Inf ガード、contains 演算子型安全性修正、outcome 欠損キー防御 |
+| **設計品質** | 93/100 | 関心の分離、イミュータブル設計、決定論が徹底、tar アーカイブメタデータ正規化による完全な再現可能ビルド、evaluator の防御的辞書アクセスによる堅牢性向上 |
+| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト・NaN/Inf数値比較ガードテスト・contains型安全性テスト・outcome欠損キー防御テスト追加 |
 | **セキュリティ** | 97/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、`VERITAS_POLICY_REQUIRE_ED25519` env var による厳格モード（サイレントダウングレード防止）、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止（パイプライン + 評価エンジン）、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止、contains 演算子型安全性修正、レガシー SHA-256 検証の TOCTOU 耐性 |
 | **運用準備** | 88/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、`VERITAS_POLICY_REQUIRE_ED25519` env var による署名厳格モード、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、監査履歴のスレッドセーフ化（TOCTOU 競合排除）、ファイルベース永続化が制約 |
 | **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
@@ -1233,6 +1238,26 @@ python -m veritas_os.scripts.compile_policy \
   - デフォルト無効（後方互換性維持）: env var 未設定時は従来通り SHA-256 フォールバック + 警告ログ
   - `VERITAS_POLICY_RUNTIME_ENFORCE` env var と同一のパターン（`"1"`, `"true"`, `"yes"` で有効化）
   - テスト2件追加: `test_require_ed25519_env_var_rejects_sha256_fallback`（公開鍵なし時の拒否）、`test_require_ed25519_env_var_allows_when_key_present`（公開鍵あり時の正常検証）
+
+---
+
+### 11.15 改善実施ログ（2026-04-05 第6弾）
+
+以下は本日追加実施した評価エンジンの堅牢性改善項目（機能完成度スコア向上: 97 → 98、設計品質スコア向上: 92 → 93）:
+
+- **評価エンジン outcome 防御的アクセス（`evaluator.py`）**
+  - `policy.outcome["decision"]` を `policy.outcome.get("decision", "allow")` に変更
+  - `policy.outcome["reason"]` を `policy.outcome.get("reason", "")` に変更（ローカル変数 `outcome_reason` に抽出して重複アクセスも解消）
+  - コンパイル済み JSON（`canonical_ir.json`）が破損した場合や、`adapt_compiled_payload()` で手動構築された IR の outcome dict が不完全な場合に `KeyError` でクラッシュする問題を防止
+  - デフォルト値: `decision="allow"`（安全側——未定義の判定は最も低い優先度に）、`reason=""`（空文字列——`policy.title` にフォールバック）
+  - 既存の防御的パターン（`context` None ガード、`_safe_numeric_compare` の NaN/Inf ガード、`contains` 演算子の型安全性）と一貫した設計
+  - テスト1件追加: `test_outcome_missing_keys_does_not_raise_key_error`（outcome dict が空の場合に `KeyError` を送出せず `allow` にフォールバックすることを検証）
+
+- **パイプライン bridge 例外キャッチ強化（`pipeline_policy.py`）**
+  - `_apply_compiled_policy_runtime_bridge()` の `except (OSError, ValueError, TypeError)` に `KeyError` を追加
+  - evaluator やランタイムアダプタ内部で `KeyError` が発生した場合のバックストップ（防御層の深化）
+  - evaluator 側の防御的アクセスと組み合わせた二重防御: evaluator が `.get()` で処理し、万一漏れた場合もパイプライン bridge でキャッチ
+  - リクエスト処理のクラッシュを防止し、fail-safe（安全側デフォルト）動作を保証
 
 ---
 

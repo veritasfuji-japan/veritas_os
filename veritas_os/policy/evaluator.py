@@ -293,14 +293,15 @@ def evaluate_runtime_policies(
             explanation = "Policy applied but did not trigger conditions/constraints."
         if triggered_policy:
             triggered.append(policy.policy_id)
-            outcome = policy.outcome["decision"]
+            outcome = policy.outcome.get("decision", "allow")
+            outcome_reason = policy.outcome.get("reason", "")
             explanation = (
-                f"{policy.title}: {policy.outcome['reason']}"
-                if policy.outcome["reason"]
+                f"{policy.title}: {outcome_reason}"
+                if outcome_reason
                 else policy.title
             )
             outcomes.append(outcome)
-            reasons.append(policy.outcome["reason"] or policy.title)
+            reasons.append(outcome_reason or policy.title)
             obligations.extend(policy.obligations)
             required_actions.extend(policy.obligations)
 
