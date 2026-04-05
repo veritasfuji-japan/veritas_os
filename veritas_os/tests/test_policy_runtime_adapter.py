@@ -767,3 +767,120 @@ def test_verify_manifest_signature_logs_warning_on_corrupt_manifest(
         verify_manifest_signature(tmp_path)
 
     assert "failed to parse manifest.json" in caplog.text
+
+
+def test_verify_manifest_signature_returns_false_on_unreadable_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """verify_manifest_signature returns False (not crash) when file read fails."""
+    import logging
+    from veritas_os.policy.runtime_adapter import verify_manifest_signature
+
+    manifest_path = tmp_path / "manifest.json"
+    sig_path = tmp_path / "manifest.sig"
+    manifest_path.write_text('{"signing":{"algorithm":"sha256"}}', encoding="utf-8")
+    sig_path.write_text("dummy", encoding="utf-8")
+
+    # Simulate file-system error after the existence check by patching read_bytes
+    _orig_read_bytes = Path.read_bytes
+
+    def _failing_read_bytes(self: Path) -> bytes:
+        if self == manifest_path:
+            raise OSError("simulated I/O failure")
+        return _orig_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _failing_read_bytes)
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
+        result = verify_manifest_signature(tmp_path)
+
+    assert result is False
+    assert "failed to read manifest" in caplog.text
+
+
+# --- NaN/Inf numeric comparison guard tests ---
+
+
+@pytest.mark.parametrize(
+    "operator, policy_value, ctx_value",
+    [
+        ("gt", 5, float("nan")),
+        ("lt", 5, float("nan")),
+        ("gte", 5, float("inf")),
+        ("lte", 5, float("-inf")),
+        ("gt", 5, "nan"),
+        ("lt", 5, "inf"),
+        # NaN/Inf in policy threshold value
+        ("gt", float("nan"), 10),
+        ("lt", float("inf"), 10),
+    ],
+)
+def test_numeric_comparison_nan_inf_returns_false(
+    operator: str,
+    policy_value: object,
+    ctx_value: object,
+) -> None:
+    """NaN and Inf values in numeric comparisons safely return False (no match)."""
+    bundle = _make_numeric_test_bundle(operator, policy_value)
+    context = {**BASE_NUMERIC_CONTEXT, "score": ctx_value}
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    assert decision["final_outcome"] == "allow"
+
+
+# --- contains operator type safety test ---
+
+
+def test_contains_operator_non_string_expected_with_string_actual() -> None:
+    """contains operator with a non-string expected value on a string actual safely returns False."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    policy = RuntimePolicy(
+        policy_id="policy.contains.type_safety",
+        version="1",
+        title="Contains type safety",
+        description="Non-string expected in string actual should not raise TypeError.",
+        effective_date=None,
+        scope={
+            "domains": ["governance"],
+            "routes": ["/api/decide"],
+            "actors": ["planner"],
+        },
+        conditions=[
+            {"field": "label", "operator": "contains", "value": 42}
+        ],
+        constraints=[],
+        requirements={
+            "required_evidence": [],
+            "required_reviewers": [],
+            "minimum_approval_count": 0,
+        },
+        outcome={"decision": "deny", "reason": "Type mismatch test."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id=policy.policy_id,
+        version=policy.version,
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-03T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[policy],
+    )
+
+    context = {
+        "domain": "governance",
+        "route": "/api/decide",
+        "actor": "planner",
+        "label": "hello world",
+    }
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    # Non-string expected on string actual → no match (previously raised TypeError)
+    assert decision["final_outcome"] == "allow"

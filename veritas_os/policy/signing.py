@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import logging
 from pathlib import Path
 from typing import Tuple
@@ -116,7 +117,7 @@ def verify_manifest_ed25519(
         raw_sig = base64.b64decode(signature_b64)
         public_key.verify(raw_sig, manifest_bytes)
         return True
-    except (InvalidSignature, Exception) as exc:
+    except (InvalidSignature, ValueError, TypeError) as exc:
         logger.warning("Ed25519 signature verification failed: %s", exc)
         return False
 
@@ -137,4 +138,4 @@ def verify_manifest_sha256(manifest_path: Path) -> bool:
         return False
     expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
     observed = sig_path.read_text(encoding="utf-8").strip()
-    return expected == observed
+    return hmac.compare_digest(expected, observed)

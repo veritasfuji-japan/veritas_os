@@ -10,7 +10,7 @@
 | ポリシーコア | `veritas_os/policy/*`（15ファイル, 1,400行+）※ `signing.py` 追加 |
 | パイプライン統合 | `veritas_os/core/pipeline/pipeline_policy.py`（301行） |
 | ガバナンスAPI | `veritas_os/api/routes_governance.py`（217行）, `veritas_os/api/governance.py`（473行） |
-| テスト基盤 | テストファイル7件（2,600行+, 174テスト関数）※ `test_policy_signing.py` 追加 |
+| テスト基盤 | テストファイル7件（2,800行+, 188テスト関数）※ `test_policy_signing.py` 追加 |
 | ポリシー定義例 | `policies/examples/*.yaml`（5ファイル, 178行） |
 | フロントエンド | `frontend/app/governance/`, `packages/types/src/governance.ts` |
 | CLI | `veritas_os/scripts/compile_policy.py`（52行） |
@@ -27,7 +27,7 @@
 |------|------|------|
 | **成熟度** | **GA-Ready（Production-Ready）** | コンパイル〜ランタイム評価の縦断経路が成立、GA 必須要件達成 |
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
-| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む174テスト関数 |
+| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む188テスト関数 |
 | **セキュリティ** | ◎ | Ed25519 公開鍵暗号署名、ReDoSガードレール、NaN/Inf 防止 |
 | **運用準備** | ○ | Ed25519 署名鍵 + `VERITAS_POLICY_RUNTIME_ENFORCE` env var、監視/アラート統合は部分的 |
 
@@ -297,7 +297,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 
 ### 3.6 バンドル生成（`bundle.py` — 44行, `emit.py` — 23行, `explain.py` — 52行）
 
-**設計評価: ○**
+**設計評価: ◎**
 
 - `bundle.py`: tar.gz アーカイブをソート済みファイル順で生成（決定論的）。
 - `emit.py`: `sort_keys=True`, `ensure_ascii=False`, `indent=2` による安定 JSON 出力。
@@ -306,6 +306,8 @@ load_and_validate → to_canonical_ir → semantic_hash
 **所見:**
 - `explain.json` の `human_summary` フィールドが自然言語で application scope と outcome を要約しており、非技術者にも理解しやすい設計。
 - `emit.py` が `ensure_ascii=False` を使用しているため、日本語等の非ASCII文字をそのまま出力可能。
+- ✅ tar アーカイブメタデータ（mtime, uid, gid, uname, gname）を正規化し、異なる環境・タイミングでの再コンパイルでもバイト同一のアーカイブを生成。再現可能ビルドの保証を強化。
+- ✅ シンボリックリンクをアーカイブ対象から除外。バンドルディレクトリにシンボリックリンクが混入してもパストラバーサルリスクを排除。
 
 ---
 
@@ -341,6 +343,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
 - ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
+- ✅ `verify_manifest_signature()` のファイル読み込みを一元化: マニフェストをバイト列として1回だけ読み込み、アルゴリズム検出と署名検証の両方に使用。従来は `read_text()` + `read_bytes()` の二重読み込みで TOCTOU 競合の余地があったが、これを解消。ファイル読み込みの `OSError` を個別にキャッチし `logger.warning()` 付きで `False` を返却。SHA-256 フォールバックも読み込み済みバイト列から直接計算し `hmac.compare_digest()` で定数時間比較。
 
 ---
 
@@ -369,8 +372,8 @@ load_and_validate → to_canonical_ir → semantic_hash
 |--------|------|---------|
 | `eq` / `neq` | 等値/非等値 | any |
 | `in` / `not_in` | リスト包含/非包含 | list/set チェック |
-| `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`） |
-| `contains` | 文字列/リスト包含 | 型チェック |
+| `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`）+ ✅ NaN/Inf ガード（`math.isfinite`） |
+| `contains` | 文字列/リスト包含 | ✅ 型安全ガード（文字列 actual × 非文字列 expected の TypeError 防止） |
 | `regex` | 正規表現マッチ | ReDoS ガードレール付き |
 
 **Outcome 優先度（deny が最高）:**
@@ -415,6 +418,8 @@ class PolicyEvaluationResult:
 - ✅ 未サポート演算子使用時に `logger.warning()` で演算子名・フィールド名を出力（silent failure を排除）。
 - ✅ `_scope_matches()` でコンテキストの scope フィールド（`domain`/`route`/`actor`）が欠落している場合に `logger.debug()` で可視化。デフォルト True 動作を維持しつつ、暗黙のマッチングを追跡可能に。
 - ✅ `evaluate_runtime_policies()` の `context` パラメータに None ガードを追加。呼び出し元が `None` を渡した場合に `AttributeError` でクラッシュする問題を防止。
+- ✅ `_safe_numeric_compare()` に `math.isfinite()` ガードを追加。`float("nan")` や `float("inf")` が float 変換に成功しても比較結果が不定になる問題を防止。`pipeline_policy.py` の `risk_val` / `value_ema` ガードと一貫したパターン。
+- ✅ `contains` 演算子で `actual` が文字列かつ `expected` が非文字列（例: 数値）の場合に `TypeError` を送出していた問題を修正。`isinstance(expected, str)` チェックを追加し、型不一致時は安全に `False` を返却。
 
 ---
 
@@ -509,6 +514,7 @@ def _apply_compiled_policy_runtime_bridge(ctx):
 - ファイルベース永続化は小規模運用に適しているが、マルチインスタンス環境ではロック競合の可能性あり。
 - 4-Eyes 承認のバリデーションが厳密（空文字チェック、重複チェック、型チェック）。
 - `governance_history.jsonl` の上限が500件で、長期運用には外部ログ連携が必要。
+- ✅ `_append_policy_history()` と `get_policy_history()` を `_policy_lock` 配下に移行。監査履歴の書き込み + トリム + 読み取りにおける TOCTOU 競合を排除。
 
 ---
 
@@ -557,15 +563,15 @@ python -m veritas_os.scripts.compile_policy \
 
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
-| `test_policy_compiler.py` | 10 | 190+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング |
-| `test_policy_runtime_adapter.py` | 28 | 780+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ |
+| `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
+| `test_policy_runtime_adapter.py` | 38 | 880+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
-| `test_policy_signing.py` | 13 | 190+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告 |
+| `test_policy_signing.py` | 14 | 210+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
-| `test_governance_api.py`（統合） | 94 | 997 | API全エンドポイント、RBAC、4-eyes、履歴 |
+| `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **174** | **2,600+** | |
+| **合計** | **188** | **2,800+** | |
 
 ### 4.2 テストパターン分析
 
@@ -637,6 +643,13 @@ python -m veritas_os.scripts.compile_policy \
 | context None ガード | ✅ | `evaluate_runtime_policies()` に `None` を渡しても安全に動作 |
 | マニフェスト破損時の警告ログ | ✅ | `verify_manifest_signature()` で manifest.json パース失敗時の WARNING ログ出力 |
 | 署名鍵エラーラッピング | ✅ | 不正な signing_key による例外が `PolicyCompilationError` に変換 |
+| SHA-256 定数時間比較 | ✅ | `verify_manifest_sha256()` が `hmac.compare_digest()` を使用 |
+| バンドルアーカイブバイト決定性 | ✅ | tar メタデータ正規化（mtime/uid/gid）による異環境での同一ハッシュ保証 |
+| バンドルアーカイブシンボリックリンク除外 | ✅ | symlink がアーカイブに含まれないことを検証 |
+| 監査履歴スレッドセーフ並行アクセス | ✅ | 10スレッド並行書き込み/読み取りでの整合性保証 |
+| 署名検証ファイル読み込みエラー耐性 | ✅ | `verify_manifest_signature()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
+| 数値比較 NaN/Inf ガード | ✅ | NaN/Inf の float 変換成功後の不定比較を防止。`float("nan")`・`float("inf")`・文字列 `"nan"`/`"inf"` の8パターン |
+| contains 演算子型安全性 | ✅ | 文字列 actual × 非文字列 expected での TypeError を防止（safe failure） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -732,6 +745,7 @@ python -m veritas_os.scripts.compile_policy \
 |------|---------|------|
 | ReDoS ガードレール | `evaluator.py` | ◎ パターン長256/入力長1024/ネスト量指定子検出 + 拒否時 warning ログ出力 |
 | Manifest 真正性検証 | `runtime_adapter.py` + `signing.py` | ◎ Ed25519 公開鍵暗号署名（SHA-256 フォールバック） |
+| SHA-256 タイミング攻撃対策 | `signing.py` | ◎ `hmac.compare_digest()` による定数時間比較 |
 | XSS 防止（updated_by） | `governance.py` | ◎ HTMLタグ除去 + 制御文字除去 + 長さ制限 |
 | RBAC/ABAC | `routes_governance.py` | ◎ ロール + テナントスコープ |
 | 4-Eyes 承認 | `governance.py` | ◎ 2名異なるレビュアー + 署名 |
@@ -739,6 +753,10 @@ python -m veritas_os.scripts.compile_policy \
 | スキーマ厳密性 | `models.py` | ◎ extra=forbid, frozen, バリデータ |
 | Fail-closed | `pipeline_policy.py` | ○ エラー時は安全側にデフォルト |
 | イミュータブル設計 | 全 dataclass | ◎ frozen=True で変更不可 |
+| シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
+| 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
+| 署名検証 TOCTOU 防止 | `runtime_adapter.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保 |
+| 例外ハンドリング厳密化 | `signing.py`, `governance.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。予期しない例外の隠蔽を防止 |
 
 ### 6.2 セキュリティ警告
 
@@ -787,8 +805,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
-| テスト行数 | 2,600行+ | テスト:実装比 = 1.9:1（良好） |
-| テスト関数数 | 174 | 十分な網羅性 |
+| テスト行数 | 2,800行+ | テスト:実装比 = 2.0:1（良好） |
+| テスト関数数 | 188 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -880,11 +898,11 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 96/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング |
-| **設計品質** | 90/100 | 関心の分離、イミュータブル設計、決定論が徹底 |
-| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト追加 |
-| **セキュリティ** | 93/100 | Ed25519 公開鍵暗号署名による真正性保証、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング |
-| **運用準備** | 85/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、ファイルベース永続化が制約 |
+| **機能完成度** | 97/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング、数値比較 NaN/Inf ガード、contains 演算子型安全性修正 |
+| **設計品質** | 92/100 | 関心の分離、イミュータブル設計、決定論が徹底、tar アーカイブメタデータ正規化による完全な再現可能ビルド |
+| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト・NaN/Inf数値比較ガードテスト・contains型安全性テスト追加 |
+| **セキュリティ** | 96/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止（パイプライン + 評価エンジン）、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止、contains 演算子型安全性修正 |
+| **運用準備** | 87/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、監査履歴のスレッドセーフ化（TOCTOU 競合排除）、ファイルベース永続化が制約 |
 | **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
 
 ### 11.2 成熟度判定
@@ -1075,6 +1093,91 @@ python -m veritas_os.scripts.compile_policy \
   - 従来はサイレントに SHA-256 フォールバックしていたが、バンドル破損・改ざんの検出性を向上
   - 後方互換性を維持: 動作自体は変更せず（SHA-256 フォールバック維持）、警告ログの追加のみ
   - テスト1件追加: `test_verify_manifest_signature_logs_warning_on_corrupt_manifest`
+
+---
+
+### 11.8 改善実施ログ（2026-04-04 第4弾）
+
+以下は本日追加実施したセキュリティ・設計品質・運用準備の改善項目（セキュリティスコア向上: 93 → 95、設計品質スコア向上: 90 → 92、運用準備スコア向上: 85 → 87）:
+
+- **SHA-256 署名検証のタイミング攻撃対策（`signing.py`）**
+  - `verify_manifest_sha256()` の文字列比較を `==` 演算子から `hmac.compare_digest()` に変更
+  - 定数時間比較により、応答時間差を利用した署名推測（タイミング攻撃）を防止
+  - レガシー SHA-256 フォールバック使用時のセキュリティを強化
+  - テスト1件追加: `test_verify_manifest_sha256_uses_constant_time_comparison`
+
+- **tar アーカイブの完全な決定性保証（`bundle.py`）**
+  - `create_bundle_archive()` のアーカイブ生成を `tar.add()` から `tar.addfile()` に変更
+  - 各エントリの `mtime`, `uid`, `gid`, `uname`, `gname` を固定値に正規化
+  - 異なるユーザー・異なるタイミングでの再コンパイルでもバイト同一のアーカイブを生成
+  - シンボリックリンクをアーカイブ対象から除外（`entry.is_symlink()` チェック）。パストラバーサルリスクを排除
+  - テスト2件追加: `test_bundle_archive_is_deterministic`, `test_bundle_archive_excludes_symlinks`
+
+- **監査履歴のスレッドセーフ化（`governance.py`）**
+  - `_append_policy_history()` のファイル書き込み + `_trim_policy_history()` 呼び出しを `_policy_lock` 配下に移行
+  - `get_policy_history()` のファイル読み取りを `_policy_lock` 配下に移行
+  - 並行スレッドによる書き込み/トリム/読み取りの TOCTOU（Time-of-Check-Time-of-Use）競合を排除
+  - 監査証跡の一貫性を保証し、マルチスレッド環境でのデータ破損を防止
+  - テスト1件追加: `test_history_operations_are_thread_safe`（10スレッド並行アクセス）
+
+---
+
+### 11.9 改善実施ログ（2026-04-04 第5弾）
+
+以下は本日追加実施した署名検証の堅牢性改善項目:
+
+- **署名検証のファイル読み込み一元化と TOCTOU 防止（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` のファイル読み込みロジックをリファクタリング:
+    - 従来は `manifest.json` を `read_text()`（JSON パース用）と `read_bytes()`（署名検証用）で二重に読み込んでおり、2回目の `read_bytes()` は `try/except` の外にあった。ファイルが存在チェック後に削除・権限変更された場合に未ハンドルの `OSError` でクラッシュする問題があった
+    - 改善後: マニフェストを `read_bytes()` で1回だけ読み込み、バイト列から `json.loads(bytes.decode("utf-8"))` でアルゴリズム検出を行い、同じバイト列を Ed25519 / SHA-256 署名検証にも使用
+    - 署名ファイル（`manifest.sig`）の読み込みも個別に `try/except OSError` で保護し、読み込み失敗時は `logger.warning()` 付きで `False` を返却
+    - SHA-256 フォールバックも読み込み済みバイト列から `hashlib.sha256()` + `hmac.compare_digest()` で直接計算。従来の `verify_manifest_sha256(manifest_path)` 呼び出し（3回目のファイル読み込み）を排除
+  - 効果:
+    - ファイル読み込み回数: 3回 → 1回（マニフェスト）+ 1回（署名）に削減
+    - TOCTOU 競合ウィンドウの解消: 二重読み込み間のファイル変更による不整合を防止
+    - ファイルシステム障害時の安全な失敗: `OSError` でクラッシュせず `False` を返却
+    - 定数時間比較の統一: SHA-256 フォールバックパスも `hmac.compare_digest()` を直接使用
+  - テスト1件追加: `test_verify_manifest_signature_returns_false_on_unreadable_files`
+
+---
+
+### 11.10 改善実施ログ（2026-04-05）
+
+以下は本日の改善で実施した項目（セキュリティスコア向上: 95 → 96、設計品質スコア向上: 92 → 93）:
+
+- **Ed25519 署名検証の例外ハンドリング厳密化（`signing.py`）**
+  - `verify_manifest_ed25519()` の `except (InvalidSignature, Exception)` を `except (InvalidSignature, ValueError, TypeError)` に変更
+  - 従来は `Exception` が全例外をキャッチしていたため、暗号ライブラリの予期しないバグや `AttributeError` 等が静かに `False` として処理され、デバッグ困難な状態だった
+  - 改善後: `InvalidSignature`（署名不一致）、`ValueError`（不正な鍵/Base64 形式）、`TypeError`（型不正）のみをキャッチし、それ以外の予期しない例外はスタックトレース付きで伝播
+  - セキュリティクリティカルな署名検証関数で予期しない例外が隠蔽されるリスクを排除
+
+- **ガバナンスAPI 例外ハンドリング厳密化（`governance.py`）**
+  - `_load()`: `except Exception` → `except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError)` に変更。ファイル読み込み・JSON パース・バリデーションの失敗のみをキャッチし、予期しない例外（例: `PermissionError` 以外のアクセス制御問題）の隠蔽を防止
+  - `get_policy_history()`: `except Exception` → `except (OSError, UnicodeDecodeError)` に変更。ファイル読み込み失敗のみをキャッチ
+  - `_load_value_history()`: `except Exception` → `except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError)` に変更。ファイル読み込み・JSON パース失敗のみをキャッチ
+  - ポリシーモジュール（`runtime_adapter.py` の `_read_json_file()` 等）で確立された具体的例外キャッチパターンとの一貫性を確保
+  - 注: `_append_policy_history()`, `_trim_policy_history()`, `_notify_policy_update()` の書き込み/通知系操作は best-effort 動作が適切なため `except Exception` を維持
+
+---
+
+### 11.11 改善実施ログ（2026-04-05 第2弾）
+
+以下は本日追加実施した評価エンジンの堅牢性改善項目（機能完成度スコア向上: 96 → 97、セキュリティスコア向上: 95 → 96）:
+
+- **数値比較演算子の NaN/Inf ガード追加（`evaluator.py`）**
+  - `_safe_numeric_compare()` に `math.isfinite()` チェックを追加
+  - `float("nan")` や `float("inf")` は float 変換に成功する（`ValueError` を送出しない）が、比較結果が不定（NaN は全比較が `False`、Inf は `inf > 5` が `True` 等）
+  - 改善後: NaN/Inf を検出した場合は安全に `False` を返却（マッチしない扱い）
+  - `pipeline_policy.py` の `risk_val` / `value_ema` で確立された NaN/Inf ガードパターン（`math.isfinite()`）との一貫性を確保
+  - テスト8件追加（parametrize）: `float("nan")` / `float("inf")` / `float("-inf")` / 文字列 `"nan"` / `"inf"` のコンテキスト値パターン + ポリシー閾値側の NaN/Inf パターン
+
+- **`contains` 演算子の TypeError 修正（`evaluator.py`）**
+  - `_evaluate_expression()` の `contains` 演算子で、`actual` が文字列かつ `expected` が非文字列（例: 数値 `42`）の場合に `TypeError: 'in <string>' requires string as left operand, not int` が送出されていた問題を修正
+  - 修正前: `isinstance(actual, (list, tuple, set, str))` で一括チェック → 文字列に対して `42 in "hello"` が実行され TypeError
+  - 修正後: 文字列とリスト/タプル/セットのチェックを分離。文字列の場合は `isinstance(expected, str)` を追加チェックし、型不一致時は安全に `False` を返却
+  - リスト/タプル/セットに対する `contains` 動作は変更なし（任意の型の `expected` を検索可能）
+  - パイプライン bridge の `except (OSError, ValueError, TypeError)` で TypeError はキャッチされていたが、評価全体が中断される問題があった。修正により個別式レベルでの安全失敗に改善
+  - テスト1件追加: `test_contains_operator_non_string_expected_with_string_actual`
 
 ---
 
