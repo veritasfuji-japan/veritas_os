@@ -233,6 +233,224 @@ describe("useGovernanceState", () => {
     expect(result.current.pendingConfirm).toBeNull();
   });
 
+  it("applyPolicy shadow mode does not call PUT", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    mockFetch.mockClear();
+
+    act(() => { result.current.applyPolicy("shadow"); });
+    expect(result.current.pendingConfirm).not.toBeNull();
+    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.current.success).toContain("Shadow mode");
+  });
+
+  it("applyPolicy apply mode calls PUT and updates policy on success", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    const updatedPolicy = { ...MOCK_POLICY, version: "v2.0" };
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: updatedPolicy }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: updatedPolicy } });
+
+    act(() => { result.current.applyPolicy("apply"); });
+    expect(result.current.pendingConfirm).not.toBeNull();
+    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/veritas/v1/governance/policy",
+      expect.objectContaining({ method: "PUT" }),
+    );
+    expect(result.current.success).toContain("applied");
+    expect(result.current.savedPolicy!.version).toBe("v2.0");
+  });
+
+  it("applyPolicy apply mode sets error on HTTP failure", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(result.current.error).toContain("HTTP 500");
+  });
+
+  it("applyPolicy apply mode sets error on validation failure", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    mockValidate.mockReturnValue({ ok: false });
+
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(result.current.error).toContain("validation failed");
+  });
+
+  it("applyPolicy apply mode sets error on network failure", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    mockFetch.mockRejectedValue(new Error("Network failure"));
+
+    act(() => { result.current.applyPolicy("apply"); });
+    await act(async () => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(result.current.error).toContain("Apply failed");
+  });
+
+  it("approveChanges sets draft approval_status to approved", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    // Make a change first so hasChanges is true
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        fuji_rules: { ...prev.fuji_rules, pii_check: false },
+      }));
+    });
+    expect(result.current.hasChanges).toBe(true);
+
+    act(() => { result.current.approveChanges(); });
+    expect(result.current.pendingConfirm).not.toBeNull();
+    act(() => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(result.current.draft!.approval_status).toBe("approved");
+    expect(result.current.success).toContain("approved");
+  });
+
+  it("rejectChanges sets draft approval_status to rejected", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    // Make a change first
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        fuji_rules: { ...prev.fuji_rules, pii_check: false },
+      }));
+    });
+
+    act(() => { result.current.rejectChanges(); });
+    expect(result.current.pendingConfirm).not.toBeNull();
+    act(() => { result.current.pendingConfirm!.onConfirm(); });
+
+    expect(result.current.draft!.approval_status).toBe("rejected");
+    expect(result.current.success).toContain("rejected");
+  });
+
+  it("approveChanges does nothing without changes", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => { result.current.approveChanges(); });
+    expect(result.current.pendingConfirm).toBeNull();
+  });
+
+  it("rejectChanges does nothing without changes", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => { result.current.rejectChanges(); });
+    expect(result.current.pendingConfirm).toBeNull();
+  });
+
+  it("draftApprovalStatus returns pending when there are changes", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        fuji_rules: { ...prev.fuji_rules, pii_check: false },
+      }));
+    });
+
+    expect(result.current.draftApprovalStatus).toBe("pending");
+  });
+
+  it("draftApprovalStatus returns draft when no draft loaded", () => {
+    const { result } = renderHook(() => useGovernanceState());
+    expect(result.current.draftApprovalStatus).toBe("draft");
+  });
+
+  it("changeCount reflects the number of changed fields", async () => {
+    mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
+    mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });
+
+    const { result } = renderHook(() => useGovernanceState());
+    await act(async () => {
+      await result.current.fetchPolicy();
+    });
+
+    expect(result.current.changeCount).toBe(0);
+
+    act(() => {
+      result.current.updateDraft((prev) => ({
+        ...prev,
+        fuji_rules: { ...prev.fuji_rules, pii_check: false },
+      }));
+    });
+
+    expect(result.current.changeCount).toBeGreaterThan(0);
+  });
+
   it("risk calculations are derived correctly", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({ policy: MOCK_POLICY }) });
     mockValidate.mockReturnValue({ ok: true, data: { policy: MOCK_POLICY } });

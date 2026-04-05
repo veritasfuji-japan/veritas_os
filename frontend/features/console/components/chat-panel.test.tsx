@@ -19,7 +19,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
     chatMessages: [],
     query: "",
     loading: false,
-    executionStatus: "idle",
+    executionStatus: "idle" as const,
     error: null,
     setQuery: vi.fn(),
     runDecision: vi.fn().mockResolvedValue(undefined),
@@ -84,5 +84,51 @@ describe("ChatPanel", () => {
   it("disables submit button when loading", () => {
     renderPanel({ loading: true });
     expect(screen.getByRole("button", { name: "sending" })).toBeDisabled();
+  });
+
+  it("shows submitting status message", () => {
+    renderPanel({ executionStatus: "submitting" });
+    expect(screen.getByText("submittingStatus")).toBeInTheDocument();
+  });
+
+  it("shows streaming status message", () => {
+    renderPanel({ executionStatus: "streaming" });
+    expect(screen.getByText("streamingStatus")).toBeInTheDocument();
+  });
+
+  it("renders danger presets when enabled", () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DANGER_PRESETS", "true");
+    renderPanel();
+    expect(screen.getByText("dangerPresets")).toBeInTheDocument();
+    // Should render preset buttons
+    const presetButtons = screen.getAllByRole("button").filter(
+      (btn) => btn.className.includes("red-500"),
+    );
+    expect(presetButtons.length).toBe(3);
+    vi.unstubAllEnvs();
+  });
+
+  it("danger preset button calls runDecision with preset text", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_DANGER_PRESETS", "true");
+    const runDecision = vi.fn().mockResolvedValue(undefined);
+    renderPanel({ runDecision });
+    const presetButtons = screen.getAllByRole("button").filter(
+      (btn) => btn.className.includes("red-500"),
+    );
+    fireEvent.click(presetButtons[0]);
+    expect(runDecision).toHaveBeenCalled();
+    vi.unstubAllEnvs();
+  });
+
+  it("renders system role label", () => {
+    renderPanel({
+      chatMessages: [
+        { id: 1, role: "system", content: "System message" },
+      ],
+    });
+    expect(screen.getByText("chatRoleSystem")).toBeInTheDocument();
+    expect(screen.getByText("System message")).toBeInTheDocument();
   });
 });

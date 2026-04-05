@@ -189,6 +189,183 @@ describe("DetailPanel", () => {
     fireEvent.click(screen.getByText("Metadata"));
     expect(onDetailTabChange).toHaveBeenCalledWith("metadata");
   });
+
+  it("renders metadata tab content", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="metadata"
+      />,
+    );
+    expect(screen.getByText("Metadata Card")).toBeInTheDocument();
+    expect(screen.getByText(/"key": "value"/)).toBeInTheDocument();
+  });
+
+  it("renders hash tab with previous/current/next entries", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        previousEntry={mockItem2 as any}
+        nextEntry={mockItem2 as any}
+        detailTab="hash"
+      />,
+    );
+    expect(screen.getByText("Previous")).toBeInTheDocument();
+    expect(screen.getByText("Current")).toBeInTheDocument();
+    expect(screen.getByText("Next")).toBeInTheDocument();
+  });
+
+  it("renders hash tab with none when no adjacent entries", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        previousEntry={null}
+        nextEntry={null}
+        detailTab="hash"
+      />,
+    );
+    const noneLabels = screen.getAllByText("none");
+    expect(noneLabels).toHaveLength(2);
+  });
+
+  it("renders hash tab with chain broken warning", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "broken" as any, reason: "mismatch" }}
+        detailTab="hash"
+      />,
+    );
+    expect(screen.getByText(/Hash mismatch detected/)).toBeInTheDocument();
+    expect(screen.getByText(/Reason.*mismatch/)).toBeInTheDocument();
+  });
+
+  it("renders hash tab with chain missing warning", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "missing" as any, reason: "hash absent" }}
+        detailTab="hash"
+      />,
+    );
+    expect(screen.getByText(/Hash missing/)).toBeInTheDocument();
+  });
+
+  it("renders hash tab with orphan warning", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "orphan" as any, reason: "no prev link" }}
+        detailTab="hash"
+      />,
+    );
+    expect(screen.getByText(/Orphan entry/)).toBeInTheDocument();
+  });
+
+  it("renders related IDs tab", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="related"
+      />,
+    );
+    expect(screen.getByText("request_id:")).toBeInTheDocument();
+    expect(screen.getByText("req-001")).toBeInTheDocument();
+    expect(screen.getByText("decision_id:")).toBeInTheDocument();
+    expect(screen.getByText("42")).toBeInTheDocument();
+    expect(screen.getByText("replay_id:")).toBeInTheDocument();
+    expect(screen.getByText("replay-001")).toBeInTheDocument();
+  });
+
+  it("renders continuation tab with no-data message", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="continuation"
+      />,
+    );
+    expect(screen.getByText(/No continuation data/)).toBeInTheDocument();
+  });
+
+  it("renders continuation tab with full data", () => {
+    const continuationItem = {
+      ...mockItem,
+      continuation_claim_status: "live",
+      continuation_revalidation_status: "passed",
+      continuation_revalidation_outcome: "accept",
+      continuation_divergence_flag: false,
+      continuation_should_refuse: false,
+      continuation_reason_codes: ["R001", "R002"],
+      continuation_law_version_id: "law-v1",
+      continuation_support_basis_digest: "digest-abc",
+      continuation_burden_headroom_digest: "burden-xyz",
+      continuation_local_step_result: "pass",
+    };
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={continuationItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="continuation"
+      />,
+    );
+    expect(screen.getByText("LIVE")).toBeInTheDocument();
+    expect(screen.getByText("law-v1")).toBeInTheDocument();
+    expect(screen.getByText("digest-abc")).toBeInTheDocument();
+    expect(screen.getByText("burden-xyz")).toBeInTheDocument();
+    expect(screen.getByText("passed")).toBeInTheDocument();
+    expect(screen.getByText("accept")).toBeInTheDocument();
+    expect(screen.getByText("pass")).toBeInTheDocument();
+    expect(screen.getByText("R001, R002")).toBeInTheDocument();
+  });
+
+  it("renders continuation tab with divergence banner", () => {
+    const divergedItem = {
+      ...mockItem,
+      continuation_claim_status: "narrowed",
+      continuation_divergence_flag: true,
+      continuation_should_refuse: true,
+    };
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={divergedItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="continuation"
+      />,
+    );
+    expect(screen.getByText(/Step passed but chain-level continuation/)).toBeInTheDocument();
+    expect(screen.getByText("NARROWED")).toBeInTheDocument();
+    // Both shouldRefuse and divergenceFlag show YES
+    const yesElements = screen.getAllByText("YES");
+    expect(yesElements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders raw JSON tab", () => {
+    render(
+      <DetailPanel
+        {...baseProps}
+        selected={mockItem as any}
+        selectedChain={{ status: "verified", reason: "ok" }}
+        detailTab="raw"
+      />,
+    );
+    expect(screen.getByText("Expand JSON")).toBeInTheDocument();
+    expect(screen.getByText(/"request_id": "req-001"/)).toBeInTheDocument();
+  });
 });
 
 /* ================================================================== */
