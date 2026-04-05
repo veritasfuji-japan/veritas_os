@@ -144,6 +144,239 @@ describe("useDecide", () => {
     expect(result.current.error).not.toContain("stack trace");
     expect(setResult).toHaveBeenCalledWith(null);
   });
+  it("sets error when query is empty", async () => {
+    const setQuery = vi.fn();
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "",
+        setQuery,
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("   ");
+    });
+
+    expect(result.current.error).toBe("queryRequired");
+    expect(result.current.executionStatus).toBe("failed");
+  });
+
+  it("handles 401 auth error response", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('{"error":"unauthorized"}', {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.error).toBe("authError");
+    expect(result.current.executionStatus).toBe("failed");
+    expect(setResult).toHaveBeenCalledWith(null);
+  });
+
+  it("handles 503 service unavailable response", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('{"error":"unavailable"}', {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.error).toBe("serviceUnavailable");
+    expect(result.current.executionStatus).toBe("failed");
+    expect(setResult).toHaveBeenCalledWith(null);
+  });
+
+  it("handles schema validation failure", async () => {
+    const invalidPayload = { not_a_valid: "response" };
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify(invalidPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.error).toBe("schemaMismatch");
+    expect(result.current.executionStatus).toBe("failed");
+    expect(setResult).toHaveBeenCalledWith(null);
+  });
+
+  it("handles network error (non-API, non-abort exception)", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(
+      new TypeError("Failed to fetch"),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.error).toBe("networkError");
+    expect(result.current.executionStatus).toBe("failed");
+    expect(setResult).toHaveBeenCalledWith(null);
+  });
+
+  it("handles generic non-ok HTTP status (e.g. 422 validation)", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('{"error":"bad request"}', {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.error).toBe("validationError");
+    expect(result.current.executionStatus).toBe("failed");
+  });
+
+  it("notifySseActivity updates latestEvent and executionStatus", () => {
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "",
+        setQuery: vi.fn(),
+        setResult: vi.fn(),
+        setChatMessages: vi.fn(),
+      }),
+    );
+
+    act(() => {
+      result.current.notifySseActivity("new event");
+    });
+
+    expect(result.current.latestEvent).toBe("new event");
+  });
+
+  it("successful response sets executionStatus to completed", async () => {
+    const payload = buildDecidePayload("req-success", "allow");
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const setResult = vi.fn();
+    const setChatMessages = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDecide({
+        t: (_ja, en) => en,
+        tk: (key) => key,
+        query: "test",
+        setQuery: vi.fn(),
+        setResult,
+        setChatMessages,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.runDecision("test query");
+    });
+
+    expect(result.current.executionStatus).toBe("completed");
+    expect(result.current.loading).toBe(false);
+    expect(setResult).toHaveBeenCalledWith(payload);
+  });
+
   it("ignores stale completion and only applies latest result", async () => {
     const first = createDeferred<Response>();
     const second = createDeferred<Response>();
