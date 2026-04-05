@@ -162,6 +162,7 @@ bundle = load_runtime_bundle(
 |------|------|
 | `VERITAS_POLICY_VERIFY_KEY` | Ed25519 公開鍵 PEM ファイルのパスを指定。`public_key_pem` 引数が未指定の場合にフォールバックとして使用 |
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `true` を設定すると、全リクエストで compiled policy enforcement を有効化。リクエスト単位の `policy_runtime_enforce` が未設定の場合のデフォルト |
+| `VERITAS_POLICY_REQUIRE_ED25519` | `true` を設定すると、マニフェストが Ed25519 署名を宣言しているバンドルに対して SHA-256 フォールバックを拒否。公開鍵が利用不可の場合は `ValueError` を送出し、サイレントダウングレードを防止 |
 
 ### 鍵ペアの生成
 
@@ -326,3 +327,5 @@ pytest -q veritas_os/tests/test_policy_runtime_adapter.py \
 - runtime bridge の enforcement は opt-in (`policy_runtime_enforce` or `VERITAS_POLICY_RUNTIME_ENFORCE`) です。
   本番環境では `VERITAS_POLICY_RUNTIME_ENFORCE=true` を設定し、全リクエストでの enforcement を保証してください。
   rollout 時は監査ログと canary を併用し、fail-closed 設定を段階的に適用してください。
+- Ed25519 署名済みバンドルを運用する場合は `VERITAS_POLICY_REQUIRE_ED25519=true` を設定し、
+  公開鍵の設定ミスによるサイレントダウングレード（Ed25519→SHA-256）を防止してください。
