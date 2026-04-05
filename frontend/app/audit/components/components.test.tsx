@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -103,7 +104,7 @@ describe("AuditSummaryPanel", () => {
   });
 
   it("renders stat cards when hasItems is true", () => {
-    render(<AuditSummaryPanel summary={baseSummary} hasItems={true} />);
+    render(<AuditSummaryPanel summary={baseSummary} hasItems />);
     expect(screen.getByTestId("stat-Total")).toHaveTextContent("10");
     expect(screen.getByTestId("stat-Verified")).toHaveTextContent("7");
     expect(screen.getByTestId("stat-Broken")).toHaveTextContent("1");
@@ -113,14 +114,14 @@ describe("AuditSummaryPanel", () => {
   });
 
   it("renders policy version distribution", () => {
-    render(<AuditSummaryPanel summary={baseSummary} hasItems={true} />);
+    render(<AuditSummaryPanel summary={baseSummary} hasItems />);
     expect(screen.getByText("Policy Version Distribution")).toBeInTheDocument();
     expect(screen.getByText("v1: 6")).toBeInTheDocument();
     expect(screen.getByText("v2: 4")).toBeInTheDocument();
   });
 
   it("renders integrity bar", () => {
-    render(<AuditSummaryPanel summary={baseSummary} hasItems={true} />);
+    render(<AuditSummaryPanel summary={baseSummary} hasItems />);
     expect(screen.getByText(/Chain integrity/)).toBeInTheDocument();
     expect(screen.getByText(/70%/)).toBeInTheDocument();
   });

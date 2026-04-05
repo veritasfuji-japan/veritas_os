@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -120,7 +121,7 @@ describe("ToggleRow", () => {
 
   it("is disabled when disabled prop is true", () => {
     const onChange = vi.fn();
-    render(<ToggleRow label="Toggle" checked={true} onChange={onChange} disabled />);
+    render(<ToggleRow label="Toggle" checked onChange={onChange} disabled />);
     const btn = screen.getByRole("switch");
     expect(btn).toBeDisabled();
     fireEvent.click(btn);
@@ -210,10 +211,10 @@ describe("ApplyFlow", () => {
   it("renders all 4 buttons", () => {
     render(
       <ApplyFlow
-        hasChanges={true}
+        hasChanges
         saving={false}
-        canApply={true}
-        canOperate={true}
+        canApply
+        canOperate
         draftApprovalStatus="approved"
         onApply={() => {}}
         onRollback={() => {}}
@@ -228,10 +229,10 @@ describe("ApplyFlow", () => {
   it("disables apply/rollback when canApply is false and shows RBAC warning", () => {
     render(
       <ApplyFlow
-        hasChanges={true}
+        hasChanges
         saving={false}
         canApply={false}
-        canOperate={true}
+        canOperate
         draftApprovalStatus="approved"
         onApply={() => {}}
         onRollback={() => {}}
@@ -248,10 +249,10 @@ describe("ApplyFlow", () => {
     const onApply = vi.fn();
     render(
       <ApplyFlow
-        hasChanges={true}
+        hasChanges
         saving={false}
-        canApply={true}
-        canOperate={true}
+        canApply
+        canOperate
         draftApprovalStatus="approved"
         onApply={onApply}
         onRollback={() => {}}
@@ -267,10 +268,10 @@ describe("ApplyFlow", () => {
   it("shows approval info text when hasChanges and status != approved", () => {
     render(
       <ApplyFlow
-        hasChanges={true}
+        hasChanges
         saving={false}
-        canApply={true}
-        canOperate={true}
+        canApply
+        canOperate
         draftApprovalStatus="pending"
         onApply={() => {}}
         onRollback={() => {}}
@@ -292,9 +293,9 @@ describe("ApprovalWorkflow", () => {
       <ApprovalWorkflow
         draftApprovalStatus="pending"
         changeCount={3}
-        canApprove={true}
+        canApprove
         ticketId="TICKET-1"
-        approverIdentityBinding={true}
+        approverIdentityBinding
         onApprove={() => {}}
         onReject={() => {}}
       />,
@@ -310,7 +311,7 @@ describe("ApprovalWorkflow", () => {
       <ApprovalWorkflow
         draftApprovalStatus="pending"
         changeCount={1}
-        canApprove={true}
+        canApprove
         ticketId="T-1"
         approverIdentityBinding={false}
         onApprove={onApprove}
@@ -345,7 +346,7 @@ describe("ApprovalWorkflow", () => {
       <ApprovalWorkflow
         draftApprovalStatus="rejected"
         changeCount={1}
-        canApprove={true}
+        canApprove
         ticketId="T-1"
         approverIdentityBinding={false}
         onApprove={() => {}}
@@ -385,7 +386,7 @@ describe("PolicyMetaPanel", () => {
         savedPolicy={MOCK_DRAFT as any}
         draft={MOCK_DRAFT as any}
         draftApprovalStatus="pending"
-        hasChanges={true}
+        hasChanges
         changeCount={5}
       />,
     );
@@ -462,7 +463,7 @@ describe("FujiRulesEditor", () => {
     render(
       <FujiRulesEditor
         draft={MOCK_DRAFT as any}
-        isViewer={true}
+        isViewer
         onUpdate={() => {}}
       />,
     );

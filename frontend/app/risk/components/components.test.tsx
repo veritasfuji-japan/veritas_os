@@ -126,7 +126,7 @@ describe("InsightCards", () => {
   });
 
   it("applies danger styling when unsafeBurst is true", () => {
-    const { container } = render(<InsightCards {...baseProps} unsafeBurst={true} />);
+    const { container } = render(<InsightCards {...baseProps} unsafeBurst />);
     const burstCard = container.querySelector(".border-danger\\/40");
     expect(burstCard).toBeInTheDocument();
   });
@@ -183,12 +183,12 @@ describe("TrendChart", () => {
   });
 
   it("shows spike detected message when spikeDetected is true", () => {
-    render(<TrendChart {...baseProps} spikeDetected={true} />);
+    render(<TrendChart {...baseProps} spikeDetected />);
     expect(screen.getByText(/Spike detected/)).toBeInTheDocument();
   });
 
   it("shows burst message when unsafeBurst is true", () => {
-    render(<TrendChart {...baseProps} unsafeBurst={true} />);
+    render(<TrendChart {...baseProps} unsafeBurst />);
     expect(screen.getByText(/Unsafe burst active/)).toBeInTheDocument();
   });
 

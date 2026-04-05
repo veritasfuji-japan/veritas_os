@@ -46,7 +46,6 @@ describe("RootLayout", () => {
       <RootLayout><span>test</span></RootLayout>
     );
 
-    const html = container.closest("html") ?? container.querySelector("html");
     // In JSDOM the <html> rendered inside the test may appear as a child node
     // since RootLayout returns an <html> element. Check the rendered output.
     const rendered = container.innerHTML;
