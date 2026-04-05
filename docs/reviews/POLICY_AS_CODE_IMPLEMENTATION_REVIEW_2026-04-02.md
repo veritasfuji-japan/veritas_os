@@ -328,10 +328,11 @@ load_and_validate → to_canonical_ir → semantic_hash
 **セキュリティフロー:**
 1. `manifest.json` の `signing.algorithm` フィールドで署名方式を判別
 2. Ed25519 の場合: `public_key_pem`（引数または `VERITAS_POLICY_VERIFY_KEY` 環境変数）で電子署名を検証
-3. レガシー（SHA-256）の場合: `manifest.sig` のハッシュ整合チェックにフォールバック
-4. 不一致の場合は `ValueError` を送出してロードを拒否
-5. 検証成功後に `canonical_ir.json` を読み込み、`RuntimePolicy` に変換
-6. `RuntimePolicyBundle` （`frozen=True`）として返却
+3. Ed25519 宣言 + 公開鍵なし + `VERITAS_POLICY_REQUIRE_ED25519=true` の場合: `ValueError` を送出（サイレントダウングレード防止）
+4. レガシー（SHA-256）の場合: `manifest.sig` のハッシュ整合チェックにフォールバック
+5. 不一致の場合は `ValueError` を送出してロードを拒否
+6. 検証成功後に `canonical_ir.json` を読み込み、`RuntimePolicy` に変換
+7. `RuntimePolicyBundle` （`frozen=True`）として返却
 
 **所見:**
 - 署名検証がロード前に必ず実行される設計は良い。
@@ -341,7 +342,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `_read_json_file()` が `json.JSONDecodeError` / `UnicodeDecodeError` / `OSError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損時に明確なエラーメッセージを提供。
 - ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
-- ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。
+- ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。✅ さらに `VERITAS_POLICY_REQUIRE_ED25519=true` 環境変数による厳格モードを追加。設定時は SHA-256 フォールバックを拒否し `ValueError` を送出。本番環境での設定ミスによるサイレントダウングレードを防止。
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
 - ✅ `verify_manifest_signature()` のファイル読み込みを一元化: マニフェストをバイト列として1回だけ読み込み、アルゴリズム検出と署名検証の両方に使用。従来は `read_text()` + `read_bytes()` の二重読み込みで TOCTOU 競合の余地があったが、これを解消。ファイル読み込みの `OSError` を個別にキャッチし `logger.warning()` 付きで `False` を返却。SHA-256 フォールバックも読み込み済みバイト列から直接計算し `hmac.compare_digest()` で定数時間比較。
 
@@ -566,12 +567,12 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
 | `test_policy_runtime_adapter.py` | 38 | 880+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
-| `test_policy_signing.py` | 14 | 210+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証** |
+| `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **188** | **2,800+** | |
+| **合計** | **191** | **2,900+** | |
 
 ### 4.2 テストパターン分析
 
@@ -650,6 +651,9 @@ python -m veritas_os.scripts.compile_policy \
 | 署名検証ファイル読み込みエラー耐性 | ✅ | `verify_manifest_signature()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
 | 数値比較 NaN/Inf ガード | ✅ | NaN/Inf の float 変換成功後の不定比較を防止。`float("nan")`・`float("inf")`・文字列 `"nan"`/`"inf"` の8パターン |
 | contains 演算子型安全性 | ✅ | 文字列 actual × 非文字列 expected での TypeError を防止（safe failure） |
+| SHA-256 レガシー検証 TOCTOU 耐性 | ✅ | `verify_manifest_sha256()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
+| Ed25519 厳格モード拒否 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` 時に公開鍵なしで Ed25519 バンドルの検証が `ValueError` を送出 |
+| Ed25519 厳格モード許可 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` でも公開鍵が利用可能な場合は正常に検証成功 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -755,8 +759,9 @@ python -m veritas_os.scripts.compile_policy \
 | イミュータブル設計 | 全 dataclass | ◎ frozen=True で変更不可 |
 | シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
-| 署名検証 TOCTOU 防止 | `runtime_adapter.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保 |
-| 例外ハンドリング厳密化 | `signing.py`, `governance.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。予期しない例外の隠蔽を防止 |
+| 署名検証 TOCTOU 防止 | `runtime_adapter.py` + `signing.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保。レガシー `verify_manifest_sha256()` も同一パターンで保護 |
+| 例外ハンドリング厳密化 | `signing.py`, `governance.py`, `pipeline_policy.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。オプション依存インポートの `except Exception` → `except ImportError` 修正。予期しない例外の隠蔽を防止 |
+| Ed25519 厳格モード | `runtime_adapter.py` | ◎ `VERITAS_POLICY_REQUIRE_ED25519` env var により Ed25519→SHA-256 サイレントダウングレードを防止。本番環境での設定ミスによる署名バイパスを排除 |
 
 ### 6.2 セキュリティ警告
 
@@ -901,8 +906,8 @@ python -m veritas_os.scripts.compile_policy \
 | **機能完成度** | 97/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング、数値比較 NaN/Inf ガード、contains 演算子型安全性修正 |
 | **設計品質** | 92/100 | 関心の分離、イミュータブル設計、決定論が徹底、tar アーカイブメタデータ正規化による完全な再現可能ビルド |
 | **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト・NaN/Inf数値比較ガードテスト・contains型安全性テスト追加 |
-| **セキュリティ** | 96/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止（パイプライン + 評価エンジン）、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止、contains 演算子型安全性修正 |
-| **運用準備** | 87/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、監査履歴のスレッドセーフ化（TOCTOU 競合排除）、ファイルベース永続化が制約 |
+| **セキュリティ** | 97/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、`VERITAS_POLICY_REQUIRE_ED25519` env var による厳格モード（サイレントダウングレード防止）、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止（パイプライン + 評価エンジン）、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止、contains 演算子型安全性修正、レガシー SHA-256 検証の TOCTOU 耐性 |
+| **運用準備** | 88/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、`VERITAS_POLICY_REQUIRE_ED25519` env var による署名厳格モード、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、監査履歴のスレッドセーフ化（TOCTOU 競合排除）、ファイルベース永続化が制約 |
 | **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
 
 ### 11.2 成熟度判定
@@ -1178,6 +1183,56 @@ python -m veritas_os.scripts.compile_policy \
   - リスト/タプル/セットに対する `contains` 動作は変更なし（任意の型の `expected` を検索可能）
   - パイプライン bridge の `except (OSError, ValueError, TypeError)` で TypeError はキャッチされていたが、評価全体が中断される問題があった。修正により個別式レベルでの安全失敗に改善
   - テスト1件追加: `test_contains_operator_non_string_expected_with_string_actual`
+
+---
+
+### 11.12 改善実施ログ（2026-04-05 第3弾）
+
+以下は本日追加実施したコード品質改善項目:
+
+- **ガバナンスAPI オプション依存インポートの例外ハンドリング修正（`governance.py`）**
+  - `atomic_write_json` のオプション依存インポートガードで `except Exception` → `except ImportError` に変更
+  - 従来は `Exception` が全例外をキャッチしていたため、`atomic_write_json` 内部の `AttributeError` / `SyntaxError` 等のプログラミングエラーが静かに `_HAS_ATOMIC_IO = False` として処理され、アトミックライト機能が無効化されるバグを隠蔽する可能性があった
+  - 改善後: `ImportError` のみをキャッチし、モジュール不在時のみフォールバック。それ以外の予期しない例外はスタックトレース付きで伝播
+  - section 11.10 で実施した `governance.py` 例外ハンドリング厳密化の残存箇所を解消
+
+- **パイプライン FUJI precheck の冗長インポート除去（`pipeline_policy.py`）**
+  - `stage_fuji_precheck()` 内の `import math as _math`（ローカルインポート）を除去し、モジュール先頭の `import math`（line 15）を直接使用するよう変更
+  - `_math.isfinite(risk_val)` → `math.isfinite(risk_val)` に統一
+  - `math` は Python 標準ライブラリであり、インポート失敗の可能性がないため try ブロック内でのローカルインポートは不要。`stage_value_core()` 内の `math.isfinite(value_ema)` と同一パターンに統一し、コードの一貫性を確保
+
+---
+
+### 11.13 改善実施ログ（2026-04-05 第4弾）
+
+以下は本日追加実施したコード品質改善項目:
+
+- **ガバナンスAPI `_save()` の冗長インポート除去（`governance.py`）**
+  - `_save()` のアトミックライトフォールバックパスで `import os as _os`（ローカルインポート）を除去し、モジュール先頭の `import os`（line 14）を直接使用するよう変更
+  - `_os.fsync(f.fileno())` → `os.fsync(f.fileno())` に統一
+  - `os` は Python 標準ライブラリであり、インポート失敗の可能性がないため関数内でのローカルインポートは不要。section 11.12 で `pipeline_policy.py` に対して実施した `import math as _math` の冗長インポート除去と同一パターンの修正であり、コードベース全体での一貫性を確保
+
+---
+
+### 11.14 改善実施ログ（2026-04-05 第5弾）
+
+以下は本日追加実施したセキュリティ・運用準備改善項目（セキュリティスコア向上: 96 → 97、運用準備スコア向上: 87 → 88）:
+
+- **レガシー SHA-256 検証の TOCTOU 耐性追加（`signing.py`）**
+  - `verify_manifest_sha256()` のファイル読み込みに `try/except OSError` を追加
+  - 従来は `manifest_path.exists()` / `sig_path.exists()` チェック後に `read_bytes()` / `read_text()` を直接呼び出しており、チェックと読み込みの間にファイルが削除・権限変更された場合に未ハンドルの `OSError` でクラッシュする TOCTOU 脆弱性があった
+  - 改善後: 各ファイル読み込みを個別に `try/except OSError` で保護し、読み込み失敗時は `logger.warning()` 付きで `False` を返却
+  - `runtime_adapter.py` の `verify_manifest_signature()` で確立された TOCTOU 防止パターン（section 11.9）との一貫性を確保
+  - テスト1件追加: `test_verify_manifest_sha256_returns_false_on_unreadable_files`（マニフェスト読み込み失敗 + 署名ファイル読み込み失敗の2パターン）
+
+- **Ed25519 署名検証の厳格モード追加（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` に `VERITAS_POLICY_REQUIRE_ED25519` 環境変数サポートを追加
+  - `VERITAS_POLICY_REQUIRE_ED25519=true` 設定時、マニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が利用不可の場合に `ValueError` を送出
+  - 従来は `logger.warning()` のみで SHA-256 フォールバックにサイレントダウングレードしていた（section 11.6 で警告追加済み）。厳格モードにより「警告」から「拒否」にエスカレーション可能に
+  - 本番環境では `VERITAS_POLICY_REQUIRE_ED25519=true` を設定することで、`VERITAS_POLICY_VERIFY_KEY` の設定ミス（パス誤り、ファイル不在等）による意図しない署名バイパスを完全に防止
+  - デフォルト無効（後方互換性維持）: env var 未設定時は従来通り SHA-256 フォールバック + 警告ログ
+  - `VERITAS_POLICY_RUNTIME_ENFORCE` env var と同一のパターン（`"1"`, `"true"`, `"yes"` で有効化）
+  - テスト2件追加: `test_require_ed25519_env_var_rejects_sha256_fallback`（公開鍵なし時の拒否）、`test_require_ed25519_env_var_allows_when_key_present`（公開鍵あり時の正常検証）
 
 ---
 

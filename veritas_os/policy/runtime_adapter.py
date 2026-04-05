@@ -132,6 +132,14 @@ def verify_manifest_signature(
         return verify_manifest_ed25519(manifest_bytes, sig_text, pub_key)
 
     if algorithm == "ed25519" and pub_key is None:
+        require_ed25519 = os.getenv(
+            "VERITAS_POLICY_REQUIRE_ED25519", ""
+        ).strip().lower() in ("1", "true", "yes")
+        if require_ed25519:
+            raise ValueError(
+                "manifest requires Ed25519 verification but no public key is "
+                "available; set VERITAS_POLICY_VERIFY_KEY or provide public_key_pem"
+            )
         logger.warning(
             "manifest declares ed25519 signing but no public key is available; "
             "falling back to SHA-256 integrity check (authenticity NOT verified)"

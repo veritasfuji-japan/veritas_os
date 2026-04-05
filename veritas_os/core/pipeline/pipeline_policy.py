@@ -153,9 +153,8 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
 
     fuji_status = ctx.fuji_dict.get("status", "allow")
     try:
-        import math as _math
         risk_val = float(ctx.fuji_dict.get("risk", 0.0))
-        if not _math.isfinite(risk_val):
+        if not math.isfinite(risk_val):
             risk_val = 1.0  # fail-closed: NaN/Inf は最大リスクとして扱う
         risk_val = max(0.0, min(1.0, risk_val))
     except (ValueError, TypeError):
