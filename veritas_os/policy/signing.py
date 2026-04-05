@@ -117,7 +117,7 @@ def verify_manifest_ed25519(
         raw_sig = base64.b64decode(signature_b64)
         public_key.verify(raw_sig, manifest_bytes)
         return True
-    except (InvalidSignature, Exception) as exc:
+    except (InvalidSignature, ValueError, TypeError) as exc:
         logger.warning("Ed25519 signature verification failed: %s", exc)
         return False
 
