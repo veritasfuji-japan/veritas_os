@@ -1,0 +1,264 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook, act } from "@testing-library/react";
+
+vi.mock("../../../components/i18n-provider", () => ({
+  useI18n: () => ({
+    language: "en",
+    t: (_ja: string, en: string) => en,
+    tk: (k: string) => k,
+    setLanguage: () => {},
+  }),
+}));
+
+const mockFetch = vi.fn();
+vi.mock("../../../lib/api-client", () => ({
+  veritasFetch: (...args: unknown[]) => mockFetch(...args),
+}));
+
+vi.mock("@veritas/types", async () => {
+  const actual = await vi.importActual("@veritas/types");
+  return {
+    ...actual,
+    isTrustLogsResponse: (payload: unknown) => {
+      if (!payload || typeof payload !== "object") return false;
+      return "items" in payload;
+    },
+    isRequestLogResponse: (payload: unknown) => {
+      if (!payload || typeof payload !== "object") return false;
+      return "items" in payload;
+    },
+  };
+});
+
+vi.mock("../audit-types", async () => {
+  const actual = await vi.importActual("../audit-types");
+  return {
+    ...actual,
+    classifyChain: () => ({ status: "verified", reason: "ok" }),
+    computeAuditSummary: () => ({
+      total: 0,
+      verified: 0,
+      broken: 0,
+      missing: 0,
+      orphan: 0,
+      policyVersions: [],
+    }),
+  };
+});
+
+import { useAuditData } from "./useAuditData";
+
+const MOCK_ITEMS = [
+  {
+    request_id: "req-001",
+    decision_id: "42",
+    sha256: "abc123",
+    sha256_prev: "prev123",
+    created_at: "2026-01-02T00:00:00Z",
+    stage: "retrieval",
+    status: "ok",
+    severity: "info",
+    policy_version: "v1",
+  },
+  {
+    request_id: "req-002",
+    decision_id: "43",
+    sha256: "def456",
+    sha256_prev: "abc123",
+    created_at: "2026-01-01T00:00:00Z",
+    stage: "generation",
+    status: "ok",
+    severity: "info",
+    policy_version: "v1",
+  },
+];
+
+describe("useAuditData", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("initialises with correct defaults", () => {
+    const { result } = renderHook(() => useAuditData());
+    expect(result.current.items).toEqual([]);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.stageFilter).toBe("ALL");
+    expect(result.current.detailTab).toBe("summary");
+  });
+
+  it("loadLogs fetches and stores items", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: "cursor-1", has_more: true }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    expect(result.current.items).toHaveLength(2);
+    expect(result.current.hasMore).toBe(true);
+    expect(result.current.cursor).toBe("cursor-1");
+  });
+
+  it("loadLogs appends items when replace is false", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    expect(result.current.items).toHaveLength(2);
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: [{ ...MOCK_ITEMS[0], request_id: "req-003" }], next_cursor: null, has_more: false }),
+    });
+
+    await act(async () => {
+      await result.current.loadLogs("cursor-1", false);
+    });
+    expect(result.current.items).toHaveLength(3);
+  });
+
+  it("loadLogs handles HTTP error", async () => {
+    mockFetch.mockResolvedValue({ ok: false, status: 500 });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    expect(result.current.error).toContain("HTTP 500");
+  });
+
+  it("loadLogs handles invalid response format", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ unexpected: "data" }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    expect(result.current.error).toContain("format error");
+  });
+
+  it("loadLogs handles network error", async () => {
+    mockFetch.mockRejectedValue(new Error("Network failure"));
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+    expect(result.current.error).toContain("Network error");
+  });
+
+  it("sortedItems sorts by created_at descending", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    expect(result.current.sortedItems[0].request_id).toBe("req-001");
+    expect(result.current.sortedItems[1].request_id).toBe("req-002");
+  });
+
+  it("stageOptions derive from loaded items", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    expect(result.current.stageOptions).toContain("ALL");
+    expect(result.current.stageOptions).toContain("retrieval");
+    expect(result.current.stageOptions).toContain("generation");
+  });
+
+  it("filteredItems filters by stageFilter", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    act(() => { result.current.setStageFilter("retrieval"); });
+    expect(result.current.filteredItems).toHaveLength(1);
+    expect(result.current.filteredItems[0].request_id).toBe("req-001");
+  });
+
+  it("crossSearch filters items", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    act(() => {
+      result.current.setCrossSearch({ query: "req-001", field: "request_id" });
+    });
+    expect(result.current.filteredItems).toHaveLength(1);
+  });
+
+  it("searchByRequestId requires non-empty input", async () => {
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.searchByRequestId();
+    });
+    expect(result.current.error).toContain("enter request_id");
+  });
+
+  it("decisionIds derive from loaded items", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ items: MOCK_ITEMS, next_cursor: null, has_more: false }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    expect(result.current.decisionIds).toContain("42");
+    expect(result.current.decisionIds).toContain("43");
+  });
+
+  it("state setters work correctly", () => {
+    const { result } = renderHook(() => useAuditData());
+
+    act(() => { result.current.setDetailTab("metadata"); });
+    expect(result.current.detailTab).toBe("metadata");
+
+    act(() => { result.current.setRedactionMode("redacted"); });
+    expect(result.current.redactionMode).toBe("redacted");
+
+    act(() => { result.current.setExportFormat("pdf"); });
+    expect(result.current.exportFormat).toBe("pdf");
+
+    act(() => { result.current.setConfirmPiiRisk(true); });
+    expect(result.current.confirmPiiRisk).toBe(true);
+  });
+});
