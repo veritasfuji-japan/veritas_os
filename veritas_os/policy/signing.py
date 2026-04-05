@@ -136,6 +136,15 @@ def verify_manifest_sha256(manifest_path: Path) -> bool:
     sig_path = manifest_path.parent / "manifest.sig"
     if not manifest_path.exists() or not sig_path.exists():
         return False
-    expected = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
-    observed = sig_path.read_text(encoding="utf-8").strip()
+    try:
+        manifest_bytes = manifest_path.read_bytes()
+    except OSError as exc:
+        logger.warning("failed to read manifest for SHA-256 verification: %s", exc)
+        return False
+    try:
+        observed = sig_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        logger.warning("failed to read signature file for SHA-256 verification: %s", exc)
+        return False
+    expected = hashlib.sha256(manifest_bytes).hexdigest()
     return hmac.compare_digest(expected, observed)

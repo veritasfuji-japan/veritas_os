@@ -86,6 +86,47 @@ def test_verify_manifest_sha256_uses_constant_time_comparison(tmp_path: Path) ->
     assert verify_manifest_sha256(manifest_path) is False
 
 
+def test_verify_manifest_sha256_returns_false_on_unreadable_files(
+    tmp_path: Path,
+) -> None:
+    """verify_manifest_sha256 must return False (not raise) when files vanish
+    between the existence check and the actual read (TOCTOU resilience)."""
+    from unittest.mock import patch
+    from veritas_os.policy.signing import verify_manifest_sha256
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_bytes(b'{"policy_id": "test"}')
+
+    import hashlib
+
+    sig_path = tmp_path / "manifest.sig"
+    sig_path.write_text(
+        hashlib.sha256(manifest_path.read_bytes()).hexdigest(), encoding="utf-8"
+    )
+
+    # Simulate manifest becoming unreadable after exists() returns True
+    original_read_bytes = Path.read_bytes
+
+    def _fail_read_bytes(self):
+        if self.name == "manifest.json":
+            raise OSError("simulated read failure")
+        return original_read_bytes(self)
+
+    with patch.object(Path, "read_bytes", _fail_read_bytes):
+        assert verify_manifest_sha256(manifest_path) is False
+
+    # Simulate signature file becoming unreadable
+    original_read_text = Path.read_text
+
+    def _fail_read_text(self, *args, **kwargs):
+        if self.name == "manifest.sig":
+            raise OSError("simulated sig read failure")
+        return original_read_text(self, *args, **kwargs)
+
+    with patch.object(Path, "read_text", _fail_read_text):
+        assert verify_manifest_sha256(manifest_path) is False
+
+
 # --- compiler + Ed25519 integration tests ---
 
 
@@ -233,3 +274,40 @@ def test_ed25519_compile_deterministic(tmp_path: Path) -> None:
     m2 = _load_json(r2.manifest_path)
     m1["source_files"] = m2["source_files"] = ["<redacted>"]
     assert m1 == m2
+
+
+def test_require_ed25519_env_var_rejects_sha256_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When VERITAS_POLICY_REQUIRE_ED25519=true and no public key is available,
+    verify_manifest_signature must raise ValueError instead of silently
+    falling back to SHA-256."""
+    private_pem, _ = generate_keypair()
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-04-05T10:00:00Z",
+        signing_key=private_pem,
+    )
+    monkeypatch.setenv("VERITAS_POLICY_REQUIRE_ED25519", "true")
+    monkeypatch.delenv("VERITAS_POLICY_VERIFY_KEY", raising=False)
+
+    with pytest.raises(ValueError, match="Ed25519 verification"):
+        verify_manifest_signature(result.bundle_dir)
+
+
+def test_require_ed25519_env_var_allows_when_key_present(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When VERITAS_POLICY_REQUIRE_ED25519=true and a valid public key IS
+    provided, verification should succeed normally."""
+    private_pem, public_pem = generate_keypair()
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-04-05T10:01:00Z",
+        signing_key=private_pem,
+    )
+    monkeypatch.setenv("VERITAS_POLICY_REQUIRE_ED25519", "true")
+
+    assert verify_manifest_signature(result.bundle_dir, public_key_pem=public_pem) is True
