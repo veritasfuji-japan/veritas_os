@@ -19,7 +19,7 @@ function renderPanel(overrides: Partial<Parameters<typeof ChatPanel>[0]> = {}) {
     chatMessages: [],
     query: "",
     loading: false,
-    executionStatus: "idle",
+    executionStatus: "idle" as const,
     error: null,
     setQuery: vi.fn(),
     runDecision: vi.fn().mockResolvedValue(undefined),
@@ -87,12 +87,12 @@ describe("ChatPanel", () => {
   });
 
   it("shows submitting status message", () => {
-    renderPanel({ executionStatus: "submitting" as any });
+    renderPanel({ executionStatus: "submitting" });
     expect(screen.getByText("submittingStatus")).toBeInTheDocument();
   });
 
   it("shows streaming status message", () => {
-    renderPanel({ executionStatus: "streaming" as any });
+    renderPanel({ executionStatus: "streaming" });
     expect(screen.getByText("streamingStatus")).toBeInTheDocument();
   });
 
