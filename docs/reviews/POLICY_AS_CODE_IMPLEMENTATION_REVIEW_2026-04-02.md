@@ -10,7 +10,7 @@
 | ポリシーコア | `veritas_os/policy/*`（15ファイル, 1,400行+）※ `signing.py` 追加 |
 | パイプライン統合 | `veritas_os/core/pipeline/pipeline_policy.py`（301行） |
 | ガバナンスAPI | `veritas_os/api/routes_governance.py`（217行）, `veritas_os/api/governance.py`（473行） |
-| テスト基盤 | テストファイル7件（2,600行+, 174テスト関数）※ `test_policy_signing.py` 追加 |
+| テスト基盤 | テストファイル7件（2,800行+, 188テスト関数）※ `test_policy_signing.py` 追加 |
 | ポリシー定義例 | `policies/examples/*.yaml`（5ファイル, 178行） |
 | フロントエンド | `frontend/app/governance/`, `packages/types/src/governance.ts` |
 | CLI | `veritas_os/scripts/compile_policy.py`（52行） |
@@ -27,7 +27,7 @@
 |------|------|------|
 | **成熟度** | **GA-Ready（Production-Ready）** | コンパイル〜ランタイム評価の縦断経路が成立、GA 必須要件達成 |
 | **設計品質** | ◎ | 関心の分離が明確、拡張性が高い |
-| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む179テスト関数 |
+| **テスト網羅性** | ◎ | 主要パスカバー、Ed25519 署名テスト含む188テスト関数 |
 | **セキュリティ** | ◎ | Ed25519 公開鍵暗号署名、ReDoSガードレール、NaN/Inf 防止 |
 | **運用準備** | ○ | Ed25519 署名鍵 + `VERITAS_POLICY_RUNTIME_ENFORCE` env var、監視/アラート統合は部分的 |
 
@@ -372,8 +372,8 @@ load_and_validate → to_canonical_ir → semantic_hash
 |--------|------|---------|
 | `eq` / `neq` | 等値/非等値 | any |
 | `in` / `not_in` | リスト包含/非包含 | list/set チェック |
-| `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`） |
-| `contains` | 文字列/リスト包含 | 型チェック |
+| `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`）+ ✅ NaN/Inf ガード（`math.isfinite`） |
+| `contains` | 文字列/リスト包含 | ✅ 型安全ガード（文字列 actual × 非文字列 expected の TypeError 防止） |
 | `regex` | 正規表現マッチ | ReDoS ガードレール付き |
 
 **Outcome 優先度（deny が最高）:**
@@ -418,6 +418,8 @@ class PolicyEvaluationResult:
 - ✅ 未サポート演算子使用時に `logger.warning()` で演算子名・フィールド名を出力（silent failure を排除）。
 - ✅ `_scope_matches()` でコンテキストの scope フィールド（`domain`/`route`/`actor`）が欠落している場合に `logger.debug()` で可視化。デフォルト True 動作を維持しつつ、暗黙のマッチングを追跡可能に。
 - ✅ `evaluate_runtime_policies()` の `context` パラメータに None ガードを追加。呼び出し元が `None` を渡した場合に `AttributeError` でクラッシュする問題を防止。
+- ✅ `_safe_numeric_compare()` に `math.isfinite()` ガードを追加。`float("nan")` や `float("inf")` が float 変換に成功しても比較結果が不定になる問題を防止。`pipeline_policy.py` の `risk_val` / `value_ema` ガードと一貫したパターン。
+- ✅ `contains` 演算子で `actual` が文字列かつ `expected` が非文字列（例: 数値）の場合に `TypeError` を送出していた問題を修正。`isinstance(expected, str)` チェックを追加し、型不一致時は安全に `False` を返却。
 
 ---
 
@@ -562,14 +564,14 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
-| `test_policy_runtime_adapter.py` | 29 | 810+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性** |
+| `test_policy_runtime_adapter.py` | 38 | 880+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 14 | 210+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **179** | **2,700+** | |
+| **合計** | **188** | **2,800+** | |
 
 ### 4.2 テストパターン分析
 
@@ -646,6 +648,8 @@ python -m veritas_os.scripts.compile_policy \
 | バンドルアーカイブシンボリックリンク除外 | ✅ | symlink がアーカイブに含まれないことを検証 |
 | 監査履歴スレッドセーフ並行アクセス | ✅ | 10スレッド並行書き込み/読み取りでの整合性保証 |
 | 署名検証ファイル読み込みエラー耐性 | ✅ | `verify_manifest_signature()` でファイルが読み取り不可時に安全に `False` を返却（クラッシュ防止） |
+| 数値比較 NaN/Inf ガード | ✅ | NaN/Inf の float 変換成功後の不定比較を防止。`float("nan")`・`float("inf")`・文字列 `"nan"`/`"inf"` の8パターン |
+| contains 演算子型安全性 | ✅ | 文字列 actual × 非文字列 expected での TypeError を防止（safe failure） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -801,8 +805,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
-| テスト行数 | 2,600行+ | テスト:実装比 = 1.9:1（良好） |
-| テスト関数数 | 179 | 十分な網羅性 |
+| テスト行数 | 2,800行+ | テスト:実装比 = 2.0:1（良好） |
+| テスト関数数 | 188 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -894,10 +898,10 @@ python -m veritas_os.scripts.compile_policy \
 
 | 評価軸 | スコア | 根拠 |
 |--------|--------|------|
-| **機能完成度** | 96/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング |
+| **機能完成度** | 97/100 | コンパイル〜評価〜パイプライン反映の全経路が動作、Ed25519 公開鍵暗号署名、`effective_date` による時間制御対応、env var による enforcement デフォルト設定、エラーハンドリング強化、context None ガード、署名鍵エラーハンドリング、数値比較 NaN/Inf ガード、contains 演算子型安全性修正 |
 | **設計品質** | 92/100 | 関心の分離、イミュータブル設計、決定論が徹底、tar アーカイブメタデータ正規化による完全な再現可能ビルド |
-| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト追加 |
-| **セキュリティ** | 95/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止 |
+| **テスト品質** | 95/100 | 主要パスカバー、Ed25519 署名/検証/改ざん検出テスト12件、複数ポリシー優先度解決・effective_date フィルタリング・I/Oエラーラッピング・パイプライン bridge enforcement 全パス・エラーハンドリング境界テスト・数値比較型安全性テスト・未知演算子警告テスト・スコープ欠落ログテスト・enforcement 監査ログテスト・NaN EMA ガードテスト・コンパイラ/バンドルロード監査ログテスト・ハッシュ入力検証テスト・context None ガードテスト・マニフェスト破損警告テスト・署名鍵エラーテスト・SHA-256定数時間比較テスト・アーカイブ決定性テスト・シンボリックリンク除外テスト・監査履歴スレッドセーフテスト・NaN/Inf数値比較ガードテスト・contains型安全性テスト追加 |
+| **セキュリティ** | 96/100 | Ed25519 公開鍵暗号署名による真正性保証、SHA-256 定数時間比較（`hmac.compare_digest`）によるタイミング攻撃対策、Ed25519→SHA-256 ダウングレード警告による署名バイパス検出、マニフェスト破損時の警告ログによる異常検出、ReDoSガードレール（拒否時 warning ログ付き）、未知演算子検出・警告、ランタイムアダプタのエラーハンドリング強化、NaN/Inf 伝播防止（パイプライン + 評価エンジン）、セマンティックハッシュ入力検証、署名鍵エラーの構造化ハンドリング、シンボリックリンク除外によるパストラバーサル防止、contains 演算子型安全性修正 |
 | **運用準備** | 87/100 | Ed25519 署名鍵の環境変数設定（`VERITAS_POLICY_VERIFY_KEY`）、`VERITAS_POLICY_RUNTIME_ENFORCE` env var による enforcement デフォルト設定対応、ポリシー評価の監査ログ出力、enforcement 適用の監査ログ、スコープマッチングの可観測性、コンパイラ/バンドルロードの監査ログ追加、監査履歴のスレッドセーフ化（TOCTOU 競合排除）、ファイルベース永続化が制約 |
 | **ドキュメント** | 88/100 | docs/policy_as_code.md に Ed25519 署名・環境変数・effective_date・enforcement 設定を反映。署名が「未実装」と記載されていた古い情報を修正済み |
 
@@ -1153,6 +1157,27 @@ python -m veritas_os.scripts.compile_policy \
   - `_load_value_history()`: `except Exception` → `except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError)` に変更。ファイル読み込み・JSON パース失敗のみをキャッチ
   - ポリシーモジュール（`runtime_adapter.py` の `_read_json_file()` 等）で確立された具体的例外キャッチパターンとの一貫性を確保
   - 注: `_append_policy_history()`, `_trim_policy_history()`, `_notify_policy_update()` の書き込み/通知系操作は best-effort 動作が適切なため `except Exception` を維持
+
+---
+
+### 11.11 改善実施ログ（2026-04-05 第2弾）
+
+以下は本日追加実施した評価エンジンの堅牢性改善項目（機能完成度スコア向上: 96 → 97、セキュリティスコア向上: 95 → 96）:
+
+- **数値比較演算子の NaN/Inf ガード追加（`evaluator.py`）**
+  - `_safe_numeric_compare()` に `math.isfinite()` チェックを追加
+  - `float("nan")` や `float("inf")` は float 変換に成功する（`ValueError` を送出しない）が、比較結果が不定（NaN は全比較が `False`、Inf は `inf > 5` が `True` 等）
+  - 改善後: NaN/Inf を検出した場合は安全に `False` を返却（マッチしない扱い）
+  - `pipeline_policy.py` の `risk_val` / `value_ema` で確立された NaN/Inf ガードパターン（`math.isfinite()`）との一貫性を確保
+  - テスト8件追加（parametrize）: `float("nan")` / `float("inf")` / `float("-inf")` / 文字列 `"nan"` / `"inf"` のコンテキスト値パターン + ポリシー閾値側の NaN/Inf パターン
+
+- **`contains` 演算子の TypeError 修正（`evaluator.py`）**
+  - `_evaluate_expression()` の `contains` 演算子で、`actual` が文字列かつ `expected` が非文字列（例: 数値 `42`）の場合に `TypeError: 'in <string>' requires string as left operand, not int` が送出されていた問題を修正
+  - 修正前: `isinstance(actual, (list, tuple, set, str))` で一括チェック → 文字列に対して `42 in "hello"` が実行され TypeError
+  - 修正後: 文字列とリスト/タプル/セットのチェックを分離。文字列の場合は `isinstance(expected, str)` を追加チェックし、型不一致時は安全に `False` を返却
+  - リスト/タプル/セットに対する `contains` 動作は変更なし（任意の型の `expected` を検索可能）
+  - パイプライン bridge の `except (OSError, ValueError, TypeError)` で TypeError はキャッチされていたが、評価全体が中断される問題があった。修正により個別式レベルでの安全失敗に改善
+  - テスト1件追加: `test_contains_operator_non_string_expected_with_string_actual`
 
 ---
 

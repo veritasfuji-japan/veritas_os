@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 import logging
+import math
 from typing import Any, Dict, Iterable, List
 import re
 
@@ -77,6 +78,8 @@ def _safe_numeric_compare(operator: str, actual: Any, expected: Any) -> bool:
         b = float(expected)
     except (ValueError, TypeError):
         return False
+    if not math.isfinite(a) or not math.isfinite(b):
+        return False
     if operator == "gt":
         return a > b
     if operator == "gte":
@@ -104,7 +107,9 @@ def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) ->
     if operator in ("gt", "gte", "lt", "lte"):
         return _safe_numeric_compare(operator, actual, expected)
     if operator == "contains":
-        if isinstance(actual, (list, tuple, set, str)):
+        if isinstance(actual, str):
+            return isinstance(expected, str) and expected in actual
+        if isinstance(actual, (list, tuple, set)):
             return expected in actual
         return False
     if operator == "regex":
