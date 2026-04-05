@@ -93,6 +93,7 @@ coverage.json
 htmlcov/
 test-reports/
 coverage-html/
+**/coverage/
 
 # Build artifacts
 *.egg-info/
