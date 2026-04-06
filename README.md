@@ -193,6 +193,7 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 | **Critique** | Self-critique generation with severity-ranked issues and fix suggestions |
 | **Planner** | Action plan generation with step-by-step execution strategies |
 | **Replay Engine** | High-fidelity reproducible replay of past decisions with diff reporting, retrieval snapshot checksum, model version verification, and dependency version tracking for audit verification |
+| **Policy Compiler** | YAML/JSON policy → intermediate representation → compiled rules with Ed25519-signed bundles, runtime enforcement adapter, and auto-generated tests |
 | **Compliance** | EU AI Act compliance reports, internal governance reports, and deployment readiness checks |
 
 ---
@@ -203,31 +204,41 @@ This separation is one of the reasons VERITAS is easier to audit and safer to ev
 veritas_os/                  ← Monorepo root
 ├── veritas_os/              ← Python backend (FastAPI)
 │   ├── api/                 ← REST API server, schemas, governance
-│   │   ├── server.py        ← FastAPI app with 30+ endpoints
+│   │   ├── server.py        ← FastAPI app with 40+ endpoints
+│   │   ├── routes_decide.py ← Decision & replay endpoints
+│   │   ├── routes_trust.py  ← TrustLog & audit endpoints
+│   │   ├── routes_memory.py ← Memory CRUD endpoints
+│   │   ├── routes_governance.py ← Governance & policy endpoints
+│   │   ├── routes_system.py ← Health, metrics, compliance, SSE, halt
 │   │   ├── schemas.py       ← Pydantic v2 request/response models
 │   │   └── governance.py    ← Policy management with audit trail
 │   ├── core/                ← Decision engine
 │   │   ├── kernel.py        ← Decision computation engine
-│   │   ├── pipeline.py      ← 20+ stage orchestrator
-│   │   ├── fuji.py          ← FUJI safety gate
+│   │   ├── kernel_*.py      ← Kernel extensions (doctor, intent, QA, stages, episode)
+│   │   ├── pipeline/        ← 20+ stage orchestrator (package with stage modules)
+│   │   ├── fuji/            ← FUJI safety gate (package — policy, injection, safety head)
+│   │   ├── memory/          ← MemoryOS (package — store, vector, search, security, compliance)
+│   │   ├── continuation_runtime/ ← Chain-level continuation observation (Phase-1)
 │   │   ├── value_core.py    ← Value alignment & online learning
-│   │   ├── memory.py        ← MemoryOS (vector search)
 │   │   ├── world.py         ← WorldModel (state management)
 │   │   ├── llm_client.py    ← Multi-provider LLM gateway
 │   │   ├── debate.py        ← Debate mechanism
 │   │   ├── critique.py      ← Critique generation
-│   │   ├── planner.py       ← Action planning
+│   │   ├── planner.py       ← Action planning (+ planner_helpers, planner_json, planner_normalization)
 │   │   └── sanitize.py      ← PII masking & content safety
-│   ├── logging/             ← TrustLog, dataset writer, rotation
+│   ├── policy/              ← Policy compiler, signing, runtime adapter, bundle
+│   ├── logging/             ← TrustLog, dataset writer, encryption, rotation
 │   ├── audit/               ← Signed audit log (Ed25519)
 │   ├── compliance/          ← EU AI Act report engine
 │   ├── security/            ← SHA-256 hashing, Ed25519 signing
 │   ├── tools/               ← Web search, GitHub search, LLM safety
 │   ├── replay/              ← Deterministic replay engine
+│   ├── observability/       ← OpenTelemetry metrics, middleware
+│   ├── storage/             ← Pluggable storage backends (JSONL, PostgreSQL)
 │   ├── prompts/             ← Prompt templates for LLM interactions
 │   ├── reporting/           ← Report generation utilities
 │   ├── benchmarks/          ← Performance benchmark data
-│   └── tests/               ← 5800+ Python tests
+│   └── tests/               ← 5600+ Python tests (+ top-level tests/)
 ├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -333,6 +344,7 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | PUT | `/v1/governance/policy` | Update governance policy (hot-reload, **4-eyes approval required**) |
 | GET | `/v1/governance/policy/history` | Policy change audit trail |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
+| GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
 
 ### Compliance & Reporting
 
@@ -341,6 +353,8 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | GET | `/v1/report/eu_ai_act/{decision_id}` | EU AI Act compliance report |
 | GET | `/v1/report/governance` | Internal governance report |
 | GET | `/v1/compliance/deployment-readiness` | Pre-deployment compliance check |
+| GET | `/v1/compliance/config` | Retrieve compliance configuration |
+| PUT | `/v1/compliance/config` | Update compliance configuration |
 
 ### System
 
@@ -596,24 +610,25 @@ Dockerfile `CMD` accordingly before building the image.
 | Module | Responsibility |
 |---|---|
 | `veritas_os/core/kernel.py` | Decision computation — intent detection, option generation, alternative scoring |
-| `veritas_os/core/pipeline.py` | 20+ stage orchestrator for `/v1/decide` — validation through audit persistence |
+| `veritas_os/core/pipeline/` | 20+ stage orchestrator for `/v1/decide` — validation through audit persistence (package with per-stage modules) |
 | `veritas_os/core/llm_client.py` | Multi-provider LLM gateway with connection pooling, circuit breaker, retry with backoff |
 
 ### Safety & governance
 
 | Module | Responsibility |
 |---|---|
-| `veritas_os/core/fuji.py` | Multi-layer **fail-closed** safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, LLM safety head, policy rules. All exceptions return `rejected` / `risk=1.0` |
+| `veritas_os/core/fuji/` | Multi-layer **fail-closed** safety gate — PII, harmful content, sensitive domains, prompt injection, confusable chars, LLM safety head, policy rules. All exceptions return `rejected` / `risk=1.0` |
 | `veritas_os/core/value_core.py` | Value function with 14 weighted dimensions (9 core ethical + 5 policy-level), online learning via EMA, auto-rebalance from TrustLog. Supports context-aware domain profiles, policy-aware score floors, per-factor contribution explainability, and auditable weight adjustment trail |
 | `veritas_os/api/governance.py` | Policy CRUD with hot-reload, **4-eyes approval** (2 approvers, no duplicates), change callbacks, audit trail, value drift monitoring, **RBAC/ABAC** access control |
 | `veritas_os/logging/trust_log.py` | Hash-chain TrustLog `h_t = SHA256(h_{t-1} ∥ r_t)` with thread-safe append |
 | `veritas_os/audit/trustlog_signed.py` | Ed25519-signed TrustLog with **WORM hard-fail** mirror, **Transparency log anchor**, automatic **PII data classification** |
+| `veritas_os/policy/` | Policy compiler — YAML/JSON → IR → compiled rules, Ed25519-signed bundles, runtime enforcement adapter |
 
 ### Memory & world state
 
 | Module | Responsibility |
 |---|---|
-| `veritas_os/core/memory.py` | Unified episodic/semantic/procedural/affective memory with vector search (sentence-transformers, 384-dim), retention classes, legal hold, PII masking |
+| `veritas_os/core/memory/` | Unified episodic/semantic/procedural/affective memory with vector search (sentence-transformers, 384-dim), retention classes, legal hold, PII masking |
 | `veritas_os/core/world.py` | World state snapshots, causal transitions, project scoping, hypothetical simulation |
 
 ### Reasoning
@@ -841,6 +856,14 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` | Block startup without Vault/KMS |
 | `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web search toxicity filter (fail-closed) |
 | `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime (Phase-1 observe) |
+
+### Policy Signing & Enforcement
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_POLICY_VERIFY_KEY` | — | Path to Ed25519 public key PEM file for policy bundle signature verification |
+| `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | Enable runtime enforcement of compiled policy decisions (deny/halt/escalate/require_human_review) |
+| `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Require Ed25519 signature verification; reject manifests when no key is available |
 
 ### TrustLog & Audit
 
