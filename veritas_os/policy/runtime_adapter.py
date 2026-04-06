@@ -217,13 +217,23 @@ def load_runtime_bundle(
     manifest = _read_json_file(root / "manifest.json")
     canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
 
+    signing_algorithm = manifest.get("signing", {}).get("algorithm", "sha256")
+    if signing_algorithm != "ed25519":
+        logger.warning(
+            "bundle %s loaded with SHA-256 integrity check only; "
+            "authenticity is NOT verified. Set VERITAS_POLICY_REQUIRE_ED25519=true "
+            "and provide an Ed25519 public key for production use.",
+            bundle_dir,
+        )
+
     runtime_policy = adapt_canonical_ir(canonical_ir)
 
     logger.info(
-        "bundle loaded: policy_id=%s version=%s hash=%s",
+        "bundle loaded: policy_id=%s version=%s hash=%s signing=%s",
         runtime_policy.policy_id,
         runtime_policy.version,
         manifest.get("semantic_hash", ""),
+        signing_algorithm,
     )
 
     return RuntimePolicyBundle(
