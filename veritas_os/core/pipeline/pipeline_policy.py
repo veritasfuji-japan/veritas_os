@@ -79,6 +79,8 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
             "true",
             "yes",
         )
+    elif isinstance(enforce, str):
+        enforce = enforce.strip().lower() in ("1", "true", "yes")
     if not bool(enforce):
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(
@@ -158,7 +160,7 @@ def stage_fuji_precheck(ctx: PipelineContext) -> None:
             risk_val = 1.0  # fail-closed: NaN/Inf は最大リスクとして扱う
         risk_val = max(0.0, min(1.0, risk_val))
     except (ValueError, TypeError):
-        risk_val = 0.0
+        risk_val = 1.0  # fail-closed: 変換不能な値は最大リスクとして扱う
     reasons_list = ctx.fuji_dict.get("reasons", []) or []
     viols = ctx.fuji_dict.get("violations", []) or []
 

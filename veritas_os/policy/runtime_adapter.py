@@ -84,6 +84,16 @@ def verify_manifest_signature(
     manifest_path = root / "manifest.json"
     signature_path = root / "manifest.sig"
     if not manifest_path.exists() or not signature_path.exists():
+        missing = [
+            name
+            for name, p in (("manifest.json", manifest_path), ("manifest.sig", signature_path))
+            if not p.exists()
+        ]
+        logger.warning(
+            "signature verification skipped: missing %s in %s",
+            missing,
+            bundle_dir,
+        )
         return False
 
     # Resolve public key from argument or env var

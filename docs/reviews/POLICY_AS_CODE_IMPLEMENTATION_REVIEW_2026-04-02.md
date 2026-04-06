@@ -345,6 +345,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。✅ さらに `VERITAS_POLICY_REQUIRE_ED25519=true` 環境変数による厳格モードを追加。設定時は SHA-256 フォールバックを拒否し `ValueError` を送出。本番環境での設定ミスによるサイレントダウングレードを防止。
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
 - ✅ `verify_manifest_signature()` のファイル読み込みを一元化: マニフェストをバイト列として1回だけ読み込み、アルゴリズム検出と署名検証の両方に使用。従来は `read_text()` + `read_bytes()` の二重読み込みで TOCTOU 競合の余地があったが、これを解消。ファイル読み込みの `OSError` を個別にキャッチし `logger.warning()` 付きで `False` を返却。SHA-256 フォールバックも読み込み済みバイト列から直接計算し `hmac.compare_digest()` で定数時間比較。
+- ✅ `verify_manifest_signature()` で `manifest.json` / `manifest.sig` が存在しない場合に `logger.warning()` で欠落ファイル名を出力。従来はサイレントに `False` を返却しており、デプロイ時の原因特定が困難だった。
 
 ---
 
@@ -471,6 +472,8 @@ def _apply_compiled_policy_runtime_bridge(ctx):
 - ✅ enforcement 適用時に `logger.info()` で outcome・変更先 status・トリガポリシー ID を出力。ガバナンス監査証跡として enforcement 実行の追跡が可能に。
 - ✅ `value_ema` の NaN/Inf ガードを追加。既存の `risk_val` ガード（`math.isfinite`）と同一パターンで一貫性を確保し、NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止。
 - ✅ `_apply_compiled_policy_runtime_bridge()` の例外キャッチに `KeyError` を追加。コンパイル済み JSON が破損し evaluator 内部で `KeyError` が発生した場合でもリクエスト処理がクラッシュしない防御層を強化。
+- ✅ `policy_runtime_enforce` の文字列値ハンドリングを修正。コンテキスト辞書から文字列（例: `"false"`, `"0"`）が渡された場合に `bool("false")` → `True` として誤って enforcement が有効化されるバグを修正。env var パスと同一の正規化パターン（`"1"`, `"true"`, `"yes"`）を適用。
+- ✅ `risk_val` 例外時のデフォルト値を `0.0`（fail-open）から `1.0`（fail-closed）に修正。NaN/Inf 時の `1.0` と一貫した fail-closed 動作に統一。
 
 ---
 
@@ -567,14 +570,14 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
-| `test_policy_runtime_adapter.py` | 39 | 930+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御** |
+| `test_policy_runtime_adapter.py` | 40 | 950+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
-| `test_pipeline_stages_ext.py`（bridge） | 9 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード） |
-| **合計** | **192** | **2,950+** | |
+| `test_pipeline_stages_ext.py`（bridge） | 11 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング** + **risk_val fail-closed**） |
+| **合計** | **195** | **2,990+** | |
 
 ### 4.2 テストパターン分析
 
@@ -657,6 +660,9 @@ python -m veritas_os.scripts.compile_policy \
 | Ed25519 厳格モード拒否 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` 時に公開鍵なしで Ed25519 バンドルの検証が `ValueError` を送出 |
 | Ed25519 厳格モード許可 | ✅ | `VERITAS_POLICY_REQUIRE_ED25519=true` でも公開鍵が利用可能な場合は正常に検証成功 |
 | outcome 欠損キー防御 | ✅ | `policy.outcome` に `decision`/`reason` キーが欠落しても `KeyError` を送出せず安全にデフォルト値で動作 |
+| `policy_runtime_enforce` 文字列値ハンドリング | ✅ | 文字列 `"false"` が enforcement を有効化しないことを検証（`bool("false")` バグ修正） |
+| 署名検証ファイル欠落時の警告ログ | ✅ | `verify_manifest_signature()` で manifest/sig ファイル欠落時に警告ログが出力されることを検証 |
+| risk_val 変換不能時の fail-closed | ✅ | 非数値 risk 値で `risk_val` が `1.0`（最大リスク）にフォールバックすることを検証 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -1258,6 +1264,31 @@ python -m veritas_os.scripts.compile_policy \
   - evaluator やランタイムアダプタ内部で `KeyError` が発生した場合のバックストップ（防御層の深化）
   - evaluator 側の防御的アクセスと組み合わせた二重防御: evaluator が `.get()` で処理し、万一漏れた場合もパイプライン bridge でキャッチ
   - リクエスト処理のクラッシュを防止し、fail-safe（安全側デフォルト）動作を保証
+
+---
+
+### 11.16 改善実施ログ（2026-04-05 第7弾）
+
+以下は本日追加実施したバグ修正・運用可観測性改善項目:
+
+- **`policy_runtime_enforce` 文字列値ハンドリングのバグ修正（`pipeline_policy.py`）**
+  - `_apply_compiled_policy_runtime_bridge()` でコンテキスト辞書から取得した `policy_runtime_enforce` が文字列（例: `"false"`, `"0"`）の場合に enforcement が誤って有効化されるバグを修正
+  - 修正前: `bool("false")` → `True`（Python の文字列 truthiness）により、文字列 `"false"` が enforcement 有効として解釈される
+  - 修正後: `isinstance(enforce, str)` チェックを追加し、文字列の場合は env var と同一のパターン（`"1"`, `"true"`, `"yes"` で有効化）で正規化
+  - env var パス（`VERITAS_POLICY_RUNTIME_ENFORCE`）との一貫性を確保
+  - テスト1件追加: `test_pipeline_bridge_string_false_enforcement_not_enforced`（文字列 `"false"` が enforcement を有効化しないことを検証）
+
+- **署名検証ファイル欠落時の警告ログ追加（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` で `manifest.json` または `manifest.sig` が存在しない場合に `logger.warning()` で欠落ファイル名とバンドルディレクトリを出力
+  - 従来はサイレントに `False` を返却しており、`load_runtime_bundle()` は `ValueError("manifest signature verification failed")` を送出するが、原因（ファイル欠落 vs 署名不一致 vs 破損）の区別がつかなかった
+  - デプロイ時のトラブルシューティングを容易化: ログから「どのファイルが欠落しているか」を即座に特定可能
+  - テスト1件追加: `test_verify_manifest_signature_logs_warning_on_missing_files`（空ディレクトリに対する検証で missing ファイルが警告ログに出力されることを検証）
+
+- **`risk_val` 例外時のデフォル���値を fail-closed に修正（`pipeline_policy.py`）**
+  - `stage_fuji_precheck()` で `risk` 値の `float()` 変換が `ValueError` / `TypeError` で失敗した場合のデフォルト値を `0.0`（fail-open）から `1.0`（fail-closed）に変更
+  - 修正前: NaN/Inf は `1.0`（fail-closed）だが、変換不能な値（非数値文字列等）は `0.0`（fail-open）で不整合
+  - 修正後: 両ケースとも `1.0`（最大リスク）に統一。「変換できない = 安全でない」の原則に一貫
+  - テスト1件追加: `test_risk_val_invalid_type_fails_closed`（非数値 risk で fail-closed 動作を検証）
 
 ---
 

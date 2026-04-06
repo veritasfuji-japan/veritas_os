@@ -7604,6 +7604,37 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
     assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
 
 
+def test_pipeline_bridge_string_false_enforcement_not_enforced(
+    tmp_path: Path,
+) -> None:
+    """String 'false' in context correctly disables enforcement (not bool-truthy)."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    ctx = PipelineContext(
+        query="use external tool",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            "policy_runtime_enforce": "false",  # string, not bool
+            "domain": "security",
+            "route": "/api/tools",
+            "actor": "kernel",
+            "tool": {"external": True, "name": "unapproved_webhook"},
+            "data": {"classification": "restricted"},
+            "evidence": {"available": ["data_classification_label"]},
+            "approvals": {"approved_by": ["security_officer"]},
+        },
+    )
+
+    stage_fuji_precheck(ctx)
+
+    # String "false" should NOT enable enforcement — status should remain allow
+    assert ctx.fuji_dict["status"] != "rejected"
+
+
 def test_pipeline_bridge_enforcement_logs_audit_info(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -7658,6 +7689,30 @@ def test_value_ema_nan_falls_back_to_neutral() -> None:
 
     assert math.isfinite(ctx.value_ema)
     assert ctx.value_ema == 0.5
+
+
+def test_risk_val_invalid_type_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-numeric risk value fails closed to maximum risk (1.0)."""
+    import veritas_os.core.pipeline.pipeline_policy as _mod
+
+    # Stub FUJI to return a non-numeric risk
+    class _FakeFuji:
+        @staticmethod
+        def validate_action(query, context):
+            return {"status": "allow", "risk": "not_a_number", "reasons": [], "violations": [], "modifications": []}
+
+    monkeypatch.setattr(_mod, "_lazy_import", lambda *a, **k: _FakeFuji)
+
+    ctx = PipelineContext(query="test")
+    ctx.response_extras = {"metrics": {"stage_latency": {}}}
+
+    stage_fuji_precheck(ctx)
+
+    # Evidence snippet should show risk=1.0 (fail-closed), not 0.0 (fail-open)
+    fuji_evidence = [e for e in ctx.evidence if e.get("source") == "internal:fuji"]
+    assert fuji_evidence
+    assert "risk=1.0" in fuji_evidence[0].get("snippet", "")
+
 
 # tests for veritas_os/core/pipeline_web_adapter.py
 """Tests for web search payload normalization and extraction."""
