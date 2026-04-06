@@ -150,6 +150,19 @@ _ASCII_RISK_NEGATION_BY_KEYWORD = {
     ),
 }
 
+_REFUSAL_CONTEXT_PATTERNS = [
+    re.compile(r"(?:対応できません|提供できません|お手伝いできません).{0,20}(?:違法|危険|ハッキング|爆弾|麻薬)", re.IGNORECASE),
+    re.compile(r"(?:違法|危険|ハッキング|爆弾|麻薬).{0,20}(?:対応できません|提供できません|お手伝いできません)", re.IGNORECASE),
+    re.compile(
+        r"\b(?:cannot|can't|won't|refuse to|do not provide)\b.{0,30}\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?)\b.{0,30}\b(?:cannot|can't|won't|refuse to|do not provide)\b",
+        re.IGNORECASE,
+    ),
+]
+
 DEBATE_SOURCE_OPENAI = "openai_llm"
 
 _ASCII_WORD_BOUNDARY = r"(?<![a-z0-9_]){token}(?![a-z0-9_])"
@@ -163,6 +176,12 @@ _RISK_KEYWORDS_WEIGHTED = (
     ("illegal", 0.20),
     ("ban", 0.15),
 )
+_REGULATORY_AMBIGUITY_PATTERNS = [
+    re.compile(r"グレーゾーン"),
+    re.compile(r"(?:法令|規制).{0,8}(?:例外|抜け道)"),
+    re.compile(r"脱法"),
+    re.compile(r"\b(?:grey zone|gray area|regulatory exception|legal loophole|policy workaround)\b", re.IGNORECASE),
+]
 _RISK_KEYWORD_PATTERNS = {
     keyword: re.compile(
         _ASCII_WORD_BOUNDARY.format(token=re.escape(keyword)),
@@ -387,6 +406,10 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     if not has_term:
         return False
 
+    if any(pattern.search(normalized) for pattern in _REFUSAL_CONTEXT_PATTERNS):
+        logger.debug("Danger term detected in refusal context; treat as non-actionable.")
+        return False
+
     if any(pattern.search(normalized) for pattern in _DANGEROUS_INTENT_PATTERNS):
         return True
 
@@ -496,6 +519,9 @@ def _calc_risk_delta(
     for kw, w in _RISK_KEYWORDS_WEIGHTED:
         if _contains_risk_keyword(safety_view, kw) and not _is_keyword_negated(safety_view, kw):
             delta += w
+
+    if any(pattern.search(safety_view) for pattern in _REGULATORY_AMBIGUITY_PATTERNS):
+        delta += 0.12
 
     if verdict == "要検討":
         delta += 0.05
