@@ -142,6 +142,19 @@
    - 深すぎるネストの除外
    - value=0 時の有限比率保証
 
+10. **[中][完了] P-1 `_pad_findings` の二重正規化を単一パス化**
+   - `pipeline_critique.py` に `_normalize_finding_item()` を追加し、1件ごとの正規化責務を分離。
+   - `_pad_findings()` は `list/dict/other` それぞれで同ヘルパーを再利用し、再走査なしで `min_items` パディングまで完了する構成へ変更。
+   - 期待効果: 可読性・テスト容易性の向上、不要な2回目走査の削減。
+
+11. **[低][完了] C-1 severity マッピングの共通化**
+   - `critique.py` に `_SEVERITY_ALIASES` を追加し、`_norm_severity` と `_severity_rank` で同一テーブルを利用。
+   - これにより `"medium"`/`"critical"` など同義語追加時のメンテナンスポイントを1箇所へ集約。
+
+12. **[テスト追加][完了] Pipeline Critique 正規化の単体テスト追加**
+   - `_normalize_finding_item()` の alias 入力（`issue`/raw `details`/非文字 `fix`）の正規化を検証。
+   - `_pad_findings()` が入力項目とデフォルト項目の双方で canonical schema を維持することを検証。
+
 ### セキュリティ注意（実装時点）
 
 - benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。

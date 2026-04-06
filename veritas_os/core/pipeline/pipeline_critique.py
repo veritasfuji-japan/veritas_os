@@ -60,87 +60,59 @@ def _default_findings() -> List[Dict[str, Any]]:
 # findings パディング（正規化 + min_items 保証）
 # =========================================================
 
+def _normalize_finding_item(item: Any) -> Dict[str, Any]:
+    """Normalize a single finding-like payload into the canonical dict shape."""
+    if isinstance(item, dict):
+        normalized = dict(item)
+        normalized["severity"] = _norm_severity(normalized.get("severity", "med"))
+        normalized["message"] = _as_str(
+            normalized.get("message")
+            or normalized.get("issue")
+            or normalized.get("msg")
+            or "Critique finding",
+            limit=1000,
+        )
+        normalized["code"] = _as_str(
+            normalized.get("code") or "CRITIQUE_GENERIC",
+            limit=120,
+        )
+        if "details" in normalized and not isinstance(normalized.get("details"), dict):
+            normalized["details"] = {"raw": _as_str(normalized.get("details"), limit=500)}
+        if "fix" in normalized and normalized.get("fix") is not None:
+            normalized["fix"] = _as_str(normalized.get("fix"), limit=1000)
+        return normalized
+
+    return {
+        "severity": "med",
+        "message": _as_str(item, limit=500),
+        "code": "CRITIQUE_TEXT",
+    }
+
+
 def _pad_findings(findings: Any, *, min_items: int = 3) -> List[Dict[str, Any]]:
-    """findings を List[Dict] に正規化し、min_items 件まで不足分をパッドする。"""
+    """findings を List[Dict] に正規化し、min_items 件まで不足分をパッドする。
+
+    実装上は「単一アイテム正規化 -> 不足分パッド」の1パスで整形し、
+    二重走査を避けて CPU 負荷を抑える。
+    """
     out: List[Dict[str, Any]] = []
 
     if isinstance(findings, list):
         for it in findings:
-            if isinstance(it, dict):
-                it2 = dict(it)
-                it2["severity"] = _norm_severity(it2.get("severity", "med"))
-                it2.setdefault(
-                    "message",
-                    it2.get("message")
-                    or it2.get("issue")
-                    or it2.get("msg")
-                    or "Critique finding",
-                )
-                it2.setdefault("code", it2.get("code") or "CRITIQUE_GENERIC")
-                if "details" in it2 and not isinstance(it2.get("details"), dict):
-                    it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-                if "fix" in it2 and it2.get("fix") is not None:
-                    it2["fix"] = _as_str(it2.get("fix"), limit=1000)
-                out.append(it2)
-            else:
-                out.append(
-                    {
-                        "severity": "med",
-                        "message": _as_str(it, limit=500),
-                        "code": "CRITIQUE_TEXT",
-                    }
-                )
+            out.append(_normalize_finding_item(it))
 
     elif isinstance(findings, dict):
-        it2 = dict(findings)
-        it2["severity"] = _norm_severity(it2.get("severity", "med"))
-        it2.setdefault(
-            "message",
-            it2.get("message") or it2.get("issue") or it2.get("msg") or "Critique finding",
-        )
-        it2.setdefault("code", it2.get("code") or "CRITIQUE_GENERIC")
-        if "details" in it2 and not isinstance(it2.get("details"), dict):
-            it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-        if "fix" in it2 and it2.get("fix") is not None:
-            it2["fix"] = _as_str(it2.get("fix"), limit=1000)
-        out = [it2]
+        out = [_normalize_finding_item(findings)]
 
     elif findings is not None:
-        out = [
-            {
-                "severity": "med",
-                "message": _as_str(findings, limit=500),
-                "code": "CRITIQUE_TEXT",
-            }
-        ]
+        out = [_normalize_finding_item(findings)]
 
     defaults = _default_findings()
     i = 0
     while len(out) < int(min_items):
-        out.append(dict(defaults[i % len(defaults)]))
+        out.append(_normalize_finding_item(defaults[i % len(defaults)]))
         i += 1
-
-    # 最終固定（必須キー保証）
-    fixed: List[Dict[str, Any]] = []
-    for it in out:
-        if not isinstance(it, dict):
-            fixed.append(
-                {
-                    "severity": "med",
-                    "message": _as_str(it, limit=500),
-                    "code": "CRITIQUE_TEXT",
-                }
-            )
-            continue
-        it2 = dict(it)
-        it2["severity"] = _norm_severity(it2.get("severity", "med"))
-        it2["message"] = _as_str(it2.get("message") or "Critique finding", limit=1000)
-        it2["code"] = _as_str(it2.get("code") or "CRITIQUE_GENERIC", limit=120)
-        if "details" in it2 and not isinstance(it2.get("details"), dict):
-            it2["details"] = {"raw": _as_str(it2.get("details"), limit=500)}
-        fixed.append(it2)
-
-    return fixed
+    return out
 
 
 # =========================================================
@@ -426,6 +398,7 @@ async def _run_critique_best_effort(
 
 __all__ = [
     "_default_findings",
+    "_normalize_finding_item",
     "_pad_findings",
     "_critique_fallback",
     "_list_to_findings",
