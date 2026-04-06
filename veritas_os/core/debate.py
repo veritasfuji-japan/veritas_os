@@ -121,6 +121,26 @@ _RISK_NEGATION_TERMS = (
 
 DEBATE_SOURCE_OPENAI = "openai_llm"
 
+_ASCII_WORD_BOUNDARY = r"(?<![a-z0-9_]){token}(?![a-z0-9_])"
+_RISK_KEYWORDS_WEIGHTED = (
+    ("危険", 0.15),
+    ("重大", 0.12),
+    ("リスク", 0.08),
+    ("問題", 0.05),
+    ("違反", 0.20),
+    ("禁止", 0.18),
+    ("illegal", 0.20),
+    ("ban", 0.15),
+)
+_RISK_KEYWORD_PATTERNS = {
+    keyword: re.compile(
+        _ASCII_WORD_BOUNDARY.format(token=re.escape(keyword)),
+        re.IGNORECASE,
+    )
+    for keyword, _ in _RISK_KEYWORDS_WEIGHTED
+    if keyword.isascii()
+}
+
 
 # ============================
 #  設定と定数
@@ -351,6 +371,14 @@ def _is_keyword_negated(text: str, keyword: str) -> bool:
     return False
 
 
+def _contains_risk_keyword(text: str, keyword: str) -> bool:
+    """Return ``True`` when a risk keyword appears without partial-token noise."""
+    if keyword.isascii():
+        pattern = _RISK_KEYWORD_PATTERNS.get(keyword)
+        return bool(pattern.search(text)) if pattern else False
+    return keyword in text
+
+
 def _calc_risk_delta(
     chosen: Optional[Dict[str, Any]],
     options: List[Dict[str, Any]],
@@ -364,18 +392,8 @@ def _calc_risk_delta(
     verdict = _normalize_verdict_by_score(chosen)
     score = _get_score(chosen)
 
-    risk_keywords = {
-        "危険": 0.15,
-        "重大": 0.12,
-        "リスク": 0.08,
-        "問題": 0.05,
-        "違反": 0.20,
-        "禁止": 0.18,
-        "illegal": 0.20,
-        "ban": 0.15,
-    }
-    for kw, w in risk_keywords.items():
-        if kw in safety_view and not _is_keyword_negated(safety_view, kw):
+    for kw, w in _RISK_KEYWORDS_WEIGHTED:
+        if _contains_risk_keyword(safety_view, kw) and not _is_keyword_negated(safety_view, kw):
             delta += w
 
     if verdict == "要検討":
