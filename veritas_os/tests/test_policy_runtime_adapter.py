@@ -659,10 +659,10 @@ def test_unknown_operator_logs_warning_and_returns_false(
 # --- Scope missing fields debug log test ---
 
 
-def test_scope_missing_fields_logs_debug(
+def test_scope_missing_fields_fail_closed(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Missing scope context fields are logged at DEBUG level."""
+    """Missing scope context fields cause fail-closed (no match) with WARNING."""
     from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
 
     policy = RuntimePolicy(
@@ -702,18 +702,19 @@ def test_scope_missing_fields_logs_debug(
         runtime_policies=[policy],
     )
 
-    # Context missing domain and actor — should still match but log debug
+    # Context missing domain and actor — fail-closed: policy does not match
     context = {
         "route": "/api/decide",
         "risk": {"level": "high"},
     }
     import logging
 
-    with caplog.at_level(logging.DEBUG, logger="veritas_os.policy.evaluator"):
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.evaluator"):
         decision = evaluate_runtime_policies(bundle, context).to_dict()
 
-    assert decision["final_outcome"] == "deny"
+    assert decision["final_outcome"] == "allow"
     assert "scope fields" in caplog.text
+    assert "fail-closed" in caplog.text
     assert "domain" in caplog.text
     assert "actor" in caplog.text
 
