@@ -383,6 +383,8 @@ async def _run_critique_best_effort(
     例外は出さない。findings >= min_findings の dict を返す。
 
     NOTE: analyze() が list を返してもここで dict に正規化する。
+    NOTE: 現状は同期呼び出しのみだが、将来の非同期 Critique 実装
+    （例: LLM ベース批評）を差し替え可能にするため async 契約を維持する。
     """
     crit_mod = _lazy_import("veritas_os.core.critique", None)
     if crit_mod is None:
