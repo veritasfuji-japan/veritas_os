@@ -98,7 +98,7 @@ def governance_value_drift(telos_baseline: float = Query(default=0.5, ge=0.0, le
         result = srv.get_value_drift(telos_baseline=telos_baseline)
         return {"ok": True, "value_drift": result}
     except Exception as e:
-        logger.error("governance_value_drift failed: %s", e)
+        logger.error("governance_value_drift failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to load value drift metrics"},
@@ -117,7 +117,7 @@ def governance_get():
         policy = srv.get_policy()
         return {"ok": True, "policy": policy}
     except Exception as e:
-        logger.error("governance_get failed: %s", e)
+        logger.error("governance_get failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to load governance policy"},
@@ -155,7 +155,7 @@ def governance_put(body: dict):
             content={"ok": False, "error": str(e)},
         )
     except Exception as e:
-        logger.error("governance_put failed: %s", e)
+        logger.error("governance_put failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to update governance policy"},
@@ -174,7 +174,7 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
         records = srv.get_policy_history(limit=limit)
         return {"ok": True, "count": len(records), "history": records}
     except Exception as e:
-        logger.error("governance_policy_history failed: %s", e)
+        logger.error("governance_policy_history failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to load governance policy history"},
@@ -210,7 +210,7 @@ def governance_decision_export(
             )
         return {"ok": True, "count": len(normalized), "items": normalized}
     except Exception as e:
-        logger.error("governance_decision_export failed: %s", e)
+        logger.error("governance_decision_export failed: %s", e, exc_info=True)
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to export governance decisions"},

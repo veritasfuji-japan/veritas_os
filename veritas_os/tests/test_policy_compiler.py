@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from veritas_os.policy.compiler import compile_policy_to_bundle
+from veritas_os.policy.explain import build_explanation_metadata
 from veritas_os.policy.models import PolicyCompilationError, PolicyValidationError
 from veritas_os.policy.runtime_adapter import load_runtime_bundle
 
@@ -226,3 +227,15 @@ def test_compile_wraps_signing_error_as_policy_compilation_error(
             compiled_at="2026-04-02T00:00:00Z",
             signing_key=b"not-a-valid-pem-key",
         )
+
+
+def test_build_explanation_metadata_handles_incomplete_ir() -> None:
+    """build_explanation_metadata does not raise KeyError on incomplete IR."""
+    incomplete_ir = {"policy_id": "test.incomplete"}
+    result = build_explanation_metadata(incomplete_ir)
+    assert result["policy_id"] == "test.incomplete"
+    assert result["outcome"]["decision"] == "unknown"
+    assert result["outcome"]["reason"] == ""
+    assert result["requirements"]["minimum_approval_count"] == 0
+    assert result["application"]["condition_count"] == 0
+    assert result["application"]["constraint_count"] == 0

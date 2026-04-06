@@ -550,6 +550,15 @@ class TestGovernanceHardeningBranches:
         assert [point["ema"] for point in result["history"]] == [0.0, 1.0, 0.55]
         assert result["history"][-1]["timestamp"] == "point-4"
 
+    def test_get_value_drift_missing_ema_key_uses_baseline(self, tmp_path):
+        """get_value_drift falls back to baseline when history entry lacks 'ema' key."""
+        with patch.object(
+            gov_mod, "_load_value_history", return_value=[{"timestamp": "t1"}]
+        ):
+            result = gov_mod.get_value_drift(telos_baseline=0.7)
+
+        assert result["latest_ema"] == 0.7
+
 
 # ----------------------------------------------------------------
 # Audit-quality governance hardening tests
