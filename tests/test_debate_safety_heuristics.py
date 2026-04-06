@@ -99,3 +99,17 @@ def test_calc_risk_delta_avoids_ascii_partial_keyword_false_positive() -> None:
     delta = debate._calc_risk_delta(chosen, [chosen])
 
     assert delta < 0.0
+
+
+def test_calc_risk_delta_does_not_negate_illegal_with_generic_no_risk() -> None:
+    """Generic 'no risk' text must not cancel explicit illegal signals."""
+    chosen = {
+        "score": 0.82,
+        "verdict": "採用推奨",
+        "safety_view": "No risk in performance, but this flow is illegal in many regions.",
+        "critic_view": "requires legal review",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta >= 0.15

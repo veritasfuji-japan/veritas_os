@@ -136,6 +136,19 @@ _RISK_NEGATION_TERMS = (
     "safe",
     "mitigated",
 )
+_ASCII_RISK_NEGATION_BY_KEYWORD = {
+    "illegal": (
+        "not illegal",
+        "is legal",
+        "legal and compliant",
+        "lawful",
+    ),
+    "ban": (
+        "not banned",
+        "no ban",
+        "ban lifted",
+    ),
+}
 
 DEBATE_SOURCE_OPENAI = "openai_llm"
 
@@ -391,6 +404,13 @@ def _normalize_verdict_by_score(opt: Dict[str, Any]) -> str:
 
 def _is_keyword_negated(text: str, keyword: str) -> bool:
     """Return ``True`` when *keyword* appears near a risk-negation phrase."""
+    negation_terms = _RISK_NEGATION_TERMS
+    if keyword.isascii():
+        negation_terms = _ASCII_RISK_NEGATION_BY_KEYWORD.get(keyword, ())
+
+    if not negation_terms:
+        return False
+
     positions = []
     start = 0
     while True:
@@ -407,7 +427,7 @@ def _is_keyword_negated(text: str, keyword: str) -> bool:
         left = max(0, idx - 18)
         right = min(len(text), idx + len(keyword) + 18)
         window = text[left:right]
-        if any(neg in window for neg in _RISK_NEGATION_TERMS):
+        if any(neg in window for neg in negation_terms):
             return True
     return False
 
