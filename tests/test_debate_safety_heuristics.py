@@ -80,6 +80,17 @@ def test_looks_dangerous_text_blocks_financial_fraud_related_terms() -> None:
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_fraud_term_even_with_strong_benign_label() -> None:
+    """Strong benign words must not whitelist explicit fraud domains."""
+    option = {
+        "title": "セキュリティ教育用メモ",
+        "description": "防止策の説明としてフィッシング配布の運用例を列挙する",
+        "summary": "対策・予防の観点を明記",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_looks_dangerous_text_blocks_zero_width_obfuscated_terms() -> None:
     """Zero-width split danger terms should still be detected."""
     option = {
@@ -89,6 +100,15 @@ def test_looks_dangerous_text_blocks_zero_width_obfuscated_terms() -> None:
     }
 
     assert debate._looks_dangerous_text(option) is True
+
+
+def test_looks_dangerous_text_allows_refusal_context_for_override_term() -> None:
+    """Refusal context should remain non-actionable even for override terms."""
+    option = {
+        "summary": "I cannot provide phishing guidance because it is harmful and illegal.",
+    }
+
+    assert debate._looks_dangerous_text(option) is False
 
 
 def test_looks_dangerous_text_blocks_confusable_obfuscated_terms() -> None:
