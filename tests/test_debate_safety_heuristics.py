@@ -81,6 +81,15 @@ def test_looks_dangerous_text_allows_obfuscated_term_in_strong_defensive_context
     assert debate._looks_dangerous_text(option) is False
 
 
+def test_looks_dangerous_text_allows_refusal_context_with_danger_terms() -> None:
+    """Refusal wording with danger terms should not be treated as harmful intent."""
+    option = {
+        "summary": "I cannot provide malware tutorial or hacking code because it is harmful and illegal.",
+    }
+
+    assert debate._looks_dangerous_text(option) is False
+
+
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:
     """Negated safety phrases should avoid risk keyword inflation."""
     chosen = {
@@ -135,3 +144,17 @@ def test_calc_risk_delta_does_not_negate_illegal_with_generic_no_risk() -> None:
     delta = debate._calc_risk_delta(chosen, [chosen])
 
     assert delta >= 0.15
+
+
+def test_calc_risk_delta_increases_for_regulatory_ambiguity() -> None:
+    """Regulatory ambiguity phrases should be treated as residual legal risk."""
+    chosen = {
+        "score": 0.84,
+        "verdict": "採用推奨",
+        "safety_view": "規制の例外を使うグレーゾーン運用で、短期的には実施可能です。",
+        "critic_view": "benefit exists but legal review required",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta >= 0.10
