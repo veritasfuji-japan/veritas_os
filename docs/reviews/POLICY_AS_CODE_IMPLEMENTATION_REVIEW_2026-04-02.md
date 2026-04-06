@@ -373,7 +373,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 | 演算子 | 動作 | 型ガード |
 |--------|------|---------|
 | `eq` / `neq` | 等値/非等値 | any |
-| `in` / `not_in` | リスト包含/非包含 | list/set チェック |
+| `in` / `not_in` | リスト包含/非包含 | list チェック + ✅ 非リスト expected 時の fail-safe（両演算子とも `False` を返却） |
 | `gt` / `gte` / `lt` / `lte` | 数値比較 | ✅ float 変換ガード（`_safe_numeric_compare`）+ ✅ NaN/Inf ガード（`math.isfinite`） |
 | `contains` | 文字列/リスト包含 | ✅ 型安全ガード（文字列 actual × 非文字列 expected の TypeError 防止） |
 | `regex` | 正規表現マッチ | ReDoS ガードレール付き |
@@ -570,14 +570,14 @@ python -m veritas_os.scripts.compile_policy \
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
 | `test_policy_compiler.py` | 12 | 230+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外** |
-| `test_policy_runtime_adapter.py` | 40 | 950+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ** |
+| `test_policy_runtime_adapter.py` | 41 | 990+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ**、**not_in 演算子非リスト expected fail-safe** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
 | `test_pipeline_stages_ext.py`（bridge） | 11 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング** + **risk_val fail-closed**） |
-| **合計** | **195** | **2,990+** | |
+| **合計** | **196** | **3,030+** | |
 
 ### 4.2 テストパターン分析
 
@@ -663,6 +663,7 @@ python -m veritas_os.scripts.compile_policy \
 | `policy_runtime_enforce` 文字列値ハンドリング | ✅ | 文字列 `"false"` が enforcement を有効化しないことを検証（`bool("false")` バグ修正） |
 | 署名検証ファイル欠落時の警告ログ | ✅ | `verify_manifest_signature()` で manifest/sig ファイル欠落時に警告ログが出力されることを検証 |
 | risk_val 変換不能時の fail-closed | ✅ | 非数値 risk 値で `risk_val` が `1.0`（最大リスク）にフォールバックすることを検証 |
+| not_in 演算子非リスト expected fail-safe | ✅ | `not_in` 演算子の `expected` が非リスト（文字列等）の場合に `True`（fail-open）ではなく `False`（fail-safe）を返却することを検証 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -822,7 +823,7 @@ python -m veritas_os.scripts.compile_policy \
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
 | テスト行数 | 2,950行+ | テスト:実装比 = 2.1:1（良好） |
-| テスト関数数 | 192 | 十分な網羅性 |
+| テスト関数数 | 196 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -1289,6 +1290,24 @@ python -m veritas_os.scripts.compile_policy \
   - 修正前: NaN/Inf は `1.0`（fail-closed）だが、変換不能な値（非数値文字列等）は `0.0`（fail-open）で不整合
   - 修正後: 両ケースとも `1.0`（最大リスク）に統一。「変換できない = 安全でない」の原則に一貫
   - テスト1件追加: `test_risk_val_invalid_type_fails_closed`（非数値 risk で fail-closed 動作を検証）
+
+---
+
+### 11.17 改善実施ログ（2026-04-06）
+
+以下は本日の改善で実施した項目:
+
+- **`not_in` 演算子の fail-open バグ修正（`evaluator.py`）**
+  - `_evaluate_expression()` の `not_in` 演算子で、`expected` がリストでない場合（文字列・None 等の不正な値）に `True` を返却していたバグを修正
+  - 修正前: `actual not in expected if isinstance(expected, list) else True` — 不正なポリシー値で条件が無条件に通過（fail-open）
+  - 修正後: `actual not in expected if isinstance(expected, list) else False` — 不正なポリシー値で条件がマッチしない（fail-safe）
+  - `in` 演算子は既に非リスト `expected` で `False` を返却しており、`not_in` との一貫性を確保
+  - セキュリティ影響: 攻撃者がポリシー YAML の `value` フィールドにリスト以外の値を注入した場合、`not_in` 条件がバイパスされる可能性があった
+  - テスト1件追加: `test_not_in_operator_non_list_expected_returns_false`
+
+- **ガバナンスAPI `_sanitize_updated_by()` の `import re` をモジュールレベルに移動（`governance.py`）**
+  - `_sanitize_updated_by()` 内の `import re`（関数内ローカルインポート）を除去し、モジュール先頭の `import` ブロックに `import re` を追加
+  - `re` は Python 標準ライブラリであり、section 11.12〜11.13 で `pipeline_policy.py` / `governance.py` に対して実施した冗長インポート除去（`import math as _math`, `import os as _os`）と同一パターンの修正
 
 ---
 

@@ -103,7 +103,7 @@ def _evaluate_expression(expression: Dict[str, Any], context: Dict[str, Any]) ->
     if operator == "in":
         return actual in expected if isinstance(expected, list) else False
     if operator == "not_in":
-        return actual not in expected if isinstance(expected, list) else True
+        return actual not in expected if isinstance(expected, list) else False
     if operator in ("gt", "gte", "lt", "lte"):
         return _safe_numeric_compare(operator, actual, expected)
     if operator == "contains":

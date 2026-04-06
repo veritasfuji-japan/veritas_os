@@ -886,6 +886,59 @@ def test_contains_operator_non_string_expected_with_string_actual() -> None:
     assert decision["final_outcome"] == "allow"
 
 
+def test_not_in_operator_non_list_expected_returns_false() -> None:
+    """not_in operator with a non-list expected value safely returns False (fail-safe)."""
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    policy = RuntimePolicy(
+        policy_id="policy.not_in.type_safety",
+        version="1",
+        title="not_in type safety",
+        description="Non-list expected in not_in should not silently pass.",
+        effective_date=None,
+        scope={
+            "domains": ["governance"],
+            "routes": ["/api/decide"],
+            "actors": ["planner"],
+        },
+        conditions=[
+            {"field": "tool.name", "operator": "not_in", "value": "not_a_list"}
+        ],
+        constraints=[],
+        requirements={
+            "required_evidence": [],
+            "required_reviewers": [],
+            "minimum_approval_count": 0,
+        },
+        outcome={"decision": "deny", "reason": "Malformed not_in value."},
+        obligations=[],
+        test_vectors=[],
+        metadata={},
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id=policy.policy_id,
+        version=policy.version,
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-05T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[policy],
+    )
+
+    context = {
+        "domain": "governance",
+        "route": "/api/decide",
+        "actor": "planner",
+        "tool": {"name": "some_tool"},
+    }
+    decision = evaluate_runtime_policies(bundle, context).to_dict()
+
+    # Non-list expected → condition does not match (fail-safe), so deny is not triggered
+    assert decision["final_outcome"] == "allow"
+
+
 def test_outcome_missing_keys_does_not_raise_key_error() -> None:
     """Evaluator handles malformed outcome dict (missing 'decision'/'reason') gracefully."""
     from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
