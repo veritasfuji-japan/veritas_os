@@ -187,6 +187,10 @@ def adapt_canonical_ir(canonical_ir: CanonicalPolicyIR) -> RuntimePolicy:
         raise ValueError(
             f"canonical IR missing required key {exc}"
         ) from exc
+    except (TypeError, AttributeError) as exc:
+        raise ValueError(
+            f"canonical IR structure invalid: {exc}"
+        ) from exc
 
 
 def load_runtime_bundle(

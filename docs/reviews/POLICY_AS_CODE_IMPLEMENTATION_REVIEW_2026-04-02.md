@@ -307,7 +307,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - `explain.json` の `human_summary` フィールドが自然言語で application scope と outcome を要約しており、非技術者にも理解しやすい設計。
 - `emit.py` が `ensure_ascii=False` を使用しているため、日本語等の非ASCII文字をそのまま出力可能。
 - ✅ tar アーカイブメタデータ（mtime, uid, gid, uname, gname）を正規化し、異なる環境・タイミングでの再コンパイルでもバイト同一のアーカイブを生成。再現可能ビルドの保証を強化。
-- ✅ シンボリックリンクをアーカイブ対象から除外。バンドルディレクトリにシンボリックリンクが混入してもパストラバーサルリスクを排除。
+- ✅ シンボリックリンクをアーカイブ対象から除外。バンドルディレクトリにシンボリックリンクが混入してもパストラバーサルリスクを排除。✅ さらに `collect_bundle_files()` でもシンボリックリンクを除外: `is_file()` はシンボリックリンクのターゲットを追跡して `True` を返すため、マニフェストの `bundle_contents` にシンボリックリンクが含まれアーカイブとの不整合が発生するバグを修正。
 - ✅ `explain.py` の `build_explanation_metadata()` で `canonical_ir` の全キーアクセスを `.get()` による防御的アクセスに変更。破損・不完全な canonical IR が渡された場合に `KeyError` でクラッシュする問題を防止。`evaluator.py` の `policy.outcome` 防御的アクセス（section 11.15）と一貫したパターン。
 
 ---
@@ -341,7 +341,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `VERITAS_POLICY_VERIFY_KEY` 環境変数によるデプロイメントレベルでの公開鍵設定をサポート。
 - ✅ レガシー SHA-256 バンドルとの後方互換性を維持。
 - ✅ `_read_json_file()` が `json.JSONDecodeError` / `UnicodeDecodeError` / `OSError` を明示的にキャッチし、コンテキスト付き `ValueError` にラップ。バンドルファイルの破損時に明確なエラーメッセージを提供。
-- ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。
+- ✅ `adapt_canonical_ir()` が canonical IR の必須キー欠落を `ValueError` で報告。不完全な IR の原因特定が容易。✅ さらに `TypeError` / `AttributeError` もキャッチ: canonical IR の構造が不正な場合（例: `scope` がリストや文字列）に `TypeError` がハンドルされず伝播するバグを修正。
 - ✅ `load_runtime_bundle()` でバンドル読み込み成功時に `logger.info()` で `policy_id`・`version`・`semantic_hash` を出力。ランタイム環境でのバンドルロード追跡が可能に。
 - ✅ `verify_manifest_signature()` でマニフェストが `algorithm: ed25519` を宣言しているにもかかわらず公開鍵が未設定の場合、SHA-256 フォールバック前に `logger.warning()` で警告を出力。署名バイパスの検出性を向上。✅ さらに `VERITAS_POLICY_REQUIRE_ED25519=true` 環境変数による厳格モードを追加。設定時は SHA-256 フォールバックを拒否し `ValueError` を送出。本番環境での設定ミスによるサイレントダウングレードを防止。
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
@@ -572,15 +572,15 @@ python -m veritas_os.scripts.compile_policy \
 
 | テストファイル | テスト数 | 行数 | 主要カバレッジ |
 |---------------|---------|------|---------------|
-| `test_policy_compiler.py` | 13 | 240+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外**、**explain.py 不完全 IR 防御** |
-| `test_policy_runtime_adapter.py` | 41 | 990+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ**、**not_in 演算子非リスト expected fail-safe** |
+| `test_policy_compiler.py` | 14 | 260+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外**、**explain.py 不完全 IR 防御**、**collect_bundle_files シンボリックリンク除外** |
+| `test_policy_runtime_adapter.py` | 42 | 1010+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ**、**not_in 演算子非リスト expected fail-safe**、**IR 構造型不正検出** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
 | `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 96 | 1060+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス**、**value_drift ema キー欠落防御** |
 | `test_pipeline_stages_ext.py`（bridge） | 11 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング** + **risk_val fail-closed**） |
-| **合計** | **198** | **3,050+** | |
+| **合計** | **200** | **3,100+** | |
 
 ### 4.2 テストパターン分析
 
@@ -669,6 +669,8 @@ python -m veritas_os.scripts.compile_policy \
 | not_in 演算子非リスト expected fail-safe | ✅ | `not_in` 演算子の `expected` が非リスト（文字列等）の場合に `True`（fail-open）ではなく `False`（fail-safe）を返却することを検証 |
 | explain.py 不完全 IR 防御 | ✅ | `build_explanation_metadata()` に不完全な canonical IR（キー欠落）を渡しても `KeyError` を送出せず安全にデフォルト値で動作 |
 | value_drift ema キー欠落防御 | ✅ | `get_value_drift()` で history エントリに `ema` キーが欠落した場合に baseline にフォールバック |
+| adapt_canonical_ir IR 構造型不正検出 | ✅ | `adapt_canonical_ir()` に型不正な IR（例: `scope` が文字列）を渡した場合に `TypeError` が `ValueError` に変換されることを検証 |
+| collect_bundle_files シンボリックリンク除外 | ✅ | `collect_bundle_files()` でシンボリックリンクがメタデータに含まれないことを検証（アーカイブ除外との一貫性） |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -772,7 +774,7 @@ python -m veritas_os.scripts.compile_policy \
 | スキーマ厳密性 | `models.py` | ◎ extra=forbid, frozen, バリデータ |
 | Fail-closed | `pipeline_policy.py` | ○ エラー時は安全側にデフォルト |
 | イミュータブル設計 | 全 dataclass | ◎ frozen=True で変更不可 |
-| シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブからシンボリックリンクを除外（パストラバーサル防止） |
+| シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブ + ファイルメタデータ収集の両方からシンボリックリンクを除外（パストラバーサル防止 + マニフェスト/アーカイブ整合性保証） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
 | 署名検証 TOCTOU 防止 | `runtime_adapter.py` + `signing.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保。レガシー `verify_manifest_sha256()` も同一パターンで保護 |
 | 例外ハンドリング厳密化 | `signing.py`, `governance.py`, `pipeline_policy.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。オプション依存インポートの `except Exception` → `except ImportError` 修正。予期しない例外の隠蔽を防止 |
@@ -780,6 +782,7 @@ python -m veritas_os.scripts.compile_policy \
 | Outcome 防御的アクセス | `evaluator.py` | ◎ `policy.outcome` への直接辞書アクセスを `.get()` に変更。破損 IR による `KeyError` クラッシュを防止 |
 | Explain 防御的アクセス | `explain.py` | ◎ `canonical_ir` の全キーアクセスを `.get()` に変更。不完全な IR による `KeyError` クラッシュを防止 |
 | Pipeline bridge KeyError 防御 | `pipeline_policy.py` | ◎ 例外キャッチに `KeyError` を追加。評価エンジン内部の `KeyError` がリクエスト処理をクラッシュさせることを防止 |
+| IR 構造型安全性 | `runtime_adapter.py` | ◎ `adapt_canonical_ir()` の例外キャッチに `TypeError` / `AttributeError` を追加。型不正な canonical IR（例: `scope` が文字列）によるクラッシュを防止 |
 | API エラーログ可観測性 | `routes_governance.py` | ◎ 全エンドポイントの `logger.error()` に `exc_info=True` を追加。スタックトレースの出力によりデバッグ・根因分析を容易化 |
 
 ### 6.2 セキュリティ警告
@@ -829,8 +832,8 @@ python -m veritas_os.scripts.compile_policy \
 | 指標 | 値 | 評価 |
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
-| テスト行数 | 3,050行+ | テスト:実装比 = 2.2:1（良好） |
-| テスト関数数 | 198 | 十分な網羅性 |
+| テスト行数 | 3,100行+ | テスト:実装比 = 2.2:1（良好） |
+| テスト関数数 | 200 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -1339,6 +1342,26 @@ python -m veritas_os.scripts.compile_policy \
   - `history[-1]["ema"]` を `history[-1].get("ema", baseline)` に変更
   - `_load_value_history()` の `_coerce_metric_point()` が `ema` キーなしのエントリをフィルタするため通常は発火しないが、将来の仕様変更や `_load_value_history()` のモック/バイパス時の安全性を確保
   - テスト1件追加: `test_get_value_drift_missing_ema_key_uses_baseline`
+
+---
+
+### 11.19 改善実施ログ（2026-04-06 第3弾）
+
+以下は本日追加実施したバグ修正項目:
+
+- **`adapt_canonical_ir()` の型安全性強化（`runtime_adapter.py`）**
+  - `except KeyError` に `TypeError` / `AttributeError` を追加
+  - 従来は canonical IR の**キー欠落**のみをキャッチしていたが、**型不正**（例: `scope` がリストや文字列、`conditions` が `None`）の場合に `TypeError` / `AttributeError` がハンドルされずスタックトレース付きで伝播するバグがあった
+  - 改善後: `KeyError` は従来通り `"missing required key"` メッセージ、`TypeError` / `AttributeError` は `"structure invalid"` メッセージで `ValueError` に変換
+  - `pipeline_policy.py` の bridge が `except (OSError, ValueError, TypeError, KeyError)` で `TypeError` をキャッチしていたが、evaluator 内部で `adapt_canonical_ir()` 以外の `TypeError` と区別できなかった。修正により原因が構造化された `ValueError` で特定可能に
+  - テスト1件追加: `test_adapt_canonical_ir_invalid_type_raises_value_error`
+
+- **`collect_bundle_files()` のシンボリックリンク除外（`bundle.py`）**
+  - `collect_bundle_files()` のファイル列挙に `or file_path.is_symlink()` チェックを追加
+  - `Path.is_file()` はシンボリックリンクのターゲットを追跡して `True` を返すため、シンボリックリンクがマニフェストの `bundle_contents` に含まれていた
+  - 一方 `create_bundle_archive()` は `entry.is_symlink()` チェックでシンボリックリンクを除外済み（section 11.8）
+  - この不整合により、マニフェストにはファイルが記録されるがアーカイブには含まれないという完全性検証の不一致が発生する可能性があった
+  - テスト1件追加: `test_collect_bundle_files_excludes_symlinks`
 
 ---
 

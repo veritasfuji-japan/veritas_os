@@ -485,6 +485,25 @@ def test_adapt_canonical_ir_missing_key() -> None:
         adapt_canonical_ir(incomplete_ir)
 
 
+def test_adapt_canonical_ir_invalid_type_raises_value_error() -> None:
+    """adapt_canonical_ir raises ValueError when IR has wrong types (e.g. scope is a string)."""
+    malformed_ir = {
+        "policy_id": "test",
+        "version": "1.0",
+        "title": "Test",
+        "description": "desc",
+        "scope": "not-a-dict",  # Should be a dict with domains/routes/actors
+        "conditions": [],
+        "constraints": [],
+        "requirements": {},
+        "outcome": {"decision": "allow", "reason": "ok"},
+        "obligations": [],
+        "test_vectors": [],
+    }
+    with pytest.raises(ValueError, match="structure invalid"):
+        adapt_canonical_ir(malformed_ir)
+
+
 # --- Numeric comparison type safety tests ---
 
 

@@ -239,3 +239,20 @@ def test_build_explanation_metadata_handles_incomplete_ir() -> None:
     assert result["requirements"]["minimum_approval_count"] == 0
     assert result["application"]["condition_count"] == 0
     assert result["application"]["constraint_count"] == 0
+
+
+def test_collect_bundle_files_excludes_symlinks(tmp_path: Path) -> None:
+    """collect_bundle_files must not include symlinks, consistent with create_bundle_archive."""
+    from veritas_os.policy.bundle import collect_bundle_files
+
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir()
+    real_file = bundle_dir / "real.json"
+    real_file.write_text("{}", encoding="utf-8")
+    link = bundle_dir / "link.json"
+    link.symlink_to(real_file)
+
+    files = collect_bundle_files(bundle_dir)
+    paths = [f["path"] for f in files]
+    assert "real.json" in paths
+    assert "link.json" not in paths
