@@ -70,6 +70,16 @@ def test_looks_dangerous_text_blocks_obfuscated_danger_terms() -> None:
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_financial_fraud_related_terms() -> None:
+    """Expanded danger dictionary should catch fraud/hacking adjacent terms."""
+    option = {
+        "title": "闇バイト募集の手順",
+        "description": "不正アクセスと口座売買で資金化する流れを説明する",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_looks_dangerous_text_blocks_zero_width_obfuscated_terms() -> None:
     """Zero-width split danger terms should still be detected."""
     option = {
@@ -180,3 +190,17 @@ def test_calc_risk_delta_increases_for_regulatory_ambiguity() -> None:
     delta = debate._calc_risk_delta(chosen, [chosen])
 
     assert delta >= 0.10
+
+
+def test_calc_risk_delta_skips_ambiguity_penalty_when_explicitly_avoiding_gray_zone() -> None:
+    """Mitigated wording around gray-zone terms should not be over-penalized."""
+    chosen = {
+        "score": 0.84,
+        "verdict": "採用推奨",
+        "safety_view": "グレーゾーンは回避し、適法かつcompliantな手順のみを採用する。",
+        "critic_view": "legal review completed",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta <= 0.0
