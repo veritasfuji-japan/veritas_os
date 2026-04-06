@@ -44,6 +44,12 @@ _DANGER_TERMS_JA = [
     "暴力",
     "テロ",
     "違法",
+    "闇バイト",
+    "不正アクセス",
+    "口座売買",
+    "詐欺",
+    "ランサムウェア",
+    "フィッシング",
 ]
 
 _DANGER_PATTERNS_EN = [
@@ -57,6 +63,9 @@ _DANGER_PATTERNS_EN = [
     re.compile(r"\bhack(?:ing)?\b", re.IGNORECASE),
     re.compile(r"\bterror(?:ism|ist)?\b", re.IGNORECASE),
     re.compile(r"\billegal\b", re.IGNORECASE),
+    re.compile(r"\bransomware\b", re.IGNORECASE),
+    re.compile(r"\bphishing\b", re.IGNORECASE),
+    re.compile(r"\bcredential(?:s)?\s*stuffing\b", re.IGNORECASE),
 ]
 
 
@@ -180,8 +189,22 @@ _REGULATORY_AMBIGUITY_PATTERNS = [
     re.compile(r"グレーゾーン"),
     re.compile(r"(?:法令|規制).{0,8}(?:例外|抜け道)"),
     re.compile(r"脱法"),
+    re.compile(r"(?:法解釈|規制解釈).{0,8}(?:次第|曖昧)"),
     re.compile(r"\b(?:grey zone|gray area|regulatory exception|legal loophole|policy workaround)\b", re.IGNORECASE),
+    re.compile(r"\b(?:regulatory arbitrage|compliance workaround)\b", re.IGNORECASE),
 ]
+_REGULATORY_AMBIGUITY_NEGATION_TERMS = (
+    "避ける",
+    "回避",
+    "該当しない",
+    "問題なし",
+    "問題はない",
+    "適法",
+    "合法",
+    "compliant",
+    "not a gray area",
+    "no gray area",
+)
 _RISK_KEYWORD_PATTERNS = {
     keyword: re.compile(
         _ASCII_WORD_BOUNDARY.format(token=re.escape(keyword)),
@@ -228,6 +251,8 @@ _OBFUSCATED_DANGER_TOKENS = (
     "drug",
     "bomb",
     "weapon",
+    "ransomware",
+    "phishing",
 )
 
 
@@ -528,6 +553,19 @@ def _contains_risk_keyword(text: str, keyword: str) -> bool:
     return keyword in text
 
 
+def _has_regulatory_ambiguity_risk(text: str) -> bool:
+    """Return True when regulatory ambiguity appears without explicit mitigation."""
+    for pattern in _REGULATORY_AMBIGUITY_PATTERNS:
+        for match in pattern.finditer(text):
+            left = max(0, match.start() - 18)
+            right = min(len(text), match.end() + 18)
+            window = text[left:right]
+            if any(term in window for term in _REGULATORY_AMBIGUITY_NEGATION_TERMS):
+                continue
+            return True
+    return False
+
+
 def _calc_risk_delta(
     chosen: Optional[Dict[str, Any]],
     options: List[Dict[str, Any]],
@@ -545,7 +583,7 @@ def _calc_risk_delta(
         if _contains_risk_keyword(safety_view, kw) and not _is_keyword_negated(safety_view, kw):
             delta += w
 
-    if any(pattern.search(safety_view) for pattern in _REGULATORY_AMBIGUITY_PATTERNS):
+    if _has_regulatory_ambiguity_risk(safety_view):
         delta += 0.12
 
     if verdict == "要検討":
