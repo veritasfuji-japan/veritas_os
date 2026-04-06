@@ -445,6 +445,173 @@ def _create_warning_message(chosen: Dict[str, Any], mode: str, all_rejected: boo
 # ============================
 
 
+def _truncate_string(value: Any, max_len: int = MAX_OPTION_STRING_LENGTH) -> Optional[str]:
+    """Safely truncate string values to prevent resource exhaustion."""
+    if value is None:
+        return None
+    if max_len <= 0:
+        max_len = MAX_OPTION_STRING_LENGTH
+    if not isinstance(value, str):
+        return str(value)[:max_len]
+    return value[:max_len]
+
+
+def _validate_option(opt: Any) -> bool:
+    """Validate that an option has expected structure and bounded field sizes."""
+    if not isinstance(opt, dict):
+        return False
+
+    for key in ("id", "title", "summary", "verdict"):
+        val = opt.get(key)
+        if val is not None and not isinstance(val, str):
+            return False
+        if isinstance(val, str) and len(val) > MAX_OPTION_STRING_LENGTH:
+            return False
+
+    for key in ("score", "score_raw"):
+        if key in opt:
+            try:
+                float(opt[key])
+            except (TypeError, ValueError):
+                return False
+    return True
+
+
+def _estimate_option_payload_size(opt: Dict[str, Any]) -> int:
+    """Estimate payload bytes for a single option."""
+    payload_chars = 0
+    for value in opt.values():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            payload_chars += len(value)
+        else:
+            payload_chars += len(str(value))
+    return payload_chars
+
+
+def _sanitize_options(options: List[Any]) -> List[Dict[str, Any]]:
+    """Filter and sanitize options list to prevent malicious data."""
+    sanitized: List[Dict[str, Any]] = []
+    cumulative_payload_size = 0
+    for opt in options[:MAX_OPTIONS]:
+        if _validate_option(opt):
+            for key in (
+                "id",
+                "title",
+                "summary",
+                "verdict",
+                "safety_view",
+                "critic_view",
+                "architect_view",
+            ):
+                if key in opt and opt[key] is not None:
+                    opt[key] = _truncate_string(opt[key])
+
+            option_size = _estimate_option_payload_size(opt)
+            if cumulative_payload_size + option_size > MAX_OPTIONS_PAYLOAD_BYTES:
+                logger.warning(
+                    "DebateOS: Truncated options due to payload limit (%d bytes)",
+                    MAX_OPTIONS_PAYLOAD_BYTES,
+                )
+                break
+
+            cumulative_payload_size += option_size
+            sanitized.append(opt)
+        else:
+            logger.warning("DebateOS: Skipping invalid option structure: %r", type(opt))
+    if len(options) > MAX_OPTIONS:
+        logger.warning("DebateOS: Truncated options from %d to %d", len(options), MAX_OPTIONS)
+    return sanitized
+
+
+def _wrap_extracted_json(obj: Any) -> Dict[str, Any]:
+    """Normalize parsed JSON object into debate payload contract."""
+    if isinstance(obj, dict):
+        options = obj.get("options") or []
+        if not isinstance(options, list):
+            options = []
+        obj["options"] = _sanitize_options(options)
+        chosen_id = obj.get("chosen_id")
+        if isinstance(chosen_id, (str, type(None))):
+            obj["chosen_id"] = _truncate_string(chosen_id, 1000)
+        else:
+            obj["chosen_id"] = None
+        return obj
+    if isinstance(obj, list):
+        return {"options": _sanitize_options(obj), "chosen_id": None}
+    return {"options": [], "chosen_id": None}
+
+
+def _extract_objects_from_array(
+    text: str,
+    key: str,
+    max_objects: int = 50,
+    max_depth: int = MAX_JSON_NESTED_DEPTH,
+) -> List[Dict[str, Any]]:
+    """Extract complete JSON objects from array in broken JSON text."""
+    idx = text.find(f'"{key}"')
+    if idx == -1:
+        return []
+    idx = text.find("[", idx)
+    if idx == -1:
+        return []
+
+    i = idx + 1
+    n = len(text)
+    in_str = False
+    esc = False
+    depth = 0
+    buf_start: Optional[int] = None
+    objs: List[Dict[str, Any]] = []
+
+    while i < n:
+        ch = text[i]
+        if in_str:
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+        else:
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                if depth == 0:
+                    buf_start = i
+                depth += 1
+                if depth > max_depth:
+                    logger.warning(
+                        "DebateOS: options JSON nesting depth exceeded limit (%d)",
+                        max_depth,
+                    )
+                    break
+            elif ch == "}":
+                if depth > 0:
+                    depth -= 1
+                if depth == 0 and buf_start is not None:
+                    s = text[buf_start : i + 1]
+                    nesting = s.count("{") + s.count("[")
+                    if nesting > max_depth:
+                        logger.warning(
+                            "DebateOS: object cumulative nesting complexity %d exceeds limit %d, skipping",
+                            nesting, max_depth,
+                        )
+                    else:
+                        try:
+                            objs.append(json.loads(s))
+                        except Exception as e:
+                            logger.debug("DebateOS: skipping unparseable JSON object: %s", e)
+                    buf_start = None
+                    if len(objs) >= max_objects:
+                        break
+            elif ch == "]":
+                break
+        i += 1
+    return objs
+
+
 def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     """
     planner._safe_json_extract と同格の“救出力”を持つ版。
@@ -465,109 +632,15 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3].strip()
 
-    def _truncate_string(value: Any, max_len: int = MAX_OPTION_STRING_LENGTH) -> Optional[str]:
-        """Safely truncate string values to prevent resource exhaustion.
-
-        If *max_len* is non-positive, falls back to
-        ``MAX_OPTION_STRING_LENGTH``.
-        """
-        if value is None:
-            return None
-        if max_len <= 0:
-            max_len = MAX_OPTION_STRING_LENGTH
-        if not isinstance(value, str):
-            return str(value)[:max_len]
-        return value[:max_len]
-
-    def _validate_option(opt: Any) -> bool:
-        """Validate that an option has expected structure."""
-        if not isinstance(opt, dict):
-            return False
-        # Options must have valid types for key fields if present
-        for key in ("id", "title", "summary", "verdict"):
-            val = opt.get(key)
-            if val is not None and not isinstance(val, str):
-                return False
-            # Check string length limits
-            if isinstance(val, str) and len(val) > MAX_OPTION_STRING_LENGTH:
-                return False
-        for key in ("score", "score_raw"):
-            if key in opt:
-                try:
-                    float(opt[key])
-                except (TypeError, ValueError):
-                    return False
-        return True
-
-    def _estimate_option_payload_size(opt: Dict[str, Any]) -> int:
-        """Estimate payload bytes for a single option.
-
-        The estimate only counts values to bound resource usage and avoid
-        constructing a massive intermediate JSON string.
-        """
-        payload_chars = 0
-        for value in opt.values():
-            if value is None:
-                continue
-            if isinstance(value, str):
-                payload_chars += len(value)
-            else:
-                payload_chars += len(str(value))
-        return payload_chars
-
-    def _sanitize_options(options: List[Any]) -> List[Dict[str, Any]]:
-        """Filter and sanitize options list to prevent malicious data.
-
-        A hard upper bound is applied to the cumulative option payload so a
-        single debate response cannot consume excessive memory.
-        """
-        sanitized = []
-        cumulative_payload_size = 0
-        for opt in options[:MAX_OPTIONS]:  # Limit number of options
-            if _validate_option(opt):
-                # Truncate string fields for safety
-                for key in ("id", "title", "summary", "verdict", "safety_view", "critic_view", "architect_view"):
-                    if key in opt and opt[key] is not None:
-                        opt[key] = _truncate_string(opt[key])
-
-                option_size = _estimate_option_payload_size(opt)
-                if cumulative_payload_size + option_size > MAX_OPTIONS_PAYLOAD_BYTES:
-                    logger.warning(
-                        "DebateOS: Truncated options due to payload limit (%d bytes)",
-                        MAX_OPTIONS_PAYLOAD_BYTES,
-                    )
-                    break
-
-                cumulative_payload_size += option_size
-                sanitized.append(opt)
-            else:
-                logger.warning("DebateOS: Skipping invalid option structure: %r", type(opt))
-        if len(options) > MAX_OPTIONS:
-            logger.warning("DebateOS: Truncated options from %d to %d", len(options), MAX_OPTIONS)
-        return sanitized
-
-    def _wrap(obj: Any) -> Dict[str, Any]:
-        if isinstance(obj, dict):
-            options = obj.get("options") or []
-            if not isinstance(options, list):
-                options = []
-            obj["options"] = _sanitize_options(options)
-            chosen_id = obj.get("chosen_id")
-            obj["chosen_id"] = _truncate_string(chosen_id, 1000) if isinstance(chosen_id, (str, type(None))) else None
-            return obj
-        if isinstance(obj, list):
-            return {"options": _sanitize_options(obj), "chosen_id": None}
-        return {"options": [], "chosen_id": None}
-
     try:
-        return _wrap(json.loads(cleaned))
+        return _wrap_extracted_json(json.loads(cleaned))
     except Exception:
         logger.debug("_safe_json_extract_like: direct JSON parse failed")
 
     try:
         start = cleaned.index("{")
         end = cleaned.rindex("}") + 1
-        return _wrap(json.loads(cleaned[start:end]))
+        return _wrap_extracted_json(json.loads(cleaned[start:end]))
     except Exception:
         logger.debug("_safe_json_extract_like: brace-delimited JSON parse failed")
 
@@ -575,84 +648,17 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
     attempts = 0
     for cut in range(len(cleaned), 1, -1):
         if attempts >= 50:
+            logger.warning("DebateOS: tail-trim parse reached retry cap (%d)", attempts)
             break
         if cleaned[cut - 1] not in ("}", "]"):
             continue
         attempts += 1
         try:
-            return _wrap(json.loads(cleaned[:cut]))
+            return _wrap_extracted_json(json.loads(cleaned[:cut]))
         except Exception:
             continue
 
     # "options":[{...},{...}] から完成objだけ拾う（最後の保険）
-    def _extract_objects_from_array(
-        text: str,
-        key: str,
-        max_objects: int = 50,
-        max_depth: int = MAX_JSON_NESTED_DEPTH,
-    ) -> List[Dict[str, Any]]:
-        idx = text.find(f'"{key}"')
-        if idx == -1:
-            return []
-        idx = text.find("[", idx)
-        if idx == -1:
-            return []
-
-        i = idx + 1
-        n = len(text)
-        in_str = False
-        esc = False
-        depth = 0
-        buf_start: Optional[int] = None
-        objs: List[Dict[str, Any]] = []
-
-        while i < n:
-            ch = text[i]
-            if in_str:
-                if esc:
-                    esc = False
-                elif ch == "\\":
-                    esc = True
-                elif ch == '"':
-                    in_str = False
-            else:
-                if ch == '"':
-                    in_str = True
-                elif ch == "{":
-                    if depth == 0:
-                        buf_start = i
-                    depth += 1
-                    if depth > max_depth:
-                        logger.warning(
-                            "DebateOS: options JSON nesting depth exceeded limit (%d)",
-                            max_depth,
-                        )
-                        break
-                elif ch == "}":
-                    if depth > 0:
-                        depth -= 1
-                    if depth == 0 and buf_start is not None:
-                        s = text[buf_start : i + 1]
-                        # 累積複雑度チェック: ネスト構造文字数が過大ならスキップ（DoS軽減）
-                        _nesting = s.count("{") + s.count("[")
-                        if _nesting > max_depth:
-                            logger.warning(
-                                "DebateOS: object cumulative nesting complexity %d exceeds limit %d, skipping",
-                                _nesting, max_depth,
-                            )
-                        else:
-                            try:
-                                objs.append(json.loads(s))
-                            except Exception as e:
-                                logger.debug("DebateOS: skipping unparseable JSON object: %s", e)
-                        buf_start = None
-                        if len(objs) >= max_objects:
-                            break
-                elif ch == "]":
-                    break
-            i += 1
-        return objs
-
     rescued = _extract_objects_from_array(cleaned, "options")
     if rescued:
         return {"options": _sanitize_options(rescued), "chosen_id": None}

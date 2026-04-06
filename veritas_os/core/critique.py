@@ -50,6 +50,7 @@ _SEVERITY_SCORE: Dict[str, int] = {
     "med": 1,
     "high": 2,
 }
+_RISK_VALUE_ZERO_GUARD = 0.01
 
 
 def _now_iso() -> str:
@@ -324,8 +325,8 @@ def analyze(
     # ==== 8. リスク・価値バランスチェック ====
     if isinstance(risk, (int, float)) and not isinstance(risk, bool) and isinstance(value, (int, float)) and not isinstance(value, bool):
         rv = float(value)
-        # Use bounded value instead of float("inf") to avoid infinity propagation
-        ratio = float(risk) / rv if rv > 0 else float(risk) * 100.0
+        # Zero-division guard: floor near-zero value to keep finite ratio.
+        ratio = float(risk) / max(rv, _RISK_VALUE_ZERO_GUARD)
         if ratio > risk_value_ratio_threshold and float(risk) > 0.6 and float(value) < 0.5:
             critiques.append(
                 _crit(
@@ -336,6 +337,7 @@ def analyze(
                         "value": float(value),
                         "risk_value_ratio": ratio,
                         "ratio_threshold": risk_value_ratio_threshold,
+                        "value_floor": _RISK_VALUE_ZERO_GUARD,
                     },
                     fix="価値向上（スコープ調整）かリスク低減策を講じるまで、実行を保留することを検討してください。",
                     code="CRITIQUE_RISK_VALUE_IMBALANCE",

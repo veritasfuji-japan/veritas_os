@@ -126,8 +126,25 @@
    - risk negation の加算抑制
    - 実リスクでの加算維持
 
+6. **[中][完了] D-4 `_safe_json_extract_like` のネスト関数をモジュールレベルへ分離**
+   - `_truncate_string` / `_validate_option` / `_sanitize_options` / `_extract_objects_from_array` をトップレベル化。
+   - 目的: 単体テスト容易性と責務分離を改善し、JSON救出ロジックの追跡性を向上。
+
+7. **[中][完了] P-2 `_run_critique_best_effort` の async 意図を明文化**
+   - 現在は同期処理中心であること、将来の非同期 Critique 実装差し替えのために async 契約を維持していることを docstring に追記。
+
+8. **[中][完了] C-2 リスク/価値ゼロ除算回避ロジックの明確化**
+   - `risk * 100.0` を廃止し、`value_floor=0.01` を使う有界比率 (`risk / max(value, 0.01)`) に変更。
+   - マジックナンバーの意味を `value_floor` として `details` に露出し、監査性を向上。
+
+9. **[テスト追加][完了] JSON救出とリスク/価値比率の単体テスト追加**
+   - 破損JSONからの options 救出（不正scoreの除外を含む）
+   - 深すぎるネストの除外
+   - value=0 時の有限比率保証
+
 ### セキュリティ注意（実装時点）
 
 - benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。
 - そのため、明示的有害意図パターンは優先的に評価し、検出時は benign 判定より強くブロックする設計とした。
 - 追加で、将来的には FUJI 側の判定結果・ユーザー意図分類・監査ログ相関で多層化することを推奨。
+- JSON救出ロジックは防御的だが、**巨大入力によるCPU/メモリ負荷リスク**は依然として存在する。`MAX_OPTIONS_PAYLOAD_BYTES` / `MAX_JSON_NESTED_DEPTH` / tail-trim retry cap ログを継続監視すること。
