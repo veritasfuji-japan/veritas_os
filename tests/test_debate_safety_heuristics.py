@@ -28,6 +28,15 @@ def test_looks_dangerous_text_blocks_explicit_harmful_intent() -> None:
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_actionable_harm_even_with_safe_words() -> None:
+    option = {
+        "title": "セキュリティ訓練",
+        "description": "教育目的だが malware を deploy する手順を説明する",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:
     """Negated safety phrases should avoid risk keyword inflation."""
     chosen = {
