@@ -48,6 +48,7 @@ def create_bundle_archive(bundle_dir: Path) -> Path:
             info.gid = 0
             info.uname = ""
             info.gname = ""
+            info.mode = 0o644
             with open(entry, "rb") as fh:
                 tar.addfile(info, fh)
     return archive_path

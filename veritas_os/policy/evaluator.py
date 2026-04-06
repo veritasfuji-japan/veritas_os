@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 import logging
 import math
@@ -45,18 +45,7 @@ class PolicyEvaluationResult:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert dataclass result to serializable mapping."""
-        return {
-            "applicable_policies": self.applicable_policies,
-            "triggered_policies": self.triggered_policies,
-            "final_outcome": self.final_outcome,
-            "reasons": self.reasons,
-            "required_actions": self.required_actions,
-            "obligations": self.obligations,
-            "approval_requirements": self.approval_requirements,
-            "evidence_gaps": self.evidence_gaps,
-            "explanations": self.explanations,
-            "policy_results": self.policy_results,
-        }
+        return asdict(self)
 
 
 def _read_path(context: Dict[str, Any], field_path: str) -> Any:
@@ -158,15 +147,16 @@ def _scope_matches(policy: RuntimePolicy, context: Dict[str, Any]) -> bool:
 
     if domain is None or route is None or actor is None:
         missing = [k for k, v in (("domain", domain), ("route", route), ("actor", actor)) if v is None]
-        logger.debug(
-            "policy %s: scope fields %s absent in context, defaulting to match",
+        logger.warning(
+            "policy %s: scope fields %s absent in context; fail-closed (no match)",
             policy.policy_id,
             missing,
         )
+        return False
 
-    domain_match = domain in policy.scope["domains"] if domain is not None else True
-    route_match = route in policy.scope["routes"] if route is not None else True
-    actor_match = actor in policy.scope["actors"] if actor is not None else True
+    domain_match = domain in policy.scope["domains"]
+    route_match = route in policy.scope["routes"]
+    actor_match = actor in policy.scope["actors"]
     return bool(domain_match and route_match and actor_match)
 
 
@@ -216,9 +206,15 @@ def _choose_final_outcome(outcomes: Iterable[str]) -> str:
     selected = "allow"
     best_score = -1
     for outcome in outcomes:
-        score = OUTCOME_PRECEDENCE.get(outcome, -1)
+        score = OUTCOME_PRECEDENCE.get(outcome)
+        if score is None:
+            logger.warning(
+                "unknown policy outcome %r encountered; treating as deny (fail-closed)",
+                outcome,
+            )
+            score = OUTCOME_PRECEDENCE["deny"]
         if score > best_score:
-            selected = outcome
+            selected = outcome if outcome in OUTCOME_PRECEDENCE else "deny"
             best_score = score
     return selected
 
@@ -305,18 +301,15 @@ def evaluate_runtime_policies(
             obligations.extend(policy.obligations)
             required_actions.extend(policy.obligations)
 
-        if triggered_policy and req_eval["missing_evidence"] and outcome == "allow":
-            outcome = "halt"
-            outcomes.append(outcome)
-            reasons.append("missing required evidence")
-        if (
-            triggered_policy
-            and (req_eval["missing_reviewers"] or not req_eval["minimum_approval_met"])
-            and outcome == "allow"
-        ):
-            outcome = "require_human_review"
-            outcomes.append(outcome)
-            reasons.append("required approvals are not satisfied")
+        if triggered_policy and outcome == "allow":
+            if req_eval["missing_evidence"]:
+                outcome = "halt"
+                outcomes[-1] = outcome
+                reasons.append("missing required evidence")
+            elif req_eval["missing_reviewers"] or not req_eval["minimum_approval_met"]:
+                outcome = "require_human_review"
+                outcomes[-1] = outcome
+                reasons.append("required approvals are not satisfied")
 
         approval_requirements.append(
             {
