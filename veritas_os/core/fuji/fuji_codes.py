@@ -121,6 +121,34 @@ FUJI_REGISTRY: Dict[str, FujiRegistryEntry] = {
             hint="矛盾する証拠の優先度と原因を再評価し、整合するデータに置き換えてください。",
         ),
     ),
+    "F-2001": FujiRegistryEntry(
+        error=FujiError(
+            code="F-2001",
+            message="Toxic Content",
+            detail="有害・攻撃的なコンテンツ生成リスクがあります。",
+            layer=FujiLayer.LOGIC_DEBATE,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="攻撃性を除去し、中立で安全な表現に修正してください。",
+        ),
+    ),
+    "F-2002": FujiRegistryEntry(
+        error=FujiError(
+            code="F-2002",
+            message="Bias / Discriminatory Content",
+            detail="差別的・バイアスを助長する表現リスクがあります。",
+            layer=FujiLayer.LOGIC_DEBATE,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="差別的要素を除去し、公平性の観点で再生成してください。",
+        ),
+    ),
     "F-2101": FujiRegistryEntry(
         error=FujiError(
             code="F-2101",
@@ -161,6 +189,76 @@ FUJI_REGISTRY: Dict[str, FujiRegistryEntry] = {
         feedback=FujiFeedback(
             action=FujiAction.REWRITE_PLAN,
             hint="優先価値（例: 安全性）を最上位に置いた計画へ修正してください。",
+        ),
+    ),
+    "F-3002": FujiRegistryEntry(
+        error=FujiError(
+            code="F-3002",
+            message="Unauthorized Financial Advice",
+            detail="無許可の断定的な金融助言を検出しました。",
+            layer=FujiLayer.VALUE_POLICY,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="一般情報に留め、必要に応じて有資格者への相談を促してください。",
+        ),
+    ),
+    "F-3003": FujiRegistryEntry(
+        error=FujiError(
+            code="F-3003",
+            message="Definitive Legal Judgment",
+            detail="法的助言を断定的に提示しており高リスクです。",
+            layer=FujiLayer.VALUE_POLICY,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="法的結論の断定を避け、専門家レビューへエスカレーションしてください。",
+        ),
+    ),
+    "F-3004": FujiRegistryEntry(
+        error=FujiError(
+            code="F-3004",
+            message="Medical High-Risk Advice",
+            detail="医療診断・治療指示に該当する高リスク助言です。",
+            layer=FujiLayer.VALUE_POLICY,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="医療専門家の判断が必要である旨を明記し、人間レビューへ回してください。",
+        ),
+    ),
+    "F-3005": FujiRegistryEntry(
+        error=FujiError(
+            code="F-3005",
+            message="Policy Load / Validation Failure",
+            detail="FUJI ポリシーのロードまたは検証に失敗しました。",
+            layer=FujiLayer.VALUE_POLICY,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="ポリシー設定を修正し、検証完了まで実行を停止してください。",
+        ),
+    ),
+    "F-3006": FujiRegistryEntry(
+        error=FujiError(
+            code="F-3006",
+            message="Compliance Rule Evaluator Exception",
+            detail="コンプライアンス評価処理で例外が発生しました。",
+            layer=FujiLayer.VALUE_POLICY,
+            severity=FujiSeverity.HIGH,
+            blocking=True,
+        ),
+        feedback=FujiFeedback(
+            action=FujiAction.HUMAN_REVIEW,
+            hint="評価器の異常を調査し、復旧まで fail-closed を維持してください。",
         ),
     ),
     "F-3008": FujiRegistryEntry(

@@ -70,21 +70,44 @@ def redact_text_for_trust_log(text: str, policy: Dict[str, Any]) -> str:
 
 def select_fuji_code(*, violations: List[str], meta: Dict[str, Any]) -> str:
     """Map FUJI gate signals to a standard rejection/audit code."""
+    normalized = {str(v).strip().lower() for v in violations}
+
     prompt_injection = meta.get("prompt_injection") or {}
     if prompt_injection.get("score", 0.0) >= 0.4 or prompt_injection.get(
         "signals"
     ):
         return "F-4001"
 
-    if "PII" in violations:
+    if "pii" in normalized or "secret_leak" in normalized:
         return "F-4003"
+
+    if "policy_load_error" in normalized:
+        return "F-3005"
+
+    if meta.get("policy_eval_exception") or "compliance_evaluator_exception" in normalized:
+        return "F-3006"
+
+    if "unauthorized_financial_advice" in normalized:
+        return "F-3002"
+
+    if "definitive_legal_judgment" in normalized:
+        return "F-3003"
+
+    if "medical_high_risk" in normalized:
+        return "F-3004"
+
+    if "toxicity" in normalized:
+        return "F-2001"
+
+    if "bias_discrimination" in normalized:
+        return "F-2002"
 
     if meta.get("low_evidence"):
         return "F-1002"
 
     if any(
         violation in {"illicit", "self_harm", "violence", "minors"}
-        for violation in violations
+        for violation in normalized
     ):
         return "F-3008"
 
