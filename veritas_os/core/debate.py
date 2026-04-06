@@ -96,6 +96,19 @@ _ACTIONABLE_INTENT_PATTERNS = [
     re.compile(r"\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\b.{0,24}\b(?:deploy|distribute|execute|weaponize|abuse)\b", re.IGNORECASE),
 ]
 
+_INSTRUCTIONAL_CUE_PATTERNS = [
+    re.compile(r"(?:方法|手順|具体的|チュートリアル|コード).{0,12}(?:ハッキング|ウイルス|爆弾|麻薬|侵入)", re.IGNORECASE),
+    re.compile(r"(?:ハッキング|ウイルス|爆弾|麻薬|侵入).{0,12}(?:方法|手順|具体的|チュートリアル|コード)", re.IGNORECASE),
+    re.compile(
+        r"\b(?:tutorial|walkthrough|code sample|script)\b.{0,24}\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\b.{0,24}\b(?:tutorial|walkthrough|code sample|script)\b",
+        re.IGNORECASE,
+    ),
+]
+
 _RISK_NEGATION_TERMS = (
     "問題なし",
     "問題はない",
@@ -278,7 +291,12 @@ def _contains_benign_context(normalized_text: str) -> bool:
 
 
 def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
-    """Detect dangerous option text while reducing benign-context false positives."""
+    """Detect dangerous option text while reducing benign-context false positives.
+
+    Security notes:
+        - Benign context terms alone do not guarantee safety.
+        - Explicit harmful intent or instructional cues are prioritized and blocked.
+    """
     text = " ".join(
         [
             str(opt.get("title") or ""),
@@ -300,6 +318,9 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
         return True
 
     if any(pattern.search(normalized) for pattern in _ACTIONABLE_INTENT_PATTERNS):
+        return True
+
+    if any(pattern.search(normalized) for pattern in _INSTRUCTIONAL_CUE_PATTERNS):
         return True
 
     if _contains_benign_context(normalized):

@@ -37,6 +37,17 @@ def test_looks_dangerous_text_blocks_actionable_harm_even_with_safe_words() -> N
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_instructional_harm_cues() -> None:
+    """Instructional cues near dangerous terms should be blocked."""
+    option = {
+        "title": "教育用セキュリティ教材",
+        "description": "研究目的と記載しつつ、ハッキングの具体的手順とコードを提示する",
+        "summary": "training context",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:
     """Negated safety phrases should avoid risk keyword inflation."""
     chosen = {
