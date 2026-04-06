@@ -1,0 +1,68 @@
+schema_version: "1.0"
+policy_id: "policy.eu_ai_act.enterprise_strict"
+version: "2026.04.06"
+title: "EU AI Act enterprise strict high-risk control"
+description: >
+  Mirror artifact for FUJI strict runtime pack.
+  High-risk or compliance-sensitive requests must require human review or deny,
+  with fail-closed behavior when mandatory evidence or approvals are insufficient.
+scope:
+  domains: ["governance", "compliance", "decisioning"]
+  routes: ["/api/decide", "/v1/decide", "/v1/fuji/validate"]
+  actors: ["planner", "kernel", "fuji"]
+conditions:
+  - field: "risk.level"
+    operator: "in"
+    value: ["high", "critical"]
+requirements:
+  required_evidence:
+    - "risk_assessment"
+    - "impact_assessment"
+    - "human_oversight_plan"
+  required_reviewers:
+    - "governance_officer"
+    - "legal_reviewer"
+    - "safety_reviewer"
+  minimum_approval_count: 2
+constraints:
+  - field: "runtime.auto_execute"
+    operator: "eq"
+    value: false
+  - field: "request.sensitive_domain"
+    operator: "in"
+    value: ["medical", "legal", "financial", "identity"]
+outcome:
+  decision: "require_human_review"
+  reason: "High-risk compliance-sensitive output requires qualified human oversight before execution."
+obligations:
+  - "record_trust_log"
+  - "attach_human_review_ticket"
+  - "notify_compliance_channel"
+test_vectors:
+  - name: "critical medical route requires human review"
+    input:
+      route: "/v1/decide"
+      risk:
+        level: "critical"
+      request:
+        sensitive_domain: "medical"
+      runtime:
+        auto_execute: false
+    expected_outcome: "require_human_review"
+  - name: "high legal route requires human review"
+    input:
+      route: "/v1/decide"
+      risk:
+        level: "high"
+      request:
+        sensitive_domain: "legal"
+      runtime:
+        auto_execute: false
+    expected_outcome: "require_human_review"
+source_refs:
+  - "EU AI Act Article 9"
+  - "EU AI Act Article 14"
+metadata:
+  owner: "veritas-core"
+  intent_sync: "fuji_eu_enterprise_strict"
+  fail_closed: true

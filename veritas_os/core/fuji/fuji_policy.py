@@ -155,13 +155,17 @@ def _policy_path() -> Path:
     - なければ <veritas_os>/policies/fuji_default.yaml
     """
     env_path = os.getenv("VERITAS_FUJI_POLICY")
-    core_dir = Path(__file__).resolve().parent      # .../core
-    root_dir = core_dir.parent                      # .../veritas_os
+    core_dir = Path(__file__).resolve().parent      # .../core/fuji
+    root_dir = core_dir.parent.parent               # .../veritas_os
 
     if env_path:
         p = Path(env_path)
         if not p.is_absolute():
-            p = root_dir / p
+            # Backward compatibility: allow "veritas_os/policies/..." as repo-root style
+            normalized_env = env_path
+            if normalized_env.startswith("veritas_os/"):
+                normalized_env = normalized_env.split("veritas_os/", 1)[1]
+            p = root_dir / normalized_env
             # ★ セキュリティ修正: 相対パスは resolve() してプロジェクト内に収まることを確認
             resolved = p.resolve()
             try:

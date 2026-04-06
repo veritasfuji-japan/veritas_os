@@ -309,17 +309,38 @@ def _check_policy_hot_reload() -> None:
 # 1) Safety Head（LLM もしくは fallback）
 # =========================================================
 def _fallback_safety_head(text: str) -> SafetyHeadResult:
+    """Deterministic fallback safety evaluator (fail-closed oriented)."""
     t = _normalize_text(text)
     categories: List[str] = []
     risk = RISK_BASELINE
     rationale_parts: List[str] = []
 
     hard_block, sensitive = _policy_blocked_keywords(POLICY)
+    blocked_cfg = POLICY.get("blocked_keywords") or {}
+    category_keywords = blocked_cfg.get("category_keywords") or {}
+
     hits = [w for w in hard_block if w in t] + [w for w in sensitive if w in t]
     if hits:
         categories.append("illicit")
         risk = max(risk, RISK_FLOOR_ILLICIT_HEURISTIC)
         rationale_parts.append(f"危険・違法系キーワード検出: {', '.join(sorted(set(hits)))}")
+
+    category_map = {
+        "toxicity": ("toxicity", 0.80),
+        "bias_discrimination": ("bias_discrimination", 0.78),
+        "unauthorized_financial_advice": ("unauthorized_financial_advice", 0.80),
+        "definitive_legal_judgment": ("definitive_legal_judgment", 0.80),
+        "medical_high_risk": ("medical_high_risk", 0.85),
+        "secret_leak": ("secret_leak", 0.85),
+    }
+    category_hits: Dict[str, List[str]] = {}
+    for policy_key, (category_name, floor) in category_map.items():
+        words = category_keywords.get(policy_key) or []
+        detected = [str(word) for word in words if str(word).lower() in t]
+        if detected:
+            categories.append(category_name)
+            risk = max(risk, floor)
+            category_hits[category_name] = sorted(set(detected))
 
     pii_hits: List[str] = []
     if _PII_RE["phone"].search(text):
@@ -335,6 +356,10 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
         risk = max(risk, RISK_FLOOR_PII)
         rationale_parts.append(f"PII パターン検出: {', '.join(pii_hits)}")
 
+    if category_hits:
+        for name, words in category_hits.items():
+            rationale_parts.append(f"{name} keyword検出: {', '.join(words)}")
+
     if not categories:
         rationale_parts.append("特段の危険キーワードや PII パターンは検出されませんでした。")
 
@@ -343,7 +368,12 @@ def _fallback_safety_head(text: str) -> SafetyHeadResult:
         categories=sorted(set(categories)),
         rationale=" / ".join(rationale_parts),
         model="heuristic_fallback",
-        raw={"fallback": True, "hits": hits, "pii_hits": pii_hits},
+        raw={
+            "fallback": True,
+            "hits": hits,
+            "pii_hits": pii_hits,
+            "category_hits": category_hits,
+        },
     )
 
 
@@ -654,13 +684,55 @@ def fuji_core_decide(
     risk = min(1.0, max(0.0, risk))
 
     # --- Policy Engine 適用 ---
-    pol_res = _apply_policy(
-        risk=risk,
-        categories=categories,
-        stakes=stakes,
-        telos_score=telos_score,
-        policy=policy,
-    )
+    try:
+        pol_res = _apply_policy(
+            risk=risk,
+            categories=categories,
+            stakes=stakes,
+            telos_score=telos_score,
+            policy=policy,
+        )
+    except (TypeError, ValueError, RuntimeError) as exc:
+        if _strict_policy_load_enabled():
+            return {
+                "status": "deny",
+                "decision_status": "deny",
+                "rejection_reason": "policy_evaluator_exception",
+                "reasons": [
+                    "policy_evaluator_exception",
+                    f"policy_eval_exception_type={type(exc).__name__}",
+                ],
+                "violations": ["compliance_evaluator_exception"],
+                "violation_details": [],
+                "risk": 1.0,
+                "guidance": "policy evaluator exception in strict mode",
+                "policy_version": policy.get("version", "fuji_v2_unknown"),
+                "followups": [],
+                "meta": {
+                    "policy_version": policy.get("version", "fuji_v2_unknown"),
+                    "safety_head_model": safety_head.model,
+                    "safe_applied": safe_applied,
+                    "poc_mode": bool(poc_mode),
+                    "low_evidence": bool(low_ev),
+                    "evidence_count": int(evidence_count),
+                    "min_evidence": int(min_evidence),
+                    "policy_eval_exception": True,
+                    "prompt_injection": {
+                        "score": float(injection_score),
+                        "signals": sorted(injection_signals),
+                    },
+                },
+            }
+        pol_res = {
+            "policy_action": "human_review",
+            "status": "needs_human_review",
+            "decision_status": "hold",
+            "reasons": [f"policy_eval_exception_non_strict={type(exc).__name__}"],
+            "violations": ["safety_head_error"],
+            "violation_details": [],
+            "risk": float(min(1.0, max(risk, RISK_DENY_THRESHOLD))),
+            "policy_version": policy.get("version", "fuji_v2_unknown"),
+        }
 
     status = pol_res["status"]
     decision_status = pol_res["decision_status"]

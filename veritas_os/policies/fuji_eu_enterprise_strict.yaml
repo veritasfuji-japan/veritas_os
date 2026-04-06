@@ -1,0 +1,218 @@
+version: "fuji_v2_eu_enterprise_strict_2026-04-06"
+
+meta:
+  name: "FUJI EU AI Act & Enterprise Strict Pack"
+  description: >
+    EU AI Act と enterprise fail-closed 運用を前提にした FUJI strict policy pack。
+    重大違反（注入攻撃、機密漏えい、高リスク専門領域の断定助言）は deny 側に倒す。
+  updated_at: "2026-04-06"
+  owner: "VERITAS Core"
+  intent_sync:
+    - "Mirror policy: policies/examples/eu_ai_act_enterprise_strict.yaml"
+
+thresholds:
+  max_uncertainty: 0.45
+  min_evidence: 2
+  base_risk: 0.08
+  stakes:
+    low:
+      max_uncertainty: 0.60
+      min_evidence: 1
+    default:
+      max_uncertainty: 0.45
+      min_evidence: 2
+    high:
+      max_uncertainty: 0.35
+      min_evidence: 3
+
+base_thresholds:
+  default: 0.35
+  high_stakes: 0.25
+  low_stakes: 0.55
+
+categories:
+  PII:
+    max_risk_allow: 0.10
+    action_on_exceed: "deny"
+  secret_leak:
+    max_risk_allow: 0.05
+    action_on_exceed: "deny"
+  prompt_injection:
+    max_risk_allow: 0.10
+    action_on_exceed: "deny"
+  toxicity:
+    max_risk_allow: 0.10
+    action_on_exceed: "deny"
+  bias_discrimination:
+    max_risk_allow: 0.10
+    action_on_exceed: "deny"
+  unauthorized_financial_advice:
+    max_risk_allow: 0.12
+    action_on_exceed: "deny"
+  definitive_legal_judgment:
+    max_risk_allow: 0.12
+    action_on_exceed: "deny"
+  medical_high_risk:
+    max_risk_allow: 0.08
+    action_on_exceed: "deny"
+  safety_head_error:
+    max_risk_allow: 0.00
+    action_on_exceed: "deny"
+  compliance_evaluator_exception:
+    max_risk_allow: 0.00
+    action_on_exceed: "deny"
+
+actions:
+  allow:
+    risk_upper: 0.25
+  warn:
+    risk_upper: 0.40
+  human_review:
+    risk_upper: 0.60
+  deny:
+    risk_upper: 1.00
+
+blocked_keywords:
+  hard_block:
+    - "ignore previous instructions"
+    - "reveal system prompt"
+    - "bypass safety"
+    - "developer mode"
+    - "dan"
+    - "jailbreak"
+    - "api key"
+    - "bearer token"
+    - "private key"
+    - "secret token"
+  sensitive:
+    - "credit card"
+    - "passport"
+    - "national id"
+    - "social security"
+  category_keywords:
+    toxicity:
+      - "hate"
+      - "harass"
+      - "kill them"
+      - "genocide"
+    bias_discrimination:
+      - "inferior race"
+      - "ethnic cleansing"
+      - "women are inferior"
+    unauthorized_financial_advice:
+      - "guaranteed return"
+      - "buy this stock now"
+      - "risk-free investment"
+    definitive_legal_judgment:
+      - "you are legally guilty"
+      - "this is definitely legal advice"
+      - "no lawyer needed"
+    medical_high_risk:
+      - "diagnose"
+      - "stop your medication"
+      - "take this dosage"
+    secret_leak:
+      - "api key"
+      - "bearer"
+      - "sk-"
+      - "password="
+
+pii:
+  enabled: true
+  honor_safe_flag: true
+  masked_markers:
+    - "●"
+    - "[pii]"
+    - "[redacted]"
+  redact_kinds:
+    phone: true
+    email: true
+    address_jp: true
+    person_name_jp: true
+  patterns:
+    phone: '(?:\+?\d{1,3}[\s.-]?)?(?:\(?\d{2,4}\)?[\s.-]?)?\d{3,4}[\s.-]?\d{4}'
+    email: '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+    address_jp: '(東京都|道府県|市|区|町|村).{0,20}\d'
+    person_name_jp: '[\u4e00-\u9fff]{2,4}\s*(?:さん|様|氏|先生|殿)'
+
+llm_safety:
+  enabled: true
+  model: "openai:gpt-4.1-mini"
+  max_categories: 8
+
+overrides:
+  high_stakes:
+    when_stakes_gte: 0.7
+    thresholds:
+      max_uncertainty: 0.30
+      min_evidence: 3
+  low_stakes:
+    when_stakes_lte: 0.3
+    thresholds:
+      max_uncertainty: 0.60
+      min_evidence: 1
+
+audit:
+  log_level: "full"
+  include:
+    - "status"
+    - "risk"
+    - "reasons"
+    - "violations"
+    - "categories"
+  redact_before_log: true
+  max_log_size: 8000
+
+prompt_injection:
+  score_threshold: 0.4
+  patterns:
+    - pattern: "(ignore|disregard|override).{0,40}(system|previous|developer|safety|policy|instruction)"
+      weight: 0.5
+      label: "override_instructions"
+    - pattern: "(reveal|show|leak).{0,40}(system prompt|developer message|policy)"
+      weight: 0.6
+      label: "reveal_system"
+    - pattern: "\\b(jailbreak|dan|developer mode|prompt injection)\\b"
+      weight: 0.6
+      label: "jailbreak_keyword"
+    - pattern: "(bypass|disable).{0,30}(safety|guard|policy|filter)"
+      weight: 0.6
+      label: "bypass_safety"
+    - pattern: "(act as|roleplay).{0,30}(system|developer|root|administrator)"
+      weight: 0.2
+      label: "role_override"
+
+unicode_normalization:
+  confusables:
+    "а": "a"
+    "е": "e"
+    "і": "i"
+    "о": "o"
+    "р": "p"
+    "с": "c"
+    "у": "y"
+    "х": "x"
+    "Α": "a"
+    "Β": "b"
+    "Ε": "e"
+    "Ι": "i"
+    "Κ": "k"
+    "Μ": "m"
+    "Ν": "n"
+    "Ο": "o"
+    "Ρ": "p"
+    "Τ": "t"
+    "Χ": "x"
+
+risk_adjustments:
+  injection_weight: 0.25
+  pii_safe_cap: 0.30
+  name_like_only_cap: 0.20
+  low_evidence_penalty: 0.18
+  telos_scale_factor: 0.10
+
+action_precedence:
+  deny: 4
+  human_review: 2
+  warn: 1
+  allow: 0
