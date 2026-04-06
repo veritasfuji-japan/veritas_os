@@ -79,6 +79,8 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
             "true",
             "yes",
         )
+    elif isinstance(enforce, str):
+        enforce = enforce.strip().lower() in ("1", "true", "yes")
     if not bool(enforce):
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(

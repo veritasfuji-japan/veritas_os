@@ -937,3 +937,19 @@ def test_outcome_missing_keys_does_not_raise_key_error() -> None:
     decision = evaluate_runtime_policies(bundle, context).to_dict()
     assert decision["final_outcome"] == "allow"
     assert "policy.malformed.outcome" in decision["triggered_policies"]
+
+
+def test_verify_manifest_signature_logs_warning_on_missing_files(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """verify_manifest_signature logs a warning when manifest/sig files are missing."""
+    import logging
+    from veritas_os.policy.runtime_adapter import verify_manifest_signature
+
+    with caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"):
+        result = verify_manifest_signature(tmp_path)
+
+    assert result is False
+    assert "missing" in caplog.text
+    assert "manifest.json" in caplog.text

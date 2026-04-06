@@ -7604,6 +7604,37 @@ def test_pipeline_bridge_env_var_enforcement_fallback(
     assert "compiled_policy:deny" in ctx.fuji_dict["reasons"]
 
 
+def test_pipeline_bridge_string_false_enforcement_not_enforced(
+    tmp_path: Path,
+) -> None:
+    """String 'false' in context correctly disables enforcement (not bool-truthy)."""
+    compiled = compile_policy_to_bundle(
+        EXAMPLES_DIR / "external_tool_usage_denied.yaml",
+        tmp_path,
+        compiled_at="2026-03-28T00:00:00Z",
+    )
+
+    ctx = PipelineContext(
+        query="use external tool",
+        context={
+            "compiled_policy_bundle_dir": compiled.bundle_dir.as_posix(),
+            "policy_runtime_enforce": "false",  # string, not bool
+            "domain": "security",
+            "route": "/api/tools",
+            "actor": "kernel",
+            "tool": {"external": True, "name": "unapproved_webhook"},
+            "data": {"classification": "restricted"},
+            "evidence": {"available": ["data_classification_label"]},
+            "approvals": {"approved_by": ["security_officer"]},
+        },
+    )
+
+    stage_fuji_precheck(ctx)
+
+    # String "false" should NOT enable enforcement — status should remain allow
+    assert ctx.fuji_dict["status"] != "rejected"
+
+
 def test_pipeline_bridge_enforcement_logs_audit_info(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
