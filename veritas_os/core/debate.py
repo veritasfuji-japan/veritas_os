@@ -89,6 +89,13 @@ _DANGEROUS_INTENT_PATTERNS = [
     re.compile(r"\b(?:how to make|how to build|steps? to|guide to)\b.{0,24}\b(?:bomb|malware|virus|drugs?|hack(?:ing)?)\b", re.IGNORECASE),
 ]
 
+_ACTIONABLE_INTENT_PATTERNS = [
+    re.compile(r"(?:実行|実施|導入|配布|拡散|悪用).{0,8}(?:ハッキング|ウイルス|爆弾|麻薬|侵入)", re.IGNORECASE),
+    re.compile(r"(?:ハッキング|ウイルス|爆弾|麻薬|侵入).{0,8}(?:実行|実施|導入|配布|拡散|悪用)", re.IGNORECASE),
+    re.compile(r"\b(?:deploy|distribute|execute|weaponize|abuse)\b.{0,24}\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\b", re.IGNORECASE),
+    re.compile(r"\b(?:malware|virus|bomb|drugs?|hack(?:ing)?)\b.{0,24}\b(?:deploy|distribute|execute|weaponize|abuse)\b", re.IGNORECASE),
+]
+
 _RISK_NEGATION_TERMS = (
     "問題なし",
     "問題はない",
@@ -270,6 +277,9 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
         return False
 
     if any(pattern.search(normalized) for pattern in _DANGEROUS_INTENT_PATTERNS):
+        return True
+
+    if any(pattern.search(normalized) for pattern in _ACTIONABLE_INTENT_PATTERNS):
         return True
 
     if _contains_benign_context(normalized):

@@ -155,9 +155,15 @@
    - `_normalize_finding_item()` の alias 入力（`issue`/raw `details`/非文字 `fix`）の正規化を検証。
    - `_pad_findings()` が入力項目とデフォルト項目の双方で canonical schema を維持することを検証。
 
+13. **[高][完了] D-1 追加強化: benign 語の混入による回避耐性を向上**
+   - `_looks_dangerous_text()` に actionable intent パターン（`deploy/distribute/execute/weaponize`、`実行/配布/悪用` など）を追加。
+   - これにより `training/教育` など benign context が共存しても、攻撃実行意図を含むテキストはブロック継続。
+   - 単体テストを追加し、`"教育目的"` と `"malware deploy"` の同居ケースを危険判定することを確認。
+
 ### セキュリティ注意（実装時点）
 
 - benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。
 - そのため、明示的有害意図パターンは優先的に評価し、検出時は benign 判定より強くブロックする設計とした。
+- さらに actionable intent（実行/配布/悪用、deploy/distribute など）を危険意図として上位評価し、**安全語付きプロンプトでのすり抜け耐性**を補強した。
 - 追加で、将来的には FUJI 側の判定結果・ユーザー意図分類・監査ログ相関で多層化することを推奨。
 - JSON救出ロジックは防御的だが、**巨大入力によるCPU/メモリ負荷リスク**は依然として存在する。`MAX_OPTIONS_PAYLOAD_BYTES` / `MAX_JSON_NESTED_DEPTH` / tail-trim retry cap ログを継続監視すること。
