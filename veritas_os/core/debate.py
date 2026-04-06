@@ -203,6 +203,22 @@ _OBFUSCATION_TRANSLATION_TABLE = str.maketrans(
         "7": "t",
     }
 )
+_ZERO_WIDTH_CHAR_PATTERN = re.compile(
+    r"[\u200b\u200c\u200d\u2060\ufeff]"
+)
+_CONFUSABLE_ASCII_TRANSLATION_TABLE = str.maketrans(
+    {
+        "а": "a",  # cyrillic small a
+        "е": "e",  # cyrillic small e
+        "о": "o",  # cyrillic small o
+        "р": "p",  # cyrillic small er
+        "с": "c",  # cyrillic small es
+        "у": "y",  # cyrillic small u
+        "х": "x",  # cyrillic small ha
+        "і": "i",  # cyrillic small i (ukrainian)
+        "ј": "j",  # cyrillic small je
+    }
+)
 _OBFUSCATED_DANGER_TOKENS = (
     "malware",
     "hacking",
@@ -347,8 +363,17 @@ def _normalize_text_for_scan(text: str) -> str:
 
 
 def _normalize_text_for_obfuscation_scan(text: str) -> str:
-    """Normalize obfuscated text (leet / separators) for token checks."""
+    """Normalize obfuscated text for token checks.
+
+    This normalizer focuses on common evasion patterns:
+    - leet substitutions (e.g., ``h4ck``)
+    - separator insertion (e.g., ``m.a.l.w.a.r.e``)
+    - zero-width characters
+    - common unicode confusables (e.g., cyrillic ``а`` -> latin ``a``)
+    """
     normalized = _normalize_text_for_scan(text)
+    normalized = _ZERO_WIDTH_CHAR_PATTERN.sub("", normalized)
+    normalized = normalized.translate(_CONFUSABLE_ASCII_TRANSLATION_TABLE)
     normalized = normalized.translate(_OBFUSCATION_TRANSLATION_TABLE)
     return re.sub(r"[^a-zぁ-んァ-ン一-龥]+", "", normalized)
 
