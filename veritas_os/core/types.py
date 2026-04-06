@@ -251,7 +251,7 @@ class ValueCoreResult(TypedDict, total=False):
 
 class DebateViewpoint(TypedDict, total=False):
     """Debateの視点"""
-    role: Literal["pro", "con", "third_party", "synthesizer"]
+    role: Literal["Architect", "Critic", "Safety", "Judge", "pro", "con", "third_party", "synthesizer"]
     argument: str
     evidence: List[str]
     confidence: float
@@ -261,7 +261,7 @@ class CritiquePoint(TypedDict, total=False):
     """批評ポイント"""
     category: str
     description: str
-    severity: Literal["low", "medium", "high"]
+    severity: Literal["low", "med", "medium", "high"]
     suggestion: str
 
 

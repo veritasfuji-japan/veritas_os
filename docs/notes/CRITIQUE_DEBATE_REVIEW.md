@@ -97,3 +97,37 @@
 4. **[中] D-4**: `_safe_json_extract_like` 内のネスト関数をモジュールレベルに引き上げ
 5. **[中] P-2**: `_run_critique_best_effort` の async 意図をコメントで明示
 6. **[中] C-2**: リスク/価値バランスのゼロ除算回避ロジック見直し
+
+
+---
+
+## 7. 実施ログ（2026-04-06 更新）
+
+優先度順に、以下を実装済み。
+
+1. **[高][完了] T-1/T-2 型定義の乖離修正**
+   - `CritiquePoint.severity` を `"low" | "med" | "medium" | "high"` に拡張し、実装互換性を確保。
+   - `DebateViewpoint.role` を実装上の `Architect/Critic/Safety/Judge` を含む Literal に拡張。
+
+2. **[高][完了] D-2 `_calc_risk_delta` の否定表現誤検知を修正**
+   - `_is_keyword_negated()` を追加し、`「リスクなし」「問題なし」「違反なし」` 等の否定文脈ではリスク加算を抑制。
+   - 従来どおり、実際のリスク表現（重大/違反/深刻）では加算されることを維持。
+
+3. **[高][完了] D-1 `_looks_dangerous_text` の文脈考慮導入**
+   - 防御的・教育的文脈（対策/予防/セキュリティ/training 等）を benign context として導入。
+   - ただし `「爆弾の作り方」` や `"how to make ..."` など明示的有害意図パターンは強制ブロック。
+
+4. **[低〜中][完了] D-3 メタ情報の定数化**
+   - `source: "openai_llm"` を `DEBATE_SOURCE_OPENAI` に定数化。
+
+5. **[テスト追加][完了] Debate 安全ヒューリスティクスの単体テスト追加**
+   - benign context false positive 抑制
+   - 明示的有害意図のブロック継続
+   - risk negation の加算抑制
+   - 実リスクでの加算維持
+
+### セキュリティ注意（実装時点）
+
+- benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。
+- そのため、明示的有害意図パターンは優先的に評価し、検出時は benign 判定より強くブロックする設計とした。
+- 追加で、将来的には FUJI 側の判定結果・ユーザー意図分類・監査ログ相関で多層化することを推奨。
