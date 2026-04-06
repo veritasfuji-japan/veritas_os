@@ -63,3 +63,17 @@ def test_calc_risk_delta_still_increases_for_real_risk_signal() -> None:
     delta = debate._calc_risk_delta(chosen, [chosen])
 
     assert delta > 0.2
+
+
+def test_calc_risk_delta_avoids_ascii_partial_keyword_false_positive() -> None:
+    """English keyword `ban` should not match inside unrelated token like `bank`."""
+    chosen = {
+        "score": 0.85,
+        "verdict": "採用推奨",
+        "safety_view": "Bank transfer flow reviewed. No risk and safe operation.",
+        "critic_view": "minor observations only",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta < 0.0
