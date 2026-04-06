@@ -116,10 +116,22 @@ def test_looks_dangerous_text_allows_obfuscated_term_in_strong_defensive_context
 def test_looks_dangerous_text_allows_refusal_context_with_danger_terms() -> None:
     """Refusal wording with danger terms should not be treated as harmful intent."""
     option = {
-        "summary": "I cannot provide malware tutorial or hacking code because it is harmful and illegal.",
+        "summary": "I cannot provide malware guidance or hacking assistance because it is harmful and illegal.",
     }
 
     assert debate._looks_dangerous_text(option) is False
+
+
+def test_looks_dangerous_text_blocks_refusal_preface_with_actionable_details() -> None:
+    """Refusal preface must not suppress actionable harmful instructions."""
+    option = {
+        "summary": (
+            "I cannot provide malware help, but here is a malware tutorial "
+            "with a deploy script and execution steps."
+        ),
+    }
+
+    assert debate._looks_dangerous_text(option) is True
 
 
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:

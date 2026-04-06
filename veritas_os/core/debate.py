@@ -456,18 +456,27 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     if not has_term:
         return False
 
+    has_dangerous_intent = any(
+        pattern.search(normalized) for pattern in _DANGEROUS_INTENT_PATTERNS
+    )
+    if has_dangerous_intent:
+        return True
+
+    has_actionable_intent = any(
+        pattern.search(normalized) for pattern in _ACTIONABLE_INTENT_PATTERNS
+    )
+    if has_actionable_intent:
+        return True
+
+    has_instructional_cue = any(
+        pattern.search(normalized) for pattern in _INSTRUCTIONAL_CUE_PATTERNS
+    )
+    if has_instructional_cue:
+        return True
+
     if any(pattern.search(normalized) for pattern in _REFUSAL_CONTEXT_PATTERNS):
         logger.debug("Danger term detected in refusal context; treat as non-actionable.")
         return False
-
-    if any(pattern.search(normalized) for pattern in _DANGEROUS_INTENT_PATTERNS):
-        return True
-
-    if any(pattern.search(normalized) for pattern in _ACTIONABLE_INTENT_PATTERNS):
-        return True
-
-    if any(pattern.search(normalized) for pattern in _INSTRUCTIONAL_CUE_PATTERNS):
-        return True
 
     if _contains_benign_context(normalized):
         return False
