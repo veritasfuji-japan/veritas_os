@@ -473,6 +473,7 @@ def _apply_compiled_policy_runtime_bridge(ctx):
 - ✅ `value_ema` の NaN/Inf ガードを追加。既存の `risk_val` ガード（`math.isfinite`）と同一パターンで一貫性を確保し、NaN 伝播による `telos_threshold` / `effective_risk` の破損を防止。
 - ✅ `_apply_compiled_policy_runtime_bridge()` の例外キャッチに `KeyError` を追加。コンパイル済み JSON が破損し evaluator 内部で `KeyError` が発生した場合でもリクエスト処理がクラッシュしない防御層を強化。
 - ✅ `policy_runtime_enforce` の文字列値ハンドリングを修正。コンテキスト辞書から文字列（例: `"false"`, `"0"`）が渡された場合に `bool("false")` → `True` として誤って enforcement が有効化されるバグを修正。env var パスと同一の正規化パターン（`"1"`, `"true"`, `"yes"`）を適用。
+- ✅ `risk_val` 例外時のデフォルト値を `0.0`（fail-open）から `1.0`（fail-closed）に修正。NaN/Inf 時の `1.0` と一貫した fail-closed 動作に統一。
 
 ---
 
@@ -575,8 +576,8 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 95 | 1050+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス** |
-| `test_pipeline_stages_ext.py`（bridge） | 10 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング**） |
-| **合計** | **194** | **2,970+** | |
+| `test_pipeline_stages_ext.py`（bridge） | 11 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング** + **risk_val fail-closed**） |
+| **合計** | **195** | **2,990+** | |
 
 ### 4.2 テストパターン分析
 
@@ -661,6 +662,7 @@ python -m veritas_os.scripts.compile_policy \
 | outcome 欠損キー防御 | ✅ | `policy.outcome` に `decision`/`reason` キーが欠落しても `KeyError` を送出せず安全にデフォルト値で動作 |
 | `policy_runtime_enforce` 文字列値ハンドリング | ✅ | 文字列 `"false"` が enforcement を有効化しないことを検証（`bool("false")` バグ修正） |
 | 署名検証ファイル欠落時の警告ログ | ✅ | `verify_manifest_signature()` で manifest/sig ファイル欠落時に警告ログが出力されることを検証 |
+| risk_val 変換不能時の fail-closed | ✅ | 非数値 risk 値で `risk_val` が `1.0`（最大リスク）にフォールバックすることを検証 |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -1281,6 +1283,12 @@ python -m veritas_os.scripts.compile_policy \
   - 従来はサイレントに `False` を返却しており、`load_runtime_bundle()` は `ValueError("manifest signature verification failed")` を送出するが、原因（ファイル欠落 vs 署名不一致 vs 破損）の区別がつかなかった
   - デプロイ時のトラブルシューティングを容易化: ログから「どのファイルが欠落しているか」を即座に特定可能
   - テスト1件追加: `test_verify_manifest_signature_logs_warning_on_missing_files`（空ディレクトリに対する検証で missing ファイルが警告ログに出力されることを検証）
+
+- **`risk_val` 例外時のデフォル���値を fail-closed に修正（`pipeline_policy.py`）**
+  - `stage_fuji_precheck()` で `risk` 値の `float()` 変換が `ValueError` / `TypeError` で失敗した場合のデフォルト値を `0.0`（fail-open）から `1.0`（fail-closed）に変更
+  - 修正前: NaN/Inf は `1.0`（fail-closed）だが、変換不能な値（非数値文字列等）は `0.0`（fail-open）で不整合
+  - 修正後: 両ケースとも `1.0`（最大リスク）に統一。「変換できない = 安全でない」の原則に一貫
+  - テスト1件追加: `test_risk_val_invalid_type_fails_closed`（非数値 risk で fail-closed 動作を検証）
 
 ---
 

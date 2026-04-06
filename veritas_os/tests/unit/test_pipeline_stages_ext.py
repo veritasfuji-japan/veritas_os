@@ -7690,6 +7690,30 @@ def test_value_ema_nan_falls_back_to_neutral() -> None:
     assert math.isfinite(ctx.value_ema)
     assert ctx.value_ema == 0.5
 
+
+def test_risk_val_invalid_type_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-numeric risk value fails closed to maximum risk (1.0)."""
+    import veritas_os.core.pipeline.pipeline_policy as _mod
+
+    # Stub FUJI to return a non-numeric risk
+    class _FakeFuji:
+        @staticmethod
+        def validate_action(query, context):
+            return {"status": "allow", "risk": "not_a_number", "reasons": [], "violations": [], "modifications": []}
+
+    monkeypatch.setattr(_mod, "_lazy_import", lambda *a, **k: _FakeFuji)
+
+    ctx = PipelineContext(query="test")
+    ctx.response_extras = {"metrics": {"stage_latency": {}}}
+
+    stage_fuji_precheck(ctx)
+
+    # Evidence snippet should show risk=1.0 (fail-closed), not 0.0 (fail-open)
+    fuji_evidence = [e for e in ctx.evidence if e.get("source") == "internal:fuji"]
+    assert fuji_evidence
+    assert "risk=1.0" in fuji_evidence[0].get("snippet", "")
+
+
 # tests for veritas_os/core/pipeline_web_adapter.py
 """Tests for web search payload normalization and extraction."""
 
