@@ -70,6 +70,28 @@ def test_looks_dangerous_text_blocks_obfuscated_danger_terms() -> None:
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_zero_width_obfuscated_terms() -> None:
+    """Zero-width split danger terms should still be detected."""
+    option = {
+        "title": "education material",
+        "detail": "m\u200ba\u200bl\u200bw\u200ba\u200br\u200be distribution plan",
+        "summary": "training notes",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
+def test_looks_dangerous_text_blocks_confusable_obfuscated_terms() -> None:
+    """Unicode confusable letters should not bypass danger-term checks."""
+    option = {
+        "title": "research memo",
+        "detail": "mаlwаre execution guidance",  # cyrillic "а"
+        "summary": "education only",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_looks_dangerous_text_allows_obfuscated_term_in_strong_defensive_context() -> None:
     option = {
         "title": "cybersecurity defense update",
