@@ -158,6 +158,18 @@ _ASCII_RISK_NEGATION_BY_KEYWORD = {
         "ban lifted",
     ),
 }
+_JA_RISK_NEGATION_BY_KEYWORD = {
+    "違反": (
+        "違反なし",
+        "違反はない",
+        "違反がない",
+    ),
+    "禁止": (
+        "禁止されていない",
+        "禁止ではない",
+        "禁止はない",
+    ),
+}
 
 _REFUSAL_CONTEXT_PATTERNS = [
     re.compile(r"(?:対応できません|提供できません|お手伝いできません).{0,20}(?:違法|危険|ハッキング|爆弾|麻薬)", re.IGNORECASE),
@@ -528,7 +540,11 @@ def _is_keyword_negated(text: str, keyword: str) -> bool:
     """Return ``True`` when *keyword* appears near a risk-negation phrase."""
     negation_terms = _RISK_NEGATION_TERMS
     if keyword.isascii():
-        negation_terms = _ASCII_RISK_NEGATION_BY_KEYWORD.get(keyword, ())
+        negation_terms = _ASCII_RISK_NEGATION_BY_KEYWORD.get(
+            keyword, _RISK_NEGATION_TERMS
+        )
+    elif keyword in _JA_RISK_NEGATION_BY_KEYWORD:
+        negation_terms = _JA_RISK_NEGATION_BY_KEYWORD[keyword]
 
     if not negation_terms:
         return False
