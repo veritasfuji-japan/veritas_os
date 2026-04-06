@@ -178,6 +178,9 @@ prompt_injection:
     - pattern: "(bypass|disable).{0,30}(safety|guard|policy|filter)"
       weight: 0.6
       label: "bypass_safety"
+    - pattern: "(act as|roleplay).{0,30}(system|developer|root|administrator)"
+      weight: 0.2
+      label: "role_override"
 
 unicode_normalization:
   confusables:
