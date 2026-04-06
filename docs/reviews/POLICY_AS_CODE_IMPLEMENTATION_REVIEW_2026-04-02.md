@@ -347,6 +347,7 @@ load_and_validate → to_canonical_ir → semantic_hash
 - ✅ `verify_manifest_signature()` で `manifest.json` のパースに失敗した場合（JSONDecodeError/OSError）に `logger.warning()` で警告を出力。バンドル破損時のサイレントフォールバックを排除し、運用時の異常検出性を向上。
 - ✅ `verify_manifest_signature()` のファイル読み込みを一元化: マニフェストをバイト列として1回だけ読み込み、アルゴリズム検出と署名検証の両方に使用。従来は `read_text()` + `read_bytes()` の二重読み込みで TOCTOU 競合の余地があったが、これを解消。ファイル読み込みの `OSError` を個別にキャッチし `logger.warning()` 付きで `False` を返却。SHA-256 フォールバックも読み込み済みバイト列から直接計算し `hmac.compare_digest()` で定数時間比較。
 - ✅ `verify_manifest_signature()` で `manifest.json` / `manifest.sig` が存在しない場合に `logger.warning()` で欠落ファイル名を出力。従来はサイレントに `False` を返却しており、デプロイ時の原因特定が困難だった。
+- ✅ `verify_manifest_signature()` の `VERITAS_POLICY_VERIFY_KEY` 環境変数からの公開鍵ファイル読み込みに `try/except OSError` を追加。`is_file()` チェックと `read_bytes()` の間にファイルが削除・権限変更された場合の TOCTOU 競合でクラッシュする問題を防止。同関数内のマニフェスト/署名ファイル読み込み（section 11.9）と一貫した防御パターン。
 
 ---
 
@@ -575,12 +576,12 @@ python -m veritas_os.scripts.compile_policy \
 | `test_policy_compiler.py` | 14 | 260+ | コンパイル成功/失敗、成果物構造、決定性、署名、I/Oエラーラッピング、コンパイル監査ログ、署名鍵エラーラッピング、**アーカイブバイト決定性、シンボリックリンク除外**、**explain.py 不完全 IR 防御**、**collect_bundle_files シンボリックリンク除外** |
 | `test_policy_runtime_adapter.py` | 42 | 1010+ | ランタイム評価（全5 outcome）、ReDoS ガード、複数ポリシー優先度解決、effective_date フィルタリング、バンドルI/Oエラー、IR 不整合検出、数値比較型安全性、未知演算子警告、スコープ欠落ログ、バンドルロード監査ログ、context None ガード、マニフェスト破損時の警告ログ、**署名検証ファイル読み込みエラー耐性**、**NaN/Inf 数値比較ガード**、**contains 演算子型安全性**、**outcome 欠損キー防御**、**ファイル欠落時の警告ログ**、**not_in 演算子非リスト expected fail-safe**、**IR 構造型不正検出** |
 | `test_policy_canonical_ir.py` | 15 | 260+ | スキーマ検証（全5例）、正規化決定性、ハッシュ安定性、ファイルI/O・パースエラーハンドリング、ハッシュ入力検証 |
-| `test_policy_signing.py` | 17 | 310+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var** |
+| `test_policy_signing.py` | 18 | 350+ | Ed25519 鍵生成、署名/検証ラウンドトリップ、改ざん検出、不正鍵拒否、コンパイラ統合、env var 検証、レガシー互換性、決定論性、Ed25519→SHA-256 ダウングレード警告、**SHA-256 定数時間比較検証**、**SHA-256 レガシー検証 TOCTOU 耐性**、**Ed25519 厳格モード env var**、**env var 公開鍵ファイル読み込みエラー耐性** |
 | `test_policy_generated_vectors.py` | 2 | 37 | テストベクトル自動生成（5ポリシー）、決定論性 |
 | `test_warning_allowlist_policy.py` | 3 | 116 | 警告許可リスト検証 |
 | `test_governance_api.py`（統合） | 96 | 1060+ | API全エンドポイント、RBAC、4-eyes、履歴、**監査履歴スレッドセーフ並行アクセス**、**value_drift ema キー欠落防御** |
 | `test_pipeline_stages_ext.py`（bridge） | 11 | — | パイプライン bridge enforcement（全4 outcome→status マッピング + 非強制時 warning + env var フォールバック + enforcement 監査ログ + NaN EMA ガード + **文字列 enforce 値ハンドリング** + **risk_val fail-closed**） |
-| **合計** | **200** | **3,100+** | |
+| **合計** | **201** | **3,100+** | |
 
 ### 4.2 テストパターン分析
 
@@ -671,6 +672,7 @@ python -m veritas_os.scripts.compile_policy \
 | value_drift ema キー欠落防御 | ✅ | `get_value_drift()` で history エントリに `ema` キーが欠落した場合に baseline にフォールバック |
 | adapt_canonical_ir IR 構造型不正検出 | ✅ | `adapt_canonical_ir()` に型不正な IR（例: `scope` が文字列）を渡した場合に `TypeError` が `ValueError` に変換されることを検証 |
 | collect_bundle_files シンボリックリンク除外 | ✅ | `collect_bundle_files()` でシンボリックリンクがメタデータに含まれないことを検証（アーカイブ除外との一貫性） |
+| env var 公開鍵ファイル読み込みエラー耐性 | ✅ | `VERITAS_POLICY_VERIFY_KEY` が指すファイルが読み取り不可時に `OSError` でクラッシュせず安全にフォールバック |
 
 **改善余地:**
 - ✅ ~~複数ポリシーの同時評価（優先度解決）の明示的テストが追加できる。~~ → `test_multiple_policy_precedence_resolution` で対応済み
@@ -776,7 +778,7 @@ python -m veritas_os.scripts.compile_policy \
 | イミュータブル設計 | 全 dataclass | ◎ frozen=True で変更不可 |
 | シンボリックリンク除外 | `bundle.py` | ◎ tar アーカイブ + ファイルメタデータ収集の両方からシンボリックリンクを除外（パストラバーサル防止 + マニフェスト/アーカイブ整合性保証） |
 | 監査履歴スレッドセーフ | `governance.py` | ◎ `_policy_lock` による排他制御で TOCTOU 競合を防止 |
-| 署名検証 TOCTOU 防止 | `runtime_adapter.py` + `signing.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保。レガシー `verify_manifest_sha256()` も同一パターンで保護 |
+| 署名検証 TOCTOU 防止 | `runtime_adapter.py` + `signing.py` | ◎ ファイル一括読み込み + 個別 `OSError` キャッチで読み込み競合・障害耐性を確保。レガシー `verify_manifest_sha256()` も同一パターンで保護。`VERITAS_POLICY_VERIFY_KEY` env var からの公開鍵ファイル読み込みも TOCTOU 保護済み |
 | 例外ハンドリング厳密化 | `signing.py`, `governance.py`, `pipeline_policy.py` | ◎ セキュリティ関連・データ読み込み関数の `except Exception` を具体的例外型に限定。オプション依存インポートの `except Exception` → `except ImportError` 修正。予期しない例外の隠蔽を防止 |
 | Ed25519 厳格モード | `runtime_adapter.py` | ◎ `VERITAS_POLICY_REQUIRE_ED25519` env var により Ed25519→SHA-256 サイレントダウングレードを防止。本番環境での設定ミスによる署名バイパスを排除 |
 | Outcome 防御的アクセス | `evaluator.py` | ◎ `policy.outcome` への直接辞書アクセスを `.get()` に変更。破損 IR による `KeyError` クラッシュを防止 |
@@ -833,7 +835,7 @@ python -m veritas_os.scripts.compile_policy \
 |------|-----|------|
 | ポリシーコアモジュール行数 | 1,400行+ | 適切（signing.py 追加） |
 | テスト行数 | 3,100行+ | テスト:実装比 = 2.2:1（良好） |
-| テスト関数数 | 200 | 十分な網羅性 |
+| テスト関数数 | 201 | 十分な網羅性 |
 | TODO/FIXME/HACK | 0件 | 技術的負債なし |
 | 外部依存 | pydantic, yaml のみ | 最小限 |
 | 型安全性 | Pydantic + TypedDict + frozen dataclass | 高い |
@@ -1362,6 +1364,19 @@ python -m veritas_os.scripts.compile_policy \
   - 一方 `create_bundle_archive()` は `entry.is_symlink()` チェックでシンボリックリンクを除外済み（section 11.8）
   - この不整合により、マニフェストにはファイルが記録されるがアーカイブには含まれないという完全性検証の不一致が発生する可能性があった
   - テスト1件追加: `test_collect_bundle_files_excludes_symlinks`
+
+---
+
+### 11.20 改善実施ログ（2026-04-06 第4弾）
+
+以下は本日追加実施したセキュリティ改善項目:
+
+- **`VERITAS_POLICY_VERIFY_KEY` 環境変数ファイル読み込みの TOCTOU 耐性追加（`runtime_adapter.py`）**
+  - `verify_manifest_signature()` の公開鍵ファイル読み込み（`VERITAS_POLICY_VERIFY_KEY` 環境変数経由）に `try/except OSError` を追加
+  - 従来は `key_path.is_file()` チェック後に `key_path.read_bytes()` を直接呼び出しており、チェックと読み込みの間にファイルが削除・権限変更された場合に未ハンドルの `OSError` でクラッシュする TOCTOU 脆弱性があった
+  - 改善後: `is_file()` と `read_bytes()` を `try/except OSError` で保護し、読み込み失敗時は `logger.warning()` 付きで `pub_key` を `None` のまま維持（SHA-256 フォールバックまたは Ed25519 厳格モードに委譲）
+  - 同関数内のマニフェスト/署名ファイル読み込み（section 11.9）および `verify_manifest_sha256()` の TOCTOU 耐性（section 11.14）と一貫した防御パターン
+  - テスト1件追加: `test_verify_key_env_var_unreadable_file_does_not_crash`（公開鍵ファイルが読み取り不可時に `OSError` でクラッシュせず安全にフォールバックすることを検証）
 
 ---
 
