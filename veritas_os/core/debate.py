@@ -172,14 +172,20 @@ _JA_RISK_NEGATION_BY_KEYWORD = {
 }
 
 _REFUSAL_CONTEXT_PATTERNS = [
-    re.compile(r"(?:対応できません|提供できません|お手伝いできません).{0,20}(?:違法|危険|ハッキング|爆弾|麻薬)", re.IGNORECASE),
-    re.compile(r"(?:違法|危険|ハッキング|爆弾|麻薬).{0,20}(?:対応できません|提供できません|お手伝いできません)", re.IGNORECASE),
     re.compile(
-        r"\b(?:cannot|can't|won't|refuse to|do not provide)\b.{0,30}\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?)\b",
+        r"(?:対応できません|提供できません|お手伝いできません).{0,20}(?:違法|危険|ハッキング|爆弾|麻薬|フィッシング|詐欺|不正アクセス)",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?)\b.{0,30}\b(?:cannot|can't|won't|refuse to|do not provide)\b",
+        r"(?:違法|危険|ハッキング|爆弾|麻薬|フィッシング|詐欺|不正アクセス).{0,20}(?:対応できません|提供できません|お手伝いできません)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:cannot|can't|won't|refuse to|do not provide)\b.{0,30}\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?|phishing|fraud|credential(?:s)?\s*stuffing)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:illegal|harmful|malware|hack(?:ing)?|bomb|drugs?|phishing|fraud|credential(?:s)?\s*stuffing)\b.{0,30}\b(?:cannot|can't|won't|refuse to|do not provide)\b",
         re.IGNORECASE,
     ),
 ]
@@ -265,6 +271,18 @@ _OBFUSCATED_DANGER_TOKENS = (
     "weapon",
     "ransomware",
     "phishing",
+)
+_NON_BENIGN_OVERRIDE_TERMS = (
+    "闇バイト",
+    "不正アクセス",
+    "口座売買",
+    "詐欺",
+    "フィッシング",
+    "ランサムウェア",
+    "ransomware",
+    "phishing",
+    "credential stuffing",
+    "credential-stuffing",
 )
 
 
@@ -489,6 +507,15 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     if any(pattern.search(normalized) for pattern in _REFUSAL_CONTEXT_PATTERNS):
         logger.debug("Danger term detected in refusal context; treat as non-actionable.")
         return False
+
+    has_non_benign_override_term = any(
+        term in normalized for term in _NON_BENIGN_OVERRIDE_TERMS
+    )
+    if has_non_benign_override_term:
+        logger.debug(
+            "Danger term includes non-benign override domain; keep dangerous."
+        )
+        return True
 
     if _contains_benign_context(normalized):
         return False
