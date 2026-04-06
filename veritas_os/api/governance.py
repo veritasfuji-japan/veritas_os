@@ -456,7 +456,7 @@ def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str,
     """Build ValueCore drift metrics relative to the configured Telos baseline."""
     baseline = max(0.0, min(1.0, float(telos_baseline)))
     history = _load_value_history()
-    latest_ema = history[-1]["ema"] if history else baseline
+    latest_ema = history[-1].get("ema", baseline) if history else baseline
 
     if baseline <= 1e-9:
         drift_percent = 0.0
