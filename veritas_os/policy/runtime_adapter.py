@@ -102,8 +102,15 @@ def verify_manifest_signature(
         key_path_str = os.environ.get("VERITAS_POLICY_VERIFY_KEY")
         if key_path_str:
             key_path = Path(key_path_str)
-            if key_path.is_file():
-                pub_key = key_path.read_bytes()
+            try:
+                if key_path.is_file():
+                    pub_key = key_path.read_bytes()
+            except OSError as exc:
+                logger.warning(
+                    "failed to read public key from VERITAS_POLICY_VERIFY_KEY=%s: %s",
+                    key_path_str,
+                    exc,
+                )
 
     # Read raw bytes once (used for both algorithm detection and verification)
     try:

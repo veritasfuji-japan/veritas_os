@@ -311,3 +311,48 @@ def test_require_ed25519_env_var_allows_when_key_present(
     monkeypatch.setenv("VERITAS_POLICY_REQUIRE_ED25519", "true")
 
     assert verify_manifest_signature(result.bundle_dir, public_key_pem=public_pem) is True
+
+
+def test_verify_key_env_var_unreadable_file_does_not_crash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """When VERITAS_POLICY_VERIFY_KEY points to a file that becomes unreadable,
+    verify_manifest_signature must not crash with an unhandled OSError.
+
+    Instead it falls back gracefully (pub_key stays None) and logs a warning.
+    """
+    import logging
+
+    private_pem, _ = generate_keypair()
+    result = compile_policy_to_bundle(
+        EXAMPLES_DIR / "low_risk_route_allow.yaml",
+        tmp_path,
+        compiled_at="2026-04-06T05:00:00Z",
+        signing_key=private_pem,
+    )
+
+    # Point env var to a path that will fail on read_bytes()
+    key_file = tmp_path / "verify.pub"
+    key_file.write_text("placeholder", encoding="utf-8")  # create so is_file() passes
+    monkeypatch.setenv("VERITAS_POLICY_VERIFY_KEY", str(key_file))
+
+    from unittest.mock import patch
+
+    _orig_read_bytes = Path.read_bytes
+
+    def _fail_on_key_file(self: Path) -> bytes:
+        if self == key_file:
+            raise OSError("simulated key file read failure")
+        return _orig_read_bytes(self)
+
+    with (
+        patch.object(Path, "read_bytes", _fail_on_key_file),
+        caplog.at_level(logging.WARNING, logger="veritas_os.policy.runtime_adapter"),
+    ):
+        # Must not raise — should fall through to SHA-256 fallback
+        ok = verify_manifest_signature(result.bundle_dir)
+
+    assert not ok  # SHA-256 check fails for ed25519-signed bundles
+    assert "failed to read public key" in caplog.text
