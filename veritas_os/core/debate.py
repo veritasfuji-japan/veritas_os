@@ -60,6 +60,61 @@ _DANGER_PATTERNS_EN = [
 ]
 
 
+_BENIGN_CONTEXT_TERMS = [
+    "対策",
+    "予防",
+    "防止",
+    "教育",
+    "研究",
+    "分析",
+    "診断",
+    "治療",
+    "検知",
+    "セキュリティ",
+    "training",
+    "defense",
+    "defensive",
+    "prevention",
+    "mitigation",
+    "awareness",
+    "diagnosis",
+    "treatment",
+    "cybersecurity",
+    "security",
+]
+
+_DANGEROUS_INTENT_PATTERNS = [
+    re.compile(r"(?:作り方|作成方法|やり方|手順).{0,8}(?:爆弾|麻薬|ウイルス|ハッキング)", re.IGNORECASE),
+    re.compile(r"(?:爆弾|麻薬|ウイルス|ハッキング).{0,8}(?:作り方|作成方法|やり方|手順)", re.IGNORECASE),
+    re.compile(r"\b(?:how to make|how to build|steps? to|guide to)\b.{0,24}\b(?:bomb|malware|virus|drugs?|hack(?:ing)?)\b", re.IGNORECASE),
+]
+
+_RISK_NEGATION_TERMS = (
+    "問題なし",
+    "問題はない",
+    "問題がない",
+    "危険ではない",
+    "危険性は低い",
+    "リスクなし",
+    "リスクはない",
+    "リスクがない",
+    "低リスク",
+    "違反なし",
+    "違反はない",
+    "禁止されていない",
+    "no risk",
+    "low risk",
+    "risk free",
+    "risk-free",
+    "no issue",
+    "no issues",
+    "safe",
+    "mitigated",
+)
+
+DEBATE_SOURCE_OPENAI = "openai_llm"
+
+
 # ============================
 #  設定と定数
 # ============================
@@ -190,11 +245,13 @@ def _normalize_text_for_scan(text: str) -> str:
     return " ".join((text or "").lower().split())
 
 
+def _contains_benign_context(normalized_text: str) -> bool:
+    """Return ``True`` when the text likely describes defensive/safe context."""
+    return any(term in normalized_text for term in _BENIGN_CONTEXT_TERMS)
+
+
 def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
-    """
-    “念のため”の軽いヒューリスティクス保険。
-    ※ ここは厳密判定ではなく、最後の事故防止。
-    """
+    """Detect dangerous option text while reducing benign-context false positives."""
     text = " ".join(
         [
             str(opt.get("title") or ""),
@@ -206,10 +263,19 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     )
     normalized = _normalize_text_for_scan(text)
 
-    if any(term in normalized for term in _DANGER_TERMS_JA):
+    has_term = any(term in normalized for term in _DANGER_TERMS_JA) or any(
+        pattern.search(normalized) for pattern in _DANGER_PATTERNS_EN
+    )
+    if not has_term:
+        return False
+
+    if any(pattern.search(normalized) for pattern in _DANGEROUS_INTENT_PATTERNS):
         return True
 
-    return any(pattern.search(normalized) for pattern in _DANGER_PATTERNS_EN)
+    if _contains_benign_context(normalized):
+        return False
+
+    return True
 
 
 # ============================
@@ -252,6 +318,29 @@ def _normalize_verdict_by_score(opt: Dict[str, Any]) -> str:
     return "却下"
 
 
+def _is_keyword_negated(text: str, keyword: str) -> bool:
+    """Return ``True`` when *keyword* appears near a risk-negation phrase."""
+    positions = []
+    start = 0
+    while True:
+        idx = text.find(keyword, start)
+        if idx == -1:
+            break
+        positions.append(idx)
+        start = idx + 1
+
+    if not positions:
+        return False
+
+    for idx in positions:
+        left = max(0, idx - 18)
+        right = min(len(text), idx + len(keyword) + 18)
+        window = text[left:right]
+        if any(neg in window for neg in _RISK_NEGATION_TERMS):
+            return True
+    return False
+
+
 def _calc_risk_delta(
     chosen: Optional[Dict[str, Any]],
     options: List[Dict[str, Any]],
@@ -276,7 +365,7 @@ def _calc_risk_delta(
         "ban": 0.15,
     }
     for kw, w in risk_keywords.items():
-        if kw in safety_view:
+        if kw in safety_view and not _is_keyword_negated(safety_view, kw):
             delta += w
 
     if verdict == "要検討":
@@ -881,7 +970,7 @@ def run_debate(
             "chosen": chosen,
             "options": enriched_list,
             "raw": parsed,
-            "source": "openai_llm",
+            "source": DEBATE_SOURCE_OPENAI,
             "mode": mode,
             "risk_delta": risk_delta,
             "warnings": warnings,
