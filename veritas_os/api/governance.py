@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 from collections import deque
 from copy import deepcopy
@@ -308,7 +309,6 @@ def _sanitize_updated_by(raw: Any) -> str:
     * Removes HTML-like tags to mitigate stored-XSS when rendered in dashboards
     * Truncates to 200 characters (DoS protection)
     """
-    import re
     if raw is None:
         return "api"
     text = str(raw).strip()
