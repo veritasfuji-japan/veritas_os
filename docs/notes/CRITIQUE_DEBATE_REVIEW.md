@@ -166,6 +166,11 @@
    - 既存の否定語判定（`no risk`, `safe` など）との併用を維持しつつ、不要なリスク加算を低減。
    - 単体テストを追加し、`"Bank transfer ... No risk"` 文脈で負方向（安全寄り）デルタを維持することを確認。
 
+15. **[低][完了] C-3 追加強化: `ensure_min_items` の重複パディング意図を監査可能化**
+   - `min_items > len(_DEFAULT_PAD_CRITIQUES)` の場合にテンプレート循環再利用される仕様を docstring に明記。
+   - 再利用パディング項目には `details.pad_reused=True` と `details.pad_cycle_index` を付与し、監査ログ上で「重複由来」を判別可能にした。
+   - 単体テストを追加し、4件目以降のパディング項目に再利用メタデータが入ることを検証。
+
 ### セキュリティ注意（実装時点）
 
 - benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。

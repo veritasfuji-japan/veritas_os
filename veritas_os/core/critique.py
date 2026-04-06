@@ -453,6 +453,12 @@ def ensure_min_items(
     """
     監査/UI都合で Critique を最低件数までパッドする。
     analyze() の意味（問題が無ければ空）を壊さないため、別関数で提供する。
+
+    Notes:
+        `_DEFAULT_PAD_CRITIQUES` は固定テンプレートのため、`min_items` が
+        テンプレート件数を上回る場合は循環して再利用される。
+        監査時の判別性を高めるため、再利用された項目には
+        `details["pad_reused"] = True` と `details["pad_cycle_index"]` を付与する。
     """
     _ = context or {}
     try:
@@ -463,12 +469,17 @@ def ensure_min_items(
     out = list(critiques or [])
     i = 0
     while len(out) < int(min_items):
-        template = _DEFAULT_PAD_CRITIQUES[i % len(_DEFAULT_PAD_CRITIQUES)]
+        template_index = i % len(_DEFAULT_PAD_CRITIQUES)
+        template = _DEFAULT_PAD_CRITIQUES[template_index]
+        details = dict(template["details"])
+        if i >= len(_DEFAULT_PAD_CRITIQUES):
+            details["pad_reused"] = True
+            details["pad_cycle_index"] = i
         out.append(
             _crit(
                 issue=str(template["issue"]),
                 severity=_norm_severity(template["severity"]),
-                details=dict(template["details"]),
+                details=details,
                 fix=str(template["fix"]),
                 code=str(template["code"]),
             )
