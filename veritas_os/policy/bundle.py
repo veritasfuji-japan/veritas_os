@@ -19,7 +19,7 @@ def collect_bundle_files(bundle_dir: Path) -> List[Dict[str, Any]]:
     """Collect bundle file metadata excluding generated archive files."""
     files: List[Dict[str, Any]] = []
     for file_path in sorted(bundle_dir.rglob("*")):
-        if not file_path.is_file():
+        if not file_path.is_file() or file_path.is_symlink():
             continue
         rel = file_path.relative_to(bundle_dir).as_posix()
         if rel.endswith(".tar.gz"):
