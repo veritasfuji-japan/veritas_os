@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from datetime import date
+import functools
 import logging
 import math
 from typing import Any, Dict, Iterable, List
@@ -133,11 +134,17 @@ def _safe_regex_search(expected: Any, actual: Any) -> bool:
         return False
 
     try:
-        compiled = re.compile(expected)
+        compiled = _compile_regex_cached(expected)
     except re.error as exc:
         logger.warning("regex compilation failed for pattern %.50r: %s", expected, exc)
         return False
     return compiled.search(actual) is not None
+
+
+@functools.lru_cache(maxsize=256)
+def _compile_regex_cached(pattern: str) -> re.Pattern[str]:
+    """Compile and cache regex patterns to avoid repeated compilation."""
+    return re.compile(pattern)
 
 
 def _scope_matches(policy: RuntimePolicy, context: Dict[str, Any]) -> bool:
@@ -204,6 +211,7 @@ def _evaluate_requirements(policy: RuntimePolicy, context: Dict[str, Any]) -> Di
 
 def _choose_final_outcome(outcomes: Iterable[str]) -> str:
     selected = "allow"
+    # -1 ensures any valid outcome (min precedence is 0 for "allow") wins
     best_score = -1
     for outcome in outcomes:
         score = OUTCOME_PRECEDENCE.get(outcome)
@@ -221,11 +229,10 @@ def _choose_final_outcome(outcomes: Iterable[str]) -> str:
 
 def _is_effective(policy: RuntimePolicy, today: date) -> bool:
     """Return True when the policy's effective_date is today or in the past."""
-    effective = getattr(policy, "effective_date", None)
-    if not effective:
+    if not policy.effective_date:
         return True
     try:
-        return date.fromisoformat(effective) <= today
+        return date.fromisoformat(policy.effective_date) <= today
     except (ValueError, TypeError):
         return True
 
@@ -296,20 +303,21 @@ def evaluate_runtime_policies(
                 if outcome_reason
                 else policy.title
             )
-            outcomes.append(outcome)
             reasons.append(outcome_reason or policy.title)
             obligations.extend(policy.obligations)
             required_actions.extend(policy.obligations)
 
-        if triggered_policy and outcome == "allow":
-            if req_eval["missing_evidence"]:
-                outcome = "halt"
-                outcomes[-1] = outcome
-                reasons.append("missing required evidence")
-            elif req_eval["missing_reviewers"] or not req_eval["minimum_approval_met"]:
-                outcome = "require_human_review"
-                outcomes[-1] = outcome
-                reasons.append("required approvals are not satisfied")
+            # Escalate outcome when requirements are unmet (fail-closed).
+            # Evidence gaps escalate to "halt"; approval gaps to "require_human_review".
+            if outcome == "allow":
+                if req_eval["missing_evidence"]:
+                    outcome = "halt"
+                    reasons.append("missing required evidence")
+                elif req_eval["missing_reviewers"] or not req_eval["minimum_approval_met"]:
+                    outcome = "require_human_review"
+                    reasons.append("required approvals are not satisfied")
+
+            outcomes.append(outcome)
 
         approval_requirements.append(
             {

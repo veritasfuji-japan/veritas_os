@@ -71,11 +71,7 @@ def build_generated_test_cases(
 
         for vector in canonical_ir["test_vectors"]:
             merged_context = _deep_merge(base_context, dict(vector["input"]))
-            expected_outcome = getattr(
-                vector["expected_outcome"],
-                "value",
-                vector["expected_outcome"],
-            )
+            expected_outcome = vector["expected_outcome"]
             cases.append(
                 GeneratedPolicyTestCase(
                     policy_file=path.as_posix(),

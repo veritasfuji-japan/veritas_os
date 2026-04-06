@@ -55,8 +55,15 @@ def to_canonical_ir(policy: SourcePolicy) -> CanonicalPolicyIR:
     policy_dict = policy.model_dump(mode="python")
     requirements = policy_dict["requirements"]
 
-    test_vectors = sorted(
-        policy_dict["test_vectors"],
+    test_vectors = []
+    for item in policy_dict["test_vectors"]:
+        raw_outcome = item["expected_outcome"]
+        outcome_str = raw_outcome.value if hasattr(raw_outcome, "value") else str(raw_outcome)
+        test_vectors.append({
+            **item,
+            "expected_outcome": outcome_str,
+        })
+    test_vectors.sort(
         key=lambda item: (
             item["name"],
             json.dumps(item["input"], sort_keys=True, separators=(",", ":")),
