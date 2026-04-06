@@ -48,6 +48,17 @@ def test_looks_dangerous_text_blocks_instructional_harm_cues() -> None:
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_keeps_block_when_only_weak_benign_label_exists() -> None:
+    """Weak labels like training alone must not bypass dangerous detection."""
+    option = {
+        "title": "training material",
+        "description": "malware virus handling notes",
+        "summary": "education only",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:
     """Negated safety phrases should avoid risk keyword inflation."""
     chosen = {

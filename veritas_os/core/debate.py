@@ -60,27 +60,32 @@ _DANGER_PATTERNS_EN = [
 ]
 
 
-_BENIGN_CONTEXT_TERMS = [
+_BENIGN_CONTEXT_STRONG_TERMS = [
     "対策",
     "予防",
     "防止",
+    "検知",
+    "セキュリティ",
+    "defense",
+    "defensive",
+    "prevention",
+    "mitigation",
+    "cybersecurity",
+    "security",
+]
+
+_BENIGN_CONTEXT_WEAK_TERMS = [
     "教育",
     "研究",
     "分析",
     "診断",
     "治療",
-    "検知",
-    "セキュリティ",
     "training",
-    "defense",
-    "defensive",
-    "prevention",
-    "mitigation",
     "awareness",
     "diagnosis",
     "treatment",
-    "cybersecurity",
-    "security",
+    "research",
+    "analysis",
 ]
 
 _DANGEROUS_INTENT_PATTERNS = [
@@ -287,8 +292,22 @@ def _normalize_text_for_scan(text: str) -> str:
 
 
 def _contains_benign_context(normalized_text: str) -> bool:
-    """Return ``True`` when the text likely describes defensive/safe context."""
-    return any(term in normalized_text for term in _BENIGN_CONTEXT_TERMS)
+    """Return ``True`` only when clear defensive context is present.
+
+    Security rationale:
+        Weak labels (e.g., "education"/"training") are easy to abuse as
+        camouflage, so they are not sufficient by themselves.
+    """
+    has_strong_signal = any(
+        term in normalized_text for term in _BENIGN_CONTEXT_STRONG_TERMS
+    )
+    if has_strong_signal:
+        return True
+
+    has_weak_signal = any(term in normalized_text for term in _BENIGN_CONTEXT_WEAK_TERMS)
+    if has_weak_signal:
+        logger.debug("Benign weak-signal detected without defensive term; keep dangerous.")
+    return False
 
 
 def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
