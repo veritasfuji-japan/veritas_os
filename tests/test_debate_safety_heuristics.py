@@ -190,6 +190,34 @@ def test_calc_risk_delta_does_not_negate_illegal_with_generic_no_risk() -> None:
     assert delta >= 0.15
 
 
+def test_calc_risk_delta_does_not_negate_violation_with_generic_no_issue() -> None:
+    """Generic '問題なし' text must not cancel explicit 違反 signals."""
+    chosen = {
+        "score": 0.81,
+        "verdict": "採用推奨",
+        "safety_view": "問題なしの運用説明だが、この手順は規約違反の可能性が高い。",
+        "critic_view": "policy review required",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta >= 0.15
+
+
+def test_calc_risk_delta_does_not_negate_ban_with_japanese_generic_no_issue() -> None:
+    """'問題なし' wording must not cancel explicit 禁止 signals."""
+    chosen = {
+        "score": 0.80,
+        "verdict": "採用推奨",
+        "safety_view": "問題なしとあるが、この運用は社内規程で禁止されている。",
+        "critic_view": "needs governance approval",
+    }
+
+    delta = debate._calc_risk_delta(chosen, [chosen])
+
+    assert delta >= 0.12
+
+
 def test_calc_risk_delta_increases_for_regulatory_ambiguity() -> None:
     """Regulatory ambiguity phrases should be treated as residual legal risk."""
     chosen = {
