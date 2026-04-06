@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from veritas_os.core import debate
 
 
@@ -29,3 +31,15 @@ def test_extract_objects_from_array_obeys_depth_limit() -> None:
     objs = debate._extract_objects_from_array(text, "options", max_depth=2)
 
     assert objs == []
+
+
+def test_safe_json_extract_like_logs_tail_trim_retry_cap(caplog) -> None:
+    """Tail-trim retry cap should emit operational warning metrics."""
+    raw = "x" + ("}" * (debate.TAIL_TRIM_RETRY_CAP + 10))
+
+    with caplog.at_level(logging.WARNING):
+        parsed = debate._safe_json_extract_like(raw)
+
+    assert parsed == {"options": [], "chosen_id": None}
+    assert "tail-trim parse reached retry cap" in caplog.text
+    assert "payload_bytes=" in caplog.text

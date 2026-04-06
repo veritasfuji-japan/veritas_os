@@ -176,6 +176,11 @@
    - `教育/研究/training` など benign context が同居していても、`「ハッキングの手順」「malware script/tutorial」` のような**実行可能性を高める説明**を含む場合は危険判定を優先。
    - 単体テストを追加し、`研究/教育` を含む文面でも「具体的手順+コード+危険語」の同居ケースがブロックされることを確認。
 
+17. **[低][完了] D-5 末尾削りループの監視ログを強化**
+   - `_safe_json_extract_like()` の tail-trim retry cap を `TAIL_TRIM_RETRY_CAP` 定数化し、運用調整時の可視性を改善。
+   - 打ち切り時ログに `attempts/cap/candidate_endings/payload_bytes` を追加し、巨大入力や異常フォーマット時の解析容易性を向上。
+   - 単体テストを追加し、retry cap 到達時に warning ログが出ることを検証。
+
 ### セキュリティ注意（実装時点）
 
 - benign context の導入により false positive は低減される一方、**攻撃者が安全語を混ぜて回避を試みるリスク**がある。

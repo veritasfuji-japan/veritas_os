@@ -176,6 +176,7 @@ MAX_OPTION_STRING_LENGTH = 10000
 MAX_OPTIONS = 100
 MAX_OPTIONS_PAYLOAD_BYTES = 1_000_000
 MAX_JSON_NESTED_DEPTH = 100
+TAIL_TRIM_RETRY_CAP = 50
 
 
 # ============================
@@ -695,12 +696,21 @@ def _safe_json_extract_like(raw: str) -> Dict[str, Any]:
 
     # 末尾削り（軽め）
     attempts = 0
+    candidate_endings = 0
     for cut in range(len(cleaned), 1, -1):
-        if attempts >= 50:
-            logger.warning("DebateOS: tail-trim parse reached retry cap (%d)", attempts)
+        if attempts >= TAIL_TRIM_RETRY_CAP:
+            logger.warning(
+                "DebateOS: tail-trim parse reached retry cap attempts=%d cap=%d "
+                "candidate_endings=%d payload_bytes=%d",
+                attempts,
+                TAIL_TRIM_RETRY_CAP,
+                candidate_endings,
+                len(cleaned.encode("utf-8")),
+            )
             break
         if cleaned[cut - 1] not in ("}", "]"):
             continue
+        candidate_endings += 1
         attempts += 1
         try:
             return _wrap_extracted_json(json.loads(cleaned[:cut]))
