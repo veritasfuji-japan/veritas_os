@@ -50,6 +50,17 @@ _SEVERITY_SCORE: Dict[str, int] = {
     "med": 1,
     "high": 2,
 }
+_SEVERITY_ALIASES: Dict[str, Severity] = {
+    "high": "high",
+    "h": "high",
+    "critical": "high",
+    "crit": "high",
+    "med": "med",
+    "m": "med",
+    "medium": "med",
+    "low": "low",
+    "l": "low",
+}
 _RISK_VALUE_ZERO_GUARD = 0.01
 
 
@@ -67,11 +78,7 @@ def _norm_severity(x: Any) -> Severity:
         s = str(x).lower().strip()
     except (TypeError, ValueError):
         return "med"
-    if s in ("high", "h", "critical", "crit"):
-        return "high"
-    if s in ("low", "l"):
-        return "low"
-    return "med"
+    return _SEVERITY_ALIASES.get(s, "med")
 
 
 def _severity_rank(x: Any, *, unknown_rank: int = 0) -> int:
@@ -86,13 +93,9 @@ def _severity_rank(x: Any, *, unknown_rank: int = 0) -> int:
         s = str(x).lower().strip()
     except (TypeError, ValueError):
         return int(unknown_rank)
-
-    if s in ("high", "h", "critical", "crit"):
-        return _SEVERITY_SCORE["high"]
-    if s in ("med", "m", "medium"):
-        return _SEVERITY_SCORE["med"]
-    if s in ("low", "l"):
-        return _SEVERITY_SCORE["low"]
+    normalized = _SEVERITY_ALIASES.get(s)
+    if normalized in _SEVERITY_SCORE:
+        return _SEVERITY_SCORE[normalized]
     # unknown => 0 扱い（=全件通る）などに使う
     return int(unknown_rank)
 
