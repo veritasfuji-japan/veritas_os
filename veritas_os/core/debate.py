@@ -172,6 +172,29 @@ _RISK_KEYWORD_PATTERNS = {
     if keyword.isascii()
 }
 
+_OBFUSCATION_TRANSLATION_TABLE = str.maketrans(
+    {
+        "@": "a",
+        "$": "s",
+        "0": "o",
+        "1": "i",
+        "3": "e",
+        "4": "a",
+        "5": "s",
+        "7": "t",
+    }
+)
+_OBFUSCATED_DANGER_TOKENS = (
+    "malware",
+    "hacking",
+    "hack",
+    "virus",
+    "drugs",
+    "drug",
+    "bomb",
+    "weapon",
+)
+
 
 # ============================
 #  設定と定数
@@ -304,6 +327,21 @@ def _normalize_text_for_scan(text: str) -> str:
     return " ".join((text or "").lower().split())
 
 
+def _normalize_text_for_obfuscation_scan(text: str) -> str:
+    """Normalize obfuscated text (leet / separators) for token checks."""
+    normalized = _normalize_text_for_scan(text)
+    normalized = normalized.translate(_OBFUSCATION_TRANSLATION_TABLE)
+    return re.sub(r"[^a-zぁ-んァ-ン一-龥]+", "", normalized)
+
+
+def _contains_obfuscated_danger_term(normalized_text: str) -> bool:
+    """Detect danger terms hidden by common obfuscation patterns."""
+    compact = _normalize_text_for_obfuscation_scan(normalized_text)
+    if any(token in compact for token in _OBFUSCATED_DANGER_TOKENS):
+        return True
+    return any(term in compact for term in _DANGER_TERMS_JA)
+
+
 def _contains_benign_context(normalized_text: str) -> bool:
     """Return ``True`` only when clear defensive context is present.
 
@@ -344,6 +382,8 @@ def _looks_dangerous_text(opt: Dict[str, Any]) -> bool:
     has_term = any(term in normalized for term in _DANGER_TERMS_JA) or any(
         pattern.search(normalized) for pattern in _DANGER_PATTERNS_EN
     )
+    if not has_term and _contains_obfuscated_danger_term(normalized):
+        has_term = True
     if not has_term:
         return False
 

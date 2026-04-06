@@ -59,6 +59,28 @@ def test_looks_dangerous_text_keeps_block_when_only_weak_benign_label_exists() -
     assert debate._looks_dangerous_text(option) is True
 
 
+def test_looks_dangerous_text_blocks_obfuscated_danger_terms() -> None:
+    option = {
+        "title": "training material",
+        "detail": "m.a.l.w.a.r.e の配布を想定した説明",
+        "summary": "安全な運用のための訓練",
+        "safety_view": "weak label only",
+    }
+
+    assert debate._looks_dangerous_text(option) is True
+
+
+def test_looks_dangerous_text_allows_obfuscated_term_in_strong_defensive_context() -> None:
+    option = {
+        "title": "cybersecurity defense update",
+        "detail": "m-a-l-w-a-r-e 対策の検知ルールを改善する",
+        "summary": "防御観点の運用改善",
+        "safety_view": "defensive prevention plan",
+    }
+
+    assert debate._looks_dangerous_text(option) is False
+
+
 def test_calc_risk_delta_ignores_negated_risk_phrases() -> None:
     """Negated safety phrases should avoid risk keyword inflation."""
     chosen = {
