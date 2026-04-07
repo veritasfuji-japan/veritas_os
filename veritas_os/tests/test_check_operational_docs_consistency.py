@@ -42,6 +42,23 @@ def test_collect_missing_tokens_reports_secondary_readme_scope_gaps() -> None:
     assert "**記述スコープの注意**" in missing
 
 
+def test_collect_missing_any_tokens_accepts_legacy_or_new_runbook_token() -> None:
+    """Runbook token checks should allow legacy and new path variants."""
+    missing_new = checker.collect_missing_any_tokens(
+        "docs/ja/operations/enterprise_slo_sli_runbook_ja.md",
+        (("docs/ja/operations/enterprise_slo_sli_runbook_ja.md",
+          "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"),),
+    )
+    missing_legacy = checker.collect_missing_any_tokens(
+        "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
+        (("docs/ja/operations/enterprise_slo_sli_runbook_ja.md",
+          "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"),),
+    )
+
+    assert missing_new == []
+    assert missing_legacy == []
+
+
 def test_main_returns_success_for_current_repository_docs(capsys) -> None:
     """Repository docs should satisfy the operational consistency check."""
     exit_code = checker.main()

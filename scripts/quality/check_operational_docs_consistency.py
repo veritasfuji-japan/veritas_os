@@ -17,7 +17,8 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PRIMARY_README_PATH = REPO_ROOT / "README_JP.md"
 README_PATH = REPO_ROOT / "veritas_os/README_JP.md"
-RUNBOOK_PATH = REPO_ROOT / "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"
+RUNBOOK_PATH = REPO_ROOT / "docs/ja/operations/enterprise_slo_sli_runbook_ja.md"
+LEGACY_RUNBOOK_PATH = REPO_ROOT / "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"
 DOC_MAP_PATH = REPO_ROOT / "docs/notes/CODE_REVIEW_DOCUMENT_MAP.md"
 
 PRIMARY_README_REQUIRED_TOKENS = (
@@ -28,7 +29,6 @@ PRIMARY_README_REQUIRED_TOKENS = (
     "| **Kernel** |",
     "| **FUJI** |",
     "| **MemoryOS** |",
-    "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
 )
 README_REQUIRED_TOKENS = (
     "Beta%20Governance%20Platform",
@@ -37,7 +37,6 @@ README_REQUIRED_TOKENS = (
     "[`README_JP.md`](../README_JP.md)",
     "**セキュリティ注意**",
     "**記述スコープの注意**",
-    "ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
 )
 RUNBOOK_REQUIRED_TOKENS = (
     "### 4.3 degraded 判定のアラートポリシー（P1固定）",
@@ -63,6 +62,15 @@ def collect_missing_tokens(content: str, required_tokens: tuple[str, ...]) -> li
     return [token for token in required_tokens if token not in content]
 
 
+def collect_missing_any_tokens(content: str, token_groups: tuple[tuple[str, ...], ...]) -> list[str]:
+    """Return missing markers where any token in each group is acceptable."""
+    missing = []
+    for group in token_groups:
+        if not any(token in content for token in group):
+            missing.append(" OR ".join(group))
+    return missing
+
+
 def _validate_file(path: pathlib.Path, required_tokens: tuple[str, ...]) -> list[str]:
     """Return missing-token errors for a required documentation file."""
     if not path.exists():
@@ -80,8 +88,41 @@ def main() -> int:
     problems = []
     problems.extend(_validate_file(PRIMARY_README_PATH, PRIMARY_README_REQUIRED_TOKENS))
     problems.extend(_validate_file(README_PATH, README_REQUIRED_TOKENS))
-    problems.extend(_validate_file(RUNBOOK_PATH, RUNBOOK_REQUIRED_TOKENS))
+    runbook_path = RUNBOOK_PATH if RUNBOOK_PATH.exists() else LEGACY_RUNBOOK_PATH
+    problems.extend(_validate_file(runbook_path, RUNBOOK_REQUIRED_TOKENS))
     problems.extend(_validate_file(DOC_MAP_PATH, DOC_MAP_REQUIRED_TOKENS))
+
+    primary_content = PRIMARY_README_PATH.read_text(encoding="utf-8") if PRIMARY_README_PATH.exists() else ""
+    problems.extend(
+        [
+            f"{PRIMARY_README_PATH.relative_to(REPO_ROOT)}: missing token: {missing}"
+            for missing in collect_missing_any_tokens(
+                primary_content,
+                (
+                    (
+                        "docs/ja/operations/enterprise_slo_sli_runbook_ja.md",
+                        "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
+                    ),
+                ),
+            )
+        ]
+    )
+
+    readme_content = README_PATH.read_text(encoding="utf-8") if README_PATH.exists() else ""
+    problems.extend(
+        [
+            f"{README_PATH.relative_to(REPO_ROOT)}: missing token: {missing}"
+            for missing in collect_missing_any_tokens(
+                readme_content,
+                (
+                    (
+                        "enterprise_slo_sli_runbook_ja.md",
+                        "ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
+                    ),
+                ),
+            )
+        ]
+    )
 
     if not problems:
         print("Operational documentation consistency checks passed.")
