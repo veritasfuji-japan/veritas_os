@@ -39,8 +39,6 @@ import os
 import re
 import threading
 import time
-import unicodedata
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterable, List, Mapping, MutableMapping
 import functools
@@ -49,438 +47,29 @@ import json
 
 logger = logging.getLogger(__name__)
 
-try:  # pragma: no cover - optional dependency path
-    from veritas_os.core.safety_gate import SafetyGate
-except (ImportError, ModuleNotFoundError):
-    class SafetyGate:  # type: ignore[override]
-        """Fallback SafetyGate base when an explicit base class is unavailable."""
-
-        def validate(self, text: str) -> Dict[str, Any]:
-            return {"passed": True, "violations": []}
-
-
-# Default SLA for human review: 4 hours (14400 seconds)
-DEFAULT_HUMAN_REVIEW_SLA_SECONDS = 14400
-
-ANNEX_III_RISK_KEYWORDS = {
-    "biometric": 0.95,
-    "hiring": 0.90,
-    "employment": 0.90,
-    "credit": 0.88,
-    "insurance": 0.80,
-    "education": 0.85,
-    "law enforcement": 0.97,
-    "immigration": 0.92,
-    "border": 0.86,
-    "healthcare": 0.91,
-    "medical": 0.91,
-    "critical infrastructure": 0.95,
-}
-
 # ---------------------------------------------------------------------------
-# P1-1: Expanded multi-language Article 5 prohibited-practice patterns
+# Canonical imports — Art. 5 detection lives in ``eu_ai_act_prohibited``,
+# human oversight in ``eu_ai_act_oversight``, and the shared config dataclass
+# in ``eu_ai_act_config``.  Re-exported here for backward compatibility.
 # ---------------------------------------------------------------------------
-# English base patterns
-ARTICLE_5_PROHIBITED_PATTERNS = (
-    "subliminal",
-    "social scoring",
-    "exploit vulnerability",
-    "discriminat",
-    "manipulat",
-    "coercive",
-    "deceptive",
-    "biometric categori",
-    "emotion recognition",
-    "real-time remote biometric",
-    "predictive policing",
-    # GAP-01 synonyms / euphemisms to reduce false negatives
-    "social credit",
-    "citizen score",
-    "trustworthiness score",
-    "behavioural scoring",
-    "behavior scoring",
-    "subconscious influence",
-    "psychological manipulation",
-    "exploit cognitive",
-    "exploit mental",
-    "facial recognition",
-    "face identification",
-    "gait recognition",
-    "voiceprint",
-    "untargeted scraping of facial",
-    "mass surveillance",
-    "indiscriminate surveillance",
+from veritas_os.core.eu_ai_act_config import EUComplianceConfig  # noqa: F401
+from veritas_os.core.eu_ai_act_prohibited import (  # noqa: F401
+    ANNEX_III_RISK_KEYWORDS,
+    ARTICLE_5_PROHIBITED_PATTERNS,
+    EUAIActSafetyGateLayer4,
+    FUNDAMENTAL_RIGHTS_ROLE,
+    _char_ngrams,
+    _ngram_similarity,
+    _semantic_ngram_check,
+    classify_annex_iii_risk,
+    normalise_text,
 )
-
-# Multi-language extensions (Japanese / French / German / Spanish)
-_ARTICLE_5_PROHIBITED_PATTERNS_MULTILANG = (
-    # Japanese
-    "サブリミナル",
-    "社会的スコアリング",
-    "ソーシャルスコアリング",
-    "脆弱性を悪用",
-    "差別",
-    "操作",
-    "強制的",
-    "欺瞞",
-    "生体認証",
-    "感情認識",
-    "リアルタイム遠隔生体認証",
-    "予測的取締",
-    # GAP-01: Additional Japanese synonyms
-    "社会信用スコア",
-    "市民スコア",
-    "行動スコアリング",
-    "潜在意識",
-    "心理的操作",
-    "顔認識",
-    "顔認証",
-    "大量監視",
-    "無差別監視",
-    # French
-    "subliminal",
-    "notation sociale",
-    "exploiter la vulnérabilité",
-    "discrimina",
-    "manipula",
-    # GAP-01: Additional French synonyms
-    "crédit social",
-    "score social",
-    "reconnaissance faciale",
-    "surveillance de masse",
-    # German
-    "unterschwellig",
-    "sozialbewertung",
-    "schwachstelle ausnutzen",
-    "diskriminier",
-    "manipulier",
-    # GAP-01: Additional German synonyms
-    "sozialkreditsystem",
-    "gesichtserkennung",
-    "massenüberwachung",
-    # Spanish
-    "subliminal",
-    "puntuación social",
-    "explotar vulnerabilidad",
-    "discrimina",
-    "manipula",
-    # GAP-01: Additional Spanish synonyms
-    "crédito social",
-    "reconocimiento facial",
-    "vigilancia masiva",
+from veritas_os.core.eu_ai_act_oversight import (  # noqa: F401
+    DEFAULT_HUMAN_REVIEW_SLA_SECONDS,
+    HumanReviewQueue,
+    SystemHaltController,
+    apply_human_oversight_hook,
 )
-
-# Combined set for matching (deduplicated, lowercased)
-_ALL_PROHIBITED_PATTERNS: tuple[str, ...] = tuple(
-    sorted(
-        {p.lower() for p in ARTICLE_5_PROHIBITED_PATTERNS + _ARTICLE_5_PROHIBITED_PATTERNS_MULTILANG}
-    )
-)
-
-# Regex to strip hyphens / zero-width chars used to evade detection
-_EVASION_STRIP_RE = re.compile(r"[-\u00ad\u200b\u200c\u200d\ufeff]")
-
-# GAP-01: Unicode confusable / homoglyph character map for Art. 5 evasion
-# resistance.  Mirrors the map used in fuji.py for prompt-injection detection.
-_CONFUSABLE_ASCII_MAP = str.maketrans(
-    {
-        "а": "a",  # Cyrillic
-        "е": "e",  # Cyrillic
-        "і": "i",  # Cyrillic
-        "о": "o",  # Cyrillic
-        "р": "p",  # Cyrillic
-        "с": "c",  # Cyrillic
-        "у": "y",  # Cyrillic
-        "х": "x",  # Cyrillic
-        "Α": "a",  # Greek
-        "Β": "b",  # Greek
-        "Ε": "e",  # Greek
-        "Ι": "i",  # Greek
-        "Κ": "k",  # Greek
-        "Μ": "m",  # Greek
-        "Ν": "n",  # Greek
-        "Ο": "o",  # Greek
-        "Ρ": "p",  # Greek
-        "Τ": "t",  # Greek
-        "Χ": "x",  # Greek
-    }
-)
-
-# GAP-01: Detect sequences of ≥3 single characters separated by spaces
-# (e.g. "m a n i p u l a t e") used to evade substring matching.
-_SPACED_EVASION_RE = re.compile(r"\b((?:[a-zA-Z] ){2,}[a-zA-Z])\b")
-
-# ---------------------------------------------------------------------------
-# GAP-01: N-gram semantic similarity detection for Art. 5
-# ---------------------------------------------------------------------------
-# Prohibited-practice *descriptions* for n-gram similarity matching.
-# These are full phrases that capture the *intent* of Art. 5 prohibitions,
-# enabling detection of paraphrased or indirect references that evade simple
-# substring matching.
-_ARTICLE_5_SEMANTIC_DESCRIPTIONS: tuple[str, ...] = (
-    "subliminal technique beyond consciousness to distort behavior",
-    "exploiting vulnerabilities of age disability social economic",
-    "social scoring by public authorities leading to detrimental treatment",
-    "real time remote biometric identification in publicly accessible spaces",
-    "untargeted scraping of facial images from internet or cctv",
-    "emotion recognition in workplace or education",
-    "biometric categorisation to deduce race political opinions religion",
-    "individual predictive policing based solely on profiling",
-    "manipulate persons through deceptive techniques to undermine autonomy",
-    "coerce individuals using position of authority or power",
-    "evaluate trustworthiness of persons based on social behavior or personality",
-    "mass indiscriminate surveillance of population",
-    "classify citizens based on behavior or personal traits for punitive measures",
-    "facial recognition database built through untargeted data collection",
-    "exploit cognitive bias to manipulate decision making",
-    "psychological manipulation targeting vulnerable groups",
-)
-
-# Default n-gram size and similarity threshold for semantic detection.
-_NGRAM_SIZE = 3
-_SEMANTIC_SIMILARITY_THRESHOLD = 0.35
-
-
-def _char_ngrams(text: str, n: int = _NGRAM_SIZE) -> set[str]:
-    """Return the set of character n-grams for *text*."""
-    if len(text) < n:
-        return {text} if text else set()
-    return {text[i : i + n] for i in range(len(text) - n + 1)}
-
-
-def _ngram_similarity(text: str, reference: str, n: int = _NGRAM_SIZE) -> float:
-    """Compute Jaccard similarity between character n-gram sets.
-
-    Returns a value in [0.0, 1.0].  A higher value indicates stronger
-    overlap between *text* and *reference*.
-    """
-    a = _char_ngrams(text, n)
-    b = _char_ngrams(reference, n)
-    if not a or not b:
-        return 0.0
-    intersection = a & b
-    union = a | b
-    return len(intersection) / len(union)
-
-
-def _semantic_ngram_check(
-    text: str,
-    *,
-    threshold: float = _SEMANTIC_SIMILARITY_THRESHOLD,
-) -> list[str]:
-    """Detect prohibited practices via n-gram semantic similarity.
-
-    GAP-01 enhancement: Provides a lightweight semantic layer above keyword
-    substring matching.  Compares sliding windows of the input text against
-    known Art. 5 prohibition descriptions using character n-gram Jaccard
-    similarity.  Matches above *threshold* are reported.
-
-    This is intentionally conservative (high-precision) to avoid
-    false positives while still catching paraphrased prohibited content
-    that exact keyword matching would miss.
-    """
-    violations: list[str] = []
-    # Slide a window sized to each reference description across the text.
-    for desc in _ARTICLE_5_SEMANTIC_DESCRIPTIONS:
-        window_size = len(desc)
-        if len(text) < window_size:
-            # Compare entire text if shorter than description.
-            sim = _ngram_similarity(text, desc)
-            if sim >= threshold:
-                violations.append(f"semantic:{desc[:60]}")
-            continue
-        # Slide the window across the text.
-        for start in range(0, len(text) - window_size + 1, max(1, window_size // 4)):
-            window = text[start : start + window_size]
-            sim = _ngram_similarity(window, desc)
-            if sim >= threshold:
-                violations.append(f"semantic:{desc[:60]}")
-                break  # One match per description is enough.
-    return violations
-
-
-FUNDAMENTAL_RIGHTS_ROLE = {
-    "role": "fundamental_rights_officer",
-    "instruction": (
-        "Assess impact on dignity, non-discrimination, privacy, due process, "
-        "and freedom of expression under EU fundamental rights standards."
-    ),
-}
-
-
-@dataclass(frozen=True)
-class EUComplianceConfig:
-    """Runtime compliance toggles.
-
-    Legal mapping:
-    - Art. 9 Risk Management
-    - Art. 14 Human Oversight
-    - Art. 15 Accuracy/Robustness
-
-    P1-6 additions:
-    - fail_close: When True, human_review decisions block automatic execution.
-    - bench_mode_pii_override: When False, bench_mode cannot disable PII checks.
-    - require_audit_for_high_risk: When True, high-risk decisions are rejected
-      if audit infrastructure is incomplete.
-    """
-
-    enabled: bool = True
-    trust_score_threshold: float = 0.8
-    fail_close: bool = True
-    bench_mode_pii_override: bool = False
-    require_audit_for_high_risk: bool = True
-
-
-class EUAIActSafetyGateLayer4(SafetyGate):
-    """Layer 4 legal gate extension.
-
-    Art. 5 Prohibited AI Practices:
-        Detects obvious prohibited output categories before release.
-        P1-1 enhancements:
-        - Multi-language pattern matching (EN/JA/FR/DE/ES).
-        - Text normalisation (NFKC, confusable homoglyphs, hyphens,
-          zero-width chars, space-insertion) to counter evasion.
-        - Input prompt inspection (not only output).
-        - Pluggable external classifier interface.
-    Art. 15 Accuracy/Robustness/Cybersecurity:
-        Runs deterministic textual checks as a last-mile safeguard.
-    """
-
-    layer_name = "layer_4_eu_ai_act"
-
-    def __init__(self, *, external_classifier: Callable[[str], Dict[str, Any]] | None = None) -> None:
-        super().__init__()
-        self._external_classifier = external_classifier
-
-    # ------------------------------------------------------------------
-    # P1-1: core pattern check with normalisation
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _normalise_text(text: str) -> str:
-        """Normalise text to defeat common evasion techniques.
-
-        GAP-01 hardening:
-        1. NFKC Unicode normalisation (fullwidth → ASCII, ligatures, etc.)
-        2. Strip hyphens, soft-hyphens, zero-width characters.
-        3. Translate Unicode confusable / homoglyph characters to ASCII
-           (Cyrillic 'а' → 'a', Greek 'Α' → 'a', etc.)
-        4. Collapse space-separated single characters that form words
-           (e.g. "m a n i p" → "manip").
-        5. Lower-case.
-        """
-        normalized = unicodedata.normalize("NFKC", text or "")
-        normalized = _EVASION_STRIP_RE.sub("", normalized)
-        normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
-        normalized = _SPACED_EVASION_RE.sub(
-            lambda m: m.group(0).replace(" ", ""), normalized,
-        )
-        return normalized.lower()
-
-    def _check_patterns(self, text: str) -> List[str]:
-        """Return matched prohibited patterns after normalisation.
-
-        GAP-01: Augmented with n-gram semantic similarity check to detect
-        paraphrased or indirect references to prohibited practices that
-        exact keyword matching would miss.
-        """
-        normalised = self._normalise_text(text)
-        keyword_hits = [p for p in _ALL_PROHIBITED_PATTERNS if p in normalised]
-        # GAP-01: Semantic similarity layer — only runs when keyword check
-        # finds nothing, to avoid duplicating detections.
-        if not keyword_hits:
-            semantic_hits = _semantic_ngram_check(normalised)
-            if semantic_hits:
-                return semantic_hits
-        return keyword_hits
-
-    def validate_article_5(self, generated_text: str) -> Dict[str, Any]:
-        """Validate generated output against Article 5 prohibited practices."""
-        violations = self._check_patterns(generated_text)
-        result: Dict[str, Any] = {
-            "passed": len(violations) == 0,
-            "violations": violations,
-            "layer": self.layer_name,
-        }
-        # External classifier hook (P1-1)
-        if self._external_classifier is not None:
-            try:
-                ext = self._external_classifier(generated_text)
-                if isinstance(ext, dict):
-                    ext_violations = ext.get("violations") or []
-                    if ext_violations:
-                        violations.extend(ext_violations)
-                        result["violations"] = violations
-                        result["passed"] = False
-                    result["external_classifier"] = ext
-            except (TypeError, ValueError, RuntimeError, AttributeError):
-                logger.debug("External Art.5 classifier error", exc_info=True)
-                result["external_classifier_error"] = True
-        return result
-
-    def validate_article_5_input(self, input_text: str) -> Dict[str, Any]:
-        """Validate user input / prompt against Article 5 prohibited practices.
-
-        P1-1: Checks inputs — not only LLM-generated outputs — to detect
-        prompts designed to elicit prohibited practices.
-        """
-        violations = self._check_patterns(input_text)
-        result: Dict[str, Any] = {
-            "passed": len(violations) == 0,
-            "violations": violations,
-            "layer": self.layer_name,
-            "scope": "input",
-        }
-        if self._external_classifier is not None:
-            try:
-                ext = self._external_classifier(input_text)
-                if isinstance(ext, dict):
-                    ext_violations = ext.get("violations") or []
-                    if ext_violations:
-                        violations.extend(ext_violations)
-                        result["violations"] = violations
-                        result["passed"] = False
-                    result["external_classifier"] = ext
-            except (TypeError, ValueError, RuntimeError, AttributeError):
-                logger.debug("External Art.5 input classifier error", exc_info=True)
-                result["external_classifier_error"] = True
-        return result
-
-
-def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
-    """Classify prompt risk based on Annex III high-risk domains.
-
-    Art. 9 Risk Management:
-        This is the iterative pre-check entry point for risk identification.
-
-    P1-6: Default score raised from 0.2 to 0.4 to avoid under-estimation of
-    unknown use-cases (GAP-06).
-
-    GAP-01: Applies the same NFKC / confusable / evasion normalisation used
-    by Art. 5 checks so that obfuscated domain keywords are still detected.
-    GAP-01d enhancement: Spaced-evasion detection now included to match
-    the full ``_normalise_text()`` pipeline (e.g. "h i r i n g" → "hiring").
-    """
-    normalized = unicodedata.normalize("NFKC", prompt or "")
-    normalized = _EVASION_STRIP_RE.sub("", normalized)
-    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
-    # GAP-01d: Collapse spaced-evasion sequences (e.g. "h i r i n g" → "hiring")
-    normalized = _SPACED_EVASION_RE.sub(
-        lambda m: m.group(0).replace(" ", ""), normalized,
-    )
-    normalized = normalized.lower()
-    matched: List[str] = [
-        keyword for keyword in ANNEX_III_RISK_KEYWORDS if keyword in normalized
-    ]
-    if not matched:
-        return {"risk_level": "MEDIUM", "risk_score": 0.4, "matched_categories": []}
-
-    score = max(ANNEX_III_RISK_KEYWORDS[item] for item in matched)
-    risk_level = "HIGH" if score >= 0.85 else "MEDIUM"
-    return {
-        "risk_level": risk_level,
-        "risk_score": round(score, 2),
-        "matched_categories": matched,
-    }
 
 
 def build_tamper_evident_trustlog_package(
@@ -515,220 +104,6 @@ def build_tamper_evident_trustlog_package(
     payload["sha256"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return payload
 
-
-def apply_human_oversight_hook(
-    *,
-    trust_score: float,
-    risk_level: str,
-    response_payload: MutableMapping[str, Any],
-    threshold: float = 0.8,
-    config: EUComplianceConfig | None = None,
-) -> Dict[str, Any]:
-    """Apply human-in-the-loop pause logic.
-
-    Art. 14 Human Oversight:
-        Force pause when confidence is low or decision context is high-risk.
-
-    P1-3: Queue entry, webhook notification, SLA timeout management.
-    P1-6: Fail-close — when human review is required the decision is blocked
-    until a human approves.  Subsequent automatic processes cannot override.
-    """
-    cfg = config or EUComplianceConfig()
-    should_pause = float(trust_score) < threshold or (risk_level or "").upper() == "HIGH"
-    if should_pause:
-        response_payload["status"] = "PENDING_HUMAN_REVIEW"
-        response_payload["paused_by"] = "Art.14_human_oversight_hook"
-
-        # P1-3: Enqueue for human review with SLA metadata
-        entry = HumanReviewQueue.enqueue(
-            decision_payload=dict(response_payload),
-            reason=f"trust_score={trust_score:.2f}, risk_level={risk_level}",
-        )
-        response_payload["human_review_entry_id"] = entry["entry_id"]
-        response_payload["human_review_sla_deadline"] = entry["sla_deadline"]
-
-        # P1-6: Fail-close — mark decision as blocked to prevent auto-override
-        if cfg.fail_close:
-            response_payload["decision_blocked"] = True
-            response_payload["fail_close"] = True
-            response_payload["decision_status"] = "hold"
-
-    return dict(response_payload)
-
-
-# ---------------------------------------------------------------------------
-# P1-3: Human Review Queue (Art. 14 workflow implementation)
-# ---------------------------------------------------------------------------
-class HumanReviewQueue:
-    """Thread-safe in-process human-review queue.
-
-    Art. 14 Human Oversight — P1-3:
-    Provides queue storage, SLA deadline tracking, webhook notification hooks,
-    and override prevention.
-
-    In production deployments this should be backed by an external message
-    broker (Redis / SQS / etc.).  The interface is designed so that a swap
-    requires only a new backend adapter — no caller changes.
-    """
-
-    _lock = threading.Lock()
-    _queue: List[Dict[str, Any]] = []
-    _webhook_url: str | None = os.environ.get("VERITAS_HUMAN_REVIEW_WEBHOOK_URL")
-    _sla_seconds: int = int(
-        os.environ.get("VERITAS_HUMAN_REVIEW_SLA_SECONDS", str(DEFAULT_HUMAN_REVIEW_SLA_SECONDS))
-    )
-
-    @classmethod
-    def enqueue(
-        cls,
-        *,
-        decision_payload: Dict[str, Any],
-        reason: str = "",
-    ) -> Dict[str, Any]:
-        """Add a decision to the human-review queue.
-
-        Returns the queue entry (contains entry_id, sla_deadline, etc.).
-        """
-        entry_id = hashlib.sha256(
-            json.dumps(decision_payload, sort_keys=True, default=str).encode()
-        ).hexdigest()[:16]
-
-        entry: Dict[str, Any] = {
-            "entry_id": entry_id,
-            "enqueued_at": datetime.now(timezone.utc).isoformat(),
-            "sla_deadline": datetime.fromtimestamp(
-                time.time() + cls._sla_seconds, tz=timezone.utc
-            ).isoformat(),
-            "sla_seconds": cls._sla_seconds,
-            "status": "pending",
-            "reason": reason,
-            "payload_summary": {
-                "request_id": decision_payload.get("request_id", ""),
-                "risk_level": decision_payload.get("eu_risk_assessment", {}).get("risk_level", ""),
-            },
-            "reviewer": None,
-            "reviewed_at": None,
-            "decision": None,
-        }
-
-        with cls._lock:
-            cls._queue.append(entry)
-
-        # Fire webhook notification (best-effort)
-        cls._notify_webhook(entry)
-
-        logger.info(
-            "Human-review entry queued: entry_id=%s sla=%ss reason=%s",
-            entry_id,
-            cls._sla_seconds,
-            reason,
-        )
-        return entry
-
-    @classmethod
-    def review(
-        cls,
-        entry_id: str,
-        *,
-        approved: bool,
-        reviewer: str,
-        comment: str = "",
-    ) -> Dict[str, Any] | None:
-        """Record a human review decision.  Returns the updated entry or None."""
-        with cls._lock:
-            for entry in cls._queue:
-                if entry["entry_id"] == entry_id and entry["status"] == "pending":
-                    entry["status"] = "approved" if approved else "rejected"
-                    entry["reviewer"] = reviewer
-                    entry["reviewed_at"] = datetime.now(timezone.utc).isoformat()
-                    entry["decision"] = "approved" if approved else "rejected"
-                    entry["comment"] = comment
-                    return dict(entry)
-        return None
-
-    @classmethod
-    def pending_entries(cls) -> List[Dict[str, Any]]:
-        """Return a snapshot of all pending review entries."""
-        with cls._lock:
-            return [dict(e) for e in cls._queue if e["status"] == "pending"]
-
-    @classmethod
-    def get_entry(cls, entry_id: str) -> Dict[str, Any] | None:
-        """Look up a single queue entry by ID."""
-        with cls._lock:
-            for entry in cls._queue:
-                if entry["entry_id"] == entry_id:
-                    return dict(entry)
-        return None
-
-    @classmethod
-    def _notify_webhook(cls, entry: Dict[str, Any]) -> None:
-        """Best-effort webhook notification for new review entries."""
-        url = cls._webhook_url
-        if not url:
-            return
-        # Validate URL scheme to prevent SSRF
-        if not url.startswith(("https://", "http://")):
-            logger.warning("Webhook URL has unsupported scheme, skipping: %s", url[:30])
-            return
-        try:
-            import urllib.request
-            data = json.dumps(
-                {"event": "human_review_required", "entry": entry},
-                default=str,
-            ).encode()
-            req = urllib.request.Request(
-                url,
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            urllib.request.urlopen(req, timeout=5)  # nosec B310
-        except Exception:
-            logger.warning("Webhook notification failed for entry %s", entry.get("entry_id"), exc_info=True)
-
-    @classmethod
-    def check_expired_entries(cls) -> List[Dict[str, Any]]:
-        """Identify and mark pending entries that have exceeded SLA deadline.
-
-        Art. 14 Human Oversight — GAP-14:
-        Entries that exceed their SLA deadline are marked ``expired`` so that
-        downstream systems can escalate or block the decision.
-
-        Returns:
-            List of newly-expired entries.
-        """
-        now = datetime.now(timezone.utc)
-        expired: List[Dict[str, Any]] = []
-        with cls._lock:
-            for entry in cls._queue:
-                if entry["status"] != "pending":
-                    continue
-                deadline_str = entry.get("sla_deadline", "")
-                if not deadline_str:
-                    continue
-                try:
-                    deadline = datetime.fromisoformat(deadline_str)
-                except (TypeError, ValueError):
-                    continue
-                if now >= deadline:
-                    entry["status"] = "expired"
-                    entry["expired_at"] = now.isoformat()
-                    expired.append(dict(entry))
-        for e in expired:
-            logger.warning(
-                "Human-review entry expired (SLA breached): entry_id=%s deadline=%s",
-                e.get("entry_id"),
-                e.get("sla_deadline"),
-            )
-            cls._notify_webhook({**e, "event_type": "sla_expired"})
-        return expired
-
-    @classmethod
-    def clear_for_testing(cls) -> None:
-        """Clear the queue (test helper only)."""
-        with cls._lock:
-            cls._queue.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -1092,6 +467,23 @@ AI_REGULATION_NOTICE = (
 # ---------------------------------------------------------------------------
 # GAP-04: Art. 50(2) — Machine-readable AI content watermark
 # ---------------------------------------------------------------------------
+def _get_watermark_signing_key() -> bytes:
+    """Return the HMAC signing key for AI content watermarks.
+
+    Uses the ``VERITAS_WATERMARK_KEY`` environment variable when available.
+    Falls back to a deterministic but deployment-unique key derived from the
+    ``VERITAS_ENCRYPTION_KEY`` or a hard-coded default (development only).
+    """
+    key = os.environ.get("VERITAS_WATERMARK_KEY") or os.environ.get("VERITAS_ENCRYPTION_KEY")
+    if key:
+        return key.encode("utf-8")
+    logger.warning(
+        "No VERITAS_WATERMARK_KEY or VERITAS_ENCRYPTION_KEY set — "
+        "using development-only fallback key for AI content watermark."
+    )
+    return b"veritas-os-dev-watermark-key"
+
+
 def build_ai_content_watermark(
     *,
     decision_id: str,
@@ -1105,6 +497,11 @@ def build_ai_content_watermark(
     This follows the C2PA (Coalition for Content Provenance and Authenticity)
     manifest structure.
 
+    P6 hardening: Uses HMAC-SHA256 instead of a plain SHA-256 digest so that
+    the watermark can be cryptographically verified by parties that hold the
+    signing key.  A bare hash is not a signature — it cannot prove
+    authenticity because anyone can recompute it.
+
     Args:
         decision_id: Unique identifier of the decision that produced the content.
         model: Name of the AI model used for generation.
@@ -1113,11 +510,14 @@ def build_ai_content_watermark(
     Returns:
         Dict containing C2PA-compatible watermark metadata.
     """
+    import hmac
+
     ts = datetime.now(timezone.utc).isoformat()
     payload = f"{producer}:{decision_id}:{ts}".encode()
-    signature = hashlib.sha256(payload).hexdigest()
+    key = _get_watermark_signing_key()
+    signature = hmac.new(key, payload, hashlib.sha256).hexdigest()
     return {
-        "version": "1.0",
+        "version": "1.1",
         "standard": "C2PA-compatible",
         "ai_generated": True,
         "producer": producer,
@@ -1128,6 +528,7 @@ def build_ai_content_watermark(
         "content_credentials": {
             "type": "ai_generated_content",
             "assertion": "c2pa.ai_generated",
+            "signature_algorithm": "HMAC-SHA256",
             "signature": signature,
         },
     }
@@ -1383,14 +784,10 @@ class ThirdPartyNotificationService:
     @classmethod
     def _notify_webhook(cls, notification: Dict[str, Any]) -> None:
         """Best-effort webhook notification for third-party alerts."""
-        url = cls._webhook_url
+        from veritas_os.core.eu_ai_act_oversight import _validate_webhook_url
+
+        url = _validate_webhook_url(cls._webhook_url or "")
         if not url:
-            return
-        if not url.startswith(("https://", "http://")):
-            logger.warning(
-                "Third-party notification webhook URL has unsupported scheme, skipping: %s",
-                url[:30],
-            )
             return
         try:
             import urllib.request
@@ -1418,123 +815,6 @@ class ThirdPartyNotificationService:
         """Clear notifications (test helper only)."""
         with cls._lock:
             cls._notifications.clear()
-
-
-# ---------------------------------------------------------------------------
-# Art. 14(4): System halt / emergency stop controller
-# ---------------------------------------------------------------------------
-class SystemHaltController:
-    """Thread-safe emergency stop mechanism for human operators.
-
-    Art. 14(4) requires that natural persons assigned to human oversight
-    can *interrupt, suspend, or halt* the AI system when necessary.
-
-    This controller provides a global halted flag that the compliance
-    pipeline checks before executing any decision.  When halted, all
-    new ``/v1/decide`` requests are refused with an explicit status.
-
-    In production, integrate with your orchestration layer so that
-    halt/resume actions are audit-logged and permission-gated.
-    """
-
-    _lock = threading.Lock()
-    _halted: bool = False
-    _halted_by: str | None = None
-    _halted_at: str | None = None
-    _halt_reason: str | None = None
-    _history: List[Dict[str, Any]] = []
-
-    @classmethod
-    def halt(cls, *, reason: str, operator: str) -> Dict[str, Any]:
-        """Halt the AI decision system.
-
-        Args:
-            reason: Human-readable explanation for the halt.
-            operator: Identifier of the person initiating the halt.
-
-        Returns:
-            Dict with halt confirmation details.
-        """
-        now = datetime.now(timezone.utc).isoformat()
-        with cls._lock:
-            cls._halted = True
-            cls._halted_by = operator
-            cls._halted_at = now
-            cls._halt_reason = reason
-            cls._history.append({
-                "action": "halt",
-                "operator": operator,
-                "reason": reason,
-                "timestamp": now,
-            })
-        logger.warning(
-            "System HALTED by %s: %s", operator, reason,
-        )
-        return {
-            "halted": True,
-            "halted_by": operator,
-            "halted_at": now,
-            "reason": reason,
-        }
-
-    @classmethod
-    def resume(cls, *, operator: str, comment: str = "") -> Dict[str, Any]:
-        """Resume the AI decision system after a halt.
-
-        Args:
-            operator: Identifier of the person resuming the system.
-            comment: Optional comment explaining the resumption.
-
-        Returns:
-            Dict with resume confirmation details.
-        """
-        now = datetime.now(timezone.utc).isoformat()
-        with cls._lock:
-            was_halted = cls._halted
-            cls._halted = False
-            cls._halted_by = None
-            cls._halted_at = None
-            cls._halt_reason = None
-            cls._history.append({
-                "action": "resume",
-                "operator": operator,
-                "comment": comment,
-                "timestamp": now,
-            })
-        logger.info("System RESUMED by %s: %s", operator, comment)
-        return {
-            "resumed": True,
-            "was_halted": was_halted,
-            "resumed_by": operator,
-            "resumed_at": now,
-        }
-
-    @classmethod
-    def is_halted(cls) -> bool:
-        """Return ``True`` if the system is currently halted."""
-        with cls._lock:
-            return cls._halted
-
-    @classmethod
-    def status(cls) -> Dict[str, Any]:
-        """Return the current halt status for dashboards and health checks."""
-        with cls._lock:
-            return {
-                "halted": cls._halted,
-                "halted_by": cls._halted_by,
-                "halted_at": cls._halted_at,
-                "reason": cls._halt_reason,
-            }
-
-    @classmethod
-    def clear_for_testing(cls) -> None:
-        """Reset state (test helper only)."""
-        with cls._lock:
-            cls._halted = False
-            cls._halted_by = None
-            cls._halted_at = None
-            cls._halt_reason = None
-            cls._history.clear()
 
 
 # ---------------------------------------------------------------------------

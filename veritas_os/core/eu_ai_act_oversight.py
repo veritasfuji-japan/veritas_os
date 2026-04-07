@@ -12,6 +12,7 @@ Covers:
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import logging
 import os
@@ -19,8 +20,44 @@ import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, MutableMapping
+from urllib.parse import urlparse
 
-from veritas_os.core.eu_ai_act_compliance_module import EUComplianceConfig
+from veritas_os.core.eu_ai_act_config import EUComplianceConfig
+
+
+def _validate_webhook_url(url: str) -> str | None:
+    """Validate a webhook URL against SSRF risks.
+
+    Returns the URL if safe, or ``None`` if the URL should be rejected.
+
+    P4 hardening:
+    - Only HTTPS is allowed (HTTP rejected to prevent cleartext leakage and
+      to reduce SSRF attack surface against internal services).
+    - Loopback, link-local, and private IP ranges are blocked to prevent
+      requests to cloud metadata endpoints (169.254.x.x) and internal
+      infrastructure.
+    """
+    if not url:
+        return None
+    if not url.startswith("https://"):
+        logger.warning("Webhook URL rejected: only HTTPS is allowed (got %s)", url[:30])
+        return None
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname or ""
+        # Block obvious internal hostnames
+        if hostname in ("localhost", ""):
+            logger.warning("Webhook URL rejected: localhost not allowed")
+            return None
+        # Resolve to IP and check for internal ranges
+        addr = ipaddress.ip_address(hostname)
+        if addr.is_loopback or addr.is_private or addr.is_link_local or addr.is_reserved:
+            logger.warning("Webhook URL rejected: internal/reserved IP %s", addr)
+            return None
+    except ValueError:
+        # hostname is not a bare IP — allow DNS names (will resolve at request time)
+        pass
+    return url
 
 logger = logging.getLogger(__name__)
 
@@ -136,12 +173,8 @@ class HumanReviewQueue:
     @classmethod
     def _notify_webhook(cls, entry: Dict[str, Any]) -> None:
         """Best-effort webhook notification for new review entries."""
-        url = cls._webhook_url
+        url = _validate_webhook_url(cls._webhook_url or "")
         if not url:
-            return
-        # Validate URL scheme to prevent SSRF
-        if not url.startswith(("https://", "http://")):
-            logger.warning("Webhook URL has unsupported scheme, skipping: %s", url[:30])
             return
         try:
             import urllib.request
