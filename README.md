@@ -45,7 +45,7 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 | **Overall** | **84 / 100** |
 | **Verdict** | **A- (production-grade governance infrastructure with comprehensive safety foundations)** |
 
-> Re-evaluated by independent full-code technical due diligence review (2026-04-04). Previous review: `docs/reviews/technical_dd_review_ja_20260315.md`
+> Re-evaluated by independent full-code technical due diligence review (2026-04-04). Previous review: `docs/ja/reviews/technical_dd_review_ja_20260315.md`
 
 ---
 
@@ -59,7 +59,10 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security Policy**: [`SECURITY.md`](SECURITY.md)
 - **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
-- **Operations Runbook**: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`
+- **Documentation Hub (EN)**: `docs/en/README.md`
+- **Documentation Hub (JA)**: `docs/ja/README.md`
+- **Documentation Map**: `docs/DOCUMENTATION_MAP.md`
+- **Operations Runbook**: `docs/ja/operations/enterprise_slo_sli_runbook_ja.md`
 
 ## 🚀 Quick Start (TL;DR)
 

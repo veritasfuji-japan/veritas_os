@@ -147,7 +147,7 @@ The OS decides **both** the multi-step plan and the immediate next action.
 ```text
 veritas_os/
 ├── chainlit_app.py
-├── chainlit.md
+├── docs/en/notes/docs/en/notes/chainlit.md
 ├── data/
 │   └── value_stats.json
 ├── docs/
@@ -171,7 +171,7 @@ veritas_os/
 │   ├── tools/
 │   ├── templates/
 │   ├── scripts/
-│   ├── README.md
+│   ├── README_JP.md
 │   ├── README_ENGLISH.md       # (optional) extra English docs
 │   └── requirements.txt
 ├── reports/

@@ -216,7 +216,7 @@ Phase boundaries are gated by:
 
 - `docs/architecture/core_responsibility_boundaries.md` — Module boundaries
 - `docs/self_healing_loop.md` — Existing retry/continuation pattern (step-scoped)
-- `docs/replay_audit.md` — Replay and divergence detection infrastructure
+- `docs/ja/audits/replay_audit_ja.md` — Replay and divergence detection infrastructure
 - `docs/architecture/continuation_runtime_glossary.md` — Term definitions
 - `docs/architecture/continuation_runtime_rollout.md` — Phased rollout plan
 - `spec/continuation_runtime_overview.md` — Conceptual overview

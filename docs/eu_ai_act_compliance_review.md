@@ -210,7 +210,7 @@ def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
 #### 準拠評価: ⚠️ 部分準拠
 
 **良い点:**
-- `README.md`（14,767行）・`README_JP.md`（16,399行）の充実した技術文書
+- `readme_ja.md`（14,767行）・`README_JP.md`（16,399行）の充実した技術文書
 - `docs/notes/`配下の各種レポート（TRUSTLOG_VERIFICATION, CODE_REVIEW_PRINCIPLESなど）
 - SBOMによる依存関係文書化（`security/sbom/`）
 - `docs/eu_ai_act/technical_documentation.md` — 附属書IV準拠の技術文書テンプレート（✅ P2-1対応済）

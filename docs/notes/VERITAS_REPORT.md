@@ -483,7 +483,7 @@ new_weights = auto_adjust_goals(
 - [ ] memory.py分割（優先度MEDIUM、10時間）
 - [ ] planner.py分割（優先度MEDIUM、6時間）
 - [ ] テストカバレッジ30%達成
-- [ ] README.md拡充
+- [ ] readme_ja.md拡充
 - [ ] 論文v1.1作成（実装詳細追記）
 
 ---
@@ -520,7 +520,7 @@ new_weights = auto_adjust_goals(
    - 効果: 品質保証
 
 4. **ドキュメント拡充**
-   - README.md完全版
+   - readme_ja.md完全版
    - ユーザーガイド
    - API リファレンス
 
