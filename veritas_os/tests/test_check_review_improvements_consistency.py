@@ -27,6 +27,25 @@ def test_main_returns_success_for_current_repository_review(capsys) -> None:
     assert "Review improvements consistency checks passed." in output
 
 
+def test_resolve_review_path_prefers_canonical() -> None:
+    """Checker should prefer canonical docs path when present."""
+    resolved = checker.resolve_review_path()
+    assert resolved == checker.CANONICAL_REVIEW_PATH
+
+
+def test_resolve_review_path_falls_back_to_legacy(monkeypatch, tmp_path) -> None:
+    """Checker should fallback to legacy path when canonical is unavailable."""
+    canonical = tmp_path / "canonical.md"
+    legacy = tmp_path / "legacy.md"
+    legacy.write_text("# legacy", encoding="utf-8")
+    monkeypatch.setattr(checker, "CANONICAL_REVIEW_PATH", canonical)
+    monkeypatch.setattr(checker, "LEGACY_REVIEW_PATH", legacy)
+
+    resolved = checker.resolve_review_path()
+
+    assert resolved == legacy
+
+
 def test_ci_workflow_runs_review_improvements_consistency_check() -> None:
     """CI lint workflow should execute the review backlog consistency checker."""
     workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "main.yml"
