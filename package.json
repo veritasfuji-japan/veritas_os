@@ -8,5 +8,14 @@
     "ui:lint": "pnpm --filter frontend lint",
     "ui:typecheck": "pnpm -r typecheck",
     "ui:test": "pnpm -r test"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch@>=9.0.0 <9.0.7": ">=9.0.7",
+      "flatted@<3.4.2": ">=3.4.2",
+      "picomatch": ">=4.0.4",
+      "lodash-es@<=4.17.23": ">=4.18.0",
+      "brace-expansion@>=2.0.0 <2.0.3": ">=2.0.3"
+    }
   }
 }
