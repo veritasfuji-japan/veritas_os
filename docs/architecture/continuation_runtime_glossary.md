@@ -245,7 +245,7 @@ same snapshot states and receipt contents. Lawful replay requires that:
 - Receipts record sufficient detail to verify the revalidation process.
 
 This aligns with VERITAS's existing replay infrastructure
-(`docs/replay_audit.md`), extending it to cover chain-level continuation
+(`docs/ja/audits/replay_audit_ja.md`), extending it to cover chain-level continuation
 artifacts.
 
 ### Continuity Grounding
