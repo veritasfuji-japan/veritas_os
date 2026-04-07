@@ -275,6 +275,30 @@ FUNDAMENTAL_RIGHTS_ROLE = {
 }
 
 
+def normalise_text(text: str) -> str:
+    """Normalise text to defeat common evasion techniques.
+
+    Shared by ``EUAIActSafetyGateLayer4`` and ``classify_annex_iii_risk``
+    to guarantee a single normalisation pipeline.
+
+    GAP-01 hardening:
+    1. NFKC Unicode normalisation (fullwidth -> ASCII, ligatures, etc.)
+    2. Strip hyphens, soft-hyphens, zero-width characters.
+    3. Translate Unicode confusable / homoglyph characters to ASCII
+       (Cyrillic 'a' -> 'a', Greek 'A' -> 'a', etc.)
+    4. Collapse space-separated single characters that form words
+       (e.g. "m a n i p" -> "manip").
+    5. Lower-case.
+    """
+    normalized = unicodedata.normalize("NFKC", text or "")
+    normalized = _EVASION_STRIP_RE.sub("", normalized)
+    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
+    normalized = _SPACED_EVASION_RE.sub(
+        lambda m: m.group(0).replace(" ", ""), normalized,
+    )
+    return normalized.lower()
+
+
 class EUAIActSafetyGateLayer4(SafetyGate):
     """Layer 4 legal gate extension.
 
@@ -296,29 +320,8 @@ class EUAIActSafetyGateLayer4(SafetyGate):
         super().__init__()
         self._external_classifier = external_classifier
 
-    # ------------------------------------------------------------------
-    # P1-1: core pattern check with normalisation
-    # ------------------------------------------------------------------
-    @staticmethod
-    def _normalise_text(text: str) -> str:
-        """Normalise text to defeat common evasion techniques.
-
-        GAP-01 hardening:
-        1. NFKC Unicode normalisation (fullwidth -> ASCII, ligatures, etc.)
-        2. Strip hyphens, soft-hyphens, zero-width characters.
-        3. Translate Unicode confusable / homoglyph characters to ASCII
-           (Cyrillic 'a' -> 'a', Greek 'A' -> 'a', etc.)
-        4. Collapse space-separated single characters that form words
-           (e.g. "m a n i p" -> "manip").
-        5. Lower-case.
-        """
-        normalized = unicodedata.normalize("NFKC", text or "")
-        normalized = _EVASION_STRIP_RE.sub("", normalized)
-        normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
-        normalized = _SPACED_EVASION_RE.sub(
-            lambda m: m.group(0).replace(" ", ""), normalized,
-        )
-        return normalized.lower()
+    # Backward-compatible static alias for the module-level function.
+    _normalise_text = staticmethod(normalise_text)
 
     def _check_patterns(self, text: str) -> List[str]:
         """Return matched prohibited patterns after normalisation.
@@ -399,19 +402,11 @@ def classify_annex_iii_risk(prompt: str) -> Dict[str, Any]:
     P1-6: Default score raised from 0.2 to 0.4 to avoid under-estimation of
     unknown use-cases (GAP-06).
 
-    GAP-01: Applies the same NFKC / confusable / evasion normalisation used
-    by Art. 5 checks so that obfuscated domain keywords are still detected.
-    GAP-01d enhancement: Spaced-evasion detection now included to match
-    the full ``_normalise_text()`` pipeline (e.g. "h i r i n g" -> "hiring").
+    GAP-01: Applies the shared ``normalise_text()`` pipeline (NFKC,
+    confusable homoglyphs, evasion-strip, spaced-char collapse) so that
+    obfuscated domain keywords are still detected.
     """
-    normalized = unicodedata.normalize("NFKC", prompt or "")
-    normalized = _EVASION_STRIP_RE.sub("", normalized)
-    normalized = normalized.translate(_CONFUSABLE_ASCII_MAP)
-    # GAP-01d: Collapse spaced-evasion sequences (e.g. "h i r i n g" -> "hiring")
-    normalized = _SPACED_EVASION_RE.sub(
-        lambda m: m.group(0).replace(" ", ""), normalized,
-    )
-    normalized = normalized.lower()
+    normalized = normalise_text(prompt)
     matched: List[str] = [
         keyword for keyword in ANNEX_III_RISK_KEYWORDS if keyword in normalized
     ]
