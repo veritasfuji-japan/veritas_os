@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 from dataclasses import asdict, dataclass
 from datetime import date
 import functools
@@ -24,8 +25,12 @@ OUTCOME_PRECEDENCE = {
 
 _REGEX_MAX_PATTERN_LENGTH = 256
 _REGEX_MAX_TARGET_LENGTH = 1024
+_REGEX_SEARCH_TIMEOUT = 1.0  # seconds
 _REGEX_NESTED_QUANTIFIER_GUARD = re.compile(
     r"\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*]"
+)
+_regex_pool = concurrent.futures.ThreadPoolExecutor(
+    max_workers=2, thread_name_prefix="regex-guard"
 )
 
 
@@ -138,7 +143,18 @@ def _safe_regex_search(expected: Any, actual: Any) -> bool:
     except re.error as exc:
         logger.warning("regex compilation failed for pattern %.50r: %s", expected, exc)
         return False
-    return compiled.search(actual) is not None
+
+    try:
+        future = _regex_pool.submit(compiled.search, actual)
+        result = future.result(timeout=_REGEX_SEARCH_TIMEOUT)
+        return result is not None
+    except concurrent.futures.TimeoutError:
+        logger.warning(
+            "regex search timed out (%.1fs) for pattern %.50r",
+            _REGEX_SEARCH_TIMEOUT,
+            expected,
+        )
+        return False
 
 
 @functools.lru_cache(maxsize=256)

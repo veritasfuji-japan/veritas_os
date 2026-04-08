@@ -140,6 +140,9 @@ class MemoryStore:
             except (OSError, TimeoutError) as e:
                 logger.error("[MemoryOS] load error: %s", e)
                 data = []
+            except Exception as e:
+                logger.error("[MemoryOS] normalize error: %s", e)
+                data = []
 
         # キャッシュ更新
         with self._cache_lock:

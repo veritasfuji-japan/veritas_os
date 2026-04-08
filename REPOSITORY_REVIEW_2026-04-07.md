@@ -12,9 +12,9 @@
 |----------|-------|-------|
 | Critical | 3 | 2 (+1 false positive) |
 | High     | 12 | 5 |
-| Medium   | 16 | 1 |
+| Medium   | 16 | 3 |
 | Low      | 12 | 0 |
-| **Total** | **43** | **8 (+1 FP)** |
+| **Total** | **43** | **10 (+3 FP)** |
 
 最も緊急性の高い問題は、~~未認証の SSE イベントストリーム~~、**暗号化テストの例外マスキング**✅、**CI テスト失敗の見落とし**✅です。
 
@@ -42,10 +42,10 @@
 - **Issue:** ユーザー入力が `strip()` のみで `/v1/decide` API に直接転送される。Null バイト、制御文字、長さ制限のチェックなし。
 - **Fix:** ✅ `MAX_QUERY_LENGTH = 10_000` チェック、制御文字除去 (`re.sub`) を追加。
 
-### [MEDIUM] S-5: Regex DoS Protection Incomplete
+### ~~[MEDIUM] S-5: Regex DoS Protection Incomplete~~ **FIXED**
 - **File:** `veritas_os/policy/evaluator.py:111-141`
 - **Issue:** パターン長 256 文字制限とネストされた量指定子のガードがあるが、`(a+)+b` のような短いパターンでの壊滅的バックトラッキングに対応できない。正規表現実行にタイムアウトなし。
-- **Fix:** `regex` ライブラリのタイムアウトサポートを使用するか、`signal.alarm` を追加。
+- **Fix:** ✅ `concurrent.futures.ThreadPoolExecutor` で regex 実行に 1 秒タイムアウトを追加。
 
 ### [MEDIUM] S-6: Policy Scope Missing Context Defaults to "allow"
 - **File:** `veritas_os/policy/evaluator.py:150-167, 296`
@@ -76,10 +76,10 @@
 - **Issue:** `_append_success_count` / `_append_failure_count` がグローバル変数 + `threading.Lock` で管理されている。リファクタリング時に `global` 宣言が欠落するとレースコンディションが発生する。
 - **Fix:** クラスベースのアプローチまたは `threading.Lock` 付きの専用カウンタクラスに変更。
 
-### [MEDIUM] P-3: Incomplete Exception Handling in Memory Store
+### ~~[MEDIUM] P-3: Incomplete Exception Handling in Memory Store~~ **FIXED**
 - **File:** `veritas_os/core/memory/memory_store.py:132-142`
 - **Issue:** `_load_all()` が `json.JSONDecodeError` と `OSError` を捕捉するが、`_normalize()` の例外は未処理でそのまま伝播する。
-- **Fix:** `_normalize()` 呼び出しを含むスコープに例外ハンドラを拡張。
+- **Fix:** ✅ `except Exception` ハンドラを追加し、`_normalize()` の予期しない例外をログ記録して空リストで安全に復帰。
 
 ### [MEDIUM] P-4: Complex While-True Loop in Trust Log Recovery
 - **File:** `veritas_os/logging/trust_log.py:234-254, 285-302`
@@ -212,9 +212,9 @@
 
 ### Medium-term (1 month)
 9. **S-3:** OpenAPI セキュリティ定義の網羅
-10. **S-5:** 正規表現 DoS 保護強化
+10. ~~**S-5:** 正規表現 DoS 保護強化~~ → ✅ **DONE**
 11. ~~**F-3:** エラーハンドリング改善~~ → ✅ **DONE**
-12. **T-7:** Dockerfile レイヤー順序最適化
+12. ~~**T-7:** Dockerfile レイヤー順序最適化~~ → **FALSE POSITIVE** (既に正しい順序)
 
 ---
 
@@ -235,6 +235,8 @@
 | T-4 | HIGH | `publish-ghcr.yml` | Docker build に GHA キャッシュ設定追加 |
 | S-4 | HIGH | `chainlit_app.py` | 入力長制限 (10,000字) と制御文字除去を追加 |
 | S-8 | MEDIUM | `chainlit_app.py` | エラーログからクエリ本文を除外 (PII 保護) |
+| S-5 | MEDIUM | `veritas_os/policy/evaluator.py` | `concurrent.futures.ThreadPoolExecutor` による regex 実行タイムアウト (1秒) 追加 |
+| P-3 | MEDIUM | `veritas_os/core/memory/memory_store.py` | `_normalize()` の例外が未処理で伝播する問題を修正。`except Exception` で捕捉しログ記録 |
 
 ### Skipped (対応不要と判断)
 
@@ -244,5 +246,7 @@
 | F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
 | P-2, P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
 | F-4, F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
-| T-5〜T-11 | CI/CD の追加改善。優先度低 |
-| S-2, S-3, S-5〜S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
+| T-5〜T-10 | CI/CD の追加改善。優先度低 |
+| T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
+| T-7 | **False positive**: Dockerfile のレイヤー順序は既に正しい (`apt-get upgrade` はアプリコードコピーの前) |
+| S-2, S-3, S-6, S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
