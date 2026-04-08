@@ -162,10 +162,10 @@
 - **Issue:** Docker build-push-action にキャッシュ設定なし。毎ビルドで全レイヤーを再構築。
 - **Fix:** ✅ `cache-from: type=gha` / `cache-to: type=gha,mode=max` を追加。
 
-### [HIGH] T-5: requirements.txt / pyproject.toml Sync Not Validated
+### ~~[HIGH] T-5: requirements.txt / pyproject.toml Sync Not Validated~~ **FIXED (2026-04-08)**
 - **File:** `veritas_os/requirements.txt`, `pyproject.toml`
 - **Issue:** `requirements.txt` が `pyproject.toml[full]` と同期されていることを保証する自動チェックがない。バージョンドリフトのリスク。
-- **Fix:** CI に `pip-compile` ベースの同期チェックステップを追加。
+- **Fix:** ✅ `scripts/quality/check_requirements_sync.py` を追加し、`pyproject.toml` (`dependencies` + `optional-dependencies.full`) と `veritas_os/requirements.txt` の依存名ドリフトを CI / Makefile で自動検知。
 
 ### ~~[MEDIUM] T-6: Frontend Security Check Without Error Handling~~ **FIXED**
 - **File:** `.github/workflows/main.yml:287-293`
@@ -209,7 +209,7 @@
 5. ~~**S-4:** Chainlit 入力バリデーション追加~~ → ✅ **DONE**
 6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → **対応不要** (abort controller で十分)
 7. ~~**T-4:** Docker ビルドキャッシュ設定~~ → ✅ **DONE**
-8. ~~**T-5:** requirements.txt 同期チェック~~ → **対応不要** (CI/CD 追加改善、優先度低)
+8. ~~**T-5:** requirements.txt 同期チェック~~ → ✅ **DONE**
 
 ### Medium-term (1 month)
 9. ~~**S-3:** OpenAPI セキュリティ定義の網羅~~ → ✅ **DONE**
@@ -238,6 +238,7 @@
 | F-3 | HIGH | `useGovernanceState.ts` | catch ブロックに `console.error()` 追加 |
 | T-4 | HIGH | `publish-ghcr.yml` | Docker build に GHA キャッシュ設定追加 |
 | S-4 | HIGH | `chainlit_app.py` | 入力長制限 (10,000字) と制御文字除去を追加 |
+| T-5 | HIGH | `.github/workflows/main.yml`, `Makefile`, `scripts/quality/check_requirements_sync.py` | requirements と pyproject の依存名同期チェックを CI / ローカル品質ゲートへ追加 |
 | S-8 | MEDIUM | `chainlit_app.py` | エラーログからクエリ本文を除外 (PII 保護) |
 | S-5 | MEDIUM | `veritas_os/policy/evaluator.py` | `concurrent.futures.ThreadPoolExecutor` による regex 実行タイムアウト (1秒) 追加 |
 | P-3 | MEDIUM | `veritas_os/core/memory/memory_store.py` | `_normalize()` の例外が未処理で伝播する問題を修正。`except Exception` で捕捉しログ記録 |

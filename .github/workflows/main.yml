@@ -58,6 +58,9 @@ jobs:
       - name: Review improvements consistency check
         run: python scripts/quality/check_review_improvements_consistency.py
 
+      - name: requirements.txt sync check
+        run: python scripts/quality/check_requirements_sync.py
+
       - name: Memory directory allowlist check
         env:
           VERITAS_ENV: "production"
