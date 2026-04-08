@@ -96,6 +96,7 @@ veritas_os = [
 ]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 filterwarnings = [
   "ignore:invalid escape sequence.*:SyntaxWarning:sentence_transformers\\..*",
 ]
