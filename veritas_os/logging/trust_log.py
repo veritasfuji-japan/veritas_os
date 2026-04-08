@@ -87,8 +87,9 @@ _trust_log_lock = threading.RLock()
 trust_log_lock = _trust_log_lock  # 公開 API（server.py 等から参照用）
 
 # Counters for operational observability
-_append_success_count: int = 0
-_append_failure_count: int = 0
+# NOTE: dict を使用することで global 宣言なしに値を更新可能。
+# global 宣言忘れによるカウンタ更新漏れ（サイレント失敗）を防止する。
+_append_stats: dict[str, int] = {"success": 0, "failure": 0}
 _append_stats_lock = threading.Lock()
 
 
@@ -100,8 +101,8 @@ def get_trust_log_stats() -> dict:
     """
     with _append_stats_lock:
         return {
-            "append_success": _append_success_count,
-            "append_failure": _append_failure_count,
+            "append_success": _append_stats["success"],
+            "append_failure": _append_stats["failure"],
         }
 
 
@@ -463,18 +464,16 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
                 )
 
             with _append_stats_lock:
-                global _append_success_count
-                _append_success_count += 1
+                _append_stats["success"] += 1
 
             return entry
 
     except (OSError, TypeError, ValueError, json.JSONDecodeError, EncryptionKeyMissing):
         with _append_stats_lock:
-            global _append_failure_count
-            _append_failure_count += 1
+            _append_stats["failure"] += 1
         logger.error(
             "append_trust_log failed (failure #%d); hash chain integrity may be affected",
-            _append_failure_count,
+            _append_stats["failure"],
             exc_info=True,
         )
         raise

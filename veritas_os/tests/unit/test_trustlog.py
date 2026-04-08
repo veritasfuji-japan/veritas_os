@@ -383,7 +383,7 @@ def test_append_trust_log_max_items_rotation(temp_log_env, monkeypatch):
 
 
 def test_append_trust_log_increments_failure_count_on_oserror(temp_log_env, monkeypatch):
-    monkeypatch.setattr(trust_log, "_append_failure_count", 0, raising=False)
+    monkeypatch.setattr(trust_log, "_append_stats", {"success": 0, "failure": 0}, raising=False)
 
     def _raise_oserror(*_args, **_kwargs):
         raise OSError("disk-full")
@@ -398,7 +398,7 @@ def test_append_trust_log_increments_failure_count_on_oserror(temp_log_env, monk
 
 
 def test_append_trust_log_does_not_swallow_unexpected_runtime_error(temp_log_env, monkeypatch):
-    monkeypatch.setattr(trust_log, "_append_failure_count", 0, raising=False)
+    monkeypatch.setattr(trust_log, "_append_stats", {"success": 0, "failure": 0}, raising=False)
 
     def _raise_runtime_error(*_args, **_kwargs):
         raise RuntimeError("unexpected")
