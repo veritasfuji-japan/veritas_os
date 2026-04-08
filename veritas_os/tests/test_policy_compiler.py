@@ -183,16 +183,28 @@ def test_runtime_adapter_rejects_tampered_manifest_signature(tmp_path: Path) -> 
         load_runtime_bundle(result.bundle_dir)
 
 
-def test_compile_wraps_io_error_as_policy_compilation_error(tmp_path: Path) -> None:
-    """OSError during bundle writing surfaces as PolicyCompilationError."""
-    read_only_dir = tmp_path / "readonly"
-    read_only_dir.mkdir()
-    read_only_dir.chmod(0o444)
+def test_compile_wraps_io_error_as_policy_compilation_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """OSError during bundle writing surfaces as PolicyCompilationError.
+
+    NOTE:
+        Permission-based failure tests can be flaky across environments
+        (e.g., root containers). Use monkeypatch to deterministically trigger
+        an OSError in the write path.
+    """
+    from veritas_os.policy import compiler as policy_compiler
+
+    def _raise_oserror(*_args, **_kwargs):
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(policy_compiler, "write_stable_json", _raise_oserror)
 
     with pytest.raises(PolicyCompilationError, match="failed to write bundle artifacts"):
         compile_policy_to_bundle(
             EXAMPLES_DIR / "low_risk_route_allow.yaml",
-            read_only_dir,
+            tmp_path,
             compiled_at="2026-04-02T00:00:00Z",
         )
 
