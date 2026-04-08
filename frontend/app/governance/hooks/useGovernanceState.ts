@@ -90,7 +90,8 @@ export function useGovernanceState() {
       setDraft(structuredClone(normalized));
       appendHistory("load", `version ${normalized.version} loaded`);
       appendLog(`policy version ${normalized.version} loaded`, "policy");
-    } catch {
+    } catch (err) {
+      console.error("fetchPolicy failed:", err);
       setError(t("ネットワークエラー: バックエンドへ接続できません。", "Network error: cannot connect to backend."));
     } finally {
       setLoading(false);
@@ -150,7 +151,8 @@ export function useGovernanceState() {
             appendHistory("apply", `version ${nextPolicy.version} applied`);
             appendLog(`applied version ${nextPolicy.version}`, "policy");
             setSuccess(t("ポリシーを適用しました。", "Policy applied successfully."));
-          } catch {
+          } catch (err) {
+            console.error("applyPolicy failed:", err);
             setError(t("適用処理に失敗しました。通信・権限・整合性を確認してください。", "Apply failed. Check connectivity, permissions, and consistency."));
           } finally {
             setSaving(false);

@@ -82,7 +82,7 @@ class TestFailClosedEncryption:
             _get_key_bytes,
         )
 
-        with pytest.raises((EncryptionKeyMissing, RuntimeError, Exception)):
+        with pytest.raises(EncryptionKeyMissing):
             _get_key_bytes()
 
     def test_wrong_length_key_raises(self, monkeypatch):
@@ -100,7 +100,7 @@ class TestFailClosedEncryption:
             _get_key_bytes,
         )
 
-        with pytest.raises((EncryptionKeyMissing, RuntimeError, Exception)):
+        with pytest.raises(EncryptionKeyMissing):
             _get_key_bytes()
 
 
@@ -150,12 +150,12 @@ class TestEncryptDecryptRoundTrip:
 
         from veritas_os.logging.encryption import decrypt
 
-        # Decryption with wrong key should fail or produce garbage
+        # Decryption with wrong key must fail or produce different output
         try:
             result = decrypt(ciphertext)
-            # If it doesn't raise, result should be different from original
-            assert result != "secret"
-        except Exception:
+            # If it doesn't raise, result MUST differ from original plaintext
+            assert result != "secret", "Decryption with wrong key must not produce original plaintext"
+        except (ValueError, RuntimeError):
             pass  # Expected — wrong key should fail
 
     def test_encrypt_empty_string(self, monkeypatch):

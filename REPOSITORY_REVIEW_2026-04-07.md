@@ -8,24 +8,24 @@
 
 ## Executive Summary
 
-| Severity | Count |
-|----------|-------|
-| Critical | 3 |
-| High     | 12 |
-| Medium   | 16 |
-| Low      | 12 |
-| **Total** | **43** |
+| Severity | Count | Fixed |
+|----------|-------|-------|
+| Critical | 3 | 2 (+1 false positive) |
+| High     | 12 | 5 |
+| Medium   | 16 | 1 |
+| Low      | 12 | 0 |
+| **Total** | **43** | **8 (+1 FP)** |
 
-最も緊急性の高い問題は、**未認証の SSE イベントストリーム**、**暗号化テストの例外マスキング**、**CI テスト失敗の見落とし**です。
+最も緊急性の高い問題は、~~未認証の SSE イベントストリーム~~、**暗号化テストの例外マスキング**✅、**CI テスト失敗の見落とし**✅です。
 
 ---
 
 ## 1. Security (セキュリティ)
 
-### [CRITICAL] S-1: Unauthenticated SSE Event Stream
+### ~~[CRITICAL] S-1: Unauthenticated SSE Event Stream~~ **FALSE POSITIVE**
 - **File:** `veritas_os/api/routes_system.py:495-520`
-- **Issue:** `/v1/events` エンドポイントに認証がない。ガバナンス更新、Trust Log 追記、コンプライアンスアラートなどの機密イベントが未認証クライアントに公開される。WebSocket の `/v1/ws/trustlog` は認証済みだが、REST SSE は未保護。
-- **Fix:** `@events_router.get("/v1/events", dependencies=[Depends(require_api_key_header_or_query)])` を追加。
+- **Issue:** `/v1/events` エンドポイントに認証がない。
+- **Resolution:** `server.py:844` でルーターレベルで `dependencies=[Depends(require_api_key_header_or_query)]` が既に適用済み。エンドポイント単体では認証定義がないが、`app.include_router(_events_router, ...)` で保護されている。**対応不要。**
 
 ### [HIGH] S-2: Governance RBAC Can Be Disabled Without Safe Defaults
 - **File:** `veritas_os/api/routes_governance.py:36-59`
@@ -37,10 +37,10 @@
 - **Issue:** `/v1/compliance/config`、`/v1/system/halt`、`/v1/events` など複数のセンシティブなエンドポイントで OpenAPI 上のセキュリティ要件が未定義。自動生成クライアントが保護なしでアクセスする可能性あり。
 - **Fix:** 全保護エンドポイントに `security: [ApiKeyAuth: []]` を追加。
 
-### [HIGH] S-4: Chainlit App Missing Input Validation
+### ~~[HIGH] S-4: Chainlit App Missing Input Validation~~ **FIXED**
 - **File:** `chainlit_app.py:68, 365`
 - **Issue:** ユーザー入力が `strip()` のみで `/v1/decide` API に直接転送される。Null バイト、制御文字、長さ制限のチェックなし。
-- **Fix:** `MAX_QUERY_LENGTH` チェック、制御文字バリデーションを追加。
+- **Fix:** ✅ `MAX_QUERY_LENGTH = 10_000` チェック、制御文字除去 (`re.sub`) を追加。
 
 ### [MEDIUM] S-5: Regex DoS Protection Incomplete
 - **File:** `veritas_os/policy/evaluator.py:111-141`
@@ -57,19 +57,19 @@
 - **Issue:** `required_evidence: []` のポリシーはエビデンスチェックを完全にバイパスする。
 - **Fix:** 高リスクルートにはグローバル最小エビデンス要件を設定。
 
-### [MEDIUM] S-8: Chainlit Error Logs Expose Query Content
+### ~~[MEDIUM] S-8: Chainlit Error Logs Expose Query Content~~ **FIXED**
 - **File:** `chainlit_app.py:379`
 - **Issue:** `logger.error("VERITAS API call failed for query=%r: %r", query, e)` でクエリ内容がログに記録される。PII 漏洩リスク。
-- **Fix:** ログにはリクエスト ID のみ記録し、クエリ本文は除外。
+- **Fix:** ✅ ログにはエラー内容とクエリ長のみ記録し、クエリ本文を除外。
 
 ---
 
 ## 2. Python Core (コアロジック)
 
-### [HIGH] P-1: Silent JSON Extraction Failure
+### ~~[HIGH] P-1: Silent JSON Extraction Failure~~ **FIXED**
 - **File:** `veritas_os/core/utils.py:291-298`
 - **Issue:** `_extract_json_object()` が `ValueError` / `json.JSONDecodeError` を捕捉し、空文字列を返すが、エラーをログに記録しない。本番環境でのデバッグが困難。
-- **Fix:** `except` ブロック内に `logger.debug()` を追加。
+- **Fix:** ✅ `except` ブロック内に `logger.debug("_extract_json_object failed: %s", exc)` を追加。
 
 ### [HIGH] P-2: Global State Counters with Fragile Lock Pattern
 - **File:** `veritas_os/logging/trust_log.py:90-92, 466-474`
@@ -105,10 +105,10 @@
 - **Issue:** React state に `Set` オブジェクトを使用。`Set` は参照等価性の問題があり、Strict Mode での再レンダリングが不安定になる可能性あり。
 - **Fix:** `Record<string, true>` またはイミュータブルなデータ構造に変更。
 
-### [HIGH] F-3: Swallowed Error Details in useGovernanceState
+### ~~[HIGH] F-3: Swallowed Error Details in useGovernanceState~~ **FIXED**
 - **File:** `frontend/app/governance/hooks/useGovernanceState.ts:93-94, 153-154`
 - **Issue:** `catch` ブロックでエラー詳細が破棄される。ユーザーにはジェネリックメッセージが表示されるが、実際のエラーがログに記録されない。
-- **Fix:** `console.error(err)` を追加してからユーザー向けメッセージを設定。
+- **Fix:** ✅ `console.error("fetchPolicy failed:", err)` / `console.error("applyPolicy failed:", err)` を追加。
 
 ### [MEDIUM] F-4: Missing Null Checks in FujiRulesEditor
 - **File:** `frontend/app/governance/components/FujiRulesEditor.tsx:22-24`
@@ -142,25 +142,25 @@
 
 ## 4. Tests & CI/CD (テスト・CI/CD)
 
-### [CRITICAL] T-1: CI Test Failures Can Be Silently Ignored
+### ~~[CRITICAL] T-1: CI Test Failures Can Be Silently Ignored~~ **FIXED**
 - **File:** `.github/workflows/main.yml:189-227`
 - **Issue:** pytest ステップが `continue-on-error: true` を使用。後続の条件チェックで失敗を検出するが、このチェックが削除されるとテスト失敗が見落とされる。
-- **Fix:** `continue-on-error: true` を削除し、テスト失敗で直接ジョブを失敗させる。
+- **Fix:** ✅ `continue-on-error: true` を削除し、冗長な "Fail job if tests failed" ステップも除去。artifact upload は `if: always()` で継続保証。
 
-### [CRITICAL] T-2: Encryption Test Masks Crypto Bugs
+### ~~[CRITICAL] T-2: Encryption Test Masks Crypto Bugs~~ **FIXED**
 - **File:** `veritas_os/tests/test_production_encryption.py:154-159`
 - **Issue:** `test_different_keys_cannot_decrypt` が `except Exception: pass` を使用。復号が成功しても（暗号バグ）テストが通過する。
-- **Fix:** `with pytest.raises(Exception):` に変更するか、結果が元テキストと異なることを明示的にアサート。
+- **Fix:** ✅ `except` を `(ValueError, RuntimeError)` に限定し、`AssertionError` が伝播するよう変更。アサーションメッセージも追加。
 
-### [HIGH] T-3: Overly Broad Exception Catching in Encryption Tests
+### ~~[HIGH] T-3: Overly Broad Exception Catching in Encryption Tests~~ **FIXED**
 - **File:** `veritas_os/tests/test_production_encryption.py:85-86, 103-104`
 - **Issue:** `(EncryptionKeyMissing, RuntimeError, Exception)` を捕捉。`AttributeError` などの予期しない例外も通過する。
-- **Fix:** 期待する例外型のみに限定: `pytest.raises(EncryptionKeyMissing)`。
+- **Fix:** ✅ `pytest.raises(EncryptionKeyMissing)` に限定。
 
-### [HIGH] T-4: Missing Docker Build Cache
+### ~~[HIGH] T-4: Missing Docker Build Cache~~ **FIXED**
 - **File:** `.github/workflows/publish-ghcr.yml:38-47`
 - **Issue:** Docker build-push-action にキャッシュ設定なし。毎ビルドで全レイヤーを再構築。
-- **Fix:** `cache-from: type=gha` / `cache-to: type=gha,mode=max` を追加。
+- **Fix:** ✅ `cache-from: type=gha` / `cache-to: type=gha,mode=max` を追加。
 
 ### [HIGH] T-5: requirements.txt / pyproject.toml Sync Not Validated
 - **File:** `veritas_os/requirements.txt`, `pyproject.toml`
@@ -199,23 +199,50 @@
 ## Priority Action Items (優先対応事項)
 
 ### Immediate (今すぐ)
-1. **S-1:** `/v1/events` に認証を追加
-2. **T-1:** CI の `continue-on-error: true` を削除
-3. **T-2:** 暗号化テストの例外処理を修正
+1. ~~**S-1:** `/v1/events` に認証を追加~~ → **FALSE POSITIVE** (router レベルで認証済み)
+2. ~~**T-1:** CI の `continue-on-error: true` を削除~~ → ✅ **DONE**
+3. ~~**T-2:** 暗号化テストの例外処理を修正~~ → ✅ **DONE**
 
 ### Short-term (1-2 weeks)
 4. **S-2:** RBAC 無効化時の fail-closed 動作に変更
-5. **S-4:** Chainlit 入力バリデーション追加
-6. **F-1:** SSE ストリームの `mounted` チェック強化
-7. **T-4:** Docker ビルドキャッシュ設定
+5. ~~**S-4:** Chainlit 入力バリデーション追加~~ → ✅ **DONE**
+6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → **対応不要** (abort controller で十分)
+7. ~~**T-4:** Docker ビルドキャッシュ設定~~ → ✅ **DONE**
 8. **T-5:** requirements.txt 同期チェック
 
 ### Medium-term (1 month)
 9. **S-3:** OpenAPI セキュリティ定義の網羅
 10. **S-5:** 正規表現 DoS 保護強化
-11. **F-3:** エラーハンドリング改善
+11. ~~**F-3:** エラーハンドリング改善~~ → ✅ **DONE**
 12. **T-7:** Dockerfile レイヤー順序最適化
 
 ---
 
 *This review was conducted on the full repository at commit `d7a57ee`.*
+
+---
+
+## Fixes Applied (2026-04-08)
+
+| ID | Severity | File | Summary |
+|----|----------|------|---------|
+| S-1 | CRITICAL | — | **False positive**: `server.py:844` で router レベル認証済み |
+| T-1 | CRITICAL | `.github/workflows/main.yml` | `continue-on-error: true` 削除、冗長なfailステップ除去 |
+| T-2 | CRITICAL | `tests/test_production_encryption.py` | `except Exception: pass` → `except (ValueError, RuntimeError)` に限定 |
+| T-3 | HIGH | `tests/test_production_encryption.py` | `pytest.raises(Exception)` → `pytest.raises(EncryptionKeyMissing)` |
+| P-1 | HIGH | `veritas_os/core/utils.py` | `_extract_json_object` に `logger.debug()` 追加 |
+| F-3 | HIGH | `useGovernanceState.ts` | catch ブロックに `console.error()` 追加 |
+| T-4 | HIGH | `publish-ghcr.yml` | Docker build に GHA キャッシュ設定追加 |
+| S-4 | HIGH | `chainlit_app.py` | 入力長制限 (10,000字) と制御文字除去を追加 |
+| S-8 | MEDIUM | `chainlit_app.py` | エラーログからクエリ本文を除外 (PII 保護) |
+
+### Skipped (対応不要と判断)
+
+| ID | Reason |
+|----|--------|
+| F-1 | `controller.abort()` がアンマウント時の中断を処理済み。内部バッファパースは同期処理で race condition なし |
+| F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
+| P-2, P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
+| F-4, F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
+| T-5〜T-11 | CI/CD の追加改善。優先度低 |
+| S-2, S-3, S-5〜S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
