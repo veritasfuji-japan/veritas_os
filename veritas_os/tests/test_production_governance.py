@@ -31,6 +31,7 @@ def gov_client(tmp_path, monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     # Disable governance RBAC for production-like testing
     monkeypatch.setenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "0")
+    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS", "1")
     # Disable 4-eyes approval for isolated testing
     monkeypatch.setenv("VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES", "0")
     import veritas_os.api.governance as gov_mod

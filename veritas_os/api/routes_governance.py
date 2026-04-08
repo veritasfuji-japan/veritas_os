@@ -46,15 +46,31 @@ def _resolve_governance_allowed_roles() -> set[str]:
     return roles or {"admin", "compliance_owner"}
 
 
+def _governance_rbac_bypass_acknowledged() -> bool:
+    """Return True only when the operator explicitly acknowledged RBAC bypass."""
+    return (os.getenv("VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS", "").strip().lower()
+            in {"1", "true", "yes"})
+
+
 def require_governance_access(
     x_role: Optional[str] = Header(default=None, alias="X-Role"),
     x_tenant_id: Optional[str] = Header(default=None, alias="X-Tenant-Id"),
 ) -> bool:
     """Enforce governance RBAC/ABAC constraints for admin endpoints."""
     if not _governance_rbac_enabled():
+        if not _governance_rbac_bypass_acknowledged():
+            logger.error(
+                "SECURITY: governance RBAC disabled without explicit bypass "
+                "(set VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1 to acknowledge)"
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="Governance RBAC is disabled but bypass is not explicitly acknowledged. "
+                       "Set VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1 to allow.",
+            )
         logger.warning(
             "SECURITY WARNING: governance RBAC/ABAC is disabled by "
-            "VERITAS_GOVERNANCE_ENFORCE_RBAC=0"
+            "VERITAS_GOVERNANCE_ENFORCE_RBAC=0 (bypass acknowledged)"
         )
         return True
 
