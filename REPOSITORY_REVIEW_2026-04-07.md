@@ -170,7 +170,7 @@
 ### ~~[MEDIUM] T-6: Frontend Security Check Without Error Handling~~ **FIXED**
 - **File:** `.github/workflows/main.yml:287-293`
 - **Issue:** `NEXT_PUBLIC_*KEY` ガードが `rg` コマンドに依存するが、ripgrep のインストール確認なし。
-- **Fix:** ✅ `command -v rg` による存在チェックを追加。ripgrep 未インストール時は明確なエラーメッセージで失敗。
+- **Fix:** ✅ `rg` が利用可能なら使用し、なければ `grep -rn` にフォールバック。
 
 ### [MEDIUM] T-7: Docker Layer Cache Invalidation Order
 - **File:** `Dockerfile:8-54`
@@ -244,7 +244,7 @@
 | S-2 | HIGH | `veritas_os/api/routes_governance.py` | RBAC 無効時に `VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1` が未設定なら HTTP 403 を返す fail-closed 動作を追加 |
 | S-3 | HIGH | `openapi.yaml` | グローバル `security: [ApiKeyAuth: []]` を追加。全エンドポイントに認証要件を明示 |
 | F-4 | MEDIUM | `FujiRulesEditor.tsx` | `draft.fuji_rules?.[key] ?? false` で null 安全なプロパティアクセスに変更 |
-| T-6 | MEDIUM | `.github/workflows/main.yml` | `command -v rg` による ripgrep 存在チェックを追加 |
+| T-6 | MEDIUM | `.github/workflows/main.yml` | `rg` 未インストール時に `grep -rn` へフォールバック |
 | T-9 | LOW | `scripts/take_frontend_snapshot.sh` | `/tmp` → `${TMPDIR:-/tmp}` に変更しポータビリティ向上 |
 | S-6 | MEDIUM | — | **False positive**: `_scope_matches()` は欠損フィールドで `False` を返す fail-closed 実装済み |
 | S-7 | MEDIUM | — | **False positive**: `required_evidence: []` は設計通り「エビデンス不要」として動作 |
