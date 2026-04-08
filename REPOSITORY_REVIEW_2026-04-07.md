@@ -86,10 +86,10 @@
 - **Issue:** ファイル後方シーク用の `while True` ループが複雑で、保守性が低い。ロジック自体は正しいが、意図が不明確。
 - **Fix:** ループをヘルパーメソッドに抽出し、各分岐にコメント追加。
 
-### [LOW] P-5: Magic Number for Recursion Depth
+### ~~[LOW] P-5: Magic Number for Recursion Depth~~ **FIXED (2026-04-08)**
 - **File:** `veritas_os/core/utils.py:350`
 - **Issue:** `redact_payload()` の最大再帰深度 `50` がハードコードされている。
-- **Fix:** `MAX_REDACTION_DEPTH = 50` 定数に抽出。
+- **Fix:** ✅ `MAX_REDACTION_DEPTH = 50` を追加し、`redact_payload()` の深度判定で参照するよう変更。
 
 ---
 

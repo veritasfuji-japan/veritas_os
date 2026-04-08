@@ -346,9 +346,12 @@ def _redact_text(text: str) -> str:
     return text
 
 
+MAX_REDACTION_DEPTH = 50
+
+
 def redact_payload(value: Any, *, _depth: int = 0) -> Any:
     """文字列中の PII を再帰的にマスクする（最大再帰深度: 50）"""
-    if _depth > 50:
+    if _depth > MAX_REDACTION_DEPTH:
         return value
     if isinstance(value, str):
         return _redact_text(value)
