@@ -285,7 +285,13 @@ jobs:
       - name: Guard against NEXT_PUBLIC_*KEY exposure
         run: |
           set -euo pipefail
-          if rg -n "NEXT_PUBLIC_[A-Z0-9_]*KEY" frontend --glob '!**/*.md'; then
+          if command -v rg &>/dev/null; then
+            FOUND=$(rg -n "NEXT_PUBLIC_[A-Z0-9_]*KEY" frontend --glob '!**/*.md' || true)
+          else
+            FOUND=$(grep -rn "NEXT_PUBLIC_[A-Z0-9_]*KEY" frontend --include='*.ts' --include='*.tsx' --include='*.js' --include='*.jsx' || true)
+          fi
+          if [ -n "$FOUND" ]; then
+            echo "$FOUND"
             echo "Detected forbidden NEXT_PUBLIC_*KEY usage in frontend source." >&2
             exit 1
           fi

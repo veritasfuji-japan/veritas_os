@@ -19,7 +19,7 @@ echo "[SECURITY WARNING] 信頼できるネットワーク/ミラーでのみ実
 echo "[INFO] Next.js 開発サーバーを起動します: $URL"
 (
   cd "$ROOT_DIR"
-  pnpm --filter frontend dev >/tmp/frontend-dev.log 2>&1
+  pnpm --filter frontend dev >"${TMPDIR:-/tmp}/frontend-dev.log" 2>&1
 ) &
 DEV_PID=$!
 
@@ -40,7 +40,7 @@ for _ in $(seq 1 60); do
 done
 
 if ! curl -fsS "$URL" >/dev/null 2>&1; then
-  echo "[ERROR] 開発サーバーに接続できません。/tmp/frontend-dev.log を確認してください。" >&2
+  echo "[ERROR] 開発サーバーに接続できません。${TMPDIR:-/tmp}/frontend-dev.log を確認してください。" >&2
   exit 1
 fi
 
