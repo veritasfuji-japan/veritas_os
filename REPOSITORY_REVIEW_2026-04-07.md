@@ -11,10 +11,10 @@
 | Severity | Count | Fixed |
 |----------|-------|-------|
 | Critical | 3 | 2 (+1 false positive) |
-| High     | 12 | 7 |
+| High     | 12 | 8 |
 | Medium   | 16 | 5 |
 | Low      | 12 | 1 |
-| **Total** | **43** | **15 (+5 FP)** |
+| **Total** | **43** | **16 (+5 FP)** |
 
 最も緊急性の高い問題は、~~未認証の SSE イベントストリーム~~、**暗号化テストの例外マスキング**✅、**CI テスト失敗の見落とし**✅です。
 
@@ -71,10 +71,10 @@
 - **Issue:** `_extract_json_object()` が `ValueError` / `json.JSONDecodeError` を捕捉し、空文字列を返すが、エラーをログに記録しない。本番環境でのデバッグが困難。
 - **Fix:** ✅ `except` ブロック内に `logger.debug("_extract_json_object failed: %s", exc)` を追加。
 
-### [HIGH] P-2: Global State Counters with Fragile Lock Pattern
+### ~~[HIGH] P-2: Global State Counters with Fragile Lock Pattern~~ **FIXED**
 - **File:** `veritas_os/logging/trust_log.py:90-92, 466-474`
 - **Issue:** `_append_success_count` / `_append_failure_count` がグローバル変数 + `threading.Lock` で管理されている。リファクタリング時に `global` 宣言が欠落するとレースコンディションが発生する。
-- **Fix:** クラスベースのアプローチまたは `threading.Lock` 付きの専用カウンタクラスに変更。
+- **Fix:** ✅ `_append_stats: dict[str, int]` に統合。dict の値更新は `global` 宣言不要のため、宣言忘れによるサイレント失敗を防止。
 
 ### ~~[MEDIUM] P-3: Incomplete Exception Handling in Memory Store~~ **FIXED**
 - **File:** `veritas_os/core/memory/memory_store.py:132-142`
@@ -246,6 +246,7 @@
 | F-4 | MEDIUM | `FujiRulesEditor.tsx` | `draft.fuji_rules?.[key] ?? false` で null 安全なプロパティアクセスに変更 |
 | T-6 | MEDIUM | `.github/workflows/main.yml` | `rg` 未インストール時に `grep -rn` へフォールバック |
 | T-9 | LOW | `scripts/take_frontend_snapshot.sh` | `/tmp` → `${TMPDIR:-/tmp}` に変更しポータビリティ向上 |
+| P-2 | HIGH | `veritas_os/logging/trust_log.py` | グローバルカウンタを `_append_stats` dict に統合。`global` 宣言不要化でサイレント失敗を防止 |
 | S-6 | MEDIUM | — | **False positive**: `_scope_matches()` は欠損フィールドで `False` を返す fail-closed 実装済み |
 | S-7 | MEDIUM | — | **False positive**: `required_evidence: []` は設計通り「エビデンス不要」として動作 |
 
@@ -255,7 +256,7 @@
 |----|--------|
 | F-1 | `controller.abort()` がアンマウント時の中断を処理済み。内部バッファパースは同期処理で race condition なし |
 | F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
-| P-2, P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
+| P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
 | F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
 | T-5, T-7(FP), T-8, T-10 | CI/CD の追加改善。優先度低 |
 | T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
