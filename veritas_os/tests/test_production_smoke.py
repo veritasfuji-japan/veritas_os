@@ -36,6 +36,7 @@ def api_client(monkeypatch):
     monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
     # Disable governance RBAC for smoke testing
     monkeypatch.setenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "0")
+    monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS", "1")
     from veritas_os.api.server import app
 
     return TestClient(app, raise_server_exceptions=False)

@@ -11,10 +11,10 @@
 | Severity | Count | Fixed |
 |----------|-------|-------|
 | Critical | 3 | 2 (+1 false positive) |
-| High     | 12 | 5 |
+| High     | 12 | 7 |
 | Medium   | 16 | 3 |
 | Low      | 12 | 0 |
-| **Total** | **43** | **10 (+3 FP)** |
+| **Total** | **43** | **12 (+3 FP)** |
 
 最も緊急性の高い問題は、~~未認証の SSE イベントストリーム~~、**暗号化テストの例外マスキング**✅、**CI テスト失敗の見落とし**✅です。
 
@@ -27,15 +27,15 @@
 - **Issue:** `/v1/events` エンドポイントに認証がない。
 - **Resolution:** `server.py:844` でルーターレベルで `dependencies=[Depends(require_api_key_header_or_query)]` が既に適用済み。エンドポイント単体では認証定義がないが、`app.include_router(_events_router, ...)` で保護されている。**対応不要。**
 
-### [HIGH] S-2: Governance RBAC Can Be Disabled Without Safe Defaults
+### ~~[HIGH] S-2: Governance RBAC Can Be Disabled Without Safe Defaults~~ **FIXED**
 - **File:** `veritas_os/api/routes_governance.py:36-59`
 - **Issue:** `VERITAS_GOVERNANCE_ENFORCE_RBAC=0` で RBAC を無効化すると、全ガバナンスエンドポイントが無制限にアクセス可能になる。警告ログのみで、ブロックしない。
-- **Fix:** Fail-closed アプローチ: RBAC 無効時はエラーを返すか、エンドポイント単位の明示的オプトインを要求。
+- **Fix:** ✅ Fail-closed: RBAC 無効時は `VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1` が明示的に設定されていなければ HTTP 403 を返すよう変更。
 
-### [HIGH] S-3: Missing Security Definitions in OpenAPI Schema
+### ~~[HIGH] S-3: Missing Security Definitions in OpenAPI Schema~~ **FIXED**
 - **File:** `openapi.yaml` (multiple endpoints)
 - **Issue:** `/v1/compliance/config`、`/v1/system/halt`、`/v1/events` など複数のセンシティブなエンドポイントで OpenAPI 上のセキュリティ要件が未定義。自動生成クライアントが保護なしでアクセスする可能性あり。
-- **Fix:** 全保護エンドポイントに `security: [ApiKeyAuth: []]` を追加。
+- **Fix:** ✅ グローバル `security: [ApiKeyAuth: []]` を追加。`/health` は `security: []` で認証不要を維持。
 
 ### ~~[HIGH] S-4: Chainlit App Missing Input Validation~~ **FIXED**
 - **File:** `chainlit_app.py:68, 365`
@@ -204,14 +204,14 @@
 3. ~~**T-2:** 暗号化テストの例外処理を修正~~ → ✅ **DONE**
 
 ### Short-term (1-2 weeks)
-4. **S-2:** RBAC 無効化時の fail-closed 動作に変更
+4. ~~**S-2:** RBAC 無効化時の fail-closed 動作に変更~~ → ✅ **DONE**
 5. ~~**S-4:** Chainlit 入力バリデーション追加~~ → ✅ **DONE**
 6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → **対応不要** (abort controller で十分)
 7. ~~**T-4:** Docker ビルドキャッシュ設定~~ → ✅ **DONE**
 8. **T-5:** requirements.txt 同期チェック
 
 ### Medium-term (1 month)
-9. **S-3:** OpenAPI セキュリティ定義の網羅
+9. ~~**S-3:** OpenAPI セキュリティ定義の網羅~~ → ✅ **DONE**
 10. ~~**S-5:** 正規表現 DoS 保護強化~~ → ✅ **DONE**
 11. ~~**F-3:** エラーハンドリング改善~~ → ✅ **DONE**
 12. ~~**T-7:** Dockerfile レイヤー順序最適化~~ → **FALSE POSITIVE** (既に正しい順序)
@@ -237,6 +237,8 @@
 | S-8 | MEDIUM | `chainlit_app.py` | エラーログからクエリ本文を除外 (PII 保護) |
 | S-5 | MEDIUM | `veritas_os/policy/evaluator.py` | `concurrent.futures.ThreadPoolExecutor` による regex 実行タイムアウト (1秒) 追加 |
 | P-3 | MEDIUM | `veritas_os/core/memory/memory_store.py` | `_normalize()` の例外が未処理で伝播する問題を修正。`except Exception` で捕捉しログ記録 |
+| S-2 | HIGH | `veritas_os/api/routes_governance.py` | RBAC 無効時に `VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1` が未設定なら HTTP 403 を返す fail-closed 動作を追加 |
+| S-3 | HIGH | `openapi.yaml` | グローバル `security: [ApiKeyAuth: []]` を追加。全エンドポイントに認証要件を明示 |
 
 ### Skipped (対応不要と判断)
 
@@ -249,4 +251,4 @@
 | T-5〜T-10 | CI/CD の追加改善。優先度低 |
 | T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
 | T-7 | **False positive**: Dockerfile のレイヤー順序は既に正しい (`apt-get upgrade` はアプリコードコピーの前) |
-| S-2, S-3, S-6, S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
+| S-6, S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
