@@ -294,7 +294,8 @@ def _extract_json_object(raw: str) -> str:
         decoder = json.JSONDecoder()
         obj, end = decoder.raw_decode(raw, start)
         return json.dumps(obj, ensure_ascii=False)
-    except (ValueError, json.JSONDecodeError):
+    except (ValueError, json.JSONDecodeError) as exc:
+        logger.debug("_extract_json_object failed: %s", exc)
         return ""
 
 

@@ -6,6 +6,7 @@
 import logging
 import math
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import chainlit as cl
@@ -362,10 +363,16 @@ async def on_chat_start():
 
 @cl.on_message
 async def on_message(message: cl.Message):
+    MAX_QUERY_LENGTH = 10_000
     query = message.content.strip()
     if not query:
         await cl.Message(content="空のメッセージです。何か聞いてください。").send()
         return
+    if len(query) > MAX_QUERY_LENGTH:
+        await cl.Message(content=f"入力が長すぎます（最大{MAX_QUERY_LENGTH}文字）。短くしてください。").send()
+        return
+    # Strip null bytes and control characters (except newline/tab)
+    query = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", query)
 
     # スピナー表示
     thinking = cl.Message(content="VERITAS が考えています…")
@@ -376,7 +383,7 @@ async def on_message(message: cl.Message):
     except Exception as e:
         # ★ L-3 修正: スタックトレースをユーザーに露出しない
         # ★ 追加修正: エラー詳細をログに記録（運用時のデバッグ用）
-        logger.error("VERITAS API call failed for query=%r: %r", query, e)
+        logger.error("VERITAS API call failed: %r (query length=%d)", e, len(query))
         thinking.content = "VERITAS API 呼び出しでエラーが発生しました。しばらくしてから再度お試しください。"
         await thinking.update()
         return
