@@ -48,7 +48,8 @@ dependencies = [
 [project.optional-dependencies]
 ml = [
   "scikit-learn==1.5.2",
-  "sentence-transformers==3.0.1",
+  "sentence-transformers==5.3.0",
+  "transformers==5.5.0",
 ]
 reports = [
   "matplotlib==3.9.2",
