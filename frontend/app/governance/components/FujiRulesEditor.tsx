@@ -20,7 +20,7 @@ export function FujiRulesEditor({ draft, isViewer, onUpdate }: FujiRulesEditorPr
     <Card title="FUJI rules / thresholds / escalation" titleSize="md" variant="elevated">
       <div className="grid gap-2 md:grid-cols-2">
         {(Object.keys(FUJI_LABELS) as (keyof FujiRules)[]).map((key) => (
-          <ToggleRow key={key} label={FUJI_LABELS[key]} checked={draft.fuji_rules[key]} disabled={isViewer} onChange={(v) => onUpdate((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, [key]: v } }))} />
+          <ToggleRow key={key} label={FUJI_LABELS[key]} checked={draft.fuji_rules?.[key] ?? false} disabled={isViewer} onChange={(v) => onUpdate((prev) => ({ ...prev, fuji_rules: { ...prev.fuji_rules, [key]: v } }))} />
         ))}
       </div>
 

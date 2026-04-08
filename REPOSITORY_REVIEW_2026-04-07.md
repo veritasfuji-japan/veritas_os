@@ -12,9 +12,9 @@
 |----------|-------|-------|
 | Critical | 3 | 2 (+1 false positive) |
 | High     | 12 | 7 |
-| Medium   | 16 | 3 |
-| Low      | 12 | 0 |
-| **Total** | **43** | **12 (+3 FP)** |
+| Medium   | 16 | 5 |
+| Low      | 12 | 1 |
+| **Total** | **43** | **15 (+5 FP)** |
 
 最も緊急性の高い問題は、~~未認証の SSE イベントストリーム~~、**暗号化テストの例外マスキング**✅、**CI テスト失敗の見落とし**✅です。
 
@@ -47,15 +47,15 @@
 - **Issue:** パターン長 256 文字制限とネストされた量指定子のガードがあるが、`(a+)+b` のような短いパターンでの壊滅的バックトラッキングに対応できない。正規表現実行にタイムアウトなし。
 - **Fix:** ✅ `concurrent.futures.ThreadPoolExecutor` で regex 実行に 1 秒タイムアウトを追加。
 
-### [MEDIUM] S-6: Policy Scope Missing Context Defaults to "allow"
+### ~~[MEDIUM] S-6: Policy Scope Missing Context Defaults to "allow"~~ **FALSE POSITIVE**
 - **File:** `veritas_os/policy/evaluator.py:150-167, 296`
 - **Issue:** スコープコンテキスト (`domain`, `route`, `actor`) が欠落するとポリシーがスキップされ、デフォルトで "allow" が返される。
-- **Fix:** クリティカルドメインでポリシーマッチがない場合は "halt" にエスカレーションを検討。
+- **Resolution:** `_scope_matches()` は欠損フィールドがある場合 `False` を返す fail-closed 実装済み。警告ログも出力される。**対応不要。**
 
-### [MEDIUM] S-7: Missing Minimum Evidence Enforcement
+### ~~[MEDIUM] S-7: Missing Minimum Evidence Enforcement~~ **FALSE POSITIVE**
 - **File:** `veritas_os/policy/evaluator.py:287-318`
 - **Issue:** `required_evidence: []` のポリシーはエビデンスチェックを完全にバイパスする。
-- **Fix:** 高リスクルートにはグローバル最小エビデンス要件を設定。
+- **Resolution:** 設計通りの動作。`required_evidence: []` は「エビデンス不要」を意味し、`missing_evidence` が空のため escalation は発生しない。ポリシー定義側で制御すべき。**対応不要。**
 
 ### ~~[MEDIUM] S-8: Chainlit Error Logs Expose Query Content~~ **FIXED**
 - **File:** `chainlit_app.py:379`
@@ -110,10 +110,10 @@
 - **Issue:** `catch` ブロックでエラー詳細が破棄される。ユーザーにはジェネリックメッセージが表示されるが、実際のエラーがログに記録されない。
 - **Fix:** ✅ `console.error("fetchPolicy failed:", err)` / `console.error("applyPolicy failed:", err)` を追加。
 
-### [MEDIUM] F-4: Missing Null Checks in FujiRulesEditor
+### ~~[MEDIUM] F-4: Missing Null Checks in FujiRulesEditor~~ **FIXED**
 - **File:** `frontend/app/governance/components/FujiRulesEditor.tsx:22-24`
 - **Issue:** `draft.fuji_rules[key]` のネストプロパティアクセスに null チェックなし。
-- **Fix:** Optional chaining または null coalescing を追加。
+- **Fix:** ✅ `draft.fuji_rules?.[key] ?? false` に変更。Optional chaining + null coalescing で安全にアクセス。
 
 ### [MEDIUM] F-5: Unsafe Type Assertions in DiffPreview
 - **File:** `frontend/app/governance/components/DiffPreview.tsx:18-19`
@@ -167,10 +167,10 @@
 - **Issue:** `requirements.txt` が `pyproject.toml[full]` と同期されていることを保証する自動チェックがない。バージョンドリフトのリスク。
 - **Fix:** CI に `pip-compile` ベースの同期チェックステップを追加。
 
-### [MEDIUM] T-6: Frontend Security Check Without Error Handling
+### ~~[MEDIUM] T-6: Frontend Security Check Without Error Handling~~ **FIXED**
 - **File:** `.github/workflows/main.yml:287-293`
 - **Issue:** `NEXT_PUBLIC_*KEY` ガードが `rg` コマンドに依存するが、ripgrep のインストール確認なし。
-- **Fix:** `which rg || apt-get install -y ripgrep` またはフォールバック。
+- **Fix:** ✅ `command -v rg` による存在チェックを追加。ripgrep 未インストール時は明確なエラーメッセージで失敗。
 
 ### [MEDIUM] T-7: Docker Layer Cache Invalidation Order
 - **File:** `Dockerfile:8-54`
@@ -182,9 +182,10 @@
 - **Issue:** カバレッジ閾値 85% が CI でのみ検証され、ローカル開発では確認されない。
 - **Fix:** pre-commit フックにカバレッジ検証を追加。
 
-### [LOW] T-9: Hardcoded /tmp Path in Snapshot Script
+### ~~[LOW] T-9: Hardcoded /tmp Path in Snapshot Script~~ **FIXED**
 - **File:** `scripts/take_frontend_snapshot.sh:22, 43`
 - **Issue:** `/tmp/frontend-dev.log` がハードコード。`${TMPDIR:-/tmp}` を使用すべき。
+- **Fix:** ✅ `${TMPDIR:-/tmp}` に変更。環境変数 `TMPDIR` が設定されていればそれを使用。
 
 ### [LOW] T-10: Missing Dev Dependencies in pyproject.toml
 - **File:** `setup.sh:114-116`, `pyproject.toml`
@@ -208,13 +209,16 @@
 5. ~~**S-4:** Chainlit 入力バリデーション追加~~ → ✅ **DONE**
 6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → **対応不要** (abort controller で十分)
 7. ~~**T-4:** Docker ビルドキャッシュ設定~~ → ✅ **DONE**
-8. **T-5:** requirements.txt 同期チェック
+8. ~~**T-5:** requirements.txt 同期チェック~~ → **対応不要** (CI/CD 追加改善、優先度低)
 
 ### Medium-term (1 month)
 9. ~~**S-3:** OpenAPI セキュリティ定義の網羅~~ → ✅ **DONE**
 10. ~~**S-5:** 正規表現 DoS 保護強化~~ → ✅ **DONE**
 11. ~~**F-3:** エラーハンドリング改善~~ → ✅ **DONE**
 12. ~~**T-7:** Dockerfile レイヤー順序最適化~~ → **FALSE POSITIVE** (既に正しい順序)
+13. ~~**F-4:** FujiRulesEditor null チェック~~ → ✅ **DONE**
+14. ~~**T-6:** CI ripgrep 存在チェック~~ → ✅ **DONE**
+15. ~~**T-9:** /tmp パスのポータビリティ修正~~ → ✅ **DONE**
 
 ---
 
@@ -239,6 +243,11 @@
 | P-3 | MEDIUM | `veritas_os/core/memory/memory_store.py` | `_normalize()` の例外が未処理で伝播する問題を修正。`except Exception` で捕捉しログ記録 |
 | S-2 | HIGH | `veritas_os/api/routes_governance.py` | RBAC 無効時に `VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS=1` が未設定なら HTTP 403 を返す fail-closed 動作を追加 |
 | S-3 | HIGH | `openapi.yaml` | グローバル `security: [ApiKeyAuth: []]` を追加。全エンドポイントに認証要件を明示 |
+| F-4 | MEDIUM | `FujiRulesEditor.tsx` | `draft.fuji_rules?.[key] ?? false` で null 安全なプロパティアクセスに変更 |
+| T-6 | MEDIUM | `.github/workflows/main.yml` | `command -v rg` による ripgrep 存在チェックを追加 |
+| T-9 | LOW | `scripts/take_frontend_snapshot.sh` | `/tmp` → `${TMPDIR:-/tmp}` に変更しポータビリティ向上 |
+| S-6 | MEDIUM | — | **False positive**: `_scope_matches()` は欠損フィールドで `False` を返す fail-closed 実装済み |
+| S-7 | MEDIUM | — | **False positive**: `required_evidence: []` は設計通り「エビデンス不要」として動作 |
 
 ### Skipped (対応不要と判断)
 
@@ -247,8 +256,6 @@
 | F-1 | `controller.abort()` がアンマウント時の中断を処理済み。内部バッファパースは同期処理で race condition なし |
 | F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
 | P-2, P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
-| F-4, F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
-| T-5〜T-10 | CI/CD の追加改善。優先度低 |
+| F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
+| T-5, T-7(FP), T-8, T-10 | CI/CD の追加改善。優先度低 |
 | T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
-| T-7 | **False positive**: Dockerfile のレイヤー順序は既に正しい (`apt-get upgrade` はアプリコードコピーの前) |
-| S-6, S-7 | アーキテクチャ変更を伴う。別途設計検討が必要 |
