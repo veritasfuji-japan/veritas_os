@@ -54,6 +54,10 @@ describe("MissionPage", () => {
     expect(screen.getByText("Verification:", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("Governance approval risk")).toBeInTheDocument();
     expect(screen.getByText("Risk → Decision → Evidence → Report")).toBeInTheDocument();
+    expect(screen.getByText("/health security posture (mandatory)")).toBeInTheDocument();
+    expect(screen.getByText("Encryption algorithm:", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Authentication mode:", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Direct FUJI API:", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("degraded:", { exact: false })).toBeInTheDocument();
   });
 });
