@@ -35,6 +35,9 @@ pytest -m production veritas_os/tests/ -v --tb=long
 
 # Run external tests (requires API keys)
 VERITAS_WEBSEARCH_KEY=<key> pytest -m external veritas_os/tests/
+
+# Run staging TLS/load external checks
+VERITAS_STAGING_BASE_URL=https://staging.example.com pytest -m "external and (tls or load)" veritas_os/tests/test_production_tls_load.py -v
 ```
 
 ### CI Execution
@@ -164,12 +167,14 @@ docker compose down
 |------|-----|----------------------|
 | HSTS header present | `/health` response header assertion | Browser HTTPS enforcement posture verified |
 | Baseline security headers | `/health` response header assertion | CSP / anti-clickjacking / MIME hardening verified |
+| Staging TLS header validation (`@external`) | HTTPS `/health` against `VERITAS_STAGING_BASE_URL` | Reverse-proxy TLS hardening verified in staging |
 
 ### 8. Load Burst Validation (`test_production_tls_load.py`)
 
 | What | How | Production Gap Closed |
 |------|-----|----------------------|
 | Concurrent health burst (32 req / 8 workers) | ThreadPool + TestClient | Lightweight load regression signal added |
+| Staging burst p95 check (`@external`) | 32 HTTPS requests + p95 latency assertion | Staging-level performance regression signal added |
 
 ## Architecture: CI Role Separation
 
@@ -203,8 +208,8 @@ docker compose down
 | Full Docker compose E2E | Script-ready, not in CI | `scripts/production_validation.sh` runs locally |
 | Database persistence | N/A (file-based) | TrustLog file tests cover persistence |
 | Multi-node clustering | Not applicable | Single-node architecture |
-| TLS certificate chain/e2e HTTPS handshake | Partially covered | Add staging reverse-proxy cert tests |
-| Load/stress at scale (p95/p99 latency SLO) | Partially covered | Add k6/locust long-run performance tests |
+| TLS certificate chain/e2e HTTPS handshake | Partially covered | `@external` staging HTTPS tests added; expand to cert-chain expiry and OCSP checks |
+| Load/stress at scale (p95/p99 latency SLO) | Partially covered | Staging p95 smoke added; add k6/locust long-run and p99 SLO validation |
 | Kubernetes deployment | Not covered | Add Helm chart tests when K8s support added |
 
 ## What This Validation Adds
