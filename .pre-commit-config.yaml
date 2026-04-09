@@ -32,3 +32,12 @@ repos:
           - --python-version=3.11
           - --ignore-missing-imports
         files: ^veritas_os/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: coverage-gate
+        name: coverage-gate (pytest-cov >= 85%)
+        entry: make test-cov
+        language: system
+        pass_filenames: false
+        files: ^(veritas_os/|tests/|pyproject\.toml|Makefile|\.github/workflows/main\.yml)
