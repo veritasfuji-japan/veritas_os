@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from fastapi.responses import JSONResponse
 
 from veritas_os.api import rate_limiting as rl
 from veritas_os.api import routes_decide as rd
@@ -13,126 +14,159 @@ from veritas_os.core.pipeline import pipeline_execute as pe
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
 
 
-def test_stop_nonce_cleanup_scheduler_cancels_existing_timer() -> None:
-    """Stopping nonce scheduler should cancel active timer and clear state."""
+def test_schedule_nonce_cleanup_logs_and_stops_when_timer_cleared(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Nonce scheduler should survive cleanup failures and avoid rescheduling when stopped."""
+
+    def _boom() -> None:
+        raise RuntimeError("cleanup failed")
+
+    monkeypatch.setattr(rl, "_cleanup_nonces", _boom)
+    monkeypatch.setattr(rl, "_nonce_cleanup_timer", object())
 
     class _DummyTimer:
-        def __init__(self) -> None:
-            self.cancelled = False
+        daemon = False
 
-        def cancel(self) -> None:
-            self.cancelled = True
+        def start(self) -> None:
+            raise AssertionError("timer should not start when scheduler was stopped")
 
-    timer = _DummyTimer()
-    old_timer = rl._nonce_cleanup_timer
-    try:
-        rl._nonce_cleanup_timer = timer  # type: ignore[assignment]
-        rl._stop_nonce_cleanup_scheduler()
-    finally:
-        rl._nonce_cleanup_timer = old_timer
+    monkeypatch.setattr(rl.threading, "Timer", lambda _i, _cb: _DummyTimer())
 
-    assert timer.cancelled is True
+    with rl._nonce_cleanup_timer_lock:
+        rl._nonce_cleanup_timer = None
+    with caplog.at_level("WARNING"):
+        rl._schedule_nonce_cleanup()
+
+    assert "nonce cleanup failed" in caplog.text
 
 
-def test_stop_rate_cleanup_scheduler_cancels_existing_timer() -> None:
-    """Stopping rate scheduler should cancel active timer and clear state."""
+def test_enforce_rate_limit_rejects_exceeded_requests(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rate limiting should return HTTP 429 when auth store reports quota exceeded."""
+    reasons: list[str] = []
+    monkeypatch.setattr(rl, "_auth_store_increment_rate_limit", lambda **_kwargs: True)
+    monkeypatch.setattr(rl, "_record_auth_reject_reason", reasons.append)
 
-    class _DummyTimer:
-        def __init__(self) -> None:
-            self.cancelled = False
+    with pytest.raises(Exception) as exc_info:  # fastapi.HTTPException
+        rl.enforce_rate_limit(" api-key ")
 
-        def cancel(self) -> None:
-            self.cancelled = True
+    err = exc_info.value
+    assert getattr(err, "status_code", None) == 429
+    assert reasons == ["rate_limit_exceeded"]
 
-    timer = _DummyTimer()
-    old_timer = rl._rate_cleanup_timer
-    try:
-        rl._rate_cleanup_timer = timer  # type: ignore[assignment]
-        rl._stop_rate_cleanup_scheduler()
-    finally:
-        rl._rate_cleanup_timer = old_timer
 
-    assert timer.cancelled is True
+def test_call_fuji_falls_back_to_positional_validate_action() -> None:
+    """_call_fuji should retry validate_action with positional args after TypeError."""
+
+    class _FujiCore:
+        @staticmethod
+        def validate_action(*args: Any, **kwargs: Any) -> dict[str, str]:
+            if kwargs:
+                raise TypeError("keyword args unsupported")
+            return {"status": "allow", "action": args[0], "context": str(args[1])}
+
+    result = rd._call_fuji(_FujiCore(), "approve", {"risk": "low"})
+
+    assert result["status"] == "allow"
+    assert result["action"] == "approve"
 
 
 @pytest.mark.anyio
-async def test_replay_endpoint_success_maps_result_fields(
+async def test_replay_decision_endpoint_defaults_mock_true_on_query_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Replay endpoint should serialize result object fields into response payload."""
+    """Replay endpoint should fail-safe to mock_external_apis=True on query parsing errors."""
 
-    class _ReplayResult:
-        decision_id = "d-777"
-        replay_path = "/tmp/replay.json"
-        match = True
-        diff_summary = "no diff"
-        replay_time_ms = 12.0
-        schema_version = "1.0"
-        severity = "low"
-        divergence_level = "none"
-        audit_summary = {"ok": True}
+    class _DummyPipeline:
+        async def replay_decision(self, *, decision_id: str, mock_external_apis: bool) -> dict[str, Any]:
+            return {"decision_id": decision_id, "mock_external_apis": mock_external_apis}
 
     class _DummyServer:
         @staticmethod
-        async def verify_signature(*_args: Any, **_kwargs: Any) -> None:
-            return None
+        def get_decision_pipeline() -> _DummyPipeline:
+            return _DummyPipeline()
 
+    class _BrokenQuery:
         @staticmethod
-        async def run_replay(*_args: Any, **_kwargs: Any) -> _ReplayResult:
-            return _ReplayResult()
+        def get(_key: str) -> str:
+            raise RuntimeError("query unavailable")
 
     class _DummyRequest:
-        headers: dict[str, str] = {}
+        query_params = _BrokenQuery()
 
     monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
 
-    out = await rd.replay_endpoint("d-777", _DummyRequest())
+    response = await rd.replay_decision_endpoint("decision-1", _DummyRequest())
 
-    assert out["ok"] is True
-    assert out["decision_id"] == "d-777"
-    assert out["match"] is True
-    assert out["audit_summary"] == {"ok": True}
+    assert response["decision_id"] == "decision-1"
+    assert response["mock_external_apis"] is True
+
+
+def test_fuji_validate_returns_500_when_core_interface_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """fuji_validate should return 500 when Fuji core lacks expected validation methods."""
+
+    class _FujiCoreWithoutMethods:
+        pass
+
+    class _DummyServer:
+        _fuji_state = SimpleNamespace(err=None)
+        _publish_event = staticmethod(lambda *_args, **_kwargs: None)
+
+        @staticmethod
+        def get_fuji_core() -> _FujiCoreWithoutMethods:
+            return _FujiCoreWithoutMethods()
+
+    monkeypatch.setattr(rd, "_is_direct_fuji_api_enabled", lambda: True)
+    monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
+
+    response = rd.fuji_validate({"action": "approve", "context": {}})
+
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 500
+    assert b"validate_action" in response.body
 
 
 @pytest.mark.anyio
-async def test_stage_core_execute_handles_non_dict_self_healing_slot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Self-healing metadata update should be skipped safely when slot is non-dict."""
+async def test_stage_core_execute_marks_retry_execution_failed_on_retry_exception() -> None:
+    """Self-healing should capture retry errors and store stable stop_reason metadata."""
     from veritas_os.core.pipeline import self_healing
 
-    clear_calls: list[str] = []
-    ctx = PipelineContext(query="q", request_id="req-non-dict", context={})
-    ctx.response_extras["self_healing"] = "invalid"
+    ctx = PipelineContext(query="q", request_id="req-retry", context={})
+    persisted_states: list[tuple[str, Any]] = []
 
-    monkeypatch.setattr(self_healing, "is_healing_enabled", lambda _ctx: True)
-    monkeypatch.setattr(self_healing, "load_healing_state", lambda _req_id: SimpleNamespace(attempt=0))
-    monkeypatch.setattr(self_healing, "HealingBudget", lambda: SimpleNamespace())
-    monkeypatch.setattr(
-        self_healing,
-        "decide_healing_action",
-        lambda **_kwargs: SimpleNamespace(
+    monkeypatches = {
+        "is_healing_enabled": lambda _ctx: True,
+        "load_healing_state": lambda _req_id: SimpleNamespace(attempt=0),
+        "HealingBudget": lambda: SimpleNamespace(),
+        "decide_healing_action": lambda **_kwargs: SimpleNamespace(
             allow=True,
             stop_reason=None,
             reason="retry",
             action=SimpleNamespace(value="retry"),
         ),
-    )
-    monkeypatch.setattr(self_healing, "build_healing_input", lambda **_kwargs: {"patched": True})
-    monkeypatch.setattr(self_healing, "healing_input_signature", lambda _inp: "sig")
-    monkeypatch.setattr(self_healing, "diff_summary", lambda *_args, **_kwargs: "diff")
-    monkeypatch.setattr(self_healing, "check_guardrails", lambda **_kwargs: None)
-    monkeypatch.setattr(self_healing, "budget_remaining", lambda *_args, **_kwargs: {"remaining": 1})
-    monkeypatch.setattr(self_healing, "build_healing_trust_log_entry", lambda **_kwargs: {"kind": "heal"})
-    monkeypatch.setattr(self_healing, "advance_state", lambda **_kwargs: None)
-    monkeypatch.setattr(self_healing, "persist_healing_state", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(self_healing, "clear_healing_state", lambda req_id: clear_calls.append(req_id))
+        "build_healing_input": lambda **_kwargs: {"patched": True},
+        "healing_input_signature": lambda _inp: "sig-1",
+        "diff_summary": lambda *_args, **_kwargs: "diff",
+        "check_guardrails": lambda **_kwargs: None,
+        "budget_remaining": lambda *_args, **_kwargs: {"remaining": 1},
+        "build_healing_trust_log_entry": lambda **_kwargs: {"kind": "heal"},
+        "clear_healing_state": lambda _req_id: None,
+        "advance_state": lambda **_kwargs: None,
+        "persist_healing_state": lambda req_id, state: persisted_states.append((req_id, state)),
+    }
+    for name, fn in monkeypatches.items():
+        setattr(self_healing, name, fn)
 
-    call_count = {"n": 0}
+    calls = {"count": 0}
 
     async def _call_core_decide_fn(**_kwargs: Any) -> dict[str, Any]:
-        call_count["n"] += 1
-        if call_count["n"] == 1:
+        calls["count"] += 1
+        if calls["count"] == 1:
             return {
                 "fuji": {
                     "rejection": {
@@ -142,7 +176,7 @@ async def test_stage_core_execute_handles_non_dict_self_healing_slot(
                     }
                 }
             }
-        return {"fuji": {"status": "allow"}}
+        raise RuntimeError("retry backend unavailable")
 
     await pe.stage_core_execute(
         ctx,
@@ -151,6 +185,6 @@ async def test_stage_core_execute_handles_non_dict_self_healing_slot(
         veritas_core=SimpleNamespace(decide=lambda **_kwargs: {}),
     )
 
-    assert isinstance(ctx.response_extras["self_healing"], str)
-    assert clear_calls == ["req-non-dict"]
-    assert len(ctx.healing_attempts) == 1
+    assert ctx.healing_stop_reason == "retry_execution_failed"
+    assert ctx.response_extras["self_healing"]["stop_reason"] == "retry_execution_failed"
+    assert persisted_states and persisted_states[0][0] == "req-retry"
