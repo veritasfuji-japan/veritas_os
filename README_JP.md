@@ -751,7 +751,12 @@ make test
 make test-cov
 ```
 
-これらのターゲットは `uv` + `PYTHON_VERSION=3.12.12` を利用し、未導入時はインタプリタを自動取得します。
+これらのターゲットは `uv` + `PYTHON_VERSION=3.12.12` を利用し、未導入時はインタプリタを自動取得します。`make test-cov` は CI と同じカバレッジゲート（`--cov-fail-under=85`、`veritas_os/tests/.coveragerc`、XML/HTML レポート、`-m "not slow"`）で検証します。
+
+```bash
+# 任意: ローカル検証時のみ閾値/マーカーを上書き
+make test-cov COVERAGE_FAIL_UNDER=0 PYTEST_MARKEXPR=""
+```
 
 スモークチェック:
 

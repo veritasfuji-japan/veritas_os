@@ -2,6 +2,10 @@ PYTHON_VERSION ?= 3.12.12
 PYTHON_FALLBACK ?= 3.12
 UV ?= uv
 TEST_ARGS ?=
+COVERAGE_FAIL_UNDER ?= 85
+PYTEST_MARKEXPR ?= not slow
+COVERAGE_XML ?= coverage.xml
+COVERAGE_HTML_DIR ?= coverage-html
 
 .PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks
 
@@ -64,18 +68,49 @@ test:
 
 test-cov:
 	@command -v $(UV) >/dev/null 2>&1 || { echo "Error: uv is required. Install from https://docs.astral.sh/uv/."; exit 1; }
+	@mkdir -p $(COVERAGE_HTML_DIR)
 	@set -e; \
 	if [ -x .venv/bin/python ] && .venv/bin/python -c "import pytest" >/dev/null 2>&1; then \
 		echo "[veritas] Using existing .venv"; \
-		.venv/bin/python -m pytest --cov=veritas_os $(TEST_ARGS); \
+		.venv/bin/python -m pytest -q veritas_os/tests \
+			--cov=veritas_os \
+			--cov-config=veritas_os/tests/.coveragerc \
+			--cov-report=term-missing \
+			--cov-report=xml:$(COVERAGE_XML) \
+			--cov-report=html:$(COVERAGE_HTML_DIR) \
+			--cov-fail-under=$(COVERAGE_FAIL_UNDER) \
+			-m "$(PYTEST_MARKEXPR)" \
+			--durations=20 \
+			--tb=short \
+			$(TEST_ARGS); \
 		exit 0; \
 	fi; \
 	echo "[veritas] Running coverage tests with Python $(PYTHON_VERSION) via uv"; \
-	if UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_VERSION) --with pytest --with pytest-cov pytest --cov=veritas_os $(TEST_ARGS); then \
+	if UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_VERSION) --with pytest --with pytest-cov pytest -q veritas_os/tests \
+		--cov=veritas_os \
+		--cov-config=veritas_os/tests/.coveragerc \
+		--cov-report=term-missing \
+		--cov-report=xml:$(COVERAGE_XML) \
+		--cov-report=html:$(COVERAGE_HTML_DIR) \
+		--cov-fail-under=$(COVERAGE_FAIL_UNDER) \
+		-m "$(PYTEST_MARKEXPR)" \
+		--durations=20 \
+		--tb=short \
+		$(TEST_ARGS); then \
 		exit 0; \
 	fi; \
 	echo "[veritas] Falling back to Python $(PYTHON_FALLBACK) (local or managed)"; \
-	UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest --with pytest-cov pytest --cov=veritas_os $(TEST_ARGS)
+	UV_PYTHON_DOWNLOADS=automatic $(UV) run --python $(PYTHON_FALLBACK) --with pytest --with pytest-cov pytest -q veritas_os/tests \
+		--cov=veritas_os \
+		--cov-config=veritas_os/tests/.coveragerc \
+		--cov-report=term-missing \
+		--cov-report=xml:$(COVERAGE_XML) \
+		--cov-report=html:$(COVERAGE_HTML_DIR) \
+		--cov-fail-under=$(COVERAGE_FAIL_UNDER) \
+		-m "$(PYTEST_MARKEXPR)" \
+		--durations=20 \
+		--tb=short \
+		$(TEST_ARGS)
 
 
 test-split:
