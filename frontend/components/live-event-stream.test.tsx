@@ -125,6 +125,100 @@ describe("LiveEventStream", () => {
     expect(links[0]).toHaveAttribute("href", "/risk?request_id=req_101");
   });
 
+  it("ignores malformed JSON events and continues parsing next messages", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: createReadableStream([
+          "data: {\"id\":\"evt-bad\",\"type\":\"risk_burst\",\"summary\":\n\n",
+          "data: {\"id\":\"evt-005\",\"type\":\"risk_burst\",\"severity\":\"critical\",\"stage\":\"detect\",\"request_id\":\"req_105\",\"decision_id\":\"dec_105\",\"occurred_at\":\"2026-03-09T06:25:00Z\",\"owner\":\"Risk Ops\",\"linked_page\":\"risk\",\"summary\":\"Valid event after malformed JSON.\"}\n\n",
+        ]),
+      }),
+    );
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Valid event after malformed JSON.")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("evt-bad")).not.toBeInTheDocument();
+  });
+
+  it("parses an SSE message that arrives in incomplete chunks", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: createReadableStream([
+          "data: {\"id\":\"evt-006\",\"type\":\"risk_burst\",",
+          "\"severity\":\"critical\",\"stage\":\"detect\",\"request_id\":\"req_106\",\"decision_id\":\"dec_106\",\"occurred_at\":\"2026-03-09T06:26:00Z\",\"owner\":\"Risk Ops\",\"linked_page\":\"risk\",\"summary\":\"Chunked event assembled correctly.\"}\n\n",
+        ]),
+      }),
+    );
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Chunked event assembled correctly.")).toBeInTheDocument();
+    });
+  });
+
+  it("reconnects after network disconnect with backoff delay", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network disconnected"))
+      .mockResolvedValue({ ok: true, body: createPersistentReadableStream() });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 800);
+    });
+  });
+
+  it("uses exponential reconnect backoff on repeated network failures", async () => {
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await Promise.resolve();
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(setTimeoutSpy).toHaveBeenNthCalledWith(1, expect.any(Function), 800);
+
+    const reconnectCallback = setTimeoutSpy.mock.calls[0]?.[0];
+    expect(typeof reconnectCallback).toBe("function");
+    await (reconnectCallback as () => Promise<void>)();
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(setTimeoutSpy).toHaveBeenNthCalledWith(2, expect.any(Function), 1600);
+    });
+  });
+
   it("remains stable in StrictMode under replayed render phases", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createPersistentReadableStream() }));
 
