@@ -123,3 +123,29 @@ def test_evaluate_decision_raises_on_none_memory(monkeypatch):
     with pytest.raises(ValueError):
         reflection.evaluate_decision("x", {"score": 0.1}, None)  # type: ignore[arg-type]
 
+
+def test_evaluate_decision_logs_structured_warning_on_trust_log_failure(
+    monkeypatch,
+    caplog,
+):
+    """trust_log.evaluate 失敗時に構造化 warning を残し、outcome fallback を使う。"""
+
+    class FailingTrustLog:
+        def evaluate(self, decision: Any, outcome: Dict[str, Any]) -> float:
+            raise RuntimeError("trust log evaluate failure")
+
+    monkeypatch.setattr(reflection, "trust_log", FailingTrustLog(), raising=False)
+    monkeypatch.setattr(reflection, "value_core", StubValueCore, raising=False)
+
+    memory: List[Dict[str, Any]] = []
+    with caplog.at_level("WARNING", logger=reflection.__name__):
+        score = reflection.evaluate_decision({"id": "d-3"}, {"score": 0.8}, memory)
+
+    assert score == 0.8
+    assert memory == [{"decision_id": "d-3", "score": 0.8}]
+    assert any(
+        record.msg == "reflection_trust_log_evaluate_failed"
+        and getattr(record, "event", "")
+        == "reflection.trust_log.evaluate_failed"
+        for record in caplog.records
+    )

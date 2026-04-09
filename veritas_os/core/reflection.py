@@ -1,9 +1,13 @@
 # veritas_os/core/reflection.py
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List
 
 from .utils import _clip01
+
+
+logger = logging.getLogger(__name__)
 
 # trust_log / value_core は他モジュールに依存するので、
 # 失敗しても落ちないように try-import しておく。
@@ -35,14 +39,22 @@ def _get_decision_id(decision: Any) -> str:
     if hasattr(decision, "id"):
         try:
             return str(getattr(decision, "id"))
-        except Exception:
-            pass
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            logger.warning(
+                "reflection_decision_id_attr_cast_failed",
+                extra={"event": "reflection.decision_id.attr_cast_failed"},
+                exc_info=True,
+            )
 
     if isinstance(decision, dict) and "id" in decision:
         try:
             return str(decision["id"])
-        except Exception:
-            pass
+        except (TypeError, ValueError, RuntimeError):
+            logger.warning(
+                "reflection_decision_id_dict_cast_failed",
+                extra={"event": "reflection.decision_id.dict_cast_failed"},
+                exc_info=True,
+            )
 
     return str(decision)
 
@@ -59,9 +71,12 @@ def _compute_score(decision: Any, outcome: Dict[str, Any] | None) -> float:
         try:
             raw = trust_log.evaluate(decision, outcome)  # type: ignore[call-arg]
             return _clip01(raw, 0.5)
-        except Exception:
-            # 評価失敗時は下のフォールバックへ
-            pass
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            logger.warning(
+                "reflection_trust_log_evaluate_failed",
+                extra={"event": "reflection.trust_log.evaluate_failed"},
+                exc_info=True,
+            )
 
     # 2) outcome に score が載っていればそれを使う
     if isinstance(outcome, dict) and "score" in outcome:
@@ -95,8 +110,12 @@ def evaluate_decision(
     if score < 0.5 and value_core is not None and hasattr(value_core, "adjust_weights"):
         try:
             value_core.adjust_weights("prudence", +0.1)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except (AttributeError, TypeError, ValueError, RuntimeError):
+            logger.warning(
+                "reflection_adjust_weights_failed",
+                extra={"event": "reflection.adjust_weights.failed"},
+                exc_info=True,
+            )
 
     memory.append(
         {
@@ -105,4 +124,3 @@ def evaluate_decision(
         }
     )
     return score
-
