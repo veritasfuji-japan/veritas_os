@@ -123,4 +123,46 @@ describe("LiveEventStream", () => {
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/risk?request_id=req_101");
   });
+
+  it("stops reader consumption immediately after unmount", async () => {
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const read = vi.fn().mockImplementation(
+      () =>
+        new Promise<ReadableStreamReadResult<Uint8Array>>((resolve) => {
+          setTimeout(() => {
+            resolve({
+              done: false,
+              value: new TextEncoder().encode(
+                "data: {\"id\":\"evt-999\",\"type\":\"risk_burst\",\"severity\":\"critical\",\"stage\":\"detect\",\"request_id\":\"req_stop\",\"decision_id\":\"dec_stop\",\"occurred_at\":\"2026-03-09T06:30:00Z\",\"owner\":\"Risk Ops\",\"linked_page\":\"risk\",\"summary\":\"Should not be processed after unmount.\"}\n\n",
+              ),
+            });
+          }, 0);
+        }),
+    );
+    const getReader = vi.fn(() => ({ read, cancel }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: { getReader },
+      }),
+    );
+
+    const rendered = render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(getReader).toHaveBeenCalledTimes(1);
+    });
+    rendered.unmount();
+
+    await waitFor(() => {
+      expect(cancel).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByText("Should not be processed after unmount.")).not.toBeInTheDocument();
+  });
 });

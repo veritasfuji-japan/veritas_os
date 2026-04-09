@@ -180,6 +180,7 @@ export function LiveEventStream(): JSX.Element {
   useEffect(() => {
     let mounted = true;
     let controller: AbortController | null = null;
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     const connect = async (): Promise<void> => {
       if (!mounted) {
@@ -211,18 +212,24 @@ export function LiveEventStream(): JSX.Element {
         setConnected(true);
         reconnectAttemptRef.current = 0;
 
-        const reader = response.body.getReader();
+        reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
 
         while (mounted) {
           const { value, done } = await reader.read();
+          if (!mounted || controller.signal.aborted) {
+            break;
+          }
           if (done) {
             break;
           }
           buffer += decoder.decode(value, { stream: true });
 
           while (buffer.includes("\n\n")) {
+            if (!mounted || controller.signal.aborted) {
+              break;
+            }
             const [rawEvent, ...rest] = buffer.split("\n\n");
             buffer = rest.join("\n\n");
             const dataLine = rawEvent.split(/\r?\n/).find((line) => line.startsWith("data:"));
@@ -261,6 +268,7 @@ export function LiveEventStream(): JSX.Element {
     return () => {
       mounted = false;
       controller?.abort();
+      void reader?.cancel();
       if (reconnectRef.current) {
         clearTimeout(reconnectRef.current);
       }
