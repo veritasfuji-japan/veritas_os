@@ -172,10 +172,12 @@
 - **Issue:** `NEXT_PUBLIC_*KEY` ガードが `rg` コマンドに依存するが、ripgrep のインストール確認なし。
 - **Fix:** ✅ `rg` が利用可能なら使用し、なければ `grep -rn` にフォールバック。
 
-### [MEDIUM] T-7: Docker Layer Cache Invalidation Order
+### ~~[MEDIUM] T-7: Docker Layer Cache Invalidation Order~~ **FALSE POSITIVE (2026-04-09 Revalidated)**
 - **File:** `Dockerfile:8-54`
-- **Issue:** `apt-get upgrade` がアプリケーションコードのコピー後にあるため、コード変更でシステムパッケージキャッシュも無効化される。
-- **Fix:** システム操作をアプリケーションコードコピーの前に移動。
+- **Claim (initial):** `apt-get upgrade` がアプリケーションコードコピー後にあり、コード変更で OS レイヤーまで再ビルドされる。
+- **Revalidation Result:** `apt-get upgrade` は `Dockerfile:31-33`、アプリケーションコード `COPY` は `Dockerfile:39-40` に配置されており、順序は既に最適（OS レイヤー → 依存レイヤー → アプリレイヤー）。
+- **Final Decision:** **対応不要（誤検知）**。レイヤー順序の修正は不要。
+- **Note:** 本リポジトリ実行環境では `docker` コマンド未導入のため、CLI 実測（2回ビルド比較）は未実施。Dockerfile の命令順序で最終判定。
 
 ### [MEDIUM] T-8: Inconsistent Coverage Threshold Enforcement
 - **File:** `.github/workflows/main.yml:159, 201`
