@@ -189,26 +189,27 @@ def test_validate_startup_security_flags_warns_direct_fuji_non_production(
     monkeypatch,
     caplog,
 ):
-    """Direct FUJI flag must raise a warning even in non-production."""
+    """Direct FUJI env key presence must warn even when disabled."""
     monkeypatch.setenv("VERITAS_ENV", "local")
-    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "true")
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "0")
 
     with caplog.at_level(logging.WARNING):
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )
 
-    assert "VERITAS_ENABLE_DIRECT_FUJI_API=true is enabled" in caplog.text
+    assert "VERITAS_ENABLE_DIRECT_FUJI_API is present" in caplog.text
+    assert "removed from shared env templates" in caplog.text
 
 
 def test_validate_startup_security_flags_rejects_direct_fuji_in_production(
     monkeypatch,
 ):
-    """Production must reject direct FUJI API mode to preserve pipeline controls."""
+    """Production must reject direct FUJI env drift before startup."""
     monkeypatch.setenv("VERITAS_ENV", "production")
-    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "true")
+    monkeypatch.setenv("VERITAS_ENABLE_DIRECT_FUJI_API", "false")
 
-    with pytest.raises(RuntimeError, match="VERITAS_ENABLE_DIRECT_FUJI_API=true"):
+    with pytest.raises(RuntimeError, match="VERITAS_ENABLE_DIRECT_FUJI_API is present"):
         startup_health.validate_startup_security_flags(
             logger=logging.getLogger("test.startup_health")
         )

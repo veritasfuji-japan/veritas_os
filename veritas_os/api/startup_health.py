@@ -19,6 +19,11 @@ def _is_node_env_production() -> bool:
     return node_env == "production"
 
 
+def _is_env_key_present(var_name: str) -> bool:
+    """Return True when an env key exists, regardless of configured value."""
+    return var_name in os.environ
+
+
 def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
     """Return whether startup validation failures should stop app boot."""
     resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
@@ -77,6 +82,7 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
         (os.getenv("VERITAS_AUTH_STORE_FAILURE_MODE") or "closed").strip().lower()
     )
     auth_fail_open_requested = auth_store_failure_mode == "open"
+    direct_fuji_key_present = _is_env_key_present("VERITAS_ENABLE_DIRECT_FUJI_API")
     direct_fuji_enabled = _is_truthy_env("VERITAS_ENABLE_DIRECT_FUJI_API")
     public_api_base_url = (os.getenv("NEXT_PUBLIC_VERITAS_API_BASE_URL") or "").strip()
 
@@ -127,15 +133,29 @@ def validate_startup_security_flags(*, logger: logging.Logger) -> None:
             )
         logger.warning("%s", message)
 
-    if direct_fuji_enabled:
+    if direct_fuji_key_present:
         message = (
-            "[SECURITY] VERITAS_ENABLE_DIRECT_FUJI_API=true is enabled. "
-            "Direct FUJI endpoints bypass `/v1/decide` orchestration controls, "
-            "so this flag must remain disabled in production."
+            "[SECURITY] VERITAS_ENABLE_DIRECT_FUJI_API is present in environment "
+            "configuration. This flag is HIGH risk because direct FUJI endpoints "
+            "bypass `/v1/decide` orchestration controls."
         )
         if is_production:
-            raise RuntimeError(f"{message} Refusing startup in production.")
-        logger.warning("%s", message)
+            raise RuntimeError(
+                f"{message} Treating this as production drift; remove the key "
+                "from environment distribution before startup."
+            )
+        if direct_fuji_enabled:
+            logger.warning(
+                "%s It is explicitly enabled and should stay limited to isolated "
+                "local testing.",
+                message,
+            )
+        else:
+            logger.warning(
+                "%s Even disabled values should be removed from shared env "
+                "templates to prevent production drift.",
+                message,
+            )
 
 
 def check_runtime_feature_health(
