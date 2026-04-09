@@ -9,6 +9,8 @@ import pytest
 
 from veritas_os.api import rate_limiting as rl
 from veritas_os.api import routes_decide as rd
+from veritas_os.core.pipeline import pipeline_execute as pe
+from veritas_os.core.pipeline import pipeline_helpers as ph
 from veritas_os.core.pipeline import pipeline_policy as pp
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
 
@@ -167,3 +169,97 @@ def test_cleanup_rate_bucket_unsafe_trims_overflow(monkeypatch: pytest.MonkeyPat
         rl._rate_bucket.clear()
 
     assert size_after == 2
+
+
+def test_as_str_falls_back_to_repr_when_str_raises() -> None:
+    """pipeline helper should safely fallback to repr on str conversion errors."""
+
+    class _BadStringify:
+        def __str__(self) -> str:
+            raise RuntimeError("str failed")
+
+        def __repr__(self) -> str:
+            return "<bad-str>"
+
+    assert ph._as_str(_BadStringify()) == "<bad-str>"
+
+
+@pytest.mark.anyio
+async def test_stage_core_execute_kernel_missing_sets_env_flag() -> None:
+    """Missing kernel entrypoint should be reflected in env_tools metadata."""
+    ctx = PipelineContext(query="q", request_id="req-1", context={})
+
+    async def _unused_call(**_kwargs: Any) -> dict[str, Any]:
+        return {}
+
+    await pe.stage_core_execute(
+        ctx,
+        call_core_decide_fn=_unused_call,
+        append_trust_log_fn=lambda _entry: None,
+        veritas_core=SimpleNamespace(),
+    )
+
+    assert ctx.response_extras["env_tools"]["kernel_missing"] is True
+    assert ctx.raw == {}
+
+
+@pytest.mark.anyio
+async def test_replay_endpoint_decision_not_found_returns_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Replay endpoint should translate missing decision into stable 404 payload."""
+
+    class _DummyServer:
+        @staticmethod
+        async def verify_signature(*_args: Any, **_kwargs: Any) -> None:
+            return None
+
+        @staticmethod
+        async def run_replay(*_args: Any, **_kwargs: Any) -> Any:
+            raise ValueError("missing")
+
+    class _DummyRequest:
+        headers: dict[str, str] = {}
+
+    monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
+
+    resp = await rd.replay_endpoint("missing-id", _DummyRequest())
+
+    assert resp.status_code == 404
+    assert resp.body
+
+
+def test_start_rate_cleanup_scheduler_is_idempotent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Starting scheduler twice should create only one timer instance."""
+
+    class _DummyTimer:
+        def __init__(self, _interval: float, _callback: Any) -> None:
+            self.daemon = False
+            self.started = False
+
+        def start(self) -> None:
+            self.started = True
+
+        def cancel(self) -> None:
+            self.started = False
+
+    created: list[_DummyTimer] = []
+
+    def _timer_factory(interval: float, callback: Any) -> _DummyTimer:
+        timer = _DummyTimer(interval, callback)
+        created.append(timer)
+        return timer
+
+    monkeypatch.setattr(rl.threading, "Timer", _timer_factory)
+    old_timer = rl._rate_cleanup_timer
+    try:
+        rl._rate_cleanup_timer = None
+        rl._start_rate_cleanup_scheduler()
+        rl._start_rate_cleanup_scheduler()
+    finally:
+        rl._rate_cleanup_timer = old_timer
+
+    assert len(created) == 1
+    assert created[0].started is True
