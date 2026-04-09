@@ -173,6 +173,12 @@ const POLICY_DIFF_IMPACT_PREVIEW = {
   summary: "Policy diff/impact preview is now linked to Mission Control action flow.",
 };
 
+const HEALTH_SECURITY_POSTURE = {
+  encryptionAlgorithm: "AES-256-GCM",
+  authenticationMode: "requested=redis / effective=memory (fail-closed)",
+  directFujiApi: "disabled",
+};
+
 /**
  * MissionPage renders the operational command-center view.
  *
@@ -229,6 +235,15 @@ export function MissionPage({ title, subtitle, chips }: MissionPageProps): JSX.E
             <p className="text-muted-foreground">Missing approvers: {GOVERNANCE_APPROVAL.missingApprovers.join(", ")}</p>
           </div>
         </Card>
+      </section>
+
+      <section aria-label="health security posture" className="rounded-xl border border-warning/40 bg-warning/10 p-4">
+        <p className="text-xs font-semibold uppercase tracking-wide text-warning">/health security posture (mandatory)</p>
+        <ul className="mt-2 space-y-1 text-xs">
+          <li>Encryption algorithm: <span className="font-semibold">{HEALTH_SECURITY_POSTURE.encryptionAlgorithm}</span></li>
+          <li>Authentication mode: <span className="font-semibold">{HEALTH_SECURITY_POSTURE.authenticationMode}</span></li>
+          <li>Direct FUJI API: <span className="font-semibold">{HEALTH_SECURITY_POSTURE.directFujiApi}</span></li>
+        </ul>
       </section>
 
       <section aria-label={`${title} operational cards`} className="grid gap-4 md:grid-cols-3">

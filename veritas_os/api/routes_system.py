@@ -85,9 +85,22 @@ def _trust_log_health(srv: Any) -> Dict[str, Any]:
 
 def _security_posture_snapshot() -> Dict[str, Any]:
     """Return security-sensitive runtime toggles for operations visibility."""
+    srv = _get_server()
+    auth_snapshot = _auth_store_health(srv)
+    auth_details = auth_snapshot["details"]
     encryption_status = get_encryption_status()
     return {
         "direct_fuji_api_enabled": _is_direct_fuji_api_enabled(),
+        "authentication": {
+            "status": auth_snapshot["status"],
+            "requested_mode": auth_details.get("requested_mode", "memory"),
+            "effective_mode": auth_details.get("effective_mode", "memory"),
+            "requested_failure_mode": auth_details.get(
+                "requested_failure_mode",
+                "closed",
+            ),
+            "failure_mode": auth_details.get("failure_mode", "closed"),
+        },
         "encryption": encryption_status,
     }
 

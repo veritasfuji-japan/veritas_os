@@ -129,6 +129,11 @@ class TestEnhancedHealth:
         assert isinstance(data["alert_policy"]["alerts"], list)
         assert "security_posture" in data
         assert "direct_fuji_api_enabled" in data["security_posture"]
+        assert "authentication" in data["security_posture"]
+        assert "requested_mode" in data["security_posture"]["authentication"]
+        assert "effective_mode" in data["security_posture"]["authentication"]
+        assert "requested_failure_mode" in data["security_posture"]["authentication"]
+        assert "failure_mode" in data["security_posture"]["authentication"]
         assert "encryption" in data["security_posture"]
         assert "algorithm" in data["security_posture"]["encryption"]
 
