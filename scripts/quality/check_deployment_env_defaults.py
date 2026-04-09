@@ -23,6 +23,7 @@ class TemplateRule:
     relative_path: str
     required_tokens: tuple[str, ...] = ()
     forbidden_tokens: tuple[str, ...] = ()
+    forbidden_env_keys: tuple[str, ...] = ()
     forbidden_env_assignments: tuple[tuple[str, str], ...] = ()
 
 
@@ -38,6 +39,9 @@ RULES = (
             ("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),
             ("VERITAS_AUTH_STORE_FAILURE_MODE", "open"),
         ),
+        forbidden_env_keys=(
+            "VERITAS_ENABLE_DIRECT_FUJI_API",
+        ),
     ),
     TemplateRule(
         relative_path="setup.sh",
@@ -52,6 +56,9 @@ RULES = (
         forbidden_env_assignments=(
             ("VERITAS_AUTH_ALLOW_FAIL_OPEN", "true"),
             ("VERITAS_AUTH_STORE_FAILURE_MODE", "open"),
+        ),
+        forbidden_env_keys=(
+            "VERITAS_ENABLE_DIRECT_FUJI_API",
         ),
     ),
 )
@@ -94,6 +101,22 @@ def _collect_forbidden_assignment_violations(
     return violations
 
 
+def _collect_forbidden_key_violations(
+    *,
+    rule: TemplateRule,
+    assignments: Iterable[tuple[str, str]],
+) -> list[str]:
+    """Return violations when forbidden env keys appear with any value."""
+    normalized_keys = {key.strip() for key, _ in assignments}
+    violations: list[str] = []
+    for key in rule.forbidden_env_keys:
+        if key in normalized_keys:
+            violations.append(
+                f"{rule.relative_path}: forbidden env key present {key}"
+            )
+    return violations
+
+
 def _validate_rule(rule: TemplateRule) -> list[str]:
     """Return human-readable violations for the given template rule."""
     path = REPO_ROOT / rule.relative_path
@@ -115,10 +138,17 @@ def _validate_rule(rule: TemplateRule) -> list[str]:
                 f"{rule.relative_path}: forbidden token present {token!r}"
             )
 
+    assignments = list(_iter_env_assignments(content))
     violations.extend(
         _collect_forbidden_assignment_violations(
             rule=rule,
-            assignments=_iter_env_assignments(content),
+            assignments=assignments,
+        )
+    )
+    violations.extend(
+        _collect_forbidden_key_violations(
+            rule=rule,
+            assignments=assignments,
         )
     )
 
@@ -140,8 +170,8 @@ def main() -> int:
         print(f"- {violation}")
     print(
         "\nUse server-only VERITAS_* variables in operator-facing templates and "
-        "never ship fail-open auth flags or open auth-store failure modes in "
-        "default configuration."
+        "never ship fail-open auth flags, direct FUJI API flags, or open "
+        "auth-store failure modes in default configuration."
     )
     return 1
 
