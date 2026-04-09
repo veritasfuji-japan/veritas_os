@@ -15,6 +15,8 @@ import logging
 import math
 import os
 import time
+from datetime import datetime, timezone
+import hashlib
 from typing import Any
 
 from veritas_os.policy.evaluator import evaluate_runtime_policies
@@ -42,6 +44,121 @@ def _build_fail_closed_fuji_precheck(reason: str) -> dict[str, Any]:
         "risk": 1.0,
         "modifications": [],
     }
+
+
+def _coerce_policy_enforce_flag(raw_value: Any) -> bool:
+    """Normalize explicit/runtime enforcement values into bool."""
+    if isinstance(raw_value, str):
+        return raw_value.strip().lower() in ("1", "true", "yes")
+    return bool(raw_value)
+
+
+def _resolve_rollout_controls(decision: dict[str, Any]) -> dict[str, Any]:
+    """Extract rollout controls from the first triggered policy metadata."""
+    policy_results = decision.get("policy_results", [])
+    if not isinstance(policy_results, list):
+        return {}
+
+    for result in policy_results:
+        if not isinstance(result, dict) or not result.get("triggered"):
+            continue
+        metadata = result.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        rollout_controls = metadata.get("rollout_controls", {})
+        if isinstance(rollout_controls, dict):
+            return rollout_controls
+    return {}
+
+
+def _resolve_rollback_metadata(decision: dict[str, Any]) -> dict[str, Any]:
+    """Extract rollback metadata from the first triggered policy."""
+    policy_results = decision.get("policy_results", [])
+    if not isinstance(policy_results, list):
+        return {}
+
+    for result in policy_results:
+        if not isinstance(result, dict) or not result.get("triggered"):
+            continue
+        metadata = result.get("metadata", {})
+        if not isinstance(metadata, dict):
+            continue
+        rollback = metadata.get("rollback", {})
+        if isinstance(rollback, dict):
+            return rollback
+    return {}
+
+
+def _deterministic_bucket_ratio(bucket_key: str) -> float:
+    """Return deterministic ratio [0, 1) from a bucket key."""
+    digest = hashlib.sha256(bucket_key.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") / float(2**64)
+
+
+def _is_rollout_auto_promoted(rollout_controls: dict[str, Any]) -> bool:
+    """Return True when canary rollout should auto-promote to full."""
+    full_after = rollout_controls.get("full_enforce_after")
+    if not isinstance(full_after, str) or not full_after.strip():
+        return False
+    normalized = full_after.strip().replace("Z", "+00:00")
+    try:
+        full_after_dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        logger.warning("invalid full_enforce_after in rollout_controls: %r", full_after)
+        return False
+    if full_after_dt.tzinfo is None:
+        full_after_dt = full_after_dt.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) >= full_after_dt
+
+
+def _is_enforcement_enabled_for_rollout(
+    ctx_dict: dict[str, Any],
+    decision: dict[str, Any],
+) -> tuple[bool, str]:
+    """Resolve runtime enforcement state with canary/full rollout control."""
+    enforce = ctx_dict.get("policy_runtime_enforce")
+    if enforce is None:
+        enforce = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE", "")
+    if not _coerce_policy_enforce_flag(enforce):
+        return False, "enforcement_disabled"
+
+    rollout_controls = _resolve_rollout_controls(decision)
+    strategy = str(rollout_controls.get("strategy", "full")).strip().lower()
+    if strategy in {"", "full"}:
+        return True, "full"
+    if strategy == "disabled":
+        return False, "rollout_disabled"
+    if strategy in {"canary", "staged"}:
+        if _is_rollout_auto_promoted(rollout_controls):
+            return True, "full_auto_promoted"
+        canary_percent_raw = rollout_controls.get("canary_percent", 0)
+        try:
+            canary_percent = int(canary_percent_raw)
+        except (TypeError, ValueError):
+            logger.warning(
+                "invalid canary_percent in rollout_controls: %r",
+                canary_percent_raw,
+            )
+            canary_percent = 0
+        canary_percent = max(0, min(100, canary_percent))
+        bucket_key = str(
+            ctx_dict.get("policy_rollout_key")
+            or ctx_dict.get("request_id")
+            or ctx_dict.get("trace_id")
+            or ctx_dict.get("actor")
+            or ""
+        )
+        ratio = _deterministic_bucket_ratio(bucket_key)
+        in_canary = ratio < (canary_percent / 100.0)
+        if not in_canary:
+            return False, f"{strategy}_skip"
+        return True, strategy
+
+    logger.warning(
+        "unknown rollout strategy=%r; defaulting to safe full enforcement",
+        strategy,
+    )
+    return True, "full_unknown_strategy"
 
 
 def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
@@ -79,21 +196,20 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
     governance["compiled_policy"] = decision
 
     outcome = decision.get("final_outcome")
-    enforce = ctx_dict.get("policy_runtime_enforce")
-    if enforce is None:
-        enforce = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE", "").strip().lower() in (
-            "1",
-            "true",
-            "yes",
-        )
-    elif isinstance(enforce, str):
-        enforce = enforce.strip().lower() in ("1", "true", "yes")
-    if not bool(enforce):
+    rollback_metadata = _resolve_rollback_metadata(decision)
+    enforce, rollout_state = _is_enforcement_enabled_for_rollout(ctx_dict, decision)
+    governance["compiled_policy_rollout"] = {
+        "enforced": enforce,
+        "state": rollout_state,
+        "rollback": rollback_metadata,
+    }
+    if not enforce:
         if outcome in {"deny", "halt", "escalate", "require_human_review"}:
             logger.warning(
                 "compiled policy outcome=%s observed but not enforced "
-                "(policy_runtime_enforce=false)",
+                "(policy_runtime_enforce=false, rollout_state=%s)",
                 outcome,
+                rollout_state,
             )
         return
 
