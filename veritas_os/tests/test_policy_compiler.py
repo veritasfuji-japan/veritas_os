@@ -107,6 +107,7 @@ def test_semantic_hash_stability_and_deterministic_outputs(tmp_path: Path) -> No
 def test_bundle_archive_is_deterministic(tmp_path: Path) -> None:
     """Tar archive must produce identical bytes across builds (normalized metadata)."""
     import hashlib
+    import time
 
     fixed_at = "2026-03-28T04:00:00Z"
     r1 = compile_policy_to_bundle(
@@ -114,6 +115,9 @@ def test_bundle_archive_is_deterministic(tmp_path: Path) -> None:
         tmp_path / "a",
         compiled_at=fixed_at,
     )
+    # Ensure the second build runs in another wall-clock second.
+    # This guards against non-deterministic gzip header timestamps.
+    time.sleep(1.1)
     r2 = compile_policy_to_bundle(
         EXAMPLES_DIR / "low_risk_route_allow.yaml",
         tmp_path / "b",

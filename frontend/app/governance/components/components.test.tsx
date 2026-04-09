@@ -32,6 +32,7 @@ vi.mock("../../../components/ui", () => ({
 const mockCollectChanges = vi.fn(() => [] as DiffChange[]);
 vi.mock("../helpers", () => ({
   collectChanges: (...args: unknown[]) => mockCollectChanges(...args),
+  isRecordObject: (value: unknown) => typeof value === "object" && value !== null && !Array.isArray(value),
 }));
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────────
@@ -406,6 +407,12 @@ describe("DiffPreview", () => {
   it("shows 'No changes.' when before and after are same/null", () => {
     mockCollectChanges.mockReturnValue([]);
     render(<DiffPreview before={null} after={null} />);
+    expect(screen.getByText("No changes.")).toBeTruthy();
+  });
+
+  it("skips diff collection when runtime values are not object records", () => {
+    render(<DiffPreview before={[] as any} after={MOCK_DRAFT as any} />);
+    expect(mockCollectChanges).not.toHaveBeenCalled();
     expect(screen.getByText("No changes.")).toBeTruthy();
   });
 
