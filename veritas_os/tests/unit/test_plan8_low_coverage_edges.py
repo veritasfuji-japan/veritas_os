@@ -272,3 +272,79 @@ async def test_decide_pipeline_unavailable_resets_lazy_state(
 
     assert resp["code"] == 503
     assert isinstance(server._pipeline_state, _DummyServer._LazyState)
+
+
+def test_effective_nonce_max_import_error_uses_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Import failure while reading server override must fall back to module default."""
+    monkeypatch.setattr(rl, "_NONCE_MAX", 37)
+
+    original_import = __import__
+
+    def _boom_import(name: str, *args: Any, **kwargs: Any) -> Any:
+        if name == "veritas_os.api":
+            raise RuntimeError("import failed")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", _boom_import)
+
+    assert rl._effective_nonce_max() == 37
+
+
+def test_schedule_rate_bucket_cleanup_no_reschedule_when_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No follow-up timer should be created when scheduler state is already stopped."""
+    created: list[Any] = []
+    monkeypatch.setattr(rl, "_cleanup_rate_bucket", lambda: None)
+    monkeypatch.setattr(
+        rl.threading,
+        "Timer",
+        lambda *_args, **_kwargs: created.append("created"),
+    )
+
+    old_timer = rl._rate_cleanup_timer
+    try:
+        rl._rate_cleanup_timer = None
+        rl._schedule_rate_bucket_cleanup()
+    finally:
+        rl._rate_cleanup_timer = old_timer
+
+    assert created == []
+
+
+@pytest.mark.anyio
+async def test_decide_pipeline_exception_returns_classified_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pipeline execution exception should return classified failure payload."""
+
+    class _BoomPipeline:
+        @staticmethod
+        async def run_decide_pipeline(**_kwargs: Any) -> dict[str, Any]:
+            raise RuntimeError("pipeline exploded")
+
+    class _DummyServer:
+        @staticmethod
+        def get_decision_pipeline() -> _BoomPipeline:
+            return _BoomPipeline()
+
+        @staticmethod
+        def _publish_event(_name: str, _payload: dict[str, Any]) -> None:
+            return None
+
+    monkeypatch.setattr(rd, "_get_server", lambda: _DummyServer())
+    monkeypatch.setattr(rd, "_classify_decide_failure", lambda _err: "runtime_error")
+    monkeypatch.setattr(
+        rd._svc,
+        "error_response",
+        lambda code, **kwargs: {"code": code, **kwargs},
+    )
+
+    req = rd.DecideRequest(query="q")
+    request = SimpleNamespace(state=SimpleNamespace(user_id="u1"))
+    out = await rd.decide(req, request)
+
+    assert out["code"] == 503
+    assert out["failure_category"] == "runtime_error"
