@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import tarfile
 from pathlib import Path
 from typing import Any, Dict, List
@@ -35,20 +36,32 @@ def collect_bundle_files(bundle_dir: Path) -> List[Dict[str, Any]]:
 
 
 def create_bundle_archive(bundle_dir: Path) -> Path:
-    """Create deterministic tar.gz archive for distribution."""
+    """Create deterministic ``tar.gz`` archive for distribution.
+
+    Security note:
+        Only regular files are archived; symlinks are skipped to prevent
+        path-traversal style bundle poisoning.
+    """
     archive_path = bundle_dir.with_suffix(".tar.gz")
-    with tarfile.open(archive_path, mode="w:gz") as tar:
-        for entry in sorted(bundle_dir.rglob("*")):
-            if not entry.is_file() or entry.is_symlink():
-                continue
-            rel = entry.relative_to(bundle_dir.parent)
-            info = tar.gettarinfo(entry, arcname=rel.as_posix())
-            info.mtime = 0
-            info.uid = 0
-            info.gid = 0
-            info.uname = ""
-            info.gname = ""
-            info.mode = 0o644
-            with open(entry, "rb") as fh:
-                tar.addfile(info, fh)
+    with archive_path.open("wb") as archive_file:
+        with gzip.GzipFile(
+            fileobj=archive_file,
+            mode="wb",
+            filename="",
+            mtime=0,
+        ) as gzip_file:
+            with tarfile.open(fileobj=gzip_file, mode="w") as tar:
+                for entry in sorted(bundle_dir.rglob("*")):
+                    if not entry.is_file() or entry.is_symlink():
+                        continue
+                    rel = entry.relative_to(bundle_dir.parent)
+                    info = tar.gettarinfo(entry, arcname=rel.as_posix())
+                    info.mtime = 0
+                    info.uid = 0
+                    info.gid = 0
+                    info.uname = ""
+                    info.gname = ""
+                    info.mode = 0o644
+                    with open(entry, "rb") as fh:
+                        tar.addfile(info, fh)
     return archive_path
