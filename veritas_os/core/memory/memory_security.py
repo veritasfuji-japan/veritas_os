@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Iterable, Set
+from typing import Iterable, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,14 @@ def is_explicitly_enabled(env_key: str) -> bool:
     if value is None:
         return False
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+
+def should_fail_fast_legacy_pickle_guard(profile: Optional[str] = None) -> bool:
+    """Return whether legacy pickle detection should stop startup immediately."""
+    resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
+    normalized_profile = resolved_profile.strip().lower()
+    return normalized_profile in {"prod", "production", "stg", "staging"}
 
 
 def emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
@@ -34,8 +42,14 @@ def emit_legacy_pickle_runtime_blocked(path: Path, artifact_name: str) -> None:
 
 
 def warn_for_legacy_pickle_artifacts(scan_roots: Iterable[Path]) -> None:
-    """Scan directories and report legacy pickle artifacts without deserializing."""
+    """Scan directories and report legacy pickle artifacts without deserializing.
+
+    In operational profiles (``VERITAS_ENV`` = prod/production/stg/staging),
+    detections are treated as fatal and raise ``RuntimeError`` to fail fast.
+    """
     checked_roots: Set[Path] = set()
+    findings: list[Path] = []
+
     for raw_root in scan_roots:
         root = raw_root.resolve(strict=False)
         if root in checked_roots or not root.exists() or not root.is_dir():
@@ -47,7 +61,14 @@ def warn_for_legacy_pickle_artifacts(scan_roots: Iterable[Path]) -> None:
                 continue
             if candidate.suffix.lower() not in {".pkl", ".joblib", ".pickle"}:
                 continue
+            findings.append(candidate)
             emit_legacy_pickle_runtime_blocked(
                 path=candidate,
                 artifact_name="runtime artifact",
             )
+
+    if findings and should_fail_fast_legacy_pickle_guard():
+        raise RuntimeError(
+            "[SECURITY] Legacy runtime pickle artifacts detected in operational "
+            "profile. Refusing startup due to RCE risk."
+        )

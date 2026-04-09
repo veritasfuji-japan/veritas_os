@@ -18,6 +18,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+import pytest
+
 from veritas_os.core import memory
 
 
@@ -278,6 +280,35 @@ def test_warn_for_legacy_pickle_artifacts_ignores_missing_paths(caplog):
         memory._warn_for_legacy_pickle_artifacts([missing, file_path])
 
     assert caplog.text == ""
+
+
+def test_warn_for_legacy_pickle_artifacts_fail_fast_in_operational_profile(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """運用プロファイルでは .pkl 検知時に fail-fast で起動停止する。"""
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    (runtime_dir / "legacy.pkl").write_bytes(b"x")
+    monkeypatch.setenv("VERITAS_ENV", "production")
+
+    with pytest.raises(RuntimeError, match="Refusing startup"):
+        memory._warn_for_legacy_pickle_artifacts([runtime_dir])
+
+
+def test_warn_for_legacy_pickle_artifacts_no_fail_fast_in_dev_profile(
+    tmp_path: Path,
+    monkeypatch,
+):
+    """開発プロファイルでは .pkl 検知時に警告ログのみに留める。"""
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    (runtime_dir / "legacy.pkl").write_bytes(b"x")
+    monkeypatch.setenv("VERITAS_ENV", "development")
+
+    memory._warn_for_legacy_pickle_artifacts([runtime_dir])
+
+
 def test_legacy_pickle_migration_disabled_by_default(tmp_path: Path, monkeypatch):
     """オプトインなしではレガシーpickleを読み込まないことを確認する。"""
     import numpy as np
