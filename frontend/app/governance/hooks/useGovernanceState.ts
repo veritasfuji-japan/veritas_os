@@ -13,7 +13,7 @@ import type {
   TrustLogEntry,
   UserRole,
 } from "../governance-types";
-import { bumpDraftVersion, collectChanges, deepEqual } from "../helpers";
+import { bumpDraftVersion, collectChanges, deepEqual, isRecordObject } from "../helpers";
 
 type PendingConfirm = { description: string; onConfirm: () => void };
 
@@ -42,8 +42,8 @@ export function useGovernanceState() {
   const canApprove = selectedRole === "admin";
 
   const changeCount = useMemo(() => {
-    if (!savedPolicy || !draft) return 0;
-    return collectChanges("", savedPolicy as unknown as Record<string, unknown>, draft as unknown as Record<string, unknown>).length;
+    if (!savedPolicy || !draft || !isRecordObject(savedPolicy) || !isRecordObject(draft)) return 0;
+    return collectChanges("", savedPolicy, draft).length;
   }, [savedPolicy, draft]);
 
   const appendLog = useCallback((message: string, severity: "info" | "warning" | "policy" = "info") => {

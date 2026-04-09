@@ -1,5 +1,15 @@
 import type { DiffChange } from "./governance-types";
 
+/**
+ * Validates that a runtime value is a plain object record.
+ *
+ * This guard intentionally rejects `null` and arrays so callers can safely pass
+ * the result into recursive diff utilities that assume key-value object shapes.
+ */
+export function isRecordObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== typeof b || a === null || b === null) return false;

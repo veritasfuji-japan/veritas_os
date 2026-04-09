@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { deepEqual, collectChanges, bumpDraftVersion } from "./helpers";
+import { deepEqual, collectChanges, bumpDraftVersion, isRecordObject } from "./helpers";
+
+describe("isRecordObject", () => {
+  it("returns true for plain objects", () => {
+    expect(isRecordObject({ key: "value" })).toBe(true);
+  });
+
+  it("returns false for null and arrays", () => {
+    expect(isRecordObject(null)).toBe(false);
+    expect(isRecordObject(["a"])).toBe(false);
+  });
+});
 
 describe("deepEqual", () => {
   it("returns true for identical primitives", () => {

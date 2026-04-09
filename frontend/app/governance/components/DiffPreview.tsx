@@ -3,7 +3,7 @@
 import { useI18n } from "../../../components/i18n-provider";
 import type { DiffChange, GovernancePolicyUI } from "../governance-types";
 import { DIFF_CATEGORY_LABELS } from "../constants";
-import { collectChanges } from "../helpers";
+import { collectChanges, isRecordObject } from "../helpers";
 
 interface DiffPreviewProps {
   before: GovernancePolicyUI | null;
@@ -12,13 +12,9 @@ interface DiffPreviewProps {
 
 export function DiffPreview({ before, after }: DiffPreviewProps): JSX.Element {
   const { t } = useI18n();
-  const rows = before && after
-    ? collectChanges(
-      "",
-      before as unknown as Record<string, unknown>,
-      after as unknown as Record<string, unknown>,
-    )
-    : [];
+  const beforeRecord = isRecordObject(before) ? before : null;
+  const afterRecord = isRecordObject(after) ? after : null;
+  const rows = beforeRecord && afterRecord ? collectChanges("", beforeRecord, afterRecord) : [];
   if (rows.length === 0) return <p className="text-xs text-muted-foreground">{t("変更はありません。", "No changes.")}</p>;
 
   const grouped = rows.reduce<Record<string, DiffChange[]>>((acc, row) => {
