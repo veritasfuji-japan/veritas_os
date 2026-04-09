@@ -28,6 +28,8 @@ interface LiveEvent {
   summary: string;
 }
 
+type FlagRecord = Record<string, true>;
+
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_RECONNECT_DELAY_MS = 30000;
 const AUTH_RETRY_PAUSE_MS = 60000;
@@ -169,9 +171,9 @@ export function LiveEventStream(): JSX.Element {
   const [authRecoveryAt, setAuthRecoveryAt] = useState<number | null>(null);
   const [activeFilter, setActiveFilter] = useState<EventFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [ackedIds, setAckedIds] = useState<Set<string>>(new Set());
-  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set());
-  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [ackedIds, setAckedIds] = useState<FlagRecord>({});
+  const [mutedIds, setMutedIds] = useState<FlagRecord>({});
+  const [pinnedIds, setPinnedIds] = useState<FlagRecord>({});
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const authPauseRef = useRef(false);
@@ -245,7 +247,10 @@ export function LiveEventStream(): JSX.Element {
             if (!parsed) {
               continue;
             }
-            setEvents((prev) => [parsed, ...prev].slice(0, 40));
+            setEvents((previous) => {
+              const withoutDuplicate = previous.filter((event) => event.id !== parsed.id);
+              return [parsed, ...withoutDuplicate].slice(0, 40);
+            });
           }
         }
       } catch {
@@ -276,7 +281,7 @@ export function LiveEventStream(): JSX.Element {
   }, []);
 
   const filteredEvents = useMemo(() => {
-    const withoutMuted = events.filter((event) => !mutedIds.has(event.id));
+    const withoutMuted = events.filter((event) => mutedIds[event.id] !== true);
     const severityFiltered = activeFilter === "all"
       ? withoutMuted
       : withoutMuted.filter((event) => event.severity === activeFilter);
@@ -296,8 +301,8 @@ export function LiveEventStream(): JSX.Element {
       });
 
     return [...queryFiltered].sort((left, right) => {
-      const leftPinned = pinnedIds.has(left.id);
-      const rightPinned = pinnedIds.has(right.id);
+      const leftPinned = pinnedIds[left.id] === true;
+      const rightPinned = pinnedIds[right.id] === true;
       if (leftPinned === rightPinned) {
         return 0;
       }
@@ -305,15 +310,16 @@ export function LiveEventStream(): JSX.Element {
     });
   }, [activeFilter, events, mutedIds, pinnedIds, searchQuery]);
 
-  const toggle = (setState: Dispatch<SetStateAction<Set<string>>>, id: string): void => {
+  const toggle = (setState: Dispatch<SetStateAction<FlagRecord>>, id: string): void => {
     setState((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+      if (current[id] === true) {
+        const { [id]: _removed, ...remaining } = current;
+        return remaining;
       }
-      return next;
+      return {
+        ...current,
+        [id]: true,
+      };
     });
   };
 
@@ -377,8 +383,8 @@ export function LiveEventStream(): JSX.Element {
         ) : (
           filteredEvents.map((event) => {
             const link = buildLink(event);
-            const isAcked = ackedIds.has(event.id);
-            const isPinned = pinnedIds.has(event.id);
+            const isAcked = ackedIds[event.id] === true;
+            const isPinned = pinnedIds[event.id] === true;
 
             return (
               <div

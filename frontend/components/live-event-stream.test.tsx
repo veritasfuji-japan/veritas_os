@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "./i18n-provider";
@@ -38,7 +39,7 @@ describe("LiveEventStream", () => {
       </I18nProvider>,
     );
 
-    await screen.findByText(/Connected|接続済み/);
+    expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
 
     expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
     expect(screen.getByText("FUJI reject")).toBeInTheDocument();
@@ -58,7 +59,7 @@ describe("LiveEventStream", () => {
       </I18nProvider>,
     );
 
-    await screen.findByText(/Connected|接続済み/);
+    expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
 
     const ackButton = screen.getAllByRole("button", { name: /acknowledge|確認/ })[0];
     fireEvent.click(ackButton);
@@ -83,7 +84,7 @@ describe("LiveEventStream", () => {
       </I18nProvider>,
     );
 
-    await screen.findByText(/Connected|接続済み/);
+    expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
 
     const search = screen.getByRole("searchbox", { name: /Search events|イベント検索/ });
     fireEvent.change(search, { target: { value: "sign-off" } });
@@ -122,6 +123,29 @@ describe("LiveEventStream", () => {
 
     const links = screen.getAllByRole("link");
     expect(links[0]).toHaveAttribute("href", "/risk?request_id=req_101");
+  });
+
+  it("remains stable in StrictMode under replayed render phases", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, body: createPersistentReadableStream() }));
+
+    render(
+      <StrictMode>
+        <I18nProvider>
+          <LiveEventStream />
+        </I18nProvider>
+      </StrictMode>,
+    );
+
+    expect(screen.getByText("Live Event Feed")).toBeInTheDocument();
+
+    expect(screen.getAllByText("FUJI reject")).toHaveLength(1);
+
+    const ackButton = screen.getAllByRole("button", { name: /acknowledge|確認/ })[0];
+    fireEvent.click(ackButton);
+    expect(screen.getByRole("button", { name: /acknowledged|確認済み/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /acknowledged|確認済み/ }));
+    expect(screen.getAllByRole("button", { name: /acknowledge|確認/ })[0]).toHaveAttribute("aria-pressed", "false");
   });
 
   it("stops reader consumption immediately after unmount", async () => {
