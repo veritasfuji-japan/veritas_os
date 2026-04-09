@@ -11,6 +11,26 @@ permissions:
   contents: read
 
 jobs:
+  runtime-guards:
+    name: Runtime guardrails (pickle + bare except)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enforce runtime pickle artifact ban
+        run: python scripts/security/check_runtime_pickle_artifacts.py
+
+      - name: Enforce bare except reduction gate
+        run: python scripts/security/check_bare_except_usage.py
+
   dependency-audit:
     name: Dependency audit (Python + Node)
     runs-on: ubuntu-latest

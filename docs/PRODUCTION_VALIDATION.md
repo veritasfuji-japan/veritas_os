@@ -13,9 +13,11 @@ deployment topology, and fail-closed security controls.
 |---------|--------|------------|-------------|
 | **Unit** | *(default)* | Every push/PR | Fast, isolated, mocked dependencies |
 | **Slow** | `@pytest.mark.slow` | Every push/PR (parallel job) | Heavier computation, larger datasets |
-| **Production** | `@pytest.mark.production` | `workflow_dispatch` / opt-in | Production-like flows with real subsystems |
+| **Production** | `@pytest.mark.production` | `workflow_dispatch` / weekly schedule | Production-like flows with real subsystems |
 | **Smoke** | `@pytest.mark.smoke` | `workflow_dispatch` / opt-in | Lightweight deployment verification |
 | **External** | `@pytest.mark.external` | `workflow_dispatch` + secrets | Tests requiring live network/API keys |
+| **TLS** | `@pytest.mark.tls` | `workflow_dispatch` / weekly schedule | TLS/security-header posture verification |
+| **Load** | `@pytest.mark.load` | `workflow_dispatch` / weekly schedule | Lightweight burst/concurrency validation |
 
 ## Running Production Validation
 
@@ -56,6 +58,13 @@ docker compose down
 ```
 
 ## Verification Matrix
+
+### 0. Runtime Security Guardrails (CI + Production Validation)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| Legacy `.pkl` / `.joblib` artifact ban | `check_runtime_pickle_artifacts.py` in CI + production-validation workflow | Runtime RCE surface continuously monitored |
+| Bare `except:` ban | `check_bare_except_usage.py` in CI + production-validation workflow | Silent error masking reduced in staged manner |
 
 ### 1. FastAPI + Frontend + Docker Compose Smoke (`test_production_smoke.py`)
 
@@ -149,6 +158,19 @@ docker compose down
 | `is_encryption_enabled` True | Valid key | Correct status report |
 | `is_encryption_enabled` False | No key | Correct status report |
 
+### 7. TLS Header Validation (`test_production_tls_load.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| HSTS header present | `/health` response header assertion | Browser HTTPS enforcement posture verified |
+| Baseline security headers | `/health` response header assertion | CSP / anti-clickjacking / MIME hardening verified |
+
+### 8. Load Burst Validation (`test_production_tls_load.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| Concurrent health burst (32 req / 8 workers) | ThreadPool + TestClient | Lightweight load regression signal added |
+
 ## Architecture: CI Role Separation
 
 ```
@@ -166,6 +188,8 @@ docker compose down
 │          production-validation.yml (Manual/Weekly)        │
 ├─────────────────────────────────────────────────────────┤
 │  production-tests: pytest -m "production or smoke"       │
+│  tls-validation: pytest -m tls                           │
+│  load-validation: pytest -m load                         │
 │  docker-smoke: docker compose up + health check          │
 │  external-tests: pytest -m external (if secrets set)     │
 └─────────────────────────────────────────────────────────┘
@@ -179,8 +203,8 @@ docker compose down
 | Full Docker compose E2E | Script-ready, not in CI | `scripts/production_validation.sh` runs locally |
 | Database persistence | N/A (file-based) | TrustLog file tests cover persistence |
 | Multi-node clustering | Not applicable | Single-node architecture |
-| TLS/HTTPS validation | Not covered | Add nginx proxy tests in staging |
-| Load/stress testing | Not covered | Consider k6/locust for performance validation |
+| TLS certificate chain/e2e HTTPS handshake | Partially covered | Add staging reverse-proxy cert tests |
+| Load/stress at scale (p95/p99 latency SLO) | Partially covered | Add k6/locust long-run performance tests |
 | Kubernetes deployment | Not covered | Add Helm chart tests when K8s support added |
 
 ## What This Validation Adds

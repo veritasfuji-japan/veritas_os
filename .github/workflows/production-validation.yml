@@ -62,6 +62,12 @@ jobs:
           python -m pip install -r veritas_os/requirements.txt
           python -m pip install pytest pytest-cov httpx anyio
 
+      - name: Enforce runtime pickle artifact ban
+        run: python scripts/security/check_runtime_pickle_artifacts.py
+
+      - name: Enforce bare except reduction gate
+        run: python scripts/security/check_bare_except_usage.py
+
       - name: Run production-like tests
         run: |
           set -euxo pipefail
@@ -79,6 +85,70 @@ jobs:
           name: production-test-report
           path: test-reports/production.xml
           if-no-files-found: warn
+
+  tls-validation:
+    name: tls-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: Run TLS production validation tests
+        run: |
+          set -euxo pipefail
+          pytest -q veritas_os/tests/ -m tls -v --tb=short
+
+  load-validation:
+    name: load-validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: Run load production validation tests
+        run: |
+          set -euxo pipefail
+          pytest -q veritas_os/tests/ -m load -v --tb=short
 
   # ── Docker Compose smoke test ─────────────────────────────────────────
   docker-smoke:

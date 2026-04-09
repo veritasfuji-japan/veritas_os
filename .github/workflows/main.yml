@@ -89,6 +89,9 @@ jobs:
       - name: runtime pickle artifact check
         run: python scripts/security/check_runtime_pickle_artifacts.py
 
+      - name: bare except usage check
+        run: python scripts/security/check_bare_except_usage.py
+
       - name: Bandit security scan
         run: |
           bandit -r veritas_os/ \

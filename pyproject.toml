@@ -113,6 +113,8 @@ markers = [
   "production: production-like validation requiring real services",
   "smoke: lightweight smoke tests for deployment verification",
   "external: tests that depend on external network services",
+  "tls: tests focused on TLS/security-header production posture",
+  "load: lightweight load/stress validation tests",
   "unit: 単体テスト",
   "integration: 統合テスト",
   "scenario: ビジネスシナリオテスト",
