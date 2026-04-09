@@ -111,8 +111,8 @@ info "Installing runtime dependencies..."
 .venv/bin/pip install -r veritas_os/requirements.txt -q
 success "Runtime dependencies installed."
 
-info "Installing development dependencies (pytest, coverage, etc.)..."
-.venv/bin/pip install pytest pytest-cov pytest-asyncio httpx -q
+info "Installing development dependencies from pyproject.toml [dev]..."
+.venv/bin/pip install ".[dev]" -q
 success "Development dependencies installed."
 
 # ── 3. Environment configuration ───────────────────────────────────────────
@@ -141,6 +141,7 @@ if [ "$WRITE_ENV" = true ]; then
 
 # --- LLM Provider ---
 # Supported: "openai", "anthropic"
+# Baseline default model for quickstart.
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4.1-mini
 # OPENAI_API_KEY=sk-...

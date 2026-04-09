@@ -6,17 +6,25 @@ interface LoadingSkeletonProps {
 }
 
 export function LoadingSkeleton({ lines = 3, className }: LoadingSkeletonProps): JSX.Element {
+  const skeletonLines = Array.from({ length: lines }, (_, index) => {
+    const lineNumber = index + 1;
+    return {
+      key: `skeleton-line-${lineNumber}`,
+      widthPercent: 75 + Math.sin(index) * 20
+    };
+  });
+
   return (
     <div
       role="status"
       aria-label="Loading"
       className={`animate-pulse space-y-2${className ? ` ${className}` : ""}`}
     >
-      {Array.from({ length: lines }, (_, i) => (
+      {skeletonLines.map((line) => (
         <div
-          key={i}
+          key={line.key}
           className="h-3 rounded bg-muted/40"
-          style={{ width: `${75 + Math.sin(i) * 20}%` }}
+          style={{ width: `${line.widthPercent}%` }}
         />
       ))}
       <span className="sr-only">Loading...</span>
