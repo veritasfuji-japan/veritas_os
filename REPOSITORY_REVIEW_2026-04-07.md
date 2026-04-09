@@ -213,7 +213,7 @@
 ### Short-term (1-2 weeks)
 4. ~~**S-2:** RBAC 無効化時の fail-closed 動作に変更~~ → ✅ **DONE**
 5. ~~**S-4:** Chainlit 入力バリデーション追加~~ → ✅ **DONE**
-6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → **対応不要** (abort controller で十分)
+6. ~~**F-1:** SSE ストリームの `mounted` チェック強化~~ → ✅ **DONE (2026-04-09 実装確認)**
 7. ~~**T-4:** Docker ビルドキャッシュ設定~~ → ✅ **DONE**
 8. ~~**T-5:** requirements.txt 同期チェック~~ → ✅ **DONE**
 
@@ -225,6 +225,10 @@
 13. ~~**F-4:** FujiRulesEditor null チェック~~ → ✅ **DONE**
 14. ~~**T-6:** CI ripgrep 存在チェック~~ → ✅ **DONE**
 15. ~~**T-9:** /tmp パスのポータビリティ修正~~ → ✅ **DONE**
+16. ~~**F-5:** DiffPreview の unsafe type assertion 除去~~ → ✅ **DONE (2026-04-09 実装確認)**
+17. ~~**F-6:** SSE エラーケーステスト拡充~~ → ✅ **DONE (2026-04-09 実装確認)**
+18. ~~**F-7:** TraceabilityRail request_id 入力妥当性強化~~ → ✅ **DONE (2026-04-09 実装確認)**
+19. ~~**T-8:** カバレッジ閾値運用のローカル統一~~ → ✅ **DONE (2026-04-09 実装確認)**
 
 ---
 
@@ -257,13 +261,21 @@
 | S-6 | MEDIUM | — | **False positive**: `_scope_matches()` は欠損フィールドで `False` を返す fail-closed 実装済み |
 | S-7 | MEDIUM | — | **False positive**: `required_evidence: []` は設計通り「エビデンス不要」として動作 |
 
+## Fixes Applied (2026-04-09)
+
+| ID | Severity | File | Summary |
+|----|----------|------|---------|
+| F-1 | HIGH | `frontend/components/live-event-stream.tsx`, `frontend/components/live-event-stream.test.tsx` | アンマウント後の読取継続リスク対策として、内部 read / parse ループにも `mounted` と abort シグナル判定を追加。`unmount` 後に処理されないことをテストで検証。 |
+| F-2 | HIGH | `frontend/components/live-event-stream.tsx` | `Set` ベース state を `Record<string, true>` へ置換し、参照等価性依存を排除。 |
+| F-5 | MEDIUM | `frontend/app/governance/components/DiffPreview.tsx`, `frontend/app/governance/helpers.ts` | `as unknown as ...` の二重 assertion を撤廃し、`isRecordObject` による実行時バリデーション経由で差分算出。 |
+| F-6 | MEDIUM | `frontend/components/live-event-stream.test.tsx` | 不正 JSON・不完全 SSE チャンク・ネットワーク断・再接続バックオフを含む異常系テストを追加。 |
+| F-7 | MEDIUM | `frontend/components/traceability-rail.tsx`, `frontend/components/traceability-rail.test.tsx` | `request_id` 形式 (`^req-[a-zA-Z0-9][a-zA-Z0-9._-]*$`) をUIで検証し、無効入力時に TrustLog 遷移を fail-closed でブロック。 |
+| T-8 | MEDIUM | `.pre-commit-config.yaml` | `coverage-gate` を pre-commit local hook として追加し、`make test-cov` により CI 相当の coverage 閾値検証をローカルでも強制。 |
+
 ### Skipped (対応不要と判断)
 
 | ID | Reason |
 |----|--------|
-| F-1 | `controller.abort()` がアンマウント時の中断を処理済み。内部バッファパースは同期処理で race condition なし |
-| F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
 | P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
-| F-5, F-7 | Low/Medium のフロントエンド改善。実害なし |
-| T-5, T-7(FP), T-8 | CI/CD の追加改善。優先度低 |
+| T-7(FP) | Docker レイヤー順序は再評価で誤検知確定。 |
 | T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
