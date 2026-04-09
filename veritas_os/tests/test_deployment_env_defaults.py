@@ -115,3 +115,32 @@ def test_validate_rule_passes_without_forbidden_defaults(tmp_path: Path) -> None
         deployment_defaults.REPO_ROOT = original_root
 
     assert violations == []
+
+
+def test_validate_rule_flags_direct_fuji_api_key_presence(tmp_path: Path) -> None:
+    """Direct FUJI API flag must not appear in operator env templates."""
+    template = tmp_path / ".env.example"
+    template.write_text(
+        """
+        VERITAS_API_BASE_URL=http://localhost:8000
+        VERITAS_ENV=production
+        VERITAS_ENABLE_DIRECT_FUJI_API=0
+        """,
+        encoding="utf-8",
+    )
+    rule = deployment_defaults.TemplateRule(
+        relative_path=str(template.relative_to(tmp_path)),
+        required_tokens=("VERITAS_API_BASE_URL", "VERITAS_ENV=production"),
+        forbidden_env_keys=("VERITAS_ENABLE_DIRECT_FUJI_API",),
+    )
+
+    original_root = deployment_defaults.REPO_ROOT
+    deployment_defaults.REPO_ROOT = tmp_path
+    try:
+        violations = deployment_defaults._validate_rule(rule)
+    finally:
+        deployment_defaults.REPO_ROOT = original_root
+
+    assert violations == [
+        ".env.example: forbidden env key present VERITAS_ENABLE_DIRECT_FUJI_API"
+    ]
