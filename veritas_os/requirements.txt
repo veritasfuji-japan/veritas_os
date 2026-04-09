@@ -12,6 +12,7 @@
 #   pip install ".[ml]"                           # + ML tooling
 #   pip install ".[reports]"                      # + reporting / PDF
 #   pip install ".[anthropic]"                    # + Anthropic provider
+#   pip install ".[dev]"                          # + pytest / test tooling
 #   pip install ".[full]"                         # everything
 
 # --- Core: API / Server ---
@@ -57,3 +58,8 @@ prometheus-client==0.20.0
 
 # --- Optional [signing]: Policy Bundle Signing ---
 cryptography==46.0.7
+
+# --- Optional [dev]: Test / QA Tooling ---
+pytest==8.3.5
+pytest-asyncio==0.25.3
+pytest-cov==6.0.0
