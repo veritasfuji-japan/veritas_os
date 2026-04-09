@@ -6,6 +6,7 @@ interface AppShellProps {
   title: string;
   description?: string;
   className?: string;
+  skipLinkLabel?: string;
 }
 
 /**
@@ -15,7 +16,8 @@ export function AppShell({
   children,
   title,
   description,
-  className
+  className,
+  skipLinkLabel = "Skip to main content"
 }: AppShellProps): JSX.Element {
   return (
     <div className={cn("min-h-screen bg-background text-foreground", className)}>
@@ -23,7 +25,7 @@ export function AppShell({
         href="#main-content"
         className="sr-only z-[var(--ds-z-overlay)] rounded-md bg-primary px-3 py-2 text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[hsl(var(--ds-color-focus-ring))]"
       >
-        メインコンテンツへスキップ
+        {skipLinkLabel}
       </a>
       <header className="border-b border-border bg-surface/90 px-6 py-4 backdrop-blur" role="banner">
         <h1 className="text-xl font-semibold">{title}</h1>

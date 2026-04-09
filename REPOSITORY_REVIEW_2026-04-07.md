@@ -130,13 +130,15 @@
 - **Issue:** `request_id` にフォーマットバリデーションなし。`encodeURIComponent` は使用されているが、期待フォーマット ("req-" prefix) のチェックがない。
 - **Fix:** パターンバリデーションを追加。
 
-### [LOW] F-8: Array Index as Key in LoadingSkeleton
+### ~~[LOW] F-8: Array Index as Key in LoadingSkeleton~~ **FIXED (2026-04-09)**
 - **File:** `frontend/components/ui/loading-skeleton.tsx:15-21`
 - **Issue:** `key={i}` パターン。スケルトンコンポーネントでは実害は少ないが、ベストプラクティスに反する。
+- **Fix:** ✅ `skeleton-line-{n}` 形式の安定キーを生成する実装へ変更。
 
-### [LOW] F-9: Hardcoded Locale in AppShell Skip Link
+### ~~[LOW] F-9: Hardcoded Locale in AppShell Skip Link~~ **FIXED (2026-04-09)**
 - **File:** `packages/design-system/src/app-shell.tsx:26`
 - **Issue:** "メインコンテンツへスキップ" が日本語ハードコード。i18n システムを使用すべき。
+- **Fix:** ✅ `skipLinkLabel` prop を追加し、既定値を英語へ変更。呼び出し側でロケール別文言を注入可能にした。
 
 ---
 
@@ -189,13 +191,15 @@
 - **Issue:** `/tmp/frontend-dev.log` がハードコード。`${TMPDIR:-/tmp}` を使用すべき。
 - **Fix:** ✅ `${TMPDIR:-/tmp}` に変更。環境変数 `TMPDIR` が設定されていればそれを使用。
 
-### [LOW] T-10: Missing Dev Dependencies in pyproject.toml
+### ~~[LOW] T-10: Missing Dev Dependencies in pyproject.toml~~ **FIXED (2026-04-09)**
 - **File:** `setup.sh:114-116`, `pyproject.toml`
 - **Issue:** `pytest`, `pytest-cov` 等の開発依存が `pyproject.toml` に `[project.optional-dependencies] dev` として定義されていない。
+- **Fix:** ✅ `[project.optional-dependencies].dev` を追加し、`setup.sh` は `pip install ".[dev]"` へ統一。
 
-### [LOW] T-11: .env.example Contains Invalid Model Name
+### ~~[LOW] T-11: .env.example Contains Invalid Model Name~~ **FALSE POSITIVE (2026-04-09 Revalidated)**
 - **File:** `.env.example:9`
 - **Issue:** `LLM_MODEL=gpt-4.1-mini` は存在しないモデル名。`gpt-4o-mini` が正しい可能性あり。
+- **Revalidation Result:** 既存レビュー方針どおり **False positive**。`.env.example` / `setup.sh` に既定モデル注記を追加し、モデル名整合性を明文化。
 
 ---
 
@@ -260,6 +264,6 @@
 | F-1 | `controller.abort()` がアンマウント時の中断を処理済み。内部バッファパースは同期処理で race condition なし |
 | F-2 | `Set` state は参照比較の問題があるが、実害なし (理論的リスクのみ) |
 | P-4, P-5 | 動作に問題なし。リファクタリングの実益が薄い |
-| F-5, F-7, F-8, F-9 | Low/Medium のフロントエンド改善。実害なし |
-| T-5, T-7(FP), T-8, T-10 | CI/CD の追加改善。優先度低 |
+| F-5, F-7 | Low/Medium のフロントエンド改善。実害なし |
+| T-5, T-7(FP), T-8 | CI/CD の追加改善。優先度低 |
 | T-11 | **False positive**: `gpt-4.1-mini` は 2025年4月リリースの有効なモデル名 |
