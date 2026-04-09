@@ -378,6 +378,7 @@ def evaluate_runtime_policies(
                     "minimum_approval_met": req_eval["minimum_approval_met"],
                 },
                 "obligations": list(policy.obligations),
+                "metadata": dict(policy.metadata),
                 "explanation": explanation,
             }
         )

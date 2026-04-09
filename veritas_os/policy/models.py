@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
@@ -206,6 +206,52 @@ class SourcePolicy(BaseModel):
     def _ensure_metadata_mapping(cls, value: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(value, dict):
             raise ValueError("metadata must be an object")
+        rollout_controls = value.get("rollout_controls")
+        if rollout_controls is not None:
+            if not isinstance(rollout_controls, dict):
+                raise ValueError("metadata.rollout_controls must be an object")
+            strategy = str(rollout_controls.get("strategy", "")).strip().lower()
+            if strategy not in {"disabled", "canary", "staged", "full"}:
+                raise ValueError(
+                    "metadata.rollout_controls.strategy must be one of "
+                    "disabled/canary/staged/full"
+                )
+            canary_percent = rollout_controls.get("canary_percent", 0)
+            try:
+                canary_int = int(canary_percent)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    "metadata.rollout_controls.canary_percent must be int"
+                ) from exc
+            if canary_int < 0 or canary_int > 100:
+                raise ValueError(
+                    "metadata.rollout_controls.canary_percent must be 0..100"
+                )
+            full_after = rollout_controls.get("full_enforce_after")
+            if full_after is not None:
+                normalized = str(full_after).strip().replace("Z", "+00:00")
+                try:
+                    datetime.fromisoformat(normalized)
+                except ValueError as exc:
+                    raise ValueError(
+                        "metadata.rollout_controls.full_enforce_after must be "
+                        "ISO-8601 datetime"
+                    ) from exc
+
+        rollback = value.get("rollback")
+        if rollback is not None:
+            if not isinstance(rollback, dict):
+                raise ValueError("metadata.rollback must be an object")
+            rollback_target = rollback.get("target_policy_version")
+            if rollback_target is not None and not str(rollback_target).strip():
+                raise ValueError(
+                    "metadata.rollback.target_policy_version must be non-empty"
+                )
+            rollback_reason = rollback.get("reason")
+            if rollback_reason is not None and not str(rollback_reason).strip():
+                raise ValueError(
+                    "metadata.rollback.reason must be non-empty when provided"
+                )
         return value
 
     @field_validator("obligations")

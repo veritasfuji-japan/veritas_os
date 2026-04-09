@@ -207,6 +207,23 @@ Ed25519 署名により、秘密鍵を保有しない攻撃者はバンドルの
 1. transparency log / trust log 連携
 2. rollout / rollback policy pack metadata の追加
 
+### Rollout / Rollback metadata（2026-04）
+
+`metadata` に以下を追加すると、runtime bridge が段階ロールアウトを自動解釈します。
+
+- `metadata.rollout_controls.strategy`
+  - `disabled` / `canary` / `staged` / `full`
+- `metadata.rollout_controls.canary_percent`
+  - `0..100`（`canary` / `staged` 時に使用）
+- `metadata.rollout_controls.full_enforce_after`
+  - ISO-8601 datetime。到達後は canary から自動で `full` へ昇格
+- `metadata.rollback`
+  - `target_policy_version`, `reason` など rollback 用監査メタデータ
+
+runtime bridge は `governance.compiled_policy_rollout` に
+`enforced/state/rollback` を出力し、`policy_runtime_enforce=true` でも
+canary 対象外リクエストは observe-only に維持します。
+
 ---
 
 ## Validation / Compile Flow

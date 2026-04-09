@@ -53,6 +53,34 @@ def test_compile_policy_failure_for_invalid_source(tmp_path: Path) -> None:
         compile_policy_to_bundle(invalid_file, tmp_path)
 
 
+def test_compile_rejects_invalid_rollout_metadata(tmp_path: Path) -> None:
+    invalid_file = tmp_path / "invalid_rollout.yaml"
+    invalid_file.write_text(
+        """
+        schema_version: "1.0"
+        policy_id: "policy.invalid.rollout"
+        version: "1"
+        title: "invalid rollout"
+        description: "rollout metadata has invalid canary percent"
+        scope:
+          domains: ["security"]
+          routes: ["/api/tools"]
+          actors: ["kernel"]
+        outcome:
+          decision: "deny"
+          reason: "invalid rollout metadata"
+        metadata:
+          rollout_controls:
+            strategy: "canary"
+            canary_percent: 101
+        """,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(PolicyValidationError):
+        compile_policy_to_bundle(invalid_file, tmp_path)
+
+
 def test_manifest_contents_and_explanation_metadata(tmp_path: Path) -> None:
     result = compile_policy_to_bundle(
         EXAMPLES_DIR / "external_tool_usage_denied.yaml",

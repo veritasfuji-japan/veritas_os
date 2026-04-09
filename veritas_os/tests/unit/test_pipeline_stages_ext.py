@@ -7450,10 +7450,8 @@ def test_pipeline_bridge_warns_when_not_enforced(
         stage_fuji_precheck(ctx)
 
     assert ctx.fuji_dict.get("status") != "rejected"
-    assert (
-        "compiled policy outcome=deny observed but not enforced "
-        "(policy_runtime_enforce=false)"
-    ) in caplog.text
+    assert "compiled policy outcome=deny observed but not enforced" in caplog.text
+    assert "rollout_state=enforcement_disabled" in caplog.text
 
 
 def test_pipeline_bridge_enforcement_deny_sets_rejected(tmp_path: Path) -> None:
@@ -7670,6 +7668,136 @@ def test_pipeline_bridge_enforcement_logs_audit_info(
         "compiled policy enforcement" in record.message and "status=rejected" in record.message
         for record in caplog.records
     )
+
+
+def test_pipeline_bridge_canary_rollout_skips_enforcement_outside_bucket() -> None:
+    """Canary strategy should observe-only when request is outside canary bucket."""
+    from unittest.mock import patch
+
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    deny_policy = RuntimePolicy(
+        policy_id="policy.test.canary",
+        version="1",
+        title="Canary deny",
+        description="Canary policy deny for test.",
+        effective_date=None,
+        scope={"domains": ["security"], "routes": ["/api/tools"], "actors": ["kernel"]},
+        conditions=[{"field": "tool.external", "operator": "eq", "value": True}],
+        requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
+        constraints=[],
+        outcome={"decision": "deny", "reason": "Denied in canary."},
+        obligations=[],
+        test_vectors=[],
+        metadata={
+            "rollout_controls": {
+                "strategy": "canary",
+                "canary_percent": 0,
+            },
+            "rollback": {
+                "target_policy_version": "2026.03.20",
+                "reason": "canary regression safeguard",
+            },
+        },
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.test.canary",
+        version="1",
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-02T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[deny_policy],
+    )
+
+    with patch(
+        "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
+        return_value=bundle,
+    ):
+        ctx = PipelineContext(
+            query="external tool request",
+            context={
+                "compiled_policy_bundle_dir": "/mock/bundle",
+                "policy_runtime_enforce": True,
+                "domain": "security",
+                "route": "/api/tools",
+                "actor": "kernel",
+                "tool": {"external": True},
+                "request_id": "outside-canary",
+            },
+        )
+        stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] != "rejected"
+    rollout = ctx.response_extras["governance"]["compiled_policy_rollout"]
+    assert rollout["enforced"] is False
+    assert rollout["state"] == "canary_skip"
+    assert rollout["rollback"]["target_policy_version"] == "2026.03.20"
+
+
+def test_pipeline_bridge_canary_rollout_auto_promotes_to_full() -> None:
+    """Canary strategy should auto-promote to full after full_enforce_after."""
+    from unittest.mock import patch
+
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    deny_policy = RuntimePolicy(
+        policy_id="policy.test.canary.promote",
+        version="1",
+        title="Canary auto promote deny",
+        description="Canary policy deny auto-promoted to full.",
+        effective_date=None,
+        scope={"domains": ["security"], "routes": ["/api/tools"], "actors": ["kernel"]},
+        conditions=[{"field": "tool.external", "operator": "eq", "value": True}],
+        requirements={"required_evidence": [], "required_reviewers": [], "minimum_approval_count": 0},
+        constraints=[],
+        outcome={"decision": "deny", "reason": "Denied after promotion."},
+        obligations=[],
+        test_vectors=[],
+        metadata={
+            "rollout_controls": {
+                "strategy": "canary",
+                "canary_percent": 1,
+                "full_enforce_after": "2020-01-01T00:00:00Z",
+            },
+        },
+        source_refs=[],
+    )
+    bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.test.canary.promote",
+        version="1",
+        semantic_hash="sha256:test",
+        compiler_version="0.1.0",
+        compiled_at="2026-04-02T00:00:00Z",
+        manifest={"schema_version": "0.1"},
+        runtime_policies=[deny_policy],
+    )
+
+    with patch(
+        "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
+        return_value=bundle,
+    ):
+        ctx = PipelineContext(
+            query="external tool request",
+            context={
+                "compiled_policy_bundle_dir": "/mock/bundle",
+                "policy_runtime_enforce": True,
+                "domain": "security",
+                "route": "/api/tools",
+                "actor": "kernel",
+                "tool": {"external": True},
+                "request_id": "any-id",
+            },
+        )
+        stage_fuji_precheck(ctx)
+
+    assert ctx.fuji_dict["status"] == "rejected"
+    rollout = ctx.response_extras["governance"]["compiled_policy_rollout"]
+    assert rollout["enforced"] is True
+    assert rollout["state"] == "full_auto_promoted"
 
 
 def test_value_ema_nan_falls_back_to_neutral() -> None:
