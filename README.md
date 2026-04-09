@@ -758,7 +758,14 @@ make test-cov
 ```
 
 These targets use `uv` with `PYTHON_VERSION=3.12.12` and automatically download the
-interpreter if it is not already installed.
+interpreter if it is not already installed. `make test-cov` now mirrors the CI
+coverage gate (`--cov-fail-under=85`, `veritas_os/tests/.coveragerc`, XML/HTML reports,
+and `-m "not slow"`).
+
+```bash
+# Optional: override the local gate/marker to troubleshoot
+make test-cov COVERAGE_FAIL_UNDER=0 PYTEST_MARKEXPR=""
+```
 
 Fast smoke check:
 
