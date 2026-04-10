@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks validate-compose validate-compose-report validate-live validate-live-report validate-staged-report
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -151,3 +151,30 @@ test-smoke:
 validate:
 	@echo "[veritas] Running full production validation..."
 	@bash scripts/production_validation.sh
+
+validate-compose:
+	@echo "[veritas] Running Docker Compose governance validation..."
+	@bash scripts/compose_validation.sh
+
+validate-compose-report:
+	@echo "[veritas] Running Docker Compose validation with JSON report..."
+	@mkdir -p release-artifacts
+	@bash scripts/compose_validation.sh --json-report=release-artifacts/compose-validation-report.json
+
+validate-live:
+	@echo "[veritas] Running live provider validation (secrets-required)..."
+	@bash scripts/live_provider_validation.sh
+
+validate-live-report:
+	@echo "[veritas] Running live provider validation with JSON report..."
+	@mkdir -p release-artifacts
+	@bash scripts/live_provider_validation.sh --json-report=release-artifacts/live-provider-report.json
+
+validate-staged-report:
+	@echo "[veritas] Generating staged operational readiness report..."
+	@mkdir -p release-artifacts
+	@python scripts/generate_staged_readiness_report.py \
+		--ref $$(git describe --tags --always 2>/dev/null || echo "local") \
+		--sha $$(git rev-parse HEAD 2>/dev/null || echo "unknown") \
+		--output release-artifacts/staged-readiness-report.json \
+		--text-output release-artifacts/staged-readiness-report.txt

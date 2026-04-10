@@ -282,14 +282,31 @@ docker compose down
 |------|-----|----------------------|
 | HSTS header present | `/health` response header assertion | Browser HTTPS enforcement posture verified |
 | Baseline security headers | `/health` response header assertion | CSP / anti-clickjacking / MIME hardening verified |
+| X-Response-Time observability | `/health` header check | Monitoring header present |
+| Security headers on errors | 404 response header check | Headers enforced on all responses |
 | Staging TLS header validation (`@external`) | HTTPS `/health` against `VERITAS_STAGING_BASE_URL` | Reverse-proxy TLS hardening verified in staging |
+| Staging TLS cert expiry (`@external`) | SSL socket cert check (> 30 day threshold) | Certificate validity window verified |
 
 ### 8. Load Burst Validation (`test_production_tls_load.py`)
 
 | What | How | Production Gap Closed |
 |------|-----|----------------------|
-| Concurrent health burst (32 req / 8 workers) | ThreadPool + TestClient | Lightweight load regression signal added |
-| Staging burst p95 check (`@external`) | 32 HTTPS requests + p95 latency assertion | Staging-level performance regression signal added |
+| Concurrent health burst (32 req / 8 workers) | ThreadPool + latency percentile summary | Latency budget enforcement with p50/p90/p95/p99 |
+| Governance policy burst (16 req / 4 workers) | ThreadPool + latency summary | Governance endpoint load regression signal |
+| Staging burst p95 check (`@external`) | 32 HTTPS requests + p95 ≤ 800ms | Staging-level performance regression signal |
+
+### 9. Compose Governance Smoke (`test_production_compose_governance.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| Governance policy contract | GET + field assertions | fuji_rules, risk_thresholds, auto_stop, log_retention |
+| Governance history reachable | GET 200 check | Audit trail API accessible |
+| Decide auth enforcement | POST without key → 401/403 | Auth middleware verified |
+| Health subsystem reporting | Checks in health response | pipeline, memory, trust_log subsystems |
+| Security headers on health | Response header assertions | Hardening present on health endpoint |
+| OpenAPI governance paths | Schema path check | Governance + decide in API schema |
+| Governance policy latency | 10 sequential calls, p95 < 500ms | Governance read performance budget |
+| Health endpoint latency | 20 sequential calls, p95 < 200ms | Health endpoint performance budget |
 
 ## Architecture: CI Role Separation
 
@@ -331,17 +348,74 @@ docker compose down
 
 | Risk | Status | Mitigation |
 |------|--------|------------|
-| Live LLM API validation | Not covered | Requires paid API keys; add `@external` tests when keys available |
-| Full Docker compose E2E | Script-ready, not in CI | `scripts/production_validation.sh` runs locally |
+| Live LLM API validation | **Gated** — `scripts/live_provider_validation.sh` | Requires OPENAI_API_KEY; runs in Tier 3 / manual |
+| Full Docker compose E2E | **Validated** — `scripts/compose_validation.sh` | Governance endpoints, security headers, auth enforcement |
 | Database persistence | N/A (file-based) | TrustLog file tests cover persistence |
 | Multi-node clustering | Not applicable | Single-node architecture |
-| TLS certificate chain/e2e HTTPS handshake | Partially covered | `@external` staging HTTPS tests added; expand to cert-chain expiry and OCSP checks |
-| Load/stress at scale (p95/p99 latency SLO) | Partially covered | Staging p95 smoke added; add k6/locust long-run and p99 SLO validation |
+| TLS certificate chain/e2e HTTPS handshake | **Gated** — staging cert expiry checked | `@external` staging HTTPS tests + cert expiry validation |
+| Load/stress at scale (p95/p99 latency SLO) | **Partially covered** — latency budgets enforced | p95 budgets on health (200ms), governance (500ms), burst (1000ms) |
 | Kubernetes deployment | Not covered | Add Helm chart tests when K8s support added |
+
+## Additional Validation Paths
+
+### Compose Governance Validation (`scripts/compose_validation.sh`)
+
+Full-stack Docker Compose validation that exercises:
+- Backend health with subsystem checks (pipeline, memory, trust_log)
+- Frontend reachability
+- OpenAPI schema with critical path verification (/v1/decide, /v1/governance, /v1/trust)
+- Governance policy read + history endpoints
+- Auth enforcement (401/403 without API key)
+- Security header presence (HSTS, CSP, X-Frame, X-Content-Type)
+
+```bash
+# Basic run
+scripts/compose_validation.sh
+
+# With JSON report
+scripts/compose_validation.sh --json-report /tmp/compose-report.json
+
+# Reuse running services
+scripts/compose_validation.sh --skip-build
+```
+
+### Live Provider Validation (`scripts/live_provider_validation.sh`)
+
+Gated validation against real external services (all checks skip when secrets absent):
+- OpenAI API connectivity (cheapest call: /v1/models list)
+- LLM client end-to-end smoke (minimal completion)
+- Staging deployment health, TLS cert expiry, security headers
+- Web search provider integration
+
+```bash
+# All checks skip unless secrets are set
+OPENAI_API_KEY=sk-... scripts/live_provider_validation.sh
+VERITAS_STAGING_BASE_URL=https://staging.example.com scripts/live_provider_validation.sh
+
+# With JSON report
+scripts/live_provider_validation.sh --json-report=/tmp/live-report.json
+```
+
+### Staged Readiness Report (`scripts/generate_staged_readiness_report.py`)
+
+Combines governance checks, compose validation, and live provider results into
+a single v2.0 operational readiness report (JSON + text):
+
+```bash
+python scripts/generate_staged_readiness_report.py \
+  --ref $(git describe --tags --always) \
+  --sha $(git rev-parse HEAD) \
+  --compose-report /tmp/compose-report.json \
+  --live-report /tmp/live-report.json \
+  --output /tmp/staged-report.json \
+  --text-output /tmp/staged-report.txt
+```
+
+See `docs/OPERATIONAL_READINESS_RUNBOOK.md` for full usage and troubleshooting.
 
 ## What This Validation Adds
 
-1. **65 production-like tests** exercising real subsystems (not just mocks)
+1. **75+ production-like tests** exercising real subsystems (not just mocks)
 2. **Fail-closed verification** — encryption key absence is explicitly tested
 3. **Tamper detection** — TrustLog chain integrity and signed log tampering
 4. **SSRF prevention** — web search security layer validated
@@ -351,3 +425,9 @@ docker compose down
 8. **Concurrent safety** — TrustLog thread-safety under load
 9. **CI isolation** — production tests separated from fast CI to avoid flakiness
 10. **Reproducible locally** — all tests run without external services by default
+11. **Compose governance smoke** — governance endpoint reachability in full-stack deploy
+12. **Latency budgets** — p95 enforcement on health (200ms), governance (500ms), burst (1000ms)
+13. **TLS cert validation** — staging certificate expiry check (> 30 day threshold)
+14. **Live provider gating** — OpenAI / staging / web search validation with secret gating
+15. **Staged readiness reports** — machine-readable JSON + human-readable text certification
+16. **Coverage matrix** — explicit proof/simulation/environment documentation
