@@ -131,10 +131,15 @@ def assemble_response(
 
     # Continuation runtime shadow output (flag on only; omitted entirely when off)
     if ctx.continuation_snapshot is not None and ctx.continuation_receipt is not None:
-        res["continuation"] = {
+        _cont_data: Dict[str, Any] = {
             "state": ctx.continuation_snapshot,
             "receipt": ctx.continuation_receipt,
         }
+        if ctx.continuation_enforcement_events:
+            _cont_data["enforcement_events"] = ctx.continuation_enforcement_events
+        if ctx.continuation_enforcement_halt:
+            _cont_data["enforcement_halt"] = True
+        res["continuation"] = _cont_data
 
     return res
 

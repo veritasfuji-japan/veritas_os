@@ -219,6 +219,15 @@ def persist_audit_log(
             audit_entry["continuation_halt_classification"] = _c_rcpt.get("halt_classification")
             audit_entry["continuation_divergence_detail"] = _c_rcpt.get("divergence_detail")
 
+        # ── Continuation enforcement events ─────────────────────────
+        _c_enf = ctx.continuation_enforcement_events
+        if isinstance(_c_enf, list) and _c_enf:
+            audit_entry["continuation_enforcement_event_count"] = len(_c_enf)
+            audit_entry["continuation_enforcement_actions"] = [
+                e.get("action") for e in _c_enf if isinstance(e, dict)
+            ]
+            audit_entry["continuation_enforcement_halt"] = ctx.continuation_enforcement_halt
+
         audit_entry = redact_payload(audit_entry)
         append_trust_log_fn(audit_entry)
         write_shadow_decide_fn(

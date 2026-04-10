@@ -1,21 +1,26 @@
 # veritas_os/core/continuation_runtime/__init__.py
 # -*- coding: utf-8 -*-
 """
-Continuation Runtime — Core Data Model (Phase-1: observe/shadow only)
+Continuation Runtime — Core Data Model
 
-Chain-level continuation observation substrate that runs *beside* the
-existing step-level decision infrastructure.  This module defines the
-four core structures:
+Chain-level continuation observation and limited enforcement substrate
+that runs *beside* (not inside) the existing step-level decision
+infrastructure.  This module defines the core structures:
 
 - ContinuationClaimLineage : live object representing a chain's standing
 - ClaimStateSnapshot       : minimal governable state at a point in time
 - ContinuationReceipt      : audit witness emitted per revalidation
 - ContinuationLawPack      : versioned rule set governing revalidation
+- ContinuationEnforcementEvaluator : limited enforcement engine (Phase-2)
 
-Phase-1 contract:
+Default behavior (Phase-1):
   - Feature flag off → zero side effects, zero imports beyond this module
-  - No enforcement; snapshots and receipts are observation artifacts only
+  - Observe mode: snapshots and receipts are observation artifacts only
   - FUJI is unmodified; gate.decision_status is unmodified
+
+Phase-2 enforcement modes (feature-flagged):
+  - Advisory mode: emit enforcement events as advisories (no blocking)
+  - Enforce mode: limited blocking for high-confidence conditions
 """
 from __future__ import annotations
 
@@ -36,6 +41,15 @@ from .revalidator import (
     ContinuationRevalidator,
     PresentCondition,
     run_continuation_revalidation_shadow,
+)
+from .enforcement import (
+    EnforcementMode,
+    EnforcementAction,
+    EnforcementConditionType,
+    EnforcementCondition,
+    EnforcementEvent,
+    EnforcementConfig,
+    ContinuationEnforcementEvaluator,
 )
 
 __all__ = [
@@ -63,4 +77,12 @@ __all__ = [
     "ContinuationRevalidator",
     "PresentCondition",
     "run_continuation_revalidation_shadow",
+    # enforcement (Phase-2)
+    "EnforcementMode",
+    "EnforcementAction",
+    "EnforcementConditionType",
+    "EnforcementCondition",
+    "EnforcementEvent",
+    "EnforcementConfig",
+    "ContinuationEnforcementEvaluator",
 ]

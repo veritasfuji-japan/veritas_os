@@ -126,6 +126,7 @@ class PostureDefaults:
     trustlog_transparency_required: bool = False
     trustlog_worm_hard_fail: bool = False
     replay_strict: bool = False
+    continuation_enforcement_mode: str = "observe"
 
     @property
     def is_strict(self) -> bool:
@@ -182,6 +183,9 @@ def derive_defaults(posture: PostureLevel) -> PostureDefaults:
             ),
             trustlog_worm_hard_fail=overrides.get("trustlog_worm_hard_fail", True),
             replay_strict=overrides.get("replay_strict", True),
+            continuation_enforcement_mode=os.getenv(
+                "VERITAS_CONTINUATION_ENFORCEMENT_MODE", "advisory"
+            ).strip().lower(),
         )
 
     # dev / staging: honour explicit env vars, default off
@@ -196,6 +200,9 @@ def derive_defaults(posture: PostureLevel) -> PostureDefaults:
         ),
         trustlog_worm_hard_fail=_env_bool("VERITAS_TRUSTLOG_WORM_HARD_FAIL", False),
         replay_strict=_env_bool("VERITAS_REPLAY_STRICT", False),
+        continuation_enforcement_mode=os.getenv(
+            "VERITAS_CONTINUATION_ENFORCEMENT_MODE", "observe"
+        ).strip().lower(),
     )
 
 
@@ -274,19 +281,23 @@ def log_posture_banner(defaults: PostureDefaults) -> str:
     off_flags = sorted(k for k, v in guarantees.items() if not v)
 
     posture_name = defaults.posture.value
+    cont_mode = defaults.continuation_enforcement_mode
     on_text = ", ".join(on_flags) if on_flags else "(none)"
     off_text = ", ".join(off_flags) if off_flags else "(none)"
     _logger.info(
-        "[POSTURE] Active posture: %s | ON: %s | OFF: %s",
+        "[POSTURE] Active posture: %s | ON: %s | OFF: %s "
+        "| continuation_enforcement: %s",
         posture_name,
         on_text,
         off_text,
+        cont_mode,
     )
     return (
         "[POSTURE] Active posture: %s\n"
         "[POSTURE] Guarantees ON : %s\n"
-        "[POSTURE] Guarantees OFF: %s"
-    ) % (posture_name, on_text, off_text)
+        "[POSTURE] Guarantees OFF: %s\n"
+        "[POSTURE] Continuation enforcement: %s"
+    ) % (posture_name, on_text, off_text, cont_mode)
 
 
 # ── Convenience: resolve + derive + validate in one call ────────────────
