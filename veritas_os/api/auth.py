@@ -568,7 +568,23 @@ def require_permission(permission: Permission):
         request: Request = None,  # type: ignore[assignment]
         x_api_key: str | None = Security(api_key_scheme),
     ):
-        role = _resolve_role_from_request(x_api_key)
+        key = (x_api_key or "").strip()
+        if not key:
+            _record_auth_reject_reason("missing_api_key_permission_check")
+            raise HTTPException(
+                status_code=401,
+                detail="Missing API key",
+            )
+
+        try:
+            role = resolve_role_for_key(key)
+        except ValueError:
+            _record_auth_reject_reason("invalid_api_key_permission_check")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid API key",
+            ) from None
+
         allowed = ROLE_PERMISSIONS.get(role, frozenset())
         if permission not in allowed:
             _record_auth_reject_reason("insufficient_permission")
