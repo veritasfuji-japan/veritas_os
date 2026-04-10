@@ -224,6 +224,24 @@ def _resolve_signer(*, ensure_local_keys: bool = False) -> Signer:
     )
 
 
+def _resolve_signer_for_entry(entry: Dict[str, Any]) -> Signer:
+    """Resolve signer for a persisted TrustLog entry.
+
+    The signer is selected from entry metadata first so mixed-backend
+    historical logs remain verifiable after backend migrations.
+    """
+    signer_type = str(entry.get("signer_type", "")).strip().lower()
+    signer_key_id = str(entry.get("signer_key_id", "")).strip()
+    if signer_type:
+        return build_trustlog_signer(
+            private_key_path=PRIVATE_KEY_PATH,
+            public_key_path=PUBLIC_KEY_PATH,
+            backend=signer_type,
+            kms_key_id=signer_key_id or None,
+        )
+    return _resolve_signer()
+
+
 def _entry_chain_hash(entry: Dict[str, Any]) -> str:
     return sha256_hex(canonical_json_dumps(entry))
 
@@ -509,7 +527,7 @@ def verify_signature(entry: Dict[str, Any]) -> bool:
     if not required.issubset(entry):
         return False
     try:
-        signer = _resolve_signer()
+        signer = _resolve_signer_for_entry(entry)
         return signer.verify_payload_signature(
             payload_hash=str(entry["payload_hash"]),
             signature_b64=str(entry["signature"]),

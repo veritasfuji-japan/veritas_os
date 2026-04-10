@@ -179,7 +179,7 @@ class Signer(Protocol):
 class FileEd25519Signer:
     """Ed25519 signer backed by local key files."""
 
-    signer_type = "file_ed25519"
+    signer_type = "file"
 
     def __init__(self, private_key_path: Path, public_key_path: Path) -> None:
         self.private_key_path = private_key_path
@@ -214,7 +214,7 @@ class AwsKmsEd25519Signer:
         are routed over trusted channels.
     """
 
-    signer_type = "aws_kms_ed25519"
+    signer_type = "aws_kms"
 
     def __init__(
         self,
@@ -274,17 +274,27 @@ def build_trustlog_signer(
     private_key_path: Path,
     public_key_path: Path,
     ensure_local_keys: bool = False,
+    backend: Optional[str] = None,
+    kms_key_id: Optional[str] = None,
 ) -> Signer:
     """Build TrustLog signer from backend environment variables."""
-    backend = os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file").strip().lower()
-    if backend in {"", "file"}:
+    selected_backend = (
+        backend
+        if backend is not None
+        else os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+    ).strip().lower()
+    if selected_backend in {"", "file", "file_ed25519"}:
         signer = FileEd25519Signer(private_key_path=private_key_path, public_key_path=public_key_path)
         if ensure_local_keys:
             signer.ensure_key_material()
         return signer
-    if backend == "aws_kms":
-        kms_key_id = os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "")
-        return AwsKmsEd25519Signer(kms_key_id=kms_key_id)
+    if selected_backend in {"aws_kms", "aws_kms_ed25519"}:
+        selected_key_id = (
+            kms_key_id
+            if kms_key_id is not None
+            else os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "")
+        )
+        return AwsKmsEd25519Signer(kms_key_id=selected_key_id)
     raise ValueError(
-        "Unsupported VERITAS_TRUSTLOG_SIGNER_BACKEND. Expected 'file' or 'aws_kms'."
+        "Unsupported signer backend. Expected 'file' or 'aws_kms'."
     )
