@@ -283,7 +283,7 @@ veritas_os/                  ← Monorepo root
 │   ├── prompts/             ← Prompt templates for LLM interactions
 │   ├── reporting/           ← Report generation utilities
 │   ├── benchmarks/          ← Performance benchmark data
-│   └── tests/               ← 5600+ Python tests (+ top-level tests/)
+│   └── tests/               ← 6200+ Python tests (+ top-level tests/)
 ├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -1100,11 +1100,18 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 
 ## 🗺️ Roadmap (Near-Term)
 
-- CI (GitHub Actions): pytest + coverage + artifact reports
-- Security hardening: input validation & secret/log hygiene
-- Policy-as-Code: **Policy → ValueCore/FUJI rules → generated tests** (compiler layer)
-- Multi-provider LLM support (Anthropic, Google, Ollama, OpenRouter)
+**Already delivered** (previously listed as roadmap items):
+- ✅ CI (GitHub Actions): three-tier validation model with pytest + coverage + artifact reports
+- ✅ Security hardening: input validation, secret/log hygiene, runtime posture system
+- ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
+- ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
+
+**Next milestones**:
+- Promote Anthropic / Google LLM providers to production tier
 - Automatic coverage badge update from CI artifacts
+- PostgreSQL storage backend (currently JSONL-only in production)
+- Phased move from mono-repo licensing (Plan B) to multi-repo split (Plan A)
+- Continuation Runtime Phase-2 enforcement graduation from advisory to enforce-by-default in secure/prod posture
 
 ---
 

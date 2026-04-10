@@ -6,6 +6,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- docs/COVERAGE_REPORT.md のスナップショット値。CIゲートは .github/workflows/main.yml で管理 -->
@@ -82,6 +83,7 @@ docker compose up --build
 ## 目次
 
 - [ベータ版の位置づけ](#-ベータ版の位置づけ)
+- [ランタイムポスチャ保証](#-ランタイムポスチャ保証)
 - [なぜVERITASか](#-なぜveritasか)
 - [できること](#-できること)
 - [Quick Start](#-quick-start)
@@ -92,7 +94,7 @@ docker compose up --build
 - [Docker（バックエンドのみ）](#-dockerバックエンドのみ)
 - [アーキテクチャ（高レベル）](#-アーキテクチャ高レベル)
 - [TrustLog（ハッシュチェーン監査ログ）](#-trustlogハッシュチェーン監査ログ)
-- [Continuation Runtime（Phase-1）](#-continuation-runtimephase-1-observeshadow)
+- [Continuation Runtime](#-continuation-runtime)
 - [テスト](#-テスト)
 - [環境変数リファレンス](#-環境変数リファレンス)
 - [セキュリティ注意（重要）](#-セキュリティ注意重要)
@@ -117,6 +119,47 @@ docker compose up --build
 - バックエンド、フロントエンド、Replay、ガバナンス、コンプライアンスまで統合された広いアーキテクチャをすでに持っている状態です。
 - もはやアルファ試作ではなく、監査基盤を備えた実用寄りの段階です。
 - 一方で、ポリシーパック、デプロイ既定値、環境固有の統合については継続的な改善が前提です。
+
+## 🔒 ランタイムポスチャ保証
+
+VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）でガバナンスに重要な既定値を制御します。一度設定すれば、すべての安全フラグがそこから導出されます。
+
+| ポスチャ | ガバナンス制御 | 起動時の動作 | エスケープハッチ |
+|---|---|---|---|
+| **dev**（デフォルト） | 明示的に有効化しない限りすべてOFF | 緩和 — 警告のみ | N/A |
+| **staging** | 明示的に有効化しない限りすべてOFF | 緩和 — 警告のみ | N/A |
+| **secure** | すべて**デフォルトON** | Fail-closed — 統合未設定時に起動拒否 | `VERITAS_POSTURE_OVERRIDE_*` 有効 |
+| **prod** | すべて**ON**、例外なし | Fail-closed — 統合未設定時に起動拒否 | オーバーライドは**無視** |
+
+### ポスチャで管理される制御
+
+| 制御 | 環境変数（明示的オーバーライド） | 適用内容 |
+|---|---|---|
+| ポリシーランタイム適用 | `VERITAS_POLICY_RUNTIME_ENFORCE` | コンパイル済みポリシーのdeny/halt/escalate/require_human_review判定をパイプラインで適用 |
+| 外部シークレットマネージャー | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | 起動時にVault/KMS/クラウドシークレットマネージャーを要求 |
+| Transparency logアンカーリング | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | Transparencyアンカー未設定時にTrustLog書き込みを失敗させる |
+| WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | WORMミラー書き込み失敗時にTrustLog書き込みを失敗させる |
+| 厳密リプレイ | `VERITAS_REPLAY_STRICT` | 重大なリプレイ乖離を中止させる |
+
+### 起動拒否の条件（secure/prod）
+
+以下の条件でアクション可能なエラーとともに起動を拒否します:
+- `VERITAS_SECRET_PROVIDER` 未設定（外部シークレットマネージャー強制）
+- `VERITAS_API_SECRET_REF` 未設定（外部シークレットマネージャー強制）
+- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` 未設定（Transparencyアンカーリング）
+- `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` 未設定（WORM hard-fail）
+
+### エスケープハッチ（secureポスチャのみ）
+
+`secure`ポスチャでは、本番前テスト用に個別制御を無効化できます:
+```bash
+VERITAS_POSTURE_OVERRIDE_POLICY_ENFORCE=0
+VERITAS_POSTURE_OVERRIDE_EXTERNAL_SECRET_MGR=0
+VERITAS_POSTURE_OVERRIDE_TRUSTLOG_TRANSPARENCY=0
+VERITAS_POSTURE_OVERRIDE_TRUSTLOG_WORM=0
+VERITAS_POSTURE_OVERRIDE_REPLAY_STRICT=0
+```
+これらのオーバーライドは `prod` ポスチャでは**無視されます**。
 
 ## 🎯 なぜVERITASか
 
@@ -241,7 +284,7 @@ veritas_os/                  ← モノレポルート
 │   ├── prompts/             ← LLM連携用プロンプトテンプレート
 │   ├── reporting/           ← レポート生成ユーティリティ
 │   ├── benchmarks/          ← パフォーマンスベンチマークデータ
-│   └── tests/               ← 5600以上のPythonテスト（+ トップレベルtests/）
+│   └── tests/               ← 6200以上のPythonテスト（+ トップレベルtests/）
 ├── frontend/                ← Next.js 16 Mission Controlダッシュボード
 │   ├── app/                 ← ページ（Home、Console、Audit、Governance、Risk）
 │   ├── components/          ← 共有Reactコンポーネント
@@ -348,6 +391,11 @@ veritas_os/                  ← モノレポルート
 | GET | `/v1/governance/policy/history` | ポリシー変更監査証跡 |
 | GET | `/v1/governance/value-drift` | 価値重みEMAドリフト監視 |
 | GET | `/v1/governance/decisions/export` | ガバナンス監査用意思決定エクスポート |
+
+> **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
+> 意思決定成果物には、適用中のガバナンスポリシー（バージョン、ダイジェスト、署名検証結果、署名者ID）を
+> 示す `governance_identity` フィールドが含まれます。
+> ライフサイクル全体、鍵管理、移行ガイドは [`docs/governance_artifact_lifecycle.md`](docs/governance_artifact_lifecycle.md) を参照してください。
 
 ### コンプライアンス & レポート
 
@@ -715,24 +763,72 @@ python -m veritas_os.scripts.verify_trust_log
 
 ---
 
-## 🔄 Continuation Runtime（Phase-1: Observe/Shadow）
+## 🔄 Continuation Runtime
 
-VERITAS は既存のステップレベル意思決定インフラの **横に（内部ではなく）** 動作する **チェーンレベル継続観測レイヤー** を含みます。これはエンフォースメントではなく、**観測のみ** です。
+VERITAS は既存のステップレベル意思決定インフラの **横に（内部ではなく）** 動作する **チェーンレベル継続観測・限定エンフォースメントレイヤー** を含みます。
+
+### モード
+
+| モード | 動作 | デフォルトポスチャ |
+|---|---|---|
+| **Observe**（Phase-1） | シャドウのみ — エンフォースメントなし、拒否ゲーティングなし | dev, staging |
+| **Advisory**（Phase-2） | エンフォースメントイベントを助言として発行。ブロックなし | secure, prod |
+| **Enforce**（Phase-2） | 限定エンフォースメント: 高確信条件でブロック/停止する場合あり | （環境変数でオプトイン） |
 
 | 側面 | 状態 |
 |---|---|
-| モード | Observe / shadow のみ — エンフォースメントなし、拒否ゲーティングなし |
 | FUJI | 変更なし — 各ステップの最終安全/ポリシーゲートのまま |
 | `gate.decision_status` | 変更なし — 新しい値なし、再解釈なし |
 | フィーチャーフラグOFF | レスポンス、ログ、UI、動作に変更なし |
-| 目的 | 個々のステップが通過しても、チェーンの継続状態が弱化した場合の検知（narrowed, degraded, escalated, halted, revoked） |
+| 目的 | 個々のステップが通過しても、チェーンの継続状態が弱化した場合の検知 |
 
-主要概念:
+### エンフォースメントアクション（Phase-2）
+
+エンフォースメントエンジンは**高確信・説明可能な条件**でのみトリガーされます:
+
+| 条件 | アクション | 発動条件 |
+|---|---|---|
+| 繰り返しの高リスク劣化 | `require_human_review` | degraded/escalated/haltedレシートが3回以上連続 |
+| 承認なしの承認必須操作 | `halt_chain` | スコープがエスカレーションを要求するが承認がない |
+| リプレイ乖離超過 | `escalate_alert` | センシティブパスで乖離率>0.3 |
+| ポリシー境界違反 | `halt_chain` | 継続状態でポリシー違反を検知 |
+
+### `require_human_review` と `halt_chain` の使い分け
+
+- **`require_human_review`**: *蓄積された劣化*により発動 — 単一の重大障害ではなく、ドリフトを示唆する弱化パターン。オペレーターレビュー待ちでチェーンが一時停止。
+- **`halt_chain`**: *決定論的なガバナンス障害*により発動 — 承認必須の遷移で承認が欠如、またはポリシー境界違反を検知。チェーンを即座に停止。
+- **`escalate_alert`**: *リプレイ乖離*により発動 — 継続パスが予想されるリプレイ動作から乖離しており、環境または設定のドリフトを示唆。
+
+### 設定
+
+| 変数 | デフォルト | 説明 |
+|---|---|---|
+| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Continuation Runtimeの有効化 |
+| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | エンフォースメントモード（`observe`, `advisory`, `enforce`） |
+
+ポスチャベースのデフォルト:
+- **dev/staging**: `observe`（エンフォースメントなし）
+- **secure/prod**: `advisory`（イベント発行のみ、ブロックなし）
+- `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce` で任意のポスチャで限定エンフォースメントを有効化。
+
+### 主要概念
+
 - **Snapshot**（状態）: 最小限のガバナンス可能な事実 — support basis、scope、burden、headroom、law version
 - **Receipt**（監査証人）: 再検証の実施方法、乖離フラグ、理由コード、レシートチェーン連結
-- Snapshot は Receipt ではない。Receipt は状態ストアではない。それぞれ別の責務。
+- **Enforcement Event**（監査成果物）: 全エンフォースメントアクションはログ記録され、帰属可能で、リプレイ可視かつオペレーター可視
+- Snapshot は Receipt ではない。Receipt は状態ストアではない。Enforcement Eventは両方とは独立。
 - 再検証はステップレベルのメリット評価の **前** に実行される（pre-merit placement）
-- `should_refuse_before_effect` は Phase-1 では助言のみ
+- 継続レベルのエンフォースメントはFUJIステップレベル安全ゲーティングとは概念的に分離
+
+### 全エンフォースメントイベントの特性:
+- **ログ記録** — Python logging + trustlog-ready構造体経由
+- **帰属可能** — `claim_lineage_id`, `receipt_id`, `chain_id` を保持
+- **リプレイ可視** — `snapshot_id`, `receipt_id`, `law_version` を保持
+- **オペレーター可視** — `action`, `reasoning`, `severity`, `conditions_met` を保持
+
+### 設計ノート
+
+参照: `docs/architecture/continuation_enforcement_design_note.md`
 
 有効化: `VERITAS_CAP_CONTINUATION_RUNTIME=1`（デフォルト: OFF）
 
@@ -787,13 +883,39 @@ pnpm --filter frontend e2e
 
 ### CI / Quality Gate
 
-- GitHub Actions は Python 3.11/3.12 マトリクスで **pytest + coverage** を実行
-- CIは最小カバレッジゲート（`--cov-fail-under`）を現在 **85%** に設定
-- **CodeQL** によるセキュリティ脆弱性スキャン
-- **SBOM** のナイトリー生成
-- **セキュリティゲート** ワークフローによる追加セキュリティチェック
-- Coverage成果物は **XML/HTML** で保存
-- Coverageバッジは `docs/COVERAGE_REPORT.md` のドキュメントスナップショット値（CI成果物からの自動更新を予定）
+VERITAS OS は明示的なブロッキングセマンティクスを持つ **3段階 CI/リリース検証モデル** を採用しています:
+
+| 段階 | ワークフロー | トリガー | ブロッキング？ |
+|------|----------|---------|-----------|
+| **Tier 1** | `main.yml` | 全PR + `main` へのpush | ✅ マージをブロック |
+| **Tier 2** | `release-gate.yml` | `v*` タグpush | ✅ リリースをブロック |
+| **Tier 3** | `production-validation.yml` | 週次 + 手動 | ⚠️ アドバイザリー |
+
+**Tier 1**（`main.yml`）— 以下がすべて通過するまでPRがブロックされます:
+- Ruff lint + Bandit + アーキテクチャ/セキュリティスクリプトチェック
+- 依存関係CVE監査（Python + Node）
+- **`governance-smoke`**: 明示的高速スモークゲート（`pytest -m smoke`, 約2分）
+- Python 3.11 + 3.12 マトリクスでのフルユニットテスト（85%カバレッジゲート）
+- フロントエンド lint / Vitest / Playwright E2E
+
+**Tier 2**（`release-gate.yml`）— 以下がすべて通過するまで `v*` タグがブロックされます:
+- Tier 1チェックのリリース時再実行
+- 本番相当テストスイート（`pytest -m "production or smoke"` + TLS + 負荷テスト）
+- フルスタック Docker Compose ヘルスチェック
+- ガバナンス準備レポート成果物の生成・アップロード
+
+**Tier 3**（`production-validation.yml`）— 週次スケジュール + 手動ディスパッチ:
+- 長時間実行の本番テスト、負荷テスト、外部ライブテスト
+- アドバイザリー: 障害は可視だがリリースをブロックしない
+
+完全な段階モデルは [`docs/PRODUCTION_VALIDATION.md`](docs/PRODUCTION_VALIDATION.md)、
+リリースプロセスは [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) を参照してください。
+
+### リリースのガバナンス準備状況の確認方法
+
+1. [Actions タブ](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml) で対象タグの `Release Gate` ワークフロー実行を確認
+2. `✅ Release Readiness Gate` ジョブが **🟢 RELEASE IS GOVERNANCE-READY** を表示していること
+3. `release-governance-readiness-report` 成果物をダウンロードし、`"governance_ready": true` を確認
 
 ### 本番相当バリデーション
 
@@ -856,7 +978,8 @@ make validate
 | `VERITAS_ENABLE_DIRECT_FUJI_API` | `0` | `/v1/fuji/validate` エンドポイントの有効化 |
 | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` | Vault/KMSなしでの起動をブロック |
 | `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web検索毒性フィルタ（fail-closed） |
-| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Continuation Runtime有効化（Phase-1 observe） |
+| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Continuation Runtimeの有効化 |
+| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | Continuation Runtimeエンフォースメントモード（`observe`, `advisory`, `enforce`） |
 
 ### ポリシー署名 & 適用
 
@@ -865,6 +988,11 @@ make validate
 | `VERITAS_POLICY_VERIFY_KEY` | — | ポリシーバンドル署名検証用Ed25519公開鍵PEMファイルのパス |
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | コンパイル済みポリシー判定（deny/halt/escalate/require_human_review）のランタイム適用を有効化 |
 | `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Ed25519署名検証を必須化。鍵未設定時にマニフェストを拒否 |
+
+> **ポスチャ対応適用**: `secure`/`prod` ポスチャでは、SHA-256のみ（未署名）のポリシーバンドルは
+> ランタイムアダプターにより拒否されます。Ed25519署名済みバンドルのみが検証を通過します。
+> `dev`/`staging` では、SHA-256完全性チェックは警告付きで受け入れられます。
+> ガバナンスロールバック操作は更新と同じ4-eyes承認・監査要件に従います。
 
 ### TrustLog & 監査
 
@@ -884,6 +1012,7 @@ make validate
 
 | 変数 | デフォルト | 説明 |
 |---|---|---|
+| `VERITAS_POSTURE` | `dev` | ランタイムポスチャ（`dev`/`staging`/`secure`/`prod`）。[ランタイムポスチャ保証](#-ランタイムポスチャ保証)を参照。 |
 | `VERITAS_RUNTIME_ROOT` | `runtime/` | ランタイムデータのルートディレクトリ |
 | `VERITAS_RUNTIME_NAMESPACE` | `dev` | ランタイム名前空間（`dev`/`test`/`demo`/`prod`） |
 
@@ -943,11 +1072,18 @@ make validate
 
 ## 🗺️ ロードマップ（短期）
 
-- CI（GitHub Actions）: pytest + coverage + artifactレポート
-- セキュリティ強化: 入力検証と秘密情報/ログ衛生
-- Policy-as-Code: **Policy → ValueCore/FUJIルール → テスト自動生成**（コンパイラ層）
-- マルチプロバイダLLMサポート（Anthropic、Google、Ollama、OpenRouter）
+**実装済み**（以前ロードマップに記載されていた項目）:
+- ✅ CI（GitHub Actions）: 3段階バリデーションモデル（pytest + coverage + artifactレポート）
+- ✅ セキュリティ強化: 入力検証、秘密情報/ログ衛生、ランタイムポスチャシステム
+- ✅ Policy-as-Code: YAML/JSON → IR → コンパイル済みルール（Ed25519署名バンドル、テスト自動生成）
+- ✅ マルチプロバイダLLM: OpenAI（production）、Anthropic/Google（planned）、Ollama/OpenRouter（experimental）
+
+**今後のマイルストーン**:
+- Anthropic / Google LLMプロバイダのproductionティア昇格
 - CI成果物からのカバレッジバッジ自動更新
+- PostgreSQLストレージバックエンド（現在は本番環境でJSONLのみ）
+- モノレポライセンス（Plan B）からマルチレポ分離（Plan A）への段階的移行
+- Continuation Runtime Phase-2 エンフォースメントのsecure/prodポスチャでのデフォルト有効化
 
 ---
 
