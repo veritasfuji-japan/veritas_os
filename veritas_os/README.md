@@ -3,7 +3,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-red.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-Production%20Ready%20(98%25)-green.svg)]()
+[![Status](https://img.shields.io/badge/status-Beta%20Governance%20Platform-blue.svg)]()
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](../docs/COVERAGE_REPORT.md)
 

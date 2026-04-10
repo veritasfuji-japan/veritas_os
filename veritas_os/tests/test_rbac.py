@@ -284,6 +284,30 @@ class TestRequirePermission:
             snap = _snapshot_auth_reject_reason_metrics()
             assert snap.get("insufficient_permission", 0) >= 1
 
+    def test_missing_api_key_denied_with_401(self):
+        """Permission checks must reject missing API keys even if reused alone."""
+        from fastapi import HTTPException
+
+        checker = require_permission(Permission.decide)
+        req = self._make_request_stub("")
+        with pytest.raises(HTTPException) as exc_info:
+            checker(request=req, x_api_key="")
+        assert exc_info.value.status_code == 401
+        assert "Missing API key" in exc_info.value.detail
+
+    def test_invalid_api_key_denied_with_401(self):
+        """Permission checks must reject invalid API keys before RBAC resolution."""
+        from fastapi import HTTPException
+
+        keys_json = json.dumps([{"key": "sk-admin", "role": "admin"}])
+        with mock.patch.dict(os.environ, {"VERITAS_API_KEYS": keys_json}, clear=False):
+            checker = require_permission(Permission.decide)
+            req = self._make_request_stub("sk-invalid")
+            with pytest.raises(HTTPException) as exc_info:
+                checker(request=req, x_api_key="sk-invalid")
+        assert exc_info.value.status_code == 401
+        assert "Invalid API key" in exc_info.value.detail
+
 
 # ==============================
 # Backward compatibility
