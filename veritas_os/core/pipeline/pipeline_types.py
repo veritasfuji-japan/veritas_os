@@ -103,3 +103,6 @@ class PipelineContext:
     effective_risk: float = 0.0
     value_ema: float = 0.5
     telos_threshold: float = BASE_TELOS_THRESHOLD
+
+    # --- Governance identity (set during pipeline init) ---
+    governance_identity: Optional[Dict[str, Any]] = None

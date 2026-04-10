@@ -52,6 +52,7 @@ AUDIT_DEBUG_INTERNAL_FIELDS = (
     "trust_log",
     "memory_citations",
     "memory_used_count",
+    "governance_identity",
 )
 
 BACKWARD_COMPAT_FIELDS = (
@@ -102,6 +103,7 @@ def _build_response_layers(
         "plan": plan,
         "planner": ctx.response_extras.get("planner", {"steps": [], "raw": None, "source": "fallback"}),
         "trust_log": ctx.raw.get("trust_log") if isinstance(ctx.raw, dict) else None,
+        "governance_identity": ctx.governance_identity,
     }
 
     backward_compat = {

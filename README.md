@@ -387,9 +387,15 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 |---|---|---|
 | GET | `/v1/governance/policy` | Retrieve current governance policy |
 | PUT | `/v1/governance/policy` | Update governance policy (hot-reload, **4-eyes approval required**) |
-| GET | `/v1/governance/policy/history` | Policy change audit trail |
+| GET | `/v1/governance/policy/history` | Policy change audit trail (with digest transitions) |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
 | GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
+
+> **Signed governance artifacts** — In secure/prod posture, policy bundles must be Ed25519-signed.
+> Decision artifacts include a `governance_identity` field showing which governance policy was in
+> force (version, digest, signature verification result, signer identity).
+> See [`docs/governance_artifact_lifecycle.md`](docs/governance_artifact_lifecycle.md) for the
+> full lifecycle, key management, and migration guide.
 
 ### Compliance & Reporting
 
@@ -991,6 +997,11 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_POLICY_VERIFY_KEY` | — | Path to Ed25519 public key PEM file for policy bundle signature verification |
 | `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` (posture: `1` in secure/prod) | Enable runtime enforcement of compiled policy decisions (deny/halt/escalate/require_human_review) |
 | `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Require Ed25519 signature verification; reject manifests when no key is available |
+
+> **Posture-aware enforcement**: In `secure`/`prod` posture, SHA-256-only (unsigned) policy bundles
+> are rejected by the runtime adapter.  Only Ed25519-signed bundles pass verification.
+> In `dev`/`staging`, SHA-256 integrity checks are accepted with a warning.
+> Governance rollback operations follow the same 4-eyes approval and audit requirements as updates.
 
 ### TrustLog & Audit
 

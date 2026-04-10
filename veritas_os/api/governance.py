@@ -16,7 +16,7 @@ from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Literal
+from typing import Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -175,13 +175,37 @@ def _save(data: Dict[str, Any]) -> None:
                 raise
 
 
-def _append_policy_history(previous: Dict[str, Any], updated: Dict[str, Any]) -> None:
-    """Append a policy change record to the audit history JSONL (best-effort)."""
+def _append_policy_history(
+    previous: Dict[str, Any],
+    updated: Dict[str, Any],
+    *,
+    proposer: str = "",
+    approvers: Optional[List[str]] = None,
+    event_type: str = "update",
+) -> None:
+    """Append a policy change record to the audit history JSONL (best-effort).
+
+    Enhanced with provenance tracking: digest transitions, proposer, approvers,
+    and event classification for audit-grade governance history.
+    """
+    try:
+        from veritas_os.policy.governance_identity import compute_governance_digest
+        prev_digest = compute_governance_digest(previous)
+        new_digest = compute_governance_digest(updated)
+    except Exception:
+        prev_digest = ""
+        new_digest = ""
+
     record = {
         "changed_at": updated.get("updated_at", datetime.now(timezone.utc).isoformat()),
         "changed_by": updated.get("updated_by", "unknown"),
+        "proposer": proposer or updated.get("updated_by", "unknown"),
+        "approvers": approvers or [],
+        "event_type": event_type,
         "previous_version": previous.get("version"),
         "new_version": updated.get("version"),
+        "previous_digest": prev_digest,
+        "new_digest": new_digest,
         "previous_policy": previous,
         "new_policy": updated,
     }
@@ -374,8 +398,26 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
 
     _save(result)
 
+    # Extract provenance metadata from the patch for audit trail.
+    approvals = patch.get("approvals")
+    approver_ids: List[str] = []
+    if isinstance(approvals, list):
+        for a in approvals:
+            if isinstance(a, dict):
+                r = str(a.get("reviewer", "")).strip()
+                if r:
+                    approver_ids.append(r)
+    proposer = _sanitize_updated_by(patch.get("updated_by", "api"))
+    event_type = str(patch.get("_event_type", "update"))
+
     # Record what changed for compliance audit trail
-    _append_policy_history(previous, result)
+    _append_policy_history(
+        previous,
+        result,
+        proposer=proposer,
+        approvers=approver_ids,
+        event_type=event_type,
+    )
 
     # Notify subscribers (e.g. FUJI hot-reload) — best-effort, non-blocking
     _notify_policy_update(result)
@@ -472,3 +514,82 @@ def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str,
         "history": history,
         "status": "ok" if history else "no_data",
     }
+
+
+def rollback_policy(
+    target_policy: Dict[str, Any],
+    *,
+    rolled_back_by: str = "api",
+    approvals: Optional[List[Dict[str, Any]]] = None,
+    reason: str = "",
+) -> Dict[str, Any]:
+    """Rollback governance policy to a previous state.
+
+    Rollback is a governed operation: it records the event as ``rollback``
+    in the audit trail with full provenance (proposer, approvers, digests).
+
+    When 4-eyes approval is enabled, the *approvals* list must satisfy the
+    same constraints as a regular policy update.
+
+    Args:
+        target_policy: The full governance policy dict to restore.
+        rolled_back_by: Identity of the person/system performing the rollback.
+        approvals: List of approval objects for 4-eyes verification.
+        reason: Human-readable reason for the rollback.
+
+    Returns:
+        The restored policy dict after validation and persistence.
+
+    Raises:
+        TypeError: If *target_policy* is not a dict.
+        ValueError: If validation fails.
+        PermissionError: If 4-eyes approval is required but not satisfied.
+    """
+    if not isinstance(target_policy, dict):
+        raise TypeError(
+            f"target_policy must be a dict, got {type(target_policy).__name__}"
+        )
+
+    # Enforce 4-eyes approval for rollback (same as update)
+    payload_for_approval = {"approvals": approvals or []}
+    enforce_four_eyes_approval(payload_for_approval)
+
+    previous = _load()
+
+    # Validate through pydantic
+    target_policy["updated_at"] = (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z")
+    )
+    target_policy["updated_by"] = _sanitize_updated_by(rolled_back_by)
+    validated = GovernancePolicy.model_validate(target_policy)
+    result = validated.model_dump()
+
+    _save(result)
+
+    # Extract approver identities
+    approver_ids: List[str] = []
+    if isinstance(approvals, list):
+        for a in approvals:
+            if isinstance(a, dict):
+                r = str(a.get("reviewer", "")).strip()
+                if r:
+                    approver_ids.append(r)
+
+    _append_policy_history(
+        previous,
+        result,
+        proposer=_sanitize_updated_by(rolled_back_by),
+        approvers=approver_ids,
+        event_type="rollback",
+    )
+
+    _notify_policy_update(result)
+
+    logger.info(
+        "governance policy rolled back by=%s reason=%s",
+        rolled_back_by,
+        reason or "(none)",
+    )
+    return result

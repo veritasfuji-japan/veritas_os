@@ -207,6 +207,11 @@ def load_runtime_bundle(
 ) -> RuntimePolicyBundle:
     """Load a compiled bundle directory and adapt it for runtime evaluation.
 
+    In **secure** / **prod** posture, Ed25519 signature verification is
+    mandatory.  Loading an unsigned bundle in strict posture raises a
+    ``ValueError``.  In **dev** / **staging** posture, SHA-256 fallback
+    is accepted with a warning.
+
     Args:
         public_key_pem: Optional Ed25519 public key in PEM format for
             signature verification.  Falls back to SHA-256 integrity check.
@@ -218,7 +223,22 @@ def load_runtime_bundle(
     canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
 
     signing_algorithm = manifest.get("signing", {}).get("algorithm", "sha256")
+
+    # Posture-aware enforcement: reject non-Ed25519 bundles in strict posture.
+    is_strict = False
+    try:
+        from veritas_os.core.posture import get_active_posture
+        is_strict = get_active_posture().is_strict
+    except (ImportError, AttributeError):
+        pass
+
     if signing_algorithm != "ed25519":
+        if is_strict:
+            raise ValueError(
+                f"bundle {bundle_dir} uses {signing_algorithm} signing which "
+                "does not provide authenticity verification; rejected in "
+                "secure/prod posture. Sign bundles with Ed25519 for production."
+            )
         logger.warning(
             "bundle %s loaded with SHA-256 integrity check only; "
             "authenticity is NOT verified. Set VERITAS_POLICY_REQUIRE_ED25519=true "

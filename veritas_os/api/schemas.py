@@ -670,6 +670,16 @@ class DecideResponse(BaseModel):
         description="Snapshot for deterministic replay of this decision.",
     )
 
+    # Governance identity: which governance artifact was in force for this decision.
+    governance_identity: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Identity of the governance artifact in force when this decision "
+            "was made.  Includes policy version, digest, signature verification "
+            "status, and signer identity."
+        ),
+    )
+
     # persist 用 meta
     meta: Dict[str, Any] = Field(default_factory=dict)
     coercion_events: List[str] = Field(default_factory=list, exclude=True)
