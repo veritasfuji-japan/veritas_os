@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 COPY ./veritas_os/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip \
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir --target /build/deps -r /tmp/requirements.txt
 
 # ============================================================
@@ -30,7 +30,8 @@ WORKDIR /app
 # セキュリティパッチ適用（ベースイメージの既知CVE修正）
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # ビルドステージからインストール済みパッケージのみコピー（ビルドツール類を除外）
 COPY --from=builder /build/deps /app/deps

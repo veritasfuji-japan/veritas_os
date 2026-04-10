@@ -306,7 +306,7 @@ def fuji_validate(payload: dict):
             logger.error("fuji_validate: %s", err_msg)
             return JSONResponse(
                 status_code=500,
-                content={"detail": err_msg}
+                content={"detail": "FUJI core interface error"}
             )
         logger.error("fuji_validate RuntimeError: %s", err_msg)
         return JSONResponse(
