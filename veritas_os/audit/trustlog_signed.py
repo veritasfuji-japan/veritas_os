@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.audit.storage_mirror import build_storage_mirror
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex, sha256_of_canonical_json
+from veritas_os.audit.trustlog_verify import verify_witness_ledger
 from veritas_os.security.signing import (
     Signer,
     build_trustlog_signer,
@@ -577,21 +578,7 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
     job and alert on any drift.
     """
     entries = _read_all_entries(path)
-    issues: List[TrustLogIssue] = []
-    previous_hash: Optional[str] = None
-
-    for index, entry in enumerate(entries):
-        payload_hash = sha256_of_canonical_json(entry.get("decision_payload", {}))
-        if payload_hash != entry.get("payload_hash"):
-            issues.append(TrustLogIssue(index=index, reason="payload_hash_mismatch"))
-
-        if entry.get("previous_hash") != previous_hash:
-            issues.append(TrustLogIssue(index=index, reason="previous_hash_mismatch"))
-
-        if not verify_signature(entry):
-            issues.append(TrustLogIssue(index=index, reason="signature_invalid"))
-
-        previous_hash = _entry_chain_hash(entry)
+    witness_result = verify_witness_ledger(entries=entries, verify_signature_fn=verify_signature)
 
     selected_mirror_backend = os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower()
     worm_path = _worm_mirror_path() if selected_mirror_backend == "local" else None
@@ -630,13 +617,29 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
     except Exception:
         _logger.warning("Could not resolve TrustLog signer metadata", exc_info=True)
 
+    issues = [
+        {"index": err["index"], "reason": err["reason"]}
+        for err in witness_result["detailed_errors"]
+    ]
+
     return {
-        "ok": len(issues) == 0,
-        "entries_checked": len(entries),
-        "issues": [issue.__dict__ for issue in issues],
+        "ok": witness_result["ok"],
+        "entries_checked": witness_result["total_entries"],
+        "issues": issues,
         "worm_mirror": worm_status,
         "transparency_anchor": transparency_status,
         "key_management": key_meta,
+        "summary": {
+            "total_entries": witness_result["total_entries"],
+            "valid_entries": witness_result["valid_entries"],
+            "invalid_entries": witness_result["invalid_entries"],
+            "chain_ok": witness_result["chain_ok"],
+            "signature_ok": witness_result["signature_ok"],
+            "linkage_ok": witness_result["linkage_ok"],
+            "mirror_ok": witness_result["mirror_ok"],
+            "last_hash": witness_result["last_hash"],
+            "detailed_errors": witness_result["detailed_errors"],
+        },
     }
 
 
