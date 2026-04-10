@@ -6,6 +6,7 @@
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
 [![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
 [![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
@@ -837,13 +838,39 @@ pnpm --filter frontend e2e
 
 ### CI / Quality Gate
 
-- GitHub Actions runs **pytest + coverage** on a Python 3.11/3.12 matrix
-- CI enforces a minimum coverage gate (`--cov-fail-under`) currently set to **85%**
-- **CodeQL** scans for security vulnerabilities
-- **SBOM** generated nightly
-- **Security gates** workflow for additional security checks
-- Coverage artifacts are stored as **XML/HTML** outputs
-- The coverage badge is a documentation snapshot value from `docs/COVERAGE_REPORT.md` (planned: automatic update from CI artifacts)
+VERITAS OS uses a **three-tier CI/release validation model** with explicit blocking semantics:
+
+| Tier | Workflow | Trigger | Blocking? |
+|------|----------|---------|-----------|
+| **Tier 1** | `main.yml` | Every PR + push to `main` | ✅ Blocks merge |
+| **Tier 2** | `release-gate.yml` | `v*` tag push | ✅ Blocks release |
+| **Tier 3** | `production-validation.yml` | Weekly + manual | ⚠️ Advisory |
+
+**Tier 1** (`main.yml`) — every PR is blocked until all of the following pass:
+- Ruff lint + Bandit + architecture/security script checks
+- Dependency CVE audit (Python + Node)
+- **`governance-smoke`**: explicit fast smoke gate (`pytest -m smoke`, ~2 min)
+- Full unit test matrix (Python 3.11 + 3.12, 85% coverage gate)
+- Frontend lint / Vitest / Playwright E2E
+
+**Tier 2** (`release-gate.yml`) — every `v*` tag is blocked until all of the following pass:
+- Tier 1 checks repeated at release time
+- Production-like test suite (`pytest -m "production or smoke"` + TLS + load)
+- Full-stack Docker Compose health check
+- Governance readiness report artifact generated and uploaded
+
+**Tier 3** (`production-validation.yml`) — weekly schedule + manual dispatch:
+- Long-running production tests, load tests, external live tests
+- Advisory: failures are visible but do not block release
+
+See [`docs/PRODUCTION_VALIDATION.md`](docs/PRODUCTION_VALIDATION.md) for the complete
+tier model and [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) for the release process.
+
+### How to tell if a release is governance-ready
+
+1. Find the `Release Gate` workflow run for the target tag in the [Actions tab](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
+2. The `✅ Release Readiness Gate` job must show **🟢 RELEASE IS GOVERNANCE-READY**
+3. Download the `release-governance-readiness-report` artifact and verify `"governance_ready": true`
 
 ### Production-like Validation
 

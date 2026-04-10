@@ -2,33 +2,115 @@
 
 ## Overview
 
-This document describes the **production-like validation** strategy for VERITAS OS.
-It complements the existing unit/integration test suite (5300+ tests, 87% coverage)
+This document describes the **tiered CI/release validation** model for VERITAS OS.
+It complements the existing unit/integration test suite (5800+ tests, 87% coverage)
 with production-realistic verification that exercises external dependencies,
 deployment topology, and fail-closed security controls.
 
+## Tier Model
+
+VERITAS OS uses three validation tiers with explicit blocking semantics:
+
+| Tier | Workflow | Trigger | Blocking? | Purpose |
+|------|----------|---------|-----------|---------|
+| **Tier 1** | `main.yml` | Every PR + push to `main` | **Yes — blocks merge** | Fast governance-critical checks: lint, security scripts, smoke tests, full unit test suite |
+| **Tier 2** | `release-gate.yml` | Every `v*` tag push | **Yes — blocks release** | Production-like validation: production pytest suite, Docker smoke, governance readiness report |
+| **Tier 3** | `production-validation.yml` | Weekly schedule + manual | Advisory (weekly), opt-in blocking (release) | Long-running, secrets-required, external/live tests |
+
+### What runs where
+
+#### On every PR / push to `main` (Tier 1, `main.yml`)
+
+| Job | Purpose | Blocking |
+|-----|---------|---------|
+| `lint` | Ruff, Bandit, architecture checks, security scripts | ✅ Yes |
+| `dependency-audit` | pip-audit CVE scan + pnpm audit | ✅ Yes |
+| `governance-smoke` | `pytest -m smoke` — 16 fast smoke tests | ✅ Yes |
+| `test (py3.11/3.12)` | Full unit suite + 85% coverage gate | ✅ Yes |
+| `test-slow` | `pytest -m slow` | ✅ Yes |
+| `frontend-quality-gate` | ESLint / Vitest / Playwright E2E | ✅ Yes |
+
+#### On `v*` tag push (Tier 2, `release-gate.yml`)
+
+| Job | Purpose | Blocking |
+|-----|---------|---------|
+| `governance-smoke` | Re-runs Tier 1 smoke at release time | ✅ Yes |
+| `security-checks` | Re-runs all security scripts + Bandit | ✅ Yes |
+| `production-tests` | `pytest -m "production or smoke"` + TLS + load | ✅ Yes |
+| `docker-smoke` | Full-stack Docker Compose health check | ✅ Yes |
+| `governance-report` | Generates governance readiness report artifact | ✅ Yes |
+| `external-tests` | Live network tests (opt-in via `tier3_external`) | ⚠️ Advisory |
+| `release-readiness` | Final summary gate (fails if any Tier 1/2 failed) | ✅ Yes |
+
+#### Weekly / manual (`production-validation.yml`)
+
+| Job | Purpose | Blocking |
+|-----|---------|---------|
+| `production-tests` | `pytest -m "production or smoke"` | Advisory |
+| `tls-validation` | `pytest -m tls` | Advisory |
+| `load-validation` | `pytest -m load` | Advisory |
+| `docker-smoke` | Docker Compose full-stack smoke | Advisory (schedule/manual only) |
+| `external-tests` | Live network tests | Advisory (opt-in) |
+
 ## Test Profiles
 
-| Profile | Marker | CI Trigger | Description |
-|---------|--------|------------|-------------|
-| **Unit** | *(default)* | Every push/PR | Fast, isolated, mocked dependencies |
-| **Slow** | `@pytest.mark.slow` | Every push/PR (parallel job) | Heavier computation, larger datasets |
-| **Production** | `@pytest.mark.production` | `workflow_dispatch` / weekly schedule | Production-like flows with real subsystems |
-| **Smoke** | `@pytest.mark.smoke` | `workflow_dispatch` / opt-in | Lightweight deployment verification |
-| **External** | `@pytest.mark.external` | `workflow_dispatch` + secrets | Tests requiring live network/API keys |
-| **TLS** | `@pytest.mark.tls` | `workflow_dispatch` / weekly schedule | TLS/security-header posture verification |
-| **Load** | `@pytest.mark.load` | `workflow_dispatch` / weekly schedule | Lightweight burst/concurrency validation |
+| Profile | Marker | CI Tier | Description |
+|---------|--------|---------|-------------|
+| **Unit** | *(default)* | Tier 1 — every PR | Fast, isolated, mocked dependencies |
+| **Slow** | `@pytest.mark.slow` | Tier 1 — every PR (parallel job) | Heavier computation, larger datasets |
+| **Smoke** | `@pytest.mark.smoke` | Tier 1 + Tier 2 | Lightweight governance invariant verification |
+| **Production** | `@pytest.mark.production` | Tier 2 (release) + Tier 3 (weekly) | Production-like flows with real subsystems |
+| **External** | `@pytest.mark.external` | Tier 3 — opt-in + secrets | Tests requiring live network/API keys |
+| **TLS** | `@pytest.mark.tls` | Tier 2 (release) + Tier 3 (weekly) | TLS/security-header posture verification |
+| **Load** | `@pytest.mark.load` | Tier 2 (release) + Tier 3 (weekly) | Lightweight burst/concurrency validation |
+
+## How to Tell If a Release Is Governance-Ready
+
+A VERITAS OS release is **governance-ready** when all of the following hold:
+
+1. The `release-gate.yml` workflow run for the target tag completed with **status=success**
+2. The `release-readiness` final job shows **🟢 RELEASE IS GOVERNANCE-READY**
+3. The `release-governance-readiness-report` artifact is attached to the workflow run
+4. The `governance-readiness-report.json` inside that artifact has `"governance_ready": true`
+5. All Tier 1 and Tier 2 blocking jobs passed (no ❌ in the readiness summary)
+
+**Shortcut**: look at the `release-readiness` job in the `Release Gate` workflow run for the
+target tag. If it shows a green ✅, the release passed all blocking checks.
+
+### Governance readiness report format
+
+The `governance-readiness-report.json` artifact has this structure:
+
+```json
+{
+  "schema_version": "1.0",
+  "report_type": "governance_readiness",
+  "generated_at": "2026-04-10T08:00:00+00:00",
+  "release_ref": "v2.1.0",
+  "release_sha": "abc1234...",
+  "summary": {
+    "governance_ready": true,
+    "total_checks": 13,
+    "passed": 13,
+    "blocking_failures": 0,
+    "advisory_failures": 0
+  },
+  "checks": [...],
+  "blocking_failures": [],
+  "advisory_failures": []
+}
+```
 
 ## Running Production Validation
 
 ### Local Execution
 
 ```bash
-# Run all production-like tests (no external deps needed)
-make test-production
-
-# Run only smoke tests
+# Run only smoke tests (Tier 1 equivalent)
 pytest -m smoke veritas_os/tests/
+
+# Run all production-like tests (Tier 2 equivalent)
+make test-production
 
 # Run production tests with verbose output
 pytest -m production veritas_os/tests/ -v --tb=long
@@ -38,15 +120,48 @@ VERITAS_WEBSEARCH_KEY=<key> pytest -m external veritas_os/tests/
 
 # Run staging TLS/load external checks
 VERITAS_STAGING_BASE_URL=https://staging.example.com pytest -m "external and (tls or load)" veritas_os/tests/test_production_tls_load.py -v
+
+# Generate a local governance readiness report
+python scripts/generate_release_readiness_report.py \
+  --ref local \
+  --sha $(git rev-parse HEAD) \
+  --output /tmp/governance-readiness.json \
+  --text-output /tmp/governance-readiness.txt
 ```
 
 ### CI Execution
 
-Production validation runs as a **separate GitHub Actions workflow** (`production-validation.yml`):
+#### Tier 1 — Automatic on every PR
 
-- **Trigger**: `workflow_dispatch` (manual) or schedule (weekly)
-- **Not in default CI**: Avoids flaky external dependency failures blocking PRs
-- **Secrets**: Optional `VERITAS_WEBSEARCH_KEY` for external tests
+No action needed. `main.yml` runs automatically on every PR to `main`.
+The `governance-smoke` job explicitly labels the fast smoke gate.
+
+#### Tier 2 — Automatic on version tags
+
+```bash
+git tag v2.1.0
+git push origin v2.1.0
+# → release-gate.yml triggers automatically
+# → release-readiness job shows pass/fail summary
+# → governance-readiness-report artifact uploaded
+```
+
+Or trigger manually:
+```bash
+gh workflow run release-gate.yml --ref v2.1.0
+```
+
+#### Tier 3 — Weekly or manual
+
+`production-validation.yml` runs weekly (Sunday 04:00 UTC) or on demand:
+
+```bash
+gh workflow run production-validation.yml
+# With Docker and external tests:
+gh workflow run production-validation.yml \
+  -f include_docker=true \
+  -f include_external=true
+```
 
 ### Docker Compose Validation
 
@@ -179,25 +294,37 @@ docker compose down
 ## Architecture: CI Role Separation
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    main.yml (Every PR)                    │
-├─────────────────────────────────────────────────────────┤
-│  lint → dependency-audit → test (py3.11/3.12)           │
-│  test-slow → frontend (lint/test/e2e)                   │
-│  Coverage gate: 85% minimum                              │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│            main.yml  (Tier 1 — Every PR + push to main)      │
+├──────────────────────────────────────────────────────────────┤
+│  lint → dependency-audit → governance-smoke                  │
+│    → test (py3.11/3.12, 85% coverage gate)                   │
+│    → test-slow → frontend (lint/test/e2e)                    │
+│  governance-smoke: pytest -m smoke  [BLOCKING]               │
+└──────────────────────────────────────────────────────────────┘
+                          │ does NOT run production tests
                           │
-                    Does NOT run
+┌──────────────────────────────────────────────────────────────┐
+│        release-gate.yml  (Tier 2 — on v* tag push)           │
+├──────────────────────────────────────────────────────────────┤
+│  governance-smoke → security-checks [Tier 1 repeat, BLOCKING]│
+│    → production-tests: pytest -m "production or smoke"       │
+│    → docker-smoke: full-stack Docker Compose health check    │
+│    → governance-report: generates readiness report artifact  │
+│    → release-readiness: final ✅/❌ gate  [BLOCKING]         │
+│  external-tests: live tests  [Tier 3, advisory]              │
+└──────────────────────────────────────────────────────────────┘
+                          │ advisory only
                           │
-┌─────────────────────────────────────────────────────────┐
-│          production-validation.yml (Manual/Weekly)        │
-├─────────────────────────────────────────────────────────┤
-│  production-tests: pytest -m "production or smoke"       │
-│  tls-validation: pytest -m tls                           │
-│  load-validation: pytest -m load                         │
-│  docker-smoke: docker compose up + health check          │
-│  external-tests: pytest -m external (if secrets set)     │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│   production-validation.yml  (Tier 3 — Weekly/Manual)        │
+├──────────────────────────────────────────────────────────────┤
+│  production-tests: pytest -m "production or smoke"           │
+│  tls-validation: pytest -m tls                               │
+│  load-validation: pytest -m load                             │
+│  docker-smoke: docker compose up + health check              │
+│  external-tests: pytest -m external (if secrets set)         │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Remaining Production Risks
