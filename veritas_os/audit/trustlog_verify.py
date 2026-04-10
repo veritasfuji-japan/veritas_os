@@ -13,6 +13,8 @@ The public API is intentionally stable:
 from __future__ import annotations
 
 import json
+import importlib
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -131,12 +133,47 @@ def _entry_chain_hash(entry: Dict[str, Any]) -> str:
     return sha256_hex(canonical_json_dumps(entry))
 
 
-def _verify_mirror_receipt(entry: Dict[str, Any]) -> bool:
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Return ``True`` when the env var is set to a truthy value."""
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_etag(value: Any) -> str:
+    return str(value or "").strip().strip('"')
+
+
+def _is_s3_receipt(receipt: Dict[str, Any]) -> bool:
+    return isinstance(receipt.get("bucket"), str) and isinstance(receipt.get("key"), str)
+
+
+def _verify_mirror_receipt(
+    entry: Dict[str, Any],
+    *,
+    remote_enabled: bool,
+    strict_mode: bool,
+    strict_s3: bool,
+    require_legal_hold: bool,
+    s3_client: Optional[Any],
+) -> Optional[str]:
+    """Verify mirror receipt shape and optional live S3 state.
+
+    Returns:
+        ``None`` when verification succeeds for this entry, otherwise a stable
+        reason string such as ``mirror_object_not_found``.
+    """
     receipt = entry.get("mirror_receipt")
+    mirror_backend = str(entry.get("mirror_backend") or "").strip().lower()
+    expects_receipt = strict_mode or mirror_backend == "s3_object_lock"
     if receipt is None:
-        return True
+        if expects_receipt:
+            return "mirror_receipt_missing"
+        return None
     if not isinstance(receipt, dict):
-        return False
+        return "mirror_receipt_malformed"
+
     known_keys = {
         "bucket",
         "key",
@@ -144,14 +181,80 @@ def _verify_mirror_receipt(entry: Dict[str, Any]) -> bool:
         "etag",
         "retention_mode",
         "retain_until_date",
+        "legal_hold_status",
     }
-    return all(isinstance(k, str) and k in known_keys for k in receipt.keys())
+    if not all(isinstance(k, str) and k in known_keys for k in receipt.keys()):
+        return "mirror_receipt_malformed"
+    if not _is_s3_receipt(receipt):
+        return None
+    if not remote_enabled:
+        return None
+    if s3_client is None:
+        return "mirror_object_not_found"
+
+    bucket = str(receipt["bucket"]).strip()
+    key = str(receipt["key"]).strip()
+    if not bucket or not key:
+        return "mirror_receipt_malformed"
+
+    head_kwargs: Dict[str, Any] = {"Bucket": bucket, "Key": key}
+    if receipt.get("version_id"):
+        head_kwargs["VersionId"] = receipt["version_id"]
+
+    try:
+        head = s3_client.head_object(**head_kwargs)
+    except Exception:  # noqa: BLE001
+        return "mirror_object_not_found"
+
+    expected_version = receipt.get("version_id")
+    if expected_version:
+        actual_version = head.get("VersionId")
+        if actual_version is not None and str(actual_version) != str(expected_version):
+            return "mirror_version_mismatch"
+
+    expected_etag = receipt.get("etag")
+    if expected_etag:
+        actual_etag = head.get("ETag")
+        if _normalize_etag(actual_etag) != _normalize_etag(expected_etag):
+            return "mirror_etag_mismatch"
+
+    needs_retention = bool(receipt.get("retention_mode") or receipt.get("retain_until_date"))
+    if needs_retention:
+        retention_kwargs: Dict[str, Any] = {"Bucket": bucket, "Key": key}
+        if receipt.get("version_id"):
+            retention_kwargs["VersionId"] = receipt["version_id"]
+        try:
+            retention = s3_client.get_object_retention(**retention_kwargs)
+            retention_obj = retention.get("Retention") or {}
+        except Exception:  # noqa: BLE001
+            retention_obj = {}
+        if strict_s3 and not retention_obj:
+            return "mirror_retention_missing"
+        if receipt.get("retention_mode") and retention_obj.get("Mode") != receipt.get("retention_mode"):
+            return "mirror_retention_missing"
+        if receipt.get("retain_until_date") and retention_obj.get("RetainUntilDate") is None:
+            return "mirror_retention_missing"
+
+    if require_legal_hold:
+        legal_hold_kwargs: Dict[str, Any] = {"Bucket": bucket, "Key": key}
+        if receipt.get("version_id"):
+            legal_hold_kwargs["VersionId"] = receipt["version_id"]
+        try:
+            legal_hold = s3_client.get_object_legal_hold(**legal_hold_kwargs)
+            legal_hold_status = ((legal_hold or {}).get("LegalHold") or {}).get("Status")
+        except Exception:  # noqa: BLE001
+            legal_hold_status = None
+        if legal_hold_status != "ON":
+            return "mirror_legal_hold_missing"
+
+    return None
 
 
 def verify_witness_ledger(
     entries: List[Dict[str, Any]],
     verify_signature_fn: Callable[[Dict[str, Any]], bool],
     artifact_search_roots: Optional[Sequence[Path]] = None,
+    s3_client: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """Verify witness ledger chain, payload hash, signature and metadata linkage.
 
@@ -166,6 +269,20 @@ def verify_witness_ledger(
     signature_ok = True
     linkage_ok = True
     mirror_ok = True
+    remote_enabled = _env_flag("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", default=False)
+    strict_mode = _env_flag("VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT", default=False)
+    strict_s3 = strict_mode
+    require_legal_hold = _env_flag(
+        "VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD",
+        default=False,
+    )
+    resolved_s3_client = s3_client
+    if remote_enabled and resolved_s3_client is None:
+        try:
+            boto3 = importlib.import_module("boto3")
+            resolved_s3_client = boto3.client("s3")
+        except Exception:  # noqa: BLE001
+            resolved_s3_client = None
 
     for index, entry in enumerate(entries):
         payload_hash = sha256_of_canonical_json(entry.get("decision_payload", {}))
@@ -194,9 +311,17 @@ def verify_witness_ledger(
                 )
             )
 
-        if not _verify_mirror_receipt(entry):
+        mirror_error = _verify_mirror_receipt(
+            entry,
+            remote_enabled=remote_enabled,
+            strict_mode=strict_mode,
+            strict_s3=strict_s3,
+            require_legal_hold=require_legal_hold,
+            s3_client=resolved_s3_client,
+        )
+        if mirror_error:
             mirror_ok = False
-            errors.append(VerificationError("witness", index, "mirror_receipt_invalid"))
+            errors.append(VerificationError("witness", index, mirror_error))
 
         if not any(err.index == index and err.ledger == "witness" for err in errors):
             valid_entries += 1

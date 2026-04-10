@@ -1078,6 +1078,9 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_TRUSTLOG_S3_REGION` | — | AWS region override for S3 client |
 | `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` | — | Object Lock mode (`GOVERNANCE` or `COMPLIANCE`) |
 | `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` | — | Retention period in days for S3 Object Lock |
+| `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE` | `0` | Enable remote S3 mirror verification during TrustLog verification |
+| `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT` | `0` | Strict mirror verification: fail on missing receipts (legacy entries) and retention gaps |
+| `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD` | `0` | Require S3 Object Legal Hold (`ON`) when remote mirror verification is enabled |
 | `VERITAS_TRUSTLOG_SIGNER_BACKEND` | `file` | TrustLog signer backend (`file` or `aws_kms`) |
 | `VERITAS_TRUSTLOG_KMS_KEY_ID` | — | AWS KMS key id/ARN (required when `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms`) |
 
@@ -1086,6 +1089,22 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - Existing deployments continue to work with no change because `VERITAS_TRUSTLOG_MIRROR_BACKEND` defaults to `local` and keeps `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` behavior.
 - To migrate to S3 Object Lock, set `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and provide at minimum `VERITAS_TRUSTLOG_S3_BUCKET` (plus optional prefix/region/retention settings).
 - `VERITAS_TRUSTLOG_WORM_HARD_FAIL` semantics are unchanged and apply to both backends.
+
+#### TrustLog mirror verification modes
+
+- **Offline mode (default)**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE=0` validates receipt schema only and keeps legacy compatibility.
+- **Remote mode**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE=1` performs S3-backed checks for `s3_object_lock` receipts:
+  - object existence (`Bucket` + `Key`)
+  - `version_id` match (when receipt has `version_id`)
+  - `etag` match (when receipt has `etag`)
+  - retention state (when receipt records retention metadata)
+- **Strict mode**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT=1` is intended for high-assurance/prod verification jobs:
+  - fails entries with missing mirror receipts (`mirror_receipt_missing`)
+  - fails retention verification gaps (`mirror_retention_missing`)
+  - can break verification for old ledgers created before receipt support.
+- **Legal hold enforcement**: `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD=1` additionally requires object legal hold to be `ON` (`mirror_legal_hold_missing`).
+
+> Security caveat: remote verification depends on live AWS API access and IAM permissions (`s3:HeadObject`, `s3:GetObjectRetention`, `s3:GetObjectLegalHold`). Use least privilege and isolate verifier credentials.
 
 ### Replay
 
