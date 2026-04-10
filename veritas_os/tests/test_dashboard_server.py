@@ -572,13 +572,14 @@ def test_dashboard_embeds_server_side_username_not_request(
     user-supplied HTTP Basic Auth username, to prevent reflected XSS
     (regression test for CodeQL alert #2)."""
     server_name = "server-admin"
+    server_pass = "s3cret-pass"
     monkeypatch.setattr(dashboard_server, "DASHBOARD_USERNAME", server_name)
-    monkeypatch.setattr(dashboard_server, "DASHBOARD_PASSWORD", server_name)
+    monkeypatch.setattr(dashboard_server, "DASHBOARD_PASSWORD", server_pass)
     monkeypatch.setattr(dashboard_server, "STATUS_JSON", tmp_path / "s.json")
     monkeypatch.setattr(dashboard_server, "REPORT_HTML", tmp_path / "r.html")
 
     test_client = TestClient(dashboard_server.app)
-    res = test_client.get("/", auth=(server_name, server_name))
+    res = test_client.get("/", auth=(server_name, server_pass))
     assert res.status_code == 200
     assert server_name in res.text
 
