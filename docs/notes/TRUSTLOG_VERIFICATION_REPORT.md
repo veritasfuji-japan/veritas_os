@@ -35,7 +35,18 @@ CLI / API summary fields:
 
 - Legacy witness entries without `full_payload_hash` or `mirror_receipt` remain valid.
 - `full_payload_hash` is validated only when present (must be SHA-256 hex).
-- `mirror_receipt` structure is validated only when present.
+- `mirror_receipt` structure is validated when present and now emits explicit reasons:
+  - `mirror_receipt_missing`
+  - `mirror_receipt_malformed`
+  - `mirror_object_not_found`
+  - `mirror_version_mismatch`
+  - `mirror_etag_mismatch`
+  - `mirror_retention_missing`
+  - `mirror_legal_hold_missing`
+- Remote S3-backed mirror verification is opt-in via environment flags:
+  - `VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE=1`
+  - `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT=1`
+  - `VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_REQUIRE_LEGAL_HOLD=1`
 - Existing APIs (`verify_trust_log`, `verify_trustlog_chain`) continue to work and now reuse shared verification logic.
 
 ---

@@ -17,6 +17,36 @@ from veritas_os.logging.encryption import encrypt, generate_key
 from veritas_os.security.hash import sha256_hex, sha256_of_canonical_json
 
 
+class _FakeS3Client:
+    def __init__(
+        self,
+        *,
+        head_response: Dict[str, Any] | None = None,
+        head_error: Exception | None = None,
+        retention_response: Dict[str, Any] | None = None,
+        retention_error: Exception | None = None,
+    ) -> None:
+        self.head_response = head_response or {}
+        self.head_error = head_error
+        self.retention_response = retention_response or {}
+        self.retention_error = retention_error
+        self.head_calls = 0
+
+    def head_object(self, **_: Any) -> Dict[str, Any]:
+        self.head_calls += 1
+        if self.head_error is not None:
+            raise self.head_error
+        return self.head_response
+
+    def get_object_retention(self, **_: Any) -> Dict[str, Any]:
+        if self.retention_error is not None:
+            raise self.retention_error
+        return self.retention_response
+
+    def get_object_legal_hold(self, **_: Any) -> Dict[str, Any]:
+        return {"LegalHold": {"Status": "ON"}}
+
+
 def _full_hash(prev_hash: str | None, entry: Dict[str, Any]) -> str:
     payload = dict(entry)
     payload.pop("sha256", None)
@@ -127,7 +157,7 @@ def test_unified_verifier_broken_path(tmp_path: Path, monkeypatch) -> None:
     assert "previous_hash_mismatch" in reasons
     assert "signature_invalid" in reasons
     assert "full_payload_hash_invalid" in reasons
-    assert "mirror_receipt_invalid" in reasons
+    assert "mirror_receipt_malformed" in reasons
 
 
 
@@ -344,3 +374,93 @@ def test_individual_apis_cover_full_and_witness(tmp_path: Path, monkeypatch) -> 
 
     assert full_result["ok"] is True
     assert witness_result["ok"] is True
+
+
+def _s3_receipt_witness() -> List[Dict[str, Any]]:
+    payload = {"request_id": "r-s3", "decision": "allow"}
+    return [
+        {
+            "decision_payload": payload,
+            "payload_hash": sha256_of_canonical_json(payload),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "mirror_backend": "s3_object_lock",
+            "mirror_receipt": {
+                "bucket": "trustlog-bucket",
+                "key": "mirror/path.jsonl",
+                "version_id": "v1",
+                "etag": '"etag-1"',
+                "retention_mode": "GOVERNANCE",
+                "retain_until_date": "2030-01-01T00:00:00Z",
+            },
+        }
+    ]
+
+
+def test_mirror_remote_verification_success(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT", "1")
+    client = _FakeS3Client(
+        head_response={"VersionId": "v1", "ETag": '"etag-1"'},
+        retention_response={
+            "Retention": {
+                "Mode": "GOVERNANCE",
+                "RetainUntilDate": "2030-01-01T00:00:00Z",
+            }
+        },
+    )
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
+    assert result["ok"] is True
+    assert result["mirror_ok"] is True
+
+
+def test_mirror_remote_object_missing(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
+    client = _FakeS3Client(head_error=RuntimeError("not found"))
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "mirror_object_not_found" in reasons
+
+
+def test_mirror_remote_version_mismatch(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
+    client = _FakeS3Client(head_response={"VersionId": "v2", "ETag": '"etag-1"'})
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "mirror_version_mismatch" in reasons
+
+
+def test_mirror_remote_retention_missing_in_strict_mode(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT", "1")
+    client = _FakeS3Client(
+        head_response={"VersionId": "v1", "ETag": '"etag-1"'},
+        retention_response={},
+    )
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "mirror_retention_missing" in reasons
+
+
+def test_mirror_receipt_missing_strict_vs_non_strict(monkeypatch) -> None:
+    entry = {
+        "decision_payload": {"request_id": "r-old"},
+        "payload_hash": sha256_of_canonical_json({"request_id": "r-old"}),
+        "previous_hash": None,
+        "signature": "sig-ok",
+    }
+    result = verify_witness_ledger([entry], lambda _: True)
+    assert result["ok"] is True
+
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT", "1")
+    strict_result = verify_witness_ledger([entry], lambda _: True)
+    reasons = {error["reason"] for error in strict_result["detailed_errors"]}
+    assert "mirror_receipt_missing" in reasons
+
+
+def test_mirror_remote_offline_mode_skips_validation(monkeypatch) -> None:
+    monkeypatch.delenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", raising=False)
+    client = _FakeS3Client(head_error=RuntimeError("offline-skip"))
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
+    assert result["ok"] is True
+    assert client.head_calls == 0
