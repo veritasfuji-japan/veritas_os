@@ -1,4 +1,4 @@
-# VERITAS OS v2.0 — LLMエージェント向け監査可能な意思決定OS（Proto-AGI Skeleton）
+# VERITAS OS v2.0 — LLMエージェント向け意思決定ガバナンスOS
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI（日本語論文）](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
@@ -64,6 +64,8 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - **ドキュメント入口（日本語）**: `docs/ja/README.md`
 - **ドキュメント対応表**: `docs/DOCUMENTATION_MAP.md`
 - **運用Runbook**: `docs/ja/operations/enterprise_slo_sli_runbook_ja.md`（旧互換: `docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md`）
+- **ガバナンス署名運用Runbook**: `docs/operations/governance_artifact_signing_operations.md`
+- **ガバナンスアップグレード概要（Press）**: `docs/press/governance_control_plane_upgrade_2026-04.md`
 
 ## 🚀 Quick Start（TL;DR）
 
@@ -140,6 +142,21 @@ VERITAS OS は単一の**ランタイムポスチャ**（`VERITAS_POSTURE`）で
 | Transparency logアンカーリング | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | Transparencyアンカー未設定時にTrustLog書き込みを失敗させる |
 | WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | WORMミラー書き込み失敗時にTrustLog書き込みを失敗させる |
 | 厳密リプレイ | `VERITAS_REPLAY_STRICT` | 重大なリプレイ乖離を中止させる |
+| ガバナンス成果物署名検証 | `VERITAS_POLICY_VERIFY_KEY`（+ポスチャ強制） | secure/prod で未署名または非Ed25519のガバナンスポリシーバンドルを拒否 |
+
+### 意思決定出力に含まれるガバナンス成果物ID
+
+コンパイル済みポリシーガバナンスが有効な場合、`/v1/decide` レスポンスには
+`governance_identity` が含まれ、次の情報を返します。
+
+- `policy_version`
+- `digest`（コンパイル済みバンドルのセマンティックハッシュ）
+- `signature_verified`
+- `signer_id`（バンドルメタデータに `signing.key_id` がある場合）
+- `verified_at`
+
+このIDは意思決定・Replay・監査成果物に連結され、どのガバナンス制御プレーン成果物が
+適用されていたかを後から証明できます。
 
 ### 起動拒否の条件（secure/prod）
 
@@ -162,6 +179,11 @@ VERITAS_POSTURE_OVERRIDE_REPLAY_STRICT=0
 これらのオーバーライドは `prod` ポスチャでは**無視されます**。
 
 ## 🎯 なぜVERITASか
+
+### VERITAS OS が「あるもの」と「ないもの」
+
+- **あるもの**: 実行前に配置され、ポリシー・安全・監査制御を強制するガバナンスレイヤ。
+- **ないもの**: 単なるエージェント実行抽象化やオーケストレーションの便利ラッパー。
 
 多くの「エージェントフレームワーク」は自律性やツール実行を最適化します。  
 VERITAS は **ガバナンス** を最適化します。
