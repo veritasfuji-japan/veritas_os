@@ -1071,6 +1071,8 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 |---|---|---|
 | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` (posture: `1` in secure/prod) | Require transparency log anchoring (fail-closed) |
 | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` (posture: `1` in secure/prod) | WORM mirror write failure raises error |
+| `VERITAS_TRUSTLOG_SIGNER_BACKEND` | `file` | TrustLog signer backend (`file` or `aws_kms`) |
+| `VERITAS_TRUSTLOG_KMS_KEY_ID` | — | AWS KMS key id/ARN (required when `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms`) |
 
 ### Replay
 
