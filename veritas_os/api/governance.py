@@ -546,7 +546,9 @@ def rollback_policy(
         PermissionError: If 4-eyes approval is required but not satisfied.
     """
     if not isinstance(target_policy, dict):
-        raise TypeError("target_policy must be a dict")
+        raise TypeError(
+            f"target_policy must be a dict, got {type(target_policy).__name__}"
+        )
 
     # Enforce 4-eyes approval for rollback (same as update)
     payload_for_approval = {"approvals": approvals or []}

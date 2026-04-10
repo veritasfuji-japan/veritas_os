@@ -229,7 +229,7 @@ def load_runtime_bundle(
     try:
         from veritas_os.core.posture import get_active_posture
         is_strict = get_active_posture().is_strict
-    except Exception:
+    except (ImportError, AttributeError):
         pass
 
     if signing_algorithm != "ed25519":

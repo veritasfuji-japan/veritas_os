@@ -666,7 +666,7 @@ class TestMissingSignatureBehavior:
                 signature_verified=False,
             )
         assert "unsigned" in caplog.text.lower()
-        assert "rejected" not in caplog.text.lower() or "would be rejected" in caplog.text.lower()
+        assert "would be rejected" in caplog.text.lower()
 
     def test_unsigned_governance_errors_in_prod(self):
         from veritas_os.policy.governance_identity import require_signed_governance
