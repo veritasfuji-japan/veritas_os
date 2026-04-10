@@ -1,37 +1,82 @@
-# VERITAS OS v2.0 — Auditable Decision OS for LLM Agents (Proto-AGI Skeleton)
+# VERITAS OS v2.0 — Decision Governance OS for AI Agents
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
+**Reviewable, traceable, replayable, and enforceable AI decisions before real-world effect.**
+
+[![DOI](https://doi.org/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
-[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
-[![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Next.js](https://img.shields.io/badge/Next.js-16-black)
+![License](https://img.shields.io/badge/license-Multi--license%20(Core%20Proprietary%20%2B%20MIT)-purple)
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
+[![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Release Gate](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/release-gate.yml)
-[![CodeQL](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/codeql.yml)
 [![Docker Publish](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/publish-ghcr.yml)
-[![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen.svg)](docs/COVERAGE_REPORT.md) <!-- Snapshot value from docs/COVERAGE_REPORT.md; CI gate is configured in .github/workflows/main.yml -->
-[![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-2496ED?logo=docker&logoColor=white)](https://ghcr.io/veritasfuji-japan/veritas_os)
+![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+![GHCR](https://img.shields.io/badge/GHCR-ghcr.io%2Fveritasfuji--japan%2Fveritas__os-blue)
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
-**Version**: 2.0.0  
-**Release Status**: Beta  
-**Author**: Takeshi Fujishita
+VERITAS OS is a **Decision Governance OS** for AI agents.
+Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with operational visibility through **Mission Control**.
 
-VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-closed safety-gated, hash-chained decision pipeline** and provides a **Mission Control dashboard** (Next.js) for real-time operational visibility. The current public release should be read as a **beta-grade governance platform**: broad in capability, strong in auditability, and intentionally conservative in safety defaults.
+This project is not only about running agents.
+It is about making AI decisions **reviewable, traceable, replayable, auditable, and enforceable** inside real organizational workflows before they have real-world effect.
 
-> Mental model: **LLM = CPU**, **VERITAS OS = Decision / Agent OS on top**
+> **Mental model:** LLM = CPU, VERITAS OS = Decision / Agent Governance OS on top
 
-### Key Highlights
+## Version
 
-| | |
-|---|---|
-| **20+ stage decision pipeline** | Structured, reproducible, with divergence-detecting replay |
-| **FUJI Gate (fail-closed)** | PII detection, prompt injection defense, toxicity filter, policy rules |
-| **Hash-chained TrustLog** | Ed25519-signed, WORM mirror, Transparency log anchor, W3C PROV export |
-| **Enterprise governance** | 4-eyes approval, RBAC/ABAC, SSE alerts, external secret manager enforcement |
-| **Mission Control dashboard** | Next.js 16 — real-time event stream, risk analytics, governance management |
-| **EU AI Act compliance** | Built-in reporting, audit export, deployment readiness checks |
+- **Version:** 2.0.0
+- **Release Status:** Beta
+- **Author:** Takeshi Fujishita
+
+## Why VERITAS OS
+
+As agent execution becomes easier to provision, the scarce layer shifts from runtime setup to governance.
+
+The key problem is no longer only:
+
+- How do we run agents?
+
+It becomes:
+
+- Who can authorize a decision and at which boundary?
+- What evidence was used and preserved?
+- Which safety and policy gates were passed?
+- What was actually committed to audit artifacts?
+- How can a decision be replayed and inspected afterward?
+- How is governance enforced consistently across environments?
+
+VERITAS OS is built to solve that layer.
+
+## Key Highlights
+
+- **20+ stage decision pipeline**
+  Structured decision flow with reproducibility hooks and divergence-aware replay support.
+
+- **Fail-closed FUJI safety gate**
+  Unsafe or policy-violating paths are rejected by default rather than silently continuing.
+
+- **Hash-chained TrustLog**
+  Tamper-evident decision records with signing support for audit accountability.
+
+- **Mission Control dashboard**
+  Real-time operational visibility into governed decision flows and risk posture.
+
+- **Replayable decision paths**
+  Reconstruct and inspect how decisions were formed and executed.
+
+- **Approval and authority controls**
+  Includes governance-oriented approval boundaries and role-aware access patterns.
+
+- **Compliance-facing architecture**
+  Designed for audit export, reporting, and enterprise deployment readiness checks.
+
+## What VERITAS OS is / is not
+
+- **Is:** a governance layer that sits before action execution and enforces policy, safety, and audit controls.
+- **Is not:** only an agent runtime abstraction or orchestration convenience wrapper.
+
 
 ### Independent Technical DD Score
 
