@@ -147,7 +147,10 @@ export function resolveCspReportOnlyEndpoint(): string {
   const configuredEndpoint = process.env[REPORT_ONLY_ENDPOINT_ENV] ?? "";
   const normalizedEndpoint = configuredEndpoint.trim();
   if (normalizedEndpoint) {
-    return normalizedEndpoint;
+    if (normalizedEndpoint.startsWith("/")) {
+      return normalizedEndpoint;
+    }
+    return "/api/veritas/csp-report";
   }
   return "/api/veritas/csp-report";
 }

@@ -66,6 +66,15 @@ describe("middleware CSP", () => {
     );
   });
 
+  it("falls back to default report-only endpoint for cross-origin override", () => {
+    vi.stubEnv("VERITAS_CSP_REPORT_ONLY_ENDPOINT", "https://collector.example/csp");
+
+    expect(resolveCspReportOnlyEndpoint()).toBe("/api/veritas/csp-report");
+    expect(buildCspReportOnly("sample-nonce")).toContain(
+      "report-uri /api/veritas/csp-report",
+    );
+  });
+
   it("defaults nonce enforcement flag to false in non-production profile", () => {
     vi.stubEnv("VERITAS_ENV", "development");
 
