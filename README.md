@@ -93,7 +93,7 @@ docker compose up --build
 - [Docker (Backend Only)](#-docker-backend-only)
 - [Architecture (High-Level)](#-architecture-high-level)
 - [TrustLog (Hash-Chained Audit Log)](#-trustlog-hash-chained-audit-log)
-- [Continuation Runtime (Phase-1)](#-continuation-runtime-phase-1-observeshadow)
+- [Continuation Runtime](#-continuation-runtime)
 - [Tests](#-tests)
 - [Environment Variables Reference](#-environment-variables-reference)
 - [Security Notes (Important)](#-security-notes-important)
@@ -763,28 +763,76 @@ Key features:
 
 ---
 
-## 🔄 Continuation Runtime (Phase-1: Observe/Shadow)
+## 🔄 Continuation Runtime
 
-VERITAS includes a **chain-level continuation observation layer** that runs beside (not inside) the existing step-level decision infrastructure. This is **not** enforcement — it is observation only.
+VERITAS includes a **chain-level continuation observation and limited enforcement layer** that runs beside (not inside) the existing step-level decision infrastructure.
+
+### Modes
+
+| Mode | Behavior | Default in posture |
+|---|---|---|
+| **Observe** (Phase-1) | Shadow only — no enforcement, no refusal gating | dev, staging |
+| **Advisory** (Phase-2) | Emits enforcement events as advisories; no blocking | secure, prod |
+| **Enforce** (Phase-2) | Limited enforcement: may block/halt for high-confidence conditions | (opt-in via env) |
 
 | Aspect | Status |
 |---|---|
-| Mode | Observe / shadow only — no enforcement, no refusal gating |
 | FUJI | Unchanged — remains the final safety/policy gate for each step |
 | `gate.decision_status` | Unchanged — no new values, no reinterpretation |
 | Feature flag off | Zero change to response, logs, UI, or behavior |
-| Purpose | Detect when a chain's continuation standing weakens (narrowed, degraded, escalated, halted, revoked) even though individual steps pass |
+| Purpose | Detect and (optionally) enforce when a chain's continuation standing weakens |
 
-Key concepts:
+### Enforcement Actions (Phase-2)
+
+The enforcement engine triggers only for **high-confidence, explainable conditions**:
+
+| Condition | Action | When |
+|---|---|---|
+| Repeated high-risk degradation | `require_human_review` | ≥3 consecutive degraded/escalated/halted receipts |
+| Approval-required without approval | `halt_chain` | Scope requires escalation but no approval provided |
+| Replay divergence exceeded | `escalate_alert` | Divergence ratio >0.3 for sensitive paths |
+| Policy boundary violation | `halt_chain` | Policy violation detected in continuation state |
+
+### What causes `require_human_review` vs `halt_chain`?
+
+- **`require_human_review`**: Triggered by *accumulated degradation* — a pattern of weakening that suggests drift, not a single critical failure. The chain is paused pending operator review.
+- **`halt_chain`**: Triggered by *deterministic governance failures* — missing approval for an approval-required transition, or a detected policy boundary violation. The chain is stopped immediately.
+- **`escalate_alert`**: Triggered by *replay divergence* — the continuation path is diverging from expected replay behavior, suggesting environmental or configuration drift.
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime |
+| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | Enforcement mode (`observe`, `advisory`, `enforce`) |
+
+Posture-based defaults:
+- **dev/staging**: `observe` (no enforcement)
+- **secure/prod**: `advisory` (emit events, no blocking)
+- Set `VERITAS_CONTINUATION_ENFORCEMENT_MODE=enforce` to enable limited enforcement in any posture.
+
+### Key Concepts
+
 - **Snapshot** (state): minimal governable facts — support basis, scope, burden, headroom, law version
 - **Receipt** (audit witness): how revalidation was conducted, divergence flags, reason codes, receipt chain linkage
-- The snapshot is not a receipt. The receipt is not a state store. They are separate responsibilities.
+- **Enforcement Event** (audit artifact): every enforcement action is logged, attributable, replay-visible, and operator-visible
+- The snapshot is not a receipt. The receipt is not a state store. Enforcement events are separate from both.
 - Revalidation runs **before** step-level merit evaluation (pre-merit placement)
-- `should_refuse_before_effect` is advisory only in phase-1
+- Continuation-level enforcement is conceptually separate from FUJI step-level safety gating
+
+### Every Enforcement Event Is:
+- **Logged** — via Python logging + trustlog-ready structure
+- **Attributable** — carries `claim_lineage_id`, `receipt_id`, `chain_id`
+- **Replay-visible** — carries `snapshot_id`, `receipt_id`, `law_version`
+- **Operator-visible** — carries `action`, `reasoning`, `severity`, `conditions_met`
+
+### Design Note
+
+See: `docs/architecture/continuation_enforcement_design_note.md`
 
 Enable with: `VERITAS_CAP_CONTINUATION_RUNTIME=1` (default: off)
 
-See: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
+See also: `docs/architecture/continuation_runtime_adr.md`, `docs/architecture/continuation_runtime_architecture_note.md`
 
 ---
 
@@ -933,7 +981,8 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_ENABLE_DIRECT_FUJI_API` | `0` | Enable `/v1/fuji/validate` endpoint |
 | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` (posture: `1` in secure/prod) | Block startup without Vault/KMS |
 | `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web search toxicity filter (fail-closed) |
-| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime (Phase-1 observe) |
+| `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime |
+| `VERITAS_CONTINUATION_ENFORCEMENT_MODE` | `observe` | Continuation enforcement mode (`observe`, `advisory`, `enforce`) |
 
 ### Policy Signing & Enforcement
 
