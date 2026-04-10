@@ -35,10 +35,14 @@ def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
     if normalized_profile in {"prod", "production"}:
         return True
 
-    # Also respect the explicit posture selector.
-    posture_raw = (os.getenv("VERITAS_POSTURE") or "").strip().lower()
-    if posture_raw in {"prod", "production", "secure", "hardened"}:
-        return True
+    # Delegate to canonical posture resolution to avoid alias drift.
+    try:
+        from veritas_os.core.posture import PostureLevel, resolve_posture
+        level = resolve_posture()
+        if level in {PostureLevel.SECURE, PostureLevel.PROD}:
+            return True
+    except Exception:
+        pass
 
     return False
 
