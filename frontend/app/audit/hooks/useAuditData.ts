@@ -125,6 +125,7 @@ export function useAuditData(): AuditDataState {
 
   const requestSearchNonceRef = useRef(0);
   const loadAbortRef = useRef<AbortController | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   /* ---------------------------------------------------------------- */
   /*  Derived data                                                     */
@@ -296,6 +297,12 @@ export function useAuditData(): AuditDataState {
     const value = requestId.trim();
     requestSearchNonceRef.current += 1;
     const requestNonce = requestSearchNonceRef.current;
+
+    // Cancel any in-flight search request before starting a new one
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
     setRequestResult(null);
     setError(null);
     if (!value) {
@@ -306,6 +313,7 @@ export function useAuditData(): AuditDataState {
     try {
       const response = await veritasFetch(
         `/api/veritas/v1/trust/${encodeURIComponent(value)}`,
+        { signal: controller.signal },
       );
       if (!response.ok) {
         setError(
@@ -329,12 +337,7 @@ export function useAuditData(): AuditDataState {
         setSelected(payload.items[payload.items.length - 1]);
     } catch (caught: unknown) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
-        setError(
-          t(
-            "タイムアウト: request_id 検索が時間内に完了しませんでした。",
-            "Timeout: request_id search did not complete in time.",
-          ),
-        );
+        // Cancelled by a newer search call — silently drop the stale request
         return;
       }
       setError(

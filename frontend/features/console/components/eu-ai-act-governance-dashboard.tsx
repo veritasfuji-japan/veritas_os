@@ -51,19 +51,20 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    veritasFetch("/api/veritas/v1/compliance/config")
+    const controller = new AbortController();
+    veritasFetch("/api/veritas/v1/compliance/config", { signal: controller.signal })
       .then(async (res) => {
-        if (!res.ok || cancelled) return;
+        if (!res.ok || controller.signal.aborted) return;
         const payload = await res.json();
-        if (!cancelled && payload?.config) {
+        if (!controller.signal.aborted && payload?.config) {
           setConfig(payload.config as ComplianceConfig);
         }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         // keep hardcoded defaults on failure
       });
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, []);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
             id: typeof parsed.id === "number" ? parsed.id : undefined,
             type,
             ts: String(parsed.ts || new Date().toISOString()),
-            payload: parsed.payload ?? {},
+            payload: parsed.payload ? { ...parsed.payload } : {},
           };
           setLogs((prev) => [nextEntry, ...prev].slice(0, 40));
         } catch {
@@ -108,23 +109,24 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
   const gaugePercent = label === "Low" ? 20 : label === "High" ? 65 : 95;
 
   const toggleMode = async (): Promise<void> => {
-    const nextConfig = {
-      ...config,
-      eu_ai_act_mode: !config.eu_ai_act_mode,
-    };
-    setConfig(nextConfig);
-    const response = await veritasFetch("/api/veritas/v1/compliance/config", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(nextConfig),
-    });
-    if (!response.ok) {
-      setConfig(config);
-      return;
-    }
-    const payload = await response.json();
-    if (payload?.config) {
-      setConfig(payload.config as ComplianceConfig);
+    const nextEuAiActMode = !config.eu_ai_act_mode;
+    setConfig((prev) => ({ ...prev, eu_ai_act_mode: nextEuAiActMode }));
+    try {
+      const response = await veritasFetch("/api/veritas/v1/compliance/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...config, eu_ai_act_mode: nextEuAiActMode }),
+      });
+      if (!response.ok) {
+        setConfig((prev) => ({ ...prev, eu_ai_act_mode: !nextEuAiActMode }));
+        return;
+      }
+      const payload = await response.json();
+      if (payload?.config) {
+        setConfig(payload.config as ComplianceConfig);
+      }
+    } catch {
+      setConfig((prev) => ({ ...prev, eu_ai_act_mode: !nextEuAiActMode }));
     }
   };
 
