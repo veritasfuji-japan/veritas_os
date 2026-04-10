@@ -159,12 +159,16 @@ def derive_defaults(posture: PostureLevel) -> PostureDefaults:
             if posture == PostureLevel.SECURE:
                 override_raw = os.getenv(env_key)
                 if override_raw is not None:
-                    val = override_raw.strip().lower() not in _FALSY
+                    normalised = override_raw.strip().lower()
+                    # Escape hatch disables the control when set to a falsy
+                    # value (0/false/no/off); any other value keeps it on.
+                    val = normalised in _TRUTHY
                     overrides[attr] = val
                     _logger.warning(
-                        "[Posture] Escape hatch %s=%s active in 'secure' posture.",
+                        "[Posture] Escape hatch %s active in 'secure' posture "
+                        "(control=%s).",
                         env_key,
-                        override_raw,
+                        "on" if val else "off",
                     )
             # prod: overrides are silently ignored
         return PostureDefaults(
@@ -330,7 +334,7 @@ def get_active_posture() -> PostureDefaults:
     server lifespan.  This function provides a safe fallback for code
     paths that run before lifespan (e.g. config module).
     """
-    global _active_posture  # noqa: PLW0603
+    global _active_posture  # noqa: PLW0603 — process-wide posture singleton
     if _active_posture is None:
         _active_posture = derive_defaults(resolve_posture())
     return _active_posture
@@ -338,11 +342,11 @@ def get_active_posture() -> PostureDefaults:
 
 def set_active_posture(defaults: PostureDefaults) -> None:
     """Set the module-level active posture (called from lifespan)."""
-    global _active_posture  # noqa: PLW0603
+    global _active_posture  # noqa: PLW0603 — set once during server startup
     _active_posture = defaults
 
 
 def reset_active_posture() -> None:
     """Reset the module-level posture singleton (testing only)."""
-    global _active_posture  # noqa: PLW0603
+    global _active_posture  # noqa: PLW0603 — testing reset only
     _active_posture = None

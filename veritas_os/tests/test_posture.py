@@ -131,6 +131,11 @@ class TestResolvePosture:
         monkeypatch.setenv("VERITAS_POSTURE", "  secure  ")
         assert resolve_posture() == PostureLevel.SECURE
 
+    def test_empty_string_is_dev(self, monkeypatch):
+        _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_POSTURE", "")
+        assert resolve_posture() == PostureLevel.DEV
+
 
 # ============================================================
 # derive_defaults — dev/staging
@@ -245,8 +250,10 @@ class TestValidatePostureStartup:
         _clean_env(monkeypatch)
         d = derive_defaults(PostureLevel.PROD)
         errors = validate_posture_startup(d)
-        assert len(errors) >= 3  # secret provider, ref, transparency, worm
+        # 4 errors: secret provider, secret ref, transparency path, worm path
+        assert len(errors) == 4
         assert any("VERITAS_SECRET_PROVIDER" in e for e in errors)
+        assert any("VERITAS_API_SECRET_REF" in e for e in errors)
         assert any("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH" in e for e in errors)
         assert any("VERITAS_TRUSTLOG_WORM_MIRROR_PATH" in e for e in errors)
 
