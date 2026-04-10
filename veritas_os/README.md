@@ -434,6 +434,8 @@ h_t = SHA256(h_{t-1} || r_t)
 
 * `sha256_prev` and `sha256` are automatically filled
 * Log entries are appended as JSONL
+* Signed witness entries can carry structured `artifact_ref` metadata
+* Verifier recomputes canonical payload hash from resolved full artifacts and rejects linkage mismatches (`artifact_missing`, `artifact_unreadable`, `canonicalization_failed`, `linkage_hash_mismatch`)
 * Supports cryptographic verification of the decision history
 
 ---

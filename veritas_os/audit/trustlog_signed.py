@@ -13,6 +13,8 @@ Design (post-compaction):
     - ``payload_hash``: SHA-256 of the *compact summary* (chain-verified)
     - ``full_payload_hash``: SHA-256 of the *original full payload* so that
       an auditor can correlate the summary back to the full artifact on disk.
+    - ``artifact_ref`` (optional): structured locator metadata that helps
+      verifiers resolve the exact full artifact and recompute linkage hashes.
 
     This keeps individual JSONL lines small while preserving cryptographic
     traceability to the original data.
@@ -470,12 +472,48 @@ def _enforce_entry_size(
     return entry
 
 
-def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
+
+
+def _build_artifact_reference(decision_payload: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Build structured artifact linkage metadata for full-ledger payloads.
+
+    Newer witness entries can carry this manifest so verifiers resolve the
+    exact encrypted full-ledger row and recompute ``full_payload_hash`` from
+    canonical JSON content.
+
+    Returns ``None`` for legacy/custom call sites where no stable locator is
+    available (for example direct tests that call ``append_signed_decision``
+    without trust-log ``sha256`` fields).
+    """
+    full_sha = decision_payload.get("sha256")
+    if not isinstance(full_sha, str) or not full_sha.strip():
+        return None
+    locator = f"sha256:{full_sha.strip()}"
+
+    return {
+        "artifact_ref": "trustlog_full_payload",
+        "artifact_type": "trust_log_entry",
+        "artifact_storage_backend": "trustlog_full_ledger",
+        "artifact_locator": locator,
+        "artifact_hash_algorithm": "sha256_canonical_json",
+    }
+
+def append_signed_decision(
+    decision_payload: Dict[str, Any],
+    *,
+    enable_artifact_ref: bool = False,
+) -> Dict[str, Any]:
     """Append a signed decision entry to append-only TrustLog JSONL.
 
     Since the compaction redesign, ``decision_payload`` written to disk is
     the *compact summary* produced by :func:`build_trustlog_summary`.  The
     full payload hash is stored in ``full_payload_hash`` for cross-reference.
+
+    Args:
+        decision_payload: Full payload object from the decision pipeline.
+        enable_artifact_ref: When ``True``, attach structured ``artifact_ref``
+            metadata if a stable full-ledger locator is available. This is
+            enabled by the full TrustLog integration path.
 
     Raises:
         SignedTrustLogWriteError: If signing/write fails due to expected
@@ -506,6 +544,10 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
                 "signer_type": signer.signer_type,
                 "signer_key_id": signer.signer_key_id(),
             }
+            if enable_artifact_ref:
+                artifact_ref = _build_artifact_reference(decision_payload)
+                if artifact_ref is not None:
+                    entry["artifact_ref"] = artifact_ref
 
             # Enforce maximum entry size before writing
             entry = _enforce_entry_size(entry, signer)

@@ -457,7 +457,14 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
             # Signed TrustLog (append-only JSONL) is best-effort and must not
             # break the existing decision pipeline.
             try:
-                append_signed_decision(entry)
+                try:
+                    append_signed_decision(entry, enable_artifact_ref=True)
+                except TypeError as exc:
+                    # Backward-compatibility for tests or call sites that
+                    # monkeypatch append_signed_decision with legacy signature.
+                    if "enable_artifact_ref" not in str(exc):
+                        raise
+                    append_signed_decision(entry)
             except SignedTrustLogWriteError:
                 logger.warning(
                     "append_signed_decision failed; continuing with legacy trust log",

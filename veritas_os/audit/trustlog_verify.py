@@ -16,10 +16,11 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence
 
 from veritas_os.logging.encryption import DecryptionError, EncryptionKeyMissing, decrypt
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex, sha256_of_canonical_json
+from veritas_os.audit.artifact_linkage import verify_entry_artifact_linkage
 
 _SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
 
@@ -150,6 +151,7 @@ def _verify_mirror_receipt(entry: Dict[str, Any]) -> bool:
 def verify_witness_ledger(
     entries: List[Dict[str, Any]],
     verify_signature_fn: Callable[[Dict[str, Any]], bool],
+    artifact_search_roots: Optional[Sequence[Path]] = None,
 ) -> Dict[str, Any]:
     """Verify witness ledger chain, payload hash, signature and metadata linkage.
 
@@ -178,13 +180,19 @@ def verify_witness_ledger(
             signature_ok = False
             errors.append(VerificationError("witness", index, "signature_invalid"))
 
-        full_payload_hash = entry.get("full_payload_hash")
-        if full_payload_hash is not None and not (
-            isinstance(full_payload_hash, str)
-            and _SHA256_HEX_RE.fullmatch(full_payload_hash)
-        ):
+        linkage_result = verify_entry_artifact_linkage(
+            entry,
+            search_roots=artifact_search_roots,
+        )
+        if not linkage_result.ok:
             linkage_ok = False
-            errors.append(VerificationError("witness", index, "full_payload_hash_invalid"))
+            errors.append(
+                VerificationError(
+                    "witness",
+                    index,
+                    str(linkage_result.reason or "linkage_verification_failed"),
+                )
+            )
 
         if not _verify_mirror_receipt(entry):
             mirror_ok = False
@@ -215,10 +223,15 @@ def verify_trustlogs(
     witness_entries: List[Dict[str, Any]],
     verify_signature_fn: Callable[[Dict[str, Any]], bool],
     max_entries: Optional[int] = None,
+    artifact_search_roots: Optional[Sequence[Path]] = None,
 ) -> Dict[str, Any]:
     """Run unified verification for both full and witness ledgers."""
     full = verify_full_ledger(log_path=full_log_path, max_entries=max_entries)
-    witness = verify_witness_ledger(entries=witness_entries, verify_signature_fn=verify_signature_fn)
+    witness = verify_witness_ledger(
+        entries=witness_entries,
+        verify_signature_fn=verify_signature_fn,
+        artifact_search_roots=artifact_search_roots,
+    )
 
     total_entries = full["total_entries"] + witness["total_entries"]
     valid_entries = full["valid_entries"] + witness["valid_entries"]
