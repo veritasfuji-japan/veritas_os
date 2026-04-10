@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -468,13 +469,59 @@ def test_load_runtime_bundle_invalid_json(tmp_path: Path) -> None:
         load_runtime_bundle(bundle_dir)
 
 
-def test_load_runtime_bundle_missing_manifest(tmp_path: Path) -> None:
-    """load_runtime_bundle raises ValueError when manifest.sig is missing."""
-    bundle_dir = tmp_path / "no_sig"
-    bundle_dir.mkdir()
-    (bundle_dir / "manifest.json").write_text("{}", encoding="utf-8")
+def test_load_runtime_bundle_missing_manifest_rejected_in_strict_posture(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Missing ``manifest.sig`` is rejected in secure/prod posture."""
+    from veritas_os.core.posture import PostureDefaults, PostureLevel
 
-    with pytest.raises(ValueError, match="signature verification failed"):
+    bundle_dir = tmp_path / "no_sig"
+    (bundle_dir / "compiled").mkdir(parents=True, exist_ok=True)
+    (bundle_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "0.1",
+                "policy_id": "test-policy",
+                "version": "1.0",
+                "semantic_hash": "abc123",
+                "compiler_version": "0.1.0",
+                "compiled_at": "2026-01-01T00:00:00Z",
+                "signing": {"algorithm": "sha256", "status": "unsigned"},
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    (bundle_dir / "compiled" / "canonical_ir.json").write_text(
+        json.dumps(
+            {
+                "policy_id": "test-policy",
+                "version": "1.0",
+                "title": "Test",
+                "description": "Test policy",
+                "scope": {"domains": [], "routes": [], "actors": []},
+                "conditions": [],
+                "constraints": [],
+                "requirements": {"min_evidence": 0, "min_approvals": 0, "reviewer_count": 0},
+                "outcome": {"decision": "allow", "reason": "test"},
+                "obligations": [],
+                "test_vectors": [],
+                "metadata": {},
+                "source_refs": [],
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "veritas_os.core.posture.get_active_posture",
+        lambda: PostureDefaults(posture=PostureLevel.PROD),
+    )
+
+    with pytest.raises(ValueError, match="missing manifest.sig"):
         load_runtime_bundle(bundle_dir)
 
 

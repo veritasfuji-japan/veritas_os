@@ -63,10 +63,10 @@ Verification behavior depends on the runtime posture:
 
 | Posture     | Ed25519 Signed | SHA-256 Only | Missing Signature |
 |-------------|----------------|--------------|-------------------|
-| **dev**     | ✅ Accept      | ⚠️ Accept    | ❌ Fail           |
-| **staging** | ✅ Accept      | ⚠️ Accept    | ❌ Fail           |
-| **secure**  | ✅ Accept      | ❌ Reject    | ❌ Fail           |
-| **prod**    | ✅ Accept      | ❌ Reject    | ❌ Fail           |
+| **dev**     | ✅ Accept      | ⚠️ Accept    | ⚠️ Accept         |
+| **staging** | ✅ Accept      | ⚠️ Accept    | ⚠️ Accept         |
+| **secure**  | ✅ Accept      | ❌ Reject    | ❌ Reject         |
+| **prod**    | ✅ Accept      | ❌ Reject    | ❌ Reject         |
 
 In secure/prod posture, only Ed25519-signed bundles are accepted.  SHA-256
 integrity-only bundles are rejected because they do not provide authenticity
@@ -155,7 +155,9 @@ print('Keys generated: policy_signing.pem (KEEP SECRET), policy_verify.pem')
   falls back to SHA-256 but will be rejected in strict posture
 - **Invalid signature**: Bundle loading fails with `ValueError`
 - **Corrupt manifest**: Bundle loading fails with `ValueError`
-- **Missing manifest.sig**: Verification returns `False`, loading fails
+- **Missing manifest.sig**:
+  - `dev` / `staging`: warning + accept (migration compatibility)
+  - `secure` / `prod`: reject (fail-closed)
 
 ## Migration Notes
 
@@ -187,8 +189,8 @@ VERITAS OS はガバナンスアーティファクトを**署名付きで検証�
 
 | ポスチャ     | Ed25519署名 | SHA-256のみ | 署名なし |
 |-------------|-------------|-------------|---------|
-| **dev**     | ✅ 許可     | ⚠️ 許可     | ❌ 拒否  |
-| **staging** | ✅ 許可     | ⚠️ 許可     | ❌ 拒否  |
+| **dev**     | ✅ 許可     | ⚠️ 許可     | ⚠️ 許可  |
+| **staging** | ✅ 許可     | ⚠️ 許可     | ⚠️ 許可  |
 | **secure**  | ✅ 許可     | ❌ 拒否     | ❌ 拒否  |
 | **prod**    | ✅ 許可     | ❌ 拒否     | ❌ 拒否  |
 

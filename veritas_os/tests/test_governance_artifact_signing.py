@@ -655,6 +655,118 @@ class TestMissingSignatureBehavior:
         # No manifest.sig
         assert verify_manifest_signature(bundle_dir) is False
 
+    def test_missing_sig_rejected_in_strict_posture(self, tmp_path, monkeypatch):
+        from veritas_os.policy.runtime_adapter import load_runtime_bundle
+        from veritas_os.core.posture import PostureDefaults, PostureLevel
+
+        bundle_dir = tmp_path / "bundle"
+        (bundle_dir / "compiled").mkdir(parents=True, exist_ok=True)
+        (bundle_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "0.1",
+                    "policy_id": "missing-sig-policy",
+                    "version": "1.0",
+                    "semantic_hash": "abc123",
+                    "compiler_version": "0.1.0",
+                    "compiled_at": "2026-01-01T00:00:00Z",
+                    "signing": {"algorithm": "sha256", "status": "unsigned"},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        (bundle_dir / "compiled" / "canonical_ir.json").write_text(
+            json.dumps(
+                {
+                    "policy_id": "missing-sig-policy",
+                    "version": "1.0",
+                    "title": "Missing Sig",
+                    "description": "Test",
+                    "scope": {"domains": [], "routes": [], "actors": []},
+                    "conditions": [],
+                    "constraints": [],
+                    "requirements": {
+                        "min_evidence": 0,
+                        "min_approvals": 0,
+                        "reviewer_count": 0,
+                    },
+                    "outcome": {"decision": "allow", "reason": "test"},
+                    "obligations": [],
+                    "test_vectors": [],
+                    "metadata": {},
+                    "source_refs": [],
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "veritas_os.core.posture.get_active_posture",
+            lambda: PostureDefaults(posture=PostureLevel.PROD),
+        )
+
+        with pytest.raises(ValueError, match="missing manifest.sig"):
+            load_runtime_bundle(bundle_dir)
+
+    def test_missing_sig_accepted_in_dev_posture(self, tmp_path, monkeypatch):
+        from veritas_os.policy.runtime_adapter import load_runtime_bundle
+        from veritas_os.core.posture import PostureDefaults, PostureLevel
+
+        bundle_dir = tmp_path / "bundle"
+        (bundle_dir / "compiled").mkdir(parents=True, exist_ok=True)
+        (bundle_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "0.1",
+                    "policy_id": "missing-sig-policy-dev",
+                    "version": "1.1",
+                    "semantic_hash": "def456",
+                    "compiler_version": "0.1.0",
+                    "compiled_at": "2026-01-01T00:00:00Z",
+                    "signing": {"algorithm": "sha256", "status": "unsigned"},
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        (bundle_dir / "compiled" / "canonical_ir.json").write_text(
+            json.dumps(
+                {
+                    "policy_id": "missing-sig-policy-dev",
+                    "version": "1.1",
+                    "title": "Missing Sig Dev",
+                    "description": "Test",
+                    "scope": {"domains": [], "routes": [], "actors": []},
+                    "conditions": [],
+                    "constraints": [],
+                    "requirements": {
+                        "min_evidence": 0,
+                        "min_approvals": 0,
+                        "reviewer_count": 0,
+                    },
+                    "outcome": {"decision": "allow", "reason": "test"},
+                    "obligations": [],
+                    "test_vectors": [],
+                    "metadata": {},
+                    "source_refs": [],
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(
+            "veritas_os.core.posture.get_active_posture",
+            lambda: PostureDefaults(posture=PostureLevel.DEV),
+        )
+
+        bundle = load_runtime_bundle(bundle_dir)
+        assert bundle.policy_id == "missing-sig-policy-dev"
+
     def test_unsigned_governance_warns_in_dev(self, caplog):
         from veritas_os.policy.governance_identity import require_signed_governance
 
@@ -677,3 +789,73 @@ class TestMissingSignatureBehavior:
                 posture_is_strict=True,
                 signature_verified=False,
             )
+
+
+def test_compiled_policy_bridge_sets_governance_identity(monkeypatch):
+    from veritas_os.core.pipeline.pipeline_policy import (
+        _apply_compiled_policy_runtime_bridge,
+    )
+    from veritas_os.core.pipeline.pipeline_types import PipelineContext
+    from veritas_os.policy.runtime_adapter import RuntimePolicy, RuntimePolicyBundle
+
+    runtime_bundle = RuntimePolicyBundle(
+        schema_version="0.1",
+        policy_id="policy.bridge",
+        version="governance_v9",
+        semantic_hash="abcde12345",
+        compiler_version="0.1.0",
+        compiled_at="2026-01-01T00:00:00Z",
+        runtime_policies=[
+            RuntimePolicy(
+                policy_id="policy.bridge",
+                version="governance_v9",
+                title="Bridge",
+                description="Bridge test",
+                effective_date=None,
+                scope={"domains": [], "routes": [], "actors": []},
+                conditions=[],
+                constraints=[],
+                requirements={},
+                outcome={"decision": "allow", "reason": "ok"},
+                obligations=[],
+                test_vectors=[],
+                metadata={},
+                source_refs=[],
+            )
+        ],
+        manifest={
+            "signing": {"algorithm": "ed25519", "status": "signed-ed25519", "key_id": "ops-key-1"}
+        },
+    )
+    monkeypatch.setattr(
+        "veritas_os.core.pipeline.pipeline_policy.load_runtime_bundle",
+        lambda *_args, **_kwargs: runtime_bundle,
+    )
+    monkeypatch.setattr(
+        "veritas_os.core.pipeline.pipeline_policy.evaluate_runtime_policies",
+        lambda *_args, **_kwargs: type("R", (), {"to_dict": lambda self: {"final_outcome": "allow"}})(),
+    )
+
+    ctx = PipelineContext(
+        body={},
+        query="q",
+        user_id="u",
+        request_id="r",
+        fast_mode=False,
+        replay_mode=False,
+        mock_external_apis=False,
+        seed=0,
+        min_ev=1,
+        started_at=0.0,
+        is_veritas_query=False,
+        context={"compiled_policy_bundle_dir": "/mock/bundle", "policy_runtime_enforce": True},
+        response_extras={},
+        plan={},
+    )
+
+    _apply_compiled_policy_runtime_bridge(ctx)
+    assert ctx.governance_identity is not None
+    assert ctx.governance_identity["policy_version"] == "governance_v9"
+    assert ctx.governance_identity["digest"] == "abcde12345"
+    assert ctx.governance_identity["signature_verified"] is True
+    assert ctx.governance_identity["signer_id"] == "ops-key-1"
