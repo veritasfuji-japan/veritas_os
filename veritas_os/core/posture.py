@@ -212,6 +212,26 @@ class PostureStartupError(RuntimeError):
     """Raised when the active posture detects a fatal misconfiguration."""
 
 
+def _trustlog_signer_backend() -> str:
+    """Return normalized TrustLog signer backend name.
+
+    Supported aliases are normalized so startup validation can apply posture
+    policy consistently.
+    """
+    raw = (os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND") or "file").strip().lower()
+    if raw in {"", "file", "file_ed25519"}:
+        return "file"
+    if raw in {"aws_kms", "aws_kms_ed25519"}:
+        return "aws_kms"
+    return raw
+
+
+def _allow_insecure_signer_override() -> bool:
+    """Return True when the unsupported production break-glass is enabled."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD") or "").strip()
+    return raw == "1"
+
+
 def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     """Validate required integrations for the active posture.
 
@@ -253,6 +273,43 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 "VERITAS_TRUSTLOG_WORM_MIRROR_PATH must be set when "
                 "WORM hard-fail is required "
                 f"(posture={defaults.posture.value})."
+            )
+
+    signer_backend = _trustlog_signer_backend()
+    insecure_override = _allow_insecure_signer_override()
+    if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
+        if signer_backend == "file":
+            if insecure_override:
+                _logger.warning(
+                    "[SECURITY][UNSUPPORTED] "
+                    "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 is active "
+                    "while VERITAS_TRUSTLOG_SIGNER_BACKEND=file in %s posture. "
+                    "This break-glass mode is NOT enterprise supported and weakens "
+                    "TrustLog non-repudiation because private key material remains "
+                    "file-based on application hosts.",
+                    defaults.posture.value,
+                )
+            else:
+                errors.append(
+                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=file is not allowed in "
+                    f"{defaults.posture.value} posture. Configure "
+                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms and set "
+                    "VERITAS_TRUSTLOG_KMS_KEY_ID to an AWS KMS Ed25519 key. "
+                    "Emergency-only break-glass: "
+                    "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 "
+                    "(unsupported; startup refusal bypass)."
+                )
+        elif signer_backend == "aws_kms":
+            kms_key_id = (os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID") or "").strip()
+            if not kms_key_id:
+                errors.append(
+                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms requires "
+                    "VERITAS_TRUSTLOG_KMS_KEY_ID in secure/prod posture."
+                )
+        else:
+            errors.append(
+                "VERITAS_TRUSTLOG_SIGNER_BACKEND must be 'aws_kms' in secure/prod "
+                f"posture (got {signer_backend!r})."
             )
 
     return errors

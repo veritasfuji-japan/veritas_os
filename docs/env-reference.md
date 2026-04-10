@@ -61,6 +61,9 @@ Variables prefixed with `VERITAS_` are project-specific.
 |----------|---------|-------------|
 | `VERITAS_ENCRYPTION_KEY` | *(required)* | Base64-encoded 32-byte key for AES-256-GCM encryption |
 | `VERITAS_ENCRYPTION_LEGACY_DECRYPT` | `false` | Enable legacy `ENC:<payload>` decryption during migrations |
+| `VERITAS_TRUSTLOG_SIGNER_BACKEND` | `file` | TrustLog signature backend (`file` for local/dev/test only, `aws_kms` required in `secure`/`prod`) |
+| `VERITAS_TRUSTLOG_KMS_KEY_ID` | `""` | AWS KMS Ed25519 key identifier/ARN required when `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms` |
+| `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` | `0` | **Unsupported emergency break-glass only**. `1` allows `file` signer in `secure`/`prod` but emits a critical security warning |
 | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` | `""` | Optional mirror path for WORM (Write-Once-Read-Many) audit log |
 | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` | Fail hard if WORM mirror write fails (`0` = warn, `1` = error) |
 | `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | `""` | Path to transparency log for blockchain-like anchoring |
