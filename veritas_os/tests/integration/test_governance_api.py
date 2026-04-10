@@ -1025,7 +1025,7 @@ class TestRouteValidationResponses:
         assert resp.status_code == 400
         body = resp.json()
         assert body["ok"] is False
-        assert "fuji_rules must be an object" in body["error"]
+        assert "Governance policy validation failed" in body["error"]
 
     def test_put_invalid_field_value_returns_400(self):
         resp = client.put(
