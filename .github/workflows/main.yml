@@ -245,18 +245,37 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          python -m pip install --upgrade pip
+          pip_retry() {
+            local cmd="$1"
+            local attempts=3
+            local delay=5
+            local try=1
+            until [ "${try}" -gt "${attempts}" ]; do
+              if eval "${cmd}"; then
+                return 0
+              fi
+              if [ "${try}" -lt "${attempts}" ]; then
+                echo "pip command failed (attempt ${try}/${attempts}), retrying in ${delay}s..."
+                sleep "${delay}"
+              fi
+              try=$((try + 1))
+            done
+            echo "pip command failed after ${attempts} attempts: ${cmd}"
+            return 1
+          }
+
+          pip_retry "python -m pip install --upgrade pip --retries 5 --timeout 60"
 
           # プロジェクト依存をインストール
-          python -m pip install -r veritas_os/requirements.txt
+          pip_retry "python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt"
 
           # テスト用追加パッケージ
-          python -m pip install \
+          pip_retry "python -m pip install --retries 5 --timeout 60 \
             httpx \
             anyio \
             pytest \
             pytest-cov \
-            pytest-asyncio
+            pytest-asyncio"
 
       - name: Run tests (with coverage)
         id: pytest
