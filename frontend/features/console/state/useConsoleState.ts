@@ -20,8 +20,14 @@ export function useConsoleState() {
       setShowDriftAlert(false);
       if (driftAlertTimerRef.current) {
         clearTimeout(driftAlertTimerRef.current);
+        driftAlertTimerRef.current = null;
       }
-      return;
+      return () => {
+        if (driftAlertTimerRef.current) {
+          clearTimeout(driftAlertTimerRef.current);
+          driftAlertTimerRef.current = null;
+        }
+      };
     }
 
     setShowDriftAlert(true);
@@ -32,6 +38,7 @@ export function useConsoleState() {
     return () => {
       if (driftAlertTimerRef.current) {
         clearTimeout(driftAlertTimerRef.current);
+        driftAlertTimerRef.current = null;
       }
     };
   }, [governanceDriftAlert]);
