@@ -109,20 +109,16 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
   const gaugePercent = label === "Low" ? 20 : label === "High" ? 65 : 95;
 
   const toggleMode = async (): Promise<void> => {
-    const previousConfig = config;
-    const nextConfig = {
-      ...config,
-      eu_ai_act_mode: !config.eu_ai_act_mode,
-    };
-    setConfig(nextConfig);
+    const nextEuAiActMode = !config.eu_ai_act_mode;
+    setConfig((prev) => ({ ...prev, eu_ai_act_mode: nextEuAiActMode }));
     try {
       const response = await veritasFetch("/api/veritas/v1/compliance/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextConfig),
+        body: JSON.stringify({ ...config, eu_ai_act_mode: nextEuAiActMode }),
       });
       if (!response.ok) {
-        setConfig(previousConfig);
+        setConfig((prev) => ({ ...prev, eu_ai_act_mode: !nextEuAiActMode }));
         return;
       }
       const payload = await response.json();
@@ -130,7 +126,7 @@ export function EUAIActGovernanceDashboard(): JSX.Element {
         setConfig(payload.config as ComplianceConfig);
       }
     } catch {
-      setConfig(previousConfig);
+      setConfig((prev) => ({ ...prev, eu_ai_act_mode: !nextEuAiActMode }));
     }
   };
 

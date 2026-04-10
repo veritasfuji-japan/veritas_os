@@ -338,13 +338,6 @@ export function useAuditData(): AuditDataState {
     } catch (caught: unknown) {
       if (caught instanceof DOMException && caught.name === "AbortError") {
         // Cancelled by a newer search call — silently drop the stale request
-        if (searchAbortRef.current !== controller) return;
-        setError(
-          t(
-            "タイムアウト: request_id 検索が時間内に完了しませんでした。",
-            "Timeout: request_id search did not complete in time.",
-          ),
-        );
         return;
       }
       setError(

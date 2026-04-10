@@ -436,7 +436,8 @@ class TestEnsureFullContract:
 
         extras = "not_a_dict"
         _ensure_full_contract(extras, fast_mode_default=False, context_obj={})  # type: ignore[arg-type]
-        # Should not raise
+        # Non-dict input is unchanged (early return, no mutation)
+        assert extras == "not_a_dict"
 
     def test_metrics_not_dict_reset(self) -> None:
         from veritas_os.core.pipeline.pipeline_contracts import _ensure_full_contract
