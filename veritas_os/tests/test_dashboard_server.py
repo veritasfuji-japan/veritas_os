@@ -565,6 +565,24 @@ def test_safe_json_for_html_script_edge_cases(value, expected_substr):
     assert ">" not in raw_content
 
 
+def test_dashboard_embeds_server_side_username_not_request(
+    monkeypatch, tmp_path
+):
+    """Dashboard must embed the server-configured DASHBOARD_USERNAME, not the
+    user-supplied HTTP Basic Auth username, to prevent reflected XSS
+    (regression test for CodeQL alert #2)."""
+    server_name = "server-admin"
+    monkeypatch.setattr(dashboard_server, "DASHBOARD_USERNAME", server_name)
+    monkeypatch.setattr(dashboard_server, "DASHBOARD_PASSWORD", server_name)
+    monkeypatch.setattr(dashboard_server, "STATUS_JSON", tmp_path / "s.json")
+    monkeypatch.setattr(dashboard_server, "REPORT_HTML", tmp_path / "r.html")
+
+    test_client = TestClient(dashboard_server.app)
+    res = test_client.get("/", auth=(server_name, server_name))
+    assert res.status_code == 200
+    assert server_name in res.text
+
+
 # =====================================================================
 # /api/status （Drive Sync ステータス）
 # =====================================================================
