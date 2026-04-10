@@ -779,9 +779,12 @@ document.getElementById('user').textContent = '{{USERNAME}}';
 </body>
 </html>
 """
-    # username を埋め込む（CSS/JS の { } を壊さないために単純置換）
+    # サーバー側で検証済みの DASHBOARD_USERNAME を使用（リクエスト由来の
+    # username をそのまま埋め込むと reflected XSS になるため）。
     # XSS対策: <script> 内に安全に埋め込むため Unicode エスケープを適用
-    html = html.replace("'{{USERNAME}}'", _safe_json_for_html_script(username))
+    html = html.replace(
+        "'{{USERNAME}}'", _safe_json_for_html_script(DASHBOARD_USERNAME)
+    )
     return HTMLResponse(html)
 
 
