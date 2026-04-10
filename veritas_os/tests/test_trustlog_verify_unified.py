@@ -44,6 +44,18 @@ def _write_full_log(path: Path, entries: List[Dict[str, Any]]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _iter_full_rows(path: Path) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    with path.open("r", encoding="utf-8") as file:
+        from veritas_os.logging.encryption import decrypt
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            rows.append(json.loads(decrypt(stripped)))
+    return rows
+
+
 def _build_witness_chain() -> List[Dict[str, Any]]:
     entries: List[Dict[str, Any]] = []
     previous_hash = None
@@ -117,6 +129,173 @@ def test_unified_verifier_broken_path(tmp_path: Path, monkeypatch) -> None:
     assert "full_payload_hash_invalid" in reasons
     assert "mirror_receipt_invalid" in reasons
 
+
+
+def test_witness_linkage_verification_success(tmp_path: Path, monkeypatch) -> None:
+    """Witness linkage succeeds when artifact_ref resolves to full ledger entry."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    full_entry = {"request_id": "r-link-ok", "decision": "allow"}
+    full_log = tmp_path / "trust_log.jsonl"
+    _write_full_log(full_log, [full_entry])
+
+    full_rows = list(_iter_full_rows(full_log))
+    assert len(full_rows) == 1
+    full_payload = full_rows[0]
+
+    witness = [
+        {
+            "decision_payload": {"request_id": "r-link-ok"},
+            "payload_hash": sha256_of_canonical_json({"request_id": "r-link-ok"}),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": sha256_of_canonical_json(full_payload),
+            "artifact_ref": {
+                "artifact_ref": "trustlog_full_payload",
+                "artifact_type": "trust_log_entry",
+                "artifact_storage_backend": "trustlog_full_ledger",
+                "artifact_locator": f"sha256:{full_payload['sha256']}",
+                "artifact_hash_algorithm": "sha256_canonical_json",
+            },
+        }
+    ]
+
+    result = verify_witness_ledger(
+        witness,
+        lambda _: True,
+        artifact_search_roots=[tmp_path],
+    )
+
+    assert result["ok"] is True
+    assert result["linkage_ok"] is True
+
+
+def test_witness_linkage_artifact_missing(tmp_path: Path, monkeypatch) -> None:
+    """Missing artifact reference must surface artifact_missing."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    payload = {"request_id": "r-missing"}
+    witness = [
+        {
+            "decision_payload": payload,
+            "payload_hash": sha256_of_canonical_json(payload),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": "a" * 64,
+            "artifact_ref": {
+                "artifact_ref": "trustlog_full_payload",
+                "artifact_type": "trust_log_entry",
+                "artifact_storage_backend": "trustlog_full_ledger",
+                "artifact_locator": "sha256:" + "b" * 64,
+                "artifact_hash_algorithm": "sha256_canonical_json",
+            },
+        }
+    ]
+
+    result = verify_witness_ledger(
+        witness,
+        lambda _: True,
+        artifact_search_roots=[tmp_path],
+    )
+
+    assert result["ok"] is False
+    assert result["linkage_ok"] is False
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "artifact_missing" in reasons
+
+
+def test_witness_linkage_hash_mismatch_on_tampered_artifact(tmp_path: Path, monkeypatch) -> None:
+    """Tampered artifact content must trigger linkage_hash_mismatch."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    full_entry = {"request_id": "r-tamper", "decision": "allow"}
+    full_log = tmp_path / "trust_log.jsonl"
+    _write_full_log(full_log, [full_entry])
+
+    full_rows = list(_iter_full_rows(full_log))
+    tampered = dict(full_rows[0])
+    tampered["decision"] = "reject"
+    _write_full_log(full_log, [tampered])
+    rewritten_rows = list(_iter_full_rows(full_log))
+
+    witness = [
+        {
+            "decision_payload": {"request_id": "r-tamper"},
+            "payload_hash": sha256_of_canonical_json({"request_id": "r-tamper"}),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": sha256_of_canonical_json(full_rows[0]),
+            "artifact_ref": {
+                "artifact_ref": "trustlog_full_payload",
+                "artifact_type": "trust_log_entry",
+                "artifact_storage_backend": "trustlog_full_ledger",
+                "artifact_locator": f"sha256:{rewritten_rows[0]['sha256']}",
+                "artifact_hash_algorithm": "sha256_canonical_json",
+            },
+        }
+    ]
+
+    result = verify_witness_ledger(
+        witness,
+        lambda _: True,
+        artifact_search_roots=[tmp_path],
+    )
+
+    assert result["ok"] is False
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "linkage_hash_mismatch" in reasons
+
+
+def test_witness_linkage_legacy_without_artifact_ref(tmp_path: Path, monkeypatch) -> None:
+    """Legacy entry without artifact_ref remains verifiable via request_id fallback."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    full_entry = {"request_id": "r-legacy", "decision": "allow"}
+    full_log = tmp_path / "trust_log.jsonl"
+    _write_full_log(full_log, [full_entry])
+    full_rows = list(_iter_full_rows(full_log))
+
+    witness = [
+        {
+            "decision_payload": {"request_id": "r-legacy"},
+            "payload_hash": sha256_of_canonical_json({"request_id": "r-legacy"}),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": sha256_of_canonical_json(full_rows[0]),
+        }
+    ]
+
+    result = verify_witness_ledger(
+        witness,
+        lambda _: True,
+        artifact_search_roots=[tmp_path],
+    )
+
+    assert result["ok"] is True
+    assert result["linkage_ok"] is True
+
+
+def test_witness_linkage_malformed_artifact_ref(tmp_path: Path, monkeypatch) -> None:
+    """Malformed artifact_ref must not be accepted."""
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    payload = {"request_id": "r-bad-ref"}
+
+    witness = [
+        {
+            "decision_payload": payload,
+            "payload_hash": sha256_of_canonical_json(payload),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": "a" * 64,
+            "artifact_ref": "not-a-dict",
+        }
+    ]
+
+    result = verify_witness_ledger(
+        witness,
+        lambda _: True,
+        artifact_search_roots=[tmp_path],
+    )
+
+    assert result["ok"] is False
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    assert "malformed_artifact_ref" in reasons
 
 def test_verify_trust_log_cli_json_output(tmp_path: Path, monkeypatch) -> None:
     """CLI must expose required stable output fields."""
