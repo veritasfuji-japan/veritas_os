@@ -37,7 +37,6 @@ def _latency_summary(latencies_ms: list[float]) -> dict[str, float]:
         "p99_ms": sorted_lat[int(0.99 * (n - 1))] if n else 0,
         "max_ms": sorted_lat[-1] if n else 0,
         "avg_ms": sum(latencies_ms) / n if n else 0,
-        "error_count": 0,
     }
 
 
@@ -119,7 +118,6 @@ class TestProductionLoadSmoke:
 
         errors = sum(1 for s in statuses if s != 200)
         summary = _latency_summary(latencies_ms)
-        summary["error_count"] = errors
 
         # Log summary for visibility in CI output
         logger.info(
@@ -131,7 +129,7 @@ class TestProductionLoadSmoke:
             summary["p95_ms"],
             summary["p99_ms"],
             summary["max_ms"],
-            summary["error_count"],
+            errors,
         )
 
         assert len(statuses) == 32
@@ -163,7 +161,6 @@ class TestProductionLoadSmoke:
 
         errors = sum(1 for s in statuses if s != 200)
         summary = _latency_summary(latencies_ms)
-        summary["error_count"] = errors
 
         logger.info(
             "Governance burst summary: count=%d avg=%.1fms p50=%.1fms "
@@ -173,7 +170,7 @@ class TestProductionLoadSmoke:
             summary["p50_ms"],
             summary["p95_ms"],
             summary["max_ms"],
-            summary["error_count"],
+            errors,
         )
 
         assert errors == 0, f"Expected 0 errors, got {errors}"
@@ -223,7 +220,9 @@ class TestStagingExternalTlsLoad:
         host = staging_base_url.replace("https://", "").split("/")[0].split(":")[0]
         port = 443
 
-        context = ssl.create_default_context()
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_default_certs()
         with socket.create_connection((host, port), timeout=5) as sock:
             with context.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
@@ -248,31 +247,31 @@ class TestStagingExternalTlsLoad:
             - All must return HTTP 200
             - p95 latency must be < 800ms
         """
-        latencies_ms: list[float] = []
-        errors = 0
+        results: list[tuple[float, bool]] = []
 
-        def _single_request_latency_ms() -> float:
+        def _single_request() -> tuple[float, bool]:
             start = perf_counter()
-            response = requests.get(
-                f"{staging_base_url}/health",
-                timeout=5,
-                verify=True,
-            )
-            elapsed = (perf_counter() - start) * 1000.0
-            if response.status_code != 200:
-                return -1.0  # signal error
-            return elapsed
+            try:
+                response = requests.get(
+                    f"{staging_base_url}/health",
+                    timeout=5,
+                    verify=True,
+                )
+                elapsed = (perf_counter() - start) * 1000.0
+                return elapsed, response.status_code == 200
+            except requests.RequestException:
+                elapsed = (perf_counter() - start) * 1000.0
+                return elapsed, False
 
         with ThreadPoolExecutor(max_workers=8) as pool:
-            raw_latencies = list(
-                pool.map(lambda _: _single_request_latency_ms(), range(32))
+            results = list(
+                pool.map(lambda _: _single_request(), range(32))
             )
 
-        errors = sum(1 for lat in raw_latencies if lat < 0)
-        latencies_ms = [lat for lat in raw_latencies if lat >= 0]
+        errors = sum(1 for _, ok in results if not ok)
+        latencies_ms = [lat for lat, ok in results if ok]
 
         summary = _latency_summary(latencies_ms) if latencies_ms else {}
-        summary["error_count"] = errors
 
         logger.info(
             "Staging burst summary: count=%d avg=%.1fms p50=%.1fms "
@@ -286,7 +285,7 @@ class TestStagingExternalTlsLoad:
             errors,
         )
 
-        assert len(raw_latencies) == 32
+        assert len(results) == 32
         assert errors == 0, f"Expected 0 errors, got {errors}"
         p95_ms = summary.get("p95_ms", 0)
         assert p95_ms < 800.0, (

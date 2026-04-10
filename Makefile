@@ -159,7 +159,7 @@ validate-compose:
 validate-compose-report:
 	@echo "[veritas] Running Docker Compose validation with JSON report..."
 	@mkdir -p release-artifacts
-	@bash scripts/compose_validation.sh --json-report release-artifacts/compose-validation-report.json
+	@bash scripts/compose_validation.sh --json-report=release-artifacts/compose-validation-report.json
 
 validate-live:
 	@echo "[veritas] Running live provider validation (secrets-required)..."

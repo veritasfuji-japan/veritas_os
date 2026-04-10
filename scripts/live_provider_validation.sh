@@ -169,11 +169,9 @@ else
     # Minimal completion to verify the LLM client path works end-to-end
     LLM_RESULT=$(python3 -c "
 import os, sys
-os.environ.setdefault('OPENAI_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
 try:
     from veritas_os.core.llm_client import get_llm_client
     client = get_llm_client()
-    # Use cheapest model for smoke test
     resp = client.complete('Say OK', model='gpt-4.1-mini', max_tokens=5)
     print('PASS' if resp and len(resp.strip()) > 0 else 'FAIL')
 except Exception as e:

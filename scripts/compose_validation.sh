@@ -9,9 +9,9 @@
 #   4. Trust/audit/governance critical path smoke
 #
 # Usage:
-#   scripts/compose_validation.sh                  # full compose validation
-#   scripts/compose_validation.sh --skip-build     # reuse running services
-#   scripts/compose_validation.sh --json-report /tmp/report.json
+#   scripts/compose_validation.sh                       # full compose validation
+#   scripts/compose_validation.sh --skip-build          # reuse running services
+#   scripts/compose_validation.sh --json-report=/tmp/report.json
 #
 # Environment variables:
 #   VERITAS_API_KEY            — API key for authenticated endpoints
@@ -50,18 +50,10 @@ START_TIME=$(date +%s)
 for arg in "$@"; do
     case "$arg" in
         --skip-build) SKIP_BUILD=true ;;
-        --json-report)
-            shift_next=true ;;
         --json-report=*) JSON_REPORT="${arg#*=}" ;;
         --help|-h)
-            echo "Usage: $0 [--skip-build] [--json-report PATH]"
+            echo "Usage: $0 [--skip-build] [--json-report=PATH]"
             exit 0
-            ;;
-        *)
-            if [[ "${shift_next:-false}" == "true" ]]; then
-                JSON_REPORT="$arg"
-                shift_next=false
-            fi
             ;;
     esac
 done

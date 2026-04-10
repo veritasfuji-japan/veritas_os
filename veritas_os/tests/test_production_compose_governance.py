@@ -49,9 +49,13 @@ class TestComposeGovernanceCriticalPath:
         assert body.get("ok") is True
         policy = body.get("policy", {})
         assert "fuji_rules" in policy, "fuji_rules missing from governance policy"
+        assert isinstance(policy["fuji_rules"], dict), "fuji_rules must be a dict"
         assert "risk_thresholds" in policy, "risk_thresholds missing from governance policy"
+        assert isinstance(policy["risk_thresholds"], dict), "risk_thresholds must be a dict"
         assert "auto_stop" in policy, "auto_stop missing from governance policy"
+        assert isinstance(policy["auto_stop"], dict), "auto_stop must be a dict"
         assert "log_retention" in policy, "log_retention missing from governance policy"
+        assert isinstance(policy["log_retention"], dict), "log_retention must be a dict"
 
     def test_governance_policy_history_reachable(self, api_client) -> None:
         """GET /v1/governance/policy/history must return 200."""
