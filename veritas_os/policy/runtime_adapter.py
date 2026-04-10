@@ -216,15 +216,6 @@ def load_runtime_bundle(
         public_key_pem: Optional Ed25519 public key in PEM format for
             signature verification.  Falls back to SHA-256 integrity check.
     """
-    root = Path(bundle_dir)
-    if not verify_manifest_signature(root, public_key_pem=public_key_pem):
-        raise ValueError("manifest signature verification failed")
-    manifest = _read_json_file(root / "manifest.json")
-    canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
-
-    signing_algorithm = manifest.get("signing", {}).get("algorithm", "sha256")
-
-    # Posture-aware enforcement: reject non-Ed25519 bundles in strict posture.
     is_strict = False
     try:
         from veritas_os.core.posture import get_active_posture
@@ -232,6 +223,29 @@ def load_runtime_bundle(
     except (ImportError, AttributeError):
         pass
 
+    root = Path(bundle_dir)
+    manifest = _read_json_file(root / "manifest.json")
+
+    signing = manifest.get("signing", {})
+    signing_algorithm = signing.get("algorithm", "sha256")
+    signature_path = root / "manifest.sig"
+
+    if not signature_path.exists():
+        if is_strict:
+            raise ValueError(
+                f"bundle {bundle_dir} is missing manifest.sig; unsigned governance "
+                "artifacts are rejected in secure/prod posture."
+            )
+        logger.warning(
+            "bundle %s is missing manifest.sig; accepting unsigned artifact in "
+            "non-strict posture for developer workflow compatibility.",
+            bundle_dir,
+        )
+    else:
+        if not verify_manifest_signature(root, public_key_pem=public_key_pem):
+            raise ValueError("manifest signature verification failed")
+
+    # Posture-aware enforcement: reject non-Ed25519 bundles in strict posture.
     if signing_algorithm != "ed25519":
         if is_strict:
             raise ValueError(
@@ -246,6 +260,7 @@ def load_runtime_bundle(
             bundle_dir,
         )
 
+    canonical_ir = _read_json_file(root / "compiled" / "canonical_ir.json")
     runtime_policy = adapt_canonical_ir(canonical_ir)
 
     logger.info(

@@ -64,6 +64,8 @@ VERITAS OS wraps an LLM (e.g. OpenAI GPT-4.1-mini) with a **reproducible, fail-c
 - **Documentation Hub (JA)**: `docs/ja/README.md`
 - **Documentation Map**: `docs/DOCUMENTATION_MAP.md`
 - **Operations Runbook**: `docs/ja/operations/enterprise_slo_sli_runbook_ja.md`
+- **Governance Signing Runbook**: `docs/operations/governance_artifact_signing_operations.md`
+- **Governance Upgrade Press Summary**: `docs/press/governance_control_plane_upgrade_2026-04.md`
 
 ## 🚀 Quick Start (TL;DR)
 
@@ -139,6 +141,21 @@ VERITAS OS uses a single **runtime posture** (`VERITAS_POSTURE`) to control gove
 | Transparency log anchoring | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | TrustLog writes fail when transparency anchor is missing |
 | WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | TrustLog writes fail when WORM mirror write fails |
 | Strict replay | `VERITAS_REPLAY_STRICT` | Critical replay divergences abort |
+| Governance artifact signatures | `VERITAS_POLICY_VERIFY_KEY` (+ posture strictness) | In secure/prod, reject unsigned or non-Ed25519 governance policy bundles |
+
+### Governance artifact identity in decision outputs
+
+When compiled policy governance is active, `/v1/decide` responses include
+`governance_identity` with:
+
+- `policy_version`
+- `digest` (compiled bundle semantic hash)
+- `signature_verified`
+- `signer_id` (if bundle metadata provides `signing.key_id`)
+- `verified_at`
+
+This identity is threaded into decision, replay, and audit artifacts so that
+operators can prove which governance control-plane asset was in force.
 
 ### What causes startup refusal (secure/prod)
 

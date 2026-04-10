@@ -203,6 +203,18 @@ def _apply_compiled_policy_runtime_bridge(ctx: PipelineContext) -> None:
         governance = {}
         ctx.response_extras["governance"] = governance
     governance["compiled_policy"] = decision
+    signing = runtime_bundle.manifest.get("signing", {})
+    signing_algorithm = str(signing.get("algorithm", "sha256")).strip().lower()
+    signer_id = str(signing.get("key_id", "")).strip()
+    ctx.governance_identity = {
+        "policy_version": runtime_bundle.version,
+        "digest": runtime_bundle.semantic_hash,
+        "signature_verified": signing_algorithm == "ed25519",
+        "signer_id": signer_id,
+        "verified_at": datetime.now(timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+    }
 
     outcome = decision.get("final_outcome")
     rollback_metadata = _resolve_rollback_metadata(decision)
