@@ -22,6 +22,13 @@ function getReconnectDelayMs(attempt: number): number {
   return Math.round(exponentialDelay * jitterFactor);
 }
 
+/**
+ * Start a managed SSE connection with retry/backoff and auth pause handling.
+ *
+ * Concurrency safety:
+ * - Ignores stale async probe responses when multiple connect attempts overlap.
+ * - Ensures EventSource error handlers only act on their own instance.
+ */
 export function startManagedEventStream(
   url: string,
   options: ManagedSseOptions,
@@ -30,6 +37,7 @@ export function startManagedEventStream(
   let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   let eventSource: EventSource | null = null;
   let reconnectAttempt = 0;
+  let connectSequence = 0;
 
   const authPauseMs = options.authRetryPauseMs ?? AUTH_RETRY_PAUSE_MS;
 
@@ -65,6 +73,9 @@ export function startManagedEventStream(
       return;
     }
 
+    const currentConnectSequence = connectSequence + 1;
+    connectSequence = currentConnectSequence;
+
     clearReconnectTimeout();
     closeEventSource();
 
@@ -73,6 +84,10 @@ export function startManagedEventStream(
         credentials: "same-origin",
         method: "GET",
       });
+
+      if (disposed || currentConnectSequence !== connectSequence) {
+        return;
+      }
 
       if (probe.status === 401 || probe.status === 403) {
         options.onAuthPause?.(Date.now() + authPauseMs);
@@ -84,22 +99,33 @@ export function startManagedEventStream(
         throw new Error(`sse probe failed: ${probe.status}`);
       }
     } catch {
+      if (disposed || currentConnectSequence !== connectSequence) {
+        return;
+      }
       const delayMs = getReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
       scheduleReconnect(delayMs);
       return;
     }
 
+    if (disposed || currentConnectSequence !== connectSequence) {
+      return;
+    }
+
     options.onAuthPause?.(null);
     reconnectAttempt = 0;
 
-    eventSource = new EventSource(url, { withCredentials: true });
-    eventSource.onopen = () => {
+    const nextEventSource = new EventSource(url, { withCredentials: true });
+    eventSource = nextEventSource;
+    nextEventSource.onopen = () => {
       reconnectAttempt = 0;
       options.onOpen?.();
     };
-    eventSource.onmessage = options.onMessage;
-    eventSource.onerror = () => {
+    nextEventSource.onmessage = options.onMessage;
+    nextEventSource.onerror = () => {
+      if (eventSource !== nextEventSource) {
+        return;
+      }
       closeEventSource();
       const delayMs = getReconnectDelayMs(reconnectAttempt);
       reconnectAttempt += 1;
