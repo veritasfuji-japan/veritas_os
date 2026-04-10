@@ -5,6 +5,41 @@
 
 ---
 
+## 2026-04 Unified verifier update
+
+### Stable API
+
+- `veritas_os.audit.trustlog_verify.verify_full_ledger(path, max_entries=None)`
+- `veritas_os.audit.trustlog_verify.verify_witness_ledger(entries, verify_signature_fn)`
+- `veritas_os.audit.trustlog_verify.verify_trustlogs(full_log_path, witness_entries, verify_signature_fn, max_entries=None)`
+
+### Stable CLI
+
+```bash
+python -m veritas_os.scripts.verify_trust_log --json
+python -m veritas_os.scripts.verify_trust_log --full-log /path/to/trust_log.jsonl --witness-log /path/to/trustlog.jsonl
+```
+
+CLI / API summary fields:
+- `total_entries`
+- `valid_entries`
+- `invalid_entries`
+- `chain_ok`
+- `signature_ok`
+- `linkage_ok`
+- `mirror_ok`
+- `last_hash`
+- `detailed_errors`
+
+### Compatibility behavior
+
+- Legacy witness entries without `full_payload_hash` or `mirror_receipt` remain valid.
+- `full_payload_hash` is validated only when present (must be SHA-256 hex).
+- `mirror_receipt` structure is validated only when present.
+- Existing APIs (`verify_trust_log`, `verify_trustlog_chain`) continue to work and now reuse shared verification logic.
+
+---
+
 ## 📊 論文記載との整合性
 
 ### 論文の記述 (Section 2.3)
