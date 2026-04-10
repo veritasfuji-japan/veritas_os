@@ -33,10 +33,9 @@ from typing import Any, Dict, List, Optional
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex, sha256_of_canonical_json
 from veritas_os.security.signing import (
-    public_key_fingerprint,
-    sign_payload_hash,
+    Signer,
+    build_trustlog_signer,
     store_keypair,
-    verify_payload_signature,
 )
 
 SIGNED_TRUSTLOG_JSONL = LOG_DIR / "trustlog.jsonl"
@@ -211,10 +210,18 @@ def _utc_now_iso8601() -> str:
     )
 
 
-def _ensure_signing_keys() -> None:
-    if PRIVATE_KEY_PATH.exists() and PUBLIC_KEY_PATH.exists():
-        return
-    store_keypair(PRIVATE_KEY_PATH, PUBLIC_KEY_PATH)
+def _resolve_signer(*, ensure_local_keys: bool = False) -> Signer:
+    """Resolve active TrustLog signer backend.
+
+    Environment:
+        - VERITAS_TRUSTLOG_SIGNER_BACKEND=file|aws_kms (default: file)
+        - VERITAS_TRUSTLOG_KMS_KEY_ID=... (required for aws_kms)
+    """
+    return build_trustlog_signer(
+        private_key_path=PRIVATE_KEY_PATH,
+        public_key_path=PUBLIC_KEY_PATH,
+        ensure_local_keys=ensure_local_keys,
+    )
 
 
 def _entry_chain_hash(entry: Dict[str, Any]) -> str:
@@ -380,7 +387,7 @@ def build_trustlog_summary(full_payload: Dict[str, Any]) -> Dict[str, Any]:
     return summary
 
 
-def _enforce_entry_size(entry: Dict[str, Any]) -> Dict[str, Any]:
+def _enforce_entry_size(entry: Dict[str, Any], signer: Signer) -> Dict[str, Any]:
     """Ensure the serialized entry does not exceed ``MAX_ENTRY_LINE_BYTES``.
 
     If the entry is oversized, the ``decision_payload`` is replaced with
@@ -420,9 +427,7 @@ def _enforce_entry_size(entry: Dict[str, Any]) -> Dict[str, Any]:
     # can validate the on-disk entry without false-positive mismatches.
     entry["payload_hash"] = sha256_of_canonical_json(stub_payload)
     try:
-        entry["signature"] = sign_payload_hash(
-            entry["payload_hash"], PRIVATE_KEY_PATH,
-        )
+        entry["signature"] = signer.sign_payload_hash(entry["payload_hash"])
     except Exception:
         _logger.warning(
             "Failed to re-sign oversized stub entry; signature will be stale",
@@ -445,7 +450,7 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     try:
         with _lock:
-            _ensure_signing_keys()
+            signer = _resolve_signer(ensure_local_keys=True)
             last_entry = _read_last_entry(SIGNED_TRUSTLOG_JSONL)
             previous_hash = _entry_chain_hash(last_entry) if last_entry else None
 
@@ -455,7 +460,7 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
             compact_payload = build_trustlog_summary(decision_payload)
 
             payload_hash = sha256_of_canonical_json(compact_payload)
-            signature = sign_payload_hash(payload_hash, PRIVATE_KEY_PATH)
+            signature = signer.sign_payload_hash(payload_hash)
 
             entry = {
                 "decision_id": _uuid7(),
@@ -465,11 +470,12 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
                 "payload_hash": payload_hash,
                 "full_payload_hash": full_payload_hash,
                 "signature": signature,
-                "signature_key_fingerprint": public_key_fingerprint(PUBLIC_KEY_PATH),
+                "signer_type": signer.signer_type,
+                "signer_key_id": signer.signer_key_id(),
             }
 
             # Enforce maximum entry size before writing
-            entry = _enforce_entry_size(entry)
+            entry = _enforce_entry_size(entry, signer)
 
             line = json.dumps(entry, ensure_ascii=False) + "\n"
             _append_line(SIGNED_TRUSTLOG_JSONL, line)
@@ -502,13 +508,11 @@ def verify_signature(entry: Dict[str, Any]) -> bool:
     required = {"payload_hash", "signature"}
     if not required.issubset(entry):
         return False
-    if not PUBLIC_KEY_PATH.exists():
-        return False
     try:
-        return verify_payload_signature(
+        signer = _resolve_signer()
+        return signer.verify_payload_signature(
             payload_hash=str(entry["payload_hash"]),
             signature_b64=str(entry["signature"]),
-            public_key_path=PUBLIC_KEY_PATH,
         )
     except Exception:  # noqa: BLE001
         # Malformed signatures (bad base64, wrong length, etc.) are treated
@@ -563,9 +567,15 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
             "exists": transparency_path.exists(),
         })
 
-    key_meta: Dict[str, Any] = {"public_key_present": PUBLIC_KEY_PATH.exists()}
-    if PUBLIC_KEY_PATH.exists():
-        key_meta["fingerprint"] = public_key_fingerprint(PUBLIC_KEY_PATH)
+    key_meta: Dict[str, Any] = {
+        "public_key_present": PUBLIC_KEY_PATH.exists(),
+    }
+    try:
+        signer = _resolve_signer()
+        key_meta["signer_type"] = signer.signer_type
+        key_meta["signer_key_id"] = signer.signer_key_id()
+    except Exception:
+        _logger.warning("Could not resolve TrustLog signer metadata", exc_info=True)
 
     return {
         "ok": len(issues) == 0,
