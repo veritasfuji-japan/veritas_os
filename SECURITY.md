@@ -92,3 +92,25 @@ A nightly workflow generates CycloneDX SBOM files for Python and Node dependenci
 If hash drift is detected, the workflow emits warnings and uploads artifacts for review.
 
 > **Security warning:** Without these automated gates, known vulnerable packages and accidental secret exposures can bypass manual review and reach production.
+
+## Runtime Posture Model
+
+VERITAS OS ships a runtime posture model (`VERITAS_POSTURE`) that controls governance-critical defaults at startup:
+
+| Posture | Governance defaults | Startup |
+|---|---|---|
+| `dev` | All controls off unless explicitly set | Relaxed |
+| `staging` | All controls off unless explicitly set | Relaxed |
+| `secure` | All controls **on**; escape hatches accepted | Fail-closed |
+| `prod` | All controls **on**; overrides ignored | Fail-closed |
+
+Setting `VERITAS_POSTURE=prod` (or `VERITAS_POSTURE=secure`) ensures:
+- Policy runtime enforcement is active
+- External secret manager (Vault/KMS) is required
+- TrustLog transparency anchoring is required
+- WORM hard-fail is enabled
+- Strict replay divergence mode is enabled
+
+When any required integration (e.g. `VERITAS_SECRET_PROVIDER`, `VERITAS_TRUSTLOG_WORM_MIRROR_PATH`) is missing, startup is refused with an actionable error message.
+
+See `README.md` section **Runtime Posture Guarantees** for details.

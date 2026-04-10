@@ -85,8 +85,18 @@ class ReplayResult:
 
 
 def _strict_mode_enabled() -> bool:
-    raw = (os.getenv("VERITAS_REPLAY_STRICT") or "").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    """Return whether strict replay divergence mode is active.
+
+    Posture-derived default is used when no explicit env var is set.
+    """
+    raw = os.getenv("VERITAS_REPLAY_STRICT")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        from veritas_os.core.posture import get_active_posture
+        return get_active_posture().replay_strict
+    except Exception:
+        return False
 
 
 def _pipeline_version() -> str:

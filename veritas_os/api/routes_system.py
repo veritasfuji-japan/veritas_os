@@ -89,7 +89,24 @@ def _security_posture_snapshot() -> Dict[str, Any]:
     auth_snapshot = _auth_store_health(srv)
     auth_details = auth_snapshot["details"]
     encryption_status = get_encryption_status()
+
+    # Include runtime posture information.
+    try:
+        from veritas_os.core.posture import get_active_posture
+        posture = get_active_posture()
+        posture_info = {
+            "level": posture.posture.value,
+            "policy_runtime_enforce": posture.policy_runtime_enforce,
+            "external_secret_manager_required": posture.external_secret_manager_required,
+            "trustlog_transparency_required": posture.trustlog_transparency_required,
+            "trustlog_worm_hard_fail": posture.trustlog_worm_hard_fail,
+            "replay_strict": posture.replay_strict,
+        }
+    except Exception:
+        posture_info = {"level": "unknown"}
+
     return {
+        "posture": posture_info,
         "direct_fuji_api_enabled": _is_direct_fuji_api_enabled(),
         "authentication": {
             "status": auth_snapshot["status"],

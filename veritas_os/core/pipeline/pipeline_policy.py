@@ -118,7 +118,16 @@ def _is_enforcement_enabled_for_rollout(
     """Resolve runtime enforcement state with canary/full rollout control."""
     enforce = ctx_dict.get("policy_runtime_enforce")
     if enforce is None:
-        enforce = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE", "")
+        raw = os.getenv("VERITAS_POLICY_RUNTIME_ENFORCE")
+        if raw is not None:
+            enforce = raw
+        else:
+            # Fall back to posture-derived default.
+            try:
+                from veritas_os.core.posture import get_active_posture
+                enforce = get_active_posture().policy_runtime_enforce
+            except Exception:
+                enforce = ""
     if not _coerce_policy_enforce_flag(enforce):
         return False, "enforcement_disabled"
 

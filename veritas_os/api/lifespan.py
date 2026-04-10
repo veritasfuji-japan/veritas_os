@@ -37,6 +37,11 @@ async def run_lifespan(
     server._shutting_down = False
     server._inflight_count = 0
 
+    # ── Posture: resolve, validate, log banner (before resource allocation) ──
+    from veritas_os.core.posture import init_posture, set_active_posture
+
+    posture_defaults = init_posture(fail_on_error=True)
+    set_active_posture(posture_defaults)
 
     # Storage DI: initialize backend instances once per application lifecycle.
     app.state.trust_log_store = create_trust_log_store()
