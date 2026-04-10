@@ -15,8 +15,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 from pathlib import Path
-from typing import Optional
+from typing import Any, Iterable, Optional
 
 from veritas_os.audit.trustlog_signed import (
     SIGNED_TRUSTLOG_JSONL,
@@ -27,6 +28,78 @@ from veritas_os.audit.trustlog_verify import verify_trustlogs
 from veritas_os.logging.paths import LOG_DIR
 
 LOG_JSONL = LOG_DIR / "trust_log.jsonl"
+
+
+def compute_hash(prev_hash: str | None, entry: dict[str, Any]) -> str:
+    """Compute chain hash for one full-ledger entry.
+
+    Backward compatibility:
+        Retained for existing tests/tools that import this helper directly.
+    """
+    payload = dict(entry)
+    payload.pop("sha256", None)
+    payload.pop("sha256_prev", None)
+    entry_json = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    combined = f"{prev_hash}{entry_json}" if prev_hash else entry_json
+    return hashlib.sha256(combined.encode("utf-8")).hexdigest()
+
+
+def iter_entries(log_path: Path = LOG_JSONL) -> Iterable[dict[str, Any]]:
+    """Yield plain JSON entries from a JSONL file, skipping invalid lines."""
+    with log_path.open("r", encoding="utf-8") as file:
+        for line in file:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            try:
+                yield json.loads(stripped)
+            except json.JSONDecodeError:
+                continue
+
+
+def verify_entries(
+    entries: Iterable[dict[str, Any]],
+) -> tuple[int, list[dict[str, Any]], str | None]:
+    """Verify hash-chain continuity and per-entry hash correctness.
+
+    Backward compatibility:
+        Retained for existing tests/tools that rely on tuple output.
+    """
+    prev_hash = None
+    total = 0
+    errors: list[dict[str, Any]] = []
+
+    for idx, entry in enumerate(entries, 1):
+        total = idx
+        sha_prev = entry.get("sha256_prev")
+        sha_self = entry.get("sha256")
+
+        if sha_prev != prev_hash:
+            errors.append(
+                {
+                    "line": idx,
+                    "type": "chain_break",
+                    "expected_prev": prev_hash,
+                    "actual_prev": sha_prev,
+                    "entry_id": entry.get("request_id", "unknown"),
+                }
+            )
+
+        expected_hash = compute_hash(sha_prev, entry)
+        if expected_hash != sha_self:
+            errors.append(
+                {
+                    "line": idx,
+                    "type": "hash_mismatch",
+                    "expected": expected_hash,
+                    "actual": sha_self,
+                    "entry_id": entry.get("request_id", "unknown"),
+                }
+            )
+
+        prev_hash = sha_self
+
+    return total, errors, prev_hash
 
 
 def _parse_args() -> argparse.Namespace:
