@@ -59,6 +59,34 @@ describe("startManagedEventStream", () => {
     stop();
   });
 
+  it("ignores repeated onerror callbacks from a stale EventSource instance", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }))
+      .mockResolvedValueOnce(new Response("ok", { status: 200 }));
+
+    const stop = startManagedEventStream("/api/veritas/v1/events", {
+      onMessage: () => undefined,
+    });
+
+    await Promise.resolve();
+    expect(MockEventSource.instances).toHaveLength(1);
+
+    const firstEventSource = MockEventSource.instances[0];
+    firstEventSource?.onerror?.();
+    firstEventSource?.onerror?.();
+
+    await vi.advanceTimersByTimeAsync(800);
+    await Promise.resolve();
+
+    expect(MockEventSource.instances).toHaveLength(2);
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    randomSpy.mockRestore();
+    stop();
+  });
+
   it("opens EventSource with same-origin credentials", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
 
