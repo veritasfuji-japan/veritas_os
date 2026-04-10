@@ -1,0 +1,472 @@
+# ============================================================================
+# VERITAS OS — Release Gate (Tier 2 + Tier 3)
+#
+# Blocks release promotion until governance-critical validation passes.
+# Triggered automatically on version tags (v*) and manually via workflow_dispatch.
+#
+# Tier Model:
+#   Tier 1 — governance-smoke       Fast smoke checks (~2 min) — also runs on every PR
+#   Tier 2 — production-tests       Production-like pytest suite (blocking at release)
+#   Tier 2 — docker-smoke           Docker Compose health check (blocking at release)
+#   Tier 2 — governance-report      Governance readiness report (artifact upload)
+#   Tier 3 — external-tests         Live network / secrets tests (opt-in, advisory)
+#   final  — release-readiness      Summary gate: release only passes if Tier 1+2 pass
+#
+# To trigger manually:
+#   gh workflow run release-gate.yml --ref v2.1.0
+#   gh workflow run release-gate.yml --ref main -f tier3_external=true
+# ============================================================================
+
+name: Release Gate
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tier3_external:
+        description: "Include Tier 3 external/live tests (requires VERITAS_WEBSEARCH_KEY secret)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
+  PYTHON_VERSION: "3.12"
+
+# ============================================================================
+# Tier 1 — Governance Smoke (fast, ~2 min)
+# Re-run at release time to catch any drift since last PR merge.
+# ============================================================================
+jobs:
+  governance-smoke:
+    name: "[Tier 1] governance-smoke"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: "[Tier 1] Run governance smoke tests"
+        run: |
+          set -euxo pipefail
+          pytest -q veritas_os/tests/ \
+            -m smoke \
+            -v \
+            --tb=short \
+            --durations=10 \
+            --junitxml=test-reports/smoke.xml
+
+      - name: Upload smoke test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-report
+          path: test-reports/smoke.xml
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Tier 1 — Security checks (blocking at release)
+  # ============================================================================
+  security-checks:
+    name: "[Tier 1] security-checks"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install tools
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install ruff==0.11.4 bandit==1.9.4
+
+      - name: Ruff lint check
+        run: ruff check veritas_os/
+
+      - name: Runtime pickle artifact ban
+        run: python scripts/security/check_runtime_pickle_artifacts.py
+
+      - name: Bare except reduction gate
+        run: python scripts/security/check_bare_except_usage.py
+
+      - name: subprocess shell usage check
+        run: python scripts/security/check_subprocess_shell_usage.py
+
+      - name: Unsafe dynamic execution check
+        run: python scripts/security/check_unsafe_dynamic_execution_usage.py
+
+      - name: httpx raw upload deprecation check
+        run: python scripts/security/check_httpx_raw_upload_usage.py
+
+      - name: Responsibility boundary check
+        run: python scripts/architecture/check_responsibility_boundaries.py --report-format json
+
+      - name: Core complexity budget check
+        run: python scripts/architecture/check_core_complexity_budget.py
+
+      - name: Bandit security scan
+        run: |
+          bandit -r veritas_os/ \
+            --exclude veritas_os/tests \
+            -s B101 \
+            --severity-level medium \
+            -f txt
+
+  # ============================================================================
+  # Tier 2 — Production-like Python tests (blocking at release)
+  # ============================================================================
+  production-tests:
+    name: "[Tier 2] production-tests"
+    needs: [governance-smoke, security-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest pytest-cov httpx anyio
+
+      - name: "[Tier 2] Run production-like tests (smoke + production)"
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q veritas_os/tests/ \
+            -m "production or smoke" \
+            -v \
+            --tb=short \
+            --durations=20 \
+            --junitxml=test-reports/production.xml
+
+      - name: "[Tier 2] TLS production tests"
+        run: |
+          set -euxo pipefail
+          status=0
+          pytest -q veritas_os/tests/ -m tls -v --tb=short || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No TLS tests selected — skipping."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: "[Tier 2] Load burst tests"
+        run: |
+          set -euxo pipefail
+          status=0
+          pytest -q veritas_os/tests/ -m load -v --tb=short || status=$?
+          if [ "$status" -eq 5 ]; then
+            echo "No load tests selected — skipping."
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Upload production test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-production-test-report
+          path: test-reports/production.xml
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Tier 2 — Docker Compose smoke (blocking at release)
+  # ============================================================================
+  docker-smoke:
+    name: "[Tier 2] docker-smoke"
+    needs: [governance-smoke, security-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and start services
+        run: |
+          set -euxo pipefail
+          docker compose up -d --build --wait --timeout 120
+
+      - name: Verify backend health
+        run: |
+          set -euxo pipefail
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health; then
+              echo ""
+              echo "Backend healthy!"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+          echo "Backend health check timed out"
+          docker compose logs backend
+          exit 1
+
+      - name: Verify OpenAPI schema
+        run: |
+          set -euxo pipefail
+          curl -sf http://localhost:8000/openapi.json | python3 -c "
+          import json, sys
+          schema = json.load(sys.stdin)
+          assert schema.get('openapi', '').startswith('3.'), 'Invalid OpenAPI version'
+          assert '/v1/decide' in str(schema.get('paths', {})), 'Missing /v1/decide'
+          print('OpenAPI schema valid — /v1/decide present')
+          "
+
+      - name: Verify frontend health
+        run: |
+          set -euxo pipefail
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:3000/ >/dev/null 2>&1; then
+              echo "Frontend healthy!"
+              exit 0
+            fi
+            echo "Waiting for frontend... ($i/20)"
+            sleep 3
+          done
+          echo "::warning::Frontend did not respond — check docker-compose logs"
+
+      - name: Collect Docker Compose logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down --timeout 10
+
+  # ============================================================================
+  # Tier 2 — Governance Readiness Report (artifact upload)
+  # ============================================================================
+  governance-report:
+    name: "[Tier 2] governance-report"
+    needs: [production-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: Generate governance readiness report
+        env:
+          VERITAS_RELEASE_REF: ${{ github.ref_name }}
+          VERITAS_RELEASE_SHA: ${{ github.sha }}
+        run: |
+          set -euxo pipefail
+          mkdir -p release-artifacts
+          python scripts/generate_release_readiness_report.py \
+            --ref "${VERITAS_RELEASE_REF}" \
+            --sha "${VERITAS_RELEASE_SHA}" \
+            --output release-artifacts/governance-readiness-report.json \
+            --text-output release-artifacts/governance-readiness-report.txt
+
+      - name: Print governance readiness report
+        if: always()
+        run: |
+          if [ -f release-artifacts/governance-readiness-report.txt ]; then
+            cat release-artifacts/governance-readiness-report.txt
+          fi
+
+      - name: Upload governance readiness report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-governance-readiness-report
+          path: release-artifacts/
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Tier 3 — External / live tests (opt-in, advisory)
+  # Runs only when: workflow_dispatch with tier3_external=true
+  # Does NOT run automatically on tag push — requires explicit opt-in.
+  # Does NOT block release-readiness (continue-on-error: true).
+  # ============================================================================
+  external-tests:
+    name: "[Tier 3] external-tests (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Tier 3 runs in parallel with Tier 2 jobs; does NOT block release-readiness
+    needs: [governance-smoke]
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.tier3_external == 'true'
+    continue-on-error: true
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_WEBSEARCH_KEY: ${{ secrets.VERITAS_WEBSEARCH_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: "[Tier 3] Run external/live tests"
+        run: |
+          set -euxo pipefail
+          if [ -z "${VERITAS_WEBSEARCH_KEY:-}" ]; then
+            echo "::warning::VERITAS_WEBSEARCH_KEY not set — external tests skipped"
+            exit 0
+          fi
+          pytest -q veritas_os/tests/ \
+            -m external \
+            -v \
+            --tb=short \
+            --junitxml=test-reports/external.xml
+
+      - name: Upload external test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-external-test-report
+          path: test-reports/external.xml
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Final Gate — Release Readiness Summary
+  # This job MUST pass for a release to be considered governance-ready.
+  # It aggregates Tier 1 + Tier 2 results. Tier 3 is advisory (continue-on-error).
+  # ============================================================================
+  release-readiness:
+    name: "✅ Release Readiness Gate"
+    needs: [governance-smoke, security-checks, production-tests, docker-smoke, governance-report]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: always()
+
+    steps:
+      - name: Evaluate release readiness
+        env:
+          SMOKE_RESULT: ${{ needs.governance-smoke.result }}
+          SECURITY_RESULT: ${{ needs.security-checks.result }}
+          PRODUCTION_RESULT: ${{ needs.production-tests.result }}
+          DOCKER_RESULT: ${{ needs.docker-smoke.result }}
+          GOVERNANCE_REPORT_RESULT: ${{ needs.governance-report.result }}
+        run: |
+          set -euo pipefail
+
+          echo "=============================================="
+          echo "  VERITAS OS — Release Readiness Assessment"
+          echo "  Ref: ${{ github.ref_name }}"
+          echo "  SHA: ${{ github.sha }}"
+          echo "=============================================="
+          echo ""
+
+          FAILED=0
+          check() {
+            local name="$1"
+            local tier="$2"
+            local result="$3"
+            if [ "$result" = "success" ]; then
+              echo "  ✅ ${tier} ${name}: PASSED"
+            elif [ "$result" = "skipped" ]; then
+              echo "  ⏭️  ${tier} ${name}: SKIPPED"
+            else
+              echo "  ❌ ${tier} ${name}: FAILED (result=${result})"
+              FAILED=$((FAILED + 1))
+            fi
+          }
+
+          check "governance-smoke"   "[Tier 1]" "$SMOKE_RESULT"
+          check "security-checks"    "[Tier 1]" "$SECURITY_RESULT"
+          check "production-tests"   "[Tier 2]" "$PRODUCTION_RESULT"
+          check "docker-smoke"       "[Tier 2]" "$DOCKER_RESULT"
+          check "governance-report"  "[Tier 2]" "$GOVERNANCE_REPORT_RESULT"
+
+          echo ""
+          if [ "$FAILED" -eq 0 ]; then
+            echo "══════════════════════════════════════════════"
+            echo "  🟢 RELEASE IS GOVERNANCE-READY"
+            echo "  All Tier 1 and Tier 2 checks passed."
+            echo "══════════════════════════════════════════════"
+          else
+            echo "══════════════════════════════════════════════"
+            echo "  🔴 RELEASE IS NOT GOVERNANCE-READY"
+            echo "  ${FAILED} blocking check(s) failed."
+            echo "  Review the failed jobs above before releasing."
+            echo "══════════════════════════════════════════════"
+            exit 1
+          fi

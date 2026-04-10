@@ -1,3 +1,18 @@
+# ============================================================================
+# VERITAS OS — CI (Tier 1 — every PR and push to main)
+#
+# Tier Model (see docs/PRODUCTION_VALIDATION.md for full explanation):
+#   Tier 1 — lint + governance-smoke   Fast gates, blocking on every PR (~5-8 min)
+#   Tier 1 — dependency-audit          CVE scan, blocking on every PR
+#   Tier 1 — test (py matrix)          Full unit tests + 85% coverage gate
+#   Tier 1 — test-slow                 Heavy tests (parallel, non-blocking on matrix)
+#   Tier 1 — frontend-quality-gate     Lint / unit / E2E
+#   Tier 2 — release-gate.yml          Production validation, blocking on v* tags
+#   Tier 3 — production-validation.yml Weekly/manual production-like validation
+#
+# Release path: push a v* tag → release-gate.yml automatically gates the release.
+# ============================================================================
+
 name: CI
 
 on:
@@ -17,7 +32,7 @@ env:
   VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
 
 # ============================================================
-# Lint & Security (fast-fail — テストより先に回す)
+# [Tier 1] Lint & Security (fast-fail — テストより先に回す)
 # ============================================================
 jobs:
   lint:
@@ -143,11 +158,63 @@ jobs:
         run: pnpm audit --audit-level=high --prod
 
   # ============================================================
-  # Test matrix
+  # [Tier 1] Governance Smoke (fast ~2 min — blocking on PRs)
+  # Explicit smoke gate that runs in parallel with lint/dependency-audit.
+  # Smoke tests exercise health endpoints, config structure, and governance
+  # invariants without requiring live LLM calls.
+  # ============================================================
+  governance-smoke:
+    name: "[Tier 1] governance-smoke"
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: "[Tier 1] Run governance smoke tests"
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q veritas_os/tests/ \
+            -m smoke \
+            -v \
+            --tb=short \
+            --durations=10 \
+            --junitxml=test-reports/smoke.xml
+
+      - name: Upload smoke test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report-${{ github.run_id }}
+          path: test-reports/smoke.xml
+          if-no-files-found: warn
+
+  # ============================================================
+  # [Tier 1] Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: [lint, dependency-audit]
+    needs: [lint, dependency-audit, governance-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -233,7 +300,7 @@ jobs:
 
   test-slow:
     name: test-slow (py3.12)
-    needs: [lint, dependency-audit]
+    needs: [lint, dependency-audit, governance-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -271,11 +338,11 @@ jobs:
           exit "$status"
 
   # ============================================================
-  # Frontend quality gates: lint/test/e2e を Python 側同様に matrix 化
+  # [Tier 1] Frontend quality gates: lint/test/e2e を Python 側同様に matrix 化
   # ============================================================
   frontend-quality-gate:
     name: frontend-${{ matrix.gate }}
-    needs: [lint, dependency-audit]
+    needs: [lint, dependency-audit, governance-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
