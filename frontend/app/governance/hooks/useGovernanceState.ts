@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../../components/i18n-provider";
 import { veritasFetch } from "../../../lib/api-client";
 import { validateGovernancePolicyResponse } from "../../../lib/api-validators";
@@ -35,6 +35,7 @@ export function useGovernanceState() {
   const requestConfirm = useCallback((description: string, onConfirm: () => void) => {
     setPendingConfirm({ description, onConfirm });
   }, []);
+  const fetchAbortRef = useRef<AbortController | null>(null);
 
   const hasChanges = useMemo(() => savedPolicy !== null && draft !== null && !deepEqual(savedPolicy, draft), [savedPolicy, draft]);
   const canApply = selectedRole === "admin";
@@ -66,10 +67,16 @@ export function useGovernanceState() {
   }, []);
 
   const fetchPolicy = useCallback(async () => {
+    fetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
-      const res = await veritasFetch("/api/veritas/v1/governance/policy");
+      const res = await veritasFetch("/api/veritas/v1/governance/policy", {
+        signal: controller.signal,
+      });
       if (!res.ok) {
         setError(t(`HTTP ${res.status}: ポリシー取得に失敗しました。`, `HTTP ${res.status}: Failed to fetch policy.`));
         return;
@@ -91,10 +98,13 @@ export function useGovernanceState() {
       appendHistory("load", `version ${normalized.version} loaded`);
       appendLog(`policy version ${normalized.version} loaded`, "policy");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("fetchPolicy failed:", err);
       setError(t("ネットワークエラー: バックエンドへ接続できません。", "Network error: cannot connect to backend."));
     } finally {
-      setLoading(false);
+      if (fetchAbortRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, [appendHistory, appendLog, t]);
 

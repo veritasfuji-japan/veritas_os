@@ -120,7 +120,7 @@ describe("TrustLogExplorerPage", () => {
     });
   });
 
-  it("shows timeout error when request_id search is aborted", async () => {
+  it("silently drops aborted request_id search", async () => {
     vi.spyOn(global, "fetch").mockRejectedValueOnce(new DOMException("Aborted", "AbortError"));
 
     render(<TrustLogExplorerPage />);
@@ -129,8 +129,9 @@ describe("TrustLogExplorerPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "検索" }));
 
+    // AbortError is now silently dropped — no error message should appear
     await waitFor(() => {
-      expect(screen.getByText("タイムアウト: request_id 検索が時間内に完了しませんでした。")).toBeInTheDocument();
+      expect(screen.queryByText("タイムアウト: request_id 検索が時間内に完了しませんでした。")).not.toBeInTheDocument();
     });
   });
 

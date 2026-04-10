@@ -253,8 +253,12 @@ export function LiveEventStream(): JSX.Element {
             });
           }
         }
-      } catch {
-        // reconnect handled below
+      } catch (err: unknown) {
+        if (!(err instanceof DOMException && err.name === "AbortError")) {
+          // Log non-abort errors for observability
+          // eslint-disable-next-line no-console
+          console.warn("LiveEventStream connection error:", err);
+        }
       }
 
       if (mounted) {
