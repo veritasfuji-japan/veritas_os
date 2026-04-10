@@ -512,6 +512,37 @@ def test_dashboard_with_auth_ok(client: TestClient):
     assert "VERITAS Dashboard" in res.text
 
 
+def test_dashboard_username_xss_script_injection(monkeypatch, tmp_path):
+    """Ensure </script> in username is escaped so it cannot break out of the
+    inline <script> block (XSS regression test for CodeQL alert #2)."""
+    malicious = '</script><img onerror=alert(1) src=x>'
+    monkeypatch.setattr(dashboard_server, "DASHBOARD_USERNAME", malicious)
+    monkeypatch.setattr(dashboard_server, "DASHBOARD_PASSWORD", "testpass")
+    monkeypatch.setattr(dashboard_server, "STATUS_JSON", tmp_path / "s.json")
+    monkeypatch.setattr(dashboard_server, "REPORT_HTML", tmp_path / "r.html")
+
+    test_client = TestClient(dashboard_server.app)
+    res = test_client.get("/", auth=(malicious, "testpass"))
+    assert res.status_code == 200
+    body = res.text
+    # Raw </script> must NOT appear — it should be Unicode-escaped
+    assert "</script><img" not in body
+    # The safe Unicode escape MUST be present
+    assert "\\u003c/script\\u003e" in body
+
+
+def test_safe_json_for_html_script_escapes_special_chars():
+    """Unit test for the _safe_json_for_html_script helper."""
+    from veritas_os.api.dashboard_server import _safe_json_for_html_script
+
+    result = _safe_json_for_html_script('a<b>c&d')
+    assert "\\u003c" in result
+    assert "\\u003e" in result
+    assert "\\u0026" in result
+    assert "<" not in result.replace("\\u003c", "")
+    assert ">" not in result.replace("\\u003e", "")
+
+
 # =====================================================================
 # /api/status （Drive Sync ステータス）
 # =====================================================================

@@ -37,6 +37,24 @@ from veritas_os.api.constants import MAX_LOG_FILE_SIZE, SENSITIVE_SYSTEM_PATHS
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_json_for_html_script(value: str) -> str:
+    """Encode a string as a JSON value safe for embedding in an HTML ``<script>``.
+
+    ``json.dumps`` alone does not escape ``/`` or ``<``, so a malicious
+    string containing ``</script>`` could prematurely close the script
+    block and inject arbitrary HTML.  This helper additionally escapes
+    ``<``, ``>``, and ``&`` using their Unicode escape sequences, which
+    is the recommended practice for inline ``<script>`` embedding (the
+    same approach used by Django and Flask).
+    """
+    return (
+        json.dumps(value)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
+
 app = FastAPI(title="VERITAS Dashboard", version="1.0.0")
 security = HTTPBasic()
 
@@ -762,8 +780,8 @@ document.getElementById('user').textContent = '{{USERNAME}}';
 </html>
 """
     # username を埋め込む（CSS/JS の { } を壊さないために単純置換）
-    # XSS対策: JS 文字列コンテキスト向けに json.dumps でエスケープ
-    html = html.replace("'{{USERNAME}}'", json.dumps(username))
+    # XSS対策: <script> 内に安全に埋め込むため Unicode エスケープを適用
+    html = html.replace("'{{USERNAME}}'", _safe_json_for_html_script(username))
     return HTMLResponse(html)
 
 

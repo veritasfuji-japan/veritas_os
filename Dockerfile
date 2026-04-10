@@ -13,7 +13,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 COPY ./veritas_os/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+RUN pip install --no-cache-dir --upgrade "pip>=24.3" "setuptools>=78.1.1" "wheel>=0.46.2" \
     && pip install --no-cache-dir --target /build/deps -r /tmp/requirements.txt
 
 # ============================================================
@@ -31,7 +31,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir --upgrade pip setuptools wheel
+    && pip install --no-cache-dir --upgrade "pip>=24.3" "setuptools>=78.1.1" "wheel>=0.46.2"
 
 # ビルドステージからインストール済みパッケージのみコピー（ビルドツール類を除外）
 COPY --from=builder /build/deps /app/deps
