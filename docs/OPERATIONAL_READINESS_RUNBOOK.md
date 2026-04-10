@@ -85,7 +85,7 @@ pip install pytest httpx pydantic fastapi numpy cryptography
 # Run all production-like tests
 make test-production
 
-# Expected output: 65+ tests pass in < 15s
+# Expected output: 75+ tests pass in < 15s
 ```
 
 ### Docker Compose Validation

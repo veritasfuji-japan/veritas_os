@@ -150,7 +150,7 @@ def run_check(label: str, command: list[str]) -> tuple[bool, str]:
         return passed, snippet
     except subprocess.TimeoutExpired:
         return False, f"[TIMEOUT] check '{label}' exceeded 60s"
-    except Exception as exc:  # noqa: BLE001
+    except (subprocess.SubprocessError, OSError) as exc:
         return False, f"[ERROR] check '{label}' failed: {exc}"
 
 
@@ -164,8 +164,11 @@ def load_json_report(path: str | None) -> dict | None:
         return None
     try:
         return json.loads(p.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("Failed to parse report %s: %s", path, exc)
+    except json.JSONDecodeError as exc:
+        logger.warning("Failed to parse JSON in %s: %s", path, exc)
+        return None
+    except OSError as exc:
+        logger.warning("Failed to read report file %s: %s", path, exc)
         return None
 
 
