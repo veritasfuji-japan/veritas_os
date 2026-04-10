@@ -844,6 +844,69 @@ async def run_decide_pipeline(
                 _cont_snap.claim_status.value,
                 _cont_rcpt.divergence_flag,
             )
+
+            # Stage 5.9b: Continuation enforcement evaluation
+            # Only runs when enforcement mode is not "observe".
+            _cont_enf_mode = _cap_cfg.continuation_enforcement_mode
+            if _cont_enf_mode in ("advisory", "enforce"):
+                from .continuation_runtime.enforcement import (
+                    ContinuationEnforcementEvaluator,
+                    EnforcementConfig,
+                    EnforcementMode,
+                    EnforcementAction,
+                )
+                _enf_mode_enum = EnforcementMode(_cont_enf_mode)
+                _enf_config = EnforcementConfig(mode=_enf_mode_enum)
+                _enf_evaluator = ContinuationEnforcementEvaluator(
+                    config=_enf_config,
+                )
+                _enf_events = _enf_evaluator.evaluate(
+                    snapshot=_cont_snap,
+                    receipt=_cont_rcpt,
+                    chain_id=ctx.body.get("chain_id", ctx.request_id),
+                    degradation_count=ctx.context.get(
+                        "continuation_degradation_count", 0
+                    ),
+                    replay_divergence_ratio=ctx.context.get(
+                        "continuation_replay_divergence_ratio", 0.0
+                    ),
+                    has_required_approval=ctx.context.get(
+                        "continuation_has_required_approval", True
+                    ),
+                    policy_violation_detected=ctx.context.get(
+                        "continuation_policy_violation", False
+                    ),
+                    policy_violation_detail=ctx.context.get(
+                        "continuation_policy_violation_detail", ""
+                    ),
+                )
+                if _enf_events:
+                    ctx.continuation_enforcement_events = [
+                        e.to_dict() for e in _enf_events
+                    ]
+                    # In enforce mode, check for halt_chain action
+                    if _cont_enf_mode == "enforce":
+                        for _enf_evt in _enf_events:
+                            if (
+                                _enf_evt.action == EnforcementAction.HALT_CHAIN
+                                and _enf_evt.is_enforced
+                            ):
+                                ctx.continuation_enforcement_halt = True
+                                logger.warning(
+                                    "[continuation-enforcement] HALT "
+                                    "chain=%s reason=%s",
+                                    ctx.body.get(
+                                        "chain_id", ctx.request_id
+                                    ),
+                                    _enf_evt.reasoning,
+                                )
+                                break
+                    logger.info(
+                        "[continuation] enforcement evaluation: "
+                        "mode=%s events=%d",
+                        _cont_enf_mode,
+                        len(_enf_events),
+                    )
     except Exception as _cont_err:
         _stage_failures.append(f"continuation_shadow:{type(_cont_err).__name__}")
         logger.warning(

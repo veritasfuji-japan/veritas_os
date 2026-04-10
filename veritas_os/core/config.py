@@ -326,6 +326,11 @@ class CapabilityConfig:
     enable_continuation_runtime: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_CONTINUATION_RUNTIME", False)
     )
+    continuation_enforcement_mode: str = field(
+        default_factory=lambda: os.getenv(
+            "VERITAS_CONTINUATION_ENFORCEMENT_MODE", "observe"
+        ).strip().lower()
+    )
     emit_manifest_on_import: bool = field(
         default_factory=lambda: _parse_bool("VERITAS_CAP_EMIT_MANIFEST", True)
     )
