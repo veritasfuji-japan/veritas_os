@@ -27,11 +27,12 @@ Recommended additional hardening for production:
 from __future__ import annotations
 
 import base64
+import importlib
 import logging
 import os
 import stat
 from pathlib import Path
-from typing import Tuple
+from typing import Optional, Protocol, Tuple
 
 from veritas_os.security.hash import sha256_hex
 
@@ -158,3 +159,142 @@ def public_key_fingerprint(public_key_path: Path, *, length: int = 16) -> str:
     """
     raw = base64.urlsafe_b64decode(public_key_path.read_text(encoding="utf-8"))
     return sha256_hex(raw.hex())[:length]
+
+
+class Signer(Protocol):
+    """Pluggable signer protocol for TrustLog signatures."""
+
+    signer_type: str
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        """Sign a canonical payload hash and return URL-safe Base64 signature."""
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        """Verify signature over a payload hash."""
+
+    def signer_key_id(self) -> str:
+        """Return a stable signer identity (KMS key id or local key fingerprint)."""
+
+
+class FileEd25519Signer:
+    """Ed25519 signer backed by local key files."""
+
+    signer_type = "file"
+
+    def __init__(self, private_key_path: Path, public_key_path: Path) -> None:
+        self.private_key_path = private_key_path
+        self.public_key_path = public_key_path
+
+    def ensure_key_material(self) -> None:
+        """Create local signing keypair on first use."""
+        if self.private_key_path.exists() and self.public_key_path.exists():
+            return
+        store_keypair(self.private_key_path, self.public_key_path)
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        return sign_payload_hash(payload_hash, self.private_key_path)
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        return verify_payload_signature(
+            payload_hash=payload_hash,
+            signature_b64=signature_b64,
+            public_key_path=self.public_key_path,
+        )
+
+    def signer_key_id(self) -> str:
+        return public_key_fingerprint(self.public_key_path)
+
+
+class AwsKmsEd25519Signer:
+    """Ed25519 signer backed by AWS KMS asymmetric keys.
+
+    Security warning:
+        This signer performs a network call to AWS KMS for signing operations.
+        Ensure IAM permissions are scoped to the specific key and that requests
+        are routed over trusted channels.
+    """
+
+    signer_type = "aws_kms"
+
+    def __init__(
+        self,
+        kms_key_id: str,
+        kms_client: Optional[object] = None,
+    ) -> None:
+        if not kms_key_id.strip():
+            raise ValueError("VERITAS_TRUSTLOG_KMS_KEY_ID is required for aws_kms backend")
+        self.kms_key_id = kms_key_id.strip()
+        self._kms_client = kms_client
+        self._public_key: Optional[Ed25519PublicKey] = None
+
+    @property
+    def kms_client(self) -> object:
+        """Lazily construct boto3 KMS client."""
+        if self._kms_client is None:
+            boto3 = importlib.import_module("boto3")
+            self._kms_client = boto3.client("kms")
+        return self._kms_client
+
+    def _load_public_key(self) -> Ed25519PublicKey:
+        if self._public_key is not None:
+            return self._public_key
+        response = self.kms_client.get_public_key(KeyId=self.kms_key_id)
+        public_key_der = response["PublicKey"]
+        loaded = serialization.load_der_public_key(public_key_der)
+        if not isinstance(loaded, Ed25519PublicKey):
+            raise ValueError("KMS key is not Ed25519")
+        self._public_key = loaded
+        return self._public_key
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        response = self.kms_client.sign(
+            KeyId=self.kms_key_id,
+            Message=payload_hash.encode("utf-8"),
+            MessageType="RAW",
+            SigningAlgorithm="EDDSA",
+        )
+        signature: bytes = response["Signature"]
+        return base64.urlsafe_b64encode(signature).decode("ascii")
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        try:
+            signature = base64.urlsafe_b64decode(signature_b64)
+            public_key = self._load_public_key()
+            public_key.verify(signature, payload_hash.encode("utf-8"))
+        except (InvalidSignature, ValueError, TypeError):
+            return False
+        return True
+
+    def signer_key_id(self) -> str:
+        return self.kms_key_id
+
+
+def build_trustlog_signer(
+    *,
+    private_key_path: Path,
+    public_key_path: Path,
+    ensure_local_keys: bool = False,
+    backend: Optional[str] = None,
+    kms_key_id: Optional[str] = None,
+) -> Signer:
+    """Build TrustLog signer from backend environment variables."""
+    selected_backend = (
+        backend
+        if backend is not None
+        else os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+    ).strip().lower()
+    if selected_backend in {"", "file", "file_ed25519"}:
+        signer = FileEd25519Signer(private_key_path=private_key_path, public_key_path=public_key_path)
+        if ensure_local_keys:
+            signer.ensure_key_material()
+        return signer
+    if selected_backend in {"aws_kms", "aws_kms_ed25519"}:
+        selected_key_id = (
+            kms_key_id
+            if kms_key_id is not None
+            else os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "")
+        )
+        return AwsKmsEd25519Signer(kms_key_id=selected_key_id)
+    raise ValueError(
+        "Unsupported signer backend. Expected 'file' or 'aws_kms'."
+    )

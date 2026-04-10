@@ -613,15 +613,26 @@ def _set_valid_key(monkeypatch: pytest.MonkeyPatch, raw: bytes | None = None) ->
 
 def _stub_signing(monkeypatch):
     """Stub out signing infrastructure for unit isolation."""
-    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
     monkeypatch.setattr(
         trustlog_signed, "sha256_of_canonical_json", lambda _p: "h" * 64,
     )
+
+    class _StubSigner:
+        signer_type = "file"
+
+        def sign_payload_hash(self, _payload_hash: str) -> str:
+            return "sig"
+
+        def verify_payload_signature(self, _payload_hash: str, _signature_b64: str) -> bool:
+            return True
+
+        def signer_key_id(self) -> str:
+            return "fp"
+
     monkeypatch.setattr(
-        trustlog_signed, "sign_payload_hash", lambda *a, **kw: "sig",
-    )
-    monkeypatch.setattr(
-        trustlog_signed, "public_key_fingerprint", lambda _p: "fp",
+        trustlog_signed,
+        "_resolve_signer",
+        lambda **_kwargs: _StubSigner(),
     )
 
 
@@ -1814,19 +1825,8 @@ from veritas_os.logging import trust_log
 def test_append_signed_decision_wraps_oserror(monkeypatch):
     """Expected runtime write failures are wrapped in domain error."""
 
-    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
     monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
-    monkeypatch.setattr(
-        trustlog_signed,
-        "sha256_of_canonical_json",
-        lambda _payload: "h" * 64,
-    )
-    monkeypatch.setattr(trustlog_signed, "sign_payload_hash", lambda *_args, **_kwargs: "sig")
-    monkeypatch.setattr(
-        trustlog_signed,
-        "public_key_fingerprint",
-        lambda _path: "fp",
-    )
+    _stub_signing(monkeypatch)
 
     def _raise_oserror(_path, _line):
         raise OSError("disk full")
@@ -1876,15 +1876,8 @@ def test_append_signed_decision_adds_transparency_anchor(monkeypatch, tmp_path):
     anchor_path = tmp_path / "transparency.jsonl"
 
     monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
-    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
     monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
-    monkeypatch.setattr(
-        trustlog_signed,
-        "sha256_of_canonical_json",
-        lambda _payload: "h" * 64,
-    )
-    monkeypatch.setattr(trustlog_signed, "sign_payload_hash", lambda *_args, **_kwargs: "sig")
-    monkeypatch.setattr(trustlog_signed, "public_key_fingerprint", lambda _path: "fp")
+    _stub_signing(monkeypatch)
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(anchor_path))
 
     entry = trustlog_signed.append_signed_decision({"request_id": "req-transparency"})
@@ -1904,15 +1897,8 @@ def test_append_signed_decision_raises_when_transparency_required(monkeypatch, t
     trustlog_path = tmp_path / "trustlog.jsonl"
 
     monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", trustlog_path)
-    monkeypatch.setattr(trustlog_signed, "_ensure_signing_keys", lambda: None)
     monkeypatch.setattr(trustlog_signed, "_read_all_entries", lambda _path: [])
-    monkeypatch.setattr(
-        trustlog_signed,
-        "sha256_of_canonical_json",
-        lambda _payload: "h" * 64,
-    )
-    monkeypatch.setattr(trustlog_signed, "sign_payload_hash", lambda *_args, **_kwargs: "sig")
-    monkeypatch.setattr(trustlog_signed, "public_key_fingerprint", lambda _path: "fp")
+    _stub_signing(monkeypatch)
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(tmp_path / "tp.jsonl"))
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
 
