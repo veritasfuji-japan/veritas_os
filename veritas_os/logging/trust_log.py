@@ -41,6 +41,7 @@ from veritas_os.audit.trustlog_signed import (
     append_signed_decision,
 )
 from veritas_os.security.hash import sha256_hex
+from veritas_os.audit.trustlog_verify import verify_full_ledger
 
 
 def _load_mask_pii():
@@ -714,124 +715,57 @@ def get_trust_logs_by_request(request_id: str) -> Dict[str, Any]:
 # =============================================================================
 
 def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
-    """
-    TrustLog 全体（または先頭から max_entries 件）について
-    ハッシュチェーンの整合性を検証する。
-
-    ★ 暗号化された行は自動復号してからハッシュチェーンを検証する。
-
-    Returns:
-        {
-          "ok": bool,
-          "checked": int,
-          "broken": bool,
-          "broken_index": int | None,
-          "broken_reason": str | None,
-        }
-    """
-    if not LOG_JSONL.exists():
-        return {
-            "ok": True,
-            "checked": 0,
-            "broken": False,
-            "broken_index": None,
-            "broken_reason": None,
-        }
-
-    prev_hash: Optional[str] = None
-    checked = 0
-
+    """Verify encrypted full TrustLog integrity with stable compatibility fields."""
     try:
-        # ★ スレッドセーフ修正: ロック下でファイルを一括読み込み
-        with _trust_log_lock:
-            with LOG_JSONL.open("r", encoding="utf-8") as f:
-                all_lines = f.readlines()
-
-        for idx, line in enumerate(all_lines):
-            if max_entries is not None and idx >= max_entries:
-                break
-
-            line = line.strip()
-            if not line:
-                continue
-
-            try:
-                # ★ 暗号化行は復号してからパース
-                line = _decrypt_line(line)
-                entry = json.loads(line)
-            except (json.JSONDecodeError, ValueError, EncryptionKeyMissing, DecryptionError):
-                return {
-                    "ok": False,
-                    "checked": checked,
-                    "broken": True,
-                    "broken_index": idx,
-                    "broken_reason": "json_decode_error",
-                }
-
-            # ★ 型安全: json.loads() が dict 以外 (null, [], "string") を返す場合を防御
-            if not isinstance(entry, dict):
-                return {
-                    "ok": False,
-                    "checked": checked,
-                    "broken": True,
-                    "broken_index": idx,
-                    "broken_reason": "entry_not_dict",
-                }
-
-            # sha256_prev の整合性チェック
-            actual_prev = entry.get("sha256_prev")
-            if prev_hash is None:
-                # 最初のエントリ: sha256_prev が None なら新規チェーン。
-                # 非 None ならログローテーション後の継続チェーンであり正常。
-                pass
-            else:
-                if actual_prev != prev_hash:
-                    return {
-                        "ok": False,
-                        "checked": checked,
-                        "broken": True,
-                        "broken_index": idx,
-                        "broken_reason": "sha256_prev_mismatch",
-                    }
-
-            # sha256 の再計算チェック
-            expected_prev = prev_hash if prev_hash is not None else actual_prev
-            entry_json = _normalize_entry_for_hash(entry)
-            if expected_prev:
-                combined = expected_prev + entry_json
-            else:
-                combined = entry_json
-            expected_hash = _sha256(combined)
-            if entry.get("sha256") != expected_hash:
-                return {
-                    "ok": False,
-                    "checked": checked,
-                    "broken": True,
-                    "broken_index": idx,
-                    "broken_reason": "sha256_mismatch",
-                }
-
-            # 状態更新
-            prev_hash = entry.get("sha256")
-            checked += 1
-
-        return {
-            "ok": True,
-            "checked": checked,
-            "broken": False,
-            "broken_index": None,
-            "broken_reason": None,
-        }
-
-    except OSError as e:
-        logger.warning("verify_trust_log failed: %s", e)
+        result = verify_full_ledger(log_path=LOG_JSONL, max_entries=max_entries)
+    except OSError as exc:
+        logger.warning("verify_trust_log failed: %s", exc)
         return {
             "ok": False,
-            "checked": checked,
+            "checked": 0,
             "broken": True,
-            "broken_index": checked,
+            "broken_index": 0,
             "broken_reason": "verification_exception",
+            "summary": {
+                "total_entries": 0,
+                "valid_entries": 0,
+                "invalid_entries": 0,
+                "chain_ok": False,
+                "signature_ok": True,
+                "linkage_ok": True,
+                "mirror_ok": True,
+                "last_hash": None,
+                "detailed_errors": [
+                    {"ledger": "full", "index": 0, "reason": "verification_exception"}
+                ],
+            },
         }
+
+    broken_reason = None
+    broken_index = None
+    if result["detailed_errors"]:
+        first = result["detailed_errors"][0]
+        broken_reason = first.get("reason")
+        broken_index = first.get("index")
+
+    return {
+        "ok": result["ok"],
+        "checked": result["total_entries"],
+        "broken": not result["ok"],
+        "broken_index": broken_index,
+        "broken_reason": broken_reason,
+        "summary": {
+            "total_entries": result["total_entries"],
+            "valid_entries": result["valid_entries"],
+            "invalid_entries": result["invalid_entries"],
+            "chain_ok": result["chain_ok"],
+            "signature_ok": result["signature_ok"],
+            "linkage_ok": result["linkage_ok"],
+            "mirror_ok": result["mirror_ok"],
+            "last_hash": result["last_hash"],
+            "detailed_errors": result["detailed_errors"],
+        },
+    }
 
 
 # =============================================================================
