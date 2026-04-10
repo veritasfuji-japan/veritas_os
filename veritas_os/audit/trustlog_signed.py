@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from veritas_os.logging.paths import LOG_DIR
+from veritas_os.audit.storage_mirror import build_storage_mirror
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex, sha256_of_canonical_json
 from veritas_os.security.signing import (
     Signer,
@@ -119,26 +120,25 @@ def _append_line(path: Path, line: str) -> None:
 
 
 def _mirror_to_worm(line: str) -> Dict[str, Any]:
-    """Best-effort append to configured WORM mirror destination."""
-    path = _worm_mirror_path()
-    if path is None:
-        return {"configured": False, "ok": False, "path": None}
-
+    """Best-effort append using the configured mirror backend."""
     try:
-        _append_line(path, line)
-    except OSError as exc:
-        _logger.warning(
-            "WORM mirror write failed (path=%s): %s: %s",
-            path, exc.__class__.__name__, exc,
-        )
+        mirror_backend = build_storage_mirror(append_fn=_append_line)
+    except (ValueError, TypeError) as exc:
         return {
             "configured": True,
             "ok": False,
-            "path": str(path),
+            "backend": "invalid",
             "error": f"{exc.__class__.__name__}: {exc}",
         }
 
-    return {"configured": True, "ok": True, "path": str(path)}
+    result = mirror_backend.append_line(line)
+    if not result.get("ok"):
+        _logger.warning(
+            "WORM mirror write failed (backend=%s): %s",
+            result.get("backend"),
+            result.get("error", "unknown_error"),
+        )
+    return result
 
 
 def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
@@ -515,6 +515,23 @@ def append_signed_decision(decision_payload: Dict[str, Any]) -> Dict[str, Any]:
             if _worm_hard_fail_enabled() and mirror.get("configured") and not mirror.get("ok"):
                 raise SignedTrustLogWriteError("worm_mirror_write_failed")
             entry["worm_mirror"] = mirror
+            entry["mirror_backend"] = mirror.get("backend")
+            entry["mirror_receipt"] = (
+                {
+                    key: mirror.get(key)
+                    for key in (
+                        "bucket",
+                        "key",
+                        "version_id",
+                        "etag",
+                        "retention_mode",
+                        "retain_until_date",
+                    )
+                    if mirror.get(key) is not None
+                }
+                if mirror.get("ok")
+                else None
+            )
 
             transparency_anchor = _append_transparency_anchor(_entry_chain_hash(entry))
             if (
@@ -576,9 +593,13 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
 
         previous_hash = _entry_chain_hash(entry)
 
-    worm_path = _worm_mirror_path()
+    selected_mirror_backend = os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower()
+    worm_path = _worm_mirror_path() if selected_mirror_backend == "local" else None
+    s3_bucket = os.getenv("VERITAS_TRUSTLOG_S3_BUCKET", "").strip()
+    mirror_configured = worm_path is not None if selected_mirror_backend == "local" else bool(s3_bucket)
     worm_status: Dict[str, Any] = {
-        "configured": worm_path is not None,
+        "backend": selected_mirror_backend or "local",
+        "configured": mirror_configured,
         "hard_fail": _worm_hard_fail_enabled(),
     }
     if worm_path is not None:

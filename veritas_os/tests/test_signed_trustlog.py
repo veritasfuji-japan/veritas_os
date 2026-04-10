@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import timezone
 
 from fastapi.testclient import TestClient
 import pytest
@@ -231,3 +232,78 @@ def test_aws_kms_signer_requires_key_id(monkeypatch, tmp_path):
 
     with pytest.raises(trustlog_signed.SignedTrustLogWriteError, match="signed trust log append failed"):
         trustlog_signed.append_signed_decision({"request_id": "r-kms-missing", "decision": "allow"})
+
+
+def test_local_mirror_backend_metadata(monkeypatch, tmp_path):
+    log_path = tmp_path / "trustlog.jsonl"
+    mirror_path = tmp_path / "worm" / "trustlog_mirror.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", str(mirror_path))
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-local-mirror", "decision": "allow"})
+    assert entry["mirror_backend"] == "local"
+    assert entry["mirror_receipt"] == {}
+
+
+def test_s3_object_lock_mirror_backend(monkeypatch, tmp_path):
+    class FakeS3Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def put_object(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                "VersionId": "v1",
+                "ETag": "\"etag123\"",
+            }
+
+    class FakeBoto3:
+        def __init__(self, client):
+            self._client = client
+
+        def client(self, service_name, **kwargs):
+            assert service_name == "s3"
+            assert kwargs["region_name"] == "us-east-1"
+            return self._client
+
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+    fake_s3 = FakeS3Client()
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "trustlog-bucket")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_REGION", "us-east-1")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE", "GOVERNANCE")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_RETENTION_DAYS", "30")
+    monkeypatch.setattr(
+        "veritas_os.audit.storage_mirror.importlib.import_module",
+        lambda module_name: FakeBoto3(fake_s3),
+    )
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-s3-mirror", "decision": "allow"})
+
+    assert entry["mirror_backend"] == "s3_object_lock"
+    assert entry["mirror_receipt"]["bucket"] == "trustlog-bucket"
+    assert entry["mirror_receipt"]["version_id"] == "v1"
+    assert entry["mirror_receipt"]["etag"] == "\"etag123\""
+    assert entry["mirror_receipt"]["retention_mode"] == "GOVERNANCE"
+    assert entry["mirror_receipt"]["retain_until_date"]
+    assert fake_s3.calls
+    assert "ObjectLockRetainUntilDate" in fake_s3.calls[0]
+    assert fake_s3.calls[0]["ObjectLockMode"] == "GOVERNANCE"
+    assert fake_s3.calls[0]["ObjectLockRetainUntilDate"].tzinfo == timezone.utc
+
+    verify_result = trustlog_signed.verify_trustlog_chain(path=log_path)
+    assert verify_result["worm_mirror"]["backend"] == "s3_object_lock"
+    assert verify_result["worm_mirror"]["configured"] is True

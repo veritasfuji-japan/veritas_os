@@ -1071,8 +1071,21 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 |---|---|---|
 | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` (posture: `1` in secure/prod) | Require transparency log anchoring (fail-closed) |
 | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` (posture: `1` in secure/prod) | WORM mirror write failure raises error |
+| `VERITAS_TRUSTLOG_MIRROR_BACKEND` | `local` | TrustLog mirror backend (`local` or `s3_object_lock`) |
+| `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` | — | Local append mirror destination path (used when backend is `local`) |
+| `VERITAS_TRUSTLOG_S3_BUCKET` | — | S3 bucket name for TrustLog mirror writes (`s3_object_lock` backend) |
+| `VERITAS_TRUSTLOG_S3_PREFIX` | — | S3 object key prefix for append-only TrustLog objects |
+| `VERITAS_TRUSTLOG_S3_REGION` | — | AWS region override for S3 client |
+| `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` | — | Object Lock mode (`GOVERNANCE` or `COMPLIANCE`) |
+| `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` | — | Retention period in days for S3 Object Lock |
 | `VERITAS_TRUSTLOG_SIGNER_BACKEND` | `file` | TrustLog signer backend (`file` or `aws_kms`) |
 | `VERITAS_TRUSTLOG_KMS_KEY_ID` | — | AWS KMS key id/ARN (required when `VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms`) |
+
+#### TrustLog mirror migration notes
+
+- Existing deployments continue to work with no change because `VERITAS_TRUSTLOG_MIRROR_BACKEND` defaults to `local` and keeps `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` behavior.
+- To migrate to S3 Object Lock, set `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and provide at minimum `VERITAS_TRUSTLOG_S3_BUCKET` (plus optional prefix/region/retention settings).
+- `VERITAS_TRUSTLOG_WORM_HARD_FAIL` semantics are unchanged and apply to both backends.
 
 ### Replay
 
