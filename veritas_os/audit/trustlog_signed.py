@@ -66,9 +66,20 @@ def _worm_mirror_path() -> Optional[Path]:
 
 
 def _worm_hard_fail_enabled() -> bool:
-    """Return whether WORM mirror failures must abort TrustLog writes."""
-    raw = (os.getenv("VERITAS_TRUSTLOG_WORM_HARD_FAIL") or "0").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    """Return whether WORM mirror failures must abort TrustLog writes.
+
+    When the runtime posture is *secure* or *prod* and no explicit env
+    var is set, the posture-derived default is used (True).
+    """
+    raw = os.getenv("VERITAS_TRUSTLOG_WORM_HARD_FAIL")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    # Fall back to posture-derived default.
+    try:
+        from veritas_os.core.posture import get_active_posture
+        return get_active_posture().trustlog_worm_hard_fail
+    except Exception:
+        return False
 
 
 def _transparency_log_path() -> Optional[Path]:
@@ -80,9 +91,19 @@ def _transparency_log_path() -> Optional[Path]:
 
 
 def _transparency_required_enabled() -> bool:
-    """Return whether transparency anchoring failures must abort writes."""
-    raw = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED") or "0").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
+    """Return whether transparency anchoring failures must abort writes.
+
+    When the runtime posture is *secure* or *prod* and no explicit env
+    var is set, the posture-derived default is used (True).
+    """
+    raw = os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED")
+    if raw is not None:
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        from veritas_os.core.posture import get_active_posture
+        return get_active_posture().trustlog_transparency_required
+    except Exception:
+        return False
 
 
 def _append_line(path: Path, line: str) -> None:

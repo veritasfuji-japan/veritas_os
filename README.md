@@ -118,6 +118,47 @@ docker compose up --build
 - The project is **not** positioned as an alpha prototype anymore; it already contains substantial operational and audit infrastructure.
 - You should still expect active iteration in policy packs, deployment defaults, and environment-specific integrations.
 
+## 🔒 Runtime Posture Guarantees
+
+VERITAS OS uses a single **runtime posture** (`VERITAS_POSTURE`) to control governance-critical defaults.  Set it once; every safety flag derives from it.
+
+| Posture | Governance controls | Startup behaviour | Escape hatches |
+|---|---|---|---|
+| **dev** (default) | All off unless explicitly enabled | Relaxed — warnings only | N/A |
+| **staging** | All off unless explicitly enabled | Relaxed — warnings only | N/A |
+| **secure** | All **on** by default | Fail-closed — refuses on missing integrations | `VERITAS_POSTURE_OVERRIDE_*` accepted |
+| **prod** | All **on**, no exceptions | Fail-closed — refuses on missing integrations | Overrides are **ignored** |
+
+### Controls governed by posture
+
+| Control | Env var (explicit override) | What it enforces |
+|---|---|---|
+| Policy runtime enforcement | `VERITAS_POLICY_RUNTIME_ENFORCE` | Compiled policy deny/halt/escalate/require_human_review decisions enforced in pipeline |
+| External secret manager | `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | Require Vault/KMS/cloud secret manager at startup |
+| Transparency log anchoring | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | TrustLog writes fail when transparency anchor is missing |
+| WORM hard-fail | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | TrustLog writes fail when WORM mirror write fails |
+| Strict replay | `VERITAS_REPLAY_STRICT` | Critical replay divergences abort |
+
+### What causes startup refusal (secure/prod)
+
+Startup will refuse with an actionable error when:
+- `VERITAS_SECRET_PROVIDER` is not set (external secret manager enforcement)
+- `VERITAS_API_SECRET_REF` is not set (external secret manager enforcement)
+- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is not set (transparency anchoring)
+- `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is not set (WORM hard-fail)
+
+### Escape hatches (secure posture only)
+
+In `secure` posture, individual controls may be disabled for pre-production testing:
+```bash
+VERITAS_POSTURE_OVERRIDE_POLICY_ENFORCE=0
+VERITAS_POSTURE_OVERRIDE_EXTERNAL_SECRET_MGR=0
+VERITAS_POSTURE_OVERRIDE_TRUSTLOG_TRANSPARENCY=0
+VERITAS_POSTURE_OVERRIDE_TRUSTLOG_WORM=0
+VERITAS_POSTURE_OVERRIDE_REPLAY_STRICT=0
+```
+These overrides are **silently ignored** in `prod` posture.
+
 ## 🎯 Why VERITAS?
 
 Most "agent frameworks" optimize autonomy and tool use.
@@ -863,7 +904,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | Variable | Default | Description |
 |---|---|---|
 | `VERITAS_ENABLE_DIRECT_FUJI_API` | `0` | Enable `/v1/fuji/validate` endpoint |
-| `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` | Block startup without Vault/KMS |
+| `VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER` | `0` (posture: `1` in secure/prod) | Block startup without Vault/KMS |
 | `VERITAS_WEBSEARCH_ENABLE_TOXICITY_FILTER` | `1` | Web search toxicity filter (fail-closed) |
 | `VERITAS_CAP_CONTINUATION_RUNTIME` | `0` | Enable Continuation Runtime (Phase-1 observe) |
 
@@ -872,27 +913,28 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | Variable | Default | Description |
 |---|---|---|
 | `VERITAS_POLICY_VERIFY_KEY` | — | Path to Ed25519 public key PEM file for policy bundle signature verification |
-| `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` | Enable runtime enforcement of compiled policy decisions (deny/halt/escalate/require_human_review) |
+| `VERITAS_POLICY_RUNTIME_ENFORCE` | `0` (posture: `1` in secure/prod) | Enable runtime enforcement of compiled policy decisions (deny/halt/escalate/require_human_review) |
 | `VERITAS_POLICY_REQUIRE_ED25519` | `0` | Require Ed25519 signature verification; reject manifests when no key is available |
 
 ### TrustLog & Audit
 
 | Variable | Default | Description |
 |---|---|---|
-| `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` | Require transparency log anchoring (fail-closed) |
-| `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` | WORM mirror write failure raises error |
+| `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` (posture: `1` in secure/prod) | Require transparency log anchoring (fail-closed) |
+| `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` (posture: `1` in secure/prod) | WORM mirror write failure raises error |
 
 ### Replay
 
 | Variable | Default | Description |
 |---|---|---|
-| `VERITAS_REPLAY_STRICT` | `0` | Enforce deterministic replay settings |
+| `VERITAS_REPLAY_STRICT` | `0` (posture: `1` in secure/prod) | Enforce deterministic replay settings |
 | `VERITAS_REPLAY_REQUIRE_MODEL_VERSION` | `1` | Reject snapshots without model_version |
 
 ### Runtime
 
 | Variable | Default | Description |
 |---|---|---|
+| `VERITAS_POSTURE` | `dev` | Runtime posture (`dev`/`staging`/`secure`/`prod`). See [Runtime Posture Guarantees](#-runtime-posture-guarantees). |
 | `VERITAS_RUNTIME_ROOT` | `runtime/` | Root directory for runtime data |
 | `VERITAS_RUNTIME_NAMESPACE` | `dev` | Runtime namespace (`dev`/`test`/`demo`/`prod`) |
 

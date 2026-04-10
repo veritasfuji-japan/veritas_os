@@ -42,6 +42,12 @@ async def run_lifespan(
     app.state.trust_log_store = create_trust_log_store()
     app.state.memory_store = create_memory_store()
 
+    # ── Posture: resolve, validate, log banner ──
+    from veritas_os.core.posture import init_posture, set_active_posture
+
+    posture_defaults = init_posture(fail_on_error=True)
+    set_active_posture(posture_defaults)
+
     startup_validation()
     runtime_health_check()
     check_multiworker_auth_store()

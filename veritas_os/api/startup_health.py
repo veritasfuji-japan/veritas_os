@@ -25,10 +25,22 @@ def _is_env_key_present(var_name: str) -> bool:
 
 
 def should_fail_fast_startup(profile: Optional[str] = None) -> bool:
-    """Return whether startup validation failures should stop app boot."""
+    """Return whether startup validation failures should stop app boot.
+
+    Fail-fast is active for ``prod``/``production`` (legacy) and also
+    when the posture model resolves to *secure* or *prod*.
+    """
     resolved_profile = profile if profile is not None else os.getenv("VERITAS_ENV", "")
     normalized_profile = resolved_profile.strip().lower()
-    return normalized_profile in {"prod", "production"}
+    if normalized_profile in {"prod", "production"}:
+        return True
+
+    # Also respect the explicit posture selector.
+    posture_raw = (os.getenv("VERITAS_POSTURE") or "").strip().lower()
+    if posture_raw in {"prod", "production", "secure", "hardened"}:
+        return True
+
+    return False
 
 
 def run_startup_config_validation(

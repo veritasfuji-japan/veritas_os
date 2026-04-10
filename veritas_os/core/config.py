@@ -492,7 +492,8 @@ class VeritasConfig:
     def validate_secret_manager_integration(self) -> None:
         """Validate secret manager integration when strict mode is enabled.
 
-        Strict mode is controlled by ``VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER``.
+        Strict mode is controlled by ``VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER``
+        or by the posture-derived default (secure/prod postures enable it).
         When enabled, the deployment must provide both:
         - ``VERITAS_SECRET_PROVIDER``: the provider identifier
         - ``VERITAS_API_SECRET_REF``: external secret reference name/path
@@ -500,7 +501,16 @@ class VeritasConfig:
         Raises:
             ValueError: When strict mode is on and required metadata is missing.
         """
-        if not _parse_bool("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", False):
+        explicit = os.getenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER")
+        if explicit is not None:
+            enforced = _parse_bool("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", False)
+        else:
+            try:
+                from veritas_os.core.posture import get_active_posture
+                enforced = get_active_posture().external_secret_manager_required
+            except Exception:
+                enforced = False
+        if not enforced:
             return
 
         allowed_providers = {
