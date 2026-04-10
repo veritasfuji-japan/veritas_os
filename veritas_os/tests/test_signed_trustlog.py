@@ -307,3 +307,42 @@ def test_s3_object_lock_mirror_backend(monkeypatch, tmp_path):
     verify_result = trustlog_signed.verify_trustlog_chain(path=log_path)
     assert verify_result["worm_mirror"]["backend"] == "s3_object_lock"
     assert verify_result["worm_mirror"]["configured"] is True
+
+
+def test_append_signed_decision_emits_artifact_ref_when_enabled(monkeypatch, tmp_path):
+    """Structured artifact_ref is emitted only when explicitly enabled."""
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+
+    payload = {
+        "request_id": "r-artifact-ref",
+        "sha256": "a" * 64,
+        "sha256_prev": None,
+    }
+    entry = trustlog_signed.append_signed_decision(
+        payload,
+        enable_artifact_ref=True,
+    )
+
+    assert "artifact_ref" in entry
+    assert entry["artifact_ref"]["artifact_storage_backend"] == "trustlog_full_ledger"
+
+
+def test_append_signed_decision_skips_artifact_ref_by_default(monkeypatch, tmp_path):
+    """Default append path remains backward-compatible for direct callers."""
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-default"})
+
+    assert "artifact_ref" not in entry
