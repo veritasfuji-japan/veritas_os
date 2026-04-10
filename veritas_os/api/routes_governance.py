@@ -168,7 +168,7 @@ def governance_put(body: dict):
         logger.warning("governance_put validation error: %s", e)
         return JSONResponse(
             status_code=400,
-            content={"ok": False, "error": str(e)},
+            content={"ok": False, "error": "Governance policy validation failed"},
         )
     except Exception as e:
         logger.error("governance_put failed: %s", e, exc_info=True)

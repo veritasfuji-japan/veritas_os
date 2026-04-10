@@ -128,7 +128,7 @@ def test_fuji_validate_returns_500_when_core_interface_missing(
 
     assert isinstance(response, JSONResponse)
     assert response.status_code == 500
-    assert b"validate_action" in response.body
+    assert b"FUJI core interface error" in response.body
 
 
 @pytest.mark.anyio

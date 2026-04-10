@@ -1021,7 +1021,7 @@ def test_fuji_validate_no_impl_raises_500(monkeypatch):
     )
     assert r.status_code == 500
     data = r.json()
-    assert "fuji_core has neither" in data["detail"]
+    assert "FUJI core interface error" in data["detail"]
 
 
 # -------------------------------------------------
