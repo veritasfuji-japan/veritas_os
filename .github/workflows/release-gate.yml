@@ -345,8 +345,10 @@ jobs:
           if-no-files-found: warn
 
   # ============================================================================
-  # Tier 3 — External / live tests (opt-in, advisory unless explicitly blocking)
-  # Runs when: workflow_dispatch with tier3_external=true OR on tag push
+  # Tier 3 — External / live tests (opt-in, advisory)
+  # Runs only when: workflow_dispatch with tier3_external=true
+  # Does NOT run automatically on tag push — requires explicit opt-in.
+  # Does NOT block release-readiness (continue-on-error: true).
   # ============================================================================
   external-tests:
     name: "[Tier 3] external-tests (advisory)"

@@ -151,7 +151,7 @@ def run_check(
     except subprocess.TimeoutExpired:
         return False, f"[TIMEOUT] check '{label}' exceeded 60s"
     except Exception as exc:  # noqa: BLE001
-        return False, f"[ERROR] {exc}"
+        return False, f"[ERROR] check '{label}' (cmd={command[0]}) failed: {exc}"
 
 
 def build_report(
@@ -189,10 +189,11 @@ def render_text_report(report: dict) -> str:
     summary = report["summary"]
     ready = summary["governance_ready"]
 
+    sha_display = report["release_sha"][:12] + "..." if len(report["release_sha"]) > 12 else report["release_sha"]
     lines.append("=" * 62)
     lines.append("  VERITAS OS — Governance Readiness Report")
     lines.append(f"  Release:  {report['release_ref']}")
-    lines.append(f"  SHA:      {report['release_sha'][:12]}...")
+    lines.append(f"  SHA:      {sha_display}")
     lines.append(f"  Date:     {report['generated_at']}")
     lines.append("=" * 62)
     lines.append("")
