@@ -539,8 +539,30 @@ def test_safe_json_for_html_script_escapes_special_chars():
     assert "\\u003c" in result
     assert "\\u003e" in result
     assert "\\u0026" in result
-    assert "<" not in result.replace("\\u003c", "")
-    assert ">" not in result.replace("\\u003e", "")
+    # Ensure no raw <, > remain outside of escaped sequences
+    stripped = result.replace("\\u003c", "").replace("\\u003e", "")
+    assert "<" not in stripped
+    assert ">" not in stripped
+
+
+@pytest.mark.parametrize("value,expected_substr", [
+    ("", '""'),
+    ("normal", '"normal"'),
+    ("<><>&&&", "\\u003c"),
+    ('</script><img src=x onerror=alert(1)>', "\\u003c/script\\u003e"),
+])
+def test_safe_json_for_html_script_edge_cases(value, expected_substr):
+    """Edge cases: empty, normal, all-special, and script injection."""
+    from veritas_os.api.dashboard_server import _safe_json_for_html_script
+
+    result = _safe_json_for_html_script(value)
+    assert expected_substr in result
+    # Raw angle brackets must never appear in the output
+    raw_content = (
+        result.replace("\\u003c", "").replace("\\u003e", "")
+    )
+    assert "<" not in raw_content
+    assert ">" not in raw_content
 
 
 # =====================================================================
