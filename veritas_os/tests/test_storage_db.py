@@ -81,6 +81,10 @@ class TestBuildConninfo:
         assert result.count("connect_timeout") == 1
         assert result.count("sslmode") == 1
         assert result.count("statement_timeout") == 1
+        # Existing values must be preserved
+        assert "connect_timeout=20" in result
+        assert "sslmode=verify-full" in result
+        assert "statement_timeout=5000" in result
 
 
 class TestPoolMinMax:

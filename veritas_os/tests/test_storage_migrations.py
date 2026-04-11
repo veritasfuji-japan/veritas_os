@@ -38,6 +38,10 @@ class TestDiscoverSqlFiles:
         files = _discover_sql_files()
         names = [f.name for f in files]
         assert names == sorted(names)
+        # Verify numeric prefix ordering is correct
+        assert names.index("0001_create_memory_records.sql") < names.index(
+            "0002_create_trustlog_entries.sql"
+        )
 
     def test_sql_files_are_not_empty(self):
         for path in _discover_sql_files():
