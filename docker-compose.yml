@@ -50,7 +50,10 @@ services:
       - "8000:8000"
     environment:
       VERITAS_CORS_ALLOW_ORIGINS: ${VERITAS_CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      VERITAS_MEMORY_BACKEND: ${VERITAS_MEMORY_BACKEND:-postgresql}
+      VERITAS_TRUSTLOG_BACKEND: ${VERITAS_TRUSTLOG_BACKEND:-postgresql}
       VERITAS_DATABASE_URL: ${VERITAS_DATABASE_URL:-postgresql://veritas:veritas@postgres:5432/veritas}
+      VERITAS_DB_AUTO_MIGRATE: ${VERITAS_DB_AUTO_MIGRATE:-true}
     depends_on:
       postgres:
         condition: service_healthy

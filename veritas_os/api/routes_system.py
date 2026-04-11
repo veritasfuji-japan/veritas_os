@@ -24,6 +24,7 @@ from veritas_os.api.pipeline_orchestrator import (
     update_runtime_config,
 )
 from veritas_os.logging.encryption import get_encryption_status
+from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
 # test monkeypatching on the server module.
 
@@ -322,6 +323,7 @@ def health() -> Dict[str, Any]:
             "status": health_status,
             "uptime": int(time.time() - srv.START_TS),
             "checks": checks,
+            "storage_backends": get_backend_info(),
             "runtime_features": runtime_features,
             "alert_policy": _derive_alert_policy(checks, runtime_features),
             "auth_store": auth_store["details"],
@@ -384,6 +386,7 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
         "pipeline_ok": pipeline_ok,
         "api_key_configured": bool(expected),
         "checks": checks,
+        "storage_backends": get_backend_info(),
         "runtime_features": runtime_features,
         "alert_policy": _derive_alert_policy(checks, runtime_features),
         "auth_store": auth_store["details"],
