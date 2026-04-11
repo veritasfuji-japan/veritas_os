@@ -137,7 +137,7 @@ class _MemoryStoreContractSuite:
         # Neither set should leak into the other
         u1_keys = {r.get("key") for r in u1_records}
         u2_keys = {r.get("key") for r in u2_records}
-        assert "k2" not in u1_keys or "k1" not in u2_keys  # at least partial isolation
+        assert "k2" not in u1_keys and "k1" not in u2_keys
 
     # -- search -----------------------------------------------------------
 
@@ -366,7 +366,7 @@ class TestPostgresTrustLogStoreContract:
 
         async def _go():
             async for _ in store.iter_entries():
-                pass  # pragma: no cover
+                pass
 
         with pytest.raises(NotImplementedError):
             asyncio.run(_go())
@@ -501,7 +501,7 @@ class TestLifespanBackendInjection:
                 close_llm_pool=None,
                 logger=logging.getLogger(__name__),
             ):
-                pass  # pragma: no cover
+                pass
 
         with pytest.raises(ValueError, match="Unknown VERITAS_TRUSTLOG_BACKEND"):
             asyncio.run(_exercise())
