@@ -721,3 +721,182 @@ async def test_verify_pg_chain_broken() -> None:
     assert result["invalid_entries"] == 1
     assert len(result["errors"]) == 1
     assert result["errors"][0]["reason"] == "sha256_prev_mismatch"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Legacy memory format
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_migrate_memory_legacy_users_dict(tmp_path: Path) -> None:
+    """Legacy ``{"users": {"uid": {"key": value}}}`` format is normalised."""
+    legacy = {
+        "users": {
+            "alice": {
+                "k1": {"text": "hello"},
+                "k2": {"text": "world"},
+            },
+            "bob": {
+                "k3": {"text": "foo"},
+            },
+        }
+    }
+    p = tmp_path / "legacy_memory.json"
+    p.write_text(json.dumps(legacy), encoding="utf-8")
+
+    pg_mock = _make_pg_memory_mock(inserted=True)
+
+    with patch("veritas_os.storage.postgresql.PostgresMemoryStore", return_value=pg_mock):
+        report = await _migrate_memory(p, dry_run=False, batch_size=500)
+
+    assert report.migrated == 3
+    assert report.duplicates == 0
+    assert report.malformed == 0
+    assert report.failed == 0
+    assert report.success()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_migrate_memory_items_format(tmp_path: Path) -> None:
+    """Alternate ``{"items": [...]}`` wrapper format is supported."""
+    data = {
+        "items": [
+            {"user_id": "alice", "key": "k1", "value": {"text": "a"}},
+            {"user_id": "bob", "key": "k2", "value": {"text": "b"}},
+        ]
+    }
+    p = tmp_path / "items_memory.json"
+    p.write_text(json.dumps(data), encoding="utf-8")
+
+    pg_mock = _make_pg_memory_mock(inserted=True)
+
+    with patch("veritas_os.storage.postgresql.PostgresMemoryStore", return_value=pg_mock):
+        report = await _migrate_memory(p, dry_run=False, batch_size=500)
+
+    assert report.migrated == 2
+    assert report.success()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CLI verbose and JSON output flags
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.unit
+def test_main_memory_json_output(tmp_memory_json: Path, capsys) -> None:
+    """CLI ``memory --json`` produces valid JSON containing report fields."""
+    pg_mock = _make_pg_memory_mock(inserted=True)
+
+    with patch("veritas_os.storage.postgresql.PostgresMemoryStore", return_value=pg_mock):
+        code = main(["memory", "--source", str(tmp_memory_json), "--json"])
+
+    assert code == 0
+    captured = capsys.readouterr()
+    parsed = json.loads(captured.out)
+    assert parsed["migrated"] == 3
+    assert parsed["dry_run"] is False
+
+
+@pytest.mark.unit
+def test_main_verbose_flag(tmp_memory_json: Path, capsys) -> None:
+    """CLI ``--verbose`` flag does not cause an error."""
+    pg_mock = _make_pg_memory_mock(inserted=True)
+
+    with patch("veritas_os.storage.postgresql.PostgresMemoryStore", return_value=pg_mock):
+        code = main(["--verbose", "memory", "--source", str(tmp_memory_json), "--dry-run"])
+
+    assert code == 0
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Resume-safety: mixed new + duplicate + failed in one run
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_migrate_memory_resume_mixed(tmp_path: Path) -> None:
+    """Simulates a re-run where some records are new, some duplicates, one fails."""
+    records = [
+        {"user_id": "alice", "key": "k1", "value": {"text": "already in pg"}},
+        {"user_id": "alice", "key": "k2", "value": {"text": "new record"}},
+        {"user_id": "bob", "key": "k3", "value": {"text": "will fail"}},
+        {"user_id": "bob", "key": "k4", "value": {"text": "also new"}},
+    ]
+    p = tmp_path / "resume_memory.json"
+    p.write_text(json.dumps(records), encoding="utf-8")
+
+    call_idx = 0
+
+    async def mixed_import(key: str, value: Any, *, user_id: str, dry_run: bool = False):
+        nonlocal call_idx
+        call_idx += 1
+        if call_idx == 1:
+            return False  # duplicate
+        if call_idx == 3:
+            raise RuntimeError("transient failure")
+        return True  # inserted
+
+    pg_mock = MagicMock()
+    pg_mock.import_record = mixed_import
+
+    with patch("veritas_os.storage.postgresql.PostgresMemoryStore", return_value=pg_mock):
+        report = await _migrate_memory(p, dry_run=False, batch_size=500)
+
+    assert report.duplicates == 1
+    assert report.migrated == 2
+    assert report.failed == 1
+    assert not report.success()
+
+
+@pytest.mark.unit
+def test_format_report_verify_pass_shown() -> None:
+    """Text report includes Verify: PASS when verify_ok is True."""
+    report = MigrationReport(
+        source="/logs/tl.jsonl",
+        migrated=100,
+        verify_ok=True,
+        verify_detail={"ok": True, "total_entries": 100},
+    )
+    text = _format_report(report, output_json=False)
+    assert "Verify:" in text
+    assert "PASS" in text
+
+
+@pytest.mark.unit
+def test_format_report_verify_fail_shown() -> None:
+    """Text report includes Verify: FAIL when verify_ok is False."""
+    report = MigrationReport(
+        source="/logs/tl.jsonl",
+        migrated=100,
+        verify_ok=False,
+        verify_detail={"ok": False, "errors": [{"reason": "sha256_prev_mismatch"}]},
+    )
+    text = _format_report(report, output_json=False)
+    assert "Verify:" in text
+    assert "FAIL" in text
+
+
+@pytest.mark.unit
+def test_format_report_errors_capped() -> None:
+    """Error list in text report is capped at 20 displayed items."""
+    report = MigrationReport(source="/logs/big.jsonl", malformed=50)
+    for i in range(50):
+        report._add_error(f"error-{i}")
+    text = _format_report(report, output_json=False)
+    # Only first 20 errors are shown in text report
+    assert "error-0" in text
+    assert "error-19" in text
+    assert "and 30 more" in text
+
+
+@pytest.mark.unit
+def test_migration_report_error_cap() -> None:
+    """MigrationReport._add_error respects the 200-entry cap."""
+    report = MigrationReport()
+    for i in range(250):
+        report._add_error(f"err-{i}")
+    assert len(report.errors) == 200
