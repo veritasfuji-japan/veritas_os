@@ -111,8 +111,9 @@ against a real PostgreSQL 16 service container.
 | **concurrent appends** | ✅ | ✅ | ✅ | |
 | **verify (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
 | **export (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
-| **migration (placeholder)** | ⬜ | ⬜ | — | Not yet implemented |
-| **import (placeholder)** | ⬜ | ⬜ | — | Not yet implemented |
+| **import (CLI)** | N/A | ✅ | — | `veritas-migrate trustlog` — idempotent, chain-preserving |
+| **import dry-run** | N/A | ✅ | — | `veritas-migrate trustlog --dry-run` — read-only validation |
+| **import verify** | N/A | ✅ | — | `veritas-migrate trustlog --verify` — post-import chain check |
 
 ### Factory & Lifecycle Coverage
 
@@ -161,8 +162,9 @@ or know which backend is active.
 | `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract tests |
 | `test-slow` | Default | Slow/heavy tests |
 | `governance-smoke` | Default | Smoke tests (Tier 1) |
-| `docker-smoke` | PostgreSQL (via compose) | Full-stack health check with real PG (Tier 2/3) |
+| `docker-smoke` | PostgreSQL (via compose) | Full-stack health + read/write with real PG (Tier 2/3) |
 | `production-tests` | Default | `pytest -m "production or smoke"` (Tier 2) |
+| `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification (Tier 3) |
 
 ### Smoke / Release Validation Path
 
@@ -173,6 +175,17 @@ whichever it is — satisfies governance invariants. In Docker Compose
 1. Schema migrations apply cleanly (`VERITAS_DB_AUTO_MIGRATE=true`)
 2. `/health` returns `storage_backends: {memory: postgresql, trustlog: postgresql}`
 3. Basic API operations succeed against a real PostgreSQL 16 instance
+4. Memory write/read operations succeed against real PostgreSQL
+5. TrustLog read path is exercised against real PostgreSQL
+
+The `postgresql-smoke` job (Tier 3) additionally verifies that
+`get_backend_info()` reports `postgresql` for both backends, catching
+silent fallback to file stores.
+
+The `veritas-migrate` CLI includes a `--verify` flag that runs a
+post-import hash-chain integrity check against the PostgreSQL backend.
+This serves as the import-specific validation step, complementing the
+API-level `/v1/trustlog/verify` endpoint.
 
 See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
 complete three-tier validation model and
@@ -183,13 +196,11 @@ for PostgreSQL-specific validation guidance.
 
 | Area | Status | Priority |
 |---|---|---|
-| **JSONL → PostgreSQL import** | Manual ETL procedure documented in production guide §11; no automated CLI | Medium |
 | **PostgreSQL → JSONL export** | No tooling; manual SQL export + reformat | Low |
-| **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` with real PG 16; mock-pool in unit tests | Medium |
+| **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` + `postgresql-smoke` with real PG 16; mock-pool in unit tests | Medium |
 | **Search scoring parity** | Covered for result IDs; exact score values may differ slightly (LIKE ANY vs. file scan) | Low |
 | **Connection pool failure recovery** | Tested in `test_storage_db.py` | — |
 | **Concurrent writes under real PostgreSQL advisory locks** | Not tested (requires real PG + threading) | Medium |
-| **Import idempotency** | Import scripts are not idempotent; partial re-import requires clean schema | Medium |
 
 ### What is parity-guaranteed
 
@@ -204,6 +215,22 @@ PostgreSQL backends based on the 195+ parity test suite:
 - Concurrent operation correctness (at mock-pool level)
 - Factory dispatch and fail-fast validation
 
+### What is covered by the import CLI
+
+The `veritas-migrate` CLI provides the following guarantees for
+file-to-PostgreSQL data migration:
+
+- **Idempotent import** — re-running produces the same final state;
+  duplicates are skipped, not errors
+- **Chain-preserving** — `sha256` / `sha256_prev` stored verbatim;
+  hash chain is never recomputed
+- **Dry-run validation** — `--dry-run` flag validates source files
+  without writing to PostgreSQL
+- **Post-import verification** — `--verify` flag runs hash-chain
+  integrity check against PostgreSQL after import
+- **Encrypted source support** — `ENC:` prefixed JSONL lines are
+  automatically decrypted during import
+
 ### What is NOT parity-guaranteed
 
 | Area | Reason |
@@ -212,7 +239,7 @@ PostgreSQL backends based on the 195+ parity test suite:
 | `iter_entries` default ordering | JSONL uses `reverse=True` internally (Note 2); PostgreSQL uses `ORDER BY id ASC` |
 | Search relevance scoring | Token-based `LIKE ANY` (PostgreSQL) vs. file-scan match (JSON) |
 | Advisory lock contention behaviour | Mock pool simulates locks; real PostgreSQL may show different timing |
-| Import/export across backends | No automated tooling; manual ETL only (see production guide §11) |
+| Export from PostgreSQL to file backends | No automated tooling; manual SQL export + reformat |
 
 ## 7. Test File Reference
 

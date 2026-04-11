@@ -34,6 +34,7 @@ and the plan for phased removal.
 | `resolve_backend_info()` | `veritas_os/api/dependency_resolver.py` | Health check backend introspection |
 | `is_file_backend()` | `veritas_os/api/dependency_resolver.py` | Predicate for backend-adaptive logic |
 | Alembic migrations | `alembic/versions/` | Schema management for PostgreSQL |
+| `veritas-migrate` CLI | `veritas_os/cli/migrate.py` | Idempotent file-to-PostgreSQL import (Memory + TrustLog) |
 
 ### Compatibility (retained for backward compat)
 
@@ -137,6 +138,7 @@ The following are **not** legacy — they are permanent parts of the architectur
 | `app.state.trust_log_store` | `veritas_os/api/lifespan.py` |
 | `get_trust_log_store(request)` | `veritas_os/api/dependency_resolver.py` |
 | Alembic マイグレーション | `alembic/versions/` |
+| `veritas-migrate` CLI | `veritas_os/cli/migrate.py`（冪等なファイル→PostgreSQL インポート） |
 
 ## 互換パス（段階的に削除予定）
 

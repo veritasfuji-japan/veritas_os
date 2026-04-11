@@ -922,10 +922,32 @@ VERITAS_DB_STATEMENT_TIMEOUT_MS=10000   # 本番推奨: 10秒
 
 ## 6. JSONL → PostgreSQL インポート
 
-- 手順は英語版 §11 を参照
-- **ドライラン**: インポート前にソース JSONL のチェーン整合性を検証
-- **順序厳守**: TrustLog エントリは元の順序で挿入すること
-- **冪等性なし**: 途中失敗時はスキーマをクリーンにして再実行
+`veritas-migrate` CLI でファイルベースデータを PostgreSQL へ安全に移行できます。
+
+```bash
+# ドライラン（読み取り専用のバリデーション）
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run
+veritas-migrate memory   --source /data/logs/memory.json      --dry-run
+
+# 本番インポート（ハッシュチェーン検証付き）
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --verify
+veritas-migrate memory   --source /data/logs/memory.json
+
+# CI パイプライン向け JSON 出力
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run --json
+```
+
+| 特性 | 説明 |
+|------|------|
+| **冪等** | 再実行しても同じ最終状態。既存エントリはスキップ（重複カウント） |
+| **フェイルソフト** | 不正なエントリはレポートに記録されるが移行を中断しない |
+| **チェーン保存** | `sha256` / `sha256_prev` は元の値のまま格納（再計算なし） |
+| **再開可能** | 部分的失敗後、同じコマンドを再実行するだけで再開 |
+| **暗号化ソース対応** | `ENC:` プレフィックス付き行は自動復号（`VERITAS_ENCRYPTION_KEY` 要設定） |
+
+終了コード: `0` = 成功、`1` = 一部失敗（malformed / failed あり）、`2` = 引数エラーまたは致命的エラー
+
+詳細は英語版 §11 を参照。
 
 ## 7. スモークテストとリリースバリデーション
 
@@ -960,13 +982,16 @@ VERITAS_DB_STATEMENT_TIMEOUT_MS=10000   # 本番推奨: 10秒
 |------|------|
 | 検索 | トークンベースの `LIKE ANY`（ベクトル類似度検索なし） |
 | リードレプリカ | アプリケーション層の読み書き分離なし |
-| データインポート | 完全自動の移行 CLI なし（手動 ETL + 検証） |
-| インポート冪等性 | 途中失敗時はクリーンスキーマからの再実行が必要 |
+| データインポート | `veritas-migrate` CLI は TrustLog 移行時にサービス停止（quiesce）が必要 |
+| 接続プールメトリクス | プールステータスが `/v1/metrics` に公開されていない |
+| マルチデータベース | MemoryOS と TrustLog を別データベースに分割不可 |
 
 ### 将来の拡張予定
 
 - **pgvector**: MemoryOS のベクトル類似度検索
-- **自動移行 CLI**: `veritas-migrate --from jsonl --to postgresql`（冪等・再開可能）
+- **オンラインマイグレーション**: Write-ahead バッファリングによるサービス無停止移行
 - **テーブルパーティショニング**: `trustlog_entries` の日付レンジパーティション
 - **CDC**: 外部監査システムへの TrustLog ストリーミング
 - **アーカイブポリシー**: 古い TrustLog エントリの自動コールドストレージ移行
+- **接続プールメトリクス**: `psycopg_pool` 統計の `/v1/metrics` / Prometheus 公開
+- **リード/ライト分離**: リードレプリカへの読み取りクエリルーティング
