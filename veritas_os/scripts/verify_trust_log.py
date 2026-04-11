@@ -130,13 +130,28 @@ def _print_human(result: dict) -> None:
     errors = result.get("detailed_errors", [])
     if not errors:
         print("  []")
+    else:
+        for error in errors:
+            print(
+                "  - "
+                f"ledger={error.get('ledger')} "
+                f"index={error.get('index')} "
+                f"reason={error.get('reason')} "
+                f"code={error.get('code')} "
+                f"tamper_suspected={error.get('tamper_suspected')}"
+            )
+    notes = result.get("verification_notes", [])
+    print("verification_notes:")
+    if not notes:
+        print("  []")
         return
-    for error in errors:
+    for note in notes:
         print(
             "  - "
-            f"ledger={error.get('ledger')} "
-            f"index={error.get('index')} "
-            f"reason={error.get('reason')}"
+            f"ledger={note.get('ledger')} "
+            f"index={note.get('index')} "
+            f"reason={note.get('reason')} "
+            f"code={note.get('code')}"
         )
 
 

@@ -128,6 +128,8 @@ def test_unified_verifier_good_path(tmp_path: Path, monkeypatch) -> None:
     assert result["linkage_ok"] is True
     assert result["mirror_ok"] is True
     assert result["invalid_entries"] == 0
+    note_codes = {note["code"] for note in result["verification_notes"]}
+    assert "legacy_entry" in note_codes
 
 
 def test_unified_verifier_broken_path(tmp_path: Path, monkeypatch) -> None:
@@ -154,10 +156,15 @@ def test_unified_verifier_broken_path(tmp_path: Path, monkeypatch) -> None:
     assert result["mirror_ok"] is False
     assert result["invalid_entries"] > 0
     reasons = {error["reason"] for error in result["detailed_errors"]}
+    codes = {error["code"] for error in result["detailed_errors"]}
     assert "previous_hash_mismatch" in reasons
     assert "signature_invalid" in reasons
     assert "full_payload_hash_invalid" in reasons
     assert "mirror_receipt_malformed" in reasons
+    assert "chain_broken" in codes
+    assert "signature_invalid" in codes
+    assert "schema_invalid" in codes
+    assert "mirror_receipt_malformed" in codes
 
 
 
@@ -358,6 +365,7 @@ def test_verify_trust_log_cli_json_output(tmp_path: Path, monkeypatch) -> None:
         "mirror_ok",
         "last_hash",
         "detailed_errors",
+        "verification_notes",
     }
     assert required.issubset(data.keys())
     assert completed.returncode == 0
@@ -418,8 +426,11 @@ def test_mirror_remote_object_missing(monkeypatch) -> None:
     monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
     client = _FakeS3Client(head_error=RuntimeError("not found"))
     result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
-    reasons = {error["reason"] for error in result["detailed_errors"]}
+    errors = result["detailed_errors"]
+    reasons = {error["reason"] for error in errors}
+    codes = {error["code"] for error in errors}
     assert "mirror_object_not_found" in reasons
+    assert "mirror_unreachable" in codes
 
 
 def test_mirror_remote_version_mismatch(monkeypatch) -> None:
@@ -427,7 +438,9 @@ def test_mirror_remote_version_mismatch(monkeypatch) -> None:
     client = _FakeS3Client(head_response={"VersionId": "v2", "ETag": '"etag-1"'})
     result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
     reasons = {error["reason"] for error in result["detailed_errors"]}
+    codes = {error["code"] for error in result["detailed_errors"]}
     assert "mirror_version_mismatch" in reasons
+    assert "tamper_suspected" in codes
 
 
 def test_mirror_remote_retention_missing_in_strict_mode(monkeypatch) -> None:
@@ -455,7 +468,9 @@ def test_mirror_receipt_missing_strict_vs_non_strict(monkeypatch) -> None:
     monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_S3_STRICT", "1")
     strict_result = verify_witness_ledger([entry], lambda _: True)
     reasons = {error["reason"] for error in strict_result["detailed_errors"]}
+    codes = {error["code"] for error in strict_result["detailed_errors"]}
     assert "mirror_receipt_missing" in reasons
+    assert "mirror_unreachable" in codes
 
 
 def test_mirror_remote_offline_mode_skips_validation(monkeypatch) -> None:
@@ -464,3 +479,59 @@ def test_mirror_remote_offline_mode_skips_validation(monkeypatch) -> None:
     result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=client)
     assert result["ok"] is True
     assert client.head_calls == 0
+
+
+def test_full_ledger_key_missing_classification(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
+    full_log = tmp_path / "trust_log.jsonl"
+    full_log.write_text("not-encrypted\n", encoding="utf-8")
+    result = verify_full_ledger(full_log)
+    codes = {error["code"] for error in result["detailed_errors"]}
+    assert "key_missing" in codes or "decrypt_failed" in codes
+
+
+def test_witness_payload_hash_mismatch_code() -> None:
+    payload = {"request_id": "r-payload"}
+    entry = {
+        "decision_payload": payload,
+        "payload_hash": "0" * 64,
+        "previous_hash": None,
+        "signature": "sig-ok",
+    }
+    result = verify_witness_ledger([entry], lambda _: True)
+    codes = {error["code"] for error in result["detailed_errors"]}
+    assert "payload_hash_mismatch" in codes
+
+
+def test_witness_unsupported_backend_code(tmp_path: Path) -> None:
+    payload = {"request_id": "r-backend"}
+    witness = [
+        {
+            "decision_payload": payload,
+            "payload_hash": sha256_of_canonical_json(payload),
+            "previous_hash": None,
+            "signature": "sig-ok",
+            "full_payload_hash": "a" * 64,
+            "artifact_ref": {
+                "artifact_ref": "trustlog_full_payload",
+                "artifact_type": "trust_log_entry",
+                "artifact_storage_backend": "unknown_backend",
+                "artifact_locator": "sha256:" + "b" * 64,
+                "artifact_hash_algorithm": "sha256_canonical_json",
+            },
+        }
+    ]
+    result = verify_witness_ledger(witness, lambda _: True, artifact_search_roots=[tmp_path])
+    codes = {error["code"] for error in result["detailed_errors"]}
+    assert "unsupported_backend" in codes
+
+
+def test_mirror_remote_verification_skipped_note(monkeypatch) -> None:
+    monkeypatch.setenv("VERITAS_TRUSTLOG_VERIFY_MIRROR_REMOTE", "1")
+    monkeypatch.setattr(
+        "veritas_os.audit.trustlog_verify.importlib.import_module",
+        lambda _: (_ for _ in ()).throw(RuntimeError("no boto3")),
+    )
+    result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=None)
+    note_codes = {note["code"] for note in result["verification_notes"]}
+    assert "verification_skipped" in note_codes

@@ -34,10 +34,91 @@ class VerificationError:
     ledger: str
     index: int
     reason: str
+    code: str
+    tamper_suspected: bool = False
 
 
 def _as_dict(error: VerificationError) -> Dict[str, Any]:
-    return {"ledger": error.ledger, "index": error.index, "reason": error.reason}
+    return {
+        "ledger": error.ledger,
+        "index": error.index,
+        "reason": error.reason,
+        "code": error.code,
+        "tamper_suspected": error.tamper_suspected,
+    }
+
+
+_REASON_CODE_MAP = {
+    "sha256_prev_mismatch": "chain_broken",
+    "previous_hash_mismatch": "chain_broken",
+    "sha256_mismatch": "tamper_suspected",
+    "signature_invalid": "signature_invalid",
+    "payload_hash_mismatch": "payload_hash_mismatch",
+    "linkage_hash_mismatch": "linkage_hash_mismatch",
+    "full_payload_hash_invalid": "schema_invalid",
+    "malformed_artifact_ref": "schema_invalid",
+    "canonicalization_failed": "schema_invalid",
+    "artifact_missing": "artifact_missing",
+    "artifact_unreadable": "artifact_missing",
+    "mirror_object_not_found": "mirror_unreachable",
+    "mirror_receipt_missing": "mirror_unreachable",
+    "mirror_version_mismatch": "tamper_suspected",
+    "mirror_etag_mismatch": "tamper_suspected",
+    "mirror_retention_missing": "tamper_suspected",
+    "mirror_legal_hold_missing": "tamper_suspected",
+    "mirror_receipt_malformed": "mirror_receipt_malformed",
+    "signer_metadata_malformed": "schema_invalid",
+    "anchor_backend_invalid": "schema_invalid",
+    "anchor_status_invalid": "schema_invalid",
+    "anchor_receipt_missing": "schema_invalid",
+    "anchor_receipt_malformed": "schema_invalid",
+    "entry_not_dict": "schema_invalid",
+    "json_decode_error": "decrypt_failed",
+    "decrypt_failed": "decrypt_failed",
+    "key_missing": "key_missing",
+    "legacy_missing_full_payload_hash": "legacy_entry",
+    "legacy_missing_signer_metadata": "legacy_entry",
+    "legacy_anchor_not_present": "legacy_entry",
+    "unsupported_artifact_backend": "unsupported_backend",
+    "verify_signature_unavailable": "signer_unavailable",
+    "mirror_remote_verification_skipped": "verification_skipped",
+}
+
+
+def _error_code(reason: str) -> str:
+    return _REASON_CODE_MAP.get(reason, "schema_invalid")
+
+
+def _is_tamper_code(code: str) -> bool:
+    return code in {
+        "tamper_suspected",
+        "chain_broken",
+        "signature_invalid",
+        "payload_hash_mismatch",
+        "linkage_hash_mismatch",
+    }
+
+
+def _make_error(ledger: str, index: int, reason: str) -> VerificationError:
+    code = _error_code(reason)
+    return VerificationError(
+        ledger=ledger,
+        index=index,
+        reason=reason,
+        code=code,
+        tamper_suspected=_is_tamper_code(code),
+    )
+
+
+def _make_note(ledger: str, index: int, reason: str) -> Dict[str, Any]:
+    code = _error_code(reason)
+    return {
+        "ledger": ledger,
+        "index": index,
+        "reason": reason,
+        "code": code,
+        "tamper_suspected": _is_tamper_code(code),
+    }
 
 
 def _canonical_entry_json(entry: Dict[str, Any]) -> str:
@@ -64,7 +145,13 @@ def _iter_full_entries(log_path: Path) -> Iterable[Dict[str, Any]]:
             try:
                 decoded = decrypt(line)
                 entry = json.loads(decoded)
-            except (json.JSONDecodeError, ValueError, EncryptionKeyMissing, DecryptionError):
+            except EncryptionKeyMissing:
+                yield {"__invalid__": True, "__index__": idx, "__reason__": "key_missing"}
+                continue
+            except DecryptionError:
+                yield {"__invalid__": True, "__index__": idx, "__reason__": "decrypt_failed"}
+                continue
+            except (json.JSONDecodeError, ValueError):
                 yield {"__invalid__": True, "__index__": idx, "__reason__": "json_decode_error"}
                 continue
             if not isinstance(entry, dict):
@@ -95,19 +182,19 @@ def verify_full_ledger(
         total_entries += 1
 
         if entry.get("__invalid__"):
-            errors.append(VerificationError("full", index, str(entry.get("__reason__", "invalid_entry"))))
+            errors.append(_make_error("full", index, str(entry.get("__reason__", "invalid_entry"))))
             continue
 
         actual_prev = entry.get("sha256_prev")
         if prev_hash is not None and actual_prev != prev_hash:
-            errors.append(VerificationError("full", index, "sha256_prev_mismatch"))
+            errors.append(_make_error("full", index, "sha256_prev_mismatch"))
             prev_hash = entry.get("sha256")
             continue
 
         expected_prev = prev_hash if prev_hash is not None else actual_prev
         expected_hash = _compute_full_entry_hash(entry, expected_prev)
         if entry.get("sha256") != expected_hash:
-            errors.append(VerificationError("full", index, "sha256_mismatch"))
+            errors.append(_make_error("full", index, "sha256_mismatch"))
             prev_hash = entry.get("sha256")
             continue
 
@@ -125,6 +212,7 @@ def verify_full_ledger(
         "mirror_ok": True,
         "last_hash": prev_hash,
         "detailed_errors": [_as_dict(err) for err in errors],
+        "verification_notes": [],
         "ok": len(errors) == 0,
     }
 
@@ -355,6 +443,7 @@ def verify_witness_ledger(
         as valid legacy rows.
     """
     errors: List[VerificationError] = []
+    notes: List[Dict[str, Any]] = []
     prev_hash: Optional[str] = None
     valid_entries = 0
     chain_ok = True
@@ -375,19 +464,23 @@ def verify_witness_ledger(
             resolved_s3_client = boto3.client("s3")
         except Exception:  # noqa: BLE001
             resolved_s3_client = None
+            notes.append(_make_note("witness", -1, "mirror_remote_verification_skipped"))
 
     for index, entry in enumerate(entries):
         payload_hash = sha256_of_canonical_json(entry.get("decision_payload", {}))
         if payload_hash != entry.get("payload_hash"):
-            errors.append(VerificationError("witness", index, "payload_hash_mismatch"))
+            errors.append(_make_error("witness", index, "payload_hash_mismatch"))
 
         if entry.get("previous_hash") != prev_hash:
             chain_ok = False
-            errors.append(VerificationError("witness", index, "previous_hash_mismatch"))
+            errors.append(_make_error("witness", index, "previous_hash_mismatch"))
 
-        if not verify_signature_fn(entry):
+        if verify_signature_fn is None:
             signature_ok = False
-            errors.append(VerificationError("witness", index, "signature_invalid"))
+            errors.append(_make_error("witness", index, "verify_signature_unavailable"))
+        elif not verify_signature_fn(entry):
+            signature_ok = False
+            errors.append(_make_error("witness", index, "signature_invalid"))
 
         linkage_result = verify_entry_artifact_linkage(
             entry,
@@ -396,11 +489,7 @@ def verify_witness_ledger(
         if not linkage_result.ok:
             linkage_ok = False
             errors.append(
-                VerificationError(
-                    "witness",
-                    index,
-                    str(linkage_result.reason or "linkage_verification_failed"),
-                )
+                _make_error("witness", index, str(linkage_result.reason or "linkage_verification_failed"))
             )
 
         mirror_error = _verify_mirror_receipt(
@@ -413,15 +502,22 @@ def verify_witness_ledger(
         )
         if mirror_error:
             mirror_ok = False
-            errors.append(VerificationError("witness", index, mirror_error))
+            errors.append(_make_error("witness", index, mirror_error))
 
         signer_meta_error = _verify_signer_metadata(entry)
         if signer_meta_error:
-            errors.append(VerificationError("witness", index, signer_meta_error))
+            errors.append(_make_error("witness", index, signer_meta_error))
+        elif "signer_metadata" not in entry:
+            notes.append(_make_note("witness", index, "legacy_missing_signer_metadata"))
 
         anchor_error = _verify_anchor_receipt(entry)
         if anchor_error:
-            errors.append(VerificationError("witness", index, anchor_error))
+            errors.append(_make_error("witness", index, anchor_error))
+        elif all(key not in entry for key in ("anchor_backend", "anchor_status", "anchor_receipt")):
+            notes.append(_make_note("witness", index, "legacy_anchor_not_present"))
+
+        if "full_payload_hash" not in entry:
+            notes.append(_make_note("witness", index, "legacy_missing_full_payload_hash"))
 
         if not any(err.index == index and err.ledger == "witness" for err in errors):
             valid_entries += 1
@@ -439,6 +535,7 @@ def verify_witness_ledger(
         "mirror_ok": mirror_ok,
         "last_hash": prev_hash,
         "detailed_errors": [_as_dict(err) for err in errors],
+        "verification_notes": notes,
         "ok": len(errors) == 0,
     }
 
@@ -472,6 +569,7 @@ def verify_trustlogs(
         "mirror_ok": witness["mirror_ok"],
         "last_hash": last_hash,
         "detailed_errors": full["detailed_errors"] + witness["detailed_errors"],
+        "verification_notes": full.get("verification_notes", []) + witness.get("verification_notes", []),
         "full_ledger": full,
         "witness_ledger": witness,
         "ok": full["ok"] and witness["ok"],

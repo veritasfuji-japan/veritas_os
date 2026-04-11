@@ -183,7 +183,7 @@ def _resolve_payload_for_entry(
                 return None
             return payload
 
-        raise ValueError("malformed_artifact_ref")
+        raise ValueError("unsupported_artifact_backend")
 
     # Legacy fallback: recover from full ledger by sha256/request_id, then decide files.
     payload = _resolve_via_full_ledger(
