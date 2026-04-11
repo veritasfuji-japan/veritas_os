@@ -393,8 +393,8 @@ veritas_os/                  ← Monorepo root
 
 VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLog persistence.
 
-| Backend | MemoryOS | TrustLog | Default (CLI) | Default (Compose) | Use case |
-|---------|----------|----------|:-------------:|:-----------------:|----------|
+| Backend | MemoryOS | TrustLog | Default (local/CLI) | Default (Docker Compose) | Use case |
+|---------|----------|----------|:-------------------:|:------------------------:|----------|
 | **JSON / JSONL** (file-based) | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ Yes | — | Single-process dev, demo, air-gapped |
 | **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | ✅ Yes | Multi-worker production, durable audit |
 

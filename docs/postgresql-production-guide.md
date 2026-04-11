@@ -611,7 +611,7 @@ alembic downgrade -1        # undo the partial migration
 # 3. Re-run
 make db-upgrade
 
-# 4. If downgrade also fails, restore from backup (§8) and re-apply
+# 4. If downgrade also fails, restore from backup (see Backup and Restore, §8) and re-apply
 ```
 
 Alembic tracks each revision atomically — a migration either fully applies
