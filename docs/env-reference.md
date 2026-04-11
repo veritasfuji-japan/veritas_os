@@ -1,7 +1,8 @@
 # Environment Variable Reference
 
-> **Last updated**: 2026-03-28  
-> **Source of truth**: `veritas_os/core/config.py`, individual modules
+> **Last updated**: 2026-04-11  
+> **Source of truth**: `veritas_os/core/config.py`, individual modules  
+> **See also**: [`docs/postgresql-production-guide.md`](postgresql-production-guide.md) for PostgreSQL-specific production guidance
 
 All environment variables used by Veritas OS, grouped by category.
 Variables prefixed with `VERITAS_` are project-specific.

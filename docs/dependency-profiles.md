@@ -18,6 +18,7 @@ keeping full backward compatibility via the `[full]` extra.
 | **+ Reports** | `pip install ".[reports]"` | Adds matplotlib, pandas, PDF tooling for report generation. |
 | **+ Anthropic** | `pip install ".[anthropic]"` | Adds the Anthropic SDK for Claude LLM support. |
 | **+ System** | `pip install ".[system]"` | Adds psutil, trio, pinned starlette for system monitoring scripts. |
+| **+ PostgreSQL** | `pip install ".[postgresql]"` | Adds psycopg 3, psycopg-pool, Alembic for PostgreSQL storage backend. |
 | **Full** | `pip install ".[full]"` | All optional groups. Equivalent to the old flat install. |
 | **requirements.txt** | `pip install -r veritas_os/requirements.txt` | Full pinned list — CI and Docker default. |
 

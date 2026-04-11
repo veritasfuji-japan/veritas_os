@@ -374,8 +374,10 @@ docker compose down
 |------|--------|------------|
 | Live LLM API validation | **Gated** — `scripts/live_provider_validation.sh` | Requires OPENAI_API_KEY; runs in Tier 3 / manual |
 | Full Docker compose E2E | **Validated** — `scripts/compose_validation.sh` | Governance endpoints, security headers, auth enforcement |
-| Database persistence | N/A (file-based) | TrustLog file tests cover persistence |
-| Multi-node clustering | Not applicable | Single-node architecture |
+| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` CI job | See `docs/BACKEND_PARITY_COVERAGE.md` for 195+ parity tests |
+| Database persistence (JSONL) | **Covered** — TrustLog file tests | File-based persistence fully tested |
+| PostgreSQL schema migrations | **Covered** — Alembic migrations tested in `test-postgresql` CI job | Forward + rollback paths tested |
+| Multi-node clustering | Not applicable | Single-node architecture; PgBouncer recommended for high-concurrency |
 | TLS certificate chain/e2e HTTPS handshake | **Gated** — staging cert expiry checked | `@external` staging HTTPS tests + cert expiry validation |
 | Load/stress at scale (p95/p99 latency SLO) | **Partially covered** — latency budgets enforced | p95 budgets on health (200ms), governance (500ms), burst (1000ms) |
 | Kubernetes deployment | Not covered | Add Helm chart tests when K8s support added |

@@ -112,7 +112,27 @@ This document provides a comprehensive security checklist for hardening Veritas 
 
 ---
 
-## 10. Pre-Deployment Verification
+## 10. PostgreSQL Backend
+
+| Item | Action | Priority |
+|------|--------|----------|
+| Set `VERITAS_DB_SSLMODE=verify-full` | Full certificate chain + hostname verification for database connections. | **CRITICAL** |
+| Use external secret manager for `VERITAS_DATABASE_URL` | Database credentials must not be stored in `.env` files, `docker-compose.yml`, or source control in production. | **CRITICAL** |
+| Disable `SUPERUSER` for application role | The PostgreSQL role used by VERITAS should have only `INSERT`, `SELECT`, `UPDATE`, `DELETE` on managed tables. | **CRITICAL** |
+| Restrict `pg_hba.conf` | Limit database access to application server IPs only. | **CRITICAL** |
+| Set `password_encryption = scram-sha-256` | Use SCRAM-SHA-256 over MD5 for password hashing. | HIGH |
+| Set `idle_in_transaction_session_timeout` | Kill leaked transactions that the application fails to close (recommend `60s`). | HIGH |
+| Set `VERITAS_DB_STATEMENT_TIMEOUT_MS` ≤ `10000` | Prevent runaway queries from holding advisory locks. | HIGH |
+| Set `VERITAS_DB_AUTO_MIGRATE=false` | Run migrations as a discrete deployment step, not on application startup. | HIGH |
+| Enable `log_min_duration_statement` | Log slow queries (recommend `500` ms) for performance monitoring. | MEDIUM |
+| Enable `pg_stat_statements` | Query performance analytics. | MEDIUM |
+| Disable unused PostgreSQL extensions | Reduce attack surface. | LOW |
+
+> See [`docs/postgresql-production-guide.md`](postgresql-production-guide.md) for the full PostgreSQL production guide.
+
+---
+
+## 11. Pre-Deployment Verification
 
 ```bash
 # Run production validation (requires running services)

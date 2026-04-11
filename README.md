@@ -104,6 +104,9 @@ VERITAS OS is built to solve that layer.
 - **User Manual (JP)**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security Policy**: [`SECURITY.md`](SECURITY.md)
+- **PostgreSQL Production Guide**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
+- **Security Hardening**: [`docs/security-hardening.md`](docs/security-hardening.md)
+- **Database Migrations**: [`docs/database-migrations.md`](docs/database-migrations.md)
 - **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - **Documentation Hub (EN)**: `docs/en/README.md`
 - **Documentation Hub (JA)**: `docs/ja/README.md`
@@ -371,6 +374,48 @@ veritas_os/                  ← Monorepo root
 ├── Makefile                 ← Dev/test/deploy commands
 └── pyproject.toml           ← Python project config
 ```
+
+---
+
+## 💾 Storage Backends
+
+VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLog persistence.
+
+| Backend | MemoryOS | TrustLog | Default | Use case |
+|---------|----------|----------|---------|----------|
+| **JSON / JSONL** (file-based) | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ Yes | Single-process dev, demo, air-gapped |
+| **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | Multi-worker production, durable audit |
+
+### Quick switch
+
+```bash
+# Use PostgreSQL for both backends
+VERITAS_MEMORY_BACKEND=postgresql
+VERITAS_TRUSTLOG_BACKEND=postgresql
+VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+
+# Apply schema
+make db-upgrade
+```
+
+### Key features of the PostgreSQL backend
+
+- **Alembic-managed schema** — reproducible migrations with `upgrade` / `downgrade` paths.
+- **Advisory-lock chain serialization** — TrustLog hash-chain integrity guaranteed under concurrent writes via `pg_advisory_xact_lock`.
+- **JSONB storage** — queryable payloads with GIN indexes.
+- **Full parity test suite** — 195+ tests verify identical semantics across backends.
+- **psycopg 3** — modern async PostgreSQL driver with connection pooling (`psycopg-pool`).
+
+### Production deployment
+
+See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) for:
+- Pool sizing, SSL/TLS, statement timeout configuration
+- Backup/restore, replication/HA guidance
+- JSONL → PostgreSQL migration path
+- Secure/prod posture recommended settings
+- Known limitations and future work (pgvector, partitioning, CDC)
+
+See also: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
 
 ---
 
@@ -1207,11 +1252,12 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Security hardening: input validation, secret/log hygiene, runtime posture system
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
+- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier
 - Automatic coverage badge update from CI artifacts
-- PostgreSQL storage backend (currently JSONL-only in production)
+- pgvector integration for MemoryOS vector similarity search
 - Phased move from mono-repo licensing (Plan B) to multi-repo split (Plan A)
 - Continuation Runtime Phase-2 enforcement graduation from advisory to enforce-by-default in secure/prod posture
 
