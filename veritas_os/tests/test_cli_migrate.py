@@ -653,8 +653,9 @@ async def test_verify_pg_chain_empty_db() -> None:
     """Empty trustlog_entries table → ok=True, total=0."""
 
     async def empty_iter(limit: int = 100, offset: int = 0) -> AsyncIterator[Dict]:
-        return
-        yield  # make it a generator
+        # Empty async generator — yields nothing.
+        if False:  # pragma: no cover
+            yield {}
 
     pg_mock = MagicMock()
     pg_mock.iter_entries = empty_iter

@@ -95,8 +95,8 @@ class MigrationReport:
     verify_detail: Optional[Dict[str, Any]] = None
     errors: List[str] = field(default_factory=list)
 
-    # Maximum number of individual error messages retained in the report.
-    _MAX_ERRORS: int = field(default=200, init=False, repr=False, compare=False)
+    # Maximum number of individual error messages retained per report.
+    _MAX_ERRORS: int = 200
 
     def total_processed(self) -> int:
         """Total entries encountered in the source file."""
@@ -225,7 +225,7 @@ async def _migrate_memory(
     # ── Load source JSON directly for per-record error isolation ──────────
     try:
         with source_path.open("r", encoding="utf-8") as fh:
-            raw = json.load(fh)
+            raw_json: Any = json.load(fh)
     except (json.JSONDecodeError, OSError) as exc:
         logger.error("Failed to load memory source %s: %s", source_path, exc)
         report._add_error(f"load_error: {exc}")
@@ -233,11 +233,11 @@ async def _migrate_memory(
         return report
 
     # Normalise to a flat list of record dicts.
-    if isinstance(raw, list):
-        records: Any = raw
-    elif isinstance(raw, dict) and "users" in raw:
+    if isinstance(raw_json, list):
+        records: List[Any] = raw_json
+    elif isinstance(raw_json, dict) and "users" in raw_json:
         # Legacy dict format: {"users": {"user_id": {"key": value, ...}}}
-        users = raw.get("users") or {}
+        users = raw_json.get("users") or {}
         flat: List[Dict[str, Any]] = []
         if isinstance(users, dict):
             import time as _time  # noqa: PLC0415
@@ -254,11 +254,11 @@ async def _migrate_memory(
                             }
                         )
         records = flat
-    elif isinstance(raw, dict) and "items" in raw:
+    elif isinstance(raw_json, dict) and "items" in raw_json:
         # Alternate format: {"items": [...]}
-        records = raw.get("items") or []
+        records = raw_json.get("items") or []
     else:
-        report._add_error(f"unrecognised source format: {type(raw).__name__}")
+        report._add_error(f"unrecognised source format: {type(raw_json).__name__}")
         report.failed += 1
         return report
 

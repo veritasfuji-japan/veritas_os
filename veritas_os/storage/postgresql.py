@@ -610,8 +610,6 @@ class PostgresMemoryStore(_PostgresBase):
             if dry_run:
                 return True  # would be inserted
 
-            from psycopg.types.json import Jsonb  # noqa: PLC0415
-
             async with conn.transaction():
                 cur = await conn.execute(
                     """
@@ -622,7 +620,7 @@ class PostgresMemoryStore(_PostgresBase):
                     DO NOTHING
                     RETURNING id
                     """,
-                    (key, user_id, Jsonb(value)),
+                    (key, user_id, _jsonb_wrap(value)),
                 )
                 row = await cur.fetchone()
                 return row is not None  # True if inserted, False if race-condition duplicate
