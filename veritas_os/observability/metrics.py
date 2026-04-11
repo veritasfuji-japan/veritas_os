@@ -7,6 +7,7 @@ keeping runtime compatibility for environments without observability extras.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,56 @@ VERITAS_HTTP_REQUESTS_TOTAL = _counter(
     labelnames=("method", "path", "status_code"),
 )
 
+TRUSTLOG_APPEND_SUCCESS_TOTAL = _counter(
+    "trustlog_append_success_total",
+    "Total successful TrustLog append operations",
+    labelnames=("posture",),
+)
+TRUSTLOG_APPEND_FAILURE_TOTAL = _counter(
+    "trustlog_append_failure_total",
+    "Total failed TrustLog append operations",
+    labelnames=("posture", "reason"),
+)
+TRUSTLOG_SIGN_FAILURE_TOTAL = _counter(
+    "trustlog_sign_failure_total",
+    "Total signing failures while appending TrustLog witness entries",
+    labelnames=("signer_backend", "reason"),
+)
+TRUSTLOG_MIRROR_FAILURE_TOTAL = _counter(
+    "trustlog_mirror_failure_total",
+    "Total TrustLog mirror write failures",
+    labelnames=("backend", "reason"),
+)
+TRUSTLOG_ANCHOR_FAILURE_TOTAL = _counter(
+    "trustlog_anchor_failure_total",
+    "Total TrustLog transparency anchor failures",
+    labelnames=("backend", "reason"),
+)
+TRUSTLOG_VERIFY_FAILURE_TOTAL = _counter(
+    "trustlog_verify_failure_total",
+    "Total TrustLog verification failures",
+    labelnames=("ledger", "reason"),
+)
+TRUSTLOG_LAST_SUCCESS_TIMESTAMP = _gauge(
+    "trustlog_last_success_timestamp",
+    "Unix timestamp of the latest successful TrustLog append",
+)
+TRUSTLOG_ANCHOR_LAG_SECONDS = _gauge(
+    "trustlog_anchor_lag_seconds",
+    "Lag between local anchor time and external transparency timestamp",
+    labelnames=("backend",),
+)
+TRUSTLOG_MIRROR_LATENCY_SECONDS = _histogram(
+    "trustlog_mirror_latency_seconds",
+    "Latency of TrustLog mirror operations",
+    labelnames=("backend",),
+)
+TRUSTLOG_SIGN_LATENCY_SECONDS = _histogram(
+    "trustlog_sign_latency_seconds",
+    "Latency of TrustLog signing operations",
+    labelnames=("signer_backend",),
+)
+
 
 def _label(value: Any, fallback: str = "unknown") -> str:
     text = str(value).strip() if value is not None else ""
@@ -206,4 +257,76 @@ def record_http_request(method: str, path: str, status_code: int, duration_secon
         method=method_label,
         path=path_label,
         status_code=code_label,
+    ).inc()
+
+
+def _now_unix_timestamp() -> float:
+    return datetime.now(timezone.utc).timestamp()
+
+
+def _posture_label() -> str:
+    try:
+        from veritas_os.core.posture import get_active_posture
+
+        return _label(get_active_posture().value)
+    except Exception:
+        return "unknown"
+
+
+def record_trustlog_append_success() -> None:
+    posture = _posture_label()
+    TRUSTLOG_APPEND_SUCCESS_TOTAL.labels(posture=posture).inc()
+    TRUSTLOG_LAST_SUCCESS_TIMESTAMP.set(_now_unix_timestamp())
+
+
+def record_trustlog_append_failure(reason: Any) -> None:
+    TRUSTLOG_APPEND_FAILURE_TOTAL.labels(
+        posture=_posture_label(),
+        reason=_label(reason, "unknown_error"),
+    ).inc()
+
+
+def observe_trustlog_sign_latency(signer_backend: Any, duration_seconds: float) -> None:
+    TRUSTLOG_SIGN_LATENCY_SECONDS.labels(
+        signer_backend=_label(signer_backend, "unknown"),
+    ).observe(max(0.0, duration_seconds))
+
+
+def record_trustlog_sign_failure(signer_backend: Any, reason: Any) -> None:
+    TRUSTLOG_SIGN_FAILURE_TOTAL.labels(
+        signer_backend=_label(signer_backend, "unknown"),
+        reason=_label(reason, "unknown_error"),
+    ).inc()
+
+
+def observe_trustlog_mirror_latency(backend: Any, duration_seconds: float) -> None:
+    TRUSTLOG_MIRROR_LATENCY_SECONDS.labels(
+        backend=_label(backend, "unknown"),
+    ).observe(max(0.0, duration_seconds))
+
+
+def record_trustlog_mirror_failure(backend: Any, reason: Any) -> None:
+    TRUSTLOG_MIRROR_FAILURE_TOTAL.labels(
+        backend=_label(backend, "unknown"),
+        reason=_label(reason, "unknown_error"),
+    ).inc()
+
+
+def record_trustlog_anchor_failure(backend: Any, reason: Any) -> None:
+    TRUSTLOG_ANCHOR_FAILURE_TOTAL.labels(
+        backend=_label(backend, "unknown"),
+        reason=_label(reason, "unknown_error"),
+    ).inc()
+
+
+def set_trustlog_anchor_lag_seconds(backend: Any, lag_seconds: float) -> None:
+    TRUSTLOG_ANCHOR_LAG_SECONDS.labels(
+        backend=_label(backend, "unknown"),
+    ).set(max(0.0, lag_seconds))
+
+
+def record_trustlog_verify_failure(ledger: Any, reason: Any) -> None:
+    TRUSTLOG_VERIFY_FAILURE_TOTAL.labels(
+        ledger=_label(ledger, "unknown"),
+        reason=_label(reason, "unknown_error"),
     ).inc()
