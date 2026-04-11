@@ -35,6 +35,7 @@ EXPECTED_EXTRAS = {
     "system",
     "observability",
     "signing",
+    "postgresql",
     "dev",
     "full",
 }

@@ -66,6 +66,7 @@ scripts/logs/
 runtime/**/*
 !runtime/**/.gitkeep
 storage/
+!veritas_os/storage/
 cache/
 *.log
 *.csv
