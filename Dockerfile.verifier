@@ -1,0 +1,37 @@
+# VERITAS TrustLog Standalone Verifier
+# Minimal Docker image for third-party auditors to verify TrustLog evidence.
+#
+# Build:
+#   docker build -f Dockerfile.verifier -t veritas-trustlog-verifier .
+#
+# Usage:
+#   docker run --rm -v /path/to/evidence:/evidence veritas-trustlog-verifier \
+#     --witness-ledger /evidence/trustlog.jsonl \
+#     --public-key /evidence/keys/trustlog_ed25519_public.key \
+#     --json
+
+FROM python:3.12-slim AS builder
+
+WORKDIR /build
+COPY pyproject.toml .
+COPY veritas_os/ veritas_os/
+
+RUN pip install --no-cache-dir ".[signing]"
+
+FROM python:3.12-slim
+
+LABEL org.opencontainers.image.title="VERITAS TrustLog Verifier"
+LABEL org.opencontainers.image.description="Standalone verifier for VERITAS TrustLog audit evidence"
+LABEL org.opencontainers.image.vendor="VERITAS OS"
+
+RUN addgroup --system verifier && adduser --system --ingroup verifier verifier
+
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/bin/veritas-trustlog-verify /usr/local/bin/veritas-trustlog-verify
+COPY --from=builder /build/veritas_os /app/veritas_os
+
+WORKDIR /app
+USER verifier
+
+ENTRYPOINT ["veritas-trustlog-verify"]
+CMD ["--help"]

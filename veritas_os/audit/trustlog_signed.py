@@ -113,6 +113,8 @@ def _transparency_anchor_backend() -> str:
         return "local"
     if raw in {"none", "noop", "no_op"}:
         return "noop"
+    if raw == "tsa":
+        return "tsa"
     return raw
 
 
@@ -236,7 +238,7 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
     backend = _transparency_anchor_backend()
     if backend == "noop":
         return {"configured": True, "ok": True, "backend": "noop", "path": None}
-    if backend != "local":
+    if backend not in {"local", "tsa"}:
         return {
             "configured": True,
             "ok": False,
@@ -244,7 +246,7 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
             "path": None,
             "error": (
                 "ValueError: Unsupported VERITAS_TRUSTLOG_ANCHOR_BACKEND. "
-                "Expected 'local' or 'noop'."
+                "Expected 'local', 'noop', or 'tsa'."
             ),
         }
 
@@ -381,9 +383,12 @@ def _build_anchor_backend() -> AnchorBackend:
         return LocalTransparencySpool(spool_path=_transparency_log_path())
     if backend_name == "noop":
         return NoOpAnchor()
+    if backend_name == "tsa":
+        from veritas_os.audit.anchor_backends import build_tsa_anchor_backend
+        return build_tsa_anchor_backend()
     raise ValueError(
         "Unsupported VERITAS_TRUSTLOG_ANCHOR_BACKEND. "
-        "Expected 'local' or 'noop'."
+        "Expected 'local', 'noop', or 'tsa'."
     )
 
 

@@ -85,6 +85,9 @@ dev = [
   "httpx==0.27.2",
 ]
 
+[project.scripts]
+veritas-trustlog-verify = "veritas_os.cli.verify_trustlog:main"
+
 [project.urls]
 Homepage = "https://github.com/veritasfuji-japan/veritas_os"
 Repository = "https://github.com/veritasfuji-japan/veritas_os"
