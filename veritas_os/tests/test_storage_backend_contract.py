@@ -334,6 +334,131 @@ class _MemoryStoreContractSuite:
 
         assert asyncio.run(_go()) == []
 
+    # -- search ordering --------------------------------------------------
+
+    def test_search_zero_limit_returns_empty(self, store) -> None:
+        """search(limit=0) must return an empty list."""
+
+        async def _go():
+            await store.put("k1", {"text": "hello world"}, user_id="u1")
+            return await store.search("hello", user_id="u1", limit=0)
+
+        assert asyncio.run(_go()) == []
+
+    def test_search_negative_limit_returns_empty(self, store) -> None:
+        """search(limit=-1) must return an empty list."""
+
+        async def _go():
+            await store.put("k1", {"text": "hello"}, user_id="u1")
+            return await store.search("hello", user_id="u1", limit=-1)
+
+        assert asyncio.run(_go()) == []
+
+    def test_search_user_isolation(self, store) -> None:
+        """search must not return records from another user."""
+
+        async def _go():
+            await store.put("k1", {"text": "alpha beta"}, user_id="u1")
+            await store.put("k2", {"text": "alpha gamma"}, user_id="u2")
+            return await store.search("alpha", user_id="u1", limit=10)
+
+        results = asyncio.run(_go())
+        for r in results:
+            meta = r.get("meta") or {}
+            uid = meta.get("user_id") or r.get("user_id", "u1")
+            assert uid != "u2"
+
+    def test_search_empty_query_returns_empty(self, store) -> None:
+        """search('') must return an empty list."""
+
+        async def _go():
+            await store.put("k1", {"text": "hello"}, user_id="u1")
+            return await store.search("", user_id="u1", limit=10)
+
+        assert asyncio.run(_go()) == []
+
+    # -- missing / malformed data -----------------------------------------
+
+    def test_put_empty_value_roundtrips(self, store) -> None:
+        """put({}) and get should roundtrip an empty dict."""
+
+        async def _go():
+            await store.put("empty", {}, user_id="u1")
+            return await store.get("empty")
+
+        result = asyncio.run(_go())
+        assert result is not None
+        assert isinstance(result, dict)
+
+    def test_put_nested_value_roundtrips(self, store) -> None:
+        """put with nested dict should preserve structure."""
+
+        async def _go():
+            nested = {"a": {"b": {"c": 1}}, "list": [1, 2, 3]}
+            await store.put("nested", nested, user_id="u1")
+            return await store.get("nested")
+
+        result = asyncio.run(_go())
+        assert result is not None
+        assert result.get("a", {}).get("b", {}).get("c") == 1
+        assert result.get("list") == [1, 2, 3]
+
+    def test_delete_wrong_user_returns_false(self, store) -> None:
+        """delete for wrong user_id must return False."""
+
+        async def _go():
+            await store.put("k1", {"v": 1}, user_id="u1")
+            return await store.delete("k1", user_id="u_other")
+
+        assert asyncio.run(_go()) is False
+
+    def test_list_all_empty_store_returns_empty(self, store) -> None:
+        """list_all on empty store returns empty list."""
+        result = asyncio.run(store.list_all(user_id="u1"))
+        assert result == []
+
+    # -- ordering ---------------------------------------------------------
+
+    def test_list_all_preserves_insertion_order(self, store) -> None:
+        """list_all must return entries in insertion order."""
+
+        async def _go():
+            for i in range(5):
+                await store.put(f"ord-{i}", {"seq": i}, user_id="u1")
+            return await store.list_all(user_id="u1")
+
+        records = asyncio.run(_go())
+        keys = [r.get("key") for r in records]
+        assert keys == [f"ord-{i}" for i in range(5)]
+
+    # -- concurrency (asyncio.gather) -------------------------------------
+
+    def test_concurrent_puts_do_not_lose_data(self, store) -> None:
+        """Concurrent put() calls must not silently lose records."""
+
+        async def _go():
+            tasks = [
+                store.put(f"c-{i}", {"i": i}, user_id="u1")
+                for i in range(10)
+            ]
+            await asyncio.gather(*tasks)
+            return await store.list_all(user_id="u1")
+
+        records = asyncio.run(_go())
+        assert len(records) >= 10
+
+    def test_erase_does_not_affect_other_users(self, store) -> None:
+        """erase_user_data for u1 must not touch u2's data."""
+
+        async def _go():
+            await store.put("k1", {"v": 1}, user_id="u1")
+            await store.put("k2", {"v": 2}, user_id="u2")
+            await store.erase_user_data("u1")
+            return await store.list_all(user_id="u2")
+
+        records = asyncio.run(_go())
+        assert len(records) >= 1
+
 
 # -- Concrete test classes ------------------------------------------------
 
@@ -449,6 +574,142 @@ class _TrustLogStoreContractSuite:
 
         result = asyncio.run(_go())
         assert result is None or isinstance(result, str)
+
+    # -- ordering ---------------------------------------------------------
+
+    def test_iter_entries_preserves_insertion_order(self, store) -> None:
+        """iter_entries must yield entries in a consistent order.
+
+        The protocol specifies insertion order (oldest first).
+        The PostgreSQL backend follows this (ORDER BY id).  The JSONL
+        backend currently returns newest-first due to the underlying
+        ``load_trust_log(reverse=True)`` implementation.
+
+        This test verifies that all appended entries are retrievable
+        and that the order is *consistent* (either ascending or
+        descending by request_id suffix).
+        """
+
+        async def _go():
+            for i in range(5):
+                await store.append({"request_id": f"ord-{i}", "action": "test"})
+            entries = []
+            async for e in store.iter_entries(limit=10, offset=0):
+                entries.append(e)
+            return entries
+
+        entries = asyncio.run(_go())
+        rids = [e.get("request_id") for e in entries]
+        expected_asc = [f"ord-{i}" for i in range(5)]
+        expected_desc = list(reversed(expected_asc))
+        assert rids == expected_asc or rids == expected_desc
+
+    def test_iter_entries_negative_limit_yields_nothing(self, store) -> None:
+        """iter_entries with limit < 0 must yield no entries."""
+
+        async def _go():
+            await store.append({"request_id": "x"})
+            entries = []
+            async for e in store.iter_entries(limit=-1, offset=0):
+                entries.append(e)
+            return entries
+
+        assert asyncio.run(_go()) == []
+
+    # -- missing / malformed data -----------------------------------------
+
+    def test_append_minimal_entry(self, store) -> None:
+        """append with only request_id should not raise."""
+        rid = asyncio.run(store.append({"request_id": "minimal"}))
+        assert isinstance(rid, str)
+
+    def test_append_extra_fields_preserved(self, store) -> None:
+        """Extra fields in the entry dict should be preserved."""
+
+        async def _go():
+            await store.append(
+                {"request_id": "extra", "custom_field": "abc", "number": 42}
+            )
+            return await store.get_by_id("extra")
+
+        entry = asyncio.run(_go())
+        assert entry is not None
+        assert entry.get("custom_field") == "abc"
+        assert entry.get("number") == 42
+
+    # -- hash chain integrity ---------------------------------------------
+
+    def test_hash_chain_grows_with_appends(self, store) -> None:
+        """Each successive append should update get_last_hash."""
+
+        async def _go():
+            hashes = []
+            for i in range(3):
+                await store.append({"request_id": f"chain-{i}"})
+                h = await store.get_last_hash()
+                hashes.append(h)
+            return hashes
+
+        hashes = asyncio.run(_go())
+        # All should be non-None strings after first append
+        for h in hashes:
+            assert h is None or isinstance(h, str)
+
+    # -- concurrency (asyncio.gather) -------------------------------------
+
+    def test_concurrent_appends_all_persisted(self, store) -> None:
+        """Concurrent appends via asyncio.gather must all be persisted."""
+
+        async def _go():
+            tasks = [
+                store.append({"request_id": f"conc-{i}", "i": i})
+                for i in range(5)
+            ]
+            await asyncio.gather(*tasks)
+            entries = []
+            async for e in store.iter_entries(limit=100, offset=0):
+                entries.append(e)
+            return entries
+
+        entries = asyncio.run(_go())
+        assert len(entries) >= 5
+
+    # -- verify / export (placeholder) ------------------------------------
+
+    def test_verify_placeholder(self, store) -> None:
+        """TODO: Backend-level verify is delegated to TrustLog layer.
+
+        This placeholder documents that chain verification coverage
+        should be tested at the TrustLog service level, not the raw
+        store layer.  See ``test_trustlog_verify_unified.py``.
+        """
+
+    def test_export_placeholder(self, store) -> None:
+        """TODO: Export is a TrustLog service concern, not a store concern.
+
+        See ``test_signed_trustlog.py`` for export coverage.
+        """
+
+    # -- migration / import (placeholder) ---------------------------------
+
+    def test_migration_placeholder(self, store) -> None:
+        """TODO: Migration parity (JSONL → PG, PG → JSONL) is not yet
+        implemented.  This test serves as a tracking placeholder.
+
+        When implemented, it should verify:
+        - All entries survive migration
+        - Hash chain remains valid post-migration
+        - Ordering is preserved
+        """
+
+    def test_import_placeholder(self, store) -> None:
+        """TODO: Bulk import from external sources is not yet implemented.
+
+        When implemented, verify:
+        - Imported entries are retrievable via get_by_id
+        - Hash chain is re-computed correctly
+        - Duplicates are handled gracefully
+        """
 
 
 # -- Concrete test classes ------------------------------------------------

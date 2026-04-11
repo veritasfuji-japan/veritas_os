@@ -317,6 +317,92 @@ jobs:
       # the job directly (continue-on-error removed).
 
 
+  # ============================================================
+  # [Tier 1] PostgreSQL backend parity tests
+  #
+  # Validates that JSONL ↔ PostgreSQL backends are interchangeable
+  # by running the backend contract and parity matrix tests against
+  # a real PostgreSQL service container.
+  # ============================================================
+  test-postgresql:
+    name: test-postgresql (py3.12)
+    needs: [lint, dependency-audit, governance-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_PYTHON_VERSION_WARNING: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql://veritas:veritas_test@localhost:5432/veritas_test"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool
+          python -m pip install httpx anyio pytest pytest-cov pytest-asyncio
+
+      - name: Run Alembic migrations
+        run: |
+          set -euxo pipefail
+          pip install alembic
+          alembic upgrade head
+        env:
+          VERITAS_DATABASE_URL: "postgresql://veritas:veritas_test@localhost:5432/veritas_test"
+
+      - name: Run backend parity tests (mock-pool)
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_storage_backend_contract.py \
+            veritas_os/tests/test_storage_backend_parity_matrix.py \
+            veritas_os/tests/test_storage_postgresql_memory.py \
+            veritas_os/tests/test_storage_postgresql_trustlog.py \
+            veritas_os/tests/test_storage_factory.py \
+            veritas_os/tests/test_storage_base.py \
+            veritas_os/tests/test_storage_db.py \
+            --tb=short \
+            --junitxml=test-reports/postgresql-parity.xml
+
+      - name: Upload PostgreSQL parity test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgresql-parity-report-${{ github.run_id }}
+          path: test-reports/postgresql-parity.xml
+          if-no-files-found: warn
+
+
   test-slow:
     name: test-slow (py3.12)
     needs: [lint, dependency-audit, governance-smoke]
