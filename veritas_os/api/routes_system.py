@@ -467,7 +467,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
     backend_info = get_backend_info()
-    is_file_tl = backend_info.get("trustlog") != "postgresql"
+    is_file_trustlog = backend_info.get("trustlog") != "postgresql"
     shadow_dir = srv._effective_shadow_dir()
     _, log_json, log_jsonl = srv._effective_log_paths()
 
@@ -476,7 +476,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     # and file-based aggregate JSON / JSONL counts are not authoritative.
     trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
     trust_json_result = None
-    if is_file_tl and trust_log_runtime is not None:
+    if is_file_trustlog and trust_log_runtime is not None:
         trust_log_runtime.effective_log_paths = srv._effective_log_paths
         trust_json_result = trust_log_runtime.load_logs_json_result(log_json)
 
@@ -493,7 +493,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     # JSONL line count: skip when backend=postgresql (not the source of
     # truth for persistence — avoids misleading operators).
     lines = 0
-    if is_file_tl:
+    if is_file_trustlog:
         try:
             if log_jsonl.exists():
                 with open(log_jsonl, encoding="utf-8") as f:

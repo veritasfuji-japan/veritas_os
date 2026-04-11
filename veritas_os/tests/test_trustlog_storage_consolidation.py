@@ -7,8 +7,11 @@ Validates that:
 4. app lifespan / DI integration
 5. Legacy fallback regression
 6. Misconfiguration detection
-7. Source-of-truth path verification
-8. Metrics / health / shadow regression across backends
+7. _is_file_trustlog_backend() helper
+8. Source-of-truth path verification
+9. Metrics JSONL line count guard for postgresql
+10. Health endpoint backend awareness regression
+11. Shadow snapshot is always file-based
 """
 from __future__ import annotations
 

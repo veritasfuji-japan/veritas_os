@@ -221,6 +221,10 @@ SHADOW_DIR: Path = _DEFAULT_SHADOW_DIR
 def _is_file_trustlog_backend() -> bool:
     """Return True when the TrustLog backend is file-based (jsonl).
 
+    This wrapper exists so that server.py internal code and test
+    monkeypatching can reference a single, module-local predicate
+    without importing from dependency_resolver in every call site.
+
     Use this predicate to guard code paths that read/write trust-log
     files (aggregate JSON, JSONL append, JSONL line counts).  When the
     backend is ``postgresql``, persistence is handled by
