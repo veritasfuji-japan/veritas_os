@@ -7,7 +7,11 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable
 
-from veritas_os.storage.factory import create_memory_store, create_trust_log_store
+from veritas_os.storage.factory import (
+    create_memory_store,
+    create_trust_log_store,
+    validate_backend_config,
+)
 
 
 @asynccontextmanager
@@ -42,6 +46,9 @@ async def run_lifespan(
 
     posture_defaults = init_posture(fail_on_error=True)
     set_active_posture(posture_defaults)
+
+    # Storage DI: validate backend environment before constructing instances.
+    validate_backend_config()
 
     # Storage DI: initialize backend instances once per application lifecycle.
     trust_log_store = create_trust_log_store()

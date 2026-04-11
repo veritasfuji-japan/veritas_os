@@ -9,6 +9,7 @@ from typing import Any, Callable, Optional, Tuple
 from fastapi import Request
 
 from veritas_os.storage.base import MemoryStore, TrustLogStore
+from veritas_os.storage.factory import get_backend_info
 
 
 class SupportsLazyState:
@@ -216,3 +217,29 @@ def get_memory_store(request: Request) -> MemoryStore:
     if store is None:
         raise RuntimeError("memory_store is not initialized in app.state")
     return store
+
+
+def resolve_backend_info() -> dict[str, str]:
+    """Return the active storage backend names.
+
+    Delegates to :func:`veritas_os.storage.factory.get_backend_info` so
+    that route handlers and health checks can inspect the configured
+    backend without re-reading environment variables directly.
+
+    Returns
+    -------
+    dict
+        ``{"memory": "<backend>", "trustlog": "<backend>"}``
+    """
+    return get_backend_info()
+
+
+def is_file_backend() -> bool:
+    """Return ``True`` when the TrustLog backend is file-based (jsonl).
+
+    Route handlers and health checks can use this predicate to decide
+    whether legacy file-based helpers (e.g. aggregate JSON loading) are
+    appropriate for the current deployment.
+    """
+    info = get_backend_info()
+    return info.get("trustlog", "jsonl") != "postgresql"
