@@ -236,6 +236,100 @@ class PostgresTrustLogStore(_PostgresBase):
                 return None
             return row[0]
 
+    async def import_entry(
+        self,
+        entry: Dict[str, Any],
+        *,
+        dry_run: bool = False,
+    ) -> tuple:
+        """Import a pre-prepared TrustLog entry preserving original cryptographic hashes.
+
+        Unlike :meth:`append`, this method does **not** call ``prepare_entry``.
+        The entry's existing ``sha256`` / ``sha256_prev`` / ``request_id`` values
+        are stored verbatim so that a JSONL → PostgreSQL migration preserves the
+        original hash chain without recomputing it.
+
+        Duplicate detection is based on ``request_id`` (unique constraint on
+        ``trustlog_entries``).  When a matching row already exists the method
+        returns ``(request_id, False)`` without performing any write.
+
+        Chain state is updated (via conditional upsert) only when the newly
+        inserted row's auto-increment ``id`` is greater than the current
+        ``trustlog_chain_state.last_id``.  This makes repeated import runs
+        idempotent with respect to chain-state management.
+
+        Args:
+            entry: Fully-formed TrustLog entry dict.  Must contain a ``sha256``
+                field (or a ``request_id`` field) to serve as the unique key.
+            dry_run: When ``True``, only checks for duplicates; no writes are
+                performed.
+
+        Returns:
+            ``(request_id, was_inserted)`` — ``was_inserted`` is ``False`` for
+            duplicates and ``True`` when the entry was written (or *would* be
+            written in dry-run mode).
+
+        Raises:
+            ValueError: When the entry has no usable ``request_id`` or ``sha256``.
+            RuntimeError: On any database or infrastructure failure (fail-closed).
+        """
+        request_id = str(entry.get("request_id") or entry.get("sha256") or "")
+        if not request_id:
+            raise ValueError("Entry has no 'request_id' or 'sha256' field")
+
+        try:
+            pool = await self._get_pool()
+            async with pool.connection() as conn:
+                # ── Duplicate check (read-only; no lock needed) ──
+                cur = await conn.execute(
+                    "SELECT id FROM trustlog_entries WHERE request_id = %s",
+                    (request_id,),
+                )
+                row = await cur.fetchone()
+                if row is not None:
+                    return request_id, False  # duplicate — skip
+
+                if dry_run:
+                    return request_id, True  # would be inserted
+
+                chain_hash = entry.get("sha256")
+                prev_hash = entry.get("sha256_prev")
+
+                async with conn.transaction():
+                    entry_jsonb = _jsonb_wrap(dict(entry))
+                    cur = await conn.execute(
+                        "INSERT INTO trustlog_entries "
+                        "(request_id, entry, hash, prev_hash, created_at) "
+                        "VALUES (%s, %s, %s, %s, now()) "
+                        "RETURNING id",
+                        (request_id, entry_jsonb, chain_hash, prev_hash),
+                    )
+                    new_row = await cur.fetchone()
+                    new_id = new_row[0] if new_row else None
+
+                    # ── Update chain state (conditional: only advance, never retreat) ──
+                    await conn.execute(
+                        """
+                        INSERT INTO trustlog_chain_state
+                            (id, last_hash, last_id, updated_at)
+                        VALUES (1, %s, %s, now())
+                        ON CONFLICT (id) DO UPDATE
+                        SET last_hash  = EXCLUDED.last_hash,
+                            last_id    = EXCLUDED.last_id,
+                            updated_at = now()
+                        WHERE trustlog_chain_state.last_id IS NULL
+                           OR trustlog_chain_state.last_id < EXCLUDED.last_id
+                        """,
+                        (chain_hash, new_id),
+                    )
+
+            return request_id, True
+
+        except Exception as exc:
+            raise RuntimeError(
+                f"PostgreSQL TrustLog import_entry failed (fail-closed): {exc}"
+            ) from exc
+
 
 class PostgresMemoryStore(_PostgresBase):
     """PostgreSQL MemoryOS backend using the shared async connection pool.
@@ -474,6 +568,64 @@ class PostgresMemoryStore(_PostgresBase):
             }
             for row_key, row_uid, row_val, row_ts in rows
         ]
+
+    # -------------------------------------------------------------- import
+
+    async def import_record(
+        self,
+        key: str,
+        value: Dict[str, Any],
+        *,
+        user_id: str,
+        dry_run: bool = False,
+    ) -> bool:
+        """Import a single memory record, skipping existing ``(key, user_id)`` pairs.
+
+        Unlike :meth:`put`, which uses ``ON CONFLICT … DO UPDATE`` (upsert)
+        semantics, this method uses ``ON CONFLICT … DO NOTHING`` so that
+        repeated migration runs do not overwrite records that were updated
+        after the first pass.
+
+        Args:
+            key: Record key.
+            value: Record payload dict.
+            user_id: Owner identifier.
+            dry_run: When ``True``, only checks for an existing record; no
+                write is performed.
+
+        Returns:
+            ``True`` if the record was inserted (or *would* be in dry-run
+            mode), ``False`` if a matching ``(key, user_id)`` already exists.
+        """
+        pool = await self._get_pool()
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT id FROM memory_records WHERE key = %s AND user_id = %s",
+                (key, user_id),
+            )
+            existing = await cur.fetchone()
+            if existing is not None:
+                return False  # duplicate — skip
+
+            if dry_run:
+                return True  # would be inserted
+
+            from psycopg.types.json import Jsonb  # noqa: PLC0415
+
+            async with conn.transaction():
+                cur = await conn.execute(
+                    """
+                    INSERT INTO memory_records
+                        (key, user_id, value, created_at, updated_at)
+                    VALUES (%s, %s, %s, now(), now())
+                    ON CONFLICT ON CONSTRAINT uq_memory_records_key_user
+                    DO NOTHING
+                    RETURNING id
+                    """,
+                    (key, user_id, Jsonb(value)),
+                )
+                row = await cur.fetchone()
+                return row is not None  # True if inserted, False if race-condition duplicate
 
     # -------------------------------------------------------- erase_user_data
 

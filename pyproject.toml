@@ -92,6 +92,7 @@ dev = [
 
 [project.scripts]
 veritas-trustlog-verify = "veritas_os.cli.verify_trustlog:main"
+veritas-migrate = "veritas_os.cli.migrate:main"
 
 [project.urls]
 Homepage = "https://github.com/veritasfuji-japan/veritas_os"
