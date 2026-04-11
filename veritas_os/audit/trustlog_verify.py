@@ -282,6 +282,66 @@ def _verify_signer_metadata(entry: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _verify_anchor_receipt(entry: Dict[str, Any]) -> Optional[str]:
+    """Validate optional transparency anchor backend/receipt structure."""
+    has_anchor_fields = any(
+        key in entry for key in ("anchor_backend", "anchor_status", "anchor_receipt")
+    )
+    if not has_anchor_fields:
+        return None
+
+    backend = entry.get("anchor_backend")
+    if not isinstance(backend, str) or not backend.strip():
+        return "anchor_backend_invalid"
+
+    status = entry.get("anchor_status")
+    valid_statuses = {"anchored", "skipped", "failed", "not_configured"}
+    if not isinstance(status, str) or status not in valid_statuses:
+        return "anchor_status_invalid"
+
+    receipt = entry.get("anchor_receipt")
+    if receipt is None:
+        return "anchor_receipt_missing"
+    if not isinstance(receipt, dict):
+        return "anchor_receipt_malformed"
+
+    required_str = {
+        "backend",
+        "status",
+        "anchored_hash",
+        "anchored_at",
+        "receipt_id",
+    }
+    for field in required_str:
+        value = receipt.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return f"anchor_receipt_invalid_{field}"
+
+    if receipt.get("backend") != backend:
+        return "anchor_receipt_backend_mismatch"
+    if receipt.get("status") != status:
+        return "anchor_receipt_status_mismatch"
+
+    anchored_hash = str(receipt.get("anchored_hash"))
+    if not _SHA256_HEX_RE.match(anchored_hash):
+        return "anchor_receipt_invalid_anchored_hash"
+
+    receipt_payload_hash = receipt.get("receipt_payload_hash")
+    if receipt_payload_hash is not None and not _SHA256_HEX_RE.match(str(receipt_payload_hash)):
+        return "anchor_receipt_invalid_receipt_payload_hash"
+
+    if receipt.get("details") is not None and not isinstance(receipt.get("details"), dict):
+        return "anchor_receipt_invalid_details"
+
+    optional_string_fields = ("receipt_location", "external_timestamp")
+    for field in optional_string_fields:
+        value = receipt.get(field)
+        if value is not None and not isinstance(value, str):
+            return f"anchor_receipt_invalid_{field}"
+
+    return None
+
+
 def verify_witness_ledger(
     entries: List[Dict[str, Any]],
     verify_signature_fn: Callable[[Dict[str, Any]], bool],
@@ -358,6 +418,10 @@ def verify_witness_ledger(
         signer_meta_error = _verify_signer_metadata(entry)
         if signer_meta_error:
             errors.append(VerificationError("witness", index, signer_meta_error))
+
+        anchor_error = _verify_anchor_receipt(entry)
+        if anchor_error:
+            errors.append(VerificationError("witness", index, anchor_error))
 
         if not any(err.index == index and err.ledger == "witness" for err in errors):
             valid_entries += 1

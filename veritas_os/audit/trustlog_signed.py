@@ -27,10 +27,10 @@ import logging
 import os
 import threading
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 
 from veritas_os.logging.paths import LOG_DIR
 from veritas_os.audit.storage_mirror import build_storage_mirror
@@ -206,6 +206,173 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
         "backend": "local",
         "path": str(path),
         "entry_hash": entry_hash,
+    }
+
+
+@dataclass(frozen=True)
+class AnchorReceipt:
+    """Structured transparency anchor receipt.
+
+    This normalized model keeps TrustLog witness entries backend-agnostic
+    so future integrations (RFC3161 TSA, managed timestamping APIs, etc.)
+    can be introduced without changing on-disk witness schema shape.
+    """
+
+    backend: str
+    status: str
+    anchored_hash: str
+    anchored_at: str
+    receipt_id: str
+    receipt_location: Optional[str]
+    receipt_payload_hash: Optional[str]
+    external_timestamp: Optional[str]
+    details: Dict[str, Any]
+
+
+class AnchorBackend(Protocol):
+    """Backend contract for transparency anchoring providers."""
+
+    backend_name: str
+
+    def anchor(self, *, entry_hash: str, anchored_at: str) -> AnchorReceipt:
+        """Anchor a TrustLog chain hash and return a structured receipt."""
+
+
+class LocalTransparencySpool:
+    """Local append-only transparency spool backend.
+
+    Phase 1 backend that preserves current behavior by writing an anchor
+    record to a local JSONL file.
+    """
+
+    backend_name = "local"
+
+    def __init__(self, *, spool_path: Optional[Path]) -> None:
+        self._spool_path = spool_path
+
+    def anchor(self, *, entry_hash: str, anchored_at: str) -> AnchorReceipt:
+        if self._spool_path is None:
+            return AnchorReceipt(
+                backend=self.backend_name,
+                status="not_configured",
+                anchored_hash=entry_hash,
+                anchored_at=anchored_at,
+                receipt_id=_uuid7(),
+                receipt_location=None,
+                receipt_payload_hash=None,
+                external_timestamp=None,
+                details={"configured": False, "ok": False},
+            )
+        payload = {"timestamp": anchored_at, "entry_hash": entry_hash}
+        payload_line = json.dumps(payload, ensure_ascii=False) + "\n"
+        _append_line(self._spool_path, payload_line)
+        return AnchorReceipt(
+            backend=self.backend_name,
+            status="anchored",
+            anchored_hash=entry_hash,
+            anchored_at=anchored_at,
+            receipt_id=_uuid7(),
+            receipt_location=str(self._spool_path),
+            receipt_payload_hash=sha256_of_canonical_json(payload),
+            external_timestamp=None,
+            details={
+                "configured": True,
+                "ok": True,
+                "path": str(self._spool_path),
+                "entry_hash": entry_hash,
+            },
+        )
+
+
+class NoOpAnchor:
+    """No-op anchoring backend used for local/dev or explicit disable mode."""
+
+    backend_name = "noop"
+
+    def anchor(self, *, entry_hash: str, anchored_at: str) -> AnchorReceipt:
+        return AnchorReceipt(
+            backend=self.backend_name,
+            status="skipped",
+            anchored_hash=entry_hash,
+            anchored_at=anchored_at,
+            receipt_id=_uuid7(),
+            receipt_location=None,
+            receipt_payload_hash=None,
+            external_timestamp=None,
+            details={"configured": True, "ok": True},
+        )
+
+
+def _build_anchor_backend() -> AnchorBackend:
+    """Resolve and instantiate the configured transparency backend."""
+    backend_name = _transparency_anchor_backend()
+    if backend_name == "local":
+        return LocalTransparencySpool(spool_path=_transparency_log_path())
+    if backend_name == "noop":
+        return NoOpAnchor()
+    raise ValueError(
+        "Unsupported VERITAS_TRUSTLOG_ANCHOR_BACKEND. "
+        "Expected 'local' or 'noop'."
+    )
+
+
+def _normalize_anchor_receipt(
+    *,
+    receipt: AnchorReceipt,
+    anchor_error: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build the normalized receipt payload persisted in witness entries."""
+    normalized = asdict(receipt)
+    if anchor_error is not None:
+        normalized["error"] = anchor_error
+    return normalized
+
+
+def _anchor_entry_hash(entry_hash: str) -> Dict[str, Any]:
+    """Anchor a chain hash using the configured backend abstraction."""
+    anchored_at = _utc_now_iso8601()
+    try:
+        backend = _build_anchor_backend()
+        receipt = backend.anchor(entry_hash=entry_hash, anchored_at=anchored_at)
+    except Exception as exc:  # noqa: BLE001
+        _logger.warning(
+            "Transparency anchor write failed: %s: %s",
+            exc.__class__.__name__,
+            exc,
+        )
+        return {
+            "backend": _transparency_anchor_backend(),
+            "status": "failed",
+            "receipt": {
+                "backend": _transparency_anchor_backend(),
+                "status": "failed",
+                "anchored_hash": entry_hash,
+                "anchored_at": anchored_at,
+                "receipt_id": _uuid7(),
+                "receipt_location": None,
+                "receipt_payload_hash": None,
+                "external_timestamp": None,
+                "details": {"configured": True, "ok": False},
+                "error": f"{exc.__class__.__name__}: {exc}",
+            },
+            "configured": True,
+            "ok": False,
+            "path": None,
+            "error": f"{exc.__class__.__name__}: {exc}",
+        }
+
+    receipt_payload = _normalize_anchor_receipt(receipt=receipt)
+    details = dict(receipt.details)
+    configured = bool(details.get("configured", True))
+    ok = bool(details.get("ok", receipt.status in {"anchored", "skipped"}))
+    return {
+        "backend": receipt.backend,
+        "status": receipt.status,
+        "receipt": receipt_payload,
+        "configured": configured,
+        "ok": ok,
+        "path": details.get("path"),
+        "entry_hash": receipt.anchored_hash,
     }
 
 
@@ -653,7 +820,7 @@ def append_signed_decision(
                 else None
             )
 
-            transparency_anchor = _append_transparency_anchor(_entry_chain_hash(entry))
+            transparency_anchor = _anchor_entry_hash(_entry_chain_hash(entry))
             if (
                 _transparency_required_enabled()
                 and transparency_anchor.get("configured")
@@ -661,6 +828,9 @@ def append_signed_decision(
             ):
                 raise SignedTrustLogWriteError("transparency_anchor_write_failed")
             entry["transparency_anchor"] = transparency_anchor
+            entry["anchor_backend"] = transparency_anchor.get("backend")
+            entry["anchor_status"] = transparency_anchor.get("status")
+            entry["anchor_receipt"] = transparency_anchor.get("receipt")
 
         return entry
     except (
@@ -717,6 +887,7 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
 
     transparency_path = _transparency_log_path()
     transparency_status: Dict[str, Any] = {
+        "backend": _transparency_anchor_backend(),
         "configured": transparency_path is not None,
         "required": _transparency_required_enabled(),
     }
