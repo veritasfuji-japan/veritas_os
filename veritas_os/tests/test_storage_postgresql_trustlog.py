@@ -550,7 +550,6 @@ class TestDbFailureClosed:
 
     def test_encryption_key_missing_raises(self, monkeypatch) -> None:
         """Append must fail when encryption key is missing (fail-closed)."""
-        from veritas_os.logging.encryption import EncryptionKeyMissing
         from veritas_os.storage.postgresql import PostgresTrustLogStore
 
         monkeypatch.delenv("VERITAS_ENCRYPTION_KEY", raising=False)
@@ -562,7 +561,7 @@ class TestDbFailureClosed:
 
         store._get_pool = _get  # type: ignore[assignment]
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(RuntimeError, match="fail-closed"):
             asyncio.run(store.append({"request_id": "no-key"}))
 
 
@@ -696,3 +695,17 @@ class TestTrustLogCorePipeline:
         payload_json = _normalize_for_hash(e1)
         expected = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
         assert e1["sha256"] == expected
+
+    def test_compute_sha256_fallback_on_unserializable(self, monkeypatch) -> None:
+        """compute_sha256 falls back to str() for non-JSON-serializable values."""
+        monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+        from veritas_os.logging.trust_log_core import compute_sha256
+
+        # A payload with a non-serializable value that triggers the fallback
+        class _NonSerializable:
+            def __repr__(self):
+                return "custom-repr"
+
+        h = compute_sha256({"key": _NonSerializable()})
+        assert isinstance(h, str)
+        assert len(h) == 64
