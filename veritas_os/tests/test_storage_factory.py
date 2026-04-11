@@ -91,6 +91,40 @@ class TestValidateBackendConfig:
         with pytest.raises(ValueError, match="Unknown VERITAS_TRUSTLOG_BACKEND"):
             validate_backend_config()
 
+    def test_warns_unused_database_url(self, monkeypatch, caplog):
+        """Warn when DATABASE_URL is set but no backend is postgresql."""
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "json")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
+            validate_backend_config()
+        assert "unused" in caplog.text.lower() or "VERITAS_DATABASE_URL" in caplog.text
+
+    def test_warns_mixed_backends(self, monkeypatch, caplog):
+        """Warn when only one backend uses postgresql."""
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
+            validate_backend_config()
+        assert "mixed" in caplog.text.lower() or "Mixed" in caplog.text
+
+    def test_no_warning_when_both_postgresql(self, monkeypatch, caplog):
+        """No contradiction warning when both backends use postgresql."""
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
+            validate_backend_config()
+        assert "unused" not in caplog.text.lower()
+        assert "Mixed" not in caplog.text
+
 
 class TestCreateStoreFailFast:
     """Verify factory create functions fail fast without DATABASE_URL."""

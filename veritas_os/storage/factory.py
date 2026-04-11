@@ -69,11 +69,23 @@ def get_backend_info() -> dict[str, str]:
 def validate_backend_config() -> None:
     """Validate storage backend environment configuration at startup.
 
+    Checks performed:
+
+    1. Backend selectors must be recognised values.
+    2. If either backend is ``postgresql``, ``VERITAS_DATABASE_URL`` must be
+       set.
+    3. If ``VERITAS_DATABASE_URL`` is set but **neither** backend is
+       ``postgresql``, a warning is logged so operators notice unused config.
+    4. If only one backend is ``postgresql`` and the other is file-based, a
+       warning is logged to flag a potentially unintentional mixed setup.
+
     Raises
     ------
+    ValueError
+        When backend selectors contain unrecognised values.
     RuntimeError
         When a postgresql backend is requested but ``VERITAS_DATABASE_URL``
-        is missing, or when backend selectors contain unrecognised values.
+        is missing.
     """
     info = get_backend_info()
 
@@ -88,16 +100,39 @@ def validate_backend_config() -> None:
             f"Supported: {sorted(_TRUSTLOG_BACKENDS)}"
         )
 
-    needs_pg = info["memory"] == "postgresql" or info["trustlog"] == "postgresql"
-    if needs_pg:
-        url = os.getenv("VERITAS_DATABASE_URL", "").strip()
-        if not url:
-            raise RuntimeError(
-                "PostgreSQL backend is requested "
-                f"(memory={info['memory']}, trustlog={info['trustlog']}) "
-                "but VERITAS_DATABASE_URL is not set.  "
-                "Set VERITAS_DATABASE_URL to a PostgreSQL DSN."
-            )
+    mem_pg = info["memory"] == "postgresql"
+    tlog_pg = info["trustlog"] == "postgresql"
+    needs_pg = mem_pg or tlog_pg
+    url = os.getenv("VERITAS_DATABASE_URL", "").strip()
+
+    if needs_pg and not url:
+        raise RuntimeError(
+            "PostgreSQL backend is requested "
+            f"(memory={info['memory']}, trustlog={info['trustlog']}) "
+            "but VERITAS_DATABASE_URL is not set.  "
+            "Set VERITAS_DATABASE_URL to a PostgreSQL DSN."
+        )
+
+    # Warn on unused DATABASE_URL — likely a backend-switch oversight.
+    if url and not needs_pg:
+        logger.warning(
+            "VERITAS_DATABASE_URL is set but neither memory (%s) nor "
+            "trustlog (%s) backend is 'postgresql'.  The database URL is "
+            "unused — did you forget to set VERITAS_MEMORY_BACKEND or "
+            "VERITAS_TRUSTLOG_BACKEND to 'postgresql'?",
+            info["memory"],
+            info["trustlog"],
+        )
+
+    # Warn on mixed backends — usually unintentional.
+    if needs_pg and not (mem_pg and tlog_pg):
+        logger.warning(
+            "Mixed storage backends detected: memory=%s, trustlog=%s.  "
+            "One backend uses PostgreSQL while the other uses a file-based "
+            "store.  This is valid but often indicates a misconfiguration.",
+            info["memory"],
+            info["trustlog"],
+        )
 
     logger.info(
         "Storage backends: memory=%s, trustlog=%s",
