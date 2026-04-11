@@ -1,6 +1,6 @@
 # TrustLog Storage Consolidation
 
-> Date: 2026-04-11 | Status: Completed | Author: Staff Python Architect
+> Date: 2026-04-11 | Status: Completed (Phase 2) | Author: Staff Python Architect
 
 ## Summary
 
@@ -28,40 +28,35 @@ could return stale or empty data.
 
 ## Changes Made
 
-### 1. Startup validation (`lifespan.py`)
+### Phase 1 (Initial)
 
-`validate_backend_config()` is now called **before** store
-instantiation during lifespan startup.  This catches misconfiguration
-(unknown backend names, missing `VERITAS_DATABASE_URL`) at boot time
-rather than at first request.
+1. **Startup validation** — `validate_backend_config()` called before
+   store instantiation in `lifespan.py`.
+2. **Backend-aware helpers** — `resolve_backend_info()`, `is_file_backend()`
+   in `dependency_resolver.py`.
+3. **Backend-aware health** — `_trust_log_health()` branches by backend.
+4. **LEGACY COMPAT markers** — Initial documentation of file-based helpers.
 
-### 2. Backend-aware dependency helpers (`dependency_resolver.py`)
+### Phase 2 (This PR)
 
-New helpers allow route handlers to query the active backend:
+1. **Metrics JSONL line count guard** — `/v1/metrics` now skips JSONL file
+   reading when `backend=postgresql`, returning `0` instead of reading a
+   stale file that is not the persistence source of truth.
 
-- `resolve_backend_info()` → `{"memory": "<backend>", "trustlog": "<backend>"}`
-- `is_file_backend()` → `True` when TrustLog backend is `jsonl`
+2. **Enhanced LEGACY COMPAT documentation** — All file-based trust-log
+   helpers in `server.py`, `trust_log_runtime.py`, and `trust_log_io.py`
+   now have detailed docstrings and comments that specify:
+   - When the path is active (only `backend=jsonl`)
+   - Why it remains (test backward-compat, shadow snapshots)
+   - That it is NOT the persistence source of truth for `backend=postgresql`
+   - Migration guidance (use `app.state.trust_log_store` via DI)
 
-### 3. Backend-aware health checks (`routes_system.py`)
-
-`_trust_log_health()` now branches on the configured backend:
-
-- **jsonl**: checks aggregate JSON file status (existing behavior).
-- **postgresql**: checks that `app.state.trust_log_store` is wired;
-  skips file-based checks that are not meaningful.
-
-The `/v1/metrics` response now includes a `storage_backends` field
-reporting the active backend names, and skips file-based aggregate
-JSON loading when the backend is `postgresql`.
-
-### 4. Legacy path documentation (`server.py`)
-
-All file-based trust-log helpers in `server.py` are annotated with
-`# LEGACY COMPAT:` markers that explain:
-
-- When these paths are active (only for `VERITAS_TRUSTLOG_BACKEND=jsonl`)
-- Why they remain (test backward-compatibility, shadow snapshots)
-- Migration guidance (use `app.state.trust_log_store` via DI)
+3. **Source-of-truth boundary tests** — New test class
+   `TestSourceOfTruthBoundary` validates that:
+   - `app.state.trust_log_store` is the canonical source of truth
+   - Legacy helpers are walled off from postgresql persistence
+   - Backend switching preserves API semantics
+   - Shadow snapshots remain file-based regardless of backend
 
 ## Architecture After Consolidation
 
@@ -70,7 +65,7 @@ All file-based trust-log helpers in `server.py` are annotated with
                        │   lifespan.py         │
                        │  validate_backend()   │
                        │  create_*_store()     │
-                       │  → app.state.*_store  │
+                       │  → app.state.*_store  │  ← SOURCE OF TRUTH
                        └──────┬───────────────┘
                               │
               ┌───────────────┼───────────────┐
@@ -89,18 +84,28 @@ DI resolver:     dependency_resolver.get_trust_log_store(request)
 
 ```
 server.py
-├── LOG_DIR, LOG_JSON, LOG_JSONL, SHADOW_DIR     # LEGACY COMPAT
-├── _effective_log_paths()                        # LEGACY COMPAT
-├── _load_logs_json()                             # LEGACY COMPAT
-├── append_trust_log()                            # LEGACY COMPAT
-├── write_shadow_decide()                         # LEGACY COMPAT
-└── _trust_log_runtime (TrustLogRuntime)          # LEGACY COMPAT
+├── LOG_DIR, LOG_JSON, LOG_JSONL, SHADOW_DIR     # LEGACY COMPAT — not SoT for postgresql
+├── _effective_log_paths()                        # LEGACY COMPAT — path resolution
+├── _load_logs_json()                             # LEGACY COMPAT — file read (jsonl only)
+├── append_trust_log()                            # LEGACY COMPAT — file write (jsonl only)
+├── write_shadow_decide()                         # LEGACY COMPAT — shadow snapshots (always file)
+└── _trust_log_runtime (TrustLogRuntime)          # LEGACY COMPAT — runtime helpers
 ```
 
 These remain for:
-- Test monkeypatching (`server.LOG_DIR`, `server.append_trust_log`, etc.)
-- Shadow snapshot writes (local file regardless of backend)
-- `/v1/metrics` aggregate health (jsonl backend only)
+- **Test monkeypatching** — `server.LOG_DIR`, `server.append_trust_log`, etc.
+- **Shadow snapshot writes** — local file regardless of backend (replay/audit)
+- **Metrics aggregate health** — jsonl backend only; skipped for postgresql
+
+### Split-Brain Risk Reduction
+
+| Risk Area | Before | After |
+|-----------|--------|-------|
+| `/v1/metrics` JSONL line count | Reads file even for postgresql | Guarded: returns 0 for postgresql |
+| `/v1/metrics` trust_json_status | Reads file even for postgresql | Already guarded (Phase 1) |
+| Health check | Could report stale file status | Backend-aware (Phase 1) |
+| Legacy helper scope | Unclear when active | Documented per-function with backend scope |
+| Source of truth | Ambiguous | Explicitly `app.state.trust_log_store` |
 
 ## Backward Compatibility
 
@@ -110,8 +115,9 @@ These remain for:
 | `server.LOG_DIR` / `LOG_JSON` monkeypatching | ✅ Still works |
 | `server.append_trust_log` monkeypatching | ✅ Still works |
 | `/v1/trust/logs`, `/v1/trust/{id}` | ✅ Same response shape |
-| `/v1/metrics` response | ⚠️ New `storage_backends` field added |
+| `/v1/metrics` response | ⚠️ `storage_backends` field present |
 | `/v1/metrics` trust_json_status | ⚠️ Returns `"unknown"` for postgresql backend |
+| `/v1/metrics` trust_jsonl_lines | ⚠️ Returns `0` for postgresql backend (was stale) |
 
 ## Remaining Technical Debt
 
@@ -129,9 +135,8 @@ These remain for:
    remains as a convenience for tests and the jsonl code path.  When
    all consumers migrate to the DI store, this can be removed.
 
-4. **Metrics JSONL line count** — `/v1/metrics` counts lines in the
-   JSONL file.  For PostgreSQL this always returns 0.  A future
-   iteration should query the store's entry count.
+4. **Metrics JSONL line count** — For PostgreSQL this now correctly returns
+   0.  A future iteration should query the store's entry count instead.
 
 ---
 

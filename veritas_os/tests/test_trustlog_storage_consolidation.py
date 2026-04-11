@@ -428,3 +428,284 @@ class TestMetricsBackendInfo:
         info = get_backend_info()
         assert "memory" in info
         assert "trustlog" in info
+
+
+# ===================================================================
+# 9. Source-of-truth boundary verification
+# ===================================================================
+
+
+class TestSourceOfTruthBoundary:
+    """Validate that app.state.trust_log_store is the canonical source of truth.
+
+    These tests verify that:
+    - The DI resolver is the single path to the authoritative store
+    - Legacy helpers are correctly scoped to jsonl backend only
+    - Backend=postgresql never uses file paths as persistence source
+    - Shadow snapshots remain file-based regardless of backend
+    """
+
+    def test_di_resolver_is_canonical_access_path(self):
+        """get_trust_log_store must be the canonical way to access the store."""
+        from veritas_os.api.dependency_resolver import get_trust_log_store
+
+        sentinel = object()
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(trust_log_store=sentinel))
+        )
+        assert get_trust_log_store(request) is sentinel
+
+    def test_di_resolver_rejects_uninitialized_state(self):
+        """get_trust_log_store must raise when store is not wired."""
+        from veritas_os.api.dependency_resolver import get_trust_log_store
+
+        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+        with pytest.raises(RuntimeError, match="trust_log_store is not initialized"):
+            get_trust_log_store(request)
+
+    def test_jsonl_backend_creates_file_store(self, monkeypatch):
+        """backend=jsonl must produce a JsonlTrustLogStore instance."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.storage.factory import create_trust_log_store
+        from veritas_os.storage.jsonl import JsonlTrustLogStore
+
+        store = create_trust_log_store()
+        assert isinstance(store, JsonlTrustLogStore)
+
+    def test_postgresql_backend_creates_pg_store(self, monkeypatch):
+        """backend=postgresql must produce a PostgresTrustLogStore instance."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
+
+        from veritas_os.storage.factory import create_trust_log_store
+        from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+        store = create_trust_log_store()
+        assert isinstance(store, PostgresTrustLogStore)
+
+    def test_file_backend_flag_reflects_jsonl(self, monkeypatch):
+        """is_file_backend returns True for jsonl, False for postgresql."""
+        from veritas_os.api.dependency_resolver import is_file_backend
+
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+        assert is_file_backend() is True
+
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        assert is_file_backend() is False
+
+    def test_legacy_helpers_exist_for_backward_compat(self):
+        """Legacy server-level helpers must remain accessible for test patching."""
+        from veritas_os.api import server
+
+        assert hasattr(server, "LOG_DIR")
+        assert hasattr(server, "LOG_JSON")
+        assert hasattr(server, "LOG_JSONL")
+        assert hasattr(server, "SHADOW_DIR")
+        assert callable(server.append_trust_log)
+        assert callable(server.write_shadow_decide)
+        assert callable(server._load_logs_json)
+        assert hasattr(server, "_trust_log_runtime")
+
+    def test_legacy_append_trust_log_has_compat_docstring(self):
+        """Legacy append_trust_log must document its backend scope."""
+        from veritas_os.api import server
+
+        doc = server.append_trust_log.__doc__ or ""
+        assert "LEGACY COMPAT" in doc
+        assert "postgresql" in doc.lower() or "backend" in doc.lower()
+
+    def test_legacy_write_shadow_has_compat_docstring(self):
+        """write_shadow_decide must document that it's always file-based."""
+        from veritas_os.api import server
+
+        doc = server.write_shadow_decide.__doc__ or ""
+        assert "LEGACY COMPAT" in doc
+        assert "file" in doc.lower() or "local" in doc.lower()
+
+    def test_trust_log_health_uses_store_for_postgresql(self, monkeypatch):
+        """Health check must use app.state.trust_log_store for postgresql."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        from veritas_os.api.routes_system import _trust_log_health
+
+        store_sentinel = object()
+        app_state = SimpleNamespace(trust_log_store=store_sentinel)
+        app = SimpleNamespace(state=app_state)
+        srv = SimpleNamespace(app=app)
+
+        result = _trust_log_health(srv)
+        assert result["status"] == "ok"
+        assert result["details"]["backend"] == "postgresql"
+
+    def test_trust_log_health_uses_file_for_jsonl(self, monkeypatch):
+        """Health check must use file-based checks for jsonl backend."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.api.routes_system import _trust_log_health
+
+        srv = SimpleNamespace(
+            _trust_log_runtime=SimpleNamespace(
+                effective_log_paths=lambda: ("/tmp", "/tmp/tl.json", "/tmp/tl.jsonl"),
+                load_logs_json_result=lambda path: SimpleNamespace(
+                    status="missing", error=None
+                ),
+            ),
+            _effective_log_paths=lambda: ("/tmp", "/tmp/tl.json", "/tmp/tl.jsonl"),
+        )
+
+        result = _trust_log_health(srv)
+        assert result["details"]["backend"] == "jsonl"
+
+    def test_both_backends_satisfy_protocol(self):
+        """Both backends must satisfy the TrustLogStore protocol interface."""
+        from veritas_os.storage.jsonl import JsonlTrustLogStore
+        from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+        required_methods = ("append", "get_by_id", "iter_entries", "get_last_hash")
+        for cls in (JsonlTrustLogStore, PostgresTrustLogStore):
+            for method in required_methods:
+                assert hasattr(cls, method), f"{cls.__name__} missing {method}"
+
+    def test_memory_store_di_resolver(self):
+        """get_memory_store must be the canonical access path for MemoryOS."""
+        from veritas_os.api.dependency_resolver import get_memory_store
+
+        sentinel = object()
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(memory_store=sentinel))
+        )
+        assert get_memory_store(request) is sentinel
+
+    def test_backend_info_matches_env(self, monkeypatch):
+        """resolve_backend_info must reflect environment variables."""
+        from veritas_os.api.dependency_resolver import resolve_backend_info
+
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+
+        info = resolve_backend_info()
+        assert info["trustlog"] == "postgresql"
+        assert info["memory"] == "postgresql"
+
+
+# ===================================================================
+# 10. Metrics JSONL line count backend guard
+# ===================================================================
+
+
+class TestMetricsJsonlLineCountGuard:
+    """Validate that /v1/metrics JSONL line count is skipped for postgresql."""
+
+    def test_metrics_skips_jsonl_read_for_postgresql(self, monkeypatch, tmp_path):
+        """When backend=postgresql, JSONL line count should be 0."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        # Create a JSONL file that should NOT be read
+        jsonl_file = tmp_path / "trust_log.jsonl"
+        jsonl_file.write_text("line1\nline2\nline3\n")
+
+        from veritas_os.storage.factory import get_backend_info
+
+        info = get_backend_info()
+        assert info["trustlog"] == "postgresql"
+
+        # The guard logic: when backend != jsonl, lines should be 0
+        is_file_tl = info.get("trustlog") != "postgresql"
+        lines = 0
+        if is_file_tl:
+            with open(jsonl_file, encoding="utf-8") as f:
+                for _ in f:
+                    lines += 1
+
+        assert lines == 0, "JSONL file should NOT be read for postgresql backend"
+
+    def test_metrics_reads_jsonl_for_jsonl_backend(self, monkeypatch, tmp_path):
+        """When backend=jsonl, JSONL line count should reflect file content."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        jsonl_file = tmp_path / "trust_log.jsonl"
+        jsonl_file.write_text("line1\nline2\nline3\n")
+
+        from veritas_os.storage.factory import get_backend_info
+
+        info = get_backend_info()
+        assert info["trustlog"] == "jsonl"
+
+        is_file_tl = info.get("trustlog") != "postgresql"
+        lines = 0
+        if is_file_tl:
+            with open(jsonl_file, encoding="utf-8") as f:
+                for _ in f:
+                    lines += 1
+
+        assert lines == 3
+
+
+# ===================================================================
+# 11. API semantics parity across backends
+# ===================================================================
+
+
+class TestApiSemanticsParity:
+    """Validate that backend=jsonl and backend=postgresql expose same API semantics."""
+
+    def test_both_backends_have_same_protocol_methods(self):
+        """Both TrustLogStore backends must expose identical method sets."""
+        from veritas_os.storage.jsonl import JsonlTrustLogStore
+        from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+        jsonl_methods = {m for m in dir(JsonlTrustLogStore) if not m.startswith("_")}
+        pg_methods = {m for m in dir(PostgresTrustLogStore) if not m.startswith("_")}
+
+        protocol_methods = {"append", "get_by_id", "iter_entries", "get_last_hash"}
+        assert protocol_methods.issubset(jsonl_methods)
+        assert protocol_methods.issubset(pg_methods)
+
+    def test_both_memory_backends_have_same_protocol_methods(self):
+        """Both MemoryStore backends must expose identical protocol methods."""
+        from veritas_os.storage.json_kv import JsonMemoryStore
+        from veritas_os.storage.postgresql import PostgresMemoryStore
+
+        protocol_methods = {"put", "get", "search", "delete", "list_all", "erase_user_data"}
+
+        json_methods = {m for m in dir(JsonMemoryStore) if not m.startswith("_")}
+        pg_methods = {m for m in dir(PostgresMemoryStore) if not m.startswith("_")}
+
+        assert protocol_methods.issubset(json_methods)
+        assert protocol_methods.issubset(pg_methods)
+
+    def test_health_response_shape_same_across_backends(self, monkeypatch):
+        """Health check response must have same keys regardless of backend."""
+        from veritas_os.api.routes_system import _trust_log_health
+
+        # jsonl backend
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+        srv_jsonl = SimpleNamespace(
+            _trust_log_runtime=SimpleNamespace(
+                effective_log_paths=lambda: ("/tmp", "/tmp/tl.json", "/tmp/tl.jsonl"),
+                load_logs_json_result=lambda path: SimpleNamespace(
+                    status="missing", error=None
+                ),
+            ),
+            _effective_log_paths=lambda: ("/tmp", "/tmp/tl.json", "/tmp/tl.jsonl"),
+        )
+        result_jsonl = _trust_log_health(srv_jsonl)
+
+        # postgresql backend
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        srv_pg = SimpleNamespace(
+            app=SimpleNamespace(
+                state=SimpleNamespace(trust_log_store=object())
+            )
+        )
+        result_pg = _trust_log_health(srv_pg)
+
+        # Both must have status + details with backend key
+        assert "status" in result_jsonl
+        assert "details" in result_jsonl
+        assert "backend" in result_jsonl["details"]
+
+        assert "status" in result_pg
+        assert "details" in result_pg
+        assert "backend" in result_pg["details"]

@@ -484,14 +484,19 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         except Exception:
             logger.debug("failed to read last decide file: %s", files[-1], exc_info=True)
 
+    # JSONL line count: only meaningful for the file-based backend.
+    # When backend=postgresql, the JSONL file is not the persistence
+    # source of truth — report 0 rather than reading a stale file.
+    is_file_tl = backend_info.get("trustlog") != "postgresql"
     lines = 0
-    try:
-        if log_jsonl.exists():
-            with open(log_jsonl, encoding="utf-8") as f:
-                for _ in f:
-                    lines += 1
-    except Exception as e:
-        logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
+    if is_file_tl:
+        try:
+            if log_jsonl.exists():
+                with open(log_jsonl, encoding="utf-8") as f:
+                    for _ in f:
+                        lines += 1
+        except Exception as e:
+            logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
 
     auth_store = _auth_store_health(srv)
     runtime_features = _runtime_feature_checks(srv)

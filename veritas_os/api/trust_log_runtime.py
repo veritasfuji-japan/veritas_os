@@ -20,6 +20,20 @@ class TrustLogRuntime:
     This class centralizes aggregate JSON loading, JSONL persistence,
     permission hardening, and shadow snapshot writes so that `server.py`
     can keep only thin compatibility wrappers.
+
+    Backend awareness
+    -----------------
+    These helpers are the operational persistence path **only** when
+    ``VERITAS_TRUSTLOG_BACKEND=jsonl`` (the default file-based backend).
+
+    When ``backend=postgresql``, the canonical persistence source of
+    truth is ``app.state.trust_log_store`` (set during lifespan startup
+    in ``lifespan.py``).  In that configuration, the methods here are
+    **not** used for TrustLog persistence.
+
+    The one exception is ``write_shadow_decide``, which always writes
+    to local files regardless of backend — shadow snapshots serve replay
+    and audit workflows that operate on filesystem artifacts.
     """
 
     def __init__(

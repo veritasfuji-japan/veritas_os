@@ -1,3 +1,23 @@
+"""File-based trust-log I/O primitives (LEGACY COMPAT — jsonl backend only).
+
+These functions provide the low-level file I/O for TrustLog persistence:
+aggregate JSON loading, JSONL append, file-permission hardening, and
+shadow snapshot writes.
+
+Backend awareness
+-----------------
+These primitives are the operational persistence path **only** when
+``VERITAS_TRUSTLOG_BACKEND=jsonl`` (the default).
+
+When ``backend=postgresql``, TrustLog persistence is handled entirely
+by ``app.state.trust_log_store`` (a ``PostgresTrustLogStore`` instance
+created by ``storage/factory.py`` and wired in ``lifespan.py``).
+The functions here are NOT the persistence source of truth in that case.
+
+The exception is ``write_shadow_decide_snapshot``, which always writes
+to local files regardless of backend for replay/audit support.
+"""
+
 from __future__ import annotations
 
 import json
