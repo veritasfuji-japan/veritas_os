@@ -30,12 +30,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import threading
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import pytest
 
 from veritas_os.logging.encryption import generate_key
 from veritas_os.logging.trust_log_core import _normalize_for_hash
+
+# Thread join timeout (seconds) for threaded contention tests.
+_THREAD_JOIN_TIMEOUT_S = 10
 
 
 # ===================================================================
@@ -825,7 +828,7 @@ class TestThreadedContention:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=10)
+            t.join(timeout=_THREAD_JOIN_TIMEOUT_S)
 
         assert not errors, f"Thread errors: {errors}"
 
@@ -898,7 +901,7 @@ class TestThreadedContention:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=10)
+            t.join(timeout=_THREAD_JOIN_TIMEOUT_S)
 
         # Some should succeed, some should fail
         assert len(successes) + len(failures) == n_threads
