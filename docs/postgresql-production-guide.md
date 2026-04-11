@@ -405,14 +405,135 @@ VERITAS_DB_AUTO_MIGRATE=false
 
 ### Migration path
 
-There is currently no automated JSONL → PostgreSQL data migration tool.
-Migration requires manual ETL:
+There is currently no fully automated JSONL → PostgreSQL migration CLI.
+The migration follows a manual ETL workflow with explicit verification
+at each step.
 
-1. **Set up PostgreSQL** and run `alembic upgrade head`.
-2. **Export JSONL TrustLog entries** from the file-based store.
-3. **Import into PostgreSQL** using a migration script.
-4. **Verify chain integrity** after import.
-5. **Switch backend** environment variables.
+### Step-by-step procedure
+
+```bash
+# ── 1. Preparation ──────────────────────────────────────────────
+# Back up the existing file-based data
+cp -a runtime/memory/ /backup/memory_$(date +%Y%m%d)/
+cp -a runtime/trustlog/ /backup/trustlog_$(date +%Y%m%d)/
+
+# Start PostgreSQL (if not already running)
+docker compose up -d postgres
+# Wait for health check
+docker compose exec postgres pg_isready -U veritas
+
+# ── 2. Schema setup ─────────────────────────────────────────────
+export VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+make db-upgrade          # alembic upgrade head
+
+# ── 3. Dry-run (read-only validation) ──────────────────────────
+# Verify JSONL entries are parseable and chain-hash consistent
+# before importing.  This step does NOT write to PostgreSQL.
+python -c "
+from veritas_os.storage.jsonl import JsonlTrustLogStore
+import asyncio, json
+
+store = JsonlTrustLogStore()
+entries = asyncio.run(store.iter_entries(limit=999999))
+print(f'Total entries: {len(entries)}')
+
+prev_hash = None
+for i, e in enumerate(entries):
+    entry = json.loads(e) if isinstance(e, str) else e
+    if prev_hash and entry.get('sha256_prev') != prev_hash:
+        print(f'ERROR: chain break at index {i}')
+        break
+    prev_hash = entry.get('sha256')
+else:
+    print('Chain integrity: OK')
+"
+
+# ── 4. Import TrustLog entries ──────────────────────────────────
+# Insert entries in original order to preserve chain linkage.
+# The PostgresTrustLogStore.append() method recomputes and
+# verifies chain hashes via the same prepare_entry() logic
+# used by the JSONL backend.
+python -c "
+from veritas_os.storage.jsonl import JsonlTrustLogStore
+from veritas_os.storage.postgresql import PostgresTrustLogStore
+import asyncio, json
+
+src = JsonlTrustLogStore()
+dst = PostgresTrustLogStore()
+
+entries = asyncio.run(src.iter_entries(limit=999999))
+print(f'Importing {len(entries)} TrustLog entries …')
+
+async def do_import():
+    for i, e in enumerate(entries):
+        entry = json.loads(e) if isinstance(e, str) else e
+        await dst.append(entry)
+        if (i + 1) % 100 == 0:
+            print(f'  … {i + 1}/{len(entries)}')
+    print('TrustLog import complete.')
+
+asyncio.run(do_import())
+"
+
+# ── 5. Import Memory records ───────────────────────────────────
+# Memory records are simpler: key/value with user_id isolation.
+python -c "
+from veritas_os.storage.json_kv import JsonMemoryStore
+from veritas_os.storage.postgresql import PostgresMemoryStore
+from pathlib import Path
+import asyncio, os
+
+src_path = Path(os.getenv('VERITAS_MEMORY_PATH',
+                           'runtime/memory/memory_store.json'))
+src = JsonMemoryStore(src_path)
+dst = PostgresMemoryStore()
+
+async def do_import():
+    # list_all requires user_id; iterate known users
+    for uid in src._data.keys() if hasattr(src, '_data') else []:
+        records = await src.list_all(uid)
+        for rec in records:
+            await dst.put(rec['key'], uid, rec['value'])
+    print('Memory import complete.')
+
+asyncio.run(do_import())
+"
+
+# ── 6. Verify ───────────────────────────────────────────────────
+# Confirm chain integrity via the API (start backend temporarily)
+VERITAS_TRUSTLOG_BACKEND=postgresql \
+VERITAS_MEMORY_BACKEND=postgresql \
+  python -m pytest veritas_os/tests/ -m smoke -q --tb=short
+
+# Or via the API:
+curl -H "X-API-Key: $VERITAS_API_KEY" http://localhost:8000/v1/trustlog/verify
+
+# ── 7. Switch backends ──────────────────────────────────────────
+# Update .env
+# VERITAS_MEMORY_BACKEND=postgresql
+# VERITAS_TRUSTLOG_BACKEND=postgresql
+# Restart the application
+```
+
+### Dry-run checklist
+
+Before committing to a production import:
+
+- [ ] Chain integrity verified on source JSONL (step 3)
+- [ ] PostgreSQL schema applied (`make db-current` shows expected revision)
+- [ ] Import completed on **staging** first
+- [ ] `/v1/trustlog/verify` returns `ok` after import
+- [ ] Smoke tests pass with PostgreSQL backend (`pytest -m smoke`)
+- [ ] Entry count matches: JSONL file lines ≈ `SELECT count(*) FROM trustlog_entries`
+
+### Rollback from a failed import
+
+```bash
+# If import fails midway, drop and re-create
+alembic downgrade base    # ⚠️ drops all managed tables
+alembic upgrade head      # re-create clean schema
+# Fix the issue, then re-run import from step 4
+```
 
 ### Key considerations
 
@@ -425,6 +546,9 @@ Migration requires manual ETL:
   to maintain `prev_hash` → `hash` chain linkage.
 - **Test on staging first**: Verify the migrated data with `/v1/trustlog/verify`
   before switching production.
+- **Idempotency**: The import scripts above are **not** idempotent. A partial
+  re-import will create duplicate entries or chain-hash conflicts. Always start
+  from a clean schema if re-running.
 
 ### After migration
 
@@ -472,9 +596,148 @@ alembic downgrade base
 
 **Never run `alembic downgrade` in production without a verified backup.**
 
+### Re-executing a failed migration
+
+If `alembic upgrade head` fails midway (e.g. network timeout), the Alembic
+version table may be in an inconsistent state:
+
+```bash
+# 1. Check the current revision
+make db-current
+
+# 2. If the revision is at the failed migration, stamp it back
+alembic downgrade -1        # undo the partial migration
+
+# 3. Re-run
+make db-upgrade
+
+# 4. If downgrade also fails, restore from backup (§8) and re-apply
+```
+
+Alembic tracks each revision atomically — a migration either fully applies
+or the version table is not updated.  However, if a migration contains
+multiple DDL statements and the database does not support transactional DDL
+for the operation (e.g. `CREATE INDEX CONCURRENTLY`), partial application
+is possible.  In that case, manually fix the schema state and use
+`alembic stamp <revision>` to align the version table.
+
 ---
 
-## 13. Known Limitations and Future Work
+## 13. Smoke Tests and Release Validation
+
+The PostgreSQL backend is exercised across all three CI validation tiers.
+Understanding how each tier relates to storage backends is essential for
+confident deployments.
+
+### Tier 1 — PR / push to `main` (`main.yml`)
+
+| Job | Storage backend | What it validates |
+|-----|-----------------|-------------------|
+| `governance-smoke` | Default (JSONL/JSON) | 16 smoke tests verify governance invariants |
+| `test (py3.11/3.12)` | Default (JSONL/JSON) + mock PostgreSQL pool | 195+ parity tests via mock pool |
+
+Smoke tests (`@pytest.mark.smoke`) run with whichever backend is active.
+In the default CI matrix this is JSONL/JSON. PostgreSQL-specific behaviour
+is covered by the mock-pool parity tests in `test_storage_backend_*.py`.
+
+### Tier 2 — Release gate (`release-gate.yml`)
+
+| Job | Storage backend | What it validates |
+|-----|-----------------|-------------------|
+| `production-tests` | Default + `@pytest.mark.production` | Production-like validation |
+| `docker-smoke` | PostgreSQL (via `docker compose`) | Full-stack health check with real PostgreSQL |
+| `trustlog-production-matrix` | N/A (posture profiles) | TrustLog promotion paths for dev/secure/prod |
+
+The `docker-smoke` job starts the full Docker Compose stack, which defaults
+to PostgreSQL.  This validates that:
+- Schema migrations apply cleanly (`VERITAS_DB_AUTO_MIGRATE=true`)
+- `/health` reports `storage_backends: {memory: postgresql, trustlog: postgresql}`
+- Basic API operations succeed against a real PostgreSQL instance
+
+### Tier 3 — Weekly / manual (`production-validation.yml`)
+
+| Job | Storage backend | What it validates |
+|-----|-----------------|-------------------|
+| `docker-smoke` | PostgreSQL (via `docker compose`) | Extended smoke with real PostgreSQL |
+| `production-tests` | Default | Long-running production-like checks |
+
+### Running smoke tests locally with PostgreSQL
+
+```bash
+# Start PostgreSQL and apply schema
+docker compose up -d postgres
+export VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+make db-upgrade
+
+# Run smoke tests against PostgreSQL
+VERITAS_MEMORY_BACKEND=postgresql \
+VERITAS_TRUSTLOG_BACKEND=postgresql \
+  make test-smoke
+
+# Run full production-like validation
+VERITAS_MEMORY_BACKEND=postgresql \
+VERITAS_TRUSTLOG_BACKEND=postgresql \
+  make test-production
+```
+
+### Validation coverage summary
+
+| Validation area | Covered by | Backend |
+|-----------------|-----------|---------|
+| Schema creation / migration | `test-postgresql` CI job, `docker-smoke` | Real PostgreSQL |
+| Contract parity (JSONL ↔ PG) | `test_storage_backend_contract.py` | Mock pool |
+| Side-by-side parity | `test_storage_backend_parity_matrix.py` | Mock pool |
+| Full-stack health check | `docker-smoke` | Real PostgreSQL (compose) |
+| Chain-hash integrity | Smoke tests + `/v1/trustlog/verify` | Both |
+| Fail-fast on missing DSN | `test_storage_factory.py` | Mock |
+| Connection pool lifecycle | `test_storage_db.py` | Mock |
+
+See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
+complete tier model and [`docs/BACKEND_PARITY_COVERAGE.md`](BACKEND_PARITY_COVERAGE.md)
+for the full parity test matrix.
+
+---
+
+## 14. Legacy Path Cleanup
+
+### Official vs. compatibility paths
+
+The PostgreSQL backend is the **recommended production path**.  Several
+legacy code paths remain for backward compatibility:
+
+| Path | Status | Location | Notes |
+|------|--------|----------|-------|
+| File-based TrustLog helpers | **Compatibility** | `server.py` (`LEGACY COMPAT` comments) | Wraps file I/O; delegated to DI store when PostgreSQL is active |
+| Backward-compat re-exports | **Compatibility** | `server.py` (route imports) | Tests monkeypatch these; removing would break test imports |
+| `veritas_os/storage/migrations/` | **Superseded** | SQL file migrator | Replaced by Alembic; retained for pre-existing databases |
+| `is_file_backend()` predicate | **Active** | `dependency_resolver.py` | Used by health checks and route handlers to adapt behaviour |
+
+### Migration from legacy SQL migrator
+
+If the database was created by `veritas_os/storage/migrations/` (the
+original SQL-file migrator), stamp the Alembic version without re-running DDL:
+
+```bash
+alembic stamp head
+```
+
+After stamping, all future schema changes are managed by Alembic.
+
+### Cleanup timeline
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| Phase 1 | DI-based store injection (`app.state.trust_log_store`) | ✅ Done |
+| Phase 2 | Consolidate legacy TrustLog helpers to DI store | ✅ Done (PR #1292) |
+| Phase 3 | Remove backward-compat re-exports from `server.py` | Planned — requires test import audit |
+| Phase 4 | Remove legacy SQL migrator (`storage/migrations/`) | Planned — requires migration-path documentation cutover |
+
+See [`docs/legacy-path-cleanup.md`](legacy-path-cleanup.md) for the full
+cleanup plan and rationale.
+
+---
+
+## 15. Known Limitations and Future Work
 
 ### Current limitations
 
@@ -482,22 +745,25 @@ alembic downgrade base
 |------|-----------|--------|
 | **Search** | Token-based `LIKE ANY` search (no vector similarity) | Lower relevance ranking vs. vector search |
 | **Read replicas** | No application-level read/write splitting | All queries go to primary |
-| **Data migration** | No automated JSONL ↔ PostgreSQL migration tool | Manual ETL required |
+| **Data import** | No fully automated JSONL → PostgreSQL CLI tool; manual ETL with verification (§11) | Requires operator intervention |
 | **Connection pool metrics** | Pool stats not exposed to `/v1/metrics` | Limited observability |
 | **Multi-database** | Single `VERITAS_DATABASE_URL` for all backends | Cannot split MemoryOS and TrustLog across databases |
-| **Schema versioning in CI** | Mock pool in unit tests, real PG only in `test-postgresql` job | Behavioral drift possible |
+| **Schema versioning in CI** | Mock pool in unit tests, real PG only in `test-postgresql` and `docker-smoke` jobs | Behavioral drift possible between mock and real |
+| **Concurrent advisory lock testing** | Advisory lock serialization tested via mock pool only; not tested under real multi-threaded contention | Edge-case contention may differ |
+| **Import idempotency** | Import scripts are not idempotent; partial re-import requires clean schema | Operator must manage failure recovery manually |
 
 ### Planned future enhancements
 
 | Enhancement | Description | Priority |
 |-------------|-------------|----------|
 | **pgvector** | Vector similarity search for MemoryOS (`embedding` column + HNSW/IVFFlat index) | High |
+| **Automated migration CLI** | `veritas-migrate --from jsonl --to postgresql` — idempotent with progress resume | High |
 | **Table partitioning** | Range-partition `trustlog_entries` by `created_at` for archive and query performance | Medium |
 | **CDC (Change Data Capture)** | Logical replication / Debezium for streaming TrustLog to external audit systems | Medium |
 | **Archive policy** | Automated partitioned table detach + cold storage for aged TrustLog entries | Medium |
+| **Connection pool metrics** | Expose `psycopg_pool` stats via `/v1/metrics` and Prometheus | Medium |
 | **Read/write splitting** | Route read-only queries to replicas for horizontal scaling | Low |
-| **Connection pool metrics** | Expose `psycopg_pool` stats via `/v1/metrics` and Prometheus | Low |
-| **Automated migration tool** | CLI command: `veritas-migrate --from jsonl --to postgresql` | Low |
+| **Legacy migrator removal** | Remove `veritas_os/storage/migrations/` once all deployments are on Alembic | Low |
 
 ### Operational notes
 
@@ -511,7 +777,7 @@ alembic downgrade base
 
 ---
 
-## 14. Three-Tier Environment Reference
+## 16. Three-Tier Environment Reference
 
 ### Dev (local)
 
@@ -607,29 +873,53 @@ VERITAS_DB_STATEMENT_TIMEOUT_MS=10000   # 本番推奨: 10秒
 - マイグレーションはデプロイ手順として明示的に実行: `make db-upgrade`
 - ロールバックは本番ではバックアップからの復元を推奨
 
-## 6. バックアップ / リストア
+## 6. JSONL → PostgreSQL インポート
+
+- 手順は英語版 §11 を参照
+- **ドライラン**: インポート前にソース JSONL のチェーン整合性を検証
+- **順序厳守**: TrustLog エントリは元の順序で挿入すること
+- **冪等性なし**: 途中失敗時はスキーマをクリーンにして再実行
+
+## 7. スモークテストとリリースバリデーション
+
+- Tier 1（PR / `main` push）: ガバナンススモーク + モックプールパリティテスト
+- Tier 2（`v*` タグ push）: Docker Compose による実 PostgreSQL スモーク
+- Tier 3（週次 / 手動）: 長時間実行の本番的検証
+- 詳細は英語版 §13 を参照
+
+## 8. レガシーパスの整理
+
+| パス | 状態 |
+|------|------|
+| ファイルベース TrustLog ヘルパー | 互換性維持（DI ストアに委譲） |
+| `veritas_os/storage/migrations/` | Alembic に置き換え済み |
+| 後方互換 re-export (`server.py`) | テスト依存あり、段階的削除予定 |
+
+## 9. バックアップ / リストア
 
 - **日次論理バックアップ**: `pg_dump -Fc` で圧縮ダンプ
 - **本番 WAL アーカイブ**: ポイントインタイムリカバリ用に継続的 WAL アーカイブ
 - TrustLog は必ず `trustlog_entries` と `trustlog_chain_state` を一緒に復元すること
 
-## 7. レプリケーション / HA
+## 10. レプリケーション / HA
 
 - VERITAS OS はレプリケーション管理を行いません
 - マネージド PostgreSQL（RDS、Cloud SQL 等）の利用を推奨
 - TrustLog 書込みは**プライマリのみ**に向けてください（アドバイザリロック前提）
 
-## 8. 既知の制限事項
+## 11. 既知の制限事項
 
 | 領域 | 制限 |
 |------|------|
 | 検索 | トークンベースの `LIKE ANY`（ベクトル類似度検索なし） |
 | リードレプリカ | アプリケーション層の読み書き分離なし |
-| データ移行 | JSONL ↔ PostgreSQL の自動移行ツールなし |
+| データインポート | 完全自動の移行 CLI なし（手動 ETL + 検証） |
+| インポート冪等性 | 途中失敗時はクリーンスキーマからの再実行が必要 |
 
 ### 将来の拡張予定
 
 - **pgvector**: MemoryOS のベクトル類似度検索
+- **自動移行 CLI**: `veritas-migrate --from jsonl --to postgresql`（冪等・再開可能）
 - **テーブルパーティショニング**: `trustlog_entries` の日付レンジパーティション
 - **CDC**: 外部監査システムへの TrustLog ストリーミング
 - **アーカイブポリシー**: 古い TrustLog エントリの自動コールドストレージ移行

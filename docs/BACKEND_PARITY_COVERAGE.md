@@ -160,19 +160,59 @@ or know which backend is active.
 | `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate |
 | `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract tests |
 | `test-slow` | Default | Slow/heavy tests |
-| `governance-smoke` | Default | Smoke tests |
+| `governance-smoke` | Default | Smoke tests (Tier 1) |
+| `docker-smoke` | PostgreSQL (via compose) | Full-stack health check with real PG (Tier 2/3) |
+| `production-tests` | Default | `pytest -m "production or smoke"` (Tier 2) |
+
+### Smoke / Release Validation Path
+
+Smoke tests (`@pytest.mark.smoke`) verify that the active backend —
+whichever it is — satisfies governance invariants. In Docker Compose
+(which defaults to PostgreSQL), the `docker-smoke` job validates:
+
+1. Schema migrations apply cleanly (`VERITAS_DB_AUTO_MIGRATE=true`)
+2. `/health` returns `storage_backends: {memory: postgresql, trustlog: postgresql}`
+3. Basic API operations succeed against a real PostgreSQL 16 instance
+
+See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
+complete three-tier validation model and
+[`docs/postgresql-production-guide.md`](postgresql-production-guide.md) §13
+for PostgreSQL-specific validation guidance.
 
 ## 6. Uncovered Areas
 
 | Area | Status | Priority |
 |---|---|---|
-| **JSONL → PostgreSQL migration** | Placeholder test | Medium |
-| **PostgreSQL → JSONL migration** | Placeholder test | Low |
-| **Bulk import** | Placeholder test | Low |
-| **Real PostgreSQL integration** (full test suite) | CI job present, mock-pool in unit tests | Medium |
-| **Search scoring parity** | Covered for result IDs; exact score values may differ slightly | Low |
-| **Connection pool failure recovery** | Tested in test_storage_db.py | — |
+| **JSONL → PostgreSQL import** | Manual ETL procedure documented in production guide §11; no automated CLI | Medium |
+| **PostgreSQL → JSONL export** | No tooling; manual SQL export + reformat | Low |
+| **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` with real PG 16; mock-pool in unit tests | Medium |
+| **Search scoring parity** | Covered for result IDs; exact score values may differ slightly (LIKE ANY vs. file scan) | Low |
+| **Connection pool failure recovery** | Tested in `test_storage_db.py` | — |
 | **Concurrent writes under real PostgreSQL advisory locks** | Not tested (requires real PG + threading) | Medium |
+| **Import idempotency** | Import scripts are not idempotent; partial re-import requires clean schema | Medium |
+
+### What is parity-guaranteed
+
+The following semantics are **guaranteed identical** across JSONL/JSON and
+PostgreSQL backends based on the 195+ parity test suite:
+
+- CRUD operations (put/get/delete/upsert) for MemoryStore
+- Append/retrieve/iterate operations for TrustLogStore
+- User isolation (MemoryStore)
+- Hash-chain integrity (TrustLogStore)
+- Error handling (missing keys, empty queries, negative limits)
+- Concurrent operation correctness (at mock-pool level)
+- Factory dispatch and fail-fast validation
+
+### What is NOT parity-guaranteed
+
+| Area | Reason |
+|------|--------|
+| `erase_user_data` return count | JSON returns 0; PostgreSQL returns actual `rowcount` (Note 1) |
+| `iter_entries` default ordering | JSONL uses `reverse=True` internally (Note 2); PostgreSQL uses `ORDER BY id ASC` |
+| Search relevance scoring | Token-based `LIKE ANY` (PostgreSQL) vs. file-scan match (JSON) |
+| Advisory lock contention behaviour | Mock pool simulates locks; real PostgreSQL may show different timing |
+| Import/export across backends | No automated tooling; manual ETL only (see production guide §11) |
 
 ## 7. Test File Reference
 
