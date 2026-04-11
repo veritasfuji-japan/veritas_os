@@ -550,6 +550,13 @@ def _verify_tsa_receipt_details(entry: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def verify_witness_ledger(
+    entries: List[Dict[str, Any]],
+    verify_signature_fn: Callable[[Dict[str, Any]], bool],
+    artifact_search_roots: Optional[Sequence[Path]] = None,
+    s3_client: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Verify witness ledger chain, payload hash, signature and metadata linkage.
 
     Legacy compatibility:
         Entries without ``full_payload_hash`` / ``mirror_receipt`` are treated
