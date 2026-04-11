@@ -149,6 +149,18 @@ class PostgresMemoryStore(_PostgresBase):
             val = row[0]
             return val if isinstance(val, dict) else None
 
+    # --------------------------------------------------------- text extraction
+
+    @staticmethod
+    def _extract_searchable_text(val: Dict[str, Any]) -> str:
+        """Return the searchable text from a JSONB value dict.
+
+        Checks ``text`` first, then ``query`` — matching the field
+        priority used in both the SQL ``WHERE`` clause and the
+        Python-side scoring loop.
+        """
+        return str(val.get("text") or val.get("query") or "").strip()
+
     # ---------------------------------------------------------------- search
 
     async def search(
@@ -196,9 +208,7 @@ class PostgresMemoryStore(_PostgresBase):
         results: List[Dict[str, Any]] = []
         for row_key, row_uid, row_val, row_ts in rows:
             val = row_val if isinstance(row_val, dict) else {}
-            text = str(
-                val.get("text") or val.get("query") or ""
-            ).strip()
+            text = self._extract_searchable_text(val)
             if not text:
                 continue
             score = self._simple_score(query_str, text)
@@ -240,7 +250,7 @@ class PostgresMemoryStore(_PostgresBase):
         if not q or not t:
             return 0.0
 
-        base = 0.5 if (q in t or t in q) else 0.0
+        base = 0.5 if q in t else (0.5 if t in q else 0.0)
 
         q_tokens = set(q.split())
         t_tokens = set(t.split())

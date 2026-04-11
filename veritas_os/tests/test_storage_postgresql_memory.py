@@ -16,6 +16,7 @@ Test categories
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import time
 from contextlib import asynccontextmanager
@@ -102,7 +103,6 @@ class _InMemoryStorage:
         # psycopg Jsonb wraps the value; extract .obj if available
         value = getattr(value_wrapper, "obj", value_wrapper)
         if isinstance(value, str):
-            import json
             value = json.loads(value)
 
         for row in self._rows:
