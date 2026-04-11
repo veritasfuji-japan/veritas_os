@@ -42,6 +42,11 @@ from veritas_os.audit.trustlog_signed import (
 )
 from veritas_os.security.hash import sha256_hex
 from veritas_os.audit.trustlog_verify import verify_full_ledger
+from veritas_os.observability.metrics import (
+    record_trustlog_append_failure,
+    record_trustlog_append_success,
+    record_trustlog_verify_failure,
+)
 
 
 def _load_mask_pii():
@@ -473,12 +478,14 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
 
             with _append_stats_lock:
                 _append_stats["success"] += 1
+            record_trustlog_append_success()
 
             return entry
 
     except (OSError, TypeError, ValueError, json.JSONDecodeError, EncryptionKeyMissing):
         with _append_stats_lock:
             _append_stats["failure"] += 1
+        record_trustlog_append_failure("append_exception")
         logger.error(
             "append_trust_log failed (failure #%d); hash chain integrity may be affected",
             _append_stats["failure"],
@@ -732,6 +739,7 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
     try:
         result = verify_full_ledger(log_path=LOG_JSONL, max_entries=max_entries)
     except OSError as exc:
+        record_trustlog_verify_failure("full", exc.__class__.__name__)
         logger.warning("verify_trust_log failed: %s", exc)
         return {
             "ok": False,
@@ -753,6 +761,8 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
                 ],
             },
         }
+    if not result["ok"]:
+        record_trustlog_verify_failure("full", "verification_failed")
 
     broken_reason = None
     broken_index = None

@@ -11,6 +11,8 @@ from fastapi.testclient import TestClient
 from veritas_os.api import auth as auth_module
 from veritas_os.api import routes_memory
 from veritas_os.api import server
+from veritas_os.audit import trustlog_signed
+from veritas_os.logging import trust_log
 
 
 @pytest.fixture(autouse=True)
@@ -165,3 +167,104 @@ def test_memory_entry_observer_uses_count_only(monkeypatch):
 
     assert called["count"] == 0
     assert called["search"] == 0
+
+
+def test_trustlog_metric_helpers_emit_labels(monkeypatch):
+    metrics = importlib.import_module("veritas_os.observability.metrics")
+    append_ok = _MetricProbe()
+    append_fail = _MetricProbe()
+    sign_fail = _MetricProbe()
+    mirror_fail = _MetricProbe()
+    anchor_fail = _MetricProbe()
+    verify_fail = _MetricProbe()
+    last_success = _MetricProbe()
+
+    monkeypatch.setattr(metrics, "TRUSTLOG_APPEND_SUCCESS_TOTAL", append_ok)
+    monkeypatch.setattr(metrics, "TRUSTLOG_APPEND_FAILURE_TOTAL", append_fail)
+    monkeypatch.setattr(metrics, "TRUSTLOG_SIGN_FAILURE_TOTAL", sign_fail)
+    monkeypatch.setattr(metrics, "TRUSTLOG_MIRROR_FAILURE_TOTAL", mirror_fail)
+    monkeypatch.setattr(metrics, "TRUSTLOG_ANCHOR_FAILURE_TOTAL", anchor_fail)
+    monkeypatch.setattr(metrics, "TRUSTLOG_VERIFY_FAILURE_TOTAL", verify_fail)
+    monkeypatch.setattr(metrics, "TRUSTLOG_LAST_SUCCESS_TIMESTAMP", last_success)
+    monkeypatch.setattr(metrics, "_posture_label", lambda: "dev")
+    monkeypatch.setattr(metrics, "_now_unix_timestamp", lambda: 1700000000.0)
+
+    metrics.record_trustlog_append_success()
+    metrics.record_trustlog_append_failure("write_error")
+    metrics.record_trustlog_sign_failure("file", "bad_key")
+    metrics.record_trustlog_mirror_failure("s3_object_lock", "denied")
+    metrics.record_trustlog_anchor_failure("local", "io_error")
+    metrics.record_trustlog_verify_failure("witness", "chain_broken")
+
+    assert any(call.get("labels") == {"posture": "dev"} for call in append_ok.calls)
+    assert any(call.get("set") == 1700000000.0 for call in last_success.calls)
+    assert any(
+        call.get("labels") == {"posture": "dev", "reason": "write_error"}
+        for call in append_fail.calls
+    )
+    assert any(
+        call.get("labels") == {"signer_backend": "file", "reason": "bad_key"}
+        for call in sign_fail.calls
+    )
+    assert any(
+        call.get("labels") == {"backend": "s3_object_lock", "reason": "denied"}
+        for call in mirror_fail.calls
+    )
+    assert any(
+        call.get("labels") == {"backend": "local", "reason": "io_error"}
+        for call in anchor_fail.calls
+    )
+    assert any(
+        call.get("labels") == {"ledger": "witness", "reason": "chain_broken"}
+        for call in verify_fail.calls
+    )
+
+
+def test_trustlog_signed_emits_sign_and_mirror_failure_metrics(monkeypatch):
+    class _FailingSigner:
+        signer_type = "file"
+
+        @staticmethod
+        def signer_key_id() -> str:
+            return "test"
+
+        @staticmethod
+        def sign_payload_hash(_: str) -> str:
+            raise ValueError("bad-sign")
+
+    recorded: dict[str, list[tuple[str, str]]] = {"sign": [], "mirror": []}
+    monkeypatch.setattr(trustlog_signed, "_resolve_signer", lambda **_: _FailingSigner())
+    monkeypatch.setattr(trustlog_signed, "_read_last_entry", lambda *_: None)
+    monkeypatch.setattr(trustlog_signed, "record_trustlog_sign_failure", lambda backend, reason: recorded["sign"].append((backend, str(reason))))
+    monkeypatch.setattr(trustlog_signed, "observe_trustlog_sign_latency", lambda *_: None)
+    monkeypatch.setattr(trustlog_signed, "record_trustlog_mirror_failure", lambda backend, reason: recorded["mirror"].append((str(backend), str(reason))))
+
+    with pytest.raises(trustlog_signed.SignedTrustLogWriteError):
+        trustlog_signed.append_signed_decision({"request_id": "r-1"})
+
+    assert recorded["sign"]
+    assert recorded["sign"][0][0] == "file"
+
+    monkeypatch.setattr(trustlog_signed, "build_storage_mirror", lambda **_: (_ for _ in ()).throw(ValueError("invalid")))
+    trustlog_signed._mirror_to_worm("line\n")
+    assert recorded["mirror"]
+    assert recorded["mirror"][0][0] == "invalid"
+
+
+def test_verify_failure_metric_emitted(monkeypatch):
+    emitted: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        trust_log,
+        "record_trustlog_verify_failure",
+        lambda ledger, reason: emitted.append((ledger, str(reason))),
+    )
+    monkeypatch.setattr(
+        trust_log,
+        "verify_full_ledger",
+        lambda **_: {"ok": False, "total_entries": 1, "valid_entries": 0, "invalid_entries": 1, "chain_ok": False, "signature_ok": True, "linkage_ok": True, "mirror_ok": True, "last_hash": None, "detailed_errors": [{"reason": "sha256_mismatch", "index": 0, "code": "tamper_suspected"}]},
+    )
+
+    result = trust_log.verify_trust_log()
+
+    assert result["ok"] is False
+    assert ("full", "verification_failed") in emitted

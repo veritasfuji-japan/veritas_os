@@ -27,6 +27,7 @@ import logging
 import os
 import threading
 import uuid
+from time import perf_counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,6 +41,15 @@ from veritas_os.security.signing import (
     Signer,
     build_trustlog_signer,
     store_keypair,
+)
+from veritas_os.observability.metrics import (
+    observe_trustlog_mirror_latency,
+    observe_trustlog_sign_latency,
+    record_trustlog_anchor_failure,
+    record_trustlog_mirror_failure,
+    record_trustlog_sign_failure,
+    record_trustlog_verify_failure,
+    set_trustlog_anchor_lag_seconds,
 )
 
 SIGNED_TRUSTLOG_JSONL = LOG_DIR / "trustlog.jsonl"
@@ -136,9 +146,12 @@ def _append_line(path: Path, line: str) -> None:
 
 def _mirror_to_worm(line: str) -> Dict[str, Any]:
     """Best-effort append using the configured mirror backend."""
+    started = perf_counter()
     try:
         mirror_backend = build_storage_mirror(append_fn=_append_line)
     except (ValueError, TypeError) as exc:
+        observe_trustlog_mirror_latency("invalid", perf_counter() - started)
+        record_trustlog_mirror_failure("invalid", exc.__class__.__name__)
         return {
             "configured": True,
             "ok": False,
@@ -147,7 +160,12 @@ def _mirror_to_worm(line: str) -> Dict[str, Any]:
         }
 
     result = mirror_backend.append_line(line)
+    observe_trustlog_mirror_latency(result.get("backend"), perf_counter() - started)
     if not result.get("ok"):
+        record_trustlog_mirror_failure(
+            result.get("backend"),
+            result.get("error", "unknown_error"),
+        )
         _logger.warning(
             "WORM mirror write failed (backend=%s): %s",
             result.get("backend"),
@@ -335,6 +353,7 @@ def _anchor_entry_hash(entry_hash: str) -> Dict[str, Any]:
         backend = _build_anchor_backend()
         receipt = backend.anchor(entry_hash=entry_hash, anchored_at=anchored_at)
     except Exception as exc:  # noqa: BLE001
+        record_trustlog_anchor_failure(_transparency_anchor_backend(), exc.__class__.__name__)
         _logger.warning(
             "Transparency anchor write failed: %s: %s",
             exc.__class__.__name__,
@@ -365,6 +384,21 @@ def _anchor_entry_hash(entry_hash: str) -> Dict[str, Any]:
     details = dict(receipt.details)
     configured = bool(details.get("configured", True))
     ok = bool(details.get("ok", receipt.status in {"anchored", "skipped"}))
+    if not ok:
+        record_trustlog_anchor_failure(receipt.backend, details.get("error", receipt.status))
+
+    external_ts = receipt.external_timestamp
+    if external_ts:
+        try:
+            external_dt = datetime.fromisoformat(external_ts.replace("Z", "+00:00"))
+            anchored_dt = datetime.fromisoformat(receipt.anchored_at.replace("Z", "+00:00"))
+            lag_seconds = (anchored_dt - external_dt).total_seconds()
+            set_trustlog_anchor_lag_seconds(receipt.backend, lag_seconds)
+        except ValueError:
+            set_trustlog_anchor_lag_seconds(receipt.backend, 0.0)
+    else:
+        set_trustlog_anchor_lag_seconds(receipt.backend, 0.0)
+
     return {
         "backend": receipt.backend,
         "status": receipt.status,
@@ -772,7 +806,13 @@ def append_signed_decision(
             compact_payload = build_trustlog_summary(decision_payload)
 
             payload_hash = sha256_of_canonical_json(compact_payload)
-            signature = signer.sign_payload_hash(payload_hash)
+            sign_started = perf_counter()
+            try:
+                signature = signer.sign_payload_hash(payload_hash)
+            except Exception as exc:
+                record_trustlog_sign_failure(signer.signer_type, exc.__class__.__name__)
+                raise
+            observe_trustlog_sign_latency(signer.signer_type, perf_counter() - sign_started)
             signed_at = _utc_now_iso8601()
             signer_metadata = _build_signer_metadata(signer, signed_at=signed_at)
 
@@ -868,6 +908,8 @@ def verify_trustlog_chain(path: Optional[Path] = None) -> Dict[str, Any]:
     """
     entries = _read_all_entries(path)
     witness_result = verify_witness_ledger(entries=entries, verify_signature_fn=verify_signature)
+    if not witness_result["ok"]:
+        record_trustlog_verify_failure("witness", "verification_failed")
 
     selected_mirror_backend = os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower()
     worm_path = _worm_mirror_path() if selected_mirror_backend == "local" else None
