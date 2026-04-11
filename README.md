@@ -107,6 +107,8 @@ VERITAS OS is built to solve that layer.
 - **PostgreSQL Production Guide**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
 - **Security Hardening**: [`docs/security-hardening.md`](docs/security-hardening.md)
 - **Database Migrations**: [`docs/database-migrations.md`](docs/database-migrations.md)
+- **Backend Parity Coverage**: [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
+- **Legacy Path Cleanup**: [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
 - **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - **Documentation Hub (EN)**: `docs/en/README.md`
 - **Documentation Hub (JA)**: `docs/ja/README.md`

@@ -9,6 +9,7 @@
 - Security Hardening Checklist: [docs/security-hardening.md](security-hardening.md)
 - Database Migrations (Alembic): [docs/database-migrations.md](database-migrations.md)
 - Backend Parity Coverage: [docs/BACKEND_PARITY_COVERAGE.md](BACKEND_PARITY_COVERAGE.md)
+- Legacy Path Cleanup: [docs/legacy-path-cleanup.md](legacy-path-cleanup.md)
 - Operational Readiness Runbook: [docs/OPERATIONAL_READINESS_RUNBOOK.md](OPERATIONAL_READINESS_RUNBOOK.md)
 - Production Validation: [docs/PRODUCTION_VALIDATION.md](PRODUCTION_VALIDATION.md)
 - Release Process: [docs/RELEASE_PROCESS.md](RELEASE_PROCESS.md)
