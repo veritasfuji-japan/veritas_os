@@ -93,6 +93,16 @@ def _transparency_log_path() -> Optional[Path]:
     return Path(anchor_path)
 
 
+def _transparency_anchor_backend() -> str:
+    """Resolve transparency anchor backend from environment."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND") or "local").strip().lower()
+    if raw in {"", "local", "file"}:
+        return "local"
+    if raw in {"none", "noop", "no_op"}:
+        return "noop"
+    return raw
+
+
 def _transparency_required_enabled() -> bool:
     """Return whether transparency anchoring failures must abort writes.
 
@@ -150,6 +160,21 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
     The transparency log can be a local spool file that is shipped to an
     external append-only system by infrastructure.
     """
+    backend = _transparency_anchor_backend()
+    if backend == "noop":
+        return {"configured": True, "ok": True, "backend": "noop", "path": None}
+    if backend != "local":
+        return {
+            "configured": True,
+            "ok": False,
+            "backend": "invalid",
+            "path": None,
+            "error": (
+                "ValueError: Unsupported VERITAS_TRUSTLOG_ANCHOR_BACKEND. "
+                "Expected 'local' or 'noop'."
+            ),
+        }
+
     path = _transparency_log_path()
     if path is None:
         return {"configured": False, "ok": False, "path": None}
@@ -176,6 +201,7 @@ def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
     return {
         "configured": True,
         "ok": True,
+        "backend": "local",
         "path": str(path),
         "entry_hash": entry_hash,
     }

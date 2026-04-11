@@ -207,8 +207,11 @@ operators can prove which governance control-plane asset was in force.
 Startup will refuse with an actionable error when:
 - `VERITAS_SECRET_PROVIDER` is not set (external secret manager enforcement)
 - `VERITAS_API_SECRET_REF` is not set (external secret manager enforcement)
-- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is not set (transparency anchoring)
-- `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` is not set (WORM hard-fail)
+- `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms`, or `VERITAS_TRUSTLOG_KMS_KEY_ID` is missing
+- `VERITAS_TRUSTLOG_MIRROR_BACKEND` is not `s3_object_lock`
+- `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` are missing for S3 mirror mode
+- `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop` while `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1`
+- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is missing when anchor backend is `local` and transparency is required
 
 ### Escape hatches (secure posture only)
 
@@ -1075,6 +1078,8 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` | — | Local append mirror destination path (used when backend is `local`) |
 | `VERITAS_TRUSTLOG_S3_BUCKET` | — | S3 bucket name for TrustLog mirror writes (`s3_object_lock` backend) |
 | `VERITAS_TRUSTLOG_S3_PREFIX` | — | S3 object key prefix for append-only TrustLog objects |
+| `VERITAS_TRUSTLOG_ANCHOR_BACKEND` | `local` | TrustLog anchor backend (`local` or `noop`) |
+| `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | — | Local transparency anchor path (required when anchor backend is `local` and transparency is required) |
 | `VERITAS_TRUSTLOG_S3_REGION` | — | AWS region override for S3 client |
 | `VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE` | — | Object Lock mode (`GOVERNANCE` or `COMPLIANCE`) |
 | `VERITAS_TRUSTLOG_S3_RETENTION_DAYS` | — | Retention period in days for S3 Object Lock |
@@ -1089,6 +1094,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - Existing deployments continue to work with no change because `VERITAS_TRUSTLOG_MIRROR_BACKEND` defaults to `local` and keeps `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` behavior.
 - To migrate to S3 Object Lock, set `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and provide at minimum `VERITAS_TRUSTLOG_S3_BUCKET` (plus optional prefix/region/retention settings).
 - `VERITAS_TRUSTLOG_WORM_HARD_FAIL` semantics are unchanged and apply to both backends.
+- In `secure`/`prod`, startup validation requires `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and both `VERITAS_TRUSTLOG_S3_BUCKET` and `VERITAS_TRUSTLOG_S3_PREFIX`.
 
 #### TrustLog mirror verification modes
 
