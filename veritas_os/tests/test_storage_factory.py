@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from veritas_os.storage.factory import (
@@ -96,7 +98,6 @@ class TestValidateBackendConfig:
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "json")
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
         monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
-        import logging
 
         with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
             validate_backend_config()
@@ -107,7 +108,6 @@ class TestValidateBackendConfig:
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
         monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
-        import logging
 
         with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
             validate_backend_config()
@@ -118,7 +118,6 @@ class TestValidateBackendConfig:
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
         monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
-        import logging
 
         with caplog.at_level(logging.WARNING, logger="veritas_os.storage.factory"):
             validate_backend_config()

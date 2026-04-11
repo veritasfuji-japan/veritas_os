@@ -12,6 +12,7 @@ Markers:
 
 from __future__ import annotations
 
+import logging
 import os
 import subprocess
 import textwrap
@@ -309,12 +310,11 @@ class TestPostgresqlBackendReadWrite:
             headers={"X-API-Key": _TEST_API_KEY},
             json=payload,
         )
-        # 200 or 201 both acceptable; 503 if memory store unavailable
-        assert w.status_code in (200, 201, 204, 503), (
-            f"Memory write failed ({w.status_code}): {w.text}"
-        )
         if w.status_code == 503:
             pytest.skip("Memory store unavailable — likely no database")
+        assert w.status_code in (200, 201, 204), (
+            f"Memory write failed ({w.status_code}): {w.text}"
+        )
         # Read back via POST /v1/memory/get
         r = api_client.post(
             "/v1/memory/get",
@@ -388,8 +388,6 @@ class TestBackendMisconfigurationFailFast:
         This catches the scenario where an operator sets up the database
         but forgets to flip the backend selector.
         """
-        import logging
-
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "json")
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
         monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
@@ -406,8 +404,6 @@ class TestBackendMisconfigurationFailFast:
 
         Mixed backends are supported but usually unintentional.
         """
-        import logging
-
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
         monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
