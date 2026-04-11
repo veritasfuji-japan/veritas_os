@@ -182,3 +182,103 @@ class TestDockerfileValid:
     def test_dockerfile_has_healthcheck(self):
         content = (_ROOT / "Dockerfile").read_text()
         assert "HEALTHCHECK" in content or "healthcheck" in content.lower()
+
+
+@pytest.mark.smoke
+class TestStorageBackendVisibility:
+    """Verify /health and /status expose storage_backends field."""
+
+    def test_health_reports_storage_backends(self, api_client):
+        r = api_client.get("/health")
+        assert r.status_code == 200
+        body = r.json()
+        backends = body.get("storage_backends")
+        assert backends is not None, "Missing storage_backends in /health"
+        assert "memory" in backends
+        assert "trustlog" in backends
+
+    def test_status_reports_storage_backends(self, api_client):
+        r = api_client.get("/status")
+        assert r.status_code == 200
+        body = r.json()
+        backends = body.get("storage_backends")
+        assert backends is not None, "Missing storage_backends in /status"
+        assert "memory" in backends
+        assert "trustlog" in backends
+
+
+@pytest.mark.smoke
+class TestComposePostgresqlBackend:
+    """Verify docker-compose.yml configures PostgreSQL as default backend."""
+
+    def test_compose_backend_env_vars(self):
+        import yaml
+
+        compose = _ROOT / "docker-compose.yml"
+        cfg = yaml.safe_load(compose.read_text())
+        backend_env = cfg["services"]["backend"]["environment"]
+        # Backend must explicitly set memory + trustlog to postgresql
+        mem = backend_env.get("VERITAS_MEMORY_BACKEND", "")
+        tlog = backend_env.get("VERITAS_TRUSTLOG_BACKEND", "")
+        assert "postgresql" in mem, (
+            f"VERITAS_MEMORY_BACKEND should default to postgresql, got {mem!r}"
+        )
+        assert "postgresql" in tlog, (
+            f"VERITAS_TRUSTLOG_BACKEND should default to postgresql, got {tlog!r}"
+        )
+
+    def test_compose_database_url_set(self):
+        import yaml
+
+        compose = _ROOT / "docker-compose.yml"
+        cfg = yaml.safe_load(compose.read_text())
+        backend_env = cfg["services"]["backend"]["environment"]
+        db_url = backend_env.get("VERITAS_DATABASE_URL", "")
+        assert "postgres" in db_url, (
+            f"VERITAS_DATABASE_URL should point to postgres, got {db_url!r}"
+        )
+
+    def test_compose_backend_depends_on_postgres(self):
+        import yaml
+
+        compose = _ROOT / "docker-compose.yml"
+        cfg = yaml.safe_load(compose.read_text())
+        deps = cfg["services"]["backend"].get("depends_on", {})
+        assert "postgres" in deps, "backend must depend on postgres service"
+
+
+@pytest.mark.smoke
+class TestBackendSelectionWithEnv:
+    """Verify backend selection reflects environment variables."""
+
+    def test_postgresql_backend_reported_in_health(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+        monkeypatch.setenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "0")
+        monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS", "1")
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
+        from veritas_os.api.server import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        r = client.get("/health")
+        assert r.status_code == 200
+        backends = r.json().get("storage_backends", {})
+        assert backends.get("memory") == "postgresql"
+        assert backends.get("trustlog") == "postgresql"
+
+    def test_json_backend_reported_in_health(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_API_KEY", _TEST_API_KEY)
+        monkeypatch.setenv("VERITAS_GOVERNANCE_ENFORCE_RBAC", "0")
+        monkeypatch.setenv("VERITAS_GOVERNANCE_ALLOW_RBAC_BYPASS", "1")
+        monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "json")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "jsonl")
+        monkeypatch.delenv("VERITAS_DATABASE_URL", raising=False)
+        from veritas_os.api.server import app
+
+        client = TestClient(app, raise_server_exceptions=False)
+        r = client.get("/health")
+        assert r.status_code == 200
+        backends = r.json().get("storage_backends", {})
+        assert backends.get("memory") == "json"
+        assert backends.get("trustlog") == "jsonl"

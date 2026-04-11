@@ -5,6 +5,41 @@
 
 ---
 
+## 0. Docker Compose Quick Start (PostgreSQL Enabled)
+
+Docker Compose **defaults to PostgreSQL** for both Memory and TrustLog backends.
+No additional configuration is needed beyond `docker compose up --build`:
+
+```bash
+# Start with PostgreSQL backend (default)
+docker compose up --build
+
+# Verify backend selection
+curl -s http://localhost:8000/health | python3 -c "
+import json, sys
+h = json.load(sys.stdin)
+print('Storage backends:', h['storage_backends'])
+# Expected: {'memory': 'postgresql', 'trustlog': 'postgresql'}
+"
+```
+
+The `backend` service sets:
+- `VERITAS_MEMORY_BACKEND=postgresql`
+- `VERITAS_TRUSTLOG_BACKEND=postgresql`
+- `VERITAS_DATABASE_URL=postgresql://veritas:veritas@postgres:5432/veritas`
+- `VERITAS_DB_AUTO_MIGRATE=true`
+
+### Lightweight local dev (file-based backends)
+
+To run without PostgreSQL, override in your `.env`:
+
+```bash
+VERITAS_MEMORY_BACKEND=json
+VERITAS_TRUSTLOG_BACKEND=jsonl
+```
+
+---
+
 ## 1. Backend Selection Policy
 
 VERITAS OS supports two storage backend families:

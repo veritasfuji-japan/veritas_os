@@ -352,6 +352,8 @@ jobs:
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
       VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_MEMORY_BACKEND: "postgresql"
+      VERITAS_TRUSTLOG_BACKEND: "postgresql"
 
     steps:
       - name: Checkout

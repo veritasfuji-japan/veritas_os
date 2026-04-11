@@ -760,6 +760,7 @@ class TestFactoryBackendSelection:
 
     def test_postgresql_trustlog(self, monkeypatch) -> None:
         monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
         from veritas_os.storage.factory import create_trust_log_store
         from veritas_os.storage.postgresql import PostgresTrustLogStore
 
@@ -767,6 +768,7 @@ class TestFactoryBackendSelection:
 
     def test_postgresql_memory(self, monkeypatch) -> None:
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
         from veritas_os.storage.factory import create_memory_store
         from veritas_os.storage.postgresql import PostgresMemoryStore
 
