@@ -54,6 +54,10 @@ def _clean_env(monkeypatch):
         "VERITAS_API_SECRET_REF",
         "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH",
         "VERITAS_TRUSTLOG_WORM_MIRROR_PATH",
+        "VERITAS_TRUSTLOG_MIRROR_BACKEND",
+        "VERITAS_TRUSTLOG_S3_BUCKET",
+        "VERITAS_TRUSTLOG_S3_PREFIX",
+        "VERITAS_TRUSTLOG_ANCHOR_BACKEND",
         "VERITAS_TRUSTLOG_SIGNER_BACKEND",
         "VERITAS_TRUSTLOG_KMS_KEY_ID",
         "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD",
@@ -67,8 +71,11 @@ def _set_minimum_strict_integrations(monkeypatch) -> None:
     """Set non-signer strict integrations so signer tests stay focused."""
     monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
     monkeypatch.setenv("VERITAS_API_SECRET_REF", "secret/ref")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "trustlog-prod")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
     monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/var/transparency")
-    monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/var/worm")
 
 
 # ============================================================
@@ -261,12 +268,12 @@ class TestValidatePostureStartup:
         _clean_env(monkeypatch)
         d = derive_defaults(PostureLevel.PROD)
         errors = validate_posture_startup(d)
-        # 5 errors: base strict integrations + trustlog signer enforcement.
-        assert len(errors) == 5
+        # 6 errors: strict integrations + backend requirements.
+        assert len(errors) == 6
         assert any("VERITAS_SECRET_PROVIDER" in e for e in errors)
         assert any("VERITAS_API_SECRET_REF" in e for e in errors)
+        assert any("VERITAS_TRUSTLOG_MIRROR_BACKEND" in e for e in errors)
         assert any("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH" in e for e in errors)
-        assert any("VERITAS_TRUSTLOG_WORM_MIRROR_PATH" in e for e in errors)
         assert any(
             "VERITAS_TRUSTLOG_SIGNER_BACKEND=file is not allowed" in e
             for e in errors
@@ -276,11 +283,14 @@ class TestValidatePostureStartup:
         _clean_env(monkeypatch)
         monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
         monkeypatch.setenv("VERITAS_API_SECRET_REF", "my/secret")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "prod-bucket")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
         monkeypatch.setenv(
             "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH",
             "/var/transparency",
         )
-        monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/var/worm")
         monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
         monkeypatch.setenv(
             "VERITAS_TRUSTLOG_KMS_KEY_ID",
@@ -295,6 +305,50 @@ class TestValidatePostureStartup:
         errors = validate_posture_startup(d)
         assert len(errors) >= 1
 
+    def test_secure_missing_kms_config_has_actionable_error(self, monkeypatch):
+        """Secure posture requires KMS key when aws_kms signer is selected."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.delenv("VERITAS_TRUSTLOG_KMS_KEY_ID", raising=False)
+        defaults = derive_defaults(PostureLevel.SECURE)
+
+        errors = validate_posture_startup(defaults)
+
+        assert any(
+            "VERITAS_TRUSTLOG_KMS_KEY_ID" in err and "aws_kms" in err
+            for err in errors
+        )
+
+    def test_secure_missing_s3_config_has_actionable_errors(self, monkeypatch):
+        """Secure posture requires S3 bucket and prefix for mirror backend."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        monkeypatch.delenv("VERITAS_TRUSTLOG_S3_BUCKET", raising=False)
+        monkeypatch.delenv("VERITAS_TRUSTLOG_S3_PREFIX", raising=False)
+        defaults = derive_defaults(PostureLevel.SECURE)
+
+        errors = validate_posture_startup(defaults)
+
+        assert any("VERITAS_TRUSTLOG_S3_BUCKET" in err for err in errors)
+        assert any("VERITAS_TRUSTLOG_S3_PREFIX" in err for err in errors)
+
+    def test_secure_rejects_invalid_backend_combination(self, monkeypatch):
+        """Secure posture rejects local mirror backend even with path set."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:1:key/a")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/var/worm")
+        defaults = derive_defaults(PostureLevel.SECURE)
+
+        errors = validate_posture_startup(defaults)
+
+        assert any("VERITAS_TRUSTLOG_MIRROR_BACKEND must be 's3_object_lock'" in err for err in errors)
+
     def test_dev_with_enforcement_on_missing_integration(self, monkeypatch):
         _clean_env(monkeypatch)
         monkeypatch.setenv("VERITAS_ENFORCE_EXTERNAL_SECRET_MANAGER", "1")
@@ -305,6 +359,8 @@ class TestValidatePostureStartup:
     def test_dev_with_file_trustlog_signer_succeeds(self, monkeypatch):
         """Dev posture keeps local file signer workflow available."""
         _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "noop")
         monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
         defaults = derive_defaults(PostureLevel.DEV)
 
@@ -381,8 +437,11 @@ class TestInitPosture:
         _clean_env(monkeypatch)
         monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
         monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/secret")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "prod-bucket")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
         monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/var/t")
-        monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/var/w")
         monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
         monkeypatch.setenv(
             "VERITAS_TRUSTLOG_KMS_KEY_ID",
@@ -410,6 +469,9 @@ class TestInitPosture:
             "VERITAS_TRUSTLOG_KMS_KEY_ID",
             "arn:aws:kms:us-east-1:111:key/secure",
         )
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "secure-bucket")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
         d = init_posture(explicit="secure")
         assert d.posture == PostureLevel.SECURE
         assert d.policy_runtime_enforce is False

@@ -226,6 +226,26 @@ def _trustlog_signer_backend() -> str:
     return raw
 
 
+def _trustlog_mirror_backend() -> str:
+    """Return normalized TrustLog mirror backend name."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND") or "local").strip().lower()
+    if raw in {"", "local", "filesystem"}:
+        return "local"
+    if raw in {"s3_object_lock", "s3"}:
+        return "s3_object_lock"
+    return raw
+
+
+def _trustlog_anchor_backend() -> str:
+    """Return normalized TrustLog anchor backend name."""
+    raw = (os.getenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND") or "local").strip().lower()
+    if raw in {"", "local", "file"}:
+        return "local"
+    if raw in {"none", "noop", "no_op"}:
+        return "noop"
+    return raw
+
+
 def _allow_insecure_signer_override() -> bool:
     """Return True when the unsupported production break-glass is enabled."""
     raw = (os.getenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD") or "").strip()
@@ -257,22 +277,60 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 f"(posture={defaults.posture.value})."
             )
 
-    if defaults.trustlog_transparency_required:
-        tp = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH") or "").strip()
-        if not tp:
+    mirror_backend = _trustlog_mirror_backend()
+    if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
+        if mirror_backend != "s3_object_lock":
             errors.append(
-                "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH must be set when "
-                "transparency log anchoring is required "
-                f"(posture={defaults.posture.value})."
+                "VERITAS_TRUSTLOG_MIRROR_BACKEND must be 's3_object_lock' in "
+                f"{defaults.posture.value} posture (got {mirror_backend!r})."
+            )
+    elif mirror_backend not in {"local", "s3_object_lock"}:
+        errors.append(
+            "VERITAS_TRUSTLOG_MIRROR_BACKEND must be one of "
+            "('local', 's3_object_lock')."
+        )
+
+    if mirror_backend == "local":
+        if defaults.trustlog_worm_hard_fail:
+            wp = (os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH") or "").strip()
+            if not wp:
+                errors.append(
+                    "VERITAS_TRUSTLOG_WORM_MIRROR_PATH must be set when "
+                    "VERITAS_TRUSTLOG_MIRROR_BACKEND=local and WORM hard-fail "
+                    f"is required (posture={defaults.posture.value})."
+                )
+    elif mirror_backend == "s3_object_lock":
+        s3_bucket = (os.getenv("VERITAS_TRUSTLOG_S3_BUCKET") or "").strip()
+        s3_prefix = (os.getenv("VERITAS_TRUSTLOG_S3_PREFIX") or "").strip()
+        if not s3_bucket:
+            errors.append(
+                "VERITAS_TRUSTLOG_S3_BUCKET must be set when "
+                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
+            )
+        if not s3_prefix:
+            errors.append(
+                "VERITAS_TRUSTLOG_S3_PREFIX must be set when "
+                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
             )
 
-    if defaults.trustlog_worm_hard_fail:
-        wp = (os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH") or "").strip()
-        if not wp:
+    anchor_backend = _trustlog_anchor_backend()
+    if anchor_backend not in {"local", "noop"}:
+        errors.append(
+            "VERITAS_TRUSTLOG_ANCHOR_BACKEND must be one of ('local', 'noop')."
+        )
+
+    if defaults.trustlog_transparency_required:
+        if anchor_backend == "noop":
             errors.append(
-                "VERITAS_TRUSTLOG_WORM_MIRROR_PATH must be set when "
-                "WORM hard-fail is required "
-                f"(posture={defaults.posture.value})."
+                "VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop is not allowed when "
+                "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1."
+            )
+        tp = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH") or "").strip()
+        if anchor_backend == "local" and not tp:
+            errors.append(
+                "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH must be set when "
+                "VERITAS_TRUSTLOG_ANCHOR_BACKEND=local and transparency "
+                f"anchoring is required (posture={defaults.posture.value})."
             )
 
     signer_backend = _trustlog_signer_backend()
