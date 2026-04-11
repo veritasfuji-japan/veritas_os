@@ -34,17 +34,27 @@ target_metadata = None
 # ---------------------------------------------------------------------------
 
 def _get_url() -> str:
-    """Return the database URL from environment or raise with guidance."""
+    """Return the database URL from environment or raise with guidance.
+
+    If the URL uses the bare ``postgresql://`` scheme, it is rewritten to
+    ``postgresql+psycopg://`` so that SQLAlchemy uses the **psycopg 3**
+    driver that the project depends on (instead of the legacy psycopg2).
+    """
     url = os.getenv("VERITAS_DATABASE_URL", "").strip()
     if not url:
         print(
             "ERROR: VERITAS_DATABASE_URL is not set.\n"
             "Set it to a PostgreSQL DSN, e.g.\n"
             "  export VERITAS_DATABASE_URL="
-            "postgresql://veritas:veritas@localhost:5432/veritas",
+            "postgresql+psycopg://veritas:veritas@localhost:5432/veritas",
             file=sys.stderr,
         )
         raise SystemExit(1)
+
+    # Ensure SQLAlchemy uses the psycopg 3 driver, not the legacy psycopg2.
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
+
     return url
 
 
