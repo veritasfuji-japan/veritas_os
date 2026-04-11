@@ -44,8 +44,15 @@ async def run_lifespan(
     set_active_posture(posture_defaults)
 
     # Storage DI: initialize backend instances once per application lifecycle.
-    app.state.trust_log_store = create_trust_log_store()
-    app.state.memory_store = create_memory_store()
+    trust_log_store = create_trust_log_store()
+    memory_store = create_memory_store()
+    app.state.trust_log_store = trust_log_store
+    app.state.memory_store = memory_store
+    logger.info(
+        "Storage backends initialised: trust_log=%s, memory=%s",
+        type(trust_log_store).__name__,
+        type(memory_store).__name__,
+    )
 
     startup_validation()
     runtime_health_check()
