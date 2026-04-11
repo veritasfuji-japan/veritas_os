@@ -66,8 +66,20 @@ Variables prefixed with `VERITAS_` are project-specific.
 | `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD` | `0` | **Unsupported emergency break-glass only**. `1` allows `file` signer in `secure`/`prod` but emits a critical security warning |
 | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` | `""` | Optional mirror path for WORM (Write-Once-Read-Many) audit log |
 | `VERITAS_TRUSTLOG_WORM_HARD_FAIL` | `0` | Fail hard if WORM mirror write fails (`0` = warn, `1` = error) |
-| `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | `""` | Path to transparency log for blockchain-like anchoring |
+| `VERITAS_TRUSTLOG_ANCHOR_BACKEND` | `local` | TrustLog anchor backend (`local` = local spool receipt, `noop` = explicitly skip anchoring) |
+| `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` | `""` | Local spool path used by `VERITAS_TRUSTLOG_ANCHOR_BACKEND=local` |
 | `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED` | `0` | Require transparency log anchoring (`0` = optional, `1` = required) |
+
+### TrustLog transparency anchoring roadmap
+
+- **Phase 1 (current)**: local/internal anchoring via structured backend receipts.
+  - `local` backend writes to local spool JSONL and stores a normalized
+    `anchor_receipt` in witness entries.
+  - `noop` backend emits a structured "skipped" receipt for local/dev flows.
+- **Future phase**: external timestamp authorities (RFC3161 TSA or equivalent).
+  - The witness schema is prepared via `anchor_backend`, `anchor_status`,
+    and `anchor_receipt`, so a TSA backend can be added without structural
+    TrustLog refactors.
 
 ---
 

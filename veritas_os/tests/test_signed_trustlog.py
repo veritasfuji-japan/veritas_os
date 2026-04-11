@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 import veritas_os.api.server as server
 from veritas_os.audit import trustlog_signed
+from veritas_os.audit.trustlog_verify import verify_witness_ledger
 
 
 @pytest.fixture
@@ -128,6 +129,86 @@ def test_worm_hard_fail_mode_raises_when_mirror_write_fails(monkeypatch, tmp_pat
 
     with pytest.raises(trustlog_signed.SignedTrustLogWriteError, match="worm_mirror_write_failed"):
         trustlog_signed.append_signed_decision({"request_id": "r-hard-fail", "decision": "allow"})
+
+
+def test_local_transparency_backend_returns_structured_receipt(monkeypatch, tmp_path):
+    """Local spool backend persists a normalized anchor receipt."""
+    log_path = tmp_path / "trustlog.jsonl"
+    anchor_path = tmp_path / "anchor_spool.jsonl"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(anchor_path))
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-anchor-local"})
+
+    assert entry["anchor_backend"] == "local"
+    assert entry["anchor_status"] == "anchored"
+    assert isinstance(entry["anchor_receipt"], dict)
+    assert entry["anchor_receipt"]["receipt_location"] == str(anchor_path)
+    assert entry["anchor_receipt"]["receipt_payload_hash"]
+    assert anchor_path.exists()
+
+
+def test_noop_transparency_backend_returns_structured_receipt(monkeypatch, tmp_path):
+    """No-op backend reports skipped status and does not require spool path."""
+    log_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "noop")
+    monkeypatch.delenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", raising=False)
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-anchor-noop"})
+
+    assert entry["anchor_backend"] == "noop"
+    assert entry["anchor_status"] == "skipped"
+    assert entry["anchor_receipt"]["receipt_location"] is None
+    assert entry["anchor_receipt"]["receipt_payload_hash"] is None
+
+
+def test_transparency_backend_exception_handled(monkeypatch, tmp_path):
+    """Backend exceptions are converted into failed anchor receipts."""
+    log_path = tmp_path / "trustlog.jsonl"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+    monkeypatch.setenv(
+        "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH",
+        str(tmp_path / "anchor_spool.jsonl"),
+    )
+
+    original_append = trustlog_signed._append_line
+
+    def _fail_anchor(path, line):
+        if str(path).endswith("anchor_spool.jsonl"):
+            raise OSError("anchor unavailable")
+        original_append(path, line)
+
+    monkeypatch.setattr(trustlog_signed, "_append_line", _fail_anchor)
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-anchor-failure"})
+
+    assert entry["anchor_status"] == "failed"
+    assert entry["anchor_receipt"]["error"].startswith("OSError:")
+
+
+def test_anchor_receipt_structure_verified(monkeypatch, tmp_path):
+    """Witness verification validates anchor receipt structure when present."""
+    log_path = tmp_path / "trustlog.jsonl"
+    anchor_path = tmp_path / "anchor_spool.jsonl"
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", str(anchor_path))
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-anchor-verify"})
+    result = verify_witness_ledger([entry], trustlog_signed.verify_signature)
+    reasons = [err["reason"] for err in result["detailed_errors"]]
+    assert "anchor_receipt_invalid_anchored_hash" not in reasons
+    assert "anchor_receipt_missing" not in reasons
+
+    bad_entry = dict(entry)
+    bad_entry["anchor_receipt"] = dict(entry["anchor_receipt"])
+    bad_entry["anchor_receipt"]["anchored_hash"] = "not-a-sha256"
+    bad_result = verify_witness_ledger([bad_entry], trustlog_signed.verify_signature)
+    reasons = [err["reason"] for err in bad_result["detailed_errors"]]
+    assert "anchor_receipt_invalid_anchored_hash" in reasons
 
 
 def test_aws_kms_signer_backend(monkeypatch, tmp_path):
