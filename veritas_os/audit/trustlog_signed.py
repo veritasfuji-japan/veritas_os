@@ -58,6 +58,7 @@ PRIVATE_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_private.key"
 PUBLIC_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_public.key"
 
 _lock = threading.RLock()
+_mirror_backend_cache: Optional[tuple[str, Any]] = None
 _logger = logging.getLogger(__name__)
 TRUSTLOG_SIGNER_METADATA_VERSION = "v2"
 TRUSTLOG_VERIFICATION_POLICY_VERSION = "trustlog_witness_v2"
@@ -146,9 +147,35 @@ def _append_line(path: Path, line: str) -> None:
 
 def _mirror_to_worm(line: str) -> Dict[str, Any]:
     """Best-effort append using the configured mirror backend."""
+    global _mirror_backend_cache
     started = perf_counter()
     try:
-        mirror_backend = build_storage_mirror(append_fn=_append_line)
+        mirror_backend_name = os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower()
+        mirror_mode = os.getenv("VERITAS_TRUSTLOG_S3_MIRROR_MODE", "single_entry_objects").strip().lower()
+        cache_enabled = mirror_backend_name == "s3_object_lock" and mirror_mode == "sealed_segments"
+        if not cache_enabled:
+            _mirror_backend_cache = None
+            mirror_backend = build_storage_mirror(append_fn=_append_line)
+        else:
+            mirror_signature = "|".join(
+                [
+                    mirror_backend_name,
+                    os.getenv("VERITAS_TRUSTLOG_S3_BUCKET", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_PREFIX", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_REGION", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_RETENTION_DAYS", "").strip(),
+                    mirror_mode,
+                    os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MAX_ENTRIES", "100").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MANIFEST_HMAC_KEY", "").strip(),
+                ]
+            )
+            if _mirror_backend_cache is None or _mirror_backend_cache[0] != mirror_signature:
+                _mirror_backend_cache = (
+                    mirror_signature,
+                    build_storage_mirror(append_fn=_append_line),
+                )
+            mirror_backend = _mirror_backend_cache[1]
     except (ValueError, TypeError) as exc:
         observe_trustlog_mirror_latency("invalid", perf_counter() - started)
         record_trustlog_mirror_failure("invalid", exc.__class__.__name__)
@@ -172,6 +199,32 @@ def _mirror_to_worm(line: str) -> Dict[str, Any]:
             result.get("error", "unknown_error"),
         )
     return result
+
+
+def _build_mirror_receipt(mirror_result: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize mirror backend output into a stable witness receipt shape."""
+    base_keys = (
+        "bucket",
+        "key",
+        "version_id",
+        "etag",
+        "retention_mode",
+        "retain_until_date",
+        "mode",
+        "segment_id",
+        "segment_object_key",
+        "segment_manifest_key",
+        "segment_payload_hash",
+        "manifest_hash",
+        "manifest_version_id",
+        "manifest_etag",
+        "manifest",
+    )
+    return {
+        key: mirror_result.get(key)
+        for key in base_keys
+        if mirror_result.get(key) is not None
+    }
 
 
 def _append_transparency_anchor(entry_hash: str) -> Dict[str, Any]:
@@ -843,22 +896,7 @@ def append_signed_decision(
                 raise SignedTrustLogWriteError("worm_mirror_write_failed")
             entry["worm_mirror"] = mirror
             entry["mirror_backend"] = mirror.get("backend")
-            entry["mirror_receipt"] = (
-                {
-                    key: mirror.get(key)
-                    for key in (
-                        "bucket",
-                        "key",
-                        "version_id",
-                        "etag",
-                        "retention_mode",
-                        "retain_until_date",
-                    )
-                    if mirror.get(key) is not None
-                }
-                if mirror.get("ok")
-                else None
-            )
+            entry["mirror_receipt"] = _build_mirror_receipt(mirror) if mirror.get("ok") else None
 
             transparency_anchor = _anchor_entry_hash(_entry_chain_hash(entry))
             if (

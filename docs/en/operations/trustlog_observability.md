@@ -70,3 +70,28 @@ This document defines production-focused TrustLog metrics, alerting guidance, an
 ## Security note
 
 Any sustained increase in `trustlog_verify_failure_total`, `trustlog_sign_failure_total`, or mirror/anchor failures in hardened posture should be treated as a potential security and integrity incident until ruled out.
+
+## S3 mirror mode selection (scalability tradeoffs)
+
+`VERITAS_TRUSTLOG_S3_MIRROR_MODE` now supports two modes:
+
+- `single_entry_objects` (default)
+  - One S3 object per witness entry.
+  - Best when volume is low/moderate and per-entry retrieval simplicity is preferred.
+  - Tradeoff: high object-count growth, expensive list operations at large scale.
+- `sealed_segments`
+  - Buffers entries and seals bounded segments using `VERITAS_TRUSTLOG_S3_SEGMENT_MAX_ENTRIES`.
+  - Writes one JSONL payload object plus one manifest object per sealed segment.
+  - Manifest stores segment boundaries (`first_hash`/`last_hash`), payload digest, timestamps, and object keys.
+  - Best for high-throughput audit pipelines and archive/export packaging.
+  - Tradeoff: latest entries remain in a short-lived in-memory buffer until seal threshold is reached.
+
+Recommended operational guidance:
+
+- Use `single_entry_objects` for small deployments and incident forensics workflows that mostly fetch single rows.
+- Use `sealed_segments` when S3 listing cost/object-count pressure becomes material.
+- Keep `VERITAS_TRUSTLOG_WORM_HARD_FAIL=1` in secure/prod so mirror write failures continue to fail closed.
+
+### Security warning
+
+If `VERITAS_TRUSTLOG_S3_SEGMENT_MANIFEST_HMAC_KEY` is used, protect it in an external secret manager (do not commit or hardcode). Compromise of this key weakens manifest-authenticity guarantees and should be treated as a security incident.

@@ -535,3 +535,60 @@ def test_mirror_remote_verification_skipped_note(monkeypatch) -> None:
     result = verify_witness_ledger(_s3_receipt_witness(), lambda _: True, s3_client=None)
     note_codes = {note["code"] for note in result["verification_notes"]}
     assert "verification_skipped" in note_codes
+
+
+def test_segment_manifest_hash_validation() -> None:
+    manifest = {
+        "segment_id": "seg-001",
+        "entry_count": 2,
+        "first_timestamp": "2026-04-11T00:00:00Z",
+        "last_timestamp": "2026-04-11T00:00:02Z",
+        "first_hash": "a" * 64,
+        "last_hash": "b" * 64,
+        "segment_payload_hash": "c" * 64,
+        "object_keys_written": ["audit/segments/seg-001.jsonl", "audit/segments/seg-001.manifest.json"],
+    }
+    payload = {"request_id": "r-segment", "decision": "allow"}
+    entry = {
+        "decision_payload": payload,
+        "payload_hash": sha256_of_canonical_json(payload),
+        "previous_hash": None,
+        "signature": "sig-ok",
+        "mirror_receipt": {
+            "mode": "sealed_segments",
+            "manifest": manifest,
+            "manifest_hash": sha256_of_canonical_json(manifest),
+        },
+    }
+    result = verify_witness_ledger([entry], lambda _: True)
+    assert result["ok"] is True
+
+
+def test_segment_manifest_tamper_detected() -> None:
+    manifest = {
+        "segment_id": "seg-002",
+        "entry_count": 1,
+        "first_timestamp": "2026-04-11T00:00:00Z",
+        "last_timestamp": "2026-04-11T00:00:00Z",
+        "first_hash": "d" * 64,
+        "last_hash": "d" * 64,
+        "segment_payload_hash": "e" * 64,
+        "object_keys_written": ["audit/segments/seg-002.jsonl", "audit/segments/seg-002.manifest.json"],
+    }
+    payload = {"request_id": "r-segment-tampered", "decision": "allow"}
+    entry = {
+        "decision_payload": payload,
+        "payload_hash": sha256_of_canonical_json(payload),
+        "previous_hash": None,
+        "signature": "sig-ok",
+        "mirror_receipt": {
+            "mode": "sealed_segments",
+            "manifest": manifest,
+            "manifest_hash": "f" * 64,
+        },
+    }
+    result = verify_witness_ledger([entry], lambda _: True)
+    reasons = {error["reason"] for error in result["detailed_errors"]}
+    codes = {error["code"] for error in result["detailed_errors"]}
+    assert "manifest_hash_mismatch" in reasons
+    assert "tamper_suspected" in codes
