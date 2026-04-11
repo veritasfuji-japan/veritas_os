@@ -107,6 +107,8 @@ VERITAS OS is built to solve that layer.
 - **PostgreSQL Production Guide**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
 - **Security Hardening**: [`docs/security-hardening.md`](docs/security-hardening.md)
 - **Database Migrations**: [`docs/database-migrations.md`](docs/database-migrations.md)
+- **Backend Parity Coverage**: [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
+- **Legacy Path Cleanup**: [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
 - **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - **Documentation Hub (EN)**: `docs/en/README.md`
 - **Documentation Hub (JA)**: `docs/ja/README.md`
@@ -391,10 +393,22 @@ veritas_os/                  ← Monorepo root
 
 VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLog persistence.
 
-| Backend | MemoryOS | TrustLog | Default | Use case |
-|---------|----------|----------|---------|----------|
-| **JSON / JSONL** (file-based) | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ Yes | Single-process dev, demo, air-gapped |
-| **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | Multi-worker production, durable audit |
+| Backend | MemoryOS | TrustLog | Default (local/CLI) | Default (Docker Compose) | Use case |
+|---------|----------|----------|:-------------------:|:------------------------:|----------|
+| **JSON / JSONL** (file-based) | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ Yes | — | Single-process dev, demo, air-gapped |
+| **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | ✅ Yes | Multi-worker production, durable audit |
+
+> **Docker Compose defaults to PostgreSQL.** File-based backends are the default
+> when running via `python -m veritas_os` or `uvicorn` without overriding env vars.
+
+### Environment matrix
+
+| Environment | Recommended backend | Config source |
+|-------------|-------------------|---------------|
+| Local dev (no Docker) | JSON / JSONL | `.env` defaults |
+| Local dev (Docker Compose) | PostgreSQL | `docker-compose.yml` defaults |
+| Staging | PostgreSQL | Explicit env vars |
+| Secure / Prod | PostgreSQL | External secret manager |
 
 ### Quick switch
 
@@ -415,17 +429,20 @@ make db-upgrade
 - **JSONB storage** — queryable payloads with GIN indexes.
 - **Full parity test suite** — 195+ tests verify identical semantics across backends.
 - **psycopg 3** — modern async PostgreSQL driver with connection pooling (`psycopg-pool`).
+- **JSONL → PostgreSQL import** — documented manual ETL with dry-run and verification steps.
 
 ### Production deployment
 
 See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) for:
 - Pool sizing, SSL/TLS, statement timeout configuration
 - Backup/restore, replication/HA guidance
-- JSONL → PostgreSQL migration path
+- JSONL → PostgreSQL import procedure (dry-run, rollback, re-execution)
+- Smoke test and release validation relationship
+- Legacy path cleanup status
 - Secure/prod posture recommended settings
 - Known limitations and future work (pgvector, partitioning, CDC)
 
-See also: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
+See also: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md) | [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
 
 ---
 
@@ -1262,7 +1279,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Security hardening: input validation, secret/log hygiene, runtime posture system
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
-- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
+- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier
