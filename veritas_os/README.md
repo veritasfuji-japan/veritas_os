@@ -825,6 +825,29 @@ python verify_trust_log.py          # if implemented
 python ../api/merge_trust_logs.py --out logs/trust_log_merged.jsonl
 ```
 
+TrustLog verifier output now includes machine-readable `code` values on each
+`detailed_errors` item, plus `verification_notes` for legacy/skipped checks.
+
+#### TrustLog verification taxonomy
+
+| Category code | Typical meaning | Operator response | Tamper suspected |
+|---|---|---|---|
+| `tamper_suspected` | Hash/receipt state mismatch indicating potential post-write mutation | Escalate incident, preserve artifacts, compare with immutable backups | Yes |
+| `chain_broken` | Hash chain continuity broken (`previous_hash` / `sha256_prev`) | Halt trust in affected range, rebuild from last known-good checkpoint | Yes |
+| `signature_invalid` | Signature does not verify | Check signer keys/rotation history; quarantine entries | Yes |
+| `payload_hash_mismatch` | Witness payload hash differs from recomputed payload | Investigate entry mutation or signing pipeline corruption | Yes |
+| `linkage_hash_mismatch` | Full-artifact hash differs from witness linkage hash | Treat as potential tampering between ledgers | Yes |
+| `decrypt_failed` | Full-ledger line cannot be decrypted/decoded | Validate ciphertext integrity and encryption configuration | No |
+| `key_missing` | Encryption key unavailable during verification | Restore verifier key provisioning and rerun verification | No |
+| `signer_unavailable` | Signature verifier callback/backend unavailable | Restore signer backend and rerun verification | No |
+| `artifact_missing` | Referenced full artifact cannot be resolved | Restore artifact retention/search roots; rerun | No |
+| `mirror_unreachable` | Mirror object/receipt expected but not reachable | Check mirror endpoint/IAM/network and object retention policies | No |
+| `mirror_receipt_malformed` | Mirror receipt shape invalid | Fix writer schema or reject malformed rows | No |
+| `legacy_entry` | Entry validated in compatibility mode with modern fields absent | Plan migration/re-signing; keep for audit continuity | No |
+| `schema_invalid` | Invalid entry metadata/anchor/artifact schema | Fix producer schema and reject bad rows | No |
+| `unsupported_backend` | Artifact backend unsupported by verifier | Add backend verifier support or disable backend usage | No |
+| `verification_skipped` | A check was intentionally skipped (e.g., remote backend unavailable) | Resolve dependencies and rerun full verification | No |
+
 ---
 
 ## 📜 11. License
