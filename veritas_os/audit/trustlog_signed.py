@@ -296,17 +296,35 @@ def _build_signer_metadata(signer: Signer, *, signed_at: str) -> Dict[str, Any]:
         - ``public_key_fingerprint`` can be ``None`` when a backend cannot
           provide a public key during write-time.
     """
-    public_key_fp = signer.public_key_fingerprint()
+    signer_key_version_fn = getattr(signer, "signer_key_version", None)
+    signature_algorithm_fn = getattr(signer, "signature_algorithm", None)
+    public_key_fingerprint_fn = getattr(signer, "public_key_fingerprint", None)
+
+    signer_key_version = (
+        signer_key_version_fn()
+        if callable(signer_key_version_fn)
+        else "unknown"
+    )
+    signature_algorithm = (
+        signature_algorithm_fn()
+        if callable(signature_algorithm_fn)
+        else "unknown"
+    )
+    public_key_fp = (
+        public_key_fingerprint_fn()
+        if callable(public_key_fingerprint_fn)
+        else None
+    )
     return {
         "metadata_version": TRUSTLOG_SIGNER_METADATA_VERSION,
         "signer_type": signer.signer_type,
         "signer_key_id": signer.signer_key_id(),
-        "signer_key_version": signer.signer_key_version(),
-        "signature_algorithm": signer.signature_algorithm(),
+        "signer_key_version": signer_key_version,
+        "signature_algorithm": signature_algorithm,
         "public_key_fingerprint": public_key_fp,
         "signed_at": signed_at,
         "verification_policy_version": TRUSTLOG_VERIFICATION_POLICY_VERSION,
-        "key_version_normalized": signer.signer_key_version() == "unknown",
+        "key_version_normalized": signer_key_version == "unknown",
         "fingerprint_missing": public_key_fp is None,
     }
 

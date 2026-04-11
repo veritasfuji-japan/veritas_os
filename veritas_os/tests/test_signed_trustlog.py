@@ -522,3 +522,28 @@ def test_missing_fingerprint_fallback_behavior(monkeypatch, tmp_path):
     meta = entry["signer_metadata"]
     assert meta["public_key_fingerprint"] is None
     assert meta["fingerprint_missing"] is True
+
+
+def test_legacy_signer_object_without_extended_metadata_methods(monkeypatch, tmp_path):
+    """Backward compatibility: legacy signer doubles without new methods still work."""
+
+    class LegacySigner:
+        signer_type = "file"
+
+        def sign_payload_hash(self, payload_hash: str) -> str:
+            return "ZmFrZV9zaWduYXR1cmU="
+
+        def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+            return True
+
+        def signer_key_id(self) -> str:
+            return "legacy-key-id"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", tmp_path / "trustlog.jsonl")
+    monkeypatch.setattr(trustlog_signed, "_resolve_signer", lambda ensure_local_keys=False: LegacySigner())
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-legacy-signer"})
+    signer_metadata = entry["signer_metadata"]
+    assert signer_metadata["signer_key_version"] == "unknown"
+    assert signer_metadata["signature_algorithm"] == "unknown"
+    assert signer_metadata["public_key_fingerprint"] is None
