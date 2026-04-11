@@ -45,6 +45,7 @@ What is proven:
 
 What is proven:
 - All Tier 1 checks (re-run)
+- TrustLog profile matrix (`dev`/`secure`/`prod`) with required secure/prod gates
 - Production-like pytest suite (`pytest -m "production or smoke"`)
 - Docker Compose full-stack health check
 - Governance readiness report (13+ checks)
@@ -64,6 +65,10 @@ What is proven:
 - Load burst validation with percentile summaries
 - Docker Compose governance endpoint reachability
 - External provider validation (when secrets configured)
+
+Notes:
+- Tier 3 remains advisory for normal development flow.
+- TrustLog release gating is enforced in Tier 2 for `release/*`, `rc/*`, and `v*`.
 
 ## Running Validation Locally
 

@@ -21,8 +21,16 @@ name: Release Gate
 
 on:
   push:
+    branches:
+      - "release/**"
+      - "rc/**"
     tags:
       - "v*"
+      - "v*-rc.*"
+  pull_request:
+    branches:
+      - "release/**"
+      - "rc/**"
   workflow_dispatch:
     inputs:
       tier3_external:
@@ -46,6 +54,126 @@ env:
 # Re-run at release time to catch any drift since last PR merge.
 # ============================================================================
 jobs:
+  trustlog-production-matrix:
+    name: "[Tier 2] trustlog-production (${{ matrix.profile }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: dev
+            profile_required: "false"
+          - profile: secure
+            profile_required: "true"
+          - profile: prod
+            profile_required: "true"
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_ENV: ${{ matrix.profile }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: Resolve TrustLog gate mode
+        id: gate_mode
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF}"
+          BASE_REF="${GITHUB_BASE_REF:-}"
+          REQUIRED="false"
+          if [[ "${REF}" == refs/tags/v* ]]; then
+            REQUIRED="true"
+          elif [[ "${REF}" == refs/heads/release/* || "${REF}" == refs/heads/rc/* ]]; then
+            REQUIRED="true"
+          elif [[ "${BASE_REF}" == release/* || "${BASE_REF}" == rc/* ]]; then
+            REQUIRED="true"
+          fi
+
+          if [[ "${{ matrix.profile_required }}" == "true" ]]; then
+            REQUIRED="true"
+          fi
+
+          if [[ "${REQUIRED}" == "true" ]]; then
+            echo "mode=required" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=advisory" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run TrustLog production validation
+        id: trustlog_tests
+        run: |
+          set -euo pipefail
+          mkdir -p test-reports
+          STATUS=0
+          pytest -q -v --tb=short \
+            veritas_os/tests/test_posture.py::TestValidatePostureStartup::test_prod_with_aws_kms_trustlog_signer_succeeds \
+            veritas_os/tests/test_posture.py::TestValidatePostureStartup::test_secure_missing_kms_config_has_actionable_error \
+            veritas_os/tests/test_posture.py::TestValidatePostureStartup::test_secure_missing_s3_config_has_actionable_errors \
+            veritas_os/tests/test_posture.py::TestValidatePostureStartup::test_secure_rejects_invalid_backend_combination \
+            veritas_os/tests/test_signed_trustlog.py::test_worm_hard_fail_mode_raises_when_mirror_write_fails \
+            veritas_os/tests/test_trustlog_verify_unified.py::test_unified_verifier_good_path \
+            veritas_os/tests/test_trustlog_verify_unified.py::test_witness_linkage_legacy_without_artifact_ref \
+            veritas_os/tests/test_trustlog_verify_unified.py::test_mirror_remote_verification_success \
+            veritas_os/tests/test_production_trustlog.py::TestTrustLogWriteReadVerify::test_chain_integrity_after_multiple_writes \
+            --junitxml=test-reports/trustlog-${{ matrix.profile }}.xml || STATUS=$?
+          echo "exit_code=${STATUS}" >> "$GITHUB_OUTPUT"
+          if [[ "${STATUS}" -ne 0 ]]; then
+            echo "TrustLog validation tests failed with exit code ${STATUS}."
+          fi
+
+      - name: Summarize TrustLog validation mode
+        if: always()
+        run: |
+          {
+            echo "## TrustLog validation profile=${{ matrix.profile }}"
+            echo ""
+            echo "- Gate mode: **${{ steps.gate_mode.outputs.mode }}**"
+            echo "- Test exit code: **${{ steps.trustlog_tests.outputs.exit_code }}**"
+            echo "- Coverage: KMS signer / S3 Object Lock mirror / unified verification / startup posture / hard-fail / legacy compatibility"
+            echo "- Ref: \`${GITHUB_REF}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload TrustLog test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trustlog-production-${{ matrix.profile }}-report
+          path: test-reports/trustlog-${{ matrix.profile }}.xml
+          if-no-files-found: warn
+
+      - name: Enforce required mode
+        if: always()
+        run: |
+          set -euo pipefail
+          MODE="${{ steps.gate_mode.outputs.mode }}"
+          EXIT_CODE="${{ steps.trustlog_tests.outputs.exit_code }}"
+          if [[ "${MODE}" == "required" && "${EXIT_CODE}" != "0" ]]; then
+            echo "::error::TrustLog validation is required for this ref/profile and failed (exit=${EXIT_CODE})."
+            echo "::error::Action: inspect trustlog-production-${{ matrix.profile }}-report and rerun after fixing posture/signer/mirror/verification failures."
+            exit 1
+          fi
+          if [[ "${MODE}" == "advisory" && "${EXIT_CODE}" != "0" ]]; then
+            echo "::warning::Advisory TrustLog validation failed (exit=${EXIT_CODE}) but is non-blocking for this ref."
+          fi
+
   governance-smoke:
     name: "[Tier 1] governance-smoke"
     runs-on: ubuntu-latest
@@ -412,7 +540,7 @@ jobs:
   # ============================================================================
   release-readiness:
     name: "✅ Release Readiness Gate"
-    needs: [governance-smoke, security-checks, production-tests, docker-smoke, governance-report]
+    needs: [governance-smoke, security-checks, trustlog-production-matrix, production-tests, docker-smoke, governance-report]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -422,6 +550,7 @@ jobs:
         env:
           SMOKE_RESULT: ${{ needs.governance-smoke.result }}
           SECURITY_RESULT: ${{ needs.security-checks.result }}
+          TRUSTLOG_RESULT: ${{ needs.trustlog-production-matrix.result }}
           PRODUCTION_RESULT: ${{ needs.production-tests.result }}
           DOCKER_RESULT: ${{ needs.docker-smoke.result }}
           GOVERNANCE_REPORT_RESULT: ${{ needs.governance-report.result }}
@@ -452,6 +581,7 @@ jobs:
 
           check "governance-smoke"   "[Tier 1]" "$SMOKE_RESULT"
           check "security-checks"    "[Tier 1]" "$SECURITY_RESULT"
+          check "trustlog-production-matrix" "[Tier 2]" "$TRUSTLOG_RESULT"
           check "production-tests"   "[Tier 2]" "$PRODUCTION_RESULT"
           check "docker-smoke"       "[Tier 2]" "$DOCKER_RESULT"
           check "governance-report"  "[Tier 2]" "$GOVERNANCE_REPORT_RESULT"

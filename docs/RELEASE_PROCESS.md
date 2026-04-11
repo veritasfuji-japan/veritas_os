@@ -15,6 +15,8 @@ VERITAS OS uses semantic versioning: `vMAJOR.MINOR.PATCH` (e.g. `v2.1.0`).
 - **Major releases** (`v3.0.0`) — breaking changes, major architecture changes
 
 Pre-release tags: `v2.1.0-rc.1`, `v2.1.0-beta.1` also trigger the release gate.
+Additionally, release preparation branches (`release/*`, `rc/*`) trigger the same
+gate so maintainers can catch TrustLog production issues before tagging.
 
 ## How to Release
 
@@ -50,8 +52,20 @@ gh run watch --workflow=release-gate.yml
 The release gate runs three parallel groups:
 
 1. **Tier 1** (`governance-smoke` + `security-checks`) — fast, ~3-5 min
-2. **Tier 2** (`production-tests` + `docker-smoke` + `governance-report`) — ~10-15 min
+2. **Tier 2** (`trustlog-production-matrix` + `production-tests` + `docker-smoke` + `governance-report`) — ~10-15 min
 3. **Final** (`release-readiness`) — 1 min summary gate
+
+### TrustLog gating policy
+
+`trustlog-production-matrix` enforces staged validation:
+
+- `dev` profile: advisory on non-release refs, required on `release/*`, `rc/*`, `v*`
+- `secure` profile: always required
+- `prod` profile: always required
+
+The matrix must pass before promotion because it covers:
+KMS signer, S3 Object Lock mirror, unified verification, startup posture,
+hard-fail semantics, and legacy verification compatibility.
 
 ### 4. Verify governance readiness
 
@@ -145,6 +159,7 @@ gh workflow run release-gate.yml --ref v2.1.0 -f tier3_external=true
 | Unit tests (85% coverage) | `main.yml` | Every PR | ✅ PR merge |
 | Frontend lint/test/E2E | `main.yml` | Every PR | ✅ PR merge |
 | Production tests + Docker smoke | `release-gate.yml` | `v*` tag push | ✅ Release |
+| TrustLog production matrix (`dev`/`secure`/`prod`) | `release-gate.yml` | `release/*`, `rc/*`, `v*` | ✅ Release candidate / release |
 | Governance readiness report | `release-gate.yml` | `v*` tag push | ✅ Release |
 | External/live tests | `release-gate.yml` | Manual only | ⚠️ Advisory |
 | Long-running production validation | `production-validation.yml` | Weekly + manual | Advisory |
