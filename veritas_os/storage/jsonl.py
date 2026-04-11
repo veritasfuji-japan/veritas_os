@@ -5,16 +5,19 @@ from __future__ import annotations
 from typing import Any, AsyncIterator, Dict, Optional
 
 from veritas_os.logging import trust_log
+from veritas_os.logging.trust_log_core import prepare_entry
 
 
 class JsonlTrustLogStore:
-    """File-backed TrustLog store based on existing trust_log module logic.
+    """File-backed TrustLog store using the shared secure pipeline.
 
-    Hash-chain and encryption behavior remain encapsulated in the underlying
-    TrustLog implementation to preserve existing security guarantees.
+    The cryptographic pipeline (redact → canonicalize → chain-hash → encrypt)
+    is delegated to :func:`trust_log_core.prepare_entry`.  Persistence and
+    hash-chain continuity are handled by the underlying ``trust_log`` module.
     """
 
     async def append(self, entry: Dict[str, Any]) -> str:
+        """Append *entry* through the standard trust_log pipeline."""
         saved = trust_log.append_trust_log(entry)
         request_id = str(saved.get("request_id") or saved.get("sha256") or "")
         return request_id

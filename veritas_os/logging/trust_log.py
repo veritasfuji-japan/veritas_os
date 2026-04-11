@@ -35,6 +35,7 @@ from veritas_os.logging.encryption import (
     DecryptionError,
 )
 from veritas_os.logging.redact import redact_entry as _redact_entry
+from veritas_os.logging.trust_log_core import prepare_entry as _prepare_entry
 from veritas_os.core.atomic_io import atomic_write_json, atomic_append_line
 from veritas_os.audit.trustlog_signed import (
     SignedTrustLogWriteError,
@@ -414,37 +415,9 @@ def append_trust_log(entry: dict) -> Dict[str, Any]:
 
             items = _load_logs_json()
 
-            # 元 entry を壊さないようにコピー
-            entry = dict(entry)
-            entry.setdefault("created_at", datetime.now(timezone.utc).isoformat())
-            entry["sha256_prev"] = sha256_prev
-
-            # ★ Step 1: redact — PII / secret を自動マスキング
-            entry = _redact_entry(entry)
-
-            # ★ Step 2: canonicalize + Step 3: chain hash
-            # rₜ を RFC 8785 canonical JSON化（キーソート・空白なし・一意性保証）
-            entry_json = _normalize_entry_for_hash(entry)
-
-            # hₜ₋₁ || rₜ を結合
-            if sha256_prev:
-                combined = sha256_prev + entry_json
-            else:
-                combined = entry_json
-
-            # SHA-256計算: hₜ = SHA256(hₜ₋₁ || rₜ)
-            entry["sha256"] = hashlib.sha256(combined.encode("utf-8")).hexdigest()
-
-            # ★ Step 4: encrypt (mandatory by default)
-            line = json.dumps(entry, ensure_ascii=False)
-            line = _encrypt_line(line)
-
-            # ★ Step 4.1: encryption enforcement verification (fail-closed)
-            if is_encryption_enabled() and not line.startswith("ENC:"):
-                raise EncryptionKeyMissing(
-                    "Plaintext write blocked by policy: encryption is enabled "
-                    "but _encrypt_line() returned non-encrypted output"
-                )
+            # ★ Backend-independent secure entry pipeline (trust_log_core)
+            # redact → canonicalize → chain-hash → encrypt
+            entry, line = _prepare_entry(entry, previous_hash=sha256_prev)
 
             # ★ Step 5: append to JSONL (with fsync for durability)
             with open_trust_log_for_append() as f:

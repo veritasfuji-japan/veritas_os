@@ -72,11 +72,127 @@ def jsonl_trustlog_store(monkeypatch, tmp_path):
 
 
 @pytest.fixture()
-def postgres_trustlog_store():
-    """PostgreSQL TrustLogStore stub (contract-compatible placeholder)."""
+def postgres_trustlog_store(monkeypatch):
+    """PostgreSQL TrustLogStore backed by in-memory mock pool.
+
+    Uses :class:`_MockTrustLogPool` to simulate PostgreSQL behaviour without
+    requiring a live database.
+    """
+    from veritas_os.logging.encryption import generate_key
     from veritas_os.storage.postgresql import PostgresTrustLogStore
 
-    return PostgresTrustLogStore()
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+
+    store = PostgresTrustLogStore()
+    pool = _MockTrustLogPool()
+
+    async def _fake_pool():
+        return pool
+
+    store._get_pool = _fake_pool  # type: ignore[assignment]
+    return store
+
+
+class _MockTrustLogCursor:
+    """Minimal async cursor for TrustLog mock pool."""
+
+    def __init__(self, rows=None):
+        self._rows = rows or []
+        self.rowcount = 0
+
+    async def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    async def fetchall(self):
+        return self._rows
+
+
+class _MockTrustLogConnection:
+    """In-memory connection that simulates trustlog_entries + trustlog_chain_state."""
+
+    def __init__(self, state: dict):
+        self._state = state
+
+    class _Transaction:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+    def transaction(self):
+        return self._Transaction()
+
+    async def execute(self, sql: str, params=None):
+        sql_lower = sql.strip().lower()
+
+        if "pg_advisory_xact_lock" in sql_lower:
+            return _MockTrustLogCursor()
+
+        if sql_lower.startswith("select last_hash from trustlog_chain_state"):
+            entries = self._state.get("entries", [])
+            if not entries and self._state.get("last_hash") is None:
+                return _MockTrustLogCursor()
+            return _MockTrustLogCursor([(self._state.get("last_hash"),)])
+
+        if sql_lower.startswith("insert into trustlog_chain_state"):
+            self._state.setdefault("last_hash", None)
+            return _MockTrustLogCursor()
+
+        if sql_lower.startswith("insert into trustlog_entries"):
+            entries = self._state.setdefault("entries", [])
+            new_id = len(entries) + 1
+            request_id, entry_jsonb, chain_hash, prev_hash = params[0], params[1], params[2], params[3]
+            # entry_jsonb may be a Jsonb wrapper; extract the underlying dict
+            entry_dict = getattr(entry_jsonb, "obj", entry_jsonb)
+            entries.append({
+                "id": new_id,
+                "request_id": request_id,
+                "entry": entry_dict,
+                "hash": chain_hash,
+                "prev_hash": prev_hash,
+            })
+            return _MockTrustLogCursor([(new_id,)])
+
+        if sql_lower.startswith("update trustlog_chain_state"):
+            self._state["last_hash"] = params[0]
+            self._state["last_id"] = params[1]
+            return _MockTrustLogCursor()
+
+        if "from trustlog_entries where request_id" in sql_lower:
+            for e in self._state.get("entries", []):
+                if e["request_id"] == params[0]:
+                    return _MockTrustLogCursor([(e["entry"],)])
+            return _MockTrustLogCursor()
+
+        if "from trustlog_entries order by id" in sql_lower:
+            entries = self._state.get("entries", [])
+            limit = params[0] if params else 100
+            offset = params[1] if params and len(params) > 1 else 0
+            selected = entries[offset:offset + limit]
+            return _MockTrustLogCursor([(e["entry"],) for e in selected])
+
+        return _MockTrustLogCursor()
+
+
+class _MockTrustLogPool:
+    """In-memory pool backed by a shared state dict."""
+
+    def __init__(self):
+        self._state: dict = {}
+
+    class _ConnCtx:
+        def __init__(self, conn):
+            self._conn = conn
+
+        async def __aenter__(self):
+            return self._conn
+
+        async def __aexit__(self, *a):
+            pass
+
+    def connection(self):
+        return self._ConnCtx(_MockTrustLogConnection(self._state))
 
 
 # ===================================================================
@@ -346,27 +462,17 @@ class TestJsonlTrustLogStoreContract(_TrustLogStoreContractSuite):
         return jsonl_trustlog_store
 
 
-class TestPostgresTrustLogStoreContract:
-    """PostgreSQL TrustLogStore stub: verify it raises NotImplementedError."""
+class TestPostgresTrustLogStoreContract(_TrustLogStoreContractSuite):
+    """PostgreSQL TrustLogStore contract tests (mock-pool backed).
 
-    def test_stub_methods_raise(self, postgres_trustlog_store) -> None:
-        store = postgres_trustlog_store
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.append({"request_id": "r"}))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.get_by_id("r"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.get_last_hash())
+    The store uses an in-memory mock pool (no live PostgreSQL required)
+    so that the same contract suite that validates the JSONL backend
+    also validates the PostgreSQL backend's SQL/result-shape logic.
+    """
 
-    def test_stub_iter_entries_raises(self, postgres_trustlog_store) -> None:
-        store = postgres_trustlog_store
-
-        async def _go():
-            async for _ in store.iter_entries():
-                pass
-
-        with pytest.raises(NotImplementedError):
-            asyncio.run(_go())
+    @pytest.fixture()
+    def store(self, postgres_trustlog_store):
+        return postgres_trustlog_store
 
 
 # ===================================================================
