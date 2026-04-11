@@ -757,6 +757,16 @@ async def test_migrate_memory_legacy_users_dict(tmp_path: Path) -> None:
     assert report.failed == 0
     assert report.success()
 
+    # Verify records are correctly normalised from nested dict to flat calls.
+    calls = pg_mock.import_record.call_args_list
+    keys_seen = {c.kwargs.get("user_id", c.args[2] if len(c.args) > 2 else None): [] for c in calls}
+    for c in calls:
+        uid = c.kwargs.get("user_id") or ""
+        key = c.args[0] if c.args else c.kwargs.get("key", "")
+        keys_seen.setdefault(uid, []).append(key)
+    assert "alice" in keys_seen
+    assert "bob" in keys_seen
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -850,6 +860,9 @@ async def test_migrate_memory_resume_mixed(tmp_path: Path) -> None:
     assert report.migrated == 2
     assert report.failed == 1
     assert not report.success()
+    # Verify the failed record is correctly identified in the error list.
+    assert len(report.errors) == 1
+    assert "k3" in report.errors[0]
 
 
 @pytest.mark.unit
