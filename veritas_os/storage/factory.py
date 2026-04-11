@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Dict
 
 from veritas_os.storage.base import MemoryStore, TrustLogStore
 from veritas_os.storage.json_kv import JsonMemoryStore
@@ -52,7 +51,7 @@ def _require_database_url(component: str) -> None:
         )
 
 
-def get_backend_info() -> Dict[str, str]:
+def get_backend_info() -> dict[str, str]:
     """Return the currently configured storage backends.
 
     Returns
