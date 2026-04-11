@@ -351,7 +351,7 @@ jobs:
       PIP_NO_PYTHON_VERSION_WARNING: "1"
       OPENAI_API_KEY: "DUMMY_FOR_CI"
       VERITAS_API_KEY: "DUMMY_FOR_CI"
-      VERITAS_DATABASE_URL: "postgresql://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
 
     steps:
       - name: Checkout
@@ -377,7 +377,7 @@ jobs:
           pip install alembic
           alembic upgrade head
         env:
-          VERITAS_DATABASE_URL: "postgresql://veritas:veritas_test@localhost:5432/veritas_test"
+          VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
 
       - name: Run backend parity tests (mock-pool)
         run: |
