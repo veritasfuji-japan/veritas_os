@@ -59,6 +59,9 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - **ユーザーマニュアル（日本語）**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
 - **コントリビューション**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **セキュリティポリシー**: [`SECURITY.md`](SECURITY.md)
+- **PostgreSQL本番運用ガイド**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
+- **セキュリティ強化チェックリスト**: [`docs/security-hardening.md`](docs/security-hardening.md)
+- **データベースマイグレーション**: [`docs/database-migrations.md`](docs/database-migrations.md)
 - **レビュー文書マップ**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
 - **ドキュメント入口（英語）**: `docs/en/README.md`
 - **ドキュメント入口（日本語）**: `docs/ja/README.md`
@@ -329,6 +332,45 @@ veritas_os/                  ← モノレポルート
 ├── Makefile                 ← 開発/テスト/デプロイコマンド
 └── pyproject.toml           ← Pythonプロジェクト設定
 ```
+
+---
+
+## 💾 ストレージバックエンド
+
+VERITAS OS は MemoryOS と TrustLog の永続化に**プラガブルストレージバックエンド**パターンを採用しています。
+
+| バックエンド | MemoryOS | TrustLog | デフォルト | 用途 |
+|-------------|----------|----------|-----------|------|
+| **JSON / JSONL**（ファイルベース） | `JsonMemoryStore` | `JsonlTrustLogStore` | ✅ はい | 単一プロセス開発、デモ、エアギャップ環境 |
+| **PostgreSQL** | `PostgresMemoryStore` | `PostgresTrustLogStore` | — | マルチワーカー本番、耐久監査 |
+
+### クイック切替
+
+```bash
+# PostgreSQL を両バックエンドに使用
+VERITAS_MEMORY_BACKEND=postgresql
+VERITAS_TRUSTLOG_BACKEND=postgresql
+VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
+
+# スキーマ適用
+make db-upgrade
+```
+
+### PostgreSQL バックエンドの主な特徴
+
+- **Alembic 管理スキーマ** — `upgrade` / `downgrade` パスを持つ再現可能なマイグレーション
+- **アドバイザリロックによるチェーン直列化** — `pg_advisory_xact_lock` による並行書込み下での TrustLog ハッシュチェーン整合性保証
+- **JSONB ストレージ** — GIN インデックスによるクエリ可能なペイロード
+- **完全パリティテストスイート** — 195+ テストによるバックエンド間の同一セマンティクス検証
+- **psycopg 3** — コネクションプーリング付きモダン非同期 PostgreSQL ドライバ
+
+### 本番デプロイ
+
+[`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) を参照:
+プール設定、SSL/TLS、ステートメントタイムアウト、バックアップ/リストア、レプリケーション/HA、
+JSONL → PostgreSQL 移行パス、secure/prod ポスチャ推奨設定、既知の制限事項と将来計画
+
+関連: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
 
 ---
 
@@ -1099,11 +1141,12 @@ make validate
 - ✅ セキュリティ強化: 入力検証、秘密情報/ログ衛生、ランタイムポスチャシステム
 - ✅ Policy-as-Code: YAML/JSON → IR → コンパイル済みルール（Ed25519署名バンドル、テスト自動生成）
 - ✅ マルチプロバイダLLM: OpenAI（production）、Anthropic/Google（planned）、Ollama/OpenRouter（experimental）
+- ✅ PostgreSQLストレージバックエンド: MemoryOS・TrustLog用プラガブルバックエンド（Alembicマイグレーション、アドバイザリロックチェーン直列化、195+パリティテスト）。[`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) 参照。
 
 **今後のマイルストーン**:
 - Anthropic / Google LLMプロバイダのproductionティア昇格
 - CI成果物からのカバレッジバッジ自動更新
-- PostgreSQLストレージバックエンド（現在は本番環境でJSONLのみ）
+- pgvector統合によるMemoryOSベクトル類似度検索
 - モノレポライセンス（Plan B）からマルチレポ分離（Plan A）への段階的移行
 - Continuation Runtime Phase-2 エンフォースメントのsecure/prodポスチャでのデフォルト有効化
 

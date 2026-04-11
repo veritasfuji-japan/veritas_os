@@ -1,4 +1,18 @@
 services:
+  # ─────────────────────────────────────────────────────────────────
+  # PostgreSQL — Pluggable storage backend for MemoryOS and TrustLog.
+  #
+  #   Dev/local:   Use as-is with default credentials below.
+  #   Staging:     Override VERITAS_DB_USER/PASSWORD via .env or CI secrets.
+  #   Prod:        Use a managed PostgreSQL service (RDS, Cloud SQL) instead
+  #                of this container.  See docs/postgresql-production-guide.md.
+  #
+  #   Production checklist:
+  #     - Set VERITAS_DB_SSLMODE=verify-full
+  #     - Inject VERITAS_DATABASE_URL from external secret manager
+  #     - Tune pool: VERITAS_DB_POOL_MIN_SIZE / MAX_SIZE
+  #     - Run migrations before starting backend: make db-upgrade
+  # ─────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-bookworm
     container_name: veritas-postgres
