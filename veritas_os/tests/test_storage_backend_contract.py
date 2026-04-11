@@ -33,10 +33,18 @@ def json_memory_store(tmp_path):
 
 @pytest.fixture()
 def postgres_memory_store():
-    """PostgreSQL MemoryStore stub (contract-compatible placeholder)."""
+    """PostgreSQL MemoryStore backed by in-memory mock pool."""
     from veritas_os.storage.postgresql import PostgresMemoryStore
+    from veritas_os.tests.test_storage_postgresql_memory import _MockPool
 
-    return PostgresMemoryStore()
+    store = PostgresMemoryStore()
+    pool = _MockPool()
+
+    async def _fake_pool():
+        return pool
+
+    store._get_pool = _fake_pool  # type: ignore[assignment]
+    return store
 
 
 @pytest.fixture()
@@ -222,28 +230,17 @@ class TestJsonMemoryStoreContract(_MemoryStoreContractSuite):
         return json_memory_store
 
 
-class TestPostgresMemoryStoreContract:
-    """PostgreSQL MemoryStore stub: verify it raises NotImplementedError.
+class TestPostgresMemoryStoreContract(_MemoryStoreContractSuite):
+    """PostgreSQL MemoryStore contract tests (mock-pool backed).
 
-    Once the real implementation lands, this class should be replaced
-    with ``_MemoryStoreContractSuite`` sub-classing, exactly like the
-    JSON backend above.
+    The store uses an in-memory mock pool (no live PostgreSQL required)
+    so that the same contract suite that validates the JSON backend
+    also validates the PostgreSQL backend's SQL/result-shape logic.
     """
 
-    def test_stub_methods_raise(self, postgres_memory_store) -> None:
-        store = postgres_memory_store
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.put("k", {}, user_id="u"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.get("k"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.search("q", user_id="u"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.delete("k", user_id="u"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.list_all(user_id="u"))
-        with pytest.raises(NotImplementedError):
-            asyncio.run(store.erase_user_data("u"))
+    @pytest.fixture()
+    def store(self, postgres_memory_store):
+        return postgres_memory_store
 
 
 # ===================================================================
