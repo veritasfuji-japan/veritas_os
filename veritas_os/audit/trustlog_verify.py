@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import importlib
+import hmac
 import os
 import re
 from dataclasses import dataclass
@@ -67,6 +68,9 @@ _REASON_CODE_MAP = {
     "mirror_retention_missing": "tamper_suspected",
     "mirror_legal_hold_missing": "tamper_suspected",
     "mirror_receipt_malformed": "mirror_receipt_malformed",
+    "segment_manifest_malformed": "schema_invalid",
+    "manifest_hash_mismatch": "tamper_suspected",
+    "segment_manifest_signature_invalid": "tamper_suspected",
     "signer_metadata_malformed": "schema_invalid",
     "anchor_backend_invalid": "schema_invalid",
     "anchor_status_invalid": "schema_invalid",
@@ -237,6 +241,58 @@ def _is_s3_receipt(receipt: Dict[str, Any]) -> bool:
     return isinstance(receipt.get("bucket"), str) and isinstance(receipt.get("key"), str)
 
 
+def _verify_segment_manifest_receipt(receipt: Dict[str, Any]) -> Optional[str]:
+    """Validate sealed-segment manifest metadata embedded in receipt."""
+    manifest = receipt.get("manifest")
+    manifest_hash = receipt.get("manifest_hash")
+    if not isinstance(manifest, dict) or not isinstance(manifest_hash, str):
+        return "segment_manifest_malformed"
+
+    expected_hash = sha256_of_canonical_json(manifest)
+    if expected_hash != manifest_hash:
+        return "manifest_hash_mismatch"
+
+    required = {
+        "segment_id": str,
+        "entry_count": int,
+        "first_timestamp": str,
+        "last_timestamp": str,
+        "first_hash": str,
+        "last_hash": str,
+        "segment_payload_hash": str,
+        "object_keys_written": list,
+    }
+    for key, expected_type in required.items():
+        value = manifest.get(key)
+        if not isinstance(value, expected_type):
+            return "segment_manifest_malformed"
+
+    if manifest["entry_count"] <= 0:
+        return "segment_manifest_malformed"
+
+    hash_fields = ("first_hash", "last_hash", "segment_payload_hash")
+    if not all(_SHA256_HEX_RE.match(str(manifest.get(field, ""))) for field in hash_fields):
+        return "segment_manifest_malformed"
+
+    if not all(isinstance(key, str) and key for key in manifest["object_keys_written"]):
+        return "segment_manifest_malformed"
+
+    signature = manifest.get("manifest_signature")
+    hmac_key = os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MANIFEST_HMAC_KEY")
+    if isinstance(signature, str) and hmac_key:
+        payload = dict(manifest)
+        payload.pop("manifest_signature", None)
+        expected_signature = hmac.new(
+            hmac_key.encode("utf-8"),
+            canonical_json_dumps(payload).encode("utf-8"),
+            "sha256",
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected_signature):
+            return "segment_manifest_signature_invalid"
+
+    return None
+
+
 def _verify_mirror_receipt(
     entry: Dict[str, Any],
     *,
@@ -270,10 +326,21 @@ def _verify_mirror_receipt(
         "retention_mode",
         "retain_until_date",
         "legal_hold_status",
+        "mode",
+        "segment_id",
+        "segment_object_key",
+        "segment_manifest_key",
+        "segment_payload_hash",
+        "manifest_hash",
+        "manifest_version_id",
+        "manifest_etag",
+        "manifest",
     }
     if not all(isinstance(k, str) and k in known_keys for k in receipt.keys()):
         return "mirror_receipt_malformed"
     if not _is_s3_receipt(receipt):
+        if receipt.get("mode") == "sealed_segments":
+            return _verify_segment_manifest_receipt(receipt)
         return None
     if not remote_enabled:
         return None
