@@ -78,6 +78,7 @@ signing = [
 postgresql = [
   "psycopg[binary]==3.2.9",
   "psycopg-pool==3.2.6",
+  "alembic==1.18.4",
 ]
 full = [
   "veritas-os[ml,reports,anthropic,system,observability,signing,postgresql,dev]",
