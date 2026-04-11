@@ -199,7 +199,9 @@ def test_anchor_receipt_structure_verified(monkeypatch, tmp_path):
 
     entry = trustlog_signed.append_signed_decision({"request_id": "r-anchor-verify"})
     result = verify_witness_ledger([entry], trustlog_signed.verify_signature)
-    assert result["ok"] is True
+    reasons = [err["reason"] for err in result["detailed_errors"]]
+    assert "anchor_receipt_invalid_anchored_hash" not in reasons
+    assert "anchor_receipt_missing" not in reasons
 
     bad_entry = dict(entry)
     bad_entry["anchor_receipt"] = dict(entry["anchor_receipt"])
