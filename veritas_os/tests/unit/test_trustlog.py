@@ -796,6 +796,7 @@ class TestTruncatedLine:
         # Truncated encrypted lines fail decryption → reported as decode error
         assert result["broken"] is True
         assert result["broken_reason"] in ("json_decode_error",)
+        assert result["broken_code"] in ("decrypt_failed", "key_missing")
 
     def test_extract_last_sha256_skips_truncated_lines(self, monkeypatch):
         _set_valid_key(monkeypatch, raw=b"I" * 32)

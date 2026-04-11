@@ -722,7 +722,13 @@ def get_trust_logs_by_request(request_id: str) -> Dict[str, Any]:
 # =============================================================================
 
 def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
-    """Verify encrypted full TrustLog integrity with stable compatibility fields."""
+    """Verify encrypted full TrustLog integrity with stable compatibility fields.
+
+    Compatibility note:
+        ``broken_reason`` is preserved for legacy callers that expect historical
+        reason strings such as ``json_decode_error``. New structured callers
+        should rely on ``broken_code`` and ``summary.detailed_errors[*].code``.
+    """
     try:
         result = verify_full_ledger(log_path=LOG_JSONL, max_entries=max_entries)
     except OSError as exc:
@@ -752,7 +758,11 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
     broken_index = None
     if result["detailed_errors"]:
         first = result["detailed_errors"][0]
-        broken_reason = first.get("reason")
+        raw_reason = first.get("reason")
+        if raw_reason in {"decrypt_failed", "key_missing"}:
+            broken_reason = "json_decode_error"
+        else:
+            broken_reason = raw_reason
         broken_index = first.get("index")
 
     return {
@@ -761,6 +771,7 @@ def verify_trust_log(max_entries: Optional[int] = None) -> Dict[str, Any]:
         "broken": not result["ok"],
         "broken_index": broken_index,
         "broken_reason": broken_reason,
+        "broken_code": (result["detailed_errors"][0].get("code") if result["detailed_errors"] else None),
         "summary": {
             "total_entries": result["total_entries"],
             "valid_entries": result["valid_entries"],
