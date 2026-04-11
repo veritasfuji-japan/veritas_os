@@ -455,6 +455,8 @@ class TestTrustLogIntegration:
 
         # Simulate broken encrypt that returns plaintext
         monkeypatch.setattr(trust_log, "_encrypt_line", lambda x: x)
+        import veritas_os.logging.trust_log_core as trust_log_core
+        monkeypatch.setattr(trust_log_core, "_encrypt_line", lambda x: x)
 
         with pytest.raises(EncryptionKeyMissing, match="Plaintext write blocked"):
             trust_log.append_trust_log({"request_id": "anti-downgrade"})
