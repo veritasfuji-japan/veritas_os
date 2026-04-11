@@ -17,6 +17,29 @@ VERITAS OS uses three validation tiers with explicit blocking semantics:
 | **Tier 2** | `release-gate.yml` | Every `v*` tag push | **Yes — blocks release** | Production-like validation: production pytest suite, Docker smoke, governance readiness report |
 | **Tier 3** | `production-validation.yml` | Weekly schedule + manual | Advisory (weekly), opt-in blocking (release) | Long-running, secrets-required, external/live tests |
 
+### TrustLog staged release gating (new)
+
+`release-gate.yml` now includes a dedicated **TrustLog production matrix** with
+`dev`, `secure`, and `prod` profiles.
+
+| Profile | Default mode | Becomes required on |
+|---------|--------------|---------------------|
+| `dev` | Advisory | `release/*`, `rc/*`, and `v*` refs |
+| `secure` | Required | All release-gate runs |
+| `prod` | Required | All release-gate runs |
+
+This matrix explicitly validates enterprise TrustLog promotion paths:
+
+- KMS signer path
+- S3 Object Lock mirror path
+- Unified verification path
+- Startup posture validation
+- Hard-fail semantics
+- Legacy verification compatibility
+
+Failures include actionable guidance and per-profile JUnit artifacts:
+`trustlog-production-<profile>-report`.
+
 ### What runs where
 
 #### On every PR / push to `main` (Tier 1, `main.yml`)
@@ -36,6 +59,7 @@ VERITAS OS uses three validation tiers with explicit blocking semantics:
 |-----|---------|---------|
 | `governance-smoke` | Re-runs Tier 1 smoke at release time | ✅ Yes |
 | `security-checks` | Re-runs all security scripts + Bandit | ✅ Yes |
+| `trustlog-production-matrix` | TrustLog release profile matrix (`dev`/`secure`/`prod`) | ✅ Yes (`secure`/`prod` always, `dev` on release refs) |
 | `production-tests` | `pytest -m "production or smoke"` + TLS + load | ✅ Yes |
 | `docker-smoke` | Full-stack Docker Compose health check | ✅ Yes |
 | `governance-report` | Generates governance readiness report artifact | ✅ Yes |
