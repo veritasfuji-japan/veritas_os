@@ -69,10 +69,12 @@ def _auth_store_health(srv: Any) -> Dict[str, Any]:
 def _trust_log_health(srv: Any) -> Dict[str, Any]:
     """Return trust-log health information with backend awareness.
 
-    When the TrustLog backend is ``postgresql``, aggregate JSON file
-    health is not meaningful — the health status is derived from the
-    configured backend type instead.  For file-based (``jsonl``) backends,
-    the legacy aggregate JSON load result is checked as before.
+    Source of truth by backend:
+      * **jsonl** (default): health is derived from the aggregate JSON
+        file status (loaded via ``TrustLogRuntime.load_logs_json_result``).
+      * **postgresql**: health is derived from whether
+        ``app.state.trust_log_store`` is wired (set by lifespan.py).
+        File-based aggregate JSON is **not** the persistence source.
     """
     backend_info = get_backend_info()
     backend_name = backend_info.get("trustlog", "jsonl")
@@ -465,16 +467,20 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
     backend_info = get_backend_info()
+    is_file_tl = backend_info.get("trustlog") != "postgresql"
     shadow_dir = srv._effective_shadow_dir()
     _, log_json, log_jsonl = srv._effective_log_paths()
 
-    # File-based metrics: only meaningful when backend is jsonl.
+    # File-based trust-log metrics: only meaningful when backend is jsonl.
+    # When backend=postgresql, persistence is via app.state.trust_log_store
+    # and file-based aggregate JSON / JSONL counts are not authoritative.
     trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
     trust_json_result = None
-    if backend_info.get("trustlog") != "postgresql" and trust_log_runtime is not None:
+    if is_file_tl and trust_log_runtime is not None:
         trust_log_runtime.effective_log_paths = srv._effective_log_paths
         trust_json_result = trust_log_runtime.load_logs_json_result(log_json)
 
+    # Shadow snapshot files (always file-based regardless of backend).
     files, total_decide_files = _collect_recent_decide_files(shadow_dir, decide_file_limit)
     last_at = None
     if files:
@@ -484,14 +490,17 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         except Exception:
             logger.debug("failed to read last decide file: %s", files[-1], exc_info=True)
 
+    # JSONL line count: skip when backend=postgresql (not the source of
+    # truth for persistence — avoids misleading operators).
     lines = 0
-    try:
-        if log_jsonl.exists():
-            with open(log_jsonl, encoding="utf-8") as f:
-                for _ in f:
-                    lines += 1
-    except Exception as e:
-        logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
+    if is_file_tl:
+        try:
+            if log_jsonl.exists():
+                with open(log_jsonl, encoding="utf-8") as f:
+                    for _ in f:
+                        lines += 1
+        except Exception as e:
+            logger.warning("read trust_log.jsonl failed: %s", srv._errstr(e))
 
     auth_store = _auth_store_health(srv)
     runtime_features = _runtime_feature_checks(srv)

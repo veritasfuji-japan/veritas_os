@@ -204,7 +204,18 @@ def resolve_memory_store(
 
 
 def get_trust_log_store(request: Request) -> TrustLogStore:
-    """Resolve TrustLogStore instance from FastAPI app state."""
+    """Resolve TrustLogStore instance from FastAPI app state.
+
+    This is the canonical way to obtain the TrustLog persistence backend.
+    The store is created during application lifespan (see ``lifespan.py``)
+    and is the **sole source of truth** for TrustLog persistence,
+    regardless of whether the backend is ``jsonl`` or ``postgresql``.
+
+    Raises
+    ------
+    RuntimeError
+        When the store has not been initialized (lifespan not yet started).
+    """
     store = getattr(request.app.state, "trust_log_store", None)
     if store is None:
         raise RuntimeError("trust_log_store is not initialized in app.state")
@@ -212,7 +223,17 @@ def get_trust_log_store(request: Request) -> TrustLogStore:
 
 
 def get_memory_store(request: Request) -> MemoryStore:
-    """Resolve MemoryStore instance from FastAPI app state."""
+    """Resolve MemoryStore instance from FastAPI app state.
+
+    This is the canonical way to obtain the MemoryOS persistence backend.
+    The store is created during application lifespan (see ``lifespan.py``)
+    and is the **sole source of truth** for Memory persistence.
+
+    Raises
+    ------
+    RuntimeError
+        When the store has not been initialized (lifespan not yet started).
+    """
     store = getattr(request.app.state, "memory_store", None)
     if store is None:
         raise RuntimeError("memory_store is not initialized in app.state")
@@ -237,9 +258,13 @@ def resolve_backend_info() -> dict[str, str]:
 def is_file_backend() -> bool:
     """Return ``True`` when the TrustLog backend is file-based (jsonl).
 
-    Route handlers and health checks can use this predicate to decide
-    whether legacy file-based helpers (e.g. aggregate JSON loading) are
-    appropriate for the current deployment.
+    Use this predicate in route handlers and health checks to decide
+    whether legacy file-based helpers (e.g. aggregate JSON loading,
+    JSONL line counting) are appropriate for the current deployment.
+
+    When this returns ``False`` (i.e. ``postgresql``), persistence is
+    managed exclusively by ``app.state.trust_log_store`` and file-based
+    paths should **not** be treated as the source of truth.
     """
     info = get_backend_info()
     return info.get("trustlog", "jsonl") != "postgresql"

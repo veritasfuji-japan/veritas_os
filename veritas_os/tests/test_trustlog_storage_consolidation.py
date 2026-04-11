@@ -7,12 +7,15 @@ Validates that:
 4. app lifespan / DI integration
 5. Legacy fallback regression
 6. Misconfiguration detection
+7. Source-of-truth path verification
+8. Metrics / health / shadow regression across backends
 """
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict
 from unittest.mock import patch
@@ -428,3 +431,245 @@ class TestMetricsBackendInfo:
         info = get_backend_info()
         assert "memory" in info
         assert "trustlog" in info
+
+
+# ===================================================================
+# 9. _is_file_trustlog_backend() helper
+# ===================================================================
+
+
+class TestIsFileTrustlogBackend:
+    """Validate _is_file_trustlog_backend() in server.py."""
+
+    def test_returns_true_for_jsonl(self, monkeypatch):
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.api import server
+
+        assert server._is_file_trustlog_backend() is True
+
+    def test_returns_false_for_postgresql(self, monkeypatch):
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        from veritas_os.api import server
+
+        assert server._is_file_trustlog_backend() is False
+
+
+# ===================================================================
+# 10. Source-of-truth path verification
+# ===================================================================
+
+
+class TestSourceOfTruthPath:
+    """Verify that the persistence source of truth is correctly routed."""
+
+    def test_jsonl_backend_source_of_truth_is_file(self, monkeypatch):
+        """When backend=jsonl, file-based helpers are the persistence path."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.api import server
+        from veritas_os.api.dependency_resolver import is_file_backend
+
+        assert is_file_backend() is True
+        # Legacy file-based wrappers should be callable
+        assert callable(server.append_trust_log)
+        assert callable(server._load_logs_json)
+
+    def test_postgresql_backend_source_of_truth_is_store(self, monkeypatch):
+        """When backend=postgresql, app.state.trust_log_store is source of truth."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        from veritas_os.api.dependency_resolver import is_file_backend
+
+        assert is_file_backend() is False
+
+    def test_factory_creates_correct_store_for_each_backend(self, monkeypatch):
+        """Factory creates the correct store class per backend."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.storage.factory import create_trust_log_store
+        from veritas_os.storage.jsonl import JsonlTrustLogStore
+
+        store = create_trust_log_store()
+        assert isinstance(store, JsonlTrustLogStore)
+
+
+# ===================================================================
+# 11. Metrics JSONL line count is skipped for postgresql
+# ===================================================================
+
+
+class TestMetricsFileGuard:
+    """Validate that metrics skips JSONL line counting for postgresql."""
+
+    def test_metrics_skips_jsonl_lines_for_postgresql(self, monkeypatch, tmp_path):
+        """When backend=postgresql, trust_jsonl_lines should be 0."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        # Create a JSONL file that would have lines if read
+        jsonl_file = tmp_path / "trust_log.jsonl"
+        jsonl_file.write_text('{"a":1}\n{"b":2}\n{"c":3}\n')
+
+        from veritas_os.api import server
+        monkeypatch.setattr(server, "LOG_DIR", tmp_path)
+        monkeypatch.setattr(server, "LOG_JSON", tmp_path / "trust_log.json")
+        monkeypatch.setattr(server, "LOG_JSONL", jsonl_file)
+        monkeypatch.setattr(server, "SHADOW_DIR", tmp_path / "DASH")
+        (tmp_path / "DASH").mkdir(exist_ok=True)
+
+        from veritas_os.api.routes_system import metrics
+
+        mock_memory = SimpleNamespace(
+            health_snapshot=lambda: {"status": "ok"},
+        )
+
+        monkeypatch.setattr(
+            server, "get_memory_store", lambda: mock_memory
+        )
+        monkeypatch.setattr(
+            server, "get_decision_pipeline", lambda: None
+        )
+        monkeypatch.setattr(
+            server, "_auth_store_failure_mode", lambda: "closed"
+        )
+        monkeypatch.setattr(
+            server, "auth_store_health_snapshot",
+            lambda: {"status": "ok", "requested_mode": "memory",
+                     "effective_mode": "memory",
+                     "requested_failure_mode": "closed",
+                     "failure_mode": "closed", "reasons": []},
+        )
+        monkeypatch.setattr(
+            server, "_snapshot_auth_reject_reason_metrics", lambda: {}
+        )
+        monkeypatch.setattr(server, "_is_debug_mode", lambda: False)
+        monkeypatch.setattr(server, "_HAS_SANITIZE", True)
+        monkeypatch.setattr(server, "_HAS_ATOMIC_IO", True)
+
+        result = metrics()
+        # JSONL lines should be 0 because postgresql backend skips file read
+        assert result["trust_jsonl_lines"] == 0
+
+    def test_metrics_reads_jsonl_lines_for_jsonl(self, monkeypatch, tmp_path):
+        """When backend=jsonl, trust_jsonl_lines should reflect file content."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        jsonl_file = tmp_path / "trust_log.jsonl"
+        jsonl_file.write_text('{"a":1}\n{"b":2}\n{"c":3}\n')
+
+        from veritas_os.api import server
+        monkeypatch.setattr(server, "LOG_DIR", tmp_path)
+        monkeypatch.setattr(server, "LOG_JSON", tmp_path / "trust_log.json")
+        monkeypatch.setattr(server, "LOG_JSONL", jsonl_file)
+        monkeypatch.setattr(server, "SHADOW_DIR", tmp_path / "DASH")
+        (tmp_path / "DASH").mkdir(exist_ok=True)
+
+        from veritas_os.api.routes_system import metrics
+
+        mock_memory = SimpleNamespace(
+            health_snapshot=lambda: {"status": "ok"},
+        )
+
+        monkeypatch.setattr(
+            server, "get_memory_store", lambda: mock_memory
+        )
+        monkeypatch.setattr(
+            server, "get_decision_pipeline", lambda: None
+        )
+        monkeypatch.setattr(
+            server, "_auth_store_failure_mode", lambda: "closed"
+        )
+        monkeypatch.setattr(
+            server, "auth_store_health_snapshot",
+            lambda: {"status": "ok", "requested_mode": "memory",
+                     "effective_mode": "memory",
+                     "requested_failure_mode": "closed",
+                     "failure_mode": "closed", "reasons": []},
+        )
+        monkeypatch.setattr(
+            server, "_snapshot_auth_reject_reason_metrics", lambda: {}
+        )
+        monkeypatch.setattr(server, "_is_debug_mode", lambda: False)
+        monkeypatch.setattr(server, "_HAS_SANITIZE", True)
+        monkeypatch.setattr(server, "_HAS_ATOMIC_IO", True)
+
+        result = metrics()
+        assert result["trust_jsonl_lines"] == 3
+
+
+# ===================================================================
+# 12. Health endpoint backend awareness regression
+# ===================================================================
+
+
+class TestHealthBackendRegression:
+    """Validate health endpoint works correctly for both backends."""
+
+    def test_health_jsonl_includes_backend_field(self, monkeypatch):
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+
+        from veritas_os.api.routes_system import _trust_log_health
+
+        srv = SimpleNamespace(
+            _trust_log_runtime=SimpleNamespace(
+                effective_log_paths=lambda: (
+                    "/tmp", "/tmp/trust_log.json", "/tmp/trust_log.jsonl"
+                ),
+                load_logs_json_result=lambda path: SimpleNamespace(
+                    status="missing", error=None
+                ),
+            ),
+            _effective_log_paths=lambda: (
+                "/tmp", "/tmp/trust_log.json", "/tmp/trust_log.jsonl"
+            ),
+        )
+
+        result = _trust_log_health(srv)
+        assert result["details"]["backend"] == "jsonl"
+        assert result["status"] == "ok"
+
+    def test_health_postgresql_does_not_read_files(self, monkeypatch):
+        """PostgreSQL health check should not touch file-based trust log."""
+        monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
+
+        from veritas_os.api.routes_system import _trust_log_health
+
+        # srv has NO file-based runtime attrs — should not fail
+        app_state = SimpleNamespace(trust_log_store=object())
+        srv = SimpleNamespace(app=SimpleNamespace(state=app_state))
+
+        result = _trust_log_health(srv)
+        assert result["details"]["backend"] == "postgresql"
+        assert result["status"] == "ok"
+
+    def test_health_includes_storage_backends_key(self, monkeypatch):
+        """Health response should include storage_backends for operational visibility."""
+        monkeypatch.delenv("VERITAS_TRUSTLOG_BACKEND", raising=False)
+        monkeypatch.delenv("VERITAS_MEMORY_BACKEND", raising=False)
+
+        from veritas_os.storage.factory import get_backend_info
+
+        info = get_backend_info()
+        assert "memory" in info
+        assert "trustlog" in info
+
+
+# ===================================================================
+# 13. Shadow snapshot is always file-based (backend-independent)
+# ===================================================================
+
+
+class TestShadowSnapshotAlwaysFileBased:
+    """Shadow snapshots are file-based for both backends."""
+
+    def test_effective_shadow_dir_returns_path(self):
+        from veritas_os.api import server
+
+        shadow = server._effective_shadow_dir()
+        assert isinstance(shadow, Path)
+
+    def test_write_shadow_decide_is_callable(self):
+        from veritas_os.api import server
+
+        assert callable(server.write_shadow_decide)

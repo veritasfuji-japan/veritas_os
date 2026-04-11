@@ -193,14 +193,45 @@ _DEFAULT_LOG_JSONL = _DEFAULT_LOG_DIR / "trust_log.jsonl"
 _DEFAULT_SHADOW_DIR = _DEFAULT_LOG_DIR / "DASH"
 
 # LEGACY COMPAT: File-based log path constants.
-# Tests monkeypatch these (server.LOG_DIR, server.LOG_JSON, etc.).
-# Only meaningful when VERITAS_TRUSTLOG_BACKEND=jsonl (default).
-# When backend=postgresql these paths are unused for persistence but
-# may still be referenced by shadow snapshot writes and /v1/metrics.
+# ─────────────────────────────────────────────────────────────
+# Purpose:
+#   Tests monkeypatch these (server.LOG_DIR, server.LOG_JSON, etc.).
+#   They are the *persistence path* ONLY when VERITAS_TRUSTLOG_BACKEND=jsonl
+#   (the default).
+#
+# When backend=postgresql:
+#   • These paths are NOT the persistence source of truth.
+#   • Persistence is handled entirely by app.state.trust_log_store
+#     (set via lifespan.py → storage.factory.create_trust_log_store).
+#   • Shadow snapshot writes (_effective_shadow_dir) still use local
+#     files regardless of backend for replay / audit.
+#   • /v1/metrics reads these paths for shadow file counts only;
+#     JSONL line counts and aggregate JSON status are skipped.
+#
+# Migration: New code SHOULD use app.state.trust_log_store (via
+#   dependency_resolver.get_trust_log_store) for TrustLog persistence.
+#   Use _is_file_trustlog_backend() to guard file-only code paths.
+# ─────────────────────────────────────────────────────────────
 LOG_DIR: Path = _DEFAULT_LOG_DIR
 LOG_JSON: Path = _DEFAULT_LOG_JSON
 LOG_JSONL: Path = _DEFAULT_LOG_JSONL
 SHADOW_DIR: Path = _DEFAULT_SHADOW_DIR
+
+
+def _is_file_trustlog_backend() -> bool:
+    """Return True when the TrustLog backend is file-based (jsonl).
+
+    Use this predicate to guard code paths that read/write trust-log
+    files (aggregate JSON, JSONL append, JSONL line counts).  When the
+    backend is ``postgresql``, persistence is handled by
+    ``app.state.trust_log_store`` and file I/O is not the source of truth.
+
+    Shadow snapshot writes and replay artifacts are always file-based
+    regardless of this flag.
+    """
+    from veritas_os.api.dependency_resolver import is_file_backend
+
+    return is_file_backend()
 
 
 def _effective_log_paths() -> Tuple[Path, Path, Path]:
@@ -695,20 +726,30 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 # ==============================
 # LEGACY COMPAT: The helpers below wrap file-based trust-log I/O
 # (aggregate JSON load, JSONL append, shadow snapshot writes).
-# They are the operational path only when VERITAS_TRUSTLOG_BACKEND=jsonl
-# (the default).  When the backend is "postgresql", persistence is
-# handled entirely by app.state.trust_log_store (set in lifespan.py).
+#
+# Source-of-truth mapping:
+#   ┌─────────────────────────┬───────────────────────────────────────┐
+#   │ Backend                 │ Persistence source of truth          │
+#   ├─────────────────────────┼───────────────────────────────────────┤
+#   │ jsonl (default)         │ These helpers → LOG_JSONL / LOG_JSON │
+#   │ postgresql              │ app.state.trust_log_store (DI)       │
+#   └─────────────────────────┴───────────────────────────────────────┘
+#
+# Shadow snapshot writes (_effective_shadow_dir / write_shadow_decide)
+# are always file-based regardless of backend — they serve replay and
+# audit workflows, not primary persistence.
 #
 # These wrappers remain for:
 #   1. Test backward-compatibility — many tests monkeypatch
 #      server.LOG_DIR / server._load_logs_json / server.append_trust_log.
-#   2. Shadow snapshot writes and /v1/metrics aggregate health checks
-#      which currently operate on local files regardless of backend.
+#   2. Shadow snapshot writes (always file-based).
+#   3. /v1/metrics file-based health checks (guarded by
+#      _is_file_trustlog_backend() in routes_system.py).
 #
 # Migration guidance:
 #   New code SHOULD use app.state.trust_log_store (via
 #   dependency_resolver.get_trust_log_store) rather than calling
-#   these helpers directly.  See docs/architecture/trustlog_storage_consolidation.md.
+#   these helpers directly.
 
 
 def _load_logs_json(path: Optional[Path] = None) -> list:
