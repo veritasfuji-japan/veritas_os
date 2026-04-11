@@ -27,7 +27,10 @@ class PostgresTrustLogStore(_PostgresBase):
         limit: int = 100,
         offset: int = 0,
     ) -> AsyncIterator[Dict[str, Any]]:
+        # The yield makes Python treat this as an async generator so that
+        # callers can use ``async for``.  The raise executes first.
         raise NotImplementedError("PostgreSQL backend is planned for v2.1")
+        yield  # type: ignore[misc]  # unreachable; satisfies async-generator requirement
 
     async def get_last_hash(self) -> Optional[str]:
         raise NotImplementedError("PostgreSQL backend is planned for v2.1")
