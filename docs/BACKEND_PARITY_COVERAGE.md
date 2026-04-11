@@ -109,10 +109,10 @@ against a real PostgreSQL 16 service container.
 | **append minimal entry** | ✅ | ✅ | ✅ | |
 | **append extra fields preserved** | ✅ | ✅ | ✅ | |
 | **concurrent appends** | ✅ | ✅ | ✅ | |
-| **verify (placeholder)** | ✅ | ✅ | — | Service layer concern |
-| **export (placeholder)** | ✅ | ✅ | — | Service layer concern |
-| **migration (placeholder)** | ✅ | ✅ | — | Not yet implemented |
-| **import (placeholder)** | ✅ | ✅ | — | Not yet implemented |
+| **verify (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
+| **export (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
+| **migration (placeholder)** | ⬜ | ⬜ | — | Not yet implemented |
+| **import (placeholder)** | ⬜ | ⬜ | — | Not yet implemented |
 
 ### Factory & Lifecycle Coverage
 

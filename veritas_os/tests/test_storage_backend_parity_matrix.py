@@ -155,6 +155,9 @@ class _MockTrustLogConnection:
             entry_jsonb = params[1]
             chain_hash = params[2]
             prev_hash = params[3]
+            # entry_jsonb is a psycopg Jsonb wrapper when psycopg is
+            # available; extract .obj for the raw dict.  In mock tests
+            # it may already be a plain dict.
             entry_dict = getattr(entry_jsonb, "obj", entry_jsonb)
             entries.append({
                 "id": new_id,
@@ -382,7 +385,11 @@ class TestMemoryStoreOrderingParity:
     def test_list_all_key_order_parity(
         self, json_memory_store, pg_memory_store
     ) -> None:
-        """Both backends return records with the same set of keys."""
+        """Both backends return records with the same keys in insertion order.
+
+        Sequential put() with deterministic key names guarantees that
+        insertion order is reproducible across backends.
+        """
 
         async def _go(store):
             for i in range(5):
@@ -394,7 +401,7 @@ class TestMemoryStoreOrderingParity:
         json_keys = [r.get("key") for r in json_records]
         pg_keys = [r.get("key") for r in pg_records]
         assert set(json_keys) == set(pg_keys)
-        # Both should be insertion order
+        # Both use insertion order, verified by sequential key names
         assert json_keys == pg_keys
 
     def test_list_all_empty_parity(
@@ -716,10 +723,13 @@ class TestDocumentedSemanticDifferences:
 
         jsonl_rids = asyncio.run(_go(jsonl_trustlog_store))
         pg_rids = asyncio.run(_go(pg_trustlog_store))
-        # Both should contain the same IDs
-        assert set(jsonl_rids) == set(pg_rids)
-        # JSONL is newest-first, PG is oldest-first (reverse of each other)
-        assert jsonl_rids == list(reversed(pg_rids)) or jsonl_rids == pg_rids
+        expected_asc = ["diff-0", "diff-1", "diff-2"]
+        expected_desc = list(reversed(expected_asc))
+        # Both should contain the same set of IDs
+        assert set(jsonl_rids) == set(pg_rids) == set(expected_asc)
+        # JSONL is newest-first, PG is oldest-first
+        assert jsonl_rids == expected_desc, "JSONL should return newest-first"
+        assert pg_rids == expected_asc, "PostgreSQL should return oldest-first"
 
     def test_list_all_shape_difference_documented(
         self, json_memory_store, pg_memory_store
