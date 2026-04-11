@@ -2,7 +2,25 @@
 
 MemoryOS backend (``PostgresMemoryStore``) is fully implemented and
 backed by the ``memory_records`` table created in the 0001 Alembic
-migration.  TrustLog backend remains a stub for v2.1.
+migration.  TrustLog backend (``PostgresTrustLogStore``) uses the
+``trustlog_entries`` and ``trustlog_chain_state`` tables.
+
+Concurrency control
+-------------------
+``PostgresTrustLogStore.append`` uses **PostgreSQL advisory locks**
+(``pg_advisory_xact_lock``) combined with ``SELECT … FOR UPDATE``
+on the ``trustlog_chain_state`` singleton row to serialize chain-hash
+writes.  This guarantees that:
+
+* Only one transaction at a time can read the previous hash and insert
+  the next entry.
+* ``hₜ = SHA256(hₜ₋₁ || rₜ)`` is never computed against a stale
+  ``hₜ₋₁``.
+* Any failure (connection drop, statement timeout, deadlock) rolls
+  back the transaction — **fail-closed**.
+
+The advisory lock key ``0x5645524954415301`` is derived from
+``b'VERITAS\\x01'`` to avoid collisions with application-level locks.
 
 All connections are obtained from the shared pool in
 ``veritas_os.storage.db``.
@@ -10,11 +28,31 @@ All connections are obtained from the shared pool in
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from typing import Any, AsyncIterator, Dict, List, Optional
 
+from veritas_os.logging.trust_log_core import prepare_entry
+
 logger = logging.getLogger(__name__)
+
+# Advisory lock key for TrustLog chain serialization.
+# Derived from b'VERITAS\x01' interpreted as a 64-bit integer.
+_TRUSTLOG_ADVISORY_LOCK_KEY = 0x5645524954415301
+
+
+def _jsonb_wrap(obj: Any) -> Any:
+    """Wrap *obj* for JSONB insertion.
+
+    Uses ``psycopg.types.json.Jsonb`` when available; falls back to the
+    raw dict for test mock pools that don't need the wrapper.
+    """
+    try:
+        from psycopg.types.json import Jsonb
+        return Jsonb(obj)
+    except ImportError:
+        return obj
 
 
 class _PostgresBase:
@@ -23,28 +61,180 @@ class _PostgresBase:
     def __init__(self) -> None:
         self.database_url = os.getenv("VERITAS_DATABASE_URL", "")
 
+    async def _get_pool(self):
+        """Obtain the process-wide connection pool.
+
+        Raises
+        ------
+        RuntimeError
+            When psycopg is not installed or the pool cannot be created.
+        """
+        from veritas_os.storage.db import get_pool
+
+        try:
+            return await get_pool()
+        except Exception as exc:
+            raise RuntimeError(
+                f"PostgreSQL connection pool unavailable: {exc}"
+            ) from exc
+
 
 class PostgresTrustLogStore(_PostgresBase):
-    """PostgreSQL TrustLog backend (planned for v2.1)."""
+    """PostgreSQL TrustLog backend with advisory-lock chain serialization.
+
+    Schema (created by Alembic migration ``0001``):
+
+    ============= ============ ==========================================
+    Table         Column       Notes
+    ============= ============ ==========================================
+    trustlog_entries
+                  id           BIGSERIAL PK (insertion order)
+                  request_id   TEXT UNIQUE NOT NULL
+                  entry        JSONB — full redacted+hashed entry
+                  hash         TEXT — sha256 chain hash
+                  prev_hash    TEXT — sha256_prev
+                  metadata     JSONB — reserved
+                  created_at   TIMESTAMPTZ server-side now()
+    trustlog_chain_state
+                  id           INTEGER = 1 (singleton)
+                  last_hash    TEXT — latest chain hash
+                  last_id      BIGINT — id of latest entry
+                  updated_at   TIMESTAMPTZ
+    ============= ============ ==========================================
+
+    Concurrency control
+    -------------------
+    ``append`` acquires a transaction-scoped advisory lock
+    (``pg_advisory_xact_lock``) **and** ``SELECT … FOR UPDATE`` on the
+    chain-state row.  The lock is released automatically on COMMIT or
+    ROLLBACK.
+    """
 
     async def append(self, entry: Dict[str, Any]) -> str:
-        raise NotImplementedError("PostgreSQL TrustLog backend is planned for v2.1")
+        """Append *entry* with chain-hash integrity under advisory lock.
+
+        Returns the ``request_id`` of the stored entry.
+
+        Raises
+        ------
+        RuntimeError
+            On any database or infrastructure failure (fail-closed).
+        """
+        try:
+            pool = await self._get_pool()
+            async with pool.connection() as conn:
+                async with conn.transaction():
+                    # ── Serialize: advisory lock + SELECT FOR UPDATE ──
+                    await conn.execute(
+                        "SELECT pg_advisory_xact_lock(%s)",
+                        (_TRUSTLOG_ADVISORY_LOCK_KEY,),
+                    )
+
+                    cur = await conn.execute(
+                        "SELECT last_hash FROM trustlog_chain_state "
+                        "WHERE id = 1 FOR UPDATE"
+                    )
+                    row = await cur.fetchone()
+                    if row is None:
+                        # First-ever append: bootstrap the singleton row.
+                        await conn.execute(
+                            "INSERT INTO trustlog_chain_state (id, last_hash, last_id, updated_at) "
+                            "VALUES (1, NULL, NULL, now())"
+                        )
+                        previous_hash: Optional[str] = None
+                    else:
+                        previous_hash = row[0]
+
+                    # ── Backend-independent crypto pipeline ──
+                    prepared, _encrypted_line = prepare_entry(
+                        entry, previous_hash=previous_hash,
+                    )
+
+                    request_id = str(
+                        prepared.get("request_id")
+                        or prepared.get("sha256")
+                        or ""
+                    )
+                    chain_hash = prepared.get("sha256")
+
+                    # ── Persist entry ──
+                    entry_jsonb = _jsonb_wrap(prepared)
+
+                    cur = await conn.execute(
+                        "INSERT INTO trustlog_entries "
+                        "(request_id, entry, hash, prev_hash, created_at) "
+                        "VALUES (%s, %s, %s, %s, now()) "
+                        "RETURNING id",
+                        (
+                            request_id,
+                            entry_jsonb,
+                            chain_hash,
+                            previous_hash,
+                        ),
+                    )
+                    new_row = await cur.fetchone()
+                    new_id = new_row[0] if new_row else None
+
+                    # ── Update chain state ──
+                    await conn.execute(
+                        "UPDATE trustlog_chain_state "
+                        "SET last_hash = %s, last_id = %s, updated_at = now() "
+                        "WHERE id = 1",
+                        (chain_hash, new_id),
+                    )
+
+            return request_id
+        except Exception as exc:
+            raise RuntimeError(
+                f"PostgreSQL TrustLog append failed (fail-closed): {exc}"
+            ) from exc
 
     async def get_by_id(self, request_id: str) -> Optional[Dict[str, Any]]:
-        raise NotImplementedError("PostgreSQL TrustLog backend is planned for v2.1")
+        """Return the entry matching *request_id*, or ``None``."""
+        pool = await self._get_pool()
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT entry FROM trustlog_entries WHERE request_id = %s",
+                (request_id,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            val = row[0]
+            return val if isinstance(val, dict) else None
 
     async def iter_entries(
         self,
         limit: int = 100,
         offset: int = 0,
     ) -> AsyncIterator[Dict[str, Any]]:
-        # The yield makes Python treat this as an async generator so that
-        # callers can use ``async for``.  The raise executes first.
-        raise NotImplementedError("PostgreSQL TrustLog backend is planned for v2.1")
-        yield  # type: ignore[misc]  # unreachable; satisfies async-generator requirement
+        """Yield entries in insertion order (oldest first)."""
+        if limit <= 0:
+            return
+
+        pool = await self._get_pool()
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT entry FROM trustlog_entries ORDER BY id LIMIT %s OFFSET %s",
+                (limit, offset),
+            )
+            rows = await cur.fetchall()
+
+        for (val,) in rows:
+            if isinstance(val, dict):
+                yield val
 
     async def get_last_hash(self) -> Optional[str]:
-        raise NotImplementedError("PostgreSQL TrustLog backend is planned for v2.1")
+        """Return the chain hash of the newest entry, or ``None``."""
+        pool = await self._get_pool()
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT last_hash FROM trustlog_chain_state WHERE id = 1"
+            )
+            row = await cur.fetchone()
+            if row is None:
+                return None
+            return row[0]
 
 
 class PostgresMemoryStore(_PostgresBase):
@@ -76,25 +266,6 @@ class PostgresMemoryStore(_PostgresBase):
     ``embedding`` column + index; the search method signature stays the
     same.
     """
-
-    # ------------------------------------------------------------------ pool
-
-    async def _get_pool(self):
-        """Obtain the process-wide connection pool.
-
-        Raises
-        ------
-        RuntimeError
-            When psycopg is not installed or the pool cannot be created.
-        """
-        from veritas_os.storage.db import get_pool
-
-        try:
-            return await get_pool()
-        except Exception as exc:
-            raise RuntimeError(
-                f"PostgreSQL connection pool unavailable: {exc}"
-            ) from exc
 
     # ------------------------------------------------------------------ put
 
