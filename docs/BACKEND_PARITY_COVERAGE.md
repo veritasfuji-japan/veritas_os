@@ -111,9 +111,9 @@ against a real PostgreSQL 16 service container.
 | **concurrent appends** | ✅ | ✅ | ✅ | |
 | **verify (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
 | **export (placeholder)** | ⬜ | ⬜ | — | Service layer concern |
-| **import (CLI)** | N/A | ✅ | — | `veritas-migrate trustlog` — idempotent, chain-preserving |
-| **import dry-run** | N/A | ✅ | — | `veritas-migrate trustlog --dry-run` — read-only validation |
-| **import verify** | N/A | ✅ | — | `veritas-migrate trustlog --verify` — post-import chain check |
+| **import (CLI)** | — | ✅ | — | `veritas-migrate trustlog` — idempotent, chain-preserving (reads JSONL source → writes to PG) |
+| **import dry-run** | — | ✅ | — | `veritas-migrate trustlog --dry-run` — read-only validation |
+| **import verify** | — | ✅ | — | `veritas-migrate trustlog --verify` — post-import chain check |
 
 ### Factory & Lifecycle Coverage
 
