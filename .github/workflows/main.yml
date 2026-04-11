@@ -390,6 +390,7 @@ jobs:
             veritas_os/tests/test_storage_backend_parity_matrix.py \
             veritas_os/tests/test_storage_postgresql_memory.py \
             veritas_os/tests/test_storage_postgresql_trustlog.py \
+            veritas_os/tests/test_pg_trustlog_contention.py \
             veritas_os/tests/test_storage_factory.py \
             veritas_os/tests/test_storage_base.py \
             veritas_os/tests/test_storage_db.py \

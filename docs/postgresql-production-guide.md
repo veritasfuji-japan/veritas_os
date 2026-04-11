@@ -734,6 +734,7 @@ print('✓ Both backends confirmed as PostgreSQL')
 | Memory read/write via API | `TestPostgresqlBackendReadWrite`, `docker-smoke` | Both |
 | TrustLog read via API | `TestPostgresqlBackendReadWrite`, `docker-smoke` | Both |
 | Chain-hash integrity | Smoke tests + `/v1/trustlog/verify` | Both |
+| Advisory lock contention | `test_pg_trustlog_contention.py` (25 tests) | Mock (lock-based) |
 | Fail-fast on missing DSN | `test_storage_factory.py` | Mock |
 | Fail-fast on contradiction | `test_storage_factory.py`, `TestBackendMisconfigurationFailFast` | Mock |
 | Mixed backend warning | `test_storage_factory.py` | Mock |
@@ -796,7 +797,7 @@ cleanup plan and rationale.
 | **Connection pool metrics** | Pool stats not exposed to `/v1/metrics` | Limited observability |
 | **Multi-database** | Single `VERITAS_DATABASE_URL` for all backends | Cannot split MemoryOS and TrustLog across databases |
 | **Schema versioning in CI** | Mock pool in unit tests, real PG only in `test-postgresql` and `docker-smoke` jobs | Behavioral drift possible between mock and real |
-| **Concurrent advisory lock testing** | Advisory lock serialization tested via mock pool only; not tested under real multi-threaded contention | Edge-case contention may differ |
+| **Concurrent advisory lock testing** | Advisory lock serialization tested via lock-based contention mock (25 tests in `test_pg_trustlog_contention.py`); real PG contention tested in CI `test-postgresql` job | Lock semantics faithfully emulated; real PG may exhibit different timing |
 | **Import idempotency** | `veritas-migrate` CLI is idempotent; re-runs skip existing entries | Safe for retry / resume after partial failure |
 
 ### Planned future enhancements
