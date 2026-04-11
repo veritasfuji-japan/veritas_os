@@ -422,6 +422,37 @@ VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
 make db-upgrade
 ```
 
+### Migrating existing data (JSONL → PostgreSQL)
+
+```bash
+# 1. Dry-run to validate source files
+veritas-migrate trustlog --source runtime/trustlog/trust_log.jsonl --dry-run
+veritas-migrate memory   --source runtime/memory/memory.json      --dry-run
+
+# 2. Import with post-migration hash-chain verification
+veritas-migrate trustlog --source runtime/trustlog/trust_log.jsonl --verify
+veritas-migrate memory   --source runtime/memory/memory.json
+
+# 3. Verify via smoke tests
+VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
+  pytest -m smoke veritas_os/tests/ -q
+```
+
+The `veritas-migrate` CLI is **idempotent** — re-running after a partial failure
+safely resumes by skipping already-imported entries. See
+[`docs/postgresql-production-guide.md` §11](docs/postgresql-production-guide.md)
+for the full procedure including rollback.
+
+### Verification tools
+
+| Tool | Purpose | Invocation |
+|------|---------|------------|
+| `veritas-trustlog-verify` | Standalone TrustLog chain integrity verifier | `veritas-trustlog-verify --log-dir <path>` |
+| `veritas-migrate --verify` | Post-import hash-chain check (PostgreSQL) | `veritas-migrate trustlog --source … --verify` |
+| `/v1/trustlog/verify` | REST API chain verification | `curl -H "X-API-Key: …" http://host:8000/v1/trustlog/verify` |
+| `pytest -m smoke` | Governance invariant smoke tests | `pytest -m smoke veritas_os/tests/` |
+| `pytest -m production` | Production-like validation suite | `make test-production` |
+
 ### Key features of the PostgreSQL backend
 
 - **Alembic-managed schema** — reproducible migrations with `upgrade` / `downgrade` paths.
@@ -429,14 +460,14 @@ make db-upgrade
 - **JSONB storage** — queryable payloads with GIN indexes.
 - **Full parity test suite** — 195+ tests verify identical semantics across backends.
 - **psycopg 3** — modern async PostgreSQL driver with connection pooling (`psycopg-pool`).
-- **JSONL → PostgreSQL import** — documented manual ETL with dry-run and verification steps.
+- **JSONL → PostgreSQL import** — idempotent `veritas-migrate` CLI with dry-run, resume, and post-import hash-chain verification.
 
 ### Production deployment
 
 See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) for:
 - Pool sizing, SSL/TLS, statement timeout configuration
 - Backup/restore, replication/HA guidance
-- JSONL → PostgreSQL import procedure (dry-run, rollback, re-execution)
+- JSONL → PostgreSQL import via `veritas-migrate` CLI (dry-run, resume, rollback, verification)
 - Smoke test and release validation relationship
 - Legacy path cleanup status
 - Secure/prod posture recommended settings
