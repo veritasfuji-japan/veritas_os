@@ -75,8 +75,12 @@ observability = [
 signing = [
   "cryptography==46.0.7",
 ]
+postgresql = [
+  "psycopg[binary]==3.2.9",
+  "psycopg-pool==3.2.6",
+]
 full = [
-  "veritas-os[ml,reports,anthropic,system,observability,signing,dev]",
+  "veritas-os[ml,reports,anthropic,system,observability,signing,postgresql,dev]",
 ]
 dev = [
   "pytest==8.3.5",
@@ -102,6 +106,7 @@ veritas_os = [
   "policies/*.yaml",
   "prompts/*.txt",
   "sample_data/memory/*.jsonl",
+  "storage/migrations/sql/*.sql",
   "templates/**/*.txt",
 ]
 

@@ -1,4 +1,31 @@
 services:
+  postgres:
+    image: postgres:16-bookworm
+    container_name: veritas-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${VERITAS_DB_USER:-veritas}
+      POSTGRES_PASSWORD: ${VERITAS_DB_PASSWORD:-veritas}
+      POSTGRES_DB: ${VERITAS_DB_NAME:-veritas}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VERITAS_DB_USER:-veritas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512m
+        reservations:
+          cpus: "0.25"
+          memory: 128m
+
   backend:
     build:
       context: .
@@ -9,6 +36,10 @@ services:
       - "8000:8000"
     environment:
       VERITAS_CORS_ALLOW_ORIGINS: ${VERITAS_CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      VERITAS_DATABASE_URL: ${VERITAS_DATABASE_URL:-postgresql://veritas:veritas@postgres:5432/veritas}
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -59,3 +90,6 @@ services:
         reservations:
           cpus: "0.25"
           memory: 256m
+
+volumes:
+  pgdata:

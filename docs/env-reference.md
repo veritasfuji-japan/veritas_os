@@ -232,6 +232,22 @@ Variables prefixed with `VERITAS_` are project-specific.
 
 ---
 
+## PostgreSQL / Storage Backend
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VERITAS_MEMORY_BACKEND` | `json` | Memory storage backend (`json` or `postgresql`) |
+| `VERITAS_TRUSTLOG_BACKEND` | `jsonl` | TrustLog storage backend (`jsonl` or `postgresql`) |
+| `VERITAS_DATABASE_URL` | *(required when backend=postgresql)* | PostgreSQL DSN, e.g. `postgresql://veritas:veritas@localhost:5432/veritas` |
+| `VERITAS_DB_POOL_MIN_SIZE` | `2` | Minimum idle connections in the pool |
+| `VERITAS_DB_POOL_MAX_SIZE` | `10` | Maximum connections in the pool |
+| `VERITAS_DB_CONNECT_TIMEOUT` | `5` | TCP connect timeout in seconds |
+| `VERITAS_DB_STATEMENT_TIMEOUT_MS` | `30000` | Per-statement timeout in milliseconds |
+| `VERITAS_DB_SSLMODE` | `prefer` | libpq sslmode (`disable`, `prefer`, `require`, `verify-full`) |
+| `VERITAS_DB_AUTO_MIGRATE` | `false` | Run pending SQL migrations on startup |
+
+---
+
 ## Replay & Persistence
 
 | Variable | Default | Description |
