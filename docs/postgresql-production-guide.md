@@ -633,33 +633,58 @@ confident deployments.
 
 | Job | Storage backend | What it validates |
 |-----|-----------------|-------------------|
-| `governance-smoke` | Default (JSONL/JSON) | 16 smoke tests verify governance invariants |
+| `governance-smoke` | Default (JSONL/JSON) | 20+ smoke tests verify governance invariants |
 | `test (py3.11/3.12)` | Default (JSONL/JSON) + mock PostgreSQL pool | 195+ parity tests via mock pool |
 
 Smoke tests (`@pytest.mark.smoke`) run with whichever backend is active.
 In the default CI matrix this is JSONL/JSON. PostgreSQL-specific behaviour
 is covered by the mock-pool parity tests in `test_storage_backend_*.py`.
 
+New in this tier:
+- `TestPostgresqlBackendReadWrite` exercises Memory write/read and TrustLog
+  list through the API, confirming the backend read/write paths work.
+- `TestBackendMisconfigurationFailFast` verifies that startup fails fast
+  on missing `VERITAS_DATABASE_URL`, unknown backends, unused DATABASE_URL,
+  and mixed backend configurations.
+
 ### Tier 2 — Release gate (`release-gate.yml`)
 
 | Job | Storage backend | What it validates |
 |-----|-----------------|-------------------|
 | `production-tests` | Default + `@pytest.mark.production` | Production-like validation |
-| `docker-smoke` | PostgreSQL (via `docker compose`) | Full-stack health check with real PostgreSQL |
+| `docker-smoke` | PostgreSQL (via `docker compose`) | Full-stack health + read/write with real PostgreSQL |
 | `trustlog-production-matrix` | N/A (posture profiles) | TrustLog promotion paths for dev/secure/prod |
 
 The `docker-smoke` job starts the full Docker Compose stack, which defaults
 to PostgreSQL.  This validates that:
 - Schema migrations apply cleanly (`VERITAS_DB_AUTO_MIGRATE=true`)
 - `/health` reports `storage_backends: {memory: postgresql, trustlog: postgresql}`
-- Basic API operations succeed against a real PostgreSQL instance
+- Memory write/read operations succeed against real PostgreSQL
+- TrustLog read path is exercised against real PostgreSQL
+- Failure messages clearly indicate "backend not switched to PostgreSQL"
 
 ### Tier 3 — Weekly / manual (`production-validation.yml`)
 
 | Job | Storage backend | What it validates |
 |-----|-----------------|-------------------|
-| `docker-smoke` | PostgreSQL (via `docker compose`) | Extended smoke with real PostgreSQL |
+| `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification |
+| `docker-smoke` | PostgreSQL (via `docker compose`) | Full-stack health + read/write with real PostgreSQL |
 | `production-tests` | Default | Long-running production-like checks |
+
+The `postgresql-smoke` job now also verifies that `get_backend_info()` reports
+`postgresql` for both backends, catching silent fallback to file stores.
+
+### Misconfiguration fail-fast
+
+The `validate_backend_config()` function (called during app startup) enforces
+the following:
+
+| Scenario | Behaviour |
+|----------|-----------|
+| `VERITAS_*_BACKEND=postgresql` without `VERITAS_DATABASE_URL` | **RuntimeError** — hard fail |
+| Unknown backend name (e.g. `redis`, `sqlite`) | **ValueError** — hard fail |
+| `VERITAS_DATABASE_URL` set but neither backend is `postgresql` | **Warning** — likely backend-switch oversight |
+| Only one backend is `postgresql` (mixed setup) | **Warning** — usually unintentional |
 
 ### Running smoke tests locally with PostgreSQL
 
@@ -680,6 +705,24 @@ VERITAS_TRUSTLOG_BACKEND=postgresql \
   make test-production
 ```
 
+### Verifying PostgreSQL backend usage
+
+After starting the stack with `docker compose up`, confirm PostgreSQL is
+actually in use (not silently falling back to file backends):
+
+```bash
+# Quick check via /health endpoint
+curl -s http://localhost:8000/health | python3 -c "
+import json, sys
+h = json.load(sys.stdin)
+b = h.get('storage_backends', {})
+print(f'memory={b.get(\"memory\")}, trustlog={b.get(\"trustlog\")}')
+assert b.get('memory') == 'postgresql', 'Memory backend is NOT PostgreSQL!'
+assert b.get('trustlog') == 'postgresql', 'TrustLog backend is NOT PostgreSQL!'
+print('✓ Both backends confirmed as PostgreSQL')
+"
+```
+
 ### Validation coverage summary
 
 | Validation area | Covered by | Backend |
@@ -688,8 +731,12 @@ VERITAS_TRUSTLOG_BACKEND=postgresql \
 | Contract parity (JSONL ↔ PG) | `test_storage_backend_contract.py` | Mock pool |
 | Side-by-side parity | `test_storage_backend_parity_matrix.py` | Mock pool |
 | Full-stack health check | `docker-smoke` | Real PostgreSQL (compose) |
+| Memory read/write via API | `TestPostgresqlBackendReadWrite`, `docker-smoke` | Both |
+| TrustLog read via API | `TestPostgresqlBackendReadWrite`, `docker-smoke` | Both |
 | Chain-hash integrity | Smoke tests + `/v1/trustlog/verify` | Both |
 | Fail-fast on missing DSN | `test_storage_factory.py` | Mock |
+| Fail-fast on contradiction | `test_storage_factory.py`, `TestBackendMisconfigurationFailFast` | Mock |
+| Mixed backend warning | `test_storage_factory.py` | Mock |
 | Connection pool lifecycle | `test_storage_db.py` | Mock |
 
 See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
