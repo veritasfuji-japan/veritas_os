@@ -67,17 +67,42 @@ def _auth_store_health(srv: Any) -> Dict[str, Any]:
 
 
 def _trust_log_health(srv: Any) -> Dict[str, Any]:
-    """Return trust-log aggregate JSON health for audit visibility."""
+    """Return trust-log health information with backend awareness.
+
+    When the TrustLog backend is ``postgresql``, aggregate JSON file
+    health is not meaningful — the health status is derived from the
+    configured backend type instead.  For file-based (``jsonl``) backends,
+    the legacy aggregate JSON load result is checked as before.
+    """
+    backend_info = get_backend_info()
+    backend_name = backend_info.get("trustlog", "jsonl")
+
+    if backend_name == "postgresql":
+        # PostgreSQL backend: file-based aggregate JSON is not the
+        # source of truth.  Report healthy if the store is wired.
+        store = None
+        app = getattr(srv, "app", None)
+        if app is not None:
+            state = getattr(app, "state", None)
+            if state is not None:
+                store = getattr(state, "trust_log_store", None)
+        status = "ok" if store is not None else "unknown"
+        return {
+            "status": status,
+            "details": {"status": status, "backend": "postgresql"},
+        }
+
+    # File-based (jsonl) backend: check aggregate JSON health.
     trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
     if trust_log_runtime is None:
-        return {"status": "unknown", "details": {"status": "unknown"}}
+        return {"status": "unknown", "details": {"status": "unknown", "backend": backend_name}}
 
     _, log_json, _ = srv._effective_log_paths()
     trust_log_runtime.effective_log_paths = srv._effective_log_paths
     load_result = trust_log_runtime.load_logs_json_result(log_json)
     raw_status = getattr(load_result, "status", "unknown")
     status = "ok" if raw_status in {"ok", "missing"} else "degraded"
-    details: Dict[str, Any] = {"status": raw_status}
+    details: Dict[str, Any] = {"status": raw_status, "backend": backend_name}
     error = getattr(load_result, "error", None)
     if error:
         details["error"] = error
@@ -439,11 +464,14 @@ def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> tuple[list[Pat
 def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
+    backend_info = get_backend_info()
     shadow_dir = srv._effective_shadow_dir()
     _, log_json, log_jsonl = srv._effective_log_paths()
+
+    # File-based metrics: only meaningful when backend is jsonl.
     trust_log_runtime = getattr(srv, "_trust_log_runtime", None)
     trust_json_result = None
-    if trust_log_runtime is not None:
+    if backend_info.get("trustlog") != "postgresql" and trust_log_runtime is not None:
         trust_log_runtime.effective_log_paths = srv._effective_log_paths
         trust_json_result = trust_log_runtime.load_logs_json_result(log_json)
 
@@ -489,6 +517,7 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": srv.get_decision_pipeline() is not None,
         "memory_status": memory_status,
+        "storage_backends": backend_info,
         "runtime_features": runtime_features,
         "auth_store_mode": auth_store["details"].get("requested_mode", "memory"),
         "auth_store_effective_mode": auth_store["details"].get("effective_mode", "memory"),

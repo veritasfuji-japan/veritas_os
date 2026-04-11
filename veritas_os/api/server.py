@@ -192,6 +192,11 @@ _DEFAULT_LOG_JSON = _DEFAULT_LOG_DIR / "trust_log.json"
 _DEFAULT_LOG_JSONL = _DEFAULT_LOG_DIR / "trust_log.jsonl"
 _DEFAULT_SHADOW_DIR = _DEFAULT_LOG_DIR / "DASH"
 
+# LEGACY COMPAT: File-based log path constants.
+# Tests monkeypatch these (server.LOG_DIR, server.LOG_JSON, etc.).
+# Only meaningful when VERITAS_TRUSTLOG_BACKEND=jsonl (default).
+# When backend=postgresql these paths are unused for persistence but
+# may still be referenced by shadow snapshot writes and /v1/metrics.
 LOG_DIR: Path = _DEFAULT_LOG_DIR
 LOG_JSON: Path = _DEFAULT_LOG_JSON
 LOG_JSONL: Path = _DEFAULT_LOG_JSONL
@@ -688,6 +693,22 @@ async def on_validation_error(request: Request, exc: RequestValidationError):
 # ==============================
 # Trust log helpers（server 側でも軽く読めるように）
 # ==============================
+# LEGACY COMPAT: The helpers below wrap file-based trust-log I/O
+# (aggregate JSON load, JSONL append, shadow snapshot writes).
+# They are the operational path only when VERITAS_TRUSTLOG_BACKEND=jsonl
+# (the default).  When the backend is "postgresql", persistence is
+# handled entirely by app.state.trust_log_store (set in lifespan.py).
+#
+# These wrappers remain for:
+#   1. Test backward-compatibility — many tests monkeypatch
+#      server.LOG_DIR / server._load_logs_json / server.append_trust_log.
+#   2. Shadow snapshot writes and /v1/metrics aggregate health checks
+#      which currently operate on local files regardless of backend.
+#
+# Migration guidance:
+#   New code SHOULD use app.state.trust_log_store (via
+#   dependency_resolver.get_trust_log_store) rather than calling
+#   these helpers directly.  See docs/architecture/trustlog_storage_consolidation.md.
 
 
 def _load_logs_json(path: Optional[Path] = None) -> list:
