@@ -150,26 +150,32 @@ def _mirror_to_worm(line: str) -> Dict[str, Any]:
     global _mirror_backend_cache
     started = perf_counter()
     try:
-        mirror_signature = "|".join(
-            [
-                os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower(),
-                os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_BUCKET", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_PREFIX", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_REGION", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_RETENTION_DAYS", "").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_MIRROR_MODE", "single_entry_objects").strip().lower(),
-                os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MAX_ENTRIES", "100").strip(),
-                os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MANIFEST_HMAC_KEY", "").strip(),
-            ]
-        )
-        if _mirror_backend_cache is None or _mirror_backend_cache[0] != mirror_signature:
-            _mirror_backend_cache = (
-                mirror_signature,
-                build_storage_mirror(append_fn=_append_line),
+        mirror_backend_name = os.getenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local").strip().lower()
+        mirror_mode = os.getenv("VERITAS_TRUSTLOG_S3_MIRROR_MODE", "single_entry_objects").strip().lower()
+        cache_enabled = mirror_backend_name == "s3_object_lock" and mirror_mode == "sealed_segments"
+        if not cache_enabled:
+            _mirror_backend_cache = None
+            mirror_backend = build_storage_mirror(append_fn=_append_line)
+        else:
+            mirror_signature = "|".join(
+                [
+                    mirror_backend_name,
+                    os.getenv("VERITAS_TRUSTLOG_S3_BUCKET", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_PREFIX", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_REGION", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_OBJECT_LOCK_MODE", "").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_RETENTION_DAYS", "").strip(),
+                    mirror_mode,
+                    os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MAX_ENTRIES", "100").strip(),
+                    os.getenv("VERITAS_TRUSTLOG_S3_SEGMENT_MANIFEST_HMAC_KEY", "").strip(),
+                ]
             )
-        mirror_backend = _mirror_backend_cache[1]
+            if _mirror_backend_cache is None or _mirror_backend_cache[0] != mirror_signature:
+                _mirror_backend_cache = (
+                    mirror_signature,
+                    build_storage_mirror(append_fn=_append_line),
+                )
+            mirror_backend = _mirror_backend_cache[1]
     except (ValueError, TypeError) as exc:
         observe_trustlog_mirror_latency("invalid", perf_counter() - started)
         record_trustlog_mirror_failure("invalid", exc.__class__.__name__)
