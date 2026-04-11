@@ -86,6 +86,9 @@ _REASON_CODE_MAP = {
     "unsupported_artifact_backend": "unsupported_backend",
     "verify_signature_unavailable": "signer_unavailable",
     "mirror_remote_verification_skipped": "verification_skipped",
+    "tsa_receipt_missing_raw": "anchor_receipt_malformed",
+    "tsa_receipt_hash_mismatch": "tamper_suspected",
+    "tsa_receipt_status_not_granted": "anchor_receipt_malformed",
 }
 
 
@@ -497,13 +500,56 @@ def _verify_anchor_receipt(entry: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def verify_witness_ledger(
-    entries: List[Dict[str, Any]],
-    verify_signature_fn: Callable[[Dict[str, Any]], bool],
-    artifact_search_roots: Optional[Sequence[Path]] = None,
-    s3_client: Optional[Any] = None,
-) -> Dict[str, Any]:
-    """Verify witness ledger chain, payload hash, signature and metadata linkage.
+def _verify_tsa_receipt_details(entry: Dict[str, Any]) -> Optional[str]:
+    """Additional validation for TSA-anchored entries.
+
+    Checks that TSA-specific fields (raw_receipt_b64, receipt_hash, status_code)
+    are present and structurally valid when the anchor backend is ``tsa``.
+
+    Returns:
+        A reason string on failure, or ``None`` if valid / not applicable.
+    """
+    backend = entry.get("anchor_backend")
+    if backend != "tsa":
+        return None
+
+    status = entry.get("anchor_status")
+    if status != "anchored":
+        return None  # failed/skipped entries don't have full receipt data
+
+    receipt = entry.get("anchor_receipt")
+    if not isinstance(receipt, dict):
+        return "anchor_receipt_malformed"
+
+    details = receipt.get("details")
+    if not isinstance(details, dict):
+        return "anchor_receipt_invalid_details"
+
+    raw_b64 = details.get("raw_receipt_b64")
+    if not isinstance(raw_b64, str) or not raw_b64.strip():
+        return "tsa_receipt_missing_raw"
+
+    # Verify receipt hash integrity
+    stored_hash = receipt.get("receipt_payload_hash")
+    if stored_hash and raw_b64:
+        try:
+            import base64 as _b64
+            import hashlib as _hl
+            raw_bytes = _b64.b64decode(raw_b64)
+            computed = _hl.sha256(raw_bytes).hexdigest()
+            if computed != stored_hash:
+                return "tsa_receipt_hash_mismatch"
+        except Exception:  # noqa: BLE001
+            return "tsa_receipt_hash_mismatch"
+
+    # Check TSA status
+    status_code = details.get("status_code")
+    if status_code is not None and status_code not in (0, 1):
+        return "tsa_receipt_status_not_granted"
+
+    return None
+
+
 
     Legacy compatibility:
         Entries without ``full_payload_hash`` / ``mirror_receipt`` are treated
@@ -582,6 +628,11 @@ def verify_witness_ledger(
             errors.append(_make_error("witness", index, anchor_error))
         elif all(key not in entry for key in ("anchor_backend", "anchor_status", "anchor_receipt")):
             notes.append(_make_note("witness", index, "legacy_anchor_not_present"))
+        else:
+            # Additional TSA-specific validation
+            tsa_error = _verify_tsa_receipt_details(entry)
+            if tsa_error:
+                errors.append(_make_error("witness", index, tsa_error))
 
         if "full_payload_hash" not in entry:
             notes.append(_make_note("witness", index, "legacy_missing_full_payload_hash"))
