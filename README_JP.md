@@ -340,7 +340,7 @@ veritas_os/                  ← モノレポルート
 
 | レイヤー | 技術 |
 |---|---|
-| フレームワーク | Next.js 16.1（App Router） |
+| フレームワーク | Next.js 16.2.3（App Router） |
 | 言語 | TypeScript 5.7 |
 | スタイリング | Tailwind CSS 3.4 + CVA（class-variance-authority） |
 | アイコン | Lucide React |

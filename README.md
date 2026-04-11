@@ -382,7 +382,7 @@ The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides 
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16.2 (App Router) |
+| Framework | Next.js 16.2.3 (App Router) |
 | Language | TypeScript 5.7 |
 | Styling | Tailwind CSS 3.4 + CVA (class-variance-authority) |
 | Icons | Lucide React |
