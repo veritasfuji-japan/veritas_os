@@ -175,6 +175,15 @@ class Signer(Protocol):
     def signer_key_id(self) -> str:
         """Return a stable signer identity (KMS key id or local key fingerprint)."""
 
+    def signer_key_version(self) -> str:
+        """Return signer key version label used at sign time."""
+
+    def signature_algorithm(self) -> str:
+        """Return signature algorithm identifier."""
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        """Return public-key fingerprint when available."""
+
 
 class FileEd25519Signer:
     """Ed25519 signer backed by local key files."""
@@ -202,6 +211,16 @@ class FileEd25519Signer:
         )
 
     def signer_key_id(self) -> str:
+        return public_key_fingerprint(self.public_key_path)
+
+    def signer_key_version(self) -> str:
+        """Return normalized key-version label for local file-backed keys."""
+        return "unversioned"
+
+    def signature_algorithm(self) -> str:
+        return "ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
         return public_key_fingerprint(self.public_key_path)
 
 
@@ -267,6 +286,29 @@ class AwsKmsEd25519Signer:
 
     def signer_key_id(self) -> str:
         return self.kms_key_id
+
+    def signer_key_version(self) -> str:
+        """Return normalized key-version label for AWS KMS.
+
+        AWS KMS Sign/GetPublicKey APIs do not return a per-operation key
+        version identifier for asymmetric KMS keys. We record ``unknown`` so
+        verifiers can treat the field consistently across backends.
+        """
+        return "unknown"
+
+    def signature_algorithm(self) -> str:
+        return "eddsa_ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        try:
+            public_key = self._load_public_key()
+            public_raw = public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        return sha256_hex(public_raw.hex())[:16]
 
 
 def build_trustlog_signer(

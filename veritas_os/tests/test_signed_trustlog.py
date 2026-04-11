@@ -346,3 +346,179 @@ def test_append_signed_decision_skips_artifact_ref_by_default(monkeypatch, tmp_p
     entry = trustlog_signed.append_signed_decision({"request_id": "r-default"})
 
     assert "artifact_ref" not in entry
+
+
+def test_file_signer_metadata_population(monkeypatch, tmp_path):
+    """File-backed signer emits normalized signer metadata by default."""
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-file-meta"})
+    meta = entry["signer_metadata"]
+
+    assert meta["metadata_version"] == "v2"
+    assert meta["signer_type"] == "file"
+    assert meta["signer_key_id"] == entry["signer_key_id"]
+    assert meta["signer_key_version"] == "unversioned"
+    assert meta["signature_algorithm"] == "ed25519"
+    assert isinstance(meta["public_key_fingerprint"], str)
+    assert meta["signed_at"] == entry["timestamp"]
+    assert meta["verification_policy_version"] == "trustlog_witness_v2"
+    assert meta["fingerprint_missing"] is False
+
+
+def test_aws_kms_signer_metadata_population(monkeypatch, tmp_path):
+    """AWS KMS signer emits normalized metadata with explicit key-version semantics."""
+
+    class FakeKmsClient:
+        def __init__(self):
+            self.private_key = Ed25519PrivateKey.generate()
+            self.key_id = "arn:aws:kms:us-east-1:111122223333:key/meta"
+
+        def sign(self, *, KeyId, Message, MessageType, SigningAlgorithm):
+            assert KeyId == self.key_id
+            assert MessageType == "RAW"
+            assert SigningAlgorithm == "EDDSA"
+            return {"Signature": self.private_key.sign(Message)}
+
+        def get_public_key(self, *, KeyId):
+            assert KeyId == self.key_id
+            public_der = self.private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            return {"PublicKey": public_der}
+
+    class FakeBoto3:
+        def __init__(self, client):
+            self._client = client
+
+        def client(self, service_name):
+            assert service_name == "kms"
+            return self._client
+
+    log_path = tmp_path / "trustlog.jsonl"
+    fake_kms = FakeKmsClient()
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", fake_kms.key_id)
+    monkeypatch.setattr(
+        "veritas_os.security.signing.importlib.import_module",
+        lambda module_name: FakeBoto3(fake_kms),
+    )
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-kms-meta"})
+    meta = entry["signer_metadata"]
+    assert meta["signer_type"] == "aws_kms"
+    assert meta["signer_key_id"] == fake_kms.key_id
+    assert meta["signer_key_version"] == "unknown"
+    assert meta["signature_algorithm"] == "eddsa_ed25519"
+    assert isinstance(meta["public_key_fingerprint"], str)
+    assert meta["key_version_normalized"] is True
+
+
+def test_legacy_entry_verification_without_signer_metadata(monkeypatch, tmp_path):
+    """Legacy entries without signer_metadata remain verifiable."""
+    log_path = tmp_path / "trustlog.jsonl"
+    private_key = tmp_path / "keys" / "priv.key"
+    public_key = tmp_path / "keys" / "pub.key"
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", log_path)
+    monkeypatch.setattr(trustlog_signed, "PRIVATE_KEY_PATH", private_key)
+    monkeypatch.setattr(trustlog_signed, "PUBLIC_KEY_PATH", public_key)
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-legacy"})
+    del entry["signer_metadata"]
+    log_path.write_text(json.dumps(entry, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    verify_result = trustlog_signed.verify_trustlog_chain(path=log_path)
+    assert verify_result["ok"] is True
+
+
+def test_rotated_key_verification_for_aws_kms_entries(monkeypatch, tmp_path):
+    """Witness verification succeeds after KMS key rotation using per-entry metadata."""
+
+    class RotatingFakeKmsClient:
+        def __init__(self):
+            self.private_by_key = {
+                "arn:aws:kms:us-east-1:111122223333:key/old": Ed25519PrivateKey.generate(),
+                "arn:aws:kms:us-east-1:111122223333:key/new": Ed25519PrivateKey.generate(),
+            }
+
+        def sign(self, *, KeyId, Message, MessageType, SigningAlgorithm):
+            assert MessageType == "RAW"
+            assert SigningAlgorithm == "EDDSA"
+            private_key = self.private_by_key[KeyId]
+            return {"Signature": private_key.sign(Message)}
+
+        def get_public_key(self, *, KeyId):
+            private_key = self.private_by_key[KeyId]
+            public_der = private_key.public_key().public_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+            return {"PublicKey": public_der}
+
+    class FakeBoto3:
+        def __init__(self, client):
+            self._client = client
+
+        def client(self, service_name):
+            assert service_name == "kms"
+            return self._client
+
+    fake_kms = RotatingFakeKmsClient()
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", tmp_path / "trustlog.jsonl")
+    monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+    monkeypatch.setattr(
+        "veritas_os.security.signing.importlib.import_module",
+        lambda module_name: FakeBoto3(fake_kms),
+    )
+
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:111122223333:key/old")
+    trustlog_signed.append_signed_decision({"request_id": "r-old-key"})
+
+    monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:us-east-1:111122223333:key/new")
+    trustlog_signed.append_signed_decision({"request_id": "r-new-key"})
+
+    verify_result = trustlog_signed.verify_trustlog_chain(path=tmp_path / "trustlog.jsonl")
+    assert verify_result["ok"] is True
+    assert verify_result["entries_checked"] == 2
+
+
+def test_missing_fingerprint_fallback_behavior(monkeypatch, tmp_path):
+    """Missing public-key fingerprint is explicitly represented in signer metadata."""
+
+    class FakeSigner:
+        signer_type = "file"
+
+        def sign_payload_hash(self, payload_hash: str) -> str:
+            return "ZmFrZV9zaWduYXR1cmU="
+
+        def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+            return True
+
+        def signer_key_id(self) -> str:
+            return "fallback-key-id"
+
+        def signer_key_version(self) -> str:
+            return "unversioned"
+
+        def signature_algorithm(self) -> str:
+            return "ed25519"
+
+        def public_key_fingerprint(self):
+            return None
+
+    monkeypatch.setattr(trustlog_signed, "SIGNED_TRUSTLOG_JSONL", tmp_path / "trustlog.jsonl")
+    monkeypatch.setattr(trustlog_signed, "_resolve_signer", lambda ensure_local_keys=False: FakeSigner())
+
+    entry = trustlog_signed.append_signed_decision({"request_id": "r-no-fp"})
+    meta = entry["signer_metadata"]
+    assert meta["public_key_fingerprint"] is None
+    assert meta["fingerprint_missing"] is True

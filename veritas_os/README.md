@@ -573,6 +573,34 @@ python -m veritas_os.api.merge_trust_logs \
 * Default: auto-discover existing logs, deduplicate by `request_id` / timestamp
 * `--no-rehash` can disable recomputation (recommended to keep rehash **ON**)
 
+#### Signed witness metadata (auditability across rotation/migration)
+
+`trustlog.jsonl` witness rows include `signer_metadata` (metadata version `v2`) so
+auditors can reconstruct which signing material and verification policy applied
+at signing time:
+
+* `signer_type`: backend (`file`, `aws_kms`, etc.)
+* `signer_key_id`: backend key identifier (KMS key ARN or local key id)
+* `signer_key_version`: normalized key version at sign time
+  * local file keys are recorded as `unversioned`
+  * AWS KMS asymmetric sign does not expose a per-sign key version; recorded as `unknown`
+* `signature_algorithm`: explicit algorithm identifier (`ed25519`, `eddsa_ed25519`)
+* `public_key_fingerprint`: SHA-256-based fingerprint when available (`null` when unavailable)
+* `signed_at`: RFC3339 UTC signing timestamp used for this signature
+* `verification_policy_version`: verifier policy profile used when entry was produced
+
+Backward compatibility:
+
+* Legacy entries without `signer_metadata` are still verifiable.
+* Existing top-level `signer_type` / `signer_key_id` fields are retained for
+  older tooling.
+
+Key rotation representation:
+
+* Each entry stores its own signer identity metadata.
+* During verification, signer selection is resolved from the entry’s signer
+  metadata first, so mixed-backend or rotated-key histories remain auditable.
+
 ### 6.2 Dataset Output
 
 Decisions can be exported as training data via `dataset_writer.py`:

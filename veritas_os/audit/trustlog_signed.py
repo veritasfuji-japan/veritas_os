@@ -49,6 +49,8 @@ PUBLIC_KEY_PATH = SIGNED_TRUSTLOG_KEYS / "trustlog_ed25519_public.key"
 
 _lock = threading.RLock()
 _logger = logging.getLogger(__name__)
+TRUSTLOG_SIGNER_METADATA_VERSION = "v2"
+TRUSTLOG_VERIFICATION_POLICY_VERSION = "trustlog_witness_v2"
 
 
 class SignedTrustLogWriteError(RuntimeError):
@@ -269,8 +271,12 @@ def _resolve_signer_for_entry(entry: Dict[str, Any]) -> Signer:
     The signer is selected from entry metadata first so mixed-backend
     historical logs remain verifiable after backend migrations.
     """
+    signer_meta = entry.get("signer_metadata")
     signer_type = str(entry.get("signer_type", "")).strip().lower()
     signer_key_id = str(entry.get("signer_key_id", "")).strip()
+    if isinstance(signer_meta, dict):
+        signer_type = str(signer_meta.get("signer_type", signer_type)).strip().lower()
+        signer_key_id = str(signer_meta.get("signer_key_id", signer_key_id)).strip()
     if signer_type:
         return build_trustlog_signer(
             private_key_path=PRIVATE_KEY_PATH,
@@ -279,6 +285,30 @@ def _resolve_signer_for_entry(entry: Dict[str, Any]) -> Signer:
             kms_key_id=signer_key_id or None,
         )
     return _resolve_signer()
+
+
+def _build_signer_metadata(signer: Signer, *, signed_at: str) -> Dict[str, Any]:
+    """Build normalized signer metadata for long-term witness verification.
+
+    Normalization rules:
+        - ``signer_key_version`` may be ``unknown`` for backends like AWS KMS
+          that do not expose per-sign operation key versions.
+        - ``public_key_fingerprint`` can be ``None`` when a backend cannot
+          provide a public key during write-time.
+    """
+    public_key_fp = signer.public_key_fingerprint()
+    return {
+        "metadata_version": TRUSTLOG_SIGNER_METADATA_VERSION,
+        "signer_type": signer.signer_type,
+        "signer_key_id": signer.signer_key_id(),
+        "signer_key_version": signer.signer_key_version(),
+        "signature_algorithm": signer.signature_algorithm(),
+        "public_key_fingerprint": public_key_fp,
+        "signed_at": signed_at,
+        "verification_policy_version": TRUSTLOG_VERIFICATION_POLICY_VERSION,
+        "key_version_normalized": signer.signer_key_version() == "unknown",
+        "fingerprint_missing": public_key_fp is None,
+    }
 
 
 def _entry_chain_hash(entry: Dict[str, Any]) -> str:
@@ -558,10 +588,12 @@ def append_signed_decision(
 
             payload_hash = sha256_of_canonical_json(compact_payload)
             signature = signer.sign_payload_hash(payload_hash)
+            signed_at = _utc_now_iso8601()
+            signer_metadata = _build_signer_metadata(signer, signed_at=signed_at)
 
             entry = {
                 "decision_id": _uuid7(),
-                "timestamp": _utc_now_iso8601(),
+                "timestamp": signed_at,
                 "previous_hash": previous_hash,
                 "decision_payload": compact_payload,
                 "payload_hash": payload_hash,
@@ -569,6 +601,7 @@ def append_signed_decision(
                 "signature": signature,
                 "signer_type": signer.signer_type,
                 "signer_key_id": signer.signer_key_id(),
+                "signer_metadata": signer_metadata,
             }
             if enable_artifact_ref:
                 artifact_ref = _build_artifact_reference(decision_payload)

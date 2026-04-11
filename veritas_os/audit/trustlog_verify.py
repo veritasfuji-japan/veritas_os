@@ -250,6 +250,38 @@ def _verify_mirror_receipt(
     return None
 
 
+def _verify_signer_metadata(entry: Dict[str, Any]) -> Optional[str]:
+    """Validate signer metadata format for new witness entries.
+
+    Legacy compatibility:
+        Entries without ``signer_metadata`` are accepted.
+    """
+    signer_meta = entry.get("signer_metadata")
+    if signer_meta is None:
+        return None
+    if not isinstance(signer_meta, dict):
+        return "signer_metadata_malformed"
+
+    required_str_fields = (
+        "metadata_version",
+        "signer_type",
+        "signer_key_id",
+        "signer_key_version",
+        "signature_algorithm",
+        "signed_at",
+        "verification_policy_version",
+    )
+    for field in required_str_fields:
+        value = signer_meta.get(field)
+        if not isinstance(value, str) or not value.strip():
+            return f"signer_metadata_invalid_{field}"
+
+    key_fingerprint = signer_meta.get("public_key_fingerprint")
+    if key_fingerprint is not None and not isinstance(key_fingerprint, str):
+        return "signer_metadata_invalid_public_key_fingerprint"
+    return None
+
+
 def verify_witness_ledger(
     entries: List[Dict[str, Any]],
     verify_signature_fn: Callable[[Dict[str, Any]], bool],
@@ -322,6 +354,10 @@ def verify_witness_ledger(
         if mirror_error:
             mirror_ok = False
             errors.append(VerificationError("witness", index, mirror_error))
+
+        signer_meta_error = _verify_signer_metadata(entry)
+        if signer_meta_error:
+            errors.append(VerificationError("witness", index, signer_meta_error))
 
         if not any(err.index == index and err.ledger == "witness" for err in errors):
             valid_entries += 1
