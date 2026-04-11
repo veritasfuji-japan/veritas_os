@@ -62,6 +62,7 @@ cryptography==46.0.7
 # --- Optional [postgresql]: PostgreSQL Backend ---
 psycopg[binary]==3.2.9
 psycopg-pool==3.2.6
+alembic==1.18.4
 
 # --- Optional [dev]: Test / QA Tooling ---
 pytest==8.3.5

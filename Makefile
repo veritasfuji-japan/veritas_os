@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks validate-compose validate-compose-report validate-live validate-live-report validate-staged-report
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks validate-compose validate-compose-report validate-live validate-live-report validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -48,6 +48,30 @@ health:
 clean-venv:
 	rm -rf .venv
 	@echo "[veritas] .venv removed."
+
+# ── Database Migrations (Alembic) ────────────────────────────────────────
+
+db-upgrade:
+	@echo "[veritas] Applying all pending migrations …"
+	alembic upgrade head
+
+db-downgrade:
+	@echo "[veritas] Rolling back one migration revision …"
+	alembic downgrade -1
+
+db-downgrade-base:
+	@echo "[veritas] WARNING: Rolling back ALL migrations (destructive) …"
+	alembic downgrade base
+
+db-current:
+	@alembic current
+
+db-history:
+	@alembic history --verbose
+
+db-revision:
+	@if [ -z "$(MSG)" ]; then echo "Usage: make db-revision MSG='short description'"; exit 1; fi
+	alembic revision -m "$(MSG)"
 
 # ── Tests ────────────────────────────────────────────────────────────────
 
