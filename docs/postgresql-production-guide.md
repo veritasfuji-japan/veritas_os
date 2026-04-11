@@ -403,11 +403,37 @@ VERITAS_DB_AUTO_MIGRATE=false
 
 ## 11. JSONL → PostgreSQL Migration
 
-### Migration path
+### Migration CLI
 
-There is currently no fully automated JSONL → PostgreSQL migration CLI.
-The migration follows a manual ETL workflow with explicit verification
-at each step.
+The `veritas-migrate` CLI tool automates the file-to-PostgreSQL migration.
+It is designed to be:
+
+- **Idempotent** — re-running produces the same final state.  Entries
+  already present in PostgreSQL are skipped (duplicate-safe).
+- **Fail-soft** — a single malformed or failing entry is recorded in the
+  report but does not abort the migration.
+- **Chain-preserving** — TrustLog `sha256` / `sha256_prev` values are
+  stored verbatim; the hash chain is *never* recomputed.
+- **Resume-safe** — after a partial failure, simply re-run the same
+  command.  Already-imported entries are counted as duplicates.
+- **Observable** — every run produces a structured report (text or JSON)
+  with counts for migrated, duplicates, malformed, failed, and
+  (optionally) a post-import hash-chain verify result.
+
+#### Subcommands
+
+| Subcommand | Source format | Target table | Dedup key |
+|------------|--------------|--------------|-----------|
+| `memory`   | JSON (`memory.json`) | `memory_records` | `(key, user_id)` |
+| `trustlog` | JSONL (`trust_log.jsonl`, plain or `ENC:` encrypted) | `trustlog_entries` | `request_id` |
+
+#### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Migration (or dry-run) completed with zero failures |
+| 1 | Migration completed but some entries failed or were malformed |
+| 2 | Invalid arguments or fatal runtime error |
 
 ### Step-by-step procedure
 
@@ -427,85 +453,34 @@ export VERITAS_DATABASE_URL=postgresql://veritas:veritas@localhost:5432/veritas
 make db-upgrade          # alembic upgrade head
 
 # ── 3. Dry-run (read-only validation) ──────────────────────────
-# Verify JSONL entries are parseable and chain-hash consistent
-# before importing.  This step does NOT write to PostgreSQL.
-python -c "
-from veritas_os.storage.jsonl import JsonlTrustLogStore
-import asyncio, json
+# Verify source files are parseable and estimate migration scope
+# without writing anything to PostgreSQL.
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run
+veritas-migrate memory   --source /data/logs/memory.json      --dry-run
 
-store = JsonlTrustLogStore()
-entries = asyncio.run(store.iter_entries(limit=999999))
-print(f'Total entries: {len(entries)}')
-
-prev_hash = None
-for i, e in enumerate(entries):
-    entry = json.loads(e) if isinstance(e, str) else e
-    if prev_hash and entry.get('sha256_prev') != prev_hash:
-        print(f'ERROR: chain break at index {i}')
-        break
-    prev_hash = entry.get('sha256')
-else:
-    print('Chain integrity: OK')
-"
+# For CI pipelines, use --json for machine-readable output:
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run --json
 
 # ── 4. Import TrustLog entries ──────────────────────────────────
-# Insert entries in original order to preserve chain linkage.
-# The PostgresTrustLogStore.append() method recomputes and
-# verifies chain hashes via the same prepare_entry() logic
-# used by the JSONL backend.
-python -c "
-from veritas_os.storage.jsonl import JsonlTrustLogStore
-from veritas_os.storage.postgresql import PostgresTrustLogStore
-import asyncio, json
-
-src = JsonlTrustLogStore()
-dst = PostgresTrustLogStore()
-
-entries = asyncio.run(src.iter_entries(limit=999999))
-print(f'Importing {len(entries)} TrustLog entries …')
-
-async def do_import():
-    for i, e in enumerate(entries):
-        entry = json.loads(e) if isinstance(e, str) else e
-        await dst.append(entry)
-        if (i + 1) % 100 == 0:
-            print(f'  … {i + 1}/{len(entries)}')
-    print('TrustLog import complete.')
-
-asyncio.run(do_import())
-"
+# Entries are inserted in original file order with sha256 / sha256_prev
+# preserved verbatim (no recomputation).  Duplicate request_ids are
+# skipped automatically.
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --verify
 
 # ── 5. Import Memory records ───────────────────────────────────
-# Memory records are simpler: key/value with user_id isolation.
-python -c "
-from veritas_os.storage.json_kv import JsonMemoryStore
-from veritas_os.storage.postgresql import PostgresMemoryStore
-from pathlib import Path
-import asyncio, os
-
-src_path = Path(os.getenv('VERITAS_MEMORY_PATH',
-                           'runtime/memory/memory_store.json'))
-src = JsonMemoryStore(src_path)
-dst = PostgresMemoryStore()
-
-async def do_import():
-    # list_all requires user_id; iterate known users
-    for uid in src._data.keys() if hasattr(src, '_data') else []:
-        records = await src.list_all(uid)
-        for rec in records:
-            await dst.put(rec['key'], uid, rec['value'])
-    print('Memory import complete.')
-
-asyncio.run(do_import())
-"
+# Memory records use skip-on-conflict semantics: existing (key, user_id)
+# pairs are not overwritten.  Both the list format and the legacy
+# {"users": {...}} dict format are supported.
+veritas-migrate memory --source /data/logs/memory.json
 
 # ── 6. Verify ───────────────────────────────────────────────────
-# Confirm chain integrity via the API (start backend temporarily)
+# The --verify flag (step 4) already ran a post-import hash-chain
+# integrity check.  You can also verify via the API:
 VERITAS_TRUSTLOG_BACKEND=postgresql \
 VERITAS_MEMORY_BACKEND=postgresql \
   python -m pytest veritas_os/tests/ -m smoke -q --tb=short
 
-# Or via the API:
+# Or via the REST endpoint:
 curl -H "X-API-Key: $VERITAS_API_KEY" http://localhost:8000/v1/trustlog/verify
 
 # ── 7. Switch backends ──────────────────────────────────────────
@@ -519,36 +494,61 @@ curl -H "X-API-Key: $VERITAS_API_KEY" http://localhost:8000/v1/trustlog/verify
 
 Before committing to a production import:
 
-- [ ] Chain integrity verified on source JSONL (step 3)
+- [ ] `veritas-migrate trustlog --source … --dry-run` reports zero malformed / failed
+- [ ] `veritas-migrate memory   --source … --dry-run` reports zero malformed / failed
 - [ ] PostgreSQL schema applied (`make db-current` shows expected revision)
 - [ ] Import completed on **staging** first
+- [ ] `veritas-migrate trustlog --source … --verify` shows `Verify: PASS`
 - [ ] `/v1/trustlog/verify` returns `ok` after import
 - [ ] Smoke tests pass with PostgreSQL backend (`pytest -m smoke`)
 - [ ] Entry count matches: JSONL file lines ≈ `SELECT count(*) FROM trustlog_entries`
 
-### Rollback from a failed import
+### Retry / resume after partial failure
+
+The migration CLI is **idempotent** and **resume-safe**.  If a run
+fails partway through (e.g. a database connection drops), simply
+re-run the same command:
 
 ```bash
-# If import fails midway, drop and re-create
+# Re-run — already-imported entries are counted as duplicates, not errors.
+veritas-migrate trustlog --source /data/logs/trust_log.jsonl --verify
+veritas-migrate memory   --source /data/logs/memory.json
+```
+
+There is no need to drop and re-create the schema.  The report will
+show the number of duplicates (previously imported) and newly migrated
+entries.
+
+### Rollback
+
+If you need to discard the imported data entirely and start fresh:
+
+```bash
+# Drop all managed tables and re-create a clean schema
 alembic downgrade base    # ⚠️ drops all managed tables
 alembic upgrade head      # re-create clean schema
-# Fix the issue, then re-run import from step 4
+# Re-run the migration from step 4
 ```
 
 ### Key considerations
 
-- **TrustLog chain hashes**: The chain hash (`sha256` / `sha256_prev`) is computed
-  identically by both backends via `prepare_entry()`. Entries can be inserted into
-  PostgreSQL in order, preserving chain integrity.
-- **Memory records**: Simpler — each record is a key/value pair with user isolation.
-  Export from JSON, insert into `memory_records` table.
-- **Ordering matters**: TrustLog entries must be inserted in the exact original order
-  to maintain `prev_hash` → `hash` chain linkage.
-- **Test on staging first**: Verify the migrated data with `/v1/trustlog/verify`
-  before switching production.
-- **Idempotency**: The import scripts above are **not** idempotent. A partial
-  re-import will create duplicate entries or chain-hash conflicts. Always start
-  from a clean schema if re-running.
+- **TrustLog chain hashes**: The `import_entry()` method stores original
+  `sha256` / `sha256_prev` values verbatim — `prepare_entry()` is
+  **not** invoked.  This preserves the cryptographic chain exactly as
+  it was computed by the JSONL backend.
+- **Memory records**: Each record is a key/value pair with user isolation.
+  Import uses `ON CONFLICT … DO NOTHING` semantics — existing records
+  are never overwritten.
+- **Ordering matters**: TrustLog entries are read line-by-line from the
+  source JSONL file and inserted in that order, preserving `prev_hash` →
+  `hash` chain linkage.
+- **Encrypted sources**: Lines prefixed with `ENC:` are decrypted
+  automatically when `VERITAS_ENCRYPTION_KEY` is set.
+- **Test on staging first**: Verify the migrated data with `--verify`
+  and `/v1/trustlog/verify` before switching production.
+- **Quiesce writes**: Run the migration while TrustLog writes are paused
+  (service stopped or quiesced) to avoid interleaving new entries with
+  migrated ones.
 
 ### After migration
 
@@ -745,19 +745,19 @@ cleanup plan and rationale.
 |------|-----------|--------|
 | **Search** | Token-based `LIKE ANY` search (no vector similarity) | Lower relevance ranking vs. vector search |
 | **Read replicas** | No application-level read/write splitting | All queries go to primary |
-| **Data import** | No fully automated JSONL → PostgreSQL CLI tool; manual ETL with verification (§11) | Requires operator intervention |
+| **Data import** | `veritas-migrate` CLI requires service quiesce during TrustLog migration (§11) | Planned: online migration with write-ahead buffering |
 | **Connection pool metrics** | Pool stats not exposed to `/v1/metrics` | Limited observability |
 | **Multi-database** | Single `VERITAS_DATABASE_URL` for all backends | Cannot split MemoryOS and TrustLog across databases |
 | **Schema versioning in CI** | Mock pool in unit tests, real PG only in `test-postgresql` and `docker-smoke` jobs | Behavioral drift possible between mock and real |
 | **Concurrent advisory lock testing** | Advisory lock serialization tested via mock pool only; not tested under real multi-threaded contention | Edge-case contention may differ |
-| **Import idempotency** | Import scripts are not idempotent; partial re-import requires clean schema | Operator must manage failure recovery manually |
+| **Import idempotency** | `veritas-migrate` CLI is idempotent; re-runs skip existing entries | Safe for retry / resume after partial failure |
 
 ### Planned future enhancements
 
 | Enhancement | Description | Priority |
 |-------------|-------------|----------|
 | **pgvector** | Vector similarity search for MemoryOS (`embedding` column + HNSW/IVFFlat index) | High |
-| **Automated migration CLI** | `veritas-migrate --from jsonl --to postgresql` — idempotent with progress resume | High |
+| **Online migration** | Live migration with write-ahead buffering (no service quiesce) | Medium |
 | **Table partitioning** | Range-partition `trustlog_entries` by `created_at` for archive and query performance | Medium |
 | **CDC (Change Data Capture)** | Logical replication / Debezium for streaming TrustLog to external audit systems | Medium |
 | **Archive policy** | Automated partitioned table detach + cold storage for aged TrustLog entries | Medium |
