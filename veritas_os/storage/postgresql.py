@@ -120,8 +120,8 @@ class PostgresTrustLogStore(_PostgresBase):
         RuntimeError
             On any database or infrastructure failure (fail-closed).
         """
-        pool = await self._get_pool()
         try:
+            pool = await self._get_pool()
             async with pool.connection() as conn:
                 async with conn.transaction():
                     # ── Serialize: advisory lock + SELECT FOR UPDATE ──
