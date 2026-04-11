@@ -27,6 +27,7 @@ def test_factory_defaults_to_json_backends(monkeypatch):
 def test_factory_selects_postgresql_backends(monkeypatch):
     monkeypatch.setenv("VERITAS_TRUSTLOG_BACKEND", "postgresql")
     monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
 
     trust_store = create_trust_log_store()
     memory_store = create_memory_store()

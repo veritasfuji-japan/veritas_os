@@ -86,6 +86,75 @@ jobs:
           path: test-reports/production.xml
           if-no-files-found: warn
 
+  # ── PostgreSQL backend smoke test ────────────────────────────────────
+  postgresql-smoke:
+    name: postgresql-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_MEMORY_BACKEND: "postgresql"
+      VERITAS_TRUSTLOG_BACKEND: "postgresql"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool
+          python -m pip install httpx anyio pytest alembic
+
+      - name: Run Alembic migrations
+        run: alembic upgrade head
+
+      - name: Run PostgreSQL backend parity tests
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_storage_backend_contract.py \
+            veritas_os/tests/test_storage_backend_parity_matrix.py \
+            veritas_os/tests/test_storage_factory.py \
+            --tb=short \
+            --junitxml=test-reports/postgresql-smoke.xml
+
+      - name: Upload PostgreSQL smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgresql-smoke-report
+          path: test-reports/postgresql-smoke.xml
+          if-no-files-found: warn
+
   tls-validation:
     name: tls-validation
     runs-on: ubuntu-latest
@@ -175,14 +244,32 @@ jobs:
             if curl -sf http://localhost:8000/health; then
               echo ""
               echo "Backend healthy!"
-              exit 0
+              break
             fi
             echo "Waiting for backend... ($i/30)"
             sleep 2
+            if [ "$i" -eq 30 ]; then
+              echo "Backend health check timed out"
+              docker compose logs backend
+              exit 1
+            fi
           done
-          echo "Backend health check timed out"
-          docker compose logs backend
-          exit 1
+
+      - name: Verify PostgreSQL backend selection
+        run: |
+          set -euxo pipefail
+          HEALTH=$(curl -sf http://localhost:8000/health)
+          echo "$HEALTH" | python3 -c "
+          import json, sys
+          health = json.load(sys.stdin)
+          backends = health.get('storage_backends', {})
+          memory = backends.get('memory', '')
+          trustlog = backends.get('trustlog', '')
+          print(f'Storage backends: memory={memory}, trustlog={trustlog}')
+          assert memory == 'postgresql', f'Expected memory=postgresql, got {memory}'
+          assert trustlog == 'postgresql', f'Expected trustlog=postgresql, got {trustlog}'
+          print('PostgreSQL backend verification passed')
+          "
 
       - name: Verify OpenAPI schema
         run: |

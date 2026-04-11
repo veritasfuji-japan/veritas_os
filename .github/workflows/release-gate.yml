@@ -372,14 +372,32 @@ jobs:
             if curl -sf http://localhost:8000/health; then
               echo ""
               echo "Backend healthy!"
-              exit 0
+              break
             fi
             echo "Waiting for backend... ($i/30)"
             sleep 2
+            if [ "$i" -eq 30 ]; then
+              echo "Backend health check timed out"
+              docker compose logs backend
+              exit 1
+            fi
           done
-          echo "Backend health check timed out"
-          docker compose logs backend
-          exit 1
+
+      - name: Verify PostgreSQL backend selection
+        run: |
+          set -euxo pipefail
+          HEALTH=$(curl -sf http://localhost:8000/health)
+          echo "$HEALTH" | python3 -c "
+          import json, sys
+          health = json.load(sys.stdin)
+          backends = health.get('storage_backends', {})
+          memory = backends.get('memory', '')
+          trustlog = backends.get('trustlog', '')
+          print(f'Storage backends: memory={memory}, trustlog={trustlog}')
+          assert memory == 'postgresql', f'Expected memory=postgresql, got {memory}'
+          assert trustlog == 'postgresql', f'Expected trustlog=postgresql, got {trustlog}'
+          print('PostgreSQL backend verification passed')
+          "
 
       - name: Verify OpenAPI schema
         run: |

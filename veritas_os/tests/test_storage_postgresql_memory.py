@@ -739,6 +739,7 @@ class TestBackendSwitch:
         assert isinstance(store_json, JsonMemoryStore)
 
         monkeypatch.setenv("VERITAS_MEMORY_BACKEND", "postgresql")
+        monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://x:x@localhost/x")
         store_pg = create_memory_store()
         assert isinstance(store_pg, PostgresMemoryStore)
 

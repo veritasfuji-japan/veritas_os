@@ -126,7 +126,17 @@ docker compose up --build
 
 # Backend: http://localhost:8000 (Swagger UI: /docs)
 # Frontend: http://localhost:3000 (Mission Control)
+# PostgreSQL: localhost:5432 (auto-configured as default storage backend)
 ```
+
+> **Docker Compose defaults to PostgreSQL** for both Memory and TrustLog backends.
+> Verify with: `curl -s http://localhost:8000/health | python3 -c "import json,sys; print(json.load(sys.stdin)['storage_backends'])"`
+>
+> To use lightweight file-based backends instead, set in your `.env`:
+> ```
+> VERITAS_MEMORY_BACKEND=json
+> VERITAS_TRUSTLOG_BACKEND=jsonl
+> ```
 
 > **Prerequisites**: Docker 20+ and Docker Compose v2. For local dev: Python 3.11+, Node.js 20+, pnpm.
 
