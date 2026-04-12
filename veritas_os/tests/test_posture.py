@@ -993,8 +993,6 @@ class TestBackendConfigValidation:
     def test_local_anchor_missing_transparency_path(self, monkeypatch):
         """local anchor reports missing transparency log path."""
         _clean_env(monkeypatch)
-        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED", "1")
-        d = derive_defaults(PostureLevel.DEV)
         # Force transparency required on
         d_strict = PostureDefaults(
             posture=PostureLevel.DEV,

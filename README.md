@@ -220,14 +220,27 @@ operators can prove which governance control-plane asset was in force.
 
 ### What causes startup refusal (secure/prod)
 
-Startup will refuse with an actionable error when:
+The startup validator uses a **capability-aware** model.  Rather than
+checking vendor names directly, it verifies that each configured backend
+declares the security capabilities required by the posture.  Startup will
+refuse with an actionable error when any required capability is missing:
+
+| Required capability | What it means | Current implementation |
+|---|---|---|
+| `managed_signing` | Signing key material held in a managed HSM/KMS | `aws_kms` signer backend |
+| `immutable_retention` | Tamper-proof, append-only retention enforced by storage service | `s3_object_lock` mirror backend |
+| `transparency_anchoring` | Verifiable proof-of-existence anchor (when required) | `local` / `tsa` anchor backends |
+| `fail_closed` | Errors result in hard refusal, never silent pass | All secure/prod backends |
+
+Additionally, startup refuses when:
 - `VERITAS_SECRET_PROVIDER` is not set (external secret manager enforcement)
 - `VERITAS_API_SECRET_REF` is not set (external secret manager enforcement)
-- `VERITAS_TRUSTLOG_SIGNER_BACKEND` is not `aws_kms`, or `VERITAS_TRUSTLOG_KMS_KEY_ID` is missing
-- `VERITAS_TRUSTLOG_MIRROR_BACKEND` is not `s3_object_lock`
-- `VERITAS_TRUSTLOG_S3_BUCKET` / `VERITAS_TRUSTLOG_S3_PREFIX` are missing for S3 mirror mode
-- `VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop` while `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1`
-- `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` is missing when anchor backend is `local` and transparency is required
+- Backend-specific configuration is incomplete (e.g. missing `VERITAS_TRUSTLOG_KMS_KEY_ID` for `aws_kms`, missing S3 bucket/prefix for `s3_object_lock`)
+
+> **Note:** In `prod` posture, `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD`
+> is unconditionally ignored — there is no break-glass for insecure signers in
+> production.  In `secure` posture this override remains available as an
+> unsupported emergency escape hatch.
 
 ### Escape hatches (secure posture only)
 
@@ -1238,7 +1251,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - Existing deployments continue to work with no change because `VERITAS_TRUSTLOG_MIRROR_BACKEND` defaults to `local` and keeps `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` behavior.
 - To migrate to S3 Object Lock, set `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and provide at minimum `VERITAS_TRUSTLOG_S3_BUCKET` (plus optional prefix/region/retention settings).
 - `VERITAS_TRUSTLOG_WORM_HARD_FAIL` semantics are unchanged and apply to both backends.
-- In `secure`/`prod`, startup validation requires `VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock` and both `VERITAS_TRUSTLOG_S3_BUCKET` and `VERITAS_TRUSTLOG_S3_PREFIX`.
+- In `secure`/`prod`, the startup validator requires backends with the `immutable_retention` capability. The current implementation satisfying this is `s3_object_lock`; both `VERITAS_TRUSTLOG_S3_BUCKET` and `VERITAS_TRUSTLOG_S3_PREFIX` must be set.
 
 #### TrustLog mirror verification modes
 
