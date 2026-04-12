@@ -105,6 +105,7 @@ VERITAS OS is built to solve that layer.
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security Policy**: [`SECURITY.md`](SECURITY.md)
 - **PostgreSQL Production Guide**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
+- **PostgreSQL Drill Runbook**: [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md)
 - **Security Hardening**: [`docs/security-hardening.md`](docs/security-hardening.md)
 - **Database Migrations**: [`docs/database-migrations.md`](docs/database-migrations.md)
 - **Backend Parity Coverage**: [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
@@ -450,6 +451,8 @@ for the full procedure including rollback.
 | `veritas-trustlog-verify` | Standalone TrustLog chain integrity verifier | `veritas-trustlog-verify --log-dir <path>` |
 | `veritas-migrate --verify` | Post-import hash-chain check (PostgreSQL) | `veritas-migrate trustlog --source … --verify` |
 | `/v1/trustlog/verify` | REST API chain verification | `curl -H "X-API-Key: …" http://host:8000/v1/trustlog/verify` |
+| `/v1/metrics` | Pool utilization, health, pg_stat_activity | `curl -H "X-API-Key: …" http://host:8000/v1/metrics` |
+| `drill_postgres_recovery.sh` | End-to-end backup → restore → verify | `make drill-recovery` or `make drill-recovery-ci` |
 | `pytest -m smoke` | Governance invariant smoke tests | `pytest -m smoke veritas_os/tests/` |
 | `pytest -m production` | Production-like validation suite | `make test-production` |
 
@@ -461,6 +464,9 @@ for the full procedure including rollback.
 - **Full parity test suite** — 195+ tests verify identical semantics across backends.
 - **psycopg 3** — modern async PostgreSQL driver with connection pooling (`psycopg-pool`).
 - **JSONL → PostgreSQL import** — idempotent `veritas-migrate` CLI with dry-run, resume, and post-import hash-chain verification.
+- **Contention testing** — 23 tests in `test_pg_trustlog_contention.py` verify chain integrity under concurrent/burst/failure scenarios.
+- **Observability** — `/v1/metrics` exposes pool utilization, health, and `pg_stat_activity` (long-running queries, idle-in-tx, advisory lock waiters). 28 tests in `test_pg_metrics.py`.
+- **Recovery drill** — `scripts/drill_postgres_recovery.sh` automates backup → restore → verify cycle. 21 tests in `test_drill_postgres_recovery.py`.
 
 ### Production deployment
 
@@ -471,7 +477,15 @@ See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
 - Smoke test and release validation relationship
 - Legacy path cleanup status
 - Secure/prod posture recommended settings
+- Contention test coverage and known limitations
+- Metrics reference (JSON fields, Prometheus gauges, interpretation guide)
 - Known limitations and future work (pgvector, partitioning, CDC)
+
+See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md) for:
+- Backup / restore / recovery drill procedures and scripts
+- Safe / unsafe HA boundaries for TrustLog writes
+- Incident response playbooks (corruption, tampering)
+- `make drill-backup`, `make drill-restore`, `make drill-recovery`, `make drill-recovery-ci`
 
 See also: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md) | [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
 
@@ -1311,6 +1325,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
 - ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
+- ✅ PostgreSQL production hardening: contention tests (23 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (21 tests). See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier
