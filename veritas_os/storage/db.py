@@ -45,8 +45,37 @@ def _require_psycopg() -> None:
 _MISSING = ""
 
 
+def _normalize_dsn(dsn: str) -> str:
+    """Strip SQLAlchemy dialect suffixes from a PostgreSQL DSN.
+
+    psycopg3 / libpq only understand ``postgresql://`` and ``postgres://``.
+    SQLAlchemy-style URLs like ``postgresql+psycopg://`` or
+    ``postgresql+asyncpg://`` must be normalised before they can be passed
+    to ``AsyncConnectionPool``.
+
+    If the DSN starts with a dialect prefix but does not contain ``://``,
+    it is returned unchanged (assumed to be a key=value libpq string).
+
+    Examples::
+
+        postgresql+psycopg://u:p@h/d  →  postgresql://u:p@h/d
+        postgres+psycopg://u:p@h/d    →  postgres://u:p@h/d
+        postgresql://u:p@h/d          →  postgresql://u:p@h/d  (no change)
+    """
+    if dsn.startswith(("postgresql+", "postgres+")) and "://" in dsn:
+        scheme_end = dsn.index("://")
+        base_scheme = dsn.split("+")[0]
+        dsn = base_scheme + dsn[scheme_end:]
+    return dsn
+
+
 def _get_database_url() -> str:
-    """Return the configured database URL or raise with guidance."""
+    """Return the configured database URL or raise with guidance.
+
+    SQLAlchemy dialect suffixes (``+psycopg``, ``+asyncpg``, etc.) are
+    automatically stripped so that the returned URL is always a valid
+    libpq / psycopg3 connection string.
+    """
     url = os.getenv("VERITAS_DATABASE_URL", _MISSING).strip()
     if not url:
         raise RuntimeError(
@@ -54,7 +83,7 @@ def _get_database_url() -> str:
             "Set it to a PostgreSQL DSN, e.g. "
             "postgresql://user:pass@localhost:5432/veritas"
         )
-    return url
+    return _normalize_dsn(url)
 
 
 def _pool_min_size() -> int:
@@ -97,8 +126,11 @@ def build_conninfo() -> str:
     if "sslmode" not in dsn:
         params.append(f"sslmode={_sslmode()}")
     if "statement_timeout" not in dsn:
+        # The '=' between the GUC name and value must be percent-encoded
+        # (%3D) so that psycopg3's URI parser does not treat it as an
+        # extra key/value separator in the query string.
         params.append(
-            f"options=-c%20statement_timeout={_statement_timeout_ms()}"
+            f"options=-c%20statement_timeout%3D{_statement_timeout_ms()}"
         )
 
     if params:

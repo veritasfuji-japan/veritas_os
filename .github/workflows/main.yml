@@ -323,12 +323,17 @@ jobs:
   # Validates that JSONL ↔ PostgreSQL backends are interchangeable
   # by running the backend contract and parity matrix tests against
   # a real PostgreSQL service container.
+  #
+  # This job also runs the real-PostgreSQL advisory-lock contention
+  # tests (pytest -m "postgresql and contention") that prove the
+  # advisory-lock serialisation actually works on a live database —
+  # something the mock-pool tests above can only approximate.
   # ============================================================
   test-postgresql:
     name: test-postgresql (py3.12)
     needs: [lint, dependency-audit, governance-smoke]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -382,6 +387,10 @@ jobs:
           VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
 
       - name: Run backend parity tests (mock-pool)
+        # Excludes the real-PG contention tests (postgresql and contention)
+        # so they get their own step with dedicated JUnit output and
+        # clearer failure attribution.  See "Run real PostgreSQL contention
+        # tests" step below for the high-fidelity advisory-lock tests.
         run: |
           set -euxo pipefail
           mkdir -p test-reports
@@ -394,8 +403,31 @@ jobs:
             veritas_os/tests/test_storage_factory.py \
             veritas_os/tests/test_storage_base.py \
             veritas_os/tests/test_storage_db.py \
+            -m "not (postgresql and contention)" \
             --tb=short \
             --junitxml=test-reports/postgresql-parity.xml
+
+      - name: Run real PostgreSQL contention tests
+        # These tests prove that PostgreSQL's own pg_advisory_xact_lock
+        # actually serialises TrustLog writes — something mock-pool tests
+        # can only approximate.  Failure here indicates a real advisory-lock
+        # integrity regression, not a mock-setup issue.
+        #
+        # Diagnosis:
+        #   advisory lock failure   → check advisory lock key (0x5645524954415301)
+        #   statement/lock timeout  → check DB under load; increase test margin
+        #   chain verification fail → INSERT + UPDATE not in same transaction
+        #   duplicate/gap           → UNIQUE constraint or advisory lock broken
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_pg_trustlog_contention.py \
+            -m "postgresql and contention" \
+            -v \
+            --tb=short \
+            --durations=10 \
+            --junitxml=test-reports/postgresql-contention.xml
 
       - name: Upload PostgreSQL parity test report
         if: always()
@@ -403,6 +435,14 @@ jobs:
         with:
           name: postgresql-parity-report-${{ github.run_id }}
           path: test-reports/postgresql-parity.xml
+          if-no-files-found: warn
+
+      - name: Upload PostgreSQL contention test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgresql-contention-report-${{ github.run_id }}
+          path: test-reports/postgresql-contention.xml
           if-no-files-found: warn
 
 

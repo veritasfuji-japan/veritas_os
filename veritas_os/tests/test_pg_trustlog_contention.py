@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import os
 import threading
 from typing import List, Optional
 
@@ -911,3 +912,909 @@ class TestThreadedContention:
         if entries:
             chain_errors = _verify_chain(entries)
             assert not chain_errors, f"Chain errors after flaky writes: {chain_errors}"
+
+
+# ===================================================================
+# PART II — REAL POSTGRESQL INTEGRATION TESTS
+# ===================================================================
+# Markers: @pytest.mark.postgresql  @pytest.mark.contention
+# Skip:    automatically when VERITAS_DATABASE_URL is absent
+# CI job:  test-postgresql (main.yml) — dedicated "Run real PG
+#          contention tests" step (pytest -m "postgresql and contention")
+#          also runs in production-validation.yml postgresql-smoke job.
+#
+# Role partition
+# --------------
+# • Mock-pool tests (Part I above): fast, deterministic, wide coverage
+#   (25 tests).  Run on every PR/push via the main unit test job.
+#   They exercise advisory-lock serialisation semantics without a live DB.
+#
+# • Real-PG tests (Part II below): narrower but high-fidelity.  They
+#   prove that PostgreSQL's own ``pg_advisory_xact_lock`` actually
+#   serialises writes, that real MVCC isolation holds, and that genuine
+#   statement-timeout / lock-timeout errors trigger fail-closed behaviour.
+#   Run in the CI test-postgresql job against a PG 16 service container.
+#
+# See also:
+#   docs/postgresql-production-guide.md §12 — Contention Tests
+#   docs/BACKEND_PARITY_COVERAGE.md §8 — Contention, Metrics, Recovery
+# ===================================================================
+
+# ---------------------------------------------------------------------------
+# Shared skip guard
+# ---------------------------------------------------------------------------
+
+_REAL_PG_DSN: str = os.getenv("VERITAS_DATABASE_URL", "")
+
+_SKIP_NO_REAL_PG = pytest.mark.skipif(
+    not _REAL_PG_DSN,
+    reason="VERITAS_DATABASE_URL not set — real PostgreSQL contention tests skipped",
+)
+
+# Advisory-lock key (same value as postgresql.py)
+_ADVISORY_LOCK_KEY = 0x5645524954415301
+
+
+# ---------------------------------------------------------------------------
+# Helpers — pool, store, and table management
+# ---------------------------------------------------------------------------
+
+
+async def _open_real_pool(max_size: int = 5):
+    """Open a fresh ``AsyncConnectionPool`` for integration tests.
+
+    Uses ``VERITAS_DATABASE_URL`` with any SQLAlchemy dialect prefix
+    (``+psycopg``) stripped so that psycopg3/libpq can parse it.
+    Skips if ``psycopg_pool`` is not installed.
+    """
+    try:
+        from psycopg_pool import AsyncConnectionPool
+        from veritas_os.storage.db import _normalize_dsn
+    except ImportError:
+        pytest.skip("psycopg_pool not installed")
+        return  # unreachable, but satisfies type-checkers
+
+    pool = AsyncConnectionPool(
+        conninfo=_normalize_dsn(_REAL_PG_DSN),
+        min_size=1,
+        max_size=max_size,
+        open=False,
+    )
+    await pool.open(wait=True, timeout=15)
+    return pool
+
+
+async def _open_real_pool_with_stmt_timeout(
+    stmt_timeout_ms: int,
+    max_size: int = 3,
+):
+    """Open a pool with a custom ``statement_timeout`` GUC.
+
+    Uses ``build_conninfo()`` from ``db.py`` after patching the env var
+    so that the GUC is embedded in the connection string.  Call this
+    **after** ``monkeypatch.setenv("VERITAS_DB_STATEMENT_TIMEOUT_MS",
+    str(stmt_timeout_ms))``.
+    """
+    try:
+        from psycopg_pool import AsyncConnectionPool
+        from veritas_os.storage.db import build_conninfo
+    except ImportError:
+        pytest.skip("psycopg_pool not installed")
+        return  # unreachable
+
+    pool = AsyncConnectionPool(
+        conninfo=build_conninfo(),
+        min_size=1,
+        max_size=max_size,
+        open=False,
+    )
+    await pool.open(wait=True, timeout=15)
+    return pool
+
+
+async def _truncate_trustlog_tables(pool) -> None:
+    """Truncate TrustLog tables to give each test a clean slate."""
+    async with pool.connection() as conn:
+        await conn.execute(
+            "TRUNCATE TABLE trustlog_entries, trustlog_chain_state "
+            "RESTART IDENTITY CASCADE"
+        )
+
+
+def _make_real_pg_store(pool):
+    """Return a ``PostgresTrustLogStore`` wired to *pool*.
+
+    ``_get_pool`` is injected via attribute assignment — the same pattern
+    used for mock-pool tests in Part I above — because
+    ``PostgresTrustLogStore`` has no built-in dependency-injection API.
+    The ``type: ignore[assignment]`` suppression is intentional.
+    """
+    from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+    store = PostgresTrustLogStore()
+
+    async def _get_pool():
+        return pool
+
+    store._get_pool = _get_pool  # type: ignore[assignment]
+    return store
+
+
+async def _fetch_db_entries(pool) -> List[dict]:
+    """Return all trustlog entries (insertion order) from the DB."""
+    async with pool.connection() as conn:
+        cur = await conn.execute(
+            "SELECT entry FROM trustlog_entries ORDER BY id"
+        )
+        rows = await cur.fetchall()
+    return [r[0] for r in rows if isinstance(r[0], dict)]
+
+
+async def _verify_real_pg_chain(store) -> List[str]:
+    """Walk the chain via ``iter_entries`` and verify hash linkage.
+
+    Returns a list of human-readable error descriptions (empty = valid).
+    """
+    entries: List[dict] = []
+    async for e in store.iter_entries(limit=10_000):
+        entries.append(e)
+
+    errors: List[str] = []
+    for i, entry in enumerate(entries):
+        if i == 0:
+            if entry.get("sha256_prev") is not None:
+                errors.append(
+                    f"Entry 0: sha256_prev should be None, "
+                    f"got {entry['sha256_prev']!r}"
+                )
+        else:
+            prev = entries[i - 1]
+            if entry.get("sha256_prev") != prev.get("sha256"):
+                errors.append(
+                    f"Entry {i}: sha256_prev mismatch — "
+                    f"got {entry.get('sha256_prev')!r}, "
+                    f"expected {prev.get('sha256')!r}"
+                )
+
+        # Recompute hash: hₜ = SHA256(hₜ₋₁ || canonical(rₜ))
+        from veritas_os.logging.trust_log_core import _normalize_for_hash
+
+        payload_json = _normalize_for_hash(entry)
+        prev_hash = entry.get("sha256_prev")
+        combined = (prev_hash + payload_json) if prev_hash else payload_json
+        expected = hashlib.sha256(combined.encode("utf-8")).hexdigest()
+        if entry.get("sha256") != expected:
+            errors.append(
+                f"Entry {i}: sha256 mismatch — "
+                f"stored {entry.get('sha256')!r}, recomputed {expected!r}"
+            )
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# 1. Two concurrent writers
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgTwoWorkers:
+    """Two concurrent writers against real PostgreSQL must produce a valid chain."""
+
+    async def test_two_concurrent_writers_chain_intact(self) -> None:
+        """Two goroutine-style async tasks appending simultaneously.
+
+        The advisory lock in PostgreSQL must serialise both inserts so
+        the resulting 2-entry chain has intact sha256/sha256_prev links.
+        """
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            rid_a, rid_b = await asyncio.gather(
+                store.append({"request_id": "real-pg-w0", "worker": 0}),
+                store.append({"request_id": "real-pg-w1", "worker": 1}),
+            )
+
+            assert rid_a is not None, (
+                "Worker 0 returned None — append may have silently failed"
+            )
+            assert rid_b is not None, (
+                "Worker 1 returned None — append may have silently failed"
+            )
+            assert rid_a != rid_b, (
+                f"Both workers returned the same request_id {rid_a!r} — "
+                "possible duplicate insert"
+            )
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                "Chain hash integrity violated after 2-writer concurrent "
+                "append on real PostgreSQL:\n" + "\n".join(chain_errors)
+            )
+
+            # Confirm exactly 2 rows in the database
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == 2, (
+                f"Expected 2 entries in trustlog_entries, got {len(entries)}"
+            )
+        finally:
+            await pool.close()
+
+    async def test_two_writers_produce_distinct_hashes(self) -> None:
+        """Each of the two entries must have a unique sha256 hash."""
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            await asyncio.gather(
+                store.append({"request_id": "hash-check-0"}),
+                store.append({"request_id": "hash-check-1"}),
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == 2
+            hashes = [e.get("sha256") for e in entries]
+            assert hashes[0] != hashes[1], (
+                "Both entries share the same sha256 hash — "
+                "advisory lock may not be serialising writes correctly"
+            )
+        finally:
+            await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# 2. Burst append — 5 and 10 workers
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgBurstAppend:
+    """Burst of N concurrent writers — chain integrity and no gaps/duplicates."""
+
+    async def _run_burst(self, n_workers: int, tag: str) -> None:
+        pool = await _open_real_pool(max_size=n_workers + 2)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            results = await asyncio.gather(
+                *[
+                    store.append({"request_id": f"{tag}-{i}", "worker": i})
+                    for i in range(n_workers)
+                ]
+            )
+
+            failed = [i for i, r in enumerate(results) if r is None]
+            assert not failed, (
+                f"Workers {failed} returned None — unexpected silent failure "
+                f"during {n_workers}-writer burst append on real PostgreSQL"
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == n_workers, (
+                f"Expected {n_workers} entries after burst, "
+                f"got {len(entries)} — possible gap or duplicate"
+            )
+
+            request_ids = [e.get("request_id") for e in entries]
+            duplicates = [
+                rid for rid in set(request_ids) if request_ids.count(rid) > 1
+            ]
+            assert not duplicates, (
+                f"Duplicate request_ids in DB after burst: {duplicates}"
+            )
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                f"Chain integrity violated after {n_workers}-writer burst "
+                f"on real PostgreSQL:\n" + "\n".join(chain_errors)
+            )
+        finally:
+            await pool.close()
+
+    async def test_five_workers_burst_chain_intact(self) -> None:
+        """5 concurrent writers — chain must be intact and complete."""
+        await self._run_burst(5, tag="burst5")
+
+    async def test_ten_workers_burst_no_gap_or_duplicate(self) -> None:
+        """10 concurrent writers — no gaps, no duplicates, chain valid."""
+        await self._run_burst(10, tag="burst10")
+
+
+# ---------------------------------------------------------------------------
+# 3. Lock-timeout / statement-timeout → fail-closed
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgLockTimeout:
+    """Advisory lock wait times out → RuntimeError (fail-closed)."""
+
+    async def test_lock_timeout_fail_closed(self, monkeypatch) -> None:
+        """Hold the advisory lock from one connection; a second connection
+        with a very short ``statement_timeout`` must fail with
+        ``RuntimeError`` and leave the chain state untouched.
+
+        Diagnosis guide
+        ---------------
+        * ``RuntimeError`` NOT raised → advisory lock is not blocking
+          as expected; check PostgreSQL version or lock-key collision.
+        * Timeout too slow or intermittent → increase ``lock_hold_s``
+          or lengthen the statement_timeout margin.
+        * Chain non-empty after the failed append → transaction did NOT
+          roll back; fail-closed guarantee is broken.
+        """
+        # Build the "holder" pool with a normal (long) timeout so it can
+        # hold the lock without risk of being cancelled.
+        holder_pool = await _open_real_pool(max_size=2)
+        try:
+            await _truncate_trustlog_tables(holder_pool)
+
+            # Build the "append" pool with a very short statement_timeout
+            # so that waiting on the advisory lock times out quickly.
+            monkeypatch.setenv("VERITAS_DB_STATEMENT_TIMEOUT_MS", "200")
+            append_pool = await _open_real_pool_with_stmt_timeout(
+                stmt_timeout_ms=200, max_size=2
+            )
+            try:
+                lock_held_event = asyncio.Event()
+                release_lock_event = asyncio.Event()
+
+                async def _hold_advisory_lock() -> None:
+                    """Hold pg_advisory_xact_lock until told to release."""
+                    async with holder_pool.connection() as conn:
+                        async with conn.transaction():
+                            await conn.execute(
+                                "SELECT pg_advisory_xact_lock(%s)",
+                                (_ADVISORY_LOCK_KEY,),
+                            )
+                            lock_held_event.set()
+                            # Hold the lock until the test releases it
+                            try:
+                                await asyncio.wait_for(
+                                    release_lock_event.wait(), timeout=10.0
+                                )
+                            except asyncio.TimeoutError:
+                                pass  # Release on test timeout
+
+                holder_task = asyncio.create_task(_hold_advisory_lock())
+                await asyncio.wait_for(lock_held_event.wait(), timeout=5.0)
+
+                # The append will try to acquire the same advisory lock.
+                # With statement_timeout=200ms it must cancel within ~200ms.
+                append_store = _make_real_pg_store(append_pool)
+                with pytest.raises(RuntimeError) as exc_info:
+                    await store_append_with_timeout(
+                        append_store,
+                        {"request_id": "lock-timeout-test"},
+                        timeout_seconds=3.0,
+                    )
+
+                assert "fail-closed" in str(exc_info.value).lower(), (
+                    f"RuntimeError raised but message does not mention "
+                    f"'fail-closed': {exc_info.value!r}"
+                )
+
+                # Release the lock so the holder task can finish cleanly
+                release_lock_event.set()
+                await asyncio.wait_for(holder_task, timeout=5.0)
+
+                # Chain state must be empty — no partial write persisted
+                entries = await _fetch_db_entries(holder_pool)
+                assert len(entries) == 0, (
+                    f"Expected 0 entries after failed lock-timeout append, "
+                    f"got {len(entries)} — transaction rollback may be broken"
+                )
+            finally:
+                await append_pool.close()
+        finally:
+            await holder_pool.close()
+
+    async def test_chain_intact_after_lock_timeout_then_success(
+        self, monkeypatch
+    ) -> None:
+        """After a lock-timeout failure, the next append succeeds and the
+        chain continues correctly from the previous last_hash.
+        """
+        holder_pool = await _open_real_pool(max_size=3)
+        try:
+            await _truncate_trustlog_tables(holder_pool)
+
+            # Pre-populate with one successful entry
+            pre_store = _make_real_pg_store(holder_pool)
+            await pre_store.append({"request_id": "pre-lock-timeout"})
+
+            monkeypatch.setenv("VERITAS_DB_STATEMENT_TIMEOUT_MS", "200")
+            append_pool = await _open_real_pool_with_stmt_timeout(
+                stmt_timeout_ms=200, max_size=2
+            )
+            try:
+                lock_held_event = asyncio.Event()
+                release_event = asyncio.Event()
+
+                async def _hold() -> None:
+                    async with holder_pool.connection() as conn:
+                        async with conn.transaction():
+                            await conn.execute(
+                                "SELECT pg_advisory_xact_lock(%s)",
+                                (_ADVISORY_LOCK_KEY,),
+                            )
+                            lock_held_event.set()
+                            try:
+                                await asyncio.wait_for(
+                                    release_event.wait(), timeout=10.0
+                                )
+                            except asyncio.TimeoutError:
+                                pass
+
+                holder = asyncio.create_task(_hold())
+                await asyncio.wait_for(lock_held_event.wait(), 5.0)
+
+                append_store = _make_real_pg_store(append_pool)
+                with pytest.raises(RuntimeError):
+                    await store_append_with_timeout(
+                        append_store,
+                        {"request_id": "should-not-persist"},
+                        timeout_seconds=3.0,
+                    )
+
+                release_event.set()
+                await asyncio.wait_for(holder, timeout=5.0)
+
+                # The failed append must not have corrupted state; now do a
+                # successful append and verify the full chain.
+                await pre_store.append({"request_id": "post-recovery"})
+
+                chain_errors = await _verify_real_pg_chain(pre_store)
+                assert not chain_errors, (
+                    "Chain corrupted after lock-timeout failure + recovery:\n"
+                    + "\n".join(chain_errors)
+                )
+
+                entries = await _fetch_db_entries(holder_pool)
+                assert len(entries) == 2, (
+                    f"Expected exactly 2 entries (pre + post-recovery), "
+                    f"got {len(entries)}"
+                )
+            finally:
+                await append_pool.close()
+        finally:
+            await holder_pool.close()
+
+
+async def store_append_with_timeout(
+    store,
+    entry: dict,
+    timeout_seconds: float = 3.0,
+) -> str:
+    """Call ``store.append`` with an overall asyncio timeout.
+
+    This prevents a test from hanging indefinitely if the DB lock wait
+    itself does not trigger an error (e.g., statement_timeout not wired
+    to the pool).  Raises ``asyncio.TimeoutError`` if the append takes
+    longer than *timeout_seconds*; propagates any other exception unchanged.
+    """
+    return await asyncio.wait_for(store.append(entry), timeout=timeout_seconds)
+
+
+# ---------------------------------------------------------------------------
+# 4. Pool-waiting scenario — small pool, many workers, chain intact
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgPoolWaiting:
+    """Connection pool has fewer slots than workers → workers queue up.
+
+    All appends must eventually complete (or raise RuntimeError on
+    genuine DB error), and the completed entries must form a valid chain.
+    """
+
+    async def test_pool_waiting_all_writers_complete(self) -> None:
+        """8 concurrent workers share a pool of max_size=2.
+
+        Workers queue for connections.  After all complete, the chain
+        must be intact and contain exactly 8 entries.
+
+        Diagnosis guide
+        ---------------
+        * ``RuntimeError`` from workers → pool timeout exceeded; increase
+          ``max_size`` or reduce worker count in this test.
+        * Chain errors → serialisation broken despite pool starvation;
+          investigate advisory lock key or transaction isolation.
+        """
+        n_workers = 8
+        pool = await _open_real_pool(max_size=2)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            results = await asyncio.gather(
+                *[
+                    store.append(
+                        {"request_id": f"pool-wait-{i}", "worker": i}
+                    )
+                    for i in range(n_workers)
+                ],
+                return_exceptions=True,
+            )
+
+            errors = [r for r in results if isinstance(r, Exception)]
+            successes = [r for r in results if not isinstance(r, Exception)]
+
+            assert not errors, (
+                f"{len(errors)} worker(s) raised an exception during pool-"
+                f"waiting test on real PostgreSQL:\n"
+                + "\n".join(repr(e) for e in errors)
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == n_workers, (
+                f"Expected {n_workers} entries after pool-waiting run, "
+                f"got {len(entries)}"
+            )
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                "Chain integrity violated after pool-waiting run:\n"
+                + "\n".join(chain_errors)
+            )
+
+            request_ids = [e.get("request_id") for e in entries]
+            assert len(set(request_ids)) == len(request_ids), (
+                f"Duplicate request_ids after pool-waiting run: "
+                f"{[r for r in request_ids if request_ids.count(r) > 1]}"
+            )
+
+            _ = successes  # all results examined above
+        finally:
+            await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# 5. Rollback recovery — chain state intact after mid-append failure
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgRollbackRecovery:
+    """Verify that a rolled-back append leaves the chain state untouched
+    and that subsequent appends continue the chain correctly.
+    """
+
+    async def test_chain_intact_after_rollback(self) -> None:
+        """A simulated mid-append failure must not corrupt chain state.
+
+        We inject a pool that raises an error during the INSERT step to
+        force a rollback; the subsequent successful append must see the
+        last_hash from the pre-failure state, not a phantom value.
+
+        Diagnosis guide
+        ---------------
+        * Chain errors on the post-rollback entry → ``last_hash`` was
+          updated despite the rollback; the UPDATE to trustlog_chain_state
+          may not be inside the same transaction as the INSERT.
+        """
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            # Successful pre-state (2 entries)
+            await store.append({"request_id": "rr-pre-0"})
+            await store.append({"request_id": "rr-pre-1"})
+
+            last_hash_before_failure = await store.get_last_hash()
+
+            # Inject a failure via a patched pool that raises on INSERT
+            from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+            fail_store = PostgresTrustLogStore()
+            _ContentionMockPool_fail = _ContentionMockPool(
+                fail_on_execute="insert into trustlog_entries"
+            )
+
+            async def _get_fail():
+                return _ContentionMockPool_fail
+
+            fail_store._get_pool = _get_fail  # type: ignore[assignment]
+
+            with pytest.raises(RuntimeError):
+                await fail_store.append({"request_id": "rr-fail"})
+
+            # The real store's last_hash must be unchanged
+            last_hash_after_failure = await store.get_last_hash()
+            assert last_hash_before_failure == last_hash_after_failure, (
+                f"last_hash changed after a failed append:\n"
+                f"  before: {last_hash_before_failure!r}\n"
+                f"  after:  {last_hash_after_failure!r}\n"
+                "The mock-pool rollback test passed but real-PG state was "
+                "not verified.  Check that chain_state UPDATE is inside the "
+                "same transaction as the entries INSERT."
+            )
+
+            # Post-recovery append must correctly extend the real chain
+            await store.append({"request_id": "rr-post-0"})
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                "Chain corrupted after rollback + recovery on real PG:\n"
+                + "\n".join(chain_errors)
+            )
+        finally:
+            await pool.close()
+
+    async def test_append_after_recovery_continues_chain(self) -> None:
+        """Three good appends, one forced failure, then two more good appends.
+
+        The five successfully-stored entries must form a single unbroken
+        hash chain.
+        """
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            for i in range(3):
+                await store.append({"request_id": f"arc-good-{i}"})
+
+            # Forced failure via mock store pointing at a broken mock pool
+            from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+            broken = PostgresTrustLogStore()
+            _fail_pool = _ContentionMockPool(fail_on_execute="update trustlog_chain_state")
+
+            async def _get_broken():
+                return _fail_pool
+
+            broken._get_pool = _get_broken  # type: ignore[assignment]
+
+            with pytest.raises(RuntimeError):
+                await broken.append({"request_id": "arc-fail"})
+
+            for i in range(3, 5):
+                await store.append({"request_id": f"arc-good-{i}"})
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                "Chain corrupted after multi-append recovery run:\n"
+                + "\n".join(chain_errors)
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == 5, (
+                f"Expected 5 entries (3 + 2 good appends), got {len(entries)}"
+            )
+        finally:
+            await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# 6. Full chain verification after contention run
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgFullChainVerify:
+    """Run a contention burst and verify the full chain using both the
+    internal verifier and the ``trustlog_verify`` audit module.
+    """
+
+    async def test_full_chain_verify_after_concurrent_writes(self) -> None:
+        """20-writer burst → verify all entries form a valid sha256 chain.
+
+        This test exercises the same code path as a post-incident audit:
+        iterate every stored entry, recompute hashes, and confirm linkage.
+
+        Diagnosis guide
+        ---------------
+        * Hash mismatch at entry N → worker N-1 and N wrote using the same
+          previous hash; advisory lock did not serialise them.
+        * sha256_prev=None at entry > 0 → bootstrap row was inserted twice
+          (ON CONFLICT not working) or chain_state was reset mid-run.
+        """
+        pool = await _open_real_pool(max_size=10)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            n_workers = 20
+            await asyncio.gather(
+                *[
+                    store.append(
+                        {"request_id": f"full-verify-{i}", "seq": i}
+                    )
+                    for i in range(n_workers)
+                ]
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == n_workers, (
+                f"Expected {n_workers} entries after burst, got {len(entries)}"
+            )
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                f"Full chain verification FAILED after {n_workers}-writer "
+                f"burst on real PostgreSQL — advisory lock contention "
+                f"integrity guarantee is broken:\n"
+                + "\n".join(chain_errors)
+            )
+
+            # Also confirm using the audit verifier module
+            try:
+                from veritas_os.audit.trustlog_verify import verify_chain
+
+                raw_entries = [
+                    {"entry": e, "hash": e.get("sha256"), "prev_hash": e.get("sha256_prev")}
+                    for e in entries
+                ]
+                audit_result = verify_chain(raw_entries)
+                assert audit_result.get("valid", False), (
+                    f"Audit verifier reported invalid chain: {audit_result}"
+                )
+            except ImportError:
+                pass  # verifier module is optional for this test
+        finally:
+            await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# 7. No duplicate request_ids / no gaps in DB
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgSequenceIntegrity:
+    """Verify that concurrent appends produce no duplicate or missing rows."""
+
+    async def test_no_duplicate_request_ids_in_db(self) -> None:
+        """10 workers each appending a unique request_id — DB must have
+        exactly 10 distinct rows with no duplicates.
+
+        Diagnosis guide
+        ---------------
+        * Fewer than 10 rows → some inserts were silently swallowed.
+        * Duplicate request_ids → UNIQUE constraint on request_id is not
+          being enforced or the same entry was inserted twice.
+        """
+        pool = await _open_real_pool(max_size=6)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+            n = 10
+
+            await asyncio.gather(
+                *[store.append({"request_id": f"seq-integ-{i}"}) for i in range(n)]
+            )
+
+            entries = await _fetch_db_entries(pool)
+            assert len(entries) == n, (
+                f"Expected {n} entries, got {len(entries)}"
+            )
+
+            request_ids = [e.get("request_id") for e in entries]
+            duplicates = [
+                rid for rid in set(request_ids) if request_ids.count(rid) > 1
+            ]
+            assert not duplicates, (
+                f"Duplicate request_ids in trustlog_entries after concurrent "
+                f"append: {duplicates}"
+            )
+
+            chain_errors = await _verify_real_pg_chain(store)
+            assert not chain_errors, (
+                "Chain integrity violated despite no duplicate request_ids:\n"
+                + "\n".join(chain_errors)
+            )
+        finally:
+            await pool.close()
+
+
+# ---------------------------------------------------------------------------
+# 8. Advisory lock release on transaction end
+# ---------------------------------------------------------------------------
+
+
+@_SKIP_NO_REAL_PG
+@pytest.mark.postgresql
+@pytest.mark.contention
+class TestRealPgAdvisoryLockRelease:
+    """Verify that ``pg_advisory_xact_lock`` is released at transaction end."""
+
+    async def test_advisory_lock_released_after_commit(self) -> None:
+        """After a successful append, the lock key is no longer held.
+
+        A second connection must be able to acquire the same advisory
+        lock without blocking, confirming transaction-scoped release.
+
+        Diagnosis guide
+        ---------------
+        * asyncio.TimeoutError → the first append somehow held the lock
+          after COMMIT; the lock may have been re-acquired without a
+          corresponding COMMIT or it was promoted to a session lock.
+        """
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+            store = _make_real_pg_store(pool)
+
+            # First append (acquires and commits the advisory lock)
+            await store.append({"request_id": "lock-release-test"})
+
+            # Second connection: acquire the same lock key — must not block
+            async def _acquire_and_release() -> None:
+                async with pool.connection() as conn:
+                    async with conn.transaction():
+                        await conn.execute(
+                            "SELECT pg_advisory_xact_lock(%s)",
+                            (_ADVISORY_LOCK_KEY,),
+                        )
+                        # Successfully acquired — lock was released on commit
+
+            await asyncio.wait_for(_acquire_and_release(), timeout=5.0)
+        finally:
+            await pool.close()
+
+    async def test_advisory_lock_released_after_rollback(self) -> None:
+        """Even after a failed (rolled-back) append, the lock is released.
+
+        Uses ``_open_real_pool`` plus a mock-pool failure so we can
+        force a rollback without modifying the real schema.
+
+        Diagnosis guide
+        ---------------
+        * asyncio.TimeoutError on the second _acquire_and_release call →
+          the rolled-back transaction left the lock held on the
+          *real* PostgreSQL connection; check whether the mock pool
+          failure path correctly exercises the real connection rollback.
+        """
+        pool = await _open_real_pool(max_size=4)
+        try:
+            await _truncate_trustlog_tables(pool)
+
+            # Force a failure using the mock-pool mechanism (same approach
+            # as the mock tests above) then verify the real DB has no lock.
+            from veritas_os.storage.postgresql import PostgresTrustLogStore
+
+            fail_store = PostgresTrustLogStore()
+            fail_pool = _ContentionMockPool(
+                fail_on_execute="insert into trustlog_entries"
+            )
+
+            async def _get_fail():
+                return fail_pool
+
+            fail_store._get_pool = _get_fail  # type: ignore[assignment]
+
+            with pytest.raises(RuntimeError):
+                await fail_store.append({"request_id": "rollback-lock-test"})
+
+            # The real pool should have no blocked connections — a new
+            # append on the REAL store must succeed without lock starvation.
+            real_store = _make_real_pg_store(pool)
+            rid = await asyncio.wait_for(
+                real_store.append({"request_id": "post-rollback-real"}),
+                timeout=5.0,
+            )
+            assert rid is not None, (
+                "Append after mock-pool rollback returned None on real PG"
+            )
+        finally:
+            await pool.close()

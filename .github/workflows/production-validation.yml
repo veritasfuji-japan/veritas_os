@@ -90,7 +90,7 @@ jobs:
   postgresql-smoke:
     name: postgresql-smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -147,6 +147,27 @@ jobs:
             --tb=short \
             --junitxml=test-reports/postgresql-smoke.xml
 
+      - name: Run real PostgreSQL contention tests (Tier 3 advisory validation)
+        # Validates advisory-lock serialisation on a live PostgreSQL 16 instance.
+        # These tests run on every weekly production-validation run and provide
+        # continuous high-fidelity evidence that the contention guarantee holds.
+        #
+        # Diagnosis:
+        #   advisory lock failure   → check advisory lock key (0x5645524954415301)
+        #   statement/lock timeout  → check DB under load; increase test margin
+        #   chain verification fail → INSERT + UPDATE not in same transaction
+        #   duplicate/gap           → UNIQUE constraint or advisory lock broken
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_pg_trustlog_contention.py \
+            -m "postgresql and contention" \
+            -v \
+            --tb=short \
+            --durations=10 \
+            --junitxml=test-reports/postgresql-contention-prod.xml
+
       - name: Verify health reports PostgreSQL backends
         run: |
           set -euxo pipefail
@@ -171,6 +192,14 @@ jobs:
         with:
           name: postgresql-smoke-report
           path: test-reports/postgresql-smoke.xml
+          if-no-files-found: warn
+
+      - name: Upload PostgreSQL contention report (production-validation)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgresql-contention-prod-report
+          path: test-reports/postgresql-contention-prod.xml
           if-no-files-found: warn
 
   tls-validation:
