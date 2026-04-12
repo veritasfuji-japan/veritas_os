@@ -550,7 +550,7 @@ class TestMetricsFileGuard:
         monkeypatch.setattr(server, "_HAS_SANITIZE", True)
         monkeypatch.setattr(server, "_HAS_ATOMIC_IO", True)
 
-        result = metrics()
+        result = asyncio.run(metrics())
         # JSONL lines should be 0 because postgresql backend skips file read
         assert result["trust_jsonl_lines"] == 0
 
@@ -597,7 +597,7 @@ class TestMetricsFileGuard:
         monkeypatch.setattr(server, "_HAS_SANITIZE", True)
         monkeypatch.setattr(server, "_HAS_ATOMIC_IO", True)
 
-        result = metrics()
+        result = asyncio.run(metrics())
         assert result["trust_jsonl_lines"] == 3
 
 

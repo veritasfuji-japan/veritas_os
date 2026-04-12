@@ -463,7 +463,7 @@ def _collect_recent_decide_files(shadow_dir: Path, limit: int) -> tuple[list[Pat
 
 
 @router.get("/v1/metrics", dependencies=[Depends(require_permission(Permission.compliance_read))])
-def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
+async def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     """Return operational metrics with degraded security/memory posture."""
     srv = _get_server()
     backend_info = get_backend_info()
@@ -514,6 +514,26 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
             if memory_health.get("status") == "degraded":
                 memory_status = "degraded"
 
+    # PostgreSQL / pool observability metrics.
+    pg_metrics: Dict[str, Any] = {
+        "db_backend": backend_info,
+        "db_pool": None,
+        "db_health": True,
+        "db_activity": None,
+    }
+    try:
+        from veritas_os.observability.pg_collector import collect_all_pg_metrics
+        from veritas_os.storage.db import _pool, _statement_timeout_ms
+
+        pool = _pool  # may be None when backend is file-based
+        pg_metrics = await collect_all_pg_metrics(
+            backend_info,
+            pool,
+            statement_timeout_ms=_statement_timeout_ms(),
+        )
+    except Exception:
+        logger.debug("pg metrics collection skipped", exc_info=True)
+
     result = {
         "decide_files": total_decide_files,
         "decide_files_returned": len(files),
@@ -543,6 +563,11 @@ def metrics(decide_file_limit: int = Query(default=500, ge=1, le=5000)):
     }
     if memory_health is not None:
         result["memory_health"] = memory_health
+
+    # Merge PostgreSQL metrics into the response.
+    result["db_pool"] = pg_metrics.get("db_pool")
+    result["db_health"] = pg_metrics.get("db_health", True)
+    result["db_activity"] = pg_metrics.get("db_activity")
 
     if srv._is_debug_mode():
         result["pipeline_error"] = srv._pipeline_state.err
