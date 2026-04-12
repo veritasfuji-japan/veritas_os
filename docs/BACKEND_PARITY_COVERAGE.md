@@ -157,8 +157,8 @@ or know which backend is active.
 
 | CI Job | Backend | What it tests |
 |---|---|---|
-| `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes contention, metrics, drill tests) |
-| `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes contention, metrics, drill tests) |
+| `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
+| `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
 | `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract + contention tests |
 | `test-slow` | Default | Slow/heavy tests |
 | `governance-smoke` | Default | Smoke tests (Tier 1) |
