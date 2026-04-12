@@ -464,9 +464,9 @@ for the full procedure including rollback.
 - **Full parity test suite** — 195+ tests verify identical semantics across backends.
 - **psycopg 3** — modern async PostgreSQL driver with connection pooling (`psycopg-pool`).
 - **JSONL → PostgreSQL import** — idempotent `veritas-migrate` CLI with dry-run, resume, and post-import hash-chain verification.
-- **Contention testing** — 23 tests in `test_pg_trustlog_contention.py` verify chain integrity under concurrent/burst/failure scenarios.
+- **Contention testing** — 25 tests in `test_pg_trustlog_contention.py` verify chain integrity under concurrent/burst/failure scenarios.
 - **Observability** — `/v1/metrics` exposes pool utilization, health, and `pg_stat_activity` (long-running queries, idle-in-tx, advisory lock waiters). 28 tests in `test_pg_metrics.py`.
-- **Recovery drill** — `scripts/drill_postgres_recovery.sh` automates backup → restore → verify cycle. 21 tests in `test_drill_postgres_recovery.py`.
+- **Recovery drill** — `scripts/drill_postgres_recovery.sh` automates backup → restore → verify cycle. 31 tests in `test_drill_postgres_recovery.py`.
 
 ### Production deployment
 
@@ -1325,7 +1325,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
 - ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
-- ✅ PostgreSQL production hardening: contention tests (23 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (21 tests). See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
+- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier

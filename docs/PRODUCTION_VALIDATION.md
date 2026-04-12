@@ -411,13 +411,13 @@ docker compose down
 |------|--------|------------|
 | Live LLM API validation | **Gated** — `scripts/live_provider_validation.sh` | Requires OPENAI_API_KEY; runs in Tier 3 / manual |
 | Full Docker compose E2E | **Validated** — `scripts/compose_validation.sh` | Governance endpoints, security headers, auth enforcement |
-| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/BACKEND_PARITY_COVERAGE.md` for 267+ parity + hardening tests |
+| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/BACKEND_PARITY_COVERAGE.md` for 279+ parity + hardening tests |
 | Database persistence (JSONL) | **Covered** — TrustLog file tests | File-based persistence fully tested |
 | PostgreSQL schema migrations | **Covered** — Alembic migrations tested in `test-postgresql` CI job | Forward + rollback paths tested |
 | JSONL → PostgreSQL import | **Covered** — `veritas-migrate` CLI with unit tests | Idempotent import with dry-run, resume, and post-import chain verification |
-| PostgreSQL advisory lock contention | **Covered** — 23 contention tests in `test_pg_trustlog_contention.py` | Mock advisory lock via `threading.Lock`; real PG in CI `test-postgresql` job |
+| PostgreSQL advisory lock contention | **Covered** — 25 contention tests in `test_pg_trustlog_contention.py` | Mock advisory lock via `threading.Lock`; real PG in CI `test-postgresql` job |
 | PostgreSQL pool/activity metrics | **Covered** — 28 metrics tests in `test_pg_metrics.py` | Pool gauges, health, pg_stat_activity, `/v1/metrics` integration |
-| PostgreSQL backup/restore/drill | **Covered** — 21 drill tests + scripts + runbook | Script syntax, coherence, and runbook consistency validated |
+| PostgreSQL backup/restore/drill | **Covered** — 31 drill tests + scripts + runbook | Script syntax, coherence, and runbook consistency validated |
 | Multi-node clustering | Not applicable | Single-node architecture; PgBouncer recommended for high-concurrency |
 | TLS certificate chain/e2e HTTPS handshake | **Gated** — staging cert expiry checked | `@external` staging HTTPS tests + cert expiry validation |
 | Load/stress at scale (p95/p99 latency SLO) | **Partially covered** — latency budgets enforced | p95 budgets on health (200ms), governance (500ms), burst (1000ms) |

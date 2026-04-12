@@ -200,9 +200,9 @@ for PostgreSQL-specific validation guidance.
 | **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` + `postgresql-smoke` with real PG 16; mock-pool in unit tests | Medium |
 | **Search scoring parity** | Covered for result IDs; exact score values may differ slightly (LIKE ANY vs. file scan) | Low |
 | **Connection pool failure recovery** | Tested in `test_storage_db.py` + `test_pg_trustlog_contention.py` (pool starvation fail-closed) | ✅ Covered |
-| **Concurrent writes under real PostgreSQL advisory locks** | Mock-pool contention (23 tests) + CI `test-postgresql` job against real PG | Medium — real PG timing not tested |
+| **Concurrent writes under real PostgreSQL advisory locks** | Mock-pool contention (25 tests) + CI `test-postgresql` job against real PG | Medium — real PG timing not tested |
 | **Pool/activity metrics** | Tested in `test_pg_metrics.py` (28 tests); `/v1/metrics` integration covered | ✅ Covered |
-| **Backup/restore/drill scripts** | Tested in `test_drill_postgres_recovery.py` (21 tests); script syntax + content coherence | ✅ Covered (no live `pg_dump`) |
+| **Backup/restore/drill scripts** | Tested in `test_drill_postgres_recovery.py` (31 tests); script syntax + content coherence | ✅ Covered (no live `pg_dump`) |
 
 ### What is parity-guaranteed
 
@@ -255,10 +255,10 @@ file-to-PostgreSQL data migration:
 | `test_storage_base.py` | varies | Protocol interface |
 | `test_storage_db.py` | varies | Connection pool |
 | `test_storage_jsonl.py` | varies | JSONL backend unit |
-| `test_pg_trustlog_contention.py` | 23 | Advisory lock contention + concurrency |
+| `test_pg_trustlog_contention.py` | 25 | Advisory lock contention + concurrency |
 | `test_pg_metrics.py` | 28 | Pool/activity metrics + `/v1/metrics` integration |
-| `test_drill_postgres_recovery.py` | 21 | Drill script validation + runbook coherence |
-| **Total backend + hardening tests** | **267+** | |
+| `test_drill_postgres_recovery.py` | 31 | Drill script validation + runbook coherence |
+| **Total backend + hardening tests** | **279+** | |
 
 ## 8. Contention, Metrics, and Recovery Coverage
 
@@ -280,7 +280,7 @@ using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
 | **Mixed success/failure contention** | 2 | ✅ |
 | **Threaded contention (OS threads)** | 2 | ✅ |
 | **Missing encryption key → fail-closed** | 1 | ✅ |
-| **Total** | **23** (mock pool, Tier 1 CI) | |
+| **Total** | **25** (mock pool, Tier 1 CI) | |
 
 ### PostgreSQL Metrics Tests (`test_pg_metrics.py`)
 
@@ -310,7 +310,7 @@ using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
 | **`--help` flag exits 0** | 3 | ✅ |
 | **Content coherence (tools + flags)** | 6 | ✅ |
 | **Runbook coherence (docs ↔ scripts)** | 7 | ✅ |
-| **Total** | **21** (no live DB required, Tier 1 CI) | |
+| **Total** | **31** (no live DB required, Tier 1 CI) | |
 
 ### What these tests guarantee
 
