@@ -787,27 +787,24 @@ class TestMockFutureBackendCapability:
             _SIGNER_CAPABILITIES,
         )
         _clean_env(monkeypatch)
-        # Register mock future backend
-        _SIGNER_CAPABILITIES["azure_keyvault"] = frozenset({
+        # Register mock future backend via monkeypatch for safe cleanup
+        monkeypatch.setitem(_SIGNER_CAPABILITIES, "azure_keyvault", frozenset({
             BackendCapability.MANAGED_SIGNING,
             BackendCapability.FAIL_CLOSED,
-        })
-        try:
-            monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
-            monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "b")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "p")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "azure_keyvault")
-            d = derive_defaults(PostureLevel.PROD)
-            errors = validate_posture_startup(d)
-            # No signer-capability errors (may have kms_key_id error for
-            # aws_kms-specific config, but that doesn't apply here)
-            assert not any("managed_signing" in e for e in errors)
-        finally:
-            _SIGNER_CAPABILITIES.pop("azure_keyvault", None)
+        }))
+        monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+        monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "b")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "p")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "azure_keyvault")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        # No signer-capability errors (may have kms_key_id error for
+        # aws_kms-specific config, but that doesn't apply here)
+        assert not any("managed_signing" in e for e in errors)
 
     def test_future_mirror_with_immutable_retention_passes_prod(self, monkeypatch):
         """A hypothetical 'azure_blob_immutable' mirror with
@@ -817,24 +814,20 @@ class TestMockFutureBackendCapability:
             _MIRROR_CAPABILITIES,
         )
         _clean_env(monkeypatch)
-        _MIRROR_CAPABILITIES["azure_blob_immutable"] = frozenset({
+        monkeypatch.setitem(_MIRROR_CAPABILITIES, "azure_blob_immutable", frozenset({
             BackendCapability.IMMUTABLE_RETENTION,
             BackendCapability.FAIL_CLOSED,
-        })
-        try:
-            monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
-            monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND",
-                               "azure_blob_immutable")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
-            monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
-            d = derive_defaults(PostureLevel.PROD)
-            errors = validate_posture_startup(d)
-            assert not any("immutable_retention" in e for e in errors)
-        finally:
-            _MIRROR_CAPABILITIES.pop("azure_blob_immutable", None)
+        }))
+        monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+        monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "azure_blob_immutable")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        assert not any("immutable_retention" in e for e in errors)
 
     def test_future_backend_without_capability_rejected(self, monkeypatch):
         """A future backend without the needed capability is rejected."""
@@ -843,12 +836,9 @@ class TestMockFutureBackendCapability:
         )
         _clean_env(monkeypatch)
         # Register with empty capabilities — should be rejected
-        _SIGNER_CAPABILITIES["weak_signer"] = frozenset()
-        try:
-            _set_minimum_strict_integrations(monkeypatch)
-            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "weak_signer")
-            d = derive_defaults(PostureLevel.PROD)
-            errors = validate_posture_startup(d)
-            assert any("managed_signing" in e for e in errors)
-        finally:
-            _SIGNER_CAPABILITIES.pop("weak_signer", None)
+        monkeypatch.setitem(_SIGNER_CAPABILITIES, "weak_signer", frozenset())
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "weak_signer")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)

@@ -402,8 +402,9 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
             )
     elif mirror_backend not in _MIRROR_CAPABILITIES:
         errors.append(
-            "VERITAS_TRUSTLOG_MIRROR_BACKEND must be one of "
-            f"({', '.join(repr(k) for k in sorted(_MIRROR_CAPABILITIES))})."
+            f"Unrecognized VERITAS_TRUSTLOG_MIRROR_BACKEND={mirror_backend!r}. "
+            "Known backends: "
+            f"{', '.join(repr(k) for k in sorted(_MIRROR_CAPABILITIES))}."
         )
 
     # ── Mirror backend-specific configuration ────────────────────────
@@ -436,8 +437,9 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
 
     if anchor_backend not in _ANCHOR_CAPABILITIES:
         errors.append(
-            "VERITAS_TRUSTLOG_ANCHOR_BACKEND must be one of "
-            f"({', '.join(repr(k) for k in sorted(_ANCHOR_CAPABILITIES))})."
+            f"Unrecognized VERITAS_TRUSTLOG_ANCHOR_BACKEND={anchor_backend!r}. "
+            "Known backends: "
+            f"{', '.join(repr(k) for k in sorted(_ANCHOR_CAPABILITIES))}."
         )
 
     if defaults.trustlog_transparency_required:
