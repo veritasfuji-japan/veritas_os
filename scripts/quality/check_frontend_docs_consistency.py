@@ -22,6 +22,7 @@ VERSION_CHECKS: list[tuple[str, str]] = [
     (r"Next\.js\s+(\d+\.\d+)", "next"),
     (r"TypeScript\s+(\d+\.\d+)", "typescript"),
     (r"Tailwind\s+CSS\s+(\d+\.\d+)", "tailwindcss"),
+    (r"eslint-config-next\s+(\d+\.\d+)", "eslint-config-next"),
 ]
 
 

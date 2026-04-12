@@ -467,6 +467,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | セキュリティ | リクエスト毎ノンス付きCSP、httpOnly BFFクッキー、HSTS、X-Frame-Options |
 | デザインシステム | `@veritas/design-system`（Card、Button、AppShell） |
 | 共有型定義 | `@veritas/types`（ランタイム型ガード付き） |
+| Lint設定 | eslint-config-next 15.5.10 |
 
 ### ページ
 

@@ -508,6 +508,7 @@ The frontend is a **Next.js 16** (React 18, TypeScript) dashboard that provides 
 | Security | CSP with per-request nonce, httpOnly BFF cookies, HSTS, X-Frame-Options |
 | Design System | `@veritas/design-system` (Card, Button, AppShell) |
 | Shared Types | `@veritas/types` with runtime type guards |
+| Lint Config | eslint-config-next 15.5.10 |
 
 ### Pages
 
