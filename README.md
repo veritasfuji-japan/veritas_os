@@ -340,7 +340,7 @@ veritas_os/                  ← Monorepo root
 │   │   └── governance.py    ← Policy management with audit trail
 │   ├── core/                ← Decision engine
 │   │   ├── kernel.py        ← Decision computation engine
-│   │   ├── kernel_*.py      ← Kernel extensions (doctor, intent, QA, stages, episode)
+│   │   ├── kernel_*.py      ← Kernel extensions (doctor, intent, QA, stages, episode, post_choice)
 │   │   ├── pipeline/        ← 20+ stage orchestrator (package with stage modules)
 │   │   ├── fuji/            ← FUJI safety gate (package — policy, injection, safety head)
 │   │   ├── memory/          ← MemoryOS (package — store, vector, search, security, compliance)
@@ -360,11 +360,11 @@ veritas_os/                  ← Monorepo root
 │   ├── tools/               ← Web search, GitHub search, LLM safety
 │   ├── replay/              ← Deterministic replay engine
 │   ├── observability/       ← OpenTelemetry metrics, middleware
-│   ├── storage/             ← Pluggable storage backends (JSONL, PostgreSQL)
+│   ├── storage/             ← Pluggable storage backends (JSONL, PostgreSQL, Alembic migrations)
 │   ├── prompts/             ← Prompt templates for LLM interactions
 │   ├── reporting/           ← Report generation utilities
 │   ├── benchmarks/          ← Performance benchmark data
-│   └── tests/               ← 6200+ Python tests (+ top-level tests/)
+│   └── tests/               ← 6600+ Python tests (+ top-level tests/)
 ├── frontend/                ← Next.js 16 Mission Control dashboard
 │   ├── app/                 ← Pages (Home, Console, Audit, Governance, Risk)
 │   ├── components/          ← Shared React components
@@ -743,11 +743,12 @@ Open Swagger UI at `http://127.0.0.1:8000/docs`, authorize with `X-API-Key`, and
 
 ## 🐳 Docker Compose (Full Stack)
 
-`docker-compose.yml` orchestrates both services:
+`docker-compose.yml` orchestrates three services:
 
 | Service | Port | Description |
 |---|---|---|
-| `backend` | 8000 | FastAPI server (built from `Dockerfile`) with health check |
+| `postgres` | 5432 | PostgreSQL 16 (auto-configured, health-checked, resource-limited) |
+| `backend` | 8000 | FastAPI server (built from `Dockerfile`) with health check, depends on `postgres` |
 | `frontend` | 3000 | Next.js dev server (Node.js 20), waits for backend to be healthy |
 
 ```bash
@@ -765,6 +766,9 @@ Environment variables (set in `.env` or shell):
 | `VERITAS_API_SECRET` | `change-me` | HMAC signing secret (32+ chars recommended) |
 | `VERITAS_CORS_ALLOW_ORIGINS` | `http://localhost:3000,http://127.0.0.1:3000` | CORS allow-list |
 | `VERITAS_API_BASE_URL` | `http://backend:8000` | Frontend BFF (server-only) → backend URL |
+| `VERITAS_MEMORY_BACKEND` | `postgresql` | Memory storage backend (`json` or `postgresql`) |
+| `VERITAS_TRUSTLOG_BACKEND` | `postgresql` | TrustLog storage backend (`jsonl` or `postgresql`) |
+| `VERITAS_DATABASE_URL` | `postgresql://veritas:veritas@postgres:5432/veritas` | PostgreSQL connection URL |
 | `LLM_PROVIDER` | `openai` | LLM provider |
 | `LLM_MODEL` | `gpt-4.1-mini` | LLM model name |
 
@@ -1082,6 +1086,16 @@ VERITAS OS uses a **three-tier CI/release validation model** with explicit block
 | **Tier 2** | `release-gate.yml` | `v*` tag push | ✅ Blocks release |
 | **Tier 3** | `production-validation.yml` | Weekly + manual | ⚠️ Advisory |
 
+Additional CI workflows:
+
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `codeql.yml` | PR + push to `main` | CodeQL security analysis |
+| `publish-ghcr.yml` | Release / tag push | Docker image publishing to GHCR |
+| `security-gates.yml` | PR + push to `main` | Security gate checks (dependency audit, secret scanning) |
+| `runtime-pickle-guard.yml` | PR + push to `main` | Block runtime pickle/joblib artifacts |
+| `sbom-nightly.yml` | Nightly schedule | SBOM generation and vulnerability scan |
+
 **Tier 1** (`main.yml`) — every PR is blocked until all of the following pass:
 - Ruff lint + Bandit + architecture/security script checks
 - Dependency CVE audit (Python + Node)
@@ -1153,6 +1167,18 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 | `LLM_MODEL` | `gpt-4.1-mini` | Model name |
 | `LLM_POOL_MAX_CONNECTIONS` | `20` | httpx connection pool size |
 | `LLM_MAX_RETRIES` | `3` | Retry count with exponential backoff |
+
+### Storage Backends
+
+| Variable | Default | Description |
+|---|---|---|
+| `VERITAS_MEMORY_BACKEND` | `json` (local) / `postgresql` (Docker) | Memory storage backend (`json` or `postgresql`) |
+| `VERITAS_TRUSTLOG_BACKEND` | `jsonl` (local) / `postgresql` (Docker) | TrustLog storage backend (`jsonl` or `postgresql`) |
+| `VERITAS_DATABASE_URL` | — | PostgreSQL connection URL (required when using `postgresql` backend) |
+| `VERITAS_DB_POOL_MIN_SIZE` | `2` | PostgreSQL connection pool minimum size |
+| `VERITAS_DB_POOL_MAX_SIZE` | `10` | PostgreSQL connection pool maximum size |
+| `VERITAS_DB_SSLMODE` | `prefer` | PostgreSQL SSL mode (`prefer`, `require`, `verify-full`) |
+| `VERITAS_DB_AUTO_MIGRATE` | `false` (local) / `true` (Docker) | Auto-run Alembic migrations on startup |
 
 ### Network & CORS
 
@@ -1326,6 +1352,9 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
 - ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
 - ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
+- ✅ Continuation Runtime (Phase-1): chain-level continuation observation layer with snapshot/receipt/enforcement event architecture. See `docs/architecture/continuation_runtime_adr.md`.
+- ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/governance_artifact_lifecycle.md`](docs/governance_artifact_lifecycle.md).
+- ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier
