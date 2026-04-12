@@ -92,3 +92,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "eu_ai_act: EU AI Act コンプライアンス関連",
     )
+    config.addinivalue_line(
+        "markers",
+        "postgresql: tests requiring a real PostgreSQL service container",
+    )
