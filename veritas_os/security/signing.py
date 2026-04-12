@@ -311,6 +311,197 @@ class AwsKmsEd25519Signer:
         return sha256_hex(public_raw.hex())[:16]
 
 
+class GcpKmsEd25519Signer:
+    """Ed25519 signer backed by Google Cloud KMS asymmetric keys.
+
+    Security warning:
+        This signer performs a network call to GCP KMS for signing operations.
+        Ensure the service account has ``cloudkms.cryptoKeyVersions.useToSign``
+        permission scoped to the specific key resource.
+
+    Environment variables:
+        ``VERITAS_GCP_KMS_SIGN_RESOURCE``: Full resource name of the crypto
+            key version (e.g.
+            ``projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/v``).
+    """
+
+    signer_type = "gcp_kms"
+
+    def __init__(
+        self,
+        resource_name: str,
+        kms_client: Optional[object] = None,
+    ) -> None:
+        if not resource_name.strip():
+            raise ValueError(
+                "VERITAS_GCP_KMS_SIGN_RESOURCE is required for gcp_kms signer backend"
+            )
+        self.resource_name = resource_name.strip()
+        self._kms_client = kms_client
+        self._public_key: Optional[Ed25519PublicKey] = None
+
+    @property
+    def kms_client(self) -> object:
+        """Lazily construct GCP KMS client."""
+        if self._kms_client is None:
+            kms_mod = importlib.import_module("google.cloud.kms_v1")
+            self._kms_client = kms_mod.KeyManagementServiceClient()
+        return self._kms_client
+
+    def _load_public_key(self) -> Ed25519PublicKey:
+        if self._public_key is not None:
+            return self._public_key
+        response = self.kms_client.get_public_key(request={"name": self.resource_name})
+        loaded = serialization.load_pem_public_key(response.pem.encode("utf-8"))
+        if not isinstance(loaded, Ed25519PublicKey):
+            raise ValueError("GCP KMS key is not Ed25519")
+        self._public_key = loaded
+        return self._public_key
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        """Sign using GCP KMS asymmetric sign API."""
+        import hashlib
+
+        digest_bytes = hashlib.sha256(
+            payload_hash.encode("utf-8")
+        ).digest()
+        response = self.kms_client.asymmetric_sign(
+            request={
+                "name": self.resource_name,
+                "data": payload_hash.encode("utf-8"),
+            }
+        )
+        return base64.urlsafe_b64encode(response.signature).decode("ascii")
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        try:
+            signature = base64.urlsafe_b64decode(signature_b64)
+            public_key = self._load_public_key()
+            public_key.verify(signature, payload_hash.encode("utf-8"))
+        except (InvalidSignature, ValueError, TypeError):
+            return False
+        return True
+
+    def signer_key_id(self) -> str:
+        return self.resource_name
+
+    def signer_key_version(self) -> str:
+        """Return key version from the resource name."""
+        parts = self.resource_name.split("/")
+        if len(parts) >= 2 and parts[-2] == "cryptoKeyVersions":
+            return parts[-1]
+        return "unknown"
+
+    def signature_algorithm(self) -> str:
+        return "eddsa_ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        try:
+            public_key = self._load_public_key()
+            public_raw = public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        return sha256_hex(public_raw.hex())[:16]
+
+
+class VaultTransitSigner:
+    """Ed25519 signer backed by HashiCorp Vault Transit secrets engine.
+
+    Security warning:
+        This signer performs network calls to Vault for signing operations.
+        The Vault token should have a policy scoped to
+        ``transit/sign/<key_name>`` and ``transit/verify/<key_name>`` only.
+
+    Environment variables:
+        ``VERITAS_VAULT_ADDR``: Vault server address.
+        ``VERITAS_VAULT_TOKEN``: Authentication token.
+        ``VERITAS_VAULT_TRANSIT_KEY``: Transit key name
+            (default ``veritas-trustlog``).
+        ``VERITAS_VAULT_TRANSIT_KEY_VERSION``: Optional key version.
+    """
+
+    signer_type = "vault"
+
+    def __init__(
+        self,
+        vault_addr: Optional[str] = None,
+        vault_token: Optional[str] = None,
+        key_name: Optional[str] = None,
+        key_version: Optional[str] = None,
+        client: Optional[object] = None,
+    ) -> None:
+        self.vault_addr = (
+            vault_addr or os.getenv("VERITAS_VAULT_ADDR", "")
+        ).strip()
+        self.vault_token = (
+            vault_token or os.getenv("VERITAS_VAULT_TOKEN", "")
+        ).strip()
+        self.key_name = (
+            key_name or os.getenv("VERITAS_VAULT_TRANSIT_KEY", "veritas-trustlog")
+        ).strip()
+        self.key_version = (
+            key_version or os.getenv("VERITAS_VAULT_TRANSIT_KEY_VERSION", "")
+        ).strip()
+        self._client = client
+
+    @property
+    def _vault_client(self) -> object:
+        """Lazily construct Vault HVAC client."""
+        if self._client is None:
+            hvac = importlib.import_module("hvac")
+            self._client = hvac.Client(url=self.vault_addr, token=self.vault_token)
+        return self._client
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        """Sign using Vault Transit engine."""
+        import hashlib
+
+        input_b64 = base64.b64encode(
+            payload_hash.encode("utf-8")
+        ).decode("ascii")
+        kwargs = {"name": self.key_name, "hash_input": input_b64}
+        if self.key_version:
+            kwargs["key_version"] = int(self.key_version)
+        response = self._vault_client.secrets.transit.sign_data(**kwargs)
+        # Vault returns "vault:v1:<base64>" format
+        vault_sig = response["data"]["signature"]
+        # Strip vault prefix: "vault:v1:<b64>"
+        sig_parts = vault_sig.split(":")
+        raw_b64 = sig_parts[-1] if len(sig_parts) >= 3 else vault_sig
+        return raw_b64
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        try:
+            input_b64 = base64.b64encode(
+                payload_hash.encode("utf-8")
+            ).decode("ascii")
+            # Re-add vault prefix for verification
+            vault_sig = f"vault:v1:{signature_b64}"
+            response = self._vault_client.secrets.transit.verify_signed_data(
+                name=self.key_name,
+                hash_input=input_b64,
+                signature=vault_sig,
+            )
+            return bool(response["data"]["valid"])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def signer_key_id(self) -> str:
+        return f"vault-transit:{self.key_name}"
+
+    def signer_key_version(self) -> str:
+        return self.key_version or "latest"
+
+    def signature_algorithm(self) -> str:
+        return "ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        return None
+
+
 def build_trustlog_signer(
     *,
     private_key_path: Path,
@@ -319,7 +510,14 @@ def build_trustlog_signer(
     backend: Optional[str] = None,
     kms_key_id: Optional[str] = None,
 ) -> Signer:
-    """Build TrustLog signer from backend environment variables."""
+    """Build TrustLog signer from backend environment variables.
+
+    Supported backends:
+        - ``file`` (default): Local file-backed Ed25519 signer.
+        - ``aws_kms``: AWS KMS asymmetric Ed25519 signer.
+        - ``gcp_kms``: Google Cloud KMS asymmetric Ed25519 signer.
+        - ``vault``: HashiCorp Vault Transit engine signer.
+    """
     selected_backend = (
         backend
         if backend is not None
@@ -337,6 +535,12 @@ def build_trustlog_signer(
             else os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "")
         )
         return AwsKmsEd25519Signer(kms_key_id=selected_key_id)
+    if selected_backend in {"gcp_kms", "gcp_kms_ed25519"}:
+        resource_name = os.getenv("VERITAS_GCP_KMS_SIGN_RESOURCE", "")
+        return GcpKmsEd25519Signer(resource_name=resource_name)
+    if selected_backend in {"vault", "hashicorp_vault", "vault_transit"}:
+        return VaultTransitSigner()
     raise ValueError(
-        "Unsupported signer backend. Expected 'file' or 'aws_kms'."
+        f"Unsupported signer backend: {selected_backend!r}. "
+        "Supported: 'file', 'aws_kms', 'gcp_kms', 'vault'."
     )

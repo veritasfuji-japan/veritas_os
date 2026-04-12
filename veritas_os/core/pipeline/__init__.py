@@ -82,6 +82,30 @@ except Exception:  # pragma: no cover - optional observability dependency
     def set_degraded_subsystems(count: Any) -> None:
         return None
 
+try:
+    from veritas_os.observability.tracing import (
+        pipeline_root_span as _pipeline_root_span,
+        pipeline_stage_span as _pipeline_stage_span,
+        record_span_event as _record_span_event,
+        set_span_attribute as _set_span_attribute,
+    )
+except Exception:  # pragma: no cover - optional observability dependency
+    from contextlib import contextmanager as _cm
+
+    @_cm
+    def _pipeline_root_span(request_id, **kw):  # type: ignore[misc]
+        yield None
+
+    @_cm
+    def _pipeline_stage_span(stage_name, **kw):  # type: ignore[misc]
+        yield None
+
+    def _record_span_event(span, name, attributes=None):  # type: ignore[misc]
+        return None
+
+    def _set_span_attribute(span, key, value):  # type: ignore[misc]
+        return None
+
 from ..utils import (  # noqa: F401 – _redact_text/redact_payload re-exported for backward compat
     _redact_text,
     redact_payload,
@@ -718,106 +742,149 @@ async def run_decide_pipeline(
     # Allow callers (e.g. replay engine) to override memory store getter
     effective_get_memory_store = memory_store_getter or _get_memory_store
 
+    # Derive tracing attributes from request
+    _trace_request_id = getattr(req, "request_id", "") or ""
+    _trace_query = getattr(req, "query", "") or ""
+    _trace_user_id = getattr(req, "user_id", "") or ""
+    _trace_fast_mode = bool(getattr(req, "fast_mode", False))
+
+    with _pipeline_root_span(
+        _trace_request_id,
+        query=_trace_query,
+        user_id=_trace_user_id,
+        fast_mode=_trace_fast_mode,
+    ) as _root_span:
+        return await _run_decide_pipeline_traced(
+            req=req,
+            request=request,
+            effective_get_memory_store=effective_get_memory_store,
+            pipeline_started_at=pipeline_started_at,
+            _stage_failures=_stage_failures,
+            _root_span=_root_span,
+        )
+
+
+async def _run_decide_pipeline_traced(
+    *,
+    req: DecideRequest,
+    request: Request,
+    effective_get_memory_store: Callable,
+    pipeline_started_at: float,
+    _stage_failures: List[str],
+    _root_span: Any,
+) -> Dict[str, Any]:
+    """Inner pipeline body wrapped in a root trace span."""
+
     # =================================================================
     # Stage 1: Input normalization  (-> pipeline_inputs)
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    ctx = normalize_pipeline_inputs(
-        req,
-        request,
-        _get_request_params=_get_request_params,
-        _to_dict_fn=to_dict,
-    )
-    observe_pipeline_stage_duration("input_norm", time.perf_counter() - _stage_started_at)
+    with _pipeline_stage_span("input_norm") as _s1:
+        _stage_started_at = time.perf_counter()
+        ctx = normalize_pipeline_inputs(
+            req,
+            request,
+            _get_request_params=_get_request_params,
+            _to_dict_fn=to_dict,
+        )
+        observe_pipeline_stage_duration("input_norm", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 2: MemoryOS retrieval  (-> pipeline_retrieval)
     # =================================================================
-    stage_memory_retrieval(
-        ctx,
-        _get_memory_store=effective_get_memory_store,
-        _memory_search=_memory_search,
-        _memory_put=_memory_put,
-        _memory_add_usage=_memory_add_usage,
-        _flatten_memory_hits=_flatten_memory_hits,
-        _warn=_warn,
-        utc_now_iso_z=utc_now_iso_z,
-    )
+    with _pipeline_stage_span("memory_retrieval") as _s2:
+        stage_memory_retrieval(
+            ctx,
+            _get_memory_store=effective_get_memory_store,
+            _memory_search=_memory_search,
+            _memory_put=_memory_put,
+            _memory_add_usage=_memory_add_usage,
+            _flatten_memory_hits=_flatten_memory_hits,
+            _warn=_warn,
+            utc_now_iso_z=utc_now_iso_z,
+        )
 
     # =================================================================
     # Stage 2b: WebSearch  (-> pipeline_retrieval)
     # =================================================================
-    await stage_web_search_async(
-        ctx,
-        _safe_web_search=_safe_web_search,
-        _normalize_web_payload=_normalize_web_payload,
-        _extract_web_results=_extract_web_results,
-        _to_bool=_to_bool,
-        _get_request_params=_get_request_params,
-        _warn=_warn,
-        request=request,
-    )
+    with _pipeline_stage_span("web_search") as _s2b:
+        await stage_web_search_async(
+            ctx,
+            _safe_web_search=_safe_web_search,
+            _normalize_web_payload=_normalize_web_payload,
+            _extract_web_results=_extract_web_results,
+            _to_bool=_to_bool,
+            _get_request_params=_get_request_params,
+            _warn=_warn,
+            request=request,
+        )
 
     # =================================================================
     # Stage 3: Options normalization  (-> pipeline_decide_stages)
     # =================================================================
-    stage_normalize_options(ctx, _norm_alt=_norm_alt)
+    with _pipeline_stage_span("options_norm") as _s3:
+        stage_normalize_options(ctx, _norm_alt=_norm_alt)
 
     # =================================================================
     # Stage 4: Core decision + self-healing  (-> pipeline_execute)
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    await stage_core_execute(
-        ctx,
-        call_core_decide_fn=call_core_decide,
-        append_trust_log_fn=append_trust_log,
-        veritas_core=veritas_core,
-    )
-    observe_pipeline_stage_duration("kernel_execute", time.perf_counter() - _stage_started_at)
+    with _pipeline_stage_span("kernel_execute") as _s4:
+        _stage_started_at = time.perf_counter()
+        await stage_core_execute(
+            ctx,
+            call_core_decide_fn=call_core_decide,
+            append_trust_log_fn=append_trust_log,
+            veritas_core=veritas_core,
+        )
+        observe_pipeline_stage_duration("kernel_execute", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 4b: Absorb raw results  (-> pipeline_decide_stages)
     # =================================================================
-    stage_absorb_raw_results(
-        ctx,
-        _norm_alt=_norm_alt,
-        _normalize_critique_payload=_normalize_critique_payload,
-        _merge_extras_preserving_contract=_merge_extras_preserving_contract,
-    )
+    with _pipeline_stage_span("absorb_results") as _s4b:
+        stage_absorb_raw_results(
+            ctx,
+            _norm_alt=_norm_alt,
+            _normalize_critique_payload=_normalize_critique_payload,
+            _merge_extras_preserving_contract=_merge_extras_preserving_contract,
+        )
 
     # =================================================================
     # Stage 4c: Fallback alternatives  (-> pipeline_decide_stages)
     # =================================================================
-    stage_fallback_alternatives(ctx, _norm_alt=_norm_alt, _dedupe_alts=_dedupe_alts)
+    with _pipeline_stage_span("fallback_alternatives") as _s4c:
+        stage_fallback_alternatives(ctx, _norm_alt=_norm_alt, _dedupe_alts=_dedupe_alts)
 
     # =================================================================
     # Stage 4d: WorldModel + MemoryModel boost  (-> pipeline_decide_stages)
     # =================================================================
-    stage_model_boost(
-        ctx,
-        world_model=world_model,
-        MEM_VEC=MEM_VEC,
-        MEM_CLF=MEM_CLF,
-        _allow_prob=_allow_prob,
-        _mem_model_path=_mem_model_path,
-        _warn=_warn,
-    )
+    with _pipeline_stage_span("model_boost") as _s4d:
+        stage_model_boost(
+            ctx,
+            world_model=world_model,
+            MEM_VEC=MEM_VEC,
+            MEM_CLF=MEM_CLF,
+            _allow_prob=_allow_prob,
+            _mem_model_path=_mem_model_path,
+            _warn=_warn,
+        )
 
     # =================================================================
     # Stage 5: DebateOS  (-> pipeline_decide_stages)
     # =================================================================
-    stage_debate_fn(ctx, debate_core=debate_core, _warn=_warn)
+    with _pipeline_stage_span("debate") as _s5:
+        stage_debate_fn(ctx, debate_core=debate_core, _warn=_warn)
 
     # =================================================================
     # Stage 5b: Critique  (-> pipeline_decide_stages)
     # =================================================================
-    await stage_critique_async(
-        ctx,
-        _normalize_critique_payload=_normalize_critique_payload,
-        _run_critique_best_effort=_run_critique_best_effort,
-        _ensure_critique_required=_ensure_critique_required,
-        _critique_fallback=_critique_fallback,
-    )
+    with _pipeline_stage_span("critique") as _s5b:
+        await stage_critique_async(
+            ctx,
+            _normalize_critique_payload=_normalize_critique_payload,
+            _run_critique_best_effort=_run_critique_best_effort,
+            _ensure_critique_required=_ensure_critique_required,
+            _critique_fallback=_critique_fallback,
+        )
 
     # =================================================================
     # Stage 5.9: Continuation revalidation (shadow / sidecar)
@@ -917,56 +984,62 @@ async def run_decide_pipeline(
     # =================================================================
     # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    stage_fuji_precheck(ctx)
-    stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
-    stage_gate_decision(ctx)
-    observe_pipeline_stage_duration("fuji_gate", time.perf_counter() - _stage_started_at)
+    with _pipeline_stage_span("fuji_gate") as _s6:
+        _stage_started_at = time.perf_counter()
+        stage_fuji_precheck(ctx)
+        stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
+        stage_gate_decision(ctx)
+        observe_pipeline_stage_duration("fuji_gate", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 6b: Value learning EMA  (-> pipeline_decide_stages)
     # =================================================================
-    stage_value_learning_ema(
-        ctx,
-        _load_valstats=_load_valstats,
-        _save_valstats=_save_valstats,
-        _warn=_warn,
-        utc_now_iso_z=utc_now_iso_z,
-    )
+    with _pipeline_stage_span("value_ema") as _s6b:
+        stage_value_learning_ema(
+            ctx,
+            _load_valstats=_load_valstats,
+            _save_valstats=_save_valstats,
+            _warn=_warn,
+            utc_now_iso_z=utc_now_iso_z,
+        )
 
     # =================================================================
     # Stage 6c: Metrics  (-> pipeline_decide_stages)
     # =================================================================
-    stage_compute_metrics(ctx, _ensure_full_contract=_ensure_full_contract)
+    with _pipeline_stage_span("compute_metrics") as _s6c:
+        stage_compute_metrics(ctx, _ensure_full_contract=_ensure_full_contract)
 
     # =================================================================
     # Stage 6d: Low-evidence hardening  (-> pipeline_decide_stages)
     # =================================================================
-    stage_evidence_hardening(
-        ctx,
-        evidence_core=evidence_core,
-        _query_is_step1_hint=_query_is_step1_hint,
-        _has_step1_minimum_evidence=_has_step1_minimum_evidence,
-    )
+    with _pipeline_stage_span("evidence_hardening") as _s6d:
+        stage_evidence_hardening(
+            ctx,
+            evidence_core=evidence_core,
+            _query_is_step1_hint=_query_is_step1_hint,
+            _has_step1_minimum_evidence=_has_step1_minimum_evidence,
+        )
 
     # =================================================================
     # Stage 7: Decision payload completion  (-> pipeline_response)
     # - decision payload contract is complete at this boundary
     # =================================================================
-    payload = _build_decision_payload(ctx)
+    with _pipeline_stage_span("response_assembly") as _s7:
+        payload = _build_decision_payload(ctx)
 
     # =================================================================
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
     # - best-effort side effects and artifact generation only
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    _run_post_decision_persistence_phase(
-        ctx,
-        payload,
-        effective_get_memory_store=effective_get_memory_store,
-        stage_failures=_stage_failures,
-    )
-    observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
+    with _pipeline_stage_span("persist") as _s8:
+        _stage_started_at = time.perf_counter()
+        _run_post_decision_persistence_phase(
+            ctx,
+            payload,
+            effective_get_memory_store=effective_get_memory_store,
+            stage_failures=_stage_failures,
+        )
+        observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Observability: record pipeline health summary
@@ -980,7 +1053,10 @@ async def run_decide_pipeline(
             if _stage_failures:
                 metrics["degraded_stages"] = _stage_failures
     set_degraded_subsystems(len(_stage_failures))
+    _set_span_attribute(_root_span, "veritas.pipeline_total_ms", total_ms)
+    _set_span_attribute(_root_span, "veritas.degraded_stages", len(_stage_failures))
     if _stage_failures:
+        _record_span_event(_root_span, "degraded_stages", {"stages": ", ".join(_stage_failures)})
         logger.info(
             "[pipeline] completed with degraded stages (%d ms): %s",
             total_ms,

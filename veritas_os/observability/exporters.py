@@ -80,6 +80,9 @@ def configure_metrics_exporter(app: Any, auth_dependency: Optional[Any] = None) 
       - none (default): collect metrics only.
       - prometheus: expose ``/metrics`` endpoint.
       - otlp: configure OpenTelemetry OTLP exporter.
+
+    Also initialises the distributed trace exporter when
+    ``VERITAS_TRACE_EXPORTER`` is set (see :mod:`observability.tracing`).
     """
     mode = _exporter_mode()
     if mode == "prometheus":
@@ -89,4 +92,15 @@ def configure_metrics_exporter(app: Any, auth_dependency: Optional[Any] = None) 
     elif mode != "none":
         logger.warning("Unknown VERITAS_METRICS_EXPORTER=%s; falling back to none", mode)
         mode = "none"
+
+    # Distributed tracing (independent of metrics mode)
+    try:
+        from veritas_os.observability.tracing import configure_trace_exporter
+
+        trace_mode = configure_trace_exporter()
+        if trace_mode != "none":
+            logger.info("Distributed tracing enabled: exporter=%s", trace_mode)
+    except Exception as exc:  # pragma: no cover - best-effort
+        logger.debug("Trace exporter configuration skipped: %s", exc)
+
     return mode
