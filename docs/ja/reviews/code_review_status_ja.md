@@ -22,7 +22,7 @@ updated_at: 2026-03-13
 
 ### Navigation
 
-- 文書整理ガイド: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+- 文書整理ガイド: `docs/ja/reviews/code-review-document-map.md`
 - ランタイム確認: `docs/ja/reviews/code_review_2026_02_11_runtime_check_ja.md`
 
 ---

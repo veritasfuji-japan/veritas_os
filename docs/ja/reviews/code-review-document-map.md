@@ -18,7 +18,7 @@ updated_at: 2026-03-30
 
 - `docs/ja/reviews/`: 運用中（active）のレビュー文書。
 - `docs/ja/reviews/`: 日付付き監査・再評価レポート（アーカイブ）。
-- `docs/notes/`: 補助メモ・履歴・参照マップ。
+- `docs/archive/notes/`: 補助メモ・履歴・参照マップ（アーカイブ済み）。
 
 > 以後、レビュー着手時は `docs/ja/reviews/readme_ja.md` を起点にする。
 

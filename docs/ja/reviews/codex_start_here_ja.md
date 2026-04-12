@@ -1,6 +1,6 @@
 # CODEX START HERE（レビュー着手 5 分ガイド）
 
-目的: `docs/ja/reviews/` と `docs/notes/` の探索コストを下げ、**新規担当者が 5 分以内にレビュー開始**できる状態を作る。
+目的: `docs/ja/reviews/` の探索コストを下げ、**新規担当者が 5 分以内にレビュー開始**できる状態を作る。
 
 ---
 
@@ -10,10 +10,10 @@
    - 最新の修正進捗（Fix / Deferred / Accepted）を確認
 2. `docs/ja/reviews/code_review_2026_02_11_runtime_check_ja.md`
    - 実行確認済み・未実施項目（環境制約）を確認
-3. `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
+3. `docs/ja/reviews/code-review-document-map.md`
    - 目的別の参照先を選定（包括レビュー、原則、過去履歴）
 4. 目的に応じて追加参照
-   - 原則確認: `docs/notes/VERITAS_CODE_REVIEW_PRINCIPLES.md`
+   - 原則確認: `docs/archive/notes/VERITAS_CODE_REVIEW_PRINCIPLES.md`
    - 責務境界確認: `docs/ja/reviews/schema_review_2026_02_23_ja.md`
 
 > 上記 1〜3 を読めば、以降どの文書を読むべきかを判断できる。
@@ -24,7 +24,7 @@
 
 ```bash
 # 1. レビュー関連文書の入口確認
-rg --files docs/review docs/notes | head -n 50
+rg --files docs/ja/reviews docs/archive/notes | head -n 50
 
 # 2. 最新ステータス確認
 sed -n '1,200p' docs/ja/reviews/code_review_status_ja.md
@@ -33,7 +33,7 @@ sed -n '1,200p' docs/ja/reviews/code_review_status_ja.md
 sed -n '1,220p' docs/ja/reviews/code_review_2026_02_11_runtime_check_ja.md
 
 # 4. 文書マップ確認（参照先決定）
-sed -n '1,220p' docs/notes/CODE_REVIEW_DOCUMENT_MAP.md
+sed -n '1,220p' docs/ja/reviews/code-review-document-map.md
 ```
 
 ---
@@ -64,7 +64,7 @@ sed -n '1,220p' docs/notes/CODE_REVIEW_DOCUMENT_MAP.md
 ## Scope
 - 変更ファイル:
   - docs/ja/reviews/...
-  - docs/notes/...
+  - docs/archive/notes/...
 - 非変更（明示）:
   - Planner / Kernel / Fuji / MemoryOS の実装
 

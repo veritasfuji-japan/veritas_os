@@ -101,22 +101,23 @@ VERITAS OS is built to solve that layer.
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
 - **Japanese README**: [`README_JP.md`](README_JP.md)
-- **User Manual (JP)**: [`docs/VERITAS_FULL_USER_MANUAL_JP.md`](docs/VERITAS_FULL_USER_MANUAL_JP.md)
+- **User Manual (JP)**: [`docs/ja/guides/user-manual.md`](docs/ja/guides/user-manual.md)
 - **Contributing**: [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - **Security Policy**: [`SECURITY.md`](SECURITY.md)
-- **PostgreSQL Production Guide**: [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
-- **PostgreSQL Drill Runbook**: [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md)
-- **Security Hardening**: [`docs/security-hardening.md`](docs/security-hardening.md)
-- **Database Migrations**: [`docs/database-migrations.md`](docs/database-migrations.md)
-- **Backend Parity Coverage**: [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md)
-- **Legacy Path Cleanup**: [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
-- **Review Document Map**: `docs/notes/CODE_REVIEW_DOCUMENT_MAP.md`
-- **Documentation Hub (EN)**: `docs/en/README.md`
-- **Documentation Hub (JA)**: `docs/ja/README.md`
-- **Documentation Map**: `docs/DOCUMENTATION_MAP.md`
-- **Operations Runbook**: `docs/ja/operations/enterprise_slo_sli_runbook_ja.md`
-- **Governance Signing Runbook**: `docs/operations/governance_artifact_signing_operations.md`
-- **Governance Upgrade Press Summary**: `docs/press/governance_control_plane_upgrade_2026-04.md`
+- **Documentation Index**: [`docs/INDEX.md`](docs/INDEX.md)
+- **PostgreSQL Production Guide**: [`docs/en/operations/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md)
+- **PostgreSQL Drill Runbook**: [`docs/en/operations/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md)
+- **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
+- **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
+- **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
+- **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
+- **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
+- **Documentation Hub (EN)**: [`docs/en/README.md`](docs/en/README.md)
+- **Documentation Hub (JA)**: [`docs/ja/README.md`](docs/ja/README.md)
+- **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
+- **Operations Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
+- **Governance Signing Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)
+- **Governance Upgrade Press Summary**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
 
 ## 🚀 Quick Start (TL;DR)
 
@@ -454,7 +455,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 
 The `veritas-migrate` CLI is **idempotent** — re-running after a partial failure
 safely resumes by skipping already-imported entries. See
-[`docs/postgresql-production-guide.md` §11](docs/postgresql-production-guide.md)
+[`docs/postgresql-production-guide.md` §11](docs/en/operations/postgresql-production-guide.md)
 for the full procedure including rollback.
 
 ### Verification tools
@@ -483,7 +484,7 @@ for the full procedure including rollback.
 
 ### Production deployment
 
-See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md) for:
+See [`docs/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md) for:
 - Pool sizing, SSL/TLS, statement timeout configuration
 - Backup/restore, replication/HA guidance
 - JSONL → PostgreSQL import via `veritas-migrate` CLI (dry-run, resume, rollback, verification)
@@ -494,13 +495,13 @@ See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md)
 - Metrics reference (JSON fields, Prometheus gauges, interpretation guide)
 - Known limitations and future work (pgvector, partitioning, CDC)
 
-See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md) for:
+See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md) for:
 - Backup / restore / recovery drill procedures and scripts
 - Safe / unsafe HA boundaries for TrustLog writes
 - Incident response playbooks (corruption, tampering)
 - `make drill-backup`, `make drill-restore`, `make drill-recovery`, `make drill-recovery-ci`
 
-See also: [`docs/database-migrations.md`](docs/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/BACKEND_PARITY_COVERAGE.md) | [`docs/legacy-path-cleanup.md`](docs/legacy-path-cleanup.md)
+See also: [`docs/database-migrations.md`](docs/en/operations/database-migrations.md) | [`docs/BACKEND_PARITY_COVERAGE.md`](docs/en/validation/backend-parity-coverage.md) | [`docs/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 
 ---
 
@@ -590,7 +591,7 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 > **Signed governance artifacts** — In secure/prod posture, policy bundles must be Ed25519-signed.
 > Decision artifacts include a `governance_identity` field showing which governance policy was in
 > force (version, digest, signature verification result, signer identity).
-> See [`docs/governance_artifact_lifecycle.md`](docs/governance_artifact_lifecycle.md) for the
+> See [`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md) for the
 > full lifecycle, key management, and migration guide.
 
 ### Compliance & Reporting
@@ -692,7 +693,7 @@ pip install -e ".[full]"     # all features (recommended)
 # pip install -e ".[ml]"    # core + ML tooling
 ```
 
-> See [`docs/dependency-profiles.md`](docs/dependency-profiles.md) for all
+> See [`docs/dependency-profiles.md`](docs/en/operations/dependency-profiles.md) for all
 > install profiles and the dependency classification table.
 
 > [!WARNING]
@@ -1127,8 +1128,8 @@ Additional CI workflows:
 - Long-running production tests, load tests, external live tests
 - Advisory: failures are visible but do not block release
 
-See [`docs/PRODUCTION_VALIDATION.md`](docs/PRODUCTION_VALIDATION.md) for the complete
-tier model and [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md) for the release process.
+See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for the complete
+tier model and [`docs/RELEASE_PROCESS.md`](docs/en/operations/release-process.md) for the release process.
 
 ### How to tell if a release is governance-ready
 
@@ -1155,7 +1156,7 @@ make validate
 
 Production validation is also available as a **separate CI workflow**
 (`production-validation.yml`) triggered manually or on a weekly schedule.
-See [`docs/PRODUCTION_VALIDATION.md`](docs/PRODUCTION_VALIDATION.md) for
+See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for
 the complete strategy, verification matrix, and remaining production risks.
 
 ---
@@ -1338,7 +1339,7 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - **Fresh-clone cleanup command**: use
   `python scripts/reset_repo_runtime.py --dry-run` and
   `python scripts/reset_repo_runtime.py --apply` to remove generated runtime data.
-  See also `docs/RUNTIME_DATA_POLICY.md`.
+  See also `docs/ja/operations/runtime-data-policy.md`.
 
 ### Fail-closed safety pipeline
 
@@ -1364,11 +1365,11 @@ All environment variables in one place. Set these in `.env` (git-ignored) or you
 - ✅ Security hardening: input validation, secret/log hygiene, runtime posture system
 - ✅ Policy-as-Code: YAML/JSON → IR → compiled rules with Ed25519-signed bundles and auto-generated tests
 - ✅ Multi-provider LLM: OpenAI (production), Anthropic/Google (planned), Ollama/OpenRouter (experimental)
-- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/postgresql-production-guide.md).
-- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
+- ✅ PostgreSQL storage backend: pluggable backend for MemoryOS and TrustLog with Alembic migrations, advisory-lock chain serialization, and full parity test suite (195+ tests). Includes JSONL → PostgreSQL import procedure, smoke/release validation integration, and legacy path cleanup. See [`docs/postgresql-production-guide.md`](docs/en/operations/postgresql-production-guide.md).
+- ✅ PostgreSQL production hardening: contention tests (25 tests), pool/activity metrics (28 tests), backup/restore/recovery drill scripts and tests (31 tests). See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
 - ✅ Continuation Runtime (Phase-1): chain-level continuation observation layer with snapshot/receipt/enforcement event architecture. See `docs/architecture/continuation_runtime_adr.md`.
-- ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/governance_artifact_lifecycle.md`](docs/governance_artifact_lifecycle.md).
-- ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/postgresql-drill-runbook.md`](docs/postgresql-drill-runbook.md).
+- ✅ Governance artifact signing: Ed25519-signed policy bundles, runtime signature verification, governance identity in decision outputs. See [`docs/governance_artifact_lifecycle.md`](docs/en/governance/governance-artifact-lifecycle.md).
+- ✅ S3 Object Lock TrustLog mirror: WORM-compliant mirror backend with retention, legal hold, and remote verification. See [`docs/postgresql-drill-runbook.md`](docs/en/operations/postgresql-drill-runbook.md).
 
 **Next milestones**:
 - Promote Anthropic / Google LLM providers to production tier

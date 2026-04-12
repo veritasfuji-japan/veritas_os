@@ -128,7 +128,7 @@ This document provides a comprehensive security checklist for hardening Veritas 
 | Enable `pg_stat_statements` | Query performance analytics. | MEDIUM |
 | Disable unused PostgreSQL extensions | Reduce attack surface. | LOW |
 
-> See [`docs/postgresql-production-guide.md`](postgresql-production-guide.md) for the full PostgreSQL production guide.
+> See [`postgresql-production-guide.md`](postgresql-production-guide.md) for the full PostgreSQL production guide.
 
 ---
 
