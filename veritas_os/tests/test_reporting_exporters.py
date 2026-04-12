@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 from veritas_os.reporting import exporters
@@ -83,3 +84,28 @@ def test_persist_report_pdf_creates_parent_and_writes_pdf(tmp_path: Path) -> Non
 
     assert path.exists()
     assert path.read_bytes().startswith(b"%PDF-1.4")
+
+
+def test_pipeline_trace_session_noop_stage_records_duration(monkeypatch) -> None:
+    """Trace session records stage duration even when OTel tracing is disabled."""
+    monkeypatch.delenv("VERITAS_ENABLE_OTEL_TRACE", raising=False)
+    session = exporters.PipelineTraceSession.start(request_id="req-1", user_id="u-1")
+
+    with session.stage("input_norm"):
+        pass
+
+    assert "input_norm" in session._stage_durations_ms
+    assert session._stage_durations_ms["input_norm"] >= 0
+
+
+def test_pipeline_trace_session_falls_back_when_otel_missing(monkeypatch) -> None:
+    """Missing OpenTelemetry package must not break pipeline tracing setup."""
+    monkeypatch.setenv("VERITAS_ENABLE_OTEL_TRACE", "1")
+    monkeypatch.setitem(sys.modules, "opentelemetry", None)
+
+    session = exporters.PipelineTraceSession.start(request_id="req-2", user_id="u-2")
+    with session.stage("kernel_execute"):
+        pass
+    session.finalize(decision_status="allow", stage_failures=[])
+
+    assert session._enabled is False

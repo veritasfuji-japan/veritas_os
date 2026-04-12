@@ -373,15 +373,31 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install -r veritas_os/requirements.txt
-          python -m pip install "psycopg[binary]" psycopg-pool
-          python -m pip install httpx anyio pytest pytest-cov pytest-asyncio
+          pip_retry() {
+            local cmd="$1"
+            local attempts="${2:-4}"
+            local delay="${3:-8}"
+            local try=1
+            until eval "$cmd"; do
+              if [ "$try" -ge "$attempts" ]; then
+                echo "pip command failed after ${attempts} attempts: ${cmd}"
+                return 1
+              fi
+              echo "pip command failed (attempt ${try}/${attempts}), retrying in ${delay}s..."
+              sleep "$delay"
+              try=$((try + 1))
+            done
+          }
+
+          pip_retry "python -m pip install --upgrade pip --retries 5 --timeout 60"
+          pip_retry "python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt"
+          pip_retry "python -m pip install --retries 5 --timeout 60 \"psycopg[binary]\" psycopg-pool"
+          pip_retry "python -m pip install --retries 5 --timeout 60 httpx anyio pytest pytest-cov pytest-asyncio"
 
       - name: Run Alembic migrations
         run: |
           set -euxo pipefail
-          pip install alembic
+          python -m pip install --retries 5 --timeout 60 alembic
           alembic upgrade head
         env:
           VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
