@@ -387,6 +387,10 @@ jobs:
           VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
 
       - name: Run backend parity tests (mock-pool)
+        # Excludes the real-PG contention tests (postgresql and contention)
+        # so they get their own step with dedicated JUnit output and
+        # clearer failure attribution.  See "Run real PostgreSQL contention
+        # tests" step below for the high-fidelity advisory-lock tests.
         run: |
           set -euxo pipefail
           mkdir -p test-reports

@@ -968,11 +968,10 @@ async def _open_real_pool(max_size: int = 5):
     Skips if ``psycopg_pool`` is not installed.
     """
     try:
-        from psycopg_pool import AsyncConnectionPool  # noqa: F401
+        from psycopg_pool import AsyncConnectionPool
     except ImportError:
         pytest.skip("psycopg_pool not installed")
-
-    from psycopg_pool import AsyncConnectionPool
+        return  # unreachable, but satisfies type-checkers
 
     pool = AsyncConnectionPool(
         conninfo=_REAL_PG_DSN,
@@ -996,12 +995,11 @@ async def _open_real_pool_with_stmt_timeout(
     str(stmt_timeout_ms))``.
     """
     try:
-        from psycopg_pool import AsyncConnectionPool  # noqa: F401
+        from psycopg_pool import AsyncConnectionPool
+        from veritas_os.storage.db import build_conninfo
     except ImportError:
         pytest.skip("psycopg_pool not installed")
-
-    from psycopg_pool import AsyncConnectionPool
-    from veritas_os.storage.db import build_conninfo
+        return  # unreachable
 
     pool = AsyncConnectionPool(
         conninfo=build_conninfo(),
@@ -1023,7 +1021,13 @@ async def _truncate_trustlog_tables(pool) -> None:
 
 
 def _make_real_pg_store(pool):
-    """Return a ``PostgresTrustLogStore`` wired to *pool*."""
+    """Return a ``PostgresTrustLogStore`` wired to *pool*.
+
+    ``_get_pool`` is injected via attribute assignment — the same pattern
+    used for mock-pool tests in Part I above — because
+    ``PostgresTrustLogStore`` has no built-in dependency-injection API.
+    The ``type: ignore[assignment]`` suppression is intentional.
+    """
     from veritas_os.storage.postgresql import PostgresTrustLogStore
 
     store = PostgresTrustLogStore()
@@ -1290,7 +1294,7 @@ class TestRealPgLockTimeout:
                     await store_append_with_timeout(
                         append_store,
                         {"request_id": "lock-timeout-test"},
-                        timeout_s=3.0,
+                        timeout_seconds=3.0,
                     )
 
                 assert "fail-closed" in str(exc_info.value).lower(), (
@@ -1358,7 +1362,7 @@ class TestRealPgLockTimeout:
                     await store_append_with_timeout(
                         append_store,
                         {"request_id": "should-not-persist"},
-                        timeout_s=3.0,
+                        timeout_seconds=3.0,
                     )
 
                 release_event.set()
@@ -1388,16 +1392,16 @@ class TestRealPgLockTimeout:
 async def store_append_with_timeout(
     store,
     entry: dict,
-    timeout_s: float = 3.0,
+    timeout_seconds: float = 3.0,
 ) -> str:
     """Call ``store.append`` with an overall asyncio timeout.
 
     This prevents a test from hanging indefinitely if the DB lock wait
     itself does not trigger an error (e.g., statement_timeout not wired
     to the pool).  Raises ``asyncio.TimeoutError`` if the append takes
-    longer than *timeout_s*; propagates any other exception unchanged.
+    longer than *timeout_seconds*; propagates any other exception unchanged.
     """
-    return await asyncio.wait_for(store.append(entry), timeout=timeout_s)
+    return await asyncio.wait_for(store.append(entry), timeout=timeout_seconds)
 
 
 # ---------------------------------------------------------------------------
