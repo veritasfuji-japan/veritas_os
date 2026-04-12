@@ -31,11 +31,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import importlib
 import logging
 import os
 import secrets
 import struct
-from typing import Optional, Tuple
+from typing import Optional, Protocol, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,154 @@ def _derive_hmac_ctr_keys(master: bytes) -> tuple[bytes, bytes]:
     return enc_key, hmac_key
 _STREAM_BLOCK = 32  # SHA-256 output size
 _LEGACY_DECRYPT_ENV = "VERITAS_ENCRYPTION_LEGACY_DECRYPT"
+_ENCRYPTION_PROVIDER_ENV = "VERITAS_ENCRYPTION_KEY_PROVIDER"
+_ALLOW_ENV_FALLBACK_ENV = "VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK"
+
+
+class EncryptionKeyProvider(Protocol):
+    """Provider interface for retrieving the 32-byte at-rest encryption key."""
+
+    provider_name: str
+
+    def load_key(self) -> Optional[bytes]:
+        """Return key bytes, or ``None`` when the key is intentionally absent."""
+
+
+def _is_truthy(raw: str) -> bool:
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+class EnvEncryptionKeyProvider:
+    """Load encryption key from ``VERITAS_ENCRYPTION_KEY`` for legacy compatibility."""
+
+    provider_name = "env"
+
+    def load_key(self) -> Optional[bytes]:
+        raw = os.environ.get("VERITAS_ENCRYPTION_KEY")
+        if not raw:
+            return None
+        try:
+            key = base64.b64decode(raw.encode("ascii"), altchars=b"-_", validate=True)
+        except (ValueError, TypeError, UnicodeEncodeError) as exc:
+            raise EncryptionKeyMissing(
+                "VERITAS_ENCRYPTION_KEY is set but contains invalid base64 encoding"
+            ) from exc
+        if len(key) != 32:
+            raise EncryptionKeyMissing(
+                "VERITAS_ENCRYPTION_KEY must decode to exactly 32 bytes"
+            )
+        return key
+
+
+class AwsKmsEncryptionKeyProvider:
+    """Retrieve a data key by decrypting KMS ciphertext (AWS KMS envelope path)."""
+
+    provider_name = "aws_kms"
+
+    def __init__(self, kms_client: Optional[object] = None) -> None:
+        self._kms_client = kms_client
+
+    @property
+    def kms_client(self) -> object:
+        if self._kms_client is None:
+            boto3 = importlib.import_module("boto3")
+            self._kms_client = boto3.client("kms")
+        return self._kms_client
+
+    def load_key(self) -> Optional[bytes]:
+        blob_b64 = (os.getenv("VERITAS_ENCRYPTION_AWS_KMS_CIPHERTEXT_B64") or "").strip()
+        if not blob_b64:
+            return None
+        try:
+            blob = _decode_urlsafe_b64(blob_b64)
+        except ValueError as exc:
+            raise EncryptionKeyMissing(
+                "VERITAS_ENCRYPTION_AWS_KMS_CIPHERTEXT_B64 must be valid base64"
+            ) from exc
+        decrypt_kwargs = {"CiphertextBlob": blob}
+        kms_key_id = (os.getenv("VERITAS_ENCRYPTION_AWS_KMS_KEY_ID") or "").strip()
+        if kms_key_id:
+            decrypt_kwargs["KeyId"] = kms_key_id
+        response = self.kms_client.decrypt(**decrypt_kwargs)
+        key = response.get("Plaintext", b"")
+        if not isinstance(key, (bytes, bytearray)) or len(key) != 32:
+            raise EncryptionKeyMissing("AWS KMS decrypt did not return a 32-byte key")
+        return bytes(key)
+
+
+class GcpKmsEncryptionKeyProvider:
+    """Retrieve a data key by decrypting KMS ciphertext (GCP Cloud KMS path)."""
+
+    provider_name = "gcp_kms"
+
+    def __init__(self, kms_client: Optional[object] = None) -> None:
+        self._kms_client = kms_client
+
+    @property
+    def kms_client(self) -> object:
+        if self._kms_client is None:
+            kms_mod = importlib.import_module("google.cloud.kms_v1")
+            self._kms_client = kms_mod.KeyManagementServiceClient()
+        return self._kms_client
+
+    def load_key(self) -> Optional[bytes]:
+        key_name = (os.getenv("VERITAS_ENCRYPTION_GCP_KMS_KEY_NAME") or "").strip()
+        blob_b64 = (os.getenv("VERITAS_ENCRYPTION_GCP_KMS_CIPHERTEXT_B64") or "").strip()
+        if not key_name or not blob_b64:
+            return None
+        try:
+            blob = _decode_urlsafe_b64(blob_b64)
+        except ValueError as exc:
+            raise EncryptionKeyMissing(
+                "VERITAS_ENCRYPTION_GCP_KMS_CIPHERTEXT_B64 must be valid base64"
+            ) from exc
+        response = self.kms_client.decrypt(request={"name": key_name, "ciphertext": blob})
+        key = getattr(response, "plaintext", b"")
+        if not isinstance(key, (bytes, bytearray)) or len(key) != 32:
+            raise EncryptionKeyMissing("GCP KMS decrypt did not return a 32-byte key")
+        return bytes(key)
+
+
+class VaultTransitEncryptionKeyProvider:
+    """Retrieve encryption key material from Vault KV path during migration."""
+
+    provider_name = "vault"
+
+    def __init__(self, vault_client: Optional[object] = None) -> None:
+        self._vault_client = vault_client
+
+    @property
+    def vault_client(self) -> object:
+        if self._vault_client is None:
+            hvac = importlib.import_module("hvac")
+            url = os.getenv("VERITAS_ENCRYPTION_VAULT_ADDR")
+            token = os.getenv("VERITAS_ENCRYPTION_VAULT_TOKEN")
+            self._vault_client = hvac.Client(url=url, token=token)
+        return self._vault_client
+
+    def load_key(self) -> Optional[bytes]:
+        mount_point = (os.getenv("VERITAS_ENCRYPTION_VAULT_KV_MOUNT") or "secret").strip()
+        secret_path = (os.getenv("VERITAS_ENCRYPTION_VAULT_SECRET_PATH") or "").strip()
+        secret_field = (os.getenv("VERITAS_ENCRYPTION_VAULT_SECRET_FIELD") or "key_b64").strip()
+        if not secret_path:
+            return None
+        response = self.vault_client.secrets.kv.v2.read_secret_version(
+            path=secret_path,
+            mount_point=mount_point,
+        )
+        data = response.get("data", {}).get("data", {})
+        raw_value = data.get(secret_field, "")
+        if not isinstance(raw_value, str) or not raw_value.strip():
+            raise EncryptionKeyMissing(
+                "Vault secret missing encryption key value in configured field"
+            )
+        try:
+            key = base64.b64decode(raw_value.encode("ascii"), altchars=b"-_", validate=True)
+        except (ValueError, TypeError, UnicodeEncodeError) as exc:
+            raise EncryptionKeyMissing("Vault encryption key must be valid base64") from exc
+        if len(key) != 32:
+            raise EncryptionKeyMissing("Vault encryption key must decode to exactly 32 bytes")
+        return key
 
 
 class EncryptionKeyMissing(RuntimeError):
@@ -90,28 +239,47 @@ def generate_key() -> str:
     return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
 
 
-def _get_key_bytes() -> Optional[bytes]:
-    """Return the 32-byte master key from the environment, or None.
+def _build_key_provider(provider: str) -> EncryptionKeyProvider:
+    normalized = provider.strip().lower()
+    if normalized in {"", "env", "legacy_env"}:
+        return EnvEncryptionKeyProvider()
+    if normalized in {"aws_kms", "aws-kms"}:
+        return AwsKmsEncryptionKeyProvider()
+    if normalized in {"gcp_kms", "gcp-kms"}:
+        return GcpKmsEncryptionKeyProvider()
+    if normalized in {"vault", "vault_kv"}:
+        return VaultTransitEncryptionKeyProvider()
+    raise EncryptionKeyMissing(
+        f"Unsupported encryption key provider: {provider!r}. "
+        "Expected one of env/aws_kms/gcp_kms/vault."
+    )
 
-    Returns ``None`` when the environment variable is not set.
-    Raises :class:`EncryptionKeyMissing` when the variable **is** set but
-    cannot be decoded to a valid 32-byte key, so that a misconfigured key
-    is never silently treated as "no key".
+
+def _get_key_bytes() -> Optional[bytes]:
+    """Return the 32-byte master key from configured key provider.
+
+    Migration path:
+        ``VERITAS_ENCRYPTION_KEY_PROVIDER`` defaults to ``env`` for backward
+        compatibility. To migrate from direct env-key management to KMS/Vault,
+        set the provider to ``aws_kms``, ``gcp_kms``, or ``vault``.
+        During migration you can temporarily allow fallback to env key with:
+        ``VERITAS_ENCRYPTION_ALLOW_ENV_FALLBACK=1``.
     """
-    raw = os.environ.get("VERITAS_ENCRYPTION_KEY")
-    if not raw:
-        return None
-    try:
-        key = base64.b64decode(raw.encode("ascii"), altchars=b"-_", validate=True)
-    except (ValueError, TypeError, UnicodeEncodeError) as exc:
-        raise EncryptionKeyMissing(
-            "VERITAS_ENCRYPTION_KEY is set but contains invalid base64 encoding"
-        ) from exc
-    if len(key) != 32:
-        raise EncryptionKeyMissing(
-            "VERITAS_ENCRYPTION_KEY must decode to exactly 32 bytes"
+    provider_name = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env")
+    provider = _build_key_provider(provider_name)
+    key = provider.load_key()
+    if key is not None:
+        return key
+
+    allow_fallback = _is_truthy(os.getenv(_ALLOW_ENV_FALLBACK_ENV, ""))
+    if provider.provider_name != "env" and allow_fallback:
+        logger.warning(
+            "%s enabled: falling back to legacy VERITAS_ENCRYPTION_KEY; "
+            "disable fallback after KMS/Vault cutover.",
+            _ALLOW_ENV_FALLBACK_ENV,
         )
-    return key
+        return EnvEncryptionKeyProvider().load_key()
+    return None
 
 
 def is_encryption_enabled() -> bool:
@@ -338,9 +506,11 @@ def get_encryption_status() -> dict:
     """Return current encryption configuration status."""
     enabled = is_encryption_enabled()
     backend = "AES-256-GCM" if _USE_REAL_AES else "HMAC-SHA256 CTR-mode"
+    provider = os.getenv(_ENCRYPTION_PROVIDER_ENV, "env").strip().lower() or "env"
     return {
         "encryption_enabled": enabled,
         "algorithm": backend if enabled else "none",
+        "key_provider": provider,
         "key_configured": enabled,
         "secure_by_default": True,
         "eu_ai_act_article": "Art. 12",
