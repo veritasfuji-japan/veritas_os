@@ -346,18 +346,111 @@ def _trustlog_anchor_backend() -> str:
 
 
 def _allow_insecure_signer_override() -> bool:
-    """Return True when the unsupported production break-glass is enabled."""
+    """Return True when the unsupported break-glass is enabled.
+
+    .. note::
+
+       This override is accepted **only** in ``secure`` posture.
+       In ``prod`` posture the override is unconditionally ignored —
+       the caller must check the posture before acting on the result.
+    """
     raw = (os.getenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD") or "").strip()
     return raw == "1"
+
+
+# ── Backend-specific configuration validation ───────────────────────
+#
+# Separated from the capability layer so that:
+# 1. Capability checks remain vendor-agnostic.
+# 2. Backend-specific schema/config checks live in one place.
+# 3. New backends only need to add an entry here for their required vars.
+
+
+def _validate_backend_config(
+    *,
+    signer_backend: str,
+    mirror_backend: str,
+    anchor_backend: str,
+    defaults: PostureDefaults,
+) -> List[str]:
+    """Validate backend-specific configuration requirements.
+
+    This layer checks that the **concrete backend** has all required
+    configuration (e.g. KMS key IDs, S3 buckets) — it does **not**
+    evaluate whether the backend satisfies the posture's capability
+    requirements (that is done by the capability layer in
+    ``validate_posture_startup``).
+
+    Returns:
+        A list of human-readable error strings for missing config.
+    """
+    errors: List[str] = []
+
+    # ── Signer backend config ────────────────────────────────────────
+    if signer_backend == "aws_kms":
+        kms_key_id = (os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID") or "").strip()
+        if not kms_key_id:
+            errors.append(
+                "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms requires "
+                "VERITAS_TRUSTLOG_KMS_KEY_ID."
+            )
+
+    # ── Mirror backend config ────────────────────────────────────────
+    if mirror_backend == "local":
+        if defaults.trustlog_worm_hard_fail:
+            wp = (os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH") or "").strip()
+            if not wp:
+                errors.append(
+                    "VERITAS_TRUSTLOG_WORM_MIRROR_PATH must be set when "
+                    "VERITAS_TRUSTLOG_MIRROR_BACKEND=local and WORM hard-fail "
+                    f"is required (posture={defaults.posture.value})."
+                )
+    elif mirror_backend == "s3_object_lock":
+        s3_bucket = (os.getenv("VERITAS_TRUSTLOG_S3_BUCKET") or "").strip()
+        s3_prefix = (os.getenv("VERITAS_TRUSTLOG_S3_PREFIX") or "").strip()
+        if not s3_bucket:
+            errors.append(
+                "VERITAS_TRUSTLOG_S3_BUCKET must be set when "
+                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
+            )
+        if not s3_prefix:
+            errors.append(
+                "VERITAS_TRUSTLOG_S3_PREFIX must be set when "
+                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
+            )
+
+    # ── Anchor backend config ────────────────────────────────────────
+    if defaults.trustlog_transparency_required:
+        if anchor_backend == "local":
+            tp = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH") or "").strip()
+            if not tp:
+                errors.append(
+                    "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH must be set when "
+                    "VERITAS_TRUSTLOG_ANCHOR_BACKEND=local and transparency "
+                    f"anchoring is required (posture={defaults.posture.value})."
+                )
+
+    return errors
 
 
 def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     """Validate required integrations for the active posture.
 
-    Validation is **capability-aware**: rather than checking vendor names
-    directly, the validator looks up the declared capabilities of each
-    configured backend and verifies they satisfy the posture's security
-    requirements.
+    Validation uses a **two-layer** model:
+
+    **Layer 1 — Capability checks** (vendor-agnostic):
+        Each configured backend is looked up in the capability registry
+        and checked against the posture's security requirements
+        (``managed_signing``, ``immutable_retention``,
+        ``transparency_anchoring``, ``fail_closed``).  The validator
+        never branches on a vendor/backend *name* to decide whether
+        the posture requirement is satisfied.
+
+    **Layer 2 — Backend-specific config validation** (vendor-aware):
+        Once a backend has been identified, its concrete configuration
+        is validated (e.g. ``aws_kms`` requires ``VERITAS_TRUSTLOG_KMS_KEY_ID``,
+        ``s3_object_lock`` requires bucket + prefix).  This layer is
+        isolated in ``_validate_backend_config``.
 
     Currently the only concrete backends that satisfy secure/prod are:
     - Signer:  ``aws_kms``  (MANAGED_SIGNING + FAIL_CLOSED)
@@ -387,7 +480,9 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 f"(posture={defaults.posture.value})."
             )
 
-    # ── Mirror backend capability check ──────────────────────────────
+    # ── Layer 1: capability checks (vendor-agnostic) ─────────────────
+
+    # Mirror
     mirror_backend = _trustlog_mirror_backend()
     mirror_caps = mirror_capabilities(mirror_backend)
 
@@ -407,31 +502,7 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
             f"{', '.join(repr(k) for k in sorted(_MIRROR_CAPABILITIES))}."
         )
 
-    # ── Mirror backend-specific configuration ────────────────────────
-    if mirror_backend == "local":
-        if defaults.trustlog_worm_hard_fail:
-            wp = (os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH") or "").strip()
-            if not wp:
-                errors.append(
-                    "VERITAS_TRUSTLOG_WORM_MIRROR_PATH must be set when "
-                    "VERITAS_TRUSTLOG_MIRROR_BACKEND=local and WORM hard-fail "
-                    f"is required (posture={defaults.posture.value})."
-                )
-    elif mirror_backend == "s3_object_lock":
-        s3_bucket = (os.getenv("VERITAS_TRUSTLOG_S3_BUCKET") or "").strip()
-        s3_prefix = (os.getenv("VERITAS_TRUSTLOG_S3_PREFIX") or "").strip()
-        if not s3_bucket:
-            errors.append(
-                "VERITAS_TRUSTLOG_S3_BUCKET must be set when "
-                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
-            )
-        if not s3_prefix:
-            errors.append(
-                "VERITAS_TRUSTLOG_S3_PREFIX must be set when "
-                "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
-            )
-
-    # ── Anchor backend capability check ──────────────────────────────
+    # Anchor
     anchor_backend = _trustlog_anchor_backend()
     anchor_caps = anchor_capabilities(anchor_backend)
 
@@ -449,23 +520,21 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 "the 'transparency_anchoring' capability required when "
                 "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1."
             )
-        tp = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH") or "").strip()
-        if anchor_backend == "local" and not tp:
-            errors.append(
-                "VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH must be set when "
-                "VERITAS_TRUSTLOG_ANCHOR_BACKEND=local and transparency "
-                f"anchoring is required (posture={defaults.posture.value})."
-            )
 
-    # ── Signer backend capability check ──────────────────────────────
+    # Signer
     signer_backend = _trustlog_signer_backend()
     signer_caps = signer_capabilities(signer_backend)
     insecure_override = _allow_insecure_signer_override()
 
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
         if BackendCapability.MANAGED_SIGNING not in signer_caps:
-            # Break-glass: allow file signer with explicit override
-            if signer_backend == "file" and insecure_override:
+            # Break-glass: allowed in secure posture only.
+            # In prod posture the override is unconditionally refused.
+            if (
+                defaults.posture == PostureLevel.SECURE
+                and signer_backend == "file"
+                and insecure_override
+            ):
                 _logger.warning(
                     "[SECURITY][UNSUPPORTED] "
                     "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 is active "
@@ -476,24 +545,37 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                     defaults.posture.value,
                 )
             else:
-                errors.append(
+                # Build the refusal message — capability-first.
+                msg = (
                     f"TrustLog signer backend {signer_backend!r} does not provide "
                     "the 'managed_signing' capability required in "
                     f"{defaults.posture.value} posture. "
                     "Configure a signer with managed key material "
                     "(e.g. VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms and set "
-                    "VERITAS_TRUSTLOG_KMS_KEY_ID to an AWS KMS Ed25519 key). "
-                    "Emergency-only break-glass: "
-                    "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 "
-                    "(unsupported; startup refusal bypass)."
+                    "VERITAS_TRUSTLOG_KMS_KEY_ID)."
                 )
-        elif signer_backend == "aws_kms":
-            kms_key_id = (os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID") or "").strip()
-            if not kms_key_id:
-                errors.append(
-                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms requires "
-                    "VERITAS_TRUSTLOG_KMS_KEY_ID in secure/prod posture."
-                )
+                if defaults.posture == PostureLevel.PROD:
+                    msg += (
+                        " In prod posture, insecure signer overrides are "
+                        "unconditionally refused."
+                    )
+                else:
+                    msg += (
+                        " Emergency-only break-glass (secure posture only): "
+                        "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 "
+                        "(unsupported; startup refusal bypass)."
+                    )
+                errors.append(msg)
+
+    # ── Layer 2: backend-specific config validation (vendor-aware) ───
+    errors.extend(
+        _validate_backend_config(
+            signer_backend=signer_backend,
+            mirror_backend=mirror_backend,
+            anchor_backend=anchor_backend,
+            defaults=defaults,
+        )
+    )
 
     return errors
 
