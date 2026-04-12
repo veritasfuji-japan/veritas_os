@@ -960,11 +960,25 @@ _ADVISORY_LOCK_KEY = 0x5645524954415301
 # ---------------------------------------------------------------------------
 
 
+def _normalize_test_dsn(dsn: str) -> str:
+    """Strip SQLAlchemy dialect suffixes (``+psycopg``, ``+asyncpg``, etc.).
+
+    psycopg3 only accepts standard ``postgresql://`` or ``postgres://``
+    URIs.  CI environments commonly use the SQLAlchemy-style
+    ``postgresql+psycopg://`` format, which must be normalised.
+    """
+    if dsn.startswith(("postgresql+", "postgres+")):
+        scheme_end = dsn.index("://")
+        base_scheme = dsn.split("+")[0]
+        dsn = base_scheme + dsn[scheme_end:]
+    return dsn
+
+
 async def _open_real_pool(max_size: int = 5):
     """Open a fresh ``AsyncConnectionPool`` for integration tests.
 
-    Uses the raw ``VERITAS_DATABASE_URL`` so that psycopg3 handles
-    the ``+psycopg`` dialect prefix (if present) transparently.
+    Uses ``VERITAS_DATABASE_URL`` with any SQLAlchemy dialect prefix
+    (``+psycopg``) stripped so that psycopg3/libpq can parse it.
     Skips if ``psycopg_pool`` is not installed.
     """
     try:
@@ -974,7 +988,7 @@ async def _open_real_pool(max_size: int = 5):
         return  # unreachable, but satisfies type-checkers
 
     pool = AsyncConnectionPool(
-        conninfo=_REAL_PG_DSN,
+        conninfo=_normalize_test_dsn(_REAL_PG_DSN),
         min_size=1,
         max_size=max_size,
         open=False,
