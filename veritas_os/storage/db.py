@@ -53,13 +53,16 @@ def _normalize_dsn(dsn: str) -> str:
     ``postgresql+asyncpg://`` must be normalised before they can be passed
     to ``AsyncConnectionPool``.
 
+    If the DSN starts with a dialect prefix but does not contain ``://``,
+    it is returned unchanged (assumed to be a key=value libpq string).
+
     Examples::
 
         postgresql+psycopg://u:p@h/d  →  postgresql://u:p@h/d
         postgres+psycopg://u:p@h/d    →  postgres://u:p@h/d
         postgresql://u:p@h/d          →  postgresql://u:p@h/d  (no change)
     """
-    if dsn.startswith(("postgresql+", "postgres+")):
+    if dsn.startswith(("postgresql+", "postgres+")) and "://" in dsn:
         scheme_end = dsn.index("://")
         base_scheme = dsn.split("+")[0]
         dsn = base_scheme + dsn[scheme_end:]
