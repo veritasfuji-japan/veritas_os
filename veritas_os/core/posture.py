@@ -206,6 +206,105 @@ def derive_defaults(posture: PostureLevel) -> PostureDefaults:
     )
 
 
+# ── Backend capability model ────────────────────────────────────────────
+#
+# Capabilities describe *what security properties* a backend provides,
+# independent of vendor or implementation.  The startup validator checks
+# capabilities rather than backend names so that future backends (Azure
+# Key Vault, GCP Cloud KMS, on-prem HSM, …) can satisfy secure/prod
+# requirements by declaring the same capability set — without touching
+# the core validation logic.
+#
+# Currently the only concrete backends that satisfy secure/prod are the
+# existing AWS implementations (KMS signer + S3 Object Lock mirror).
+# See docs/PRODUCTION_VALIDATION.md for the full capability contract.
+
+
+class BackendCapability(str, enum.Enum):
+    """Security capabilities a TrustLog backend may declare.
+
+    These are the *minimum* properties required by secure/prod posture.
+    A backend must declare the relevant capabilities to be accepted.
+    """
+
+    MANAGED_SIGNING = "managed_signing"
+    """Signing key material is held in a managed HSM/KMS service.
+
+    The private key never leaves the service boundary; signing operations
+    are performed remotely.  Required for secure/prod signer backends.
+    """
+
+    IMMUTABLE_RETENTION = "immutable_retention"
+    """Mirror storage enforces tamper-proof, append-only retention.
+
+    Objects cannot be deleted or overwritten during the retention period.
+    Required for secure/prod mirror backends.
+    """
+
+    TRANSPARENCY_ANCHORING = "transparency_anchoring"
+    """Backend can produce a verifiable proof-of-existence anchor.
+
+    Required when ``trustlog_transparency_required`` is active.
+    """
+
+    FAIL_CLOSED = "fail_closed"
+    """Backend fails closed — errors result in hard refusal, never silent pass.
+
+    Required for all backends in secure/prod posture.
+    """
+
+
+# ── Backend capability registry ─────────────────────────────────────────
+#
+# Maps normalized backend names → frozensets of capabilities they satisfy.
+# When adding a new backend, register it here with its proven capabilities.
+
+_SIGNER_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
+    "aws_kms": frozenset({
+        BackendCapability.MANAGED_SIGNING,
+        BackendCapability.FAIL_CLOSED,
+    }),
+    # file signer: no managed signing, local key material only
+    "file": frozenset(),
+}
+
+_MIRROR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
+    "s3_object_lock": frozenset({
+        BackendCapability.IMMUTABLE_RETENTION,
+        BackendCapability.FAIL_CLOSED,
+    }),
+    # local mirror: no immutable retention guarantee
+    "local": frozenset(),
+}
+
+_ANCHOR_CAPABILITIES: Dict[str, frozenset[BackendCapability]] = {
+    "local": frozenset({
+        BackendCapability.TRANSPARENCY_ANCHORING,
+        BackendCapability.FAIL_CLOSED,
+    }),
+    "noop": frozenset(),
+    "tsa": frozenset({
+        BackendCapability.TRANSPARENCY_ANCHORING,
+        BackendCapability.FAIL_CLOSED,
+    }),
+}
+
+
+def signer_capabilities(backend_name: str) -> frozenset[BackendCapability]:
+    """Return declared capabilities for a signer backend."""
+    return _SIGNER_CAPABILITIES.get(backend_name, frozenset())
+
+
+def mirror_capabilities(backend_name: str) -> frozenset[BackendCapability]:
+    """Return declared capabilities for a mirror backend."""
+    return _MIRROR_CAPABILITIES.get(backend_name, frozenset())
+
+
+def anchor_capabilities(backend_name: str) -> frozenset[BackendCapability]:
+    """Return declared capabilities for an anchor backend."""
+    return _ANCHOR_CAPABILITIES.get(backend_name, frozenset())
+
+
 # ── Startup validation ──────────────────────────────────────────────────
 
 class PostureStartupError(RuntimeError):
@@ -255,12 +354,23 @@ def _allow_insecure_signer_override() -> bool:
 def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
     """Validate required integrations for the active posture.
 
+    Validation is **capability-aware**: rather than checking vendor names
+    directly, the validator looks up the declared capabilities of each
+    configured backend and verifies they satisfy the posture's security
+    requirements.
+
+    Currently the only concrete backends that satisfy secure/prod are:
+    - Signer:  ``aws_kms``  (MANAGED_SIGNING + FAIL_CLOSED)
+    - Mirror:  ``s3_object_lock``  (IMMUTABLE_RETENTION + FAIL_CLOSED)
+    - Anchor:  ``local`` / ``tsa``  (TRANSPARENCY_ANCHORING + FAIL_CLOSED)
+
     Returns a list of human-readable error strings.  For *secure*/*prod*
     posture, missing integrations cause startup to fail.  For *dev*/*staging*,
     the list is returned for informational warnings only.
     """
     errors: List[str] = []
 
+    # ── External secret manager ──────────────────────────────────────
     if defaults.external_secret_manager_required:
         provider = (os.getenv("VERITAS_SECRET_PROVIDER") or "").strip()
         ref = (os.getenv("VERITAS_API_SECRET_REF") or "").strip()
@@ -277,19 +387,26 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 f"(posture={defaults.posture.value})."
             )
 
+    # ── Mirror backend capability check ──────────────────────────────
     mirror_backend = _trustlog_mirror_backend()
+    mirror_caps = mirror_capabilities(mirror_backend)
+
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
-        if mirror_backend != "s3_object_lock":
+        if BackendCapability.IMMUTABLE_RETENTION not in mirror_caps:
             errors.append(
-                "VERITAS_TRUSTLOG_MIRROR_BACKEND must be 's3_object_lock' in "
-                f"{defaults.posture.value} posture (got {mirror_backend!r})."
+                f"TrustLog mirror backend {mirror_backend!r} does not provide "
+                "the 'immutable_retention' capability required in "
+                f"{defaults.posture.value} posture. "
+                "Configure a mirror with immutable retention support "
+                "(e.g. VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock)."
             )
-    elif mirror_backend not in {"local", "s3_object_lock"}:
+    elif mirror_backend not in _MIRROR_CAPABILITIES:
         errors.append(
             "VERITAS_TRUSTLOG_MIRROR_BACKEND must be one of "
-            "('local', 's3_object_lock')."
+            f"({', '.join(repr(k) for k in sorted(_MIRROR_CAPABILITIES))})."
         )
 
+    # ── Mirror backend-specific configuration ────────────────────────
     if mirror_backend == "local":
         if defaults.trustlog_worm_hard_fail:
             wp = (os.getenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH") or "").strip()
@@ -313,16 +430,21 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 "VERITAS_TRUSTLOG_MIRROR_BACKEND=s3_object_lock."
             )
 
+    # ── Anchor backend capability check ──────────────────────────────
     anchor_backend = _trustlog_anchor_backend()
-    if anchor_backend not in {"local", "noop"}:
+    anchor_caps = anchor_capabilities(anchor_backend)
+
+    if anchor_backend not in _ANCHOR_CAPABILITIES:
         errors.append(
-            "VERITAS_TRUSTLOG_ANCHOR_BACKEND must be one of ('local', 'noop')."
+            "VERITAS_TRUSTLOG_ANCHOR_BACKEND must be one of "
+            f"({', '.join(repr(k) for k in sorted(_ANCHOR_CAPABILITIES))})."
         )
 
     if defaults.trustlog_transparency_required:
-        if anchor_backend == "noop":
+        if BackendCapability.TRANSPARENCY_ANCHORING not in anchor_caps:
             errors.append(
-                "VERITAS_TRUSTLOG_ANCHOR_BACKEND=noop is not allowed when "
+                f"TrustLog anchor backend {anchor_backend!r} does not provide "
+                "the 'transparency_anchoring' capability required when "
                 "VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1."
             )
         tp = (os.getenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH") or "").strip()
@@ -333,11 +455,15 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 f"anchoring is required (posture={defaults.posture.value})."
             )
 
+    # ── Signer backend capability check ──────────────────────────────
     signer_backend = _trustlog_signer_backend()
+    signer_caps = signer_capabilities(signer_backend)
     insecure_override = _allow_insecure_signer_override()
+
     if defaults.posture in {PostureLevel.SECURE, PostureLevel.PROD}:
-        if signer_backend == "file":
-            if insecure_override:
+        if BackendCapability.MANAGED_SIGNING not in signer_caps:
+            # Break-glass: allow file signer with explicit override
+            if signer_backend == "file" and insecure_override:
                 _logger.warning(
                     "[SECURITY][UNSUPPORTED] "
                     "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 is active "
@@ -349,10 +475,12 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                 )
             else:
                 errors.append(
-                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=file is not allowed in "
-                    f"{defaults.posture.value} posture. Configure "
-                    "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms and set "
-                    "VERITAS_TRUSTLOG_KMS_KEY_ID to an AWS KMS Ed25519 key. "
+                    f"TrustLog signer backend {signer_backend!r} does not provide "
+                    "the 'managed_signing' capability required in "
+                    f"{defaults.posture.value} posture. "
+                    "Configure a signer with managed key material "
+                    "(e.g. VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms and set "
+                    "VERITAS_TRUSTLOG_KMS_KEY_ID to an AWS KMS Ed25519 key). "
                     "Emergency-only break-glass: "
                     "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 "
                     "(unsupported; startup refusal bypass)."
@@ -364,11 +492,6 @@ def validate_posture_startup(defaults: PostureDefaults) -> List[str]:
                     "VERITAS_TRUSTLOG_SIGNER_BACKEND=aws_kms requires "
                     "VERITAS_TRUSTLOG_KMS_KEY_ID in secure/prod posture."
                 )
-        else:
-            errors.append(
-                "VERITAS_TRUSTLOG_SIGNER_BACKEND must be 'aws_kms' in secure/prod "
-                f"posture (got {signer_backend!r})."
-            )
 
     return errors
 

@@ -480,6 +480,60 @@ python scripts/generate_staged_readiness_report.py \
 
 See `docs/OPERATIONAL_READINESS_RUNBOOK.md` for full usage and troubleshooting.
 
+## Capability-Aware Startup Validation
+
+### Design
+
+Starting with v2.0, the secure/prod startup validator uses a **capability-aware**
+model rather than hard-coded vendor names. Each TrustLog backend declares a set
+of security capabilities, and the validator checks that the configured backends
+satisfy the posture's requirements.
+
+This design means that **adding a new backend** (e.g. Azure Key Vault, GCP Cloud
+KMS, or an on-prem HSM) requires only:
+
+1. Implementing the backend class (conforming to existing protocols).
+2. Registering the backend's proven capabilities in the capability registry
+   (`_SIGNER_CAPABILITIES`, `_MIRROR_CAPABILITIES`, or `_ANCHOR_CAPABILITIES`
+   in `veritas_os/core/posture.py`).
+
+The core validation logic (`validate_posture_startup`) does **not** need to change.
+
+### Capabilities
+
+| Capability | Required for | Meaning |
+|------------|-------------|---------|
+| `managed_signing` | secure/prod signer | Key material held in managed HSM/KMS; never on application host |
+| `immutable_retention` | secure/prod mirror | Tamper-proof, append-only object retention enforced by storage service |
+| `transparency_anchoring` | when `VERITAS_TRUSTLOG_TRANSPARENCY_REQUIRED=1` | Backend produces verifiable proof-of-existence anchor |
+| `fail_closed` | secure/prod (all backends) | Errors result in hard refusal, never silent pass |
+
+### Current Implementations
+
+| Component | Backend | Capabilities |
+|-----------|---------|-------------|
+| Signer | `aws_kms` | `managed_signing`, `fail_closed` |
+| Signer | `file` | *(none — dev/staging only)* |
+| Mirror | `s3_object_lock` | `immutable_retention`, `fail_closed` |
+| Mirror | `local` | *(none — dev/staging only)* |
+| Anchor | `local` | `transparency_anchoring`, `fail_closed` |
+| Anchor | `tsa` | `transparency_anchoring`, `fail_closed` |
+| Anchor | `noop` | *(none — dev/staging only)* |
+
+> **Note:** The current production-supported implementation uses **AWS KMS** for
+> signing and **S3 Object Lock** for mirroring. No new backend implementations
+> were added in this release — only the validation framework was restructured
+> to be capability-aware.
+
+### Future Work
+
+When adding Azure, GCP, or on-prem backends:
+
+- Implement the backend class conforming to the `Signer` / `StorageMirror` /
+  `AnchorBackend` protocol.
+- Register capabilities in the posture module's registry dictionaries.
+- No changes to `validate_posture_startup` should be necessary.
+
 ## What This Validation Adds
 
 1. **75+ production-like tests** exercising real subsystems (not just mocks)

@@ -272,10 +272,10 @@ class TestValidatePostureStartup:
         assert len(errors) == 6
         assert any("VERITAS_SECRET_PROVIDER" in e for e in errors)
         assert any("VERITAS_API_SECRET_REF" in e for e in errors)
-        assert any("VERITAS_TRUSTLOG_MIRROR_BACKEND" in e for e in errors)
+        assert any("immutable_retention" in e for e in errors)
         assert any("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH" in e for e in errors)
         assert any(
-            "VERITAS_TRUSTLOG_SIGNER_BACKEND=file is not allowed" in e
+            "managed_signing" in e
             for e in errors
         )
 
@@ -347,7 +347,7 @@ class TestValidatePostureStartup:
 
         errors = validate_posture_startup(defaults)
 
-        assert any("VERITAS_TRUSTLOG_MIRROR_BACKEND must be 's3_object_lock'" in err for err in errors)
+        assert any("immutable_retention" in err for err in errors)
 
     def test_dev_with_enforcement_on_missing_integration(self, monkeypatch):
         _clean_env(monkeypatch)
@@ -375,7 +375,7 @@ class TestValidatePostureStartup:
         errors = validate_posture_startup(defaults)
 
         assert any(
-            "VERITAS_TRUSTLOG_SIGNER_BACKEND=file is not allowed" in err
+            "managed_signing" in err
             for err in errors
         )
 
@@ -594,3 +594,261 @@ class TestPostureDefaultsImmutable:
         d = derive_defaults(PostureLevel.DEV)
         with pytest.raises(AttributeError):
             d.policy_runtime_enforce = True  # type: ignore[misc]
+
+
+# ============================================================
+# Capability model
+# ============================================================
+
+class TestBackendCapabilities:
+    """Tests for the capability-aware backend registry."""
+
+    def test_aws_kms_signer_has_managed_signing(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            signer_capabilities,
+        )
+        caps = signer_capabilities("aws_kms")
+        assert BackendCapability.MANAGED_SIGNING in caps
+        assert BackendCapability.FAIL_CLOSED in caps
+
+    def test_file_signer_lacks_managed_signing(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            signer_capabilities,
+        )
+        caps = signer_capabilities("file")
+        assert BackendCapability.MANAGED_SIGNING not in caps
+
+    def test_s3_object_lock_mirror_has_immutable_retention(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            mirror_capabilities,
+        )
+        caps = mirror_capabilities("s3_object_lock")
+        assert BackendCapability.IMMUTABLE_RETENTION in caps
+        assert BackendCapability.FAIL_CLOSED in caps
+
+    def test_local_mirror_lacks_immutable_retention(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            mirror_capabilities,
+        )
+        caps = mirror_capabilities("local")
+        assert BackendCapability.IMMUTABLE_RETENTION not in caps
+
+    def test_local_anchor_has_transparency(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            anchor_capabilities,
+        )
+        caps = anchor_capabilities("local")
+        assert BackendCapability.TRANSPARENCY_ANCHORING in caps
+
+    def test_noop_anchor_lacks_transparency(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            anchor_capabilities,
+        )
+        caps = anchor_capabilities("noop")
+        assert BackendCapability.TRANSPARENCY_ANCHORING not in caps
+
+    def test_tsa_anchor_has_transparency(self):
+        from veritas_os.core.posture import (
+            BackendCapability,
+            anchor_capabilities,
+        )
+        caps = anchor_capabilities("tsa")
+        assert BackendCapability.TRANSPARENCY_ANCHORING in caps
+        assert BackendCapability.FAIL_CLOSED in caps
+
+    def test_unknown_backend_returns_empty(self):
+        from veritas_os.core.posture import (
+            signer_capabilities,
+            mirror_capabilities,
+            anchor_capabilities,
+        )
+        assert signer_capabilities("unknown_vendor") == frozenset()
+        assert mirror_capabilities("unknown_vendor") == frozenset()
+        assert anchor_capabilities("unknown_vendor") == frozenset()
+
+
+# ============================================================
+# Capability-aware startup validation
+# ============================================================
+
+class TestCapabilityAwareValidation:
+    """Verify startup validator uses capabilities, not vendor names."""
+
+    def test_dev_file_signer_local_mirror_passes(self, monkeypatch):
+        """dev/local: file signer + local mirror works as before."""
+        _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "noop")
+        d = derive_defaults(PostureLevel.DEV)
+        assert validate_posture_startup(d) == []
+
+    def test_secure_rejects_incapable_signer(self, monkeypatch):
+        """Secure posture rejects signer without managed_signing capability."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.SECURE)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)
+
+    def test_secure_rejects_incapable_mirror(self, monkeypatch):
+        """Secure posture rejects mirror without immutable_retention."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:x:1:key/a")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_WORM_MIRROR_PATH", "/var/worm")
+        d = derive_defaults(PostureLevel.SECURE)
+        errors = validate_posture_startup(d)
+        assert any("immutable_retention" in e for e in errors)
+
+    def test_prod_aws_kms_s3_passes(self, monkeypatch):
+        """prod: aws_kms + s3_object_lock passes as before."""
+        _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+        monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/secret")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "prod-bucket")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/var/t")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:x:1:key/p")
+        d = derive_defaults(PostureLevel.PROD)
+        assert validate_posture_startup(d) == []
+
+    def test_prod_file_local_rejected(self, monkeypatch):
+        """prod: file/local backends are still rejected."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)
+        assert any("immutable_retention" in e for e in errors)
+
+    def test_refusal_messages_are_capability_based(self, monkeypatch):
+        """Refusal messages reference capabilities, not just vendor names."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        # Messages should mention the capability being checked
+        signer_err = [e for e in errors if "signer" in e.lower()]
+        mirror_err = [e for e in errors if "mirror" in e.lower()]
+        assert len(signer_err) >= 1
+        assert len(mirror_err) >= 1
+        assert any("managed_signing" in e for e in signer_err)
+        assert any("immutable_retention" in e for e in mirror_err)
+
+    def test_backward_compat_break_glass_still_works(self, monkeypatch, caplog):
+        """Break-glass override for file signer still works in prod."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
+        d = derive_defaults(PostureLevel.PROD)
+        with caplog.at_level(logging.WARNING):
+            errors = validate_posture_startup(d)
+        # Break-glass allows startup
+        signer_errors = [e for e in errors if "signer" in e.lower()]
+        assert signer_errors == []
+        assert "NOT enterprise supported" in caplog.text
+
+
+# ============================================================
+# Mock future backend — proves capability-based (not vendor-based)
+# ============================================================
+
+class TestMockFutureBackendCapability:
+    """Register a hypothetical future backend and verify it passes
+    secure/prod validation based on capabilities, not vendor name.
+
+    This confirms the validator is truly capability-aware: an unknown
+    backend name can pass validation if it declares the right capabilities.
+    """
+
+    def test_future_signer_with_managed_signing_passes_prod(self, monkeypatch):
+        """A hypothetical 'azure_keyvault' signer with managed_signing
+        capability should pass secure/prod validation."""
+        from veritas_os.core.posture import (
+            BackendCapability,
+            _SIGNER_CAPABILITIES,
+        )
+        _clean_env(monkeypatch)
+        # Register mock future backend
+        _SIGNER_CAPABILITIES["azure_keyvault"] = frozenset({
+            BackendCapability.MANAGED_SIGNING,
+            BackendCapability.FAIL_CLOSED,
+        })
+        try:
+            monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+            monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "b")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "p")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "azure_keyvault")
+            d = derive_defaults(PostureLevel.PROD)
+            errors = validate_posture_startup(d)
+            # No signer-capability errors (may have kms_key_id error for
+            # aws_kms-specific config, but that doesn't apply here)
+            assert not any("managed_signing" in e for e in errors)
+        finally:
+            _SIGNER_CAPABILITIES.pop("azure_keyvault", None)
+
+    def test_future_mirror_with_immutable_retention_passes_prod(self, monkeypatch):
+        """A hypothetical 'azure_blob_immutable' mirror with
+        immutable_retention should pass secure/prod validation."""
+        from veritas_os.core.posture import (
+            BackendCapability,
+            _MIRROR_CAPABILITIES,
+        )
+        _clean_env(monkeypatch)
+        _MIRROR_CAPABILITIES["azure_blob_immutable"] = frozenset({
+            BackendCapability.IMMUTABLE_RETENTION,
+            BackendCapability.FAIL_CLOSED,
+        })
+        try:
+            monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+            monkeypatch.setenv("VERITAS_API_SECRET_REF", "path/to/s")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND",
+                               "azure_blob_immutable")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/v")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+            monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+            d = derive_defaults(PostureLevel.PROD)
+            errors = validate_posture_startup(d)
+            assert not any("immutable_retention" in e for e in errors)
+        finally:
+            _MIRROR_CAPABILITIES.pop("azure_blob_immutable", None)
+
+    def test_future_backend_without_capability_rejected(self, monkeypatch):
+        """A future backend without the needed capability is rejected."""
+        from veritas_os.core.posture import (
+            _SIGNER_CAPABILITIES,
+        )
+        _clean_env(monkeypatch)
+        # Register with empty capabilities — should be rejected
+        _SIGNER_CAPABILITIES["weak_signer"] = frozenset()
+        try:
+            _set_minimum_strict_integrations(monkeypatch)
+            monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "weak_signer")
+            d = derive_defaults(PostureLevel.PROD)
+            errors = validate_posture_startup(d)
+            assert any("managed_signing" in e for e in errors)
+        finally:
+            _SIGNER_CAPABILITIES.pop("weak_signer", None)
