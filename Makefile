@@ -202,3 +202,21 @@ validate-staged-report:
 		--sha $$(git rev-parse HEAD 2>/dev/null || echo "unknown") \
 		--output release-artifacts/staged-readiness-report.json \
 		--text-output release-artifacts/staged-readiness-report.txt
+
+# ── PostgreSQL backup / restore / recovery drill ──────────────────────────
+
+drill-backup:
+	@echo "[veritas] Running PostgreSQL backup..."
+	@bash scripts/backup_postgres.sh
+
+drill-restore:
+	@echo "[veritas] Running PostgreSQL test restore..."
+	@bash scripts/restore_postgres.sh --mode=test --verify $(BACKUP_FILE)
+
+drill-recovery:
+	@echo "[veritas] Running full PostgreSQL recovery drill..."
+	@bash scripts/drill_postgres_recovery.sh
+
+drill-recovery-ci:
+	@echo "[veritas] Running CI-safe PostgreSQL recovery drill..."
+	@bash scripts/drill_postgres_recovery.sh --ci
