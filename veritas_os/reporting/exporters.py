@@ -3,10 +3,121 @@
 from __future__ import annotations
 
 import json
+import logging
+import os
+import time
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterator, Optional
 
 from veritas_os.core.atomic_io import atomic_write_json
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class PipelineTraceSession:
+    """OpenTelemetry trace session for one pipeline execution.
+
+    The session creates a root span keyed by ``request_id`` and provides a
+    stage-level span context manager so each pipeline phase can be traced
+    end-to-end with a consistent request correlation id.
+    """
+
+    request_id: str
+    user_id: str
+    _tracer: Any = None
+    _root_span: Any = None
+    _stage_durations_ms: Dict[str, int] = field(default_factory=dict)
+    _enabled: bool = False
+
+    @classmethod
+    def start(cls, *, request_id: str, user_id: str) -> "PipelineTraceSession":
+        """Create and start a trace session.
+
+        Tracing is enabled only when ``VERITAS_ENABLE_OTEL_TRACE`` evaluates to
+        true and OpenTelemetry dependencies are available.
+        """
+        trace_enabled = (os.getenv("VERITAS_ENABLE_OTEL_TRACE") or "0").strip().lower()
+        if trace_enabled not in {"1", "true", "yes", "on"}:
+            return cls(request_id=request_id, user_id=user_id)
+        try:
+            from opentelemetry import trace
+        except Exception as exc:
+            logger.warning("OTel trace requested but unavailable: %s", exc)
+            return cls(request_id=request_id, user_id=user_id)
+
+        tracer = trace.get_tracer("veritas_os.pipeline")
+        root_span = tracer.start_span("pipeline.run_decide")
+        root_span.set_attribute("veritas.request_id", request_id)
+        root_span.set_attribute("veritas.user_id", user_id)
+        root_span.set_attribute("veritas.component", "pipeline")
+        return cls(
+            request_id=request_id,
+            user_id=user_id,
+            _tracer=tracer,
+            _root_span=root_span,
+            _enabled=True,
+        )
+
+    @contextmanager
+    def stage(self, stage_name: str) -> Iterator[None]:
+        """Trace one pipeline stage as a child span."""
+        started = time.perf_counter()
+        if not self._enabled or self._tracer is None or self._root_span is None:
+            try:
+                yield
+            finally:
+                elapsed_ms = int((time.perf_counter() - started) * 1000)
+                self._stage_durations_ms[stage_name] = max(0, elapsed_ms)
+            return
+
+        from opentelemetry import trace
+
+        with trace.use_span(self._root_span, end_on_exit=False):
+            with self._tracer.start_as_current_span(
+                f"pipeline.stage.{stage_name}",
+                context=None,
+            ) as span:
+                span.set_attribute("veritas.request_id", self.request_id)
+                span.set_attribute("veritas.pipeline.stage", stage_name)
+                span.set_attribute("veritas.user_id", self.user_id)
+                try:
+                    yield
+                except Exception as exc:
+                    span.record_exception(exc)
+                    span.set_attribute("veritas.stage.error", type(exc).__name__)
+                    raise
+                finally:
+                    elapsed_ms = int((time.perf_counter() - started) * 1000)
+                    self._stage_durations_ms[stage_name] = max(0, elapsed_ms)
+                    span.set_attribute(
+                        "veritas.stage.duration_ms",
+                        self._stage_durations_ms[stage_name],
+                    )
+
+    def finalize(
+        self,
+        *,
+        decision_status: str,
+        stage_failures: Optional[list[str]] = None,
+    ) -> None:
+        """Finalize root span and attach execution summary attributes."""
+        if not self._enabled or self._root_span is None:
+            return
+        failures = list(stage_failures or [])
+        self._root_span.set_attribute("veritas.decision_status", decision_status)
+        self._root_span.set_attribute("veritas.stage.failure_count", len(failures))
+        self._root_span.set_attribute(
+            "veritas.stage.failures",
+            ",".join(failures),
+        )
+        self._root_span.set_attribute(
+            "veritas.pipeline.stage_durations_ms",
+            json.dumps(self._stage_durations_ms, sort_keys=True),
+        )
+        self._root_span.end()
 
 
 def build_w3c_prov_document(

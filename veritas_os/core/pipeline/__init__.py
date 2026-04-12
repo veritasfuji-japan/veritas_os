@@ -235,6 +235,7 @@ from .pipeline_replay import (
     _ReplayRequest,  # noqa: F401 – backward compat
     replay_decision as _replay_decision_impl,
 )
+from ...reporting.exporters import PipelineTraceSession
 
 _atomic_write_json: Any = None
 _HAS_ATOMIC_IO = False
@@ -714,277 +715,305 @@ async def run_decide_pipeline(
 
     pipeline_started_at = time.time()
     _stage_failures: List[str] = []  # track degraded stages for observability
+    trace_session = PipelineTraceSession.start(
+        request_id=str(getattr(req, "request_id", "") or ""),
+        user_id=str(getattr(req, "user_id", "") or "anon"),
+    )
 
     # Allow callers (e.g. replay engine) to override memory store getter
     effective_get_memory_store = memory_store_getter or _get_memory_store
 
-    # =================================================================
-    # Stage 1: Input normalization  (-> pipeline_inputs)
-    # =================================================================
-    _stage_started_at = time.perf_counter()
-    ctx = normalize_pipeline_inputs(
-        req,
-        request,
-        _get_request_params=_get_request_params,
-        _to_dict_fn=to_dict,
-    )
-    observe_pipeline_stage_duration("input_norm", time.perf_counter() - _stage_started_at)
+    try:
+        # =================================================================
+        # Stage 1: Input normalization  (-> pipeline_inputs)
+        # =================================================================
+        with trace_session.stage("input_norm"):
+            _stage_started_at = time.perf_counter()
+            ctx = normalize_pipeline_inputs(
+                req,
+                request,
+                _get_request_params=_get_request_params,
+                _to_dict_fn=to_dict,
+            )
+            observe_pipeline_stage_duration("input_norm", time.perf_counter() - _stage_started_at)
 
-    # =================================================================
-    # Stage 2: MemoryOS retrieval  (-> pipeline_retrieval)
-    # =================================================================
-    stage_memory_retrieval(
-        ctx,
-        _get_memory_store=effective_get_memory_store,
-        _memory_search=_memory_search,
-        _memory_put=_memory_put,
-        _memory_add_usage=_memory_add_usage,
-        _flatten_memory_hits=_flatten_memory_hits,
-        _warn=_warn,
-        utc_now_iso_z=utc_now_iso_z,
-    )
+        # =================================================================
+        # Stage 2: MemoryOS retrieval  (-> pipeline_retrieval)
+        # =================================================================
+        with trace_session.stage("memory_retrieval"):
+            stage_memory_retrieval(
+                ctx,
+                _get_memory_store=effective_get_memory_store,
+                _memory_search=_memory_search,
+                _memory_put=_memory_put,
+                _memory_add_usage=_memory_add_usage,
+                _flatten_memory_hits=_flatten_memory_hits,
+                _warn=_warn,
+                utc_now_iso_z=utc_now_iso_z,
+            )
 
     # =================================================================
     # Stage 2b: WebSearch  (-> pipeline_retrieval)
     # =================================================================
-    await stage_web_search_async(
-        ctx,
-        _safe_web_search=_safe_web_search,
-        _normalize_web_payload=_normalize_web_payload,
-        _extract_web_results=_extract_web_results,
-        _to_bool=_to_bool,
-        _get_request_params=_get_request_params,
-        _warn=_warn,
-        request=request,
-    )
+        with trace_session.stage("web_search"):
+            await stage_web_search_async(
+                ctx,
+                _safe_web_search=_safe_web_search,
+                _normalize_web_payload=_normalize_web_payload,
+                _extract_web_results=_extract_web_results,
+                _to_bool=_to_bool,
+                _get_request_params=_get_request_params,
+                _warn=_warn,
+                request=request,
+            )
 
     # =================================================================
     # Stage 3: Options normalization  (-> pipeline_decide_stages)
     # =================================================================
-    stage_normalize_options(ctx, _norm_alt=_norm_alt)
+        with trace_session.stage("normalize_options"):
+            stage_normalize_options(ctx, _norm_alt=_norm_alt)
 
     # =================================================================
     # Stage 4: Core decision + self-healing  (-> pipeline_execute)
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    await stage_core_execute(
-        ctx,
-        call_core_decide_fn=call_core_decide,
-        append_trust_log_fn=append_trust_log,
-        veritas_core=veritas_core,
-    )
-    observe_pipeline_stage_duration("kernel_execute", time.perf_counter() - _stage_started_at)
+        with trace_session.stage("kernel_execute"):
+            _stage_started_at = time.perf_counter()
+            await stage_core_execute(
+                ctx,
+                call_core_decide_fn=call_core_decide,
+                append_trust_log_fn=append_trust_log,
+                veritas_core=veritas_core,
+            )
+            observe_pipeline_stage_duration("kernel_execute", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 4b: Absorb raw results  (-> pipeline_decide_stages)
     # =================================================================
-    stage_absorb_raw_results(
-        ctx,
-        _norm_alt=_norm_alt,
-        _normalize_critique_payload=_normalize_critique_payload,
-        _merge_extras_preserving_contract=_merge_extras_preserving_contract,
-    )
+        with trace_session.stage("absorb_raw_results"):
+            stage_absorb_raw_results(
+                ctx,
+                _norm_alt=_norm_alt,
+                _normalize_critique_payload=_normalize_critique_payload,
+                _merge_extras_preserving_contract=_merge_extras_preserving_contract,
+            )
 
     # =================================================================
     # Stage 4c: Fallback alternatives  (-> pipeline_decide_stages)
     # =================================================================
-    stage_fallback_alternatives(ctx, _norm_alt=_norm_alt, _dedupe_alts=_dedupe_alts)
+        with trace_session.stage("fallback_alternatives"):
+            stage_fallback_alternatives(ctx, _norm_alt=_norm_alt, _dedupe_alts=_dedupe_alts)
 
     # =================================================================
     # Stage 4d: WorldModel + MemoryModel boost  (-> pipeline_decide_stages)
     # =================================================================
-    stage_model_boost(
-        ctx,
-        world_model=world_model,
-        MEM_VEC=MEM_VEC,
-        MEM_CLF=MEM_CLF,
-        _allow_prob=_allow_prob,
-        _mem_model_path=_mem_model_path,
-        _warn=_warn,
-    )
+        with trace_session.stage("model_boost"):
+            stage_model_boost(
+                ctx,
+                world_model=world_model,
+                MEM_VEC=MEM_VEC,
+                MEM_CLF=MEM_CLF,
+                _allow_prob=_allow_prob,
+                _mem_model_path=_mem_model_path,
+                _warn=_warn,
+            )
 
     # =================================================================
     # Stage 5: DebateOS  (-> pipeline_decide_stages)
     # =================================================================
-    stage_debate_fn(ctx, debate_core=debate_core, _warn=_warn)
+        with trace_session.stage("debate"):
+            stage_debate_fn(ctx, debate_core=debate_core, _warn=_warn)
 
     # =================================================================
     # Stage 5b: Critique  (-> pipeline_decide_stages)
     # =================================================================
-    await stage_critique_async(
-        ctx,
-        _normalize_critique_payload=_normalize_critique_payload,
-        _run_critique_best_effort=_run_critique_best_effort,
-        _ensure_critique_required=_ensure_critique_required,
-        _critique_fallback=_critique_fallback,
-    )
+        with trace_session.stage("critique"):
+            await stage_critique_async(
+                ctx,
+                _normalize_critique_payload=_normalize_critique_payload,
+                _run_critique_best_effort=_run_critique_best_effort,
+                _ensure_critique_required=_ensure_critique_required,
+                _critique_fallback=_critique_fallback,
+            )
 
     # =================================================================
     # Stage 5.9: Continuation revalidation (shadow / sidecar)
     # =================================================================
     # Runs *before* step-level merit evaluation (FUJI / gate).
     # Feature flag off → zero computation, zero side effects.
-    try:
-        from ..config import capability_cfg as _cap_cfg
-        if _cap_cfg.enable_continuation_runtime:
-            from .continuation_runtime.revalidator import (
-                run_continuation_revalidation_shadow as _run_cont_reval,
-            )
-            _cont_lineage, _cont_snap, _cont_rcpt = _run_cont_reval(
-                chain_id=ctx.body.get("chain_id", ctx.request_id),
-                step_index=ctx.body.get("step_index", 0),
-                query=ctx.query,
-                context=ctx.context,
-                prior_decision_status=ctx.decision_status,
-            )
-            ctx.continuation_snapshot = _cont_snap.to_dict()
-            ctx.continuation_receipt = _cont_rcpt.to_dict()
-            logger.debug(
-                "[continuation] shadow revalidation: status=%s divergence=%s",
-                _cont_snap.claim_status.value,
-                _cont_rcpt.divergence_flag,
-            )
-
-            # Stage 5.9b: Continuation enforcement evaluation
-            # Only runs when enforcement mode is not "observe".
-            _cont_enf_mode = _cap_cfg.continuation_enforcement_mode
-            if _cont_enf_mode in ("advisory", "enforce"):
-                from .continuation_runtime.enforcement import (
-                    ContinuationEnforcementEvaluator,
-                    EnforcementConfig,
-                    EnforcementMode,
-                    EnforcementAction,
-                )
-                _enf_mode_enum = EnforcementMode(_cont_enf_mode)
-                _enf_config = EnforcementConfig(mode=_enf_mode_enum)
-                _enf_evaluator = ContinuationEnforcementEvaluator(
-                    config=_enf_config,
-                )
-                _enf_events = _enf_evaluator.evaluate(
-                    snapshot=_cont_snap,
-                    receipt=_cont_rcpt,
-                    chain_id=ctx.body.get("chain_id", ctx.request_id),
-                    degradation_count=ctx.context.get(
-                        "continuation_degradation_count", 0
-                    ),
-                    replay_divergence_ratio=ctx.context.get(
-                        "continuation_replay_divergence_ratio", 0.0
-                    ),
-                    has_required_approval=ctx.context.get(
-                        "continuation_has_required_approval", True
-                    ),
-                    policy_violation_detected=ctx.context.get(
-                        "continuation_policy_violation", False
-                    ),
-                    policy_violation_detail=ctx.context.get(
-                        "continuation_policy_violation_detail", ""
-                    ),
-                )
-                if _enf_events:
-                    ctx.continuation_enforcement_events = [
-                        e.to_dict() for e in _enf_events
-                    ]
-                    # In enforce mode, check for halt_chain action
-                    if _cont_enf_mode == "enforce":
-                        for _enf_evt in _enf_events:
-                            if (
-                                _enf_evt.action == EnforcementAction.HALT_CHAIN
-                                and _enf_evt.is_enforced
-                            ):
-                                ctx.continuation_enforcement_halt = True
-                                logger.warning(
-                                    "[continuation-enforcement] HALT "
-                                    "chain=%s reason=%s",
-                                    ctx.body.get(
-                                        "chain_id", ctx.request_id
-                                    ),
-                                    _enf_evt.reasoning,
-                                )
-                                break
-                    logger.info(
-                        "[continuation] enforcement evaluation: "
-                        "mode=%s events=%d",
-                        _cont_enf_mode,
-                        len(_enf_events),
+        with trace_session.stage("continuation_shadow"):
+            try:
+                from ..config import capability_cfg as _cap_cfg
+                if _cap_cfg.enable_continuation_runtime:
+                    from .continuation_runtime.revalidator import (
+                        run_continuation_revalidation_shadow as _run_cont_reval,
                     )
-    except Exception as _cont_err:
-        _stage_failures.append(f"continuation_shadow:{type(_cont_err).__name__}")
-        logger.warning(
-            "[pipeline] continuation shadow revalidation failed (best-effort): %s",
-            _cont_err,
-        )
+                    _cont_lineage, _cont_snap, _cont_rcpt = _run_cont_reval(
+                        chain_id=ctx.body.get("chain_id", ctx.request_id),
+                        step_index=ctx.body.get("step_index", 0),
+                        query=ctx.query,
+                        context=ctx.context,
+                        prior_decision_status=ctx.decision_status,
+                    )
+                    ctx.continuation_snapshot = _cont_snap.to_dict()
+                    ctx.continuation_receipt = _cont_rcpt.to_dict()
+                    logger.debug(
+                        "[continuation] shadow revalidation: status=%s divergence=%s",
+                        _cont_snap.claim_status.value,
+                        _cont_rcpt.divergence_flag,
+                    )
+
+                    # Stage 5.9b: Continuation enforcement evaluation
+                    # Only runs when enforcement mode is not "observe".
+                    _cont_enf_mode = _cap_cfg.continuation_enforcement_mode
+                    if _cont_enf_mode in ("advisory", "enforce"):
+                        from .continuation_runtime.enforcement import (
+                            ContinuationEnforcementEvaluator,
+                            EnforcementConfig,
+                            EnforcementMode,
+                            EnforcementAction,
+                        )
+                        _enf_mode_enum = EnforcementMode(_cont_enf_mode)
+                        _enf_config = EnforcementConfig(mode=_enf_mode_enum)
+                        _enf_evaluator = ContinuationEnforcementEvaluator(
+                            config=_enf_config,
+                        )
+                        _enf_events = _enf_evaluator.evaluate(
+                            snapshot=_cont_snap,
+                            receipt=_cont_rcpt,
+                            chain_id=ctx.body.get("chain_id", ctx.request_id),
+                            degradation_count=ctx.context.get(
+                                "continuation_degradation_count", 0
+                            ),
+                            replay_divergence_ratio=ctx.context.get(
+                                "continuation_replay_divergence_ratio", 0.0
+                            ),
+                            has_required_approval=ctx.context.get(
+                                "continuation_has_required_approval", True
+                            ),
+                            policy_violation_detected=ctx.context.get(
+                                "continuation_policy_violation", False
+                            ),
+                            policy_violation_detail=ctx.context.get(
+                                "continuation_policy_violation_detail", ""
+                            ),
+                        )
+                        if _enf_events:
+                            ctx.continuation_enforcement_events = [
+                                e.to_dict() for e in _enf_events
+                            ]
+                            # In enforce mode, check for halt_chain action
+                            if _cont_enf_mode == "enforce":
+                                for _enf_evt in _enf_events:
+                                    if (
+                                        _enf_evt.action == EnforcementAction.HALT_CHAIN
+                                        and _enf_evt.is_enforced
+                                    ):
+                                        ctx.continuation_enforcement_halt = True
+                                        logger.warning(
+                                            "[continuation-enforcement] HALT "
+                                            "chain=%s reason=%s",
+                                            ctx.body.get(
+                                                "chain_id", ctx.request_id
+                                            ),
+                                            _enf_evt.reasoning,
+                                        )
+                                        break
+                            logger.info(
+                                "[continuation] enforcement evaluation: "
+                                "mode=%s events=%d",
+                                _cont_enf_mode,
+                                len(_enf_events),
+                            )
+            except Exception as _cont_err:
+                _stage_failures.append(f"continuation_shadow:{type(_cont_err).__name__}")
+                logger.warning(
+                    "[pipeline] continuation shadow revalidation failed (best-effort): %s",
+                    _cont_err,
+                )
 
     # =================================================================
     # Stage 6: Policy (FUJI + ValueCore + Gate)  (-> pipeline_policy)
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    stage_fuji_precheck(ctx)
-    stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
-    stage_gate_decision(ctx)
-    observe_pipeline_stage_duration("fuji_gate", time.perf_counter() - _stage_started_at)
+        with trace_session.stage("fuji_gate"):
+            _stage_started_at = time.perf_counter()
+            stage_fuji_precheck(ctx)
+            stage_value_core(ctx, _load_valstats=_load_valstats, _clip01=_clip01)
+            stage_gate_decision(ctx)
+            observe_pipeline_stage_duration("fuji_gate", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Stage 6b: Value learning EMA  (-> pipeline_decide_stages)
     # =================================================================
-    stage_value_learning_ema(
-        ctx,
-        _load_valstats=_load_valstats,
-        _save_valstats=_save_valstats,
-        _warn=_warn,
-        utc_now_iso_z=utc_now_iso_z,
-    )
+        with trace_session.stage("value_learning_ema"):
+            stage_value_learning_ema(
+                ctx,
+                _load_valstats=_load_valstats,
+                _save_valstats=_save_valstats,
+                _warn=_warn,
+                utc_now_iso_z=utc_now_iso_z,
+            )
 
     # =================================================================
     # Stage 6c: Metrics  (-> pipeline_decide_stages)
     # =================================================================
-    stage_compute_metrics(ctx, _ensure_full_contract=_ensure_full_contract)
+        with trace_session.stage("compute_metrics"):
+            stage_compute_metrics(ctx, _ensure_full_contract=_ensure_full_contract)
 
     # =================================================================
     # Stage 6d: Low-evidence hardening  (-> pipeline_decide_stages)
     # =================================================================
-    stage_evidence_hardening(
-        ctx,
-        evidence_core=evidence_core,
-        _query_is_step1_hint=_query_is_step1_hint,
-        _has_step1_minimum_evidence=_has_step1_minimum_evidence,
-    )
+        with trace_session.stage("evidence_hardening"):
+            stage_evidence_hardening(
+                ctx,
+                evidence_core=evidence_core,
+                _query_is_step1_hint=_query_is_step1_hint,
+                _has_step1_minimum_evidence=_has_step1_minimum_evidence,
+            )
 
     # =================================================================
     # Stage 7: Decision payload completion  (-> pipeline_response)
     # - decision payload contract is complete at this boundary
     # =================================================================
-    payload = _build_decision_payload(ctx)
+        with trace_session.stage("build_response"):
+            payload = _build_decision_payload(ctx)
 
     # =================================================================
     # Stage 8: Post-decision persistence phase  (-> pipeline_persist)
     # - best-effort side effects and artifact generation only
     # =================================================================
-    _stage_started_at = time.perf_counter()
-    _run_post_decision_persistence_phase(
-        ctx,
-        payload,
-        effective_get_memory_store=effective_get_memory_store,
-        stage_failures=_stage_failures,
-    )
-    observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
+        with trace_session.stage("persist"):
+            _stage_started_at = time.perf_counter()
+            _run_post_decision_persistence_phase(
+                ctx,
+                payload,
+                effective_get_memory_store=effective_get_memory_store,
+                stage_failures=_stage_failures,
+            )
+            observe_pipeline_stage_duration("persist", time.perf_counter() - _stage_started_at)
 
     # =================================================================
     # Observability: record pipeline health summary
     # =================================================================
-    total_ms = max(1, int((time.time() - pipeline_started_at) * 1000))
-    extras = payload.setdefault("extras", {})
-    if isinstance(extras, dict):
-        metrics = extras.setdefault("metrics", {})
-        if isinstance(metrics, dict):
-            metrics["pipeline_total_ms"] = total_ms
-            if _stage_failures:
-                metrics["degraded_stages"] = _stage_failures
-    set_degraded_subsystems(len(_stage_failures))
-    if _stage_failures:
-        logger.info(
-            "[pipeline] completed with degraded stages (%d ms): %s",
-            total_ms,
-            ", ".join(_stage_failures),
+        total_ms = max(1, int((time.time() - pipeline_started_at) * 1000))
+        extras = payload.setdefault("extras", {})
+        if isinstance(extras, dict):
+            metrics = extras.setdefault("metrics", {})
+            if isinstance(metrics, dict):
+                metrics["pipeline_total_ms"] = total_ms
+                if _stage_failures:
+                    metrics["degraded_stages"] = _stage_failures
+        set_degraded_subsystems(len(_stage_failures))
+        if _stage_failures:
+            logger.info(
+                "[pipeline] completed with degraded stages (%d ms): %s",
+                total_ms,
+                ", ".join(_stage_failures),
+            )
+        trace_session.finalize(
+            decision_status=str(ctx.decision_status or "unknown"),
+            stage_failures=_stage_failures,
         )
-
-    return payload
+        return payload
+    finally:
+        if "ctx" not in locals():
+            trace_session.finalize(decision_status="failed_pre_context", stage_failures=_stage_failures)
