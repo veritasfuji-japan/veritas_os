@@ -22,6 +22,7 @@ from veritas_os.core.posture import (
     PostureDefaults,
     PostureLevel,
     PostureStartupError,
+    _validate_backend_config,
     derive_defaults,
     get_active_posture,
     init_posture,
@@ -392,12 +393,12 @@ class TestValidatePostureStartup:
 
         assert validate_posture_startup(defaults) == []
 
-    def test_prod_with_file_signer_override_succeeds_with_warning(
+    def test_prod_with_file_signer_override_rejected_in_prod(
         self,
         monkeypatch,
         caplog,
     ):
-        """Break-glass override allows startup but emits unsupported warning."""
+        """Prod posture unconditionally refuses insecure signer override."""
         _clean_env(monkeypatch)
         _set_minimum_strict_integrations(monkeypatch)
         monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
@@ -407,12 +408,9 @@ class TestValidatePostureStartup:
         with caplog.at_level(logging.WARNING):
             errors = validate_posture_startup(defaults)
 
-        assert errors == []
-        assert (
-            "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 is active"
-            in caplog.text
-        )
-        assert "NOT enterprise supported" in caplog.text
+        # In prod, the override is ignored — file signer is still rejected
+        assert any("managed_signing" in e for e in errors)
+        assert any("unconditionally refused" in e for e in errors)
 
 
 # ============================================================
@@ -752,19 +750,31 @@ class TestCapabilityAwareValidation:
         assert any("managed_signing" in e for e in signer_err)
         assert any("immutable_retention" in e for e in mirror_err)
 
-    def test_backward_compat_break_glass_still_works(self, monkeypatch, caplog):
-        """Break-glass override for file signer still works in prod."""
+    def test_break_glass_works_in_secure_posture(self, monkeypatch, caplog):
+        """Break-glass override for file signer works in secure (not prod)."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
+        d = derive_defaults(PostureLevel.SECURE)
+        with caplog.at_level(logging.WARNING):
+            errors = validate_posture_startup(d)
+        # Break-glass allows startup in secure
+        signer_errors = [e for e in errors if "signer" in e.lower()]
+        assert signer_errors == []
+        assert "NOT enterprise supported" in caplog.text
+
+    def test_break_glass_rejected_in_prod_posture(self, monkeypatch):
+        """Break-glass override is unconditionally refused in prod posture."""
         _clean_env(monkeypatch)
         _set_minimum_strict_integrations(monkeypatch)
         monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
         monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
         d = derive_defaults(PostureLevel.PROD)
-        with caplog.at_level(logging.WARNING):
-            errors = validate_posture_startup(d)
-        # Break-glass allows startup
-        signer_errors = [e for e in errors if "signer" in e.lower()]
-        assert signer_errors == []
-        assert "NOT enterprise supported" in caplog.text
+        errors = validate_posture_startup(d)
+        # Prod ignores the override — managed_signing error present
+        assert any("managed_signing" in e for e in errors)
+        assert any("unconditionally refused" in e for e in errors)
 
 
 # ============================================================
@@ -842,3 +852,252 @@ class TestMockFutureBackendCapability:
         d = derive_defaults(PostureLevel.PROD)
         errors = validate_posture_startup(d)
         assert any("managed_signing" in e for e in errors)
+
+
+# ============================================================
+# Prod insecure signer override disabled — dedicated tests
+# ============================================================
+
+class TestProdInsecureSignerOverrideDisabled:
+    """Verify that prod posture unconditionally refuses insecure signer
+    override, while secure posture retains the break-glass escape hatch."""
+
+    def test_prod_file_signer_with_override_is_refused(self, monkeypatch):
+        """Setting VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1 has no
+        effect in prod posture — file signer is still rejected."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)
+        assert any("unconditionally refused" in e for e in errors)
+
+    def test_prod_file_signer_without_override_is_refused(self, monkeypatch):
+        """Even without the override env, file signer is refused in prod."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)
+
+    def test_secure_file_signer_with_override_succeeds(self, monkeypatch, caplog):
+        """Secure posture accepts the break-glass override for file signer."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD", "1")
+        d = derive_defaults(PostureLevel.SECURE)
+        with caplog.at_level(logging.WARNING):
+            errors = validate_posture_startup(d)
+        signer_errors = [e for e in errors if "managed_signing" in e]
+        assert signer_errors == []
+        assert "NOT enterprise supported" in caplog.text
+
+    def test_secure_file_signer_without_override_is_refused(self, monkeypatch):
+        """Secure posture without break-glass override refuses file signer."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.SECURE)
+        errors = validate_posture_startup(d)
+        assert any("managed_signing" in e for e in errors)
+
+    def test_prod_refusal_message_says_no_override(self, monkeypatch):
+        """Prod refusal message explicitly states override is not available."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        signer_errors = [e for e in errors if "managed_signing" in e]
+        assert len(signer_errors) == 1
+        assert "unconditionally refused" in signer_errors[0]
+        # Should NOT mention break-glass availability in prod
+        assert "break-glass" not in signer_errors[0].lower()
+
+    def test_secure_refusal_message_mentions_break_glass(self, monkeypatch):
+        """Secure posture refusal message mentions break-glass availability."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.SECURE)
+        errors = validate_posture_startup(d)
+        signer_errors = [e for e in errors if "managed_signing" in e]
+        assert len(signer_errors) == 1
+        assert "VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD" in signer_errors[0]
+
+
+# ============================================================
+# Backend-specific config validation (layer 2) — isolated tests
+# ============================================================
+
+class TestBackendConfigValidation:
+    """Verify _validate_backend_config reports backend-specific config
+    errors independently from capability checks."""
+
+    def test_aws_kms_missing_key_id(self, monkeypatch):
+        """aws_kms backend reports missing KMS key ID."""
+        _clean_env(monkeypatch)
+        d = derive_defaults(PostureLevel.DEV)
+        errors = _validate_backend_config(
+            signer_backend="aws_kms",
+            mirror_backend="local",
+            anchor_backend="local",
+            defaults=d,
+        )
+        assert any("VERITAS_TRUSTLOG_KMS_KEY_ID" in e for e in errors)
+
+    def test_aws_kms_with_key_id_passes(self, monkeypatch):
+        """aws_kms backend with KMS key ID is valid."""
+        _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:aws:kms:key/test")
+        d = derive_defaults(PostureLevel.DEV)
+        errors = _validate_backend_config(
+            signer_backend="aws_kms",
+            mirror_backend="local",
+            anchor_backend="local",
+            defaults=d,
+        )
+        assert not any("KMS" in e for e in errors)
+
+    def test_s3_object_lock_missing_bucket_prefix(self, monkeypatch):
+        """s3_object_lock mirror reports missing bucket and prefix."""
+        _clean_env(monkeypatch)
+        d = derive_defaults(PostureLevel.DEV)
+        errors = _validate_backend_config(
+            signer_backend="file",
+            mirror_backend="s3_object_lock",
+            anchor_backend="local",
+            defaults=d,
+        )
+        assert any("VERITAS_TRUSTLOG_S3_BUCKET" in e for e in errors)
+        assert any("VERITAS_TRUSTLOG_S3_PREFIX" in e for e in errors)
+
+    def test_s3_object_lock_with_config_passes(self, monkeypatch):
+        """s3_object_lock mirror with bucket and prefix is valid."""
+        _clean_env(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_BUCKET", "my-bucket")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_S3_PREFIX", "audit/worm")
+        d = derive_defaults(PostureLevel.DEV)
+        errors = _validate_backend_config(
+            signer_backend="file",
+            mirror_backend="s3_object_lock",
+            anchor_backend="local",
+            defaults=d,
+        )
+        assert not any("S3" in e for e in errors)
+
+    def test_local_anchor_missing_transparency_path(self, monkeypatch):
+        """local anchor reports missing transparency log path."""
+        _clean_env(monkeypatch)
+        # Force transparency required on
+        d_strict = PostureDefaults(
+            posture=PostureLevel.DEV,
+            trustlog_transparency_required=True,
+        )
+        errors = _validate_backend_config(
+            signer_backend="file",
+            mirror_backend="local",
+            anchor_backend="local",
+            defaults=d_strict,
+        )
+        assert any("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH" in e for e in errors)
+
+    def test_file_signer_no_config_errors(self, monkeypatch):
+        """file signer has no backend-specific config requirements."""
+        _clean_env(monkeypatch)
+        d = derive_defaults(PostureLevel.DEV)
+        errors = _validate_backend_config(
+            signer_backend="file",
+            mirror_backend="local",
+            anchor_backend="noop",
+            defaults=d,
+        )
+        assert errors == []
+
+    def test_config_errors_are_separate_from_capability_errors(self, monkeypatch):
+        """In prod, capability errors and config errors are both present
+        but distinguishable — config errors reference specific env vars,
+        capability errors reference capability names."""
+        _clean_env(monkeypatch)
+        # Set aws_kms signer but no KMS key, s3_object_lock but no bucket
+        monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+        monkeypatch.setenv("VERITAS_API_SECRET_REF", "ref")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "s3_object_lock")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/t")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        # No capability errors (aws_kms+s3 have the right caps)
+        assert not any("managed_signing" in e for e in errors)
+        assert not any("immutable_retention" in e for e in errors)
+        # But backend config errors for missing KMS key, S3 bucket/prefix
+        assert any("VERITAS_TRUSTLOG_KMS_KEY_ID" in e for e in errors)
+        assert any("VERITAS_TRUSTLOG_S3_BUCKET" in e for e in errors)
+        assert any("VERITAS_TRUSTLOG_S3_PREFIX" in e for e in errors)
+
+
+# ============================================================
+# Capability-aware refusal messages
+# ============================================================
+
+class TestCapabilityAwareRefusalMessages:
+    """Verify refusal messages reference capabilities and are posture-aware."""
+
+    def test_prod_refusal_mentions_capability_not_vendor(self, monkeypatch):
+        """Prod refusal for incapable signer mentions the capability name."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        signer_errs = [e for e in errors if "signer" in e.lower()]
+        assert len(signer_errs) >= 1
+        assert "managed_signing" in signer_errs[0]
+        # The error explains *what capability* is missing
+        assert "capability" in signer_errs[0].lower()
+
+    def test_mirror_refusal_mentions_capability(self, monkeypatch):
+        """Mirror refusal references immutable_retention capability."""
+        _clean_env(monkeypatch)
+        _set_minimum_strict_integrations(monkeypatch)
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "aws_kms")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "arn:key")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        mirror_errs = [e for e in errors if "mirror" in e.lower()]
+        assert len(mirror_errs) >= 1
+        assert "immutable_retention" in mirror_errs[0]
+
+    def test_dummy_capable_backend_passes_prod(self, monkeypatch):
+        """A dummy backend with all required capabilities passes prod."""
+        from veritas_os.core.posture import (
+            BackendCapability,
+            _SIGNER_CAPABILITIES,
+            _MIRROR_CAPABILITIES,
+        )
+        _clean_env(monkeypatch)
+        monkeypatch.setitem(_SIGNER_CAPABILITIES, "dummy_hsm", frozenset({
+            BackendCapability.MANAGED_SIGNING,
+            BackendCapability.FAIL_CLOSED,
+        }))
+        monkeypatch.setitem(_MIRROR_CAPABILITIES, "dummy_worm", frozenset({
+            BackendCapability.IMMUTABLE_RETENTION,
+            BackendCapability.FAIL_CLOSED,
+        }))
+        monkeypatch.setenv("VERITAS_SECRET_PROVIDER", "vault")
+        monkeypatch.setenv("VERITAS_API_SECRET_REF", "ref")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "dummy_hsm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_MIRROR_BACKEND", "dummy_worm")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_ANCHOR_BACKEND", "local")
+        monkeypatch.setenv("VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH", "/t")
+        d = derive_defaults(PostureLevel.PROD)
+        errors = validate_posture_startup(d)
+        # No capability errors for signer or mirror
+        assert not any("managed_signing" in e for e in errors)
+        assert not any("immutable_retention" in e for e in errors)

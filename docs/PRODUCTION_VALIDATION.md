@@ -30,10 +30,10 @@ VERITAS OS uses three validation tiers with explicit blocking semantics:
 
 This matrix explicitly validates enterprise TrustLog promotion paths:
 
-- KMS signer path
-- S3 Object Lock mirror path
+- Managed signing capability (current impl: AWS KMS signer)
+- Immutable retention capability (current impl: S3 Object Lock mirror)
 - Unified verification path
-- Startup posture validation
+- Capability-aware startup posture validation
 - Hard-fail semantics
 - Legacy verification compatibility
 
