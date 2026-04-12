@@ -126,8 +126,11 @@ def build_conninfo() -> str:
     if "sslmode" not in dsn:
         params.append(f"sslmode={_sslmode()}")
     if "statement_timeout" not in dsn:
+        # The '=' between the GUC name and value must be percent-encoded
+        # (%3D) so that psycopg3's URI parser does not treat it as an
+        # extra key/value separator in the query string.
         params.append(
-            f"options=-c%20statement_timeout={_statement_timeout_ms()}"
+            f"options=-c%20statement_timeout%3D{_statement_timeout_ms()}"
         )
 
     if params:

@@ -44,7 +44,7 @@ class TestBuildConninfo:
 
         assert "connect_timeout=5" in result
         assert "sslmode=prefer" in result
-        assert "statement_timeout=30000" in result
+        assert "statement_timeout%3D30000" in result
 
     def test_custom_timeouts(self, monkeypatch):
         monkeypatch.setenv(
@@ -59,7 +59,7 @@ class TestBuildConninfo:
 
         assert "connect_timeout=10" in result
         assert "sslmode=require" in result
-        assert "statement_timeout=60000" in result
+        assert "statement_timeout%3D60000" in result
 
     def test_dsn_with_existing_params_uses_ampersand(self, monkeypatch):
         monkeypatch.setenv(
