@@ -157,9 +157,9 @@ or know which backend is active.
 
 | CI Job | Backend | What it tests |
 |---|---|---|
-| `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate |
-| `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate |
-| `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract tests |
+| `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
+| `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
+| `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract + contention tests |
 | `test-slow` | Default | Slow/heavy tests |
 | `governance-smoke` | Default | Smoke tests (Tier 1) |
 | `docker-smoke` | PostgreSQL (via compose) | Full-stack health + read/write with real PG (Tier 2/3) |
@@ -199,8 +199,10 @@ for PostgreSQL-specific validation guidance.
 | **PostgreSQL → JSONL export** | No tooling; manual SQL export + reformat | Low |
 | **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` + `postgresql-smoke` with real PG 16; mock-pool in unit tests | Medium |
 | **Search scoring parity** | Covered for result IDs; exact score values may differ slightly (LIKE ANY vs. file scan) | Low |
-| **Connection pool failure recovery** | Tested in `test_storage_db.py` | — |
-| **Concurrent writes under real PostgreSQL advisory locks** | Not tested (requires real PG + threading) | Medium |
+| **Connection pool failure recovery** | Tested in `test_storage_db.py` + `test_pg_trustlog_contention.py` (pool starvation fail-closed) | ✅ Covered |
+| **Concurrent writes under real PostgreSQL advisory locks** | Mock-pool contention (25 tests) + CI `test-postgresql` job against real PG | Medium — real PG timing not tested |
+| **Pool/activity metrics** | Tested in `test_pg_metrics.py` (28 tests); `/v1/metrics` integration covered | ✅ Covered |
+| **Backup/restore/drill scripts** | Tested in `test_drill_postgres_recovery.py` (31 tests); script syntax + content coherence | ✅ Covered (no live `pg_dump`) |
 
 ### What is parity-guaranteed
 
@@ -253,4 +255,81 @@ file-to-PostgreSQL data migration:
 | `test_storage_base.py` | varies | Protocol interface |
 | `test_storage_db.py` | varies | Connection pool |
 | `test_storage_jsonl.py` | varies | JSONL backend unit |
-| **Total backend-parity tests** | **195+** | |
+| `test_pg_trustlog_contention.py` | 25 | Advisory lock contention + concurrency |
+| `test_pg_metrics.py` | 28 | Pool/activity metrics + `/v1/metrics` integration |
+| `test_drill_postgres_recovery.py` | 31 | Drill script validation + runbook coherence |
+| **Total backend + hardening tests** | **279+** | |
+
+## 8. Contention, Metrics, and Recovery Coverage
+
+### Advisory Lock Contention Tests (`test_pg_trustlog_contention.py`)
+
+These tests exercise TrustLog `append()` under concurrent-access patterns
+using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
+`threading.Lock`.
+
+| Test Domain | Tests | Covered |
+|---|---:|:---:|
+| **2-worker simultaneous append** | 2 | ✅ |
+| **N-worker burst (5/10/20)** | 4 | ✅ |
+| **Statement timeout → fail-closed** | 3 | ✅ |
+| **Connection pool starvation → fail-closed** | 2 | ✅ |
+| **Rollback recovery (chain intact after failure)** | 2 | ✅ |
+| **Advisory lock release (commit + rollback)** | 3 | ✅ |
+| **Full chain verification after concurrent writes** | 4 | ✅ |
+| **Mixed success/failure contention** | 2 | ✅ |
+| **Threaded contention (OS threads)** | 2 | ✅ |
+| **Missing encryption key → fail-closed** | 1 | ✅ |
+| **Total** | **25** (mock pool, Tier 1 CI) | |
+
+### PostgreSQL Metrics Tests (`test_pg_metrics.py`)
+
+| Test Domain | Tests | Covered |
+|---|---:|:---:|
+| **Metric definitions (gauges, counters, histograms)** | 4 | ✅ |
+| **Recording helpers (pool stats, failures, latency)** | 7 | ✅ |
+| **Pool-stats collection (mock pool)** | 3 | ✅ |
+| **pg_stat_activity collection** | 3 | ✅ |
+| **Health-check gauge emission** | 2 | ✅ |
+| **Backend label emission** | 1 | ✅ |
+| **High-level collector (file + PG backend)** | 2 | ✅ |
+| **`/v1/metrics` endpoint integration** | 3 | ✅ |
+| **DB unavailable → safe defaults** | 1 | ✅ |
+| **Metric name stability across releases** | 1 | ✅ |
+| **Health/metrics backend consistency** | 1 | ✅ |
+| **Total** | **28** (mock pool + TestClient, Tier 1 CI) | |
+
+### Recovery Drill Tests (`test_drill_postgres_recovery.py`)
+
+| Test Domain | Tests | Covered |
+|---|---:|:---:|
+| **Script existence** | 3 | ✅ |
+| **Script is executable** | 3 | ✅ |
+| **Script has shebang** | 3 | ✅ |
+| **Bash syntax valid (`bash -n`)** | 3 | ✅ |
+| **`--help` flag exits 0** | 3 | ✅ |
+| **Content coherence (tools + flags)** | 6 | ✅ |
+| **Runbook coherence (docs ↔ scripts)** | 7 | ✅ |
+| **Total** | **31** (no live DB required, Tier 1 CI) | |
+
+### What these tests guarantee
+
+- TrustLog hash chain remains valid after N concurrent appending workers.
+- Statement timeout or pool starvation → `RuntimeError` (fail-closed).
+- Advisory lock is released on both successful commit and rollback.
+- `/v1/metrics` always returns `db_pool`, `db_health`, `db_activity` fields.
+- File-backend mode degrades gracefully (null pool, true health).
+- Drill scripts are syntactically valid and reference the correct
+  PostgreSQL tools and VERITAS tables.
+- `postgresql-drill-runbook.md` references all scripts, documents HA
+  boundaries, and describes exit codes.
+
+### What these tests do NOT guarantee
+
+| Area | Reason |
+|------|--------|
+| Real PostgreSQL lock timing under CPU/IO saturation | Mock pool uses zero-delay `threading.Lock` |
+| Actual `pg_dump` / `pg_restore` execution | Tests validate syntax and flags, not runtime output |
+| WAL archiving / PITR restore | Infrastructure-level concern |
+| Cross-version `pg_dump` compatibility | CI uses PostgreSQL 16 only |
+| Prometheus scrape correctness | Tests use `_NoOpMetric` / probe stubs, not real `prometheus_client` |
