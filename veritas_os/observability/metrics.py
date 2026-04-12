@@ -7,6 +7,7 @@ keeping runtime compatibility for environments without observability extras.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Iterable, Optional
 
@@ -406,7 +407,10 @@ def record_trustlog_verify_failure(ledger: Any, reason: Any) -> None:
 # ---------------------------------------------------------------------------
 
 # Threshold for slow TrustLog appends (in seconds).
-_SLOW_APPEND_THRESHOLD_SECONDS = 1.0
+# Configurable via VERITAS_SLOW_APPEND_THRESHOLD_SECONDS env var.
+_SLOW_APPEND_THRESHOLD_SECONDS = float(
+    os.getenv("VERITAS_SLOW_APPEND_THRESHOLD_SECONDS", "1.0")
+)
 
 
 def set_db_pool_stats(

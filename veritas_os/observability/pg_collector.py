@@ -124,8 +124,7 @@ async def collect_pg_activity(
     Args:
         pool: The ``AsyncConnectionPool``.
         statement_timeout_sec: Threshold (seconds) to classify a query
-            as "long running".  Defaults to the statement_timeout env var
-            divided by 1000, falling back to 30s.
+            as "long running".  Defaults to 30 seconds.
 
     Returns:
         A dict with ``long_running``, ``idle_in_tx``,
