@@ -642,7 +642,7 @@ async def _app_lifespan(_: FastAPI):
         yield
 
 
-app = FastAPI(title="VERITAS Public API", version="1.0.3", lifespan=_app_lifespan)
+app = FastAPI(title="VERITAS Public API", version="2.0.0-beta", lifespan=_app_lifespan)
 
 # ★ セキュリティ: allow_credentials は明示的なオリジンが設定されている場合のみ True
 def _resolve_cors_settings(origins: Any) -> tuple[list[str], bool]:

@@ -407,7 +407,7 @@ def _system_status_snapshot(srv: Any) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "ok": True,
         "status": system_status,
-        "version": "veritas-api 1.0.3",
+        "version": "veritas-api 2.0.0-beta",
         "uptime": int(time.time() - srv.START_TS),
         "server_time": srv.utc_now_iso_z(),
         "pipeline_ok": pipeline_ok,

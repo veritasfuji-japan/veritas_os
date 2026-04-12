@@ -9,10 +9,19 @@ from scripts.quality import check_frontend_docs_consistency as checker
 
 def test_check_consistency_passes_when_versions_match() -> None:
     """No problems when README versions match package.json."""
-    readme = "| Framework | Next.js 16.1 (App Router) |\n| Language | TypeScript 5.7 |\n| Styling | Tailwind CSS 3.4 |\n"
+    readme = (
+        "| Framework | Next.js 16.1 (App Router) |\n"
+        "| Language | TypeScript 5.7 |\n"
+        "| Styling | Tailwind CSS 3.4 |\n"
+        "| Lint Config | eslint-config-next 15.5 |\n"
+    )
     pkg = {
         "dependencies": {"next": "16.1.7"},
-        "devDependencies": {"typescript": "^5.7.2", "tailwindcss": "^3.4.17"},
+        "devDependencies": {
+            "typescript": "^5.7.2",
+            "tailwindcss": "^3.4.17",
+            "eslint-config-next": "15.5.10",
+        },
     }
     problems = checker.check_consistency(readme, pkg)
     assert problems == []
@@ -20,10 +29,19 @@ def test_check_consistency_passes_when_versions_match() -> None:
 
 def test_check_consistency_detects_nextjs_drift() -> None:
     """Should flag when README documents a different Next.js major.minor."""
-    readme = "| Framework | Next.js 15.5 (App Router) |\n| Language | TypeScript 5.7 |\n| Styling | Tailwind CSS 3.4 |\n"
+    readme = (
+        "| Framework | Next.js 15.5 (App Router) |\n"
+        "| Language | TypeScript 5.7 |\n"
+        "| Styling | Tailwind CSS 3.4 |\n"
+        "| Lint Config | eslint-config-next 15.5 |\n"
+    )
     pkg = {
         "dependencies": {"next": "16.1.7"},
-        "devDependencies": {"typescript": "^5.7.2", "tailwindcss": "^3.4.17"},
+        "devDependencies": {
+            "typescript": "^5.7.2",
+            "tailwindcss": "^3.4.17",
+            "eslint-config-next": "15.5.10",
+        },
     }
     problems = checker.check_consistency(readme, pkg)
     assert len(problems) == 1
@@ -31,12 +49,41 @@ def test_check_consistency_detects_nextjs_drift() -> None:
     assert "15.5" in problems[0]
 
 
+def test_check_consistency_detects_eslint_config_next_drift() -> None:
+    """Should flag when README documents different eslint-config-next major.minor."""
+    readme = (
+        "| Framework | Next.js 16.1 (App Router) |\n"
+        "| Language | TypeScript 5.7 |\n"
+        "| Styling | Tailwind CSS 3.4 |\n"
+        "| Lint Config | eslint-config-next 16.2 |\n"
+    )
+    pkg = {
+        "dependencies": {"next": "16.1.7"},
+        "devDependencies": {
+            "typescript": "^5.7.2",
+            "tailwindcss": "^3.4.17",
+            "eslint-config-next": "15.5.10",
+        },
+    }
+
+    problems = checker.check_consistency(readme, pkg)
+
+    assert len(problems) == 1
+    assert "eslint-config-next" in problems[0]
+    assert "16.2" in problems[0]
+
+
 def test_check_consistency_detects_missing_dep() -> None:
     """Should flag when README documents a package not in package.json."""
-    readme = "| Framework | Next.js 16.1 (App Router) |\n| Language | TypeScript 5.7 |\n| Styling | Tailwind CSS 3.4 |\n"
+    readme = (
+        "| Framework | Next.js 16.1 (App Router) |\n"
+        "| Language | TypeScript 5.7 |\n"
+        "| Styling | Tailwind CSS 3.4 |\n"
+        "| Lint Config | eslint-config-next 15.5 |\n"
+    )
     pkg = {"dependencies": {}, "devDependencies": {}}
     problems = checker.check_consistency(readme, pkg)
-    assert len(problems) == 3
+    assert len(problems) == 4
     assert any("not in frontend/package.json" in p for p in problems)
 
 
@@ -45,10 +92,14 @@ def test_check_consistency_detects_missing_readme_mention() -> None:
     readme = "No version info here."
     pkg = {
         "dependencies": {"next": "16.1.7"},
-        "devDependencies": {"typescript": "^5.7.2", "tailwindcss": "^3.4.17"},
+        "devDependencies": {
+            "typescript": "^5.7.2",
+            "tailwindcss": "^3.4.17",
+            "eslint-config-next": "15.5.10",
+        },
     }
     problems = checker.check_consistency(readme, pkg)
-    assert len(problems) == 3
+    assert len(problems) == 4
     assert any("does not mention" in p for p in problems)
 
 
