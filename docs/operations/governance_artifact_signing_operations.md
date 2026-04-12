@@ -16,8 +16,11 @@ verification, key rotation, and failure handling across runtime posture levels.
 - `secure` / `prod`
   - Only Ed25519-signed governance bundles are accepted.
   - Missing signatures, invalid signatures, and SHA-256-only artifacts are rejected.
-  - TrustLog signer backend must be `aws_kms` with an AWS KMS Ed25519 key.
-  - `file` signer startup is refused unless break-glass override is explicitly set.
+  - TrustLog signer backend must provide the `managed_signing` capability.
+    The current implementation satisfying this is `aws_kms` with an AWS KMS Ed25519 key.
+  - `file` signer startup is refused.  In `prod`, the break-glass override is
+    unconditionally ignored.  In `secure`, the break-glass override is accepted
+    as an unsupported emergency escape hatch.
 
 ## TrustLog signer hardening policy
 
@@ -29,7 +32,11 @@ verification, key rotation, and failure handling across runtime posture levels.
 - Leaked signing keys allow forged TrustLog entries, weakening non-repudiation
   and reducing external audit credibility.
 
-### Required secure/prod configuration (AWS KMS Ed25519)
+### Required secure/prod configuration
+
+The startup validator requires the `managed_signing` capability for the
+TrustLog signer backend.  The current production implementation satisfying
+this requirement is AWS KMS Ed25519:
 
 Set:
 
@@ -42,10 +49,11 @@ Operational notes:
 - Scope IAM permissions to the specific key and required KMS actions only.
 - Validate startup logs show the KMS signer backend and key id metadata.
 
-### Emergency break-glass (unsupported)
+### Emergency break-glass (unsupported, secure posture only)
 
 - Env: `VERITAS_TRUSTLOG_ALLOW_INSECURE_SIGNER_IN_PROD=1`
-- Effect: allows startup to continue with `file` signer in `secure`/`prod`.
+- Effect: allows startup to continue with `file` signer in `secure` posture.
+  **In `prod` posture this override is unconditionally ignored.**
 - Security warning: this mode is unsupported for enterprise deployments and
   should be used only for short-lived emergency recovery.
 - Exit criteria: remove override, restore `aws_kms` signer, and document

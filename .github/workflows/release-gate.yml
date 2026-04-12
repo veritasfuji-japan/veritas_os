@@ -147,7 +147,7 @@ jobs:
             echo ""
             echo "- Gate mode: **${{ steps.gate_mode.outputs.mode }}**"
             echo "- Test exit code: **${{ steps.trustlog_tests.outputs.exit_code }}**"
-            echo "- Coverage: KMS signer / S3 Object Lock mirror / unified verification / startup posture / hard-fail / legacy compatibility"
+            echo "- Coverage: managed_signing (KMS signer) / immutable_retention (S3 Object Lock mirror) / unified verification / capability-aware startup posture / hard-fail / legacy compatibility"
             echo "- Ref: \`${GITHUB_REF}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
