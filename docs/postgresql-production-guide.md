@@ -785,7 +785,103 @@ cleanup plan and rationale.
 
 ---
 
-## 15. Known Limitations and Future Work
+## 15. PostgreSQL Metrics Reference (`/v1/metrics`)
+
+When either `VERITAS_TRUSTLOG_BACKEND` or `VERITAS_MEMORY_BACKEND` is set to
+`postgresql`, the `/v1/metrics` endpoint exposes additional fields and the
+Prometheus `/metrics` endpoint emits additional gauges/counters.
+
+### JSON response fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `db_pool` | `object \| null` | Connection pool snapshot (null when backend = file) |
+| `db_pool.in_use` | `int` | Connections currently checked out |
+| `db_pool.available` | `int` | Idle connections ready for use |
+| `db_pool.waiting` | `int` | Requests blocked waiting for a connection |
+| `db_pool.max_size` | `int` | Configured maximum pool size |
+| `db_pool.min_size` | `int` | Configured minimum pool size |
+| `db_health` | `bool` | `true` when `SELECT 1` succeeds |
+| `db_activity` | `object \| null` | pg_stat_activity snapshot (null when file backend or DB unhealthy) |
+| `db_activity.long_running` | `int` | Queries exceeding the statement timeout |
+| `db_activity.idle_in_tx` | `int` | Connections idle in a transaction |
+| `db_activity.advisory_lock_wait` | `int` | Sessions waiting on advisory locks |
+
+### Prometheus metrics
+
+#### Pool gauges (updated on every `/v1/metrics` scrape)
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `db_pool_in_use` | Gauge | — | Checked-out connections |
+| `db_pool_available` | Gauge | — | Idle connections |
+| `db_pool_waiting` | Gauge | — | Waiting requests |
+| `db_pool_max_size` | Gauge | — | Max pool size |
+| `db_pool_min_size` | Gauge | — | Min pool size |
+
+#### Health and backend
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `db_health_status` | Gauge | — | 1 = healthy, 0 = unhealthy |
+| `db_backend_selected` | Gauge | `component`, `backend` | 1 for each active storage backend |
+
+#### Failure counters
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `db_connect_failures_total` | Counter | `reason` | Connection failures |
+| `db_statement_timeouts_total` | Counter | — | SQL statement timeouts |
+| `trustlog_append_conflict_total` | Counter | — | Unique-constraint conflicts on append |
+| `slow_append_warning_total` | Counter | — | Appends exceeding 1 s threshold |
+
+#### Latency and activity
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `trustlog_append_latency_seconds` | Histogram | — | End-to-end TrustLog append time |
+| `long_running_query_count` | Gauge | — | Queries exceeding timeout threshold |
+| `idle_in_transaction_count` | Gauge | — | Idle-in-transaction connections |
+| `advisory_lock_contention_count` | Gauge | — | Advisory lock waiters |
+
+### Interpreting the metrics
+
+* **`db_pool_in_use` ≈ `db_pool_max_size`** → Pool exhaustion risk.
+  Action: increase `VERITAS_DB_POOL_MAX_SIZE` or investigate slow queries.
+* **`db_pool_waiting > 0`** → Callers are blocked.
+  Correlate with `trustlog_append_latency_seconds` to find the bottleneck.
+* **`db_health_status = 0`** → Database is unreachable.
+  Check `db_connect_failures_total` for the failure pattern.
+* **`long_running_query_count > 0`** → Possible lock contention or
+  missing indexes.  Cross-check with `advisory_lock_contention_count`.
+* **`slow_append_warning_total` increasing** → TrustLog appends are slow.
+  Investigate lock contention, WAL pressure, or connection pool saturation.
+
+### File-backend behaviour
+
+When both backends use file storage (`jsonl` / `json`), the `db_pool`,
+`db_activity` fields are `null` and `db_health` is always `true`.
+Prometheus gauges for pool/activity are set to zero.
+The `db_backend_selected` gauge still reflects the active backend names.
+
+### 日本語サマリー
+
+PostgreSQL バックエンド使用時、`/v1/metrics` は接続プールの利用状況
+(`db_pool`)、データベース健全性 (`db_health`)、アクティブセッション情報
+(`db_activity`) を返します。ファイルバックエンド時はこれらは `null` / `true`
+になります。Prometheus メトリクスも同様に更新されます。
+
+| 指標 | 意味 |
+|------|------|
+| `db_pool_in_use ≈ max_size` | プール枯渇リスク |
+| `db_pool_waiting > 0` | 接続待ちが発生中 |
+| `db_health_status = 0` | データベース到達不能 |
+| `long_running_query_count > 0` | 長時間クエリ検出 |
+| `slow_append_warning_total` 増加 | TrustLog 書込みが遅い |
+
+---
+
+## 16. Known Limitations and Future Work
 
 ### Current limitations
 
@@ -794,7 +890,7 @@ cleanup plan and rationale.
 | **Search** | Token-based `LIKE ANY` search (no vector similarity) | Lower relevance ranking vs. vector search |
 | **Read replicas** | No application-level read/write splitting | All queries go to primary |
 | **Data import** | `veritas-migrate` CLI requires service quiesce during TrustLog migration (§11) | Planned: online migration with write-ahead buffering |
-| **Connection pool metrics** | Pool stats not exposed to `/v1/metrics` | Limited observability |
+| **Connection pool metrics** | Pool stats exposed via `/v1/metrics` and Prometheus gauges (since v2.1) | ✅ Resolved |
 | **Multi-database** | Single `VERITAS_DATABASE_URL` for all backends | Cannot split MemoryOS and TrustLog across databases |
 | **Schema versioning in CI** | Mock pool in unit tests, real PG only in `test-postgresql` and `docker-smoke` jobs | Behavioral drift possible between mock and real |
 | **Concurrent advisory lock testing** | Advisory lock serialization tested via lock-based contention mock (25 tests in `test_pg_trustlog_contention.py`); real PG contention tested in CI `test-postgresql` job | Lock semantics faithfully emulated; real PG may exhibit different timing |
@@ -809,7 +905,7 @@ cleanup plan and rationale.
 | **Table partitioning** | Range-partition `trustlog_entries` by `created_at` for archive and query performance | Medium |
 | **CDC (Change Data Capture)** | Logical replication / Debezium for streaming TrustLog to external audit systems | Medium |
 | **Archive policy** | Automated partitioned table detach + cold storage for aged TrustLog entries | Medium |
-| **Connection pool metrics** | Expose `psycopg_pool` stats via `/v1/metrics` and Prometheus | Medium |
+| **Connection pool metrics** | ✅ Implemented — pool gauges, health, pg_stat_activity exposed via `/v1/metrics` | Done |
 | **Read/write splitting** | Route read-only queries to replicas for horizontal scaling | Low |
 | **Legacy migrator removal** | Remove `veritas_os/storage/migrations/` once all deployments are on Alembic | Low |
 
@@ -825,7 +921,7 @@ cleanup plan and rationale.
 
 ---
 
-## 16. Three-Tier Environment Reference
+## 17. Three-Tier Environment Reference
 
 ### Dev (local)
 
@@ -984,7 +1080,7 @@ veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run --json
 | 検索 | トークンベースの `LIKE ANY`（ベクトル類似度検索なし） |
 | リードレプリカ | アプリケーション層の読み書き分離なし |
 | データインポート | `veritas-migrate` CLI は TrustLog 移行時にサービス停止（quiesce）が必要 |
-| 接続プールメトリクス | プールステータスが `/v1/metrics` に公開されていない |
+| 接続プールメトリクス | `/v1/metrics` と Prometheus ゲージで公開済み (v2.1〜) |
 | マルチデータベース | MemoryOS と TrustLog を別データベースに分割不可 |
 
 ### 将来の拡張予定
@@ -994,5 +1090,5 @@ veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run --json
 - **テーブルパーティショニング**: `trustlog_entries` の日付レンジパーティション
 - **CDC**: 外部監査システムへの TrustLog ストリーミング
 - **アーカイブポリシー**: 古い TrustLog エントリの自動コールドストレージ移行
-- **接続プールメトリクス**: `psycopg_pool` 統計の `/v1/metrics` / Prometheus 公開
+- **接続プールメトリクス**: ✅ 実装済み — プールゲージ、ヘルスチェック、pg_stat_activity が `/v1/metrics` / Prometheus で公開
 - **リード/ライト分離**: リードレプリカへの読み取りクエリルーティング
