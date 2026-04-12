@@ -185,6 +185,30 @@ class Signer(Protocol):
         """Return public-key fingerprint when available."""
 
 
+class KmsEd25519Provider(Protocol):
+    """Provider interface for remote Ed25519 signing backends."""
+
+    provider_name: str
+
+    def sign(self, payload_hash: str) -> bytes:
+        """Sign payload hash bytes and return raw signature bytes."""
+
+    def verify(self, payload_hash: str, signature: bytes) -> bool:
+        """Verify raw signature bytes for payload hash."""
+
+    def key_id(self) -> str:
+        """Return stable key identifier."""
+
+    def key_version(self) -> str:
+        """Return key-version label if available."""
+
+    def algorithm(self) -> str:
+        """Return signature algorithm name."""
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        """Return stable public key fingerprint if provider exposes one."""
+
+
 class FileEd25519Signer:
     """Ed25519 signer backed by local key files."""
 
@@ -224,22 +248,12 @@ class FileEd25519Signer:
         return public_key_fingerprint(self.public_key_path)
 
 
-class AwsKmsEd25519Signer:
-    """Ed25519 signer backed by AWS KMS asymmetric keys.
+class AwsKmsEd25519Provider:
+    """AWS KMS provider for asymmetric Ed25519 signing."""
 
-    Security warning:
-        This signer performs a network call to AWS KMS for signing operations.
-        Ensure IAM permissions are scoped to the specific key and that requests
-        are routed over trusted channels.
-    """
+    provider_name = "aws_kms"
 
-    signer_type = "aws_kms"
-
-    def __init__(
-        self,
-        kms_key_id: str,
-        kms_client: Optional[object] = None,
-    ) -> None:
+    def __init__(self, kms_key_id: str, kms_client: Optional[object] = None) -> None:
         if not kms_key_id.strip():
             raise ValueError("VERITAS_TRUSTLOG_KMS_KEY_ID is required for aws_kms backend")
         self.kms_key_id = kms_key_id.strip()
@@ -248,7 +262,6 @@ class AwsKmsEd25519Signer:
 
     @property
     def kms_client(self) -> object:
-        """Lazily construct boto3 KMS client."""
         if self._kms_client is None:
             boto3 = importlib.import_module("boto3")
             self._kms_client = boto3.client("kms")
@@ -263,40 +276,32 @@ class AwsKmsEd25519Signer:
         if not isinstance(loaded, Ed25519PublicKey):
             raise ValueError("KMS key is not Ed25519")
         self._public_key = loaded
-        return self._public_key
+        return loaded
 
-    def sign_payload_hash(self, payload_hash: str) -> str:
+    def sign(self, payload_hash: str) -> bytes:
         response = self.kms_client.sign(
             KeyId=self.kms_key_id,
             Message=payload_hash.encode("utf-8"),
             MessageType="RAW",
             SigningAlgorithm="EDDSA",
         )
-        signature: bytes = response["Signature"]
-        return base64.urlsafe_b64encode(signature).decode("ascii")
+        return response["Signature"]
 
-    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+    def verify(self, payload_hash: str, signature: bytes) -> bool:
         try:
-            signature = base64.urlsafe_b64decode(signature_b64)
             public_key = self._load_public_key()
             public_key.verify(signature, payload_hash.encode("utf-8"))
         except (InvalidSignature, ValueError, TypeError):
             return False
         return True
 
-    def signer_key_id(self) -> str:
+    def key_id(self) -> str:
         return self.kms_key_id
 
-    def signer_key_version(self) -> str:
-        """Return normalized key-version label for AWS KMS.
-
-        AWS KMS Sign/GetPublicKey APIs do not return a per-operation key
-        version identifier for asymmetric KMS keys. We record ``unknown`` so
-        verifiers can treat the field consistently across backends.
-        """
+    def key_version(self) -> str:
         return "unknown"
 
-    def signature_algorithm(self) -> str:
+    def algorithm(self) -> str:
         return "eddsa_ed25519"
 
     def public_key_fingerprint(self) -> Optional[str]:
@@ -311,6 +316,198 @@ class AwsKmsEd25519Signer:
         return sha256_hex(public_raw.hex())[:16]
 
 
+class GcpKmsEd25519Provider:
+    """GCP Cloud KMS provider for asymmetric Ed25519 signing."""
+
+    provider_name = "gcp_kms"
+
+    def __init__(self, kms_key_name: str, kms_client: Optional[object] = None) -> None:
+        if not kms_key_name.strip():
+            raise ValueError(
+                "VERITAS_TRUSTLOG_GCP_KMS_KEY_NAME is required for gcp_kms backend"
+            )
+        self.kms_key_name = kms_key_name.strip()
+        self._kms_client = kms_client
+        self._public_key: Optional[Ed25519PublicKey] = None
+
+    @property
+    def kms_client(self) -> object:
+        if self._kms_client is None:
+            kms_mod = importlib.import_module("google.cloud.kms_v1")
+            self._kms_client = kms_mod.KeyManagementServiceClient()
+        return self._kms_client
+
+    def _load_public_key(self) -> Ed25519PublicKey:
+        if self._public_key is not None:
+            return self._public_key
+        response = self.kms_client.get_public_key(request={"name": self.kms_key_name})
+        pem = getattr(response, "pem", "")
+        loaded = serialization.load_pem_public_key(pem.encode("utf-8"))
+        if not isinstance(loaded, Ed25519PublicKey):
+            raise ValueError("GCP KMS key is not Ed25519")
+        self._public_key = loaded
+        return loaded
+
+    def sign(self, payload_hash: str) -> bytes:
+        response = self.kms_client.asymmetric_sign(
+            request={
+                "name": self.kms_key_name,
+                "data": payload_hash.encode("utf-8"),
+            }
+        )
+        return response.signature
+
+    def verify(self, payload_hash: str, signature: bytes) -> bool:
+        try:
+            public_key = self._load_public_key()
+            public_key.verify(signature, payload_hash.encode("utf-8"))
+        except (InvalidSignature, ValueError, TypeError, AttributeError):
+            return False
+        return True
+
+    def key_id(self) -> str:
+        return self.kms_key_name
+
+    def key_version(self) -> str:
+        return self.kms_key_name.rsplit("/", maxsplit=1)[-1]
+
+    def algorithm(self) -> str:
+        return "eddsa_ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        try:
+            public_key = self._load_public_key()
+            public_raw = public_key.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+        except Exception:  # noqa: BLE001
+            return None
+        return sha256_hex(public_raw.hex())[:16]
+
+
+class VaultTransitEd25519Provider:
+    """HashiCorp Vault transit provider for Ed25519 signing and verification."""
+
+    provider_name = "vault"
+
+    def __init__(self, key_name: str, vault_client: Optional[object] = None) -> None:
+        if not key_name.strip():
+            raise ValueError("VERITAS_TRUSTLOG_VAULT_KEY_NAME is required for vault backend")
+        self.key_name = key_name.strip()
+        self._vault_client = vault_client
+        self._cached_fingerprint: Optional[str] = None
+
+    @property
+    def vault_client(self) -> object:
+        if self._vault_client is None:
+            hvac = importlib.import_module("hvac")
+            self._vault_client = hvac.Client(
+                url=os.getenv("VERITAS_TRUSTLOG_VAULT_ADDR"),
+                token=os.getenv("VERITAS_TRUSTLOG_VAULT_TOKEN"),
+            )
+        return self._vault_client
+
+    def _b64_input(self, payload_hash: str) -> str:
+        return base64.b64encode(payload_hash.encode("utf-8")).decode("ascii")
+
+    def sign(self, payload_hash: str) -> bytes:
+        response = self.vault_client.secrets.transit.sign_data(
+            name=self.key_name,
+            hash_input=self._b64_input(payload_hash),
+            signature_algorithm="ed25519",
+            marshaling_algorithm="jws",
+            prehashed=False,
+        )
+        signature = response.get("data", {}).get("signature", "")
+        # Format: vault:v1:<base64sig>
+        parts = signature.split(":")
+        if len(parts) != 3:
+            raise ValueError("Vault transit sign_data returned malformed signature")
+        return base64.urlsafe_b64decode(parts[2])
+
+    def verify(self, payload_hash: str, signature: bytes) -> bool:
+        wrapped_sig = f"vault:v1:{base64.urlsafe_b64encode(signature).decode('ascii')}"
+        response = self.vault_client.secrets.transit.verify_signed_data(
+            name=self.key_name,
+            hash_input=self._b64_input(payload_hash),
+            signature=wrapped_sig,
+            signature_algorithm="ed25519",
+            marshaling_algorithm="jws",
+            prehashed=False,
+        )
+        return bool(response.get("data", {}).get("valid", False))
+
+    def key_id(self) -> str:
+        return self.key_name
+
+    def key_version(self) -> str:
+        return "unknown"
+
+    def algorithm(self) -> str:
+        return "eddsa_ed25519"
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        if self._cached_fingerprint is not None:
+            return self._cached_fingerprint
+        try:
+            response = self.vault_client.secrets.transit.read_key(name=self.key_name)
+            latest_version = str(response.get("data", {}).get("latest_version", ""))
+            key_data = response.get("data", {}).get("keys", {}).get(latest_version, {})
+            public_key_pem = key_data.get("public_key")
+            if not public_key_pem:
+                return None
+            loaded = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
+            if not isinstance(loaded, Ed25519PublicKey):
+                return None
+            public_raw = loaded.public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw,
+            )
+            self._cached_fingerprint = sha256_hex(public_raw.hex())[:16]
+            return self._cached_fingerprint
+        except Exception:  # noqa: BLE001
+            return None
+
+
+class KmsEd25519Signer:
+    """Signer adapter for KMS/HSM/Vault provider implementations."""
+
+    def __init__(self, provider: KmsEd25519Provider) -> None:
+        self.provider = provider
+        self.signer_type = provider.provider_name
+
+    def sign_payload_hash(self, payload_hash: str) -> str:
+        signature = self.provider.sign(payload_hash)
+        return base64.urlsafe_b64encode(signature).decode("ascii")
+
+    def verify_payload_signature(self, payload_hash: str, signature_b64: str) -> bool:
+        try:
+            signature = base64.urlsafe_b64decode(signature_b64)
+        except (ValueError, TypeError):
+            return False
+        return self.provider.verify(payload_hash, signature)
+
+    def signer_key_id(self) -> str:
+        return self.provider.key_id()
+
+    def signer_key_version(self) -> str:
+        return self.provider.key_version()
+
+    def signature_algorithm(self) -> str:
+        return self.provider.algorithm()
+
+    def public_key_fingerprint(self) -> Optional[str]:
+        return self.provider.public_key_fingerprint()
+
+
+class AwsKmsEd25519Signer(KmsEd25519Signer):
+    """Backward-compatible AWS KMS signer wrapper."""
+
+    def __init__(self, kms_key_id: str, kms_client: Optional[object] = None) -> None:
+        super().__init__(AwsKmsEd25519Provider(kms_key_id=kms_key_id, kms_client=kms_client))
+
+
 def build_trustlog_signer(
     *,
     private_key_path: Path,
@@ -319,7 +516,14 @@ def build_trustlog_signer(
     backend: Optional[str] = None,
     kms_key_id: Optional[str] = None,
 ) -> Signer:
-    """Build TrustLog signer from backend environment variables."""
+    """Build TrustLog signer from backend environment variables.
+
+    Migration path:
+        Existing deployments can keep ``backend=file`` while introducing KMS.
+        For staged rollout, set ``VERITAS_TRUSTLOG_SIGNER_BACKEND`` to one of
+        ``aws_kms`` / ``gcp_kms`` / ``vault`` and keep file-based keys only as
+        temporary fallback at the orchestrator level.
+    """
     selected_backend = (
         backend
         if backend is not None
@@ -336,7 +540,14 @@ def build_trustlog_signer(
             if kms_key_id is not None
             else os.getenv("VERITAS_TRUSTLOG_KMS_KEY_ID", "")
         )
-        return AwsKmsEd25519Signer(kms_key_id=selected_key_id)
+        return KmsEd25519Signer(AwsKmsEd25519Provider(kms_key_id=selected_key_id))
+    if selected_backend in {"gcp_kms", "gcp_kms_ed25519"}:
+        key_name = os.getenv("VERITAS_TRUSTLOG_GCP_KMS_KEY_NAME", "")
+        return KmsEd25519Signer(GcpKmsEd25519Provider(kms_key_name=key_name))
+    if selected_backend in {"vault", "vault_transit"}:
+        key_name = os.getenv("VERITAS_TRUSTLOG_VAULT_KEY_NAME", "")
+        return KmsEd25519Signer(VaultTransitEd25519Provider(key_name=key_name))
     raise ValueError(
-        "Unsupported signer backend. Expected 'file' or 'aws_kms'."
+        "Unsupported signer backend. Expected 'file', 'aws_kms', "
+        "'gcp_kms', or 'vault'."
     )
