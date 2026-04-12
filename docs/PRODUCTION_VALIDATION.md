@@ -332,6 +332,43 @@ docker compose down
 | Governance policy latency | 10 sequential calls, p95 < 500ms | Governance read performance budget |
 | Health endpoint latency | 20 sequential calls, p95 < 200ms | Health endpoint performance budget |
 
+### 10. PostgreSQL Contention (`test_pg_trustlog_contention.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| 2-worker simultaneous append | Mock advisory lock + asyncio.gather | Chain intact under basic concurrency |
+| N-worker burst (5/10/20) | N concurrent appends + chain verify | Burst write safety |
+| Statement timeout → fail-closed | Simulated INSERT/lock/UPDATE timeout | No silent pass on timeout |
+| Pool starvation → fail-closed | Broken pool factory | Fail-closed on resource exhaustion |
+| Rollback recovery | Success → failure → success cycle | Chain unaffected by mid-append crash |
+| Advisory lock release | Check lock availability after commit/rollback | No leaked locks |
+| Chain verification (hash formula) | SHA-256 recompute across all entries | End-to-end chain integrity |
+| Threaded contention | OS threads × asyncio.run per thread | Multi-worker deployment approximation |
+
+### 11. PostgreSQL Metrics (`test_pg_metrics.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| Pool gauge definitions | Attribute existence check | All required metrics exist |
+| Recording helpers | Monkeypatched metric probes | Labels and values correct |
+| Pool-stats collection | Mock pool → `collect_pool_stats()` | in_use/available/waiting derived correctly |
+| pg_stat_activity collection | Mock cursor → `collect_pg_activity()` | long_running/idle_in_tx/advisory_lock_wait parsed |
+| Health-check gauge | Healthy + unhealthy mock pool | Gauge reflects true DB state |
+| `/v1/metrics` integration | TestClient GET + field assertions | Endpoint includes db_pool, db_health, db_activity |
+| File-backend stub | Null pool → safe defaults | Graceful degradation without PG |
+| Metric name stability | Key presence check | No metric name regression |
+
+### 12. Recovery Drill Scripts (`test_drill_postgres_recovery.py`)
+
+| What | How | Production Gap Closed |
+|------|-----|----------------------|
+| Script existence | Path.exists() for 3 scripts | Deployment package complete |
+| Script executable | `os.access(X_OK)` | Scripts runnable without `bash` prefix |
+| Bash syntax valid | `bash -n` for 3 scripts | No syntax errors in drill scripts |
+| `--help` flag | Subprocess exit code + output | Self-documenting scripts |
+| Content coherence (pg_dump, etc.) | String assertions on script body | Correct tools referenced |
+| Runbook coherence | Assertions on `postgresql-drill-runbook.md` | Docs ↔ scripts consistency |
+
 ## Architecture: CI Role Separation
 
 ```
@@ -374,10 +411,13 @@ docker compose down
 |------|--------|------------|
 | Live LLM API validation | **Gated** — `scripts/live_provider_validation.sh` | Requires OPENAI_API_KEY; runs in Tier 3 / manual |
 | Full Docker compose E2E | **Validated** — `scripts/compose_validation.sh` | Governance endpoints, security headers, auth enforcement |
-| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/BACKEND_PARITY_COVERAGE.md` for 195+ parity tests |
+| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/BACKEND_PARITY_COVERAGE.md` for 279+ parity + hardening tests |
 | Database persistence (JSONL) | **Covered** — TrustLog file tests | File-based persistence fully tested |
 | PostgreSQL schema migrations | **Covered** — Alembic migrations tested in `test-postgresql` CI job | Forward + rollback paths tested |
 | JSONL → PostgreSQL import | **Covered** — `veritas-migrate` CLI with unit tests | Idempotent import with dry-run, resume, and post-import chain verification |
+| PostgreSQL advisory lock contention | **Covered** — 25 contention tests in `test_pg_trustlog_contention.py` | Mock advisory lock via `threading.Lock`; real PG in CI `test-postgresql` job |
+| PostgreSQL pool/activity metrics | **Covered** — 28 metrics tests in `test_pg_metrics.py` | Pool gauges, health, pg_stat_activity, `/v1/metrics` integration |
+| PostgreSQL backup/restore/drill | **Covered** — 31 drill tests + scripts + runbook | Script syntax, coherence, and runbook consistency validated |
 | Multi-node clustering | Not applicable | Single-node architecture; PgBouncer recommended for high-concurrency |
 | TLS certificate chain/e2e HTTPS handshake | **Gated** — staging cert expiry checked | `@external` staging HTTPS tests + cert expiry validation |
 | Load/stress at scale (p95/p99 latency SLO) | **Partially covered** — latency budgets enforced | p95 budgets on health (200ms), governance (500ms), burst (1000ms) |
