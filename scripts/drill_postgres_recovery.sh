@@ -239,7 +239,11 @@ if ! $SKIP_HEALTH; then
 
     HEALTH_BODY=$(curl -sf "${BACKEND_URL}/health" 2>/dev/null || echo "")
     if [[ -n "$HEALTH_BODY" ]]; then
-        HEALTH_STATUS=$(echo "$HEALTH_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "unknown")
+        HEALTH_STATUS=$(echo "$HEALTH_BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('status',''))" 2>/dev/null)
+        if [[ -z "$HEALTH_STATUS" ]]; then
+            log_warn "Could not parse /health JSON response"
+            HEALTH_STATUS="unknown"
+        fi
         if [[ "$HEALTH_STATUS" == "ok" || "$HEALTH_STATUS" == "degraded" ]]; then
             record_step "health-check" "PASS" "status=${HEALTH_STATUS}"
         else

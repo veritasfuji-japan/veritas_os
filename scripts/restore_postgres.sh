@@ -147,15 +147,15 @@ if pg_restore "${PG_RESTORE_ARGS[@]}" "${BACKUP_FILE}"; then
     DURATION=$((END_TIME - START_TIME))
     log_info "Restore completed in ${DURATION}s ✓"
 else
-    RC=$?
+    PG_RESTORE_RC=$?
     # pg_restore returns 1 for warnings (e.g. "relation already exists" on
     # clean mode when table was already dropped).  Treat only fatal (>1) as
     # errors.
-    if [[ $RC -gt 1 ]]; then
-        log_error "pg_restore failed (exit code: ${RC})"
+    if [[ $PG_RESTORE_RC -gt 1 ]]; then
+        log_error "pg_restore failed (exit code: ${PG_RESTORE_RC})"
         exit 2
     else
-        log_warn "pg_restore completed with warnings (exit code: ${RC})"
+        log_warn "pg_restore completed with warnings (exit code: ${PG_RESTORE_RC})"
     fi
 fi
 

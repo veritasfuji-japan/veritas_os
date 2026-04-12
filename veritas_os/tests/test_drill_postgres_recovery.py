@@ -171,9 +171,10 @@ class TestRunbookCoherence:
         assert "unsafe" in content.lower() or "not safe" in content.lower()
 
     def test_runbook_documents_single_primary(self) -> None:
-        content = self.RUNBOOK.read_text()
-        assert "single writable primary" in content.lower() or \
-               "single" in content.lower()
+        content = self.RUNBOOK.read_text().lower()
+        assert "single writable primary" in content, (
+            "Runbook does not document the single writable primary requirement"
+        )
 
     def test_runbook_documents_advisory_lock(self) -> None:
         content = self.RUNBOOK.read_text()
