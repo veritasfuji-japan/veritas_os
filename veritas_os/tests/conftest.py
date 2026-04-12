@@ -96,3 +96,7 @@ def pytest_configure(config: pytest.Config) -> None:
         "markers",
         "postgresql: tests requiring a real PostgreSQL service container",
     )
+    config.addinivalue_line(
+        "markers",
+        "contention: advisory-lock contention and concurrency integration tests",
+    )

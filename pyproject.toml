@@ -130,4 +130,5 @@ markers = [
   "scenario: ビジネスシナリオテスト",
   "eu_ai_act: EU AI Act コンプライアンス関連",
   "postgresql: tests requiring a real PostgreSQL service container",
+  "contention: advisory-lock contention and concurrency integration tests",
 ]

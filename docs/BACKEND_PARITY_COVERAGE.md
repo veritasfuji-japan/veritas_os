@@ -159,12 +159,12 @@ or know which backend is active.
 |---|---|---|
 | `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
 | `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
-| `test-postgresql` | PostgreSQL (mock + real) | Backend parity + contract + contention tests |
+| `test-postgresql` | PostgreSQL (mock + **real PG**) | Backend parity + contract tests (mock-pool) **+ real PostgreSQL advisory-lock contention tests** (`-m "postgresql and contention"`) |
 | `test-slow` | Default | Slow/heavy tests |
 | `governance-smoke` | Default | Smoke tests (Tier 1) |
 | `docker-smoke` | PostgreSQL (via compose) | Full-stack health + read/write with real PG (Tier 2/3) |
 | `production-tests` | Default | `pytest -m "production or smoke"` (Tier 2) |
-| `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification (Tier 3) |
+| `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification **+ real PostgreSQL advisory-lock contention tests** (Tier 3) |
 
 ### Smoke / Release Validation Path
 
@@ -200,7 +200,7 @@ for PostgreSQL-specific validation guidance.
 | **Real PostgreSQL integration** (full test suite) | CI job `test-postgresql` + `docker-smoke` + `postgresql-smoke` with real PG 16; mock-pool in unit tests | Medium |
 | **Search scoring parity** | Covered for result IDs; exact score values may differ slightly (LIKE ANY vs. file scan) | Low |
 | **Connection pool failure recovery** | Tested in `test_storage_db.py` + `test_pg_trustlog_contention.py` (pool starvation fail-closed) | ✅ Covered |
-| **Concurrent writes under real PostgreSQL advisory locks** | Mock-pool contention (25 tests) + CI `test-postgresql` job against real PG | Medium — real PG timing not tested |
+| **Concurrent writes under real PostgreSQL advisory locks** | 13 real-PG contention tests (`@pytest.mark.postgresql and contention`) run in `test-postgresql` and `postgresql-smoke` CI jobs against a live PG 16 service container | ✅ Covered |
 | **Pool/activity metrics** | Tested in `test_pg_metrics.py` (28 tests); `/v1/metrics` integration covered | ✅ Covered |
 | **Backup/restore/drill scripts** | Tested in `test_drill_postgres_recovery.py` (31 tests); script syntax + content coherence | ✅ Covered (no live `pg_dump`) |
 
@@ -214,7 +214,7 @@ PostgreSQL backends based on the 195+ parity test suite:
 - User isolation (MemoryStore)
 - Hash-chain integrity (TrustLogStore)
 - Error handling (missing keys, empty queries, negative limits)
-- Concurrent operation correctness (at mock-pool level)
+- Concurrent operation correctness (at mock-pool level **and on a live PostgreSQL 16 instance**)
 - Factory dispatch and fail-fast validation
 
 ### What is covered by the import CLI
@@ -240,7 +240,7 @@ file-to-PostgreSQL data migration:
 | `erase_user_data` return count | JSON returns 0; PostgreSQL returns actual `rowcount` (Note 1) |
 | `iter_entries` default ordering | JSONL uses `reverse=True` internally (Note 2); PostgreSQL uses `ORDER BY id ASC` |
 | Search relevance scoring | Token-based `LIKE ANY` (PostgreSQL) vs. file-scan match (JSON) |
-| Advisory lock contention behaviour | Mock pool simulates locks; real PostgreSQL may show different timing |
+| Advisory lock timing under CPU/IO saturation | Real-PG contention tests use an idle CI container; saturation behaviour is not tested |
 | Export from PostgreSQL to file backends | No automated tooling; manual SQL export + reformat |
 
 ## 7. Test File Reference
@@ -255,32 +255,69 @@ file-to-PostgreSQL data migration:
 | `test_storage_base.py` | varies | Protocol interface |
 | `test_storage_db.py` | varies | Connection pool |
 | `test_storage_jsonl.py` | varies | JSONL backend unit |
-| `test_pg_trustlog_contention.py` | 25 | Advisory lock contention + concurrency |
+| `test_pg_trustlog_contention.py` | 38 (25 mock-pool + 13 real-PG) | Advisory lock contention + concurrency (mock **and** real PostgreSQL) |
 | `test_pg_metrics.py` | 28 | Pool/activity metrics + `/v1/metrics` integration |
 | `test_drill_postgres_recovery.py` | 31 | Drill script validation + runbook coherence |
-| **Total backend + hardening tests** | **279+** | |
+| **Total backend + hardening tests** | **292+** | |
 
 ## 8. Contention, Metrics, and Recovery Coverage
 
 ### Advisory Lock Contention Tests (`test_pg_trustlog_contention.py`)
 
-These tests exercise TrustLog `append()` under concurrent-access patterns
-using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
-`threading.Lock`.
+This module contains **two layers** of advisory-lock serialisation tests:
 
-| Test Domain | Tests | Covered |
-|---|---:|:---:|
-| **2-worker simultaneous append** | 2 | ✅ |
-| **N-worker burst (5/10/20)** | 4 | ✅ |
-| **Statement timeout → fail-closed** | 3 | ✅ |
-| **Connection pool starvation → fail-closed** | 2 | ✅ |
-| **Rollback recovery (chain intact after failure)** | 2 | ✅ |
-| **Advisory lock release (commit + rollback)** | 3 | ✅ |
-| **Full chain verification after concurrent writes** | 4 | ✅ |
-| **Mixed success/failure contention** | 2 | ✅ |
-| **Threaded contention (OS threads)** | 2 | ✅ |
-| **Missing encryption key → fail-closed** | 1 | ✅ |
-| **Total** | **25** (mock pool, Tier 1 CI) | |
+**Layer 1 — Mock-pool tests (25 tests, `pytest` default)**  
+Exercise TrustLog `append()` under concurrent-access patterns using an
+enhanced mock pool that simulates `pg_advisory_xact_lock` via
+`threading.Lock`.  Fast and deterministic; run on every PR.
+
+| Test Domain | Tests | Layer |
+|---|---:|---|
+| **2-worker simultaneous append** | 2 | Mock |
+| **N-worker burst (5/10/20)** | 4 | Mock |
+| **Statement timeout → fail-closed** | 3 | Mock |
+| **Connection pool starvation → fail-closed** | 2 | Mock |
+| **Rollback recovery (chain intact after failure)** | 2 | Mock |
+| **Advisory lock release (commit + rollback)** | 3 | Mock |
+| **Full chain verification after concurrent writes** | 4 | Mock |
+| **Mixed success/failure contention** | 2 | Mock |
+| **Threaded contention (OS threads)** | 2 | Mock |
+| **Missing encryption key → fail-closed** | 1 | Mock |
+| **Subtotal** | **25** (mock pool, Tier 1 CI — every PR) | |
+
+**Layer 2 — Real PostgreSQL tests (13 tests, `@pytest.mark.postgresql @pytest.mark.contention`)**  
+Prove that PostgreSQL's own `pg_advisory_xact_lock` actually serialises
+writes on a live database.  Run in the `test-postgresql` job (Tier 1)
+and the `postgresql-smoke` job (Tier 3) against a PostgreSQL 16 service
+container.
+
+| Test Domain | Tests | Layer |
+|---|---:|---|
+| **2 concurrent writers — chain intact** | 2 | Real PG |
+| **5-worker burst — chain intact** | 1 | Real PG |
+| **10-worker burst — no gap/duplicate** | 1 | Real PG |
+| **Lock timeout → fail-closed** | 1 | Real PG |
+| **Chain intact after lock-timeout + recovery** | 1 | Real PG |
+| **Pool waiting (8 workers, max_size=2)** | 1 | Real PG |
+| **Rollback recovery — chain intact** | 1 | Real PG |
+| **Append-after-recovery — chain continues** | 1 | Real PG |
+| **Full chain verify after 20-writer burst** | 1 | Real PG |
+| **No duplicate request_ids in DB** | 1 | Real PG |
+| **Advisory lock released after commit** | 1 | Real PG |
+| **Advisory lock released after rollback** | 1 | Real PG |
+| **Subtotal** | **13** (real PostgreSQL, `test-postgresql` + `postgresql-smoke` CI) | |
+
+**How to run locally**:
+
+```bash
+# Mock-pool tests (no database needed)
+pytest veritas_os/tests/test_pg_trustlog_contention.py -m "not (postgresql and contention)"
+
+# Real PostgreSQL contention tests (requires VERITAS_DATABASE_URL)
+export VERITAS_DATABASE_URL="postgresql://user:pass@localhost:5432/veritas"
+alembic upgrade head
+pytest veritas_os/tests/test_pg_trustlog_contention.py -m "postgresql and contention" -v
+```
 
 ### PostgreSQL Metrics Tests (`test_pg_metrics.py`)
 
@@ -314,9 +351,15 @@ using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
 
 ### What these tests guarantee
 
-- TrustLog hash chain remains valid after N concurrent appending workers.
-- Statement timeout or pool starvation → `RuntimeError` (fail-closed).
+- TrustLog hash chain remains valid after N concurrent appending workers
+  (verified at **mock-pool level** and on a **live PostgreSQL 16 instance**).
+- PostgreSQL's `pg_advisory_xact_lock` actually serialises concurrent
+  TrustLog writes — proven with real database connections.
+- Lock-timeout → `RuntimeError` (fail-closed) on real PostgreSQL.
+- Pool starvation (max_size < workers) → all appends complete in order.
 - Advisory lock is released on both successful commit and rollback.
+- Chain state is not corrupted by a rolled-back transaction on real PG.
+- No duplicate `request_id` values after a concurrent burst on real PG.
 - `/v1/metrics` always returns `db_pool`, `db_health`, `db_activity` fields.
 - File-backend mode degrades gracefully (null pool, true health).
 - Drill scripts are syntactically valid and reference the correct
@@ -328,8 +371,9 @@ using an enhanced mock pool that simulates `pg_advisory_xact_lock` via
 
 | Area | Reason |
 |------|--------|
-| Real PostgreSQL lock timing under CPU/IO saturation | Mock pool uses zero-delay `threading.Lock` |
+| Advisory lock serialisation under CPU/IO saturation | Real-PG tests run against an idle CI container; saturation behaviour not tested |
 | Actual `pg_dump` / `pg_restore` execution | Tests validate syntax and flags, not runtime output |
 | WAL archiving / PITR restore | Infrastructure-level concern |
 | Cross-version `pg_dump` compatibility | CI uses PostgreSQL 16 only |
 | Prometheus scrape correctness | Tests use `_NoOpMetric` / probe stubs, not real `prometheus_client` |
+| Large-scale burst (>100 concurrent writers) | Real-PG tests use up to 20 workers; higher load is future work |
