@@ -681,6 +681,79 @@ make dev-frontend  # フロントエンド起動（ポート3000）
 make dev-all       # 両方起動
 ```
 
+#### ローカルMac開発（Docker不要）
+
+macOS上でDockerなしにVERITAS OSをネイティブ実行する検証済みフローです。
+
+**1. `.env` を作成** — `.env.example` をコピーして必須値を設定:
+
+```bash
+cp .env.example .env
+# .env を編集 — 最低限以下を設定:
+#   OPENAI_API_KEY, VERITAS_API_KEY, VERITAS_API_SECRET, VERITAS_ENCRYPTION_KEY
+```
+
+暗号鍵の生成:
+
+```bash
+python -c "from veritas_os.logging.encryption import generate_key; print(generate_key())"
+```
+
+TrustLog WORMミラーとTransparencyログのパスをローカル開発用に追加:
+
+```bash
+# .env に追記
+VERITAS_TRUSTLOG_MIRROR_BACKEND=local
+VERITAS_TRUSTLOG_WORM_MIRROR_PATH=runtime/dev/logs/trustlog_worm.jsonl
+VERITAS_TRUSTLOG_ANCHOR_BACKEND=local
+VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH=runtime/dev/logs/trustlog_transparency.jsonl
+```
+
+**2. バックエンド起動** — `.env` をシェルに読み込んでから起動:
+
+```bash
+set -a && source .env && set +a
+python -m uvicorn veritas_os.api.server:app --reload --port 8000
+# または: make dev  （Makefileが自動で .env を読み込みます）
+```
+
+**3. フロントエンド起動** — 別ターミナルで:
+
+```bash
+# フロントエンドは frontend/.env.development をNext.js経由で自動読み込みします。
+# frontend/.env.development の VERITAS_API_KEY がバックエンドと一致していることを確認してください。
+set -a && source .env && set +a
+pnpm ui:dev
+```
+
+**4. BFF認証** — フロントエンドBFFプロキシには有効な認証トークンが必要です。
+`frontend/.env.development` にはdev用デフォルト値（`VERITAS_BFF_AUTH_TOKENS_JSON` と
+`VERITAS_BFF_SESSION_TOKEN`）が設定済みです。ブラウザアクセスには
+`http://localhost:3000/api/auth/dev-login` にアクセスして `__veritas_bff` httpOnlyクッキーを
+発行し、以降の `/api/veritas/*` リクエストを認証します。
+
+**5. 動作確認済み機能:**
+
+| 機能 | エンドポイント / パス |
+|---|---|
+| 意思決定 | `POST /v1/decide` |
+| SSEイベント | `GET /v1/events` |
+| TrustLog保存 | decide時に自動実行 |
+| WORMミラー | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` |
+| Transparencyログ | `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` |
+
+**6. 開発アーティファクトの場所** — デフォルト設定でのランタイムデータ出力先:
+
+| パス | 内容 |
+|---|---|
+| `runtime/dev/logs/` | TrustLog JSONL、WORMミラー、Transparencyログ |
+| `runtime/dev/logs/DASH/` | Shadow decide出力、データセット |
+| `runtime/dev/logs/keys/` | Ed25519署名鍵（自動生成） |
+
+> [!TIP]
+> `runtime/` ディレクトリは `VERITAS_RUNTIME_NAMESPACE` または `VERITAS_ENV` マッピングにより
+> 名前空間分離されます（`dev`, `test`, `demo`, `prod`）。デフォルトは `dev` です。
+
 ### APIを試す
 
 Swagger UI（`http://127.0.0.1:8000/docs`）を開き、`X-API-Key`で認証して `POST /v1/decide` を実行:
