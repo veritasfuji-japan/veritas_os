@@ -738,6 +738,79 @@ make dev-frontend  # Start frontend (port 3000)
 make dev-all       # Start both
 ```
 
+#### Local Mac Development (No Docker)
+
+A validated end-to-end flow for running VERITAS OS natively on macOS without Docker.
+
+**1. Create `.env`** — copy `.env.example` and fill in the required values:
+
+```bash
+cp .env.example .env
+# Edit .env — set at minimum:
+#   OPENAI_API_KEY, VERITAS_API_KEY, VERITAS_API_SECRET, VERITAS_ENCRYPTION_KEY
+```
+
+Generate an encryption key if you don't have one:
+
+```bash
+python -c "from veritas_os.logging.encryption import generate_key; print(generate_key())"
+```
+
+Add TrustLog WORM mirror and transparency log paths for local dev:
+
+```bash
+# Append to .env
+VERITAS_TRUSTLOG_MIRROR_BACKEND=local
+VERITAS_TRUSTLOG_WORM_MIRROR_PATH=runtime/dev/logs/trustlog_worm.jsonl
+VERITAS_TRUSTLOG_ANCHOR_BACKEND=local
+VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH=runtime/dev/logs/trustlog_transparency.jsonl
+```
+
+**2. Launch backend** — `.env` must be sourced into the shell:
+
+```bash
+set -a && source .env && set +a
+python -m uvicorn veritas_os.api.server:app --reload --port 8000
+# Or simply: make dev   (Makefile sources .env automatically)
+```
+
+**3. Launch frontend** — in a separate terminal:
+
+```bash
+# Frontend reads frontend/.env.development automatically via Next.js.
+# Ensure VERITAS_API_KEY in frontend/.env.development matches your backend.
+set -a && source .env && set +a
+pnpm ui:dev
+```
+
+**4. BFF authentication** — the frontend BFF proxy requires a valid auth token.
+`frontend/.env.development` ships with dev defaults (`VERITAS_BFF_AUTH_TOKENS_JSON`
+and `VERITAS_BFF_SESSION_TOKEN`). For browser access, visit
+`http://localhost:3000/api/auth/dev-login` to mint the `__veritas_bff` httpOnly
+cookie, which authenticates all subsequent `/api/veritas/*` requests.
+
+**5. Verified working features:**
+
+| Feature | Endpoint / Path |
+|---|---|
+| Decision | `POST /v1/decide` |
+| SSE events | `GET /v1/events` |
+| TrustLog save | Automatic on decide |
+| WORM mirror | `VERITAS_TRUSTLOG_WORM_MIRROR_PATH` |
+| Transparency log | `VERITAS_TRUSTLOG_TRANSPARENCY_LOG_PATH` |
+
+**6. Dev artifact locations** — with default settings, runtime data writes to:
+
+| Path | Contents |
+|---|---|
+| `runtime/dev/logs/` | TrustLog JSONL, WORM mirror, transparency log |
+| `runtime/dev/logs/DASH/` | Shadow decide outputs, datasets |
+| `runtime/dev/logs/keys/` | Ed25519 signing key material (auto-generated) |
+
+> [!TIP]
+> The `runtime/` directory is namespace-separated (`dev`, `test`, `demo`, `prod`)
+> via `VERITAS_RUNTIME_NAMESPACE` or the `VERITAS_ENV` mapping. Default is `dev`.
+
 ### Try the API
 
 Open Swagger UI at `http://127.0.0.1:8000/docs`, authorize with `X-API-Key`, and run `POST /v1/decide`:
