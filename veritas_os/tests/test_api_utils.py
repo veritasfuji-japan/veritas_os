@@ -216,6 +216,10 @@ class TestParseRiskFromTrustEntry:
         assert _parse_risk_from_trust_entry({"risk": float("nan")}) is None
         assert _parse_risk_from_trust_entry({"risk": float("inf")}) is None
 
+    def test_boolean_risk_is_ignored(self):
+        assert _parse_risk_from_trust_entry({"risk": True}) is None
+        assert _parse_risk_from_trust_entry({"gate": {"risk": False}}) is None
+
 
 class TestProvActorForEntry:
     def test_updated_by(self):
