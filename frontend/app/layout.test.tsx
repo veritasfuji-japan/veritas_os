@@ -39,6 +39,7 @@ describe("RootLayout", () => {
   it("exports correct metadata", () => {
     expect(metadata.title).toBe("Mission Control IA");
     expect(metadata.description).toBe("Governance OS operations console");
+    expect(metadata.icons).toEqual({ icon: "/icon.svg" });
   });
 
   it("sets lang='ja' on html element", () => {

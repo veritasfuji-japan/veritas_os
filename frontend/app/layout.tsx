@@ -6,7 +6,10 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Mission Control IA",
-  description: "Governance OS operations console"
+  description: "Governance OS operations console",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
