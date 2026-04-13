@@ -143,7 +143,10 @@ def _coerce_decide_payload(payload: Any, *, seed: str = "") -> Dict[str, Any]:
         d["alternatives"] = _coerce_alt_list(alts)
 
     if not opts and d.get("alternatives"):
-        d["options"] = list(d["alternatives"])
+        d["options"] = [
+            dict(item) if isinstance(item, dict) else item
+            for item in d["alternatives"]
+        ]
     else:
         d["options"] = _coerce_alt_list(opts)
 
