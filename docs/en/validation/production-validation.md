@@ -411,7 +411,7 @@ docker compose down
 |------|--------|------------|
 | Live LLM API validation | **Gated** — `scripts/live_provider_validation.sh` | Requires OPENAI_API_KEY; runs in Tier 3 / manual |
 | Full Docker compose E2E | **Validated** — `scripts/compose_validation.sh` | Governance endpoints, security headers, auth enforcement |
-| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/BACKEND_PARITY_COVERAGE.md` for 279+ parity + hardening tests |
+| Database persistence (PostgreSQL) | **Covered** — mock pool in unit tests, real PG in `test-postgresql` + `docker-smoke` + `postgresql-smoke` CI jobs | See `docs/en/validation/backend-parity-coverage.md` for 279+ parity + hardening tests |
 | Database persistence (JSONL) | **Covered** — TrustLog file tests | File-based persistence fully tested |
 | PostgreSQL schema migrations | **Covered** — Alembic migrations tested in `test-postgresql` CI job | Forward + rollback paths tested |
 | JSONL → PostgreSQL import | **Covered** — `veritas-migrate` CLI with unit tests | Idempotent import with dry-run, resume, and post-import chain verification |
@@ -478,7 +478,7 @@ python scripts/generate_staged_readiness_report.py \
   --text-output /tmp/staged-report.txt
 ```
 
-See `docs/OPERATIONAL_READINESS_RUNBOOK.md` for full usage and troubleshooting.
+See [`operational-readiness-runbook.md`](../operations/operational-readiness-runbook.md) for full usage and troubleshooting.
 
 ## Capability-Aware Startup Validation
 

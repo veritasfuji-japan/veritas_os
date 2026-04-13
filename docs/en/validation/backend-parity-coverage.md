@@ -187,9 +187,9 @@ post-import hash-chain integrity check against the PostgreSQL backend.
 This serves as the import-specific validation step, complementing the
 API-level `/v1/trustlog/verify` endpoint.
 
-See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
+See [`production-validation.md`](production-validation.md) for the
 complete three-tier validation model and
-[`docs/postgresql-production-guide.md`](postgresql-production-guide.md) §13
+[`postgresql-production-guide.md`](../operations/postgresql-production-guide.md) §13
 for PostgreSQL-specific validation guidance.
 
 ## 6. Uncovered Areas

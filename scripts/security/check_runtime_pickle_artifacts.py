@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         "\nRemove these files before deployment. Runtime pickle/joblib loading is "
-        "disabled due to RCE risk. See docs/operations/MEMORY_PICKLE_MIGRATION.md"
+        "disabled due to RCE risk. See docs/en/operations/memory_pickle_migration.md"
     )
     return 1
 

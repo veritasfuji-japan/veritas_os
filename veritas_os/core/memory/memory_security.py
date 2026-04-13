@@ -9,7 +9,7 @@ from typing import Iterable, Optional, Set
 
 logger = logging.getLogger(__name__)
 
-PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
+PICKLE_MIGRATION_GUIDE_PATH = "docs/en/operations/memory_pickle_migration.md"
 
 
 def is_explicitly_enabled(env_key: str) -> bool:

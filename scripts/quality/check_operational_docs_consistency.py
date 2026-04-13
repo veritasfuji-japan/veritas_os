@@ -17,8 +17,8 @@ import sys
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 PRIMARY_README_PATH = REPO_ROOT / "README_JP.md"
 README_PATH = REPO_ROOT / "veritas_os/README_JP.md"
-RUNBOOK_PATH = REPO_ROOT / "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"
-DOC_MAP_PATH = REPO_ROOT / "docs/notes/CODE_REVIEW_DOCUMENT_MAP.md"
+RUNBOOK_PATH = REPO_ROOT / "docs/ja/operations/enterprise_slo_sli_runbook_ja.md"
+DOC_MAP_PATH = REPO_ROOT / "docs/ja/reviews/code-review-document-map.md"
 
 PRIMARY_README_REQUIRED_TOKENS = (
     "**Release Status**: ベータ版",
@@ -28,7 +28,7 @@ PRIMARY_README_REQUIRED_TOKENS = (
     "| **Kernel** |",
     "| **FUJI** |",
     "| **MemoryOS** |",
-    "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md",
+    "docs/ja/operations/enterprise_slo_sli_runbook_ja.md",
 )
 README_REQUIRED_TOKENS = (
     "Beta%20Governance%20Platform",

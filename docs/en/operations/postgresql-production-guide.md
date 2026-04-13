@@ -191,7 +191,7 @@ SELECT pg_reload_conf();
 ## 6. Migration Operations
 
 VERITAS OS uses **Alembic** for PostgreSQL schema management.
-See [`docs/database-migrations.md`](database-migrations.md) for the full reference.
+See [`database-migrations.md`](database-migrations.md) for the full reference.
 
 ### Pre-deployment checklist
 
@@ -828,11 +828,11 @@ running PostgreSQL instance:
 | Content coherence | 6 | Scripts reference expected tools (`pg_dump`, `pg_restore`) and flags (`--ci`, `--verify`) |
 | Runbook coherence | 7 | `postgresql-drill-runbook.md` references all scripts, documents HA boundaries, exit codes |
 
-See also [`docs/postgresql-drill-runbook.md`](postgresql-drill-runbook.md)
+See also [`postgresql-drill-runbook.md`](postgresql-drill-runbook.md)
 for the complete drill procedure.
 
-See [`docs/PRODUCTION_VALIDATION.md`](PRODUCTION_VALIDATION.md) for the
-complete tier model and [`docs/BACKEND_PARITY_COVERAGE.md`](BACKEND_PARITY_COVERAGE.md)
+See [`production-validation.md`](../validation/production-validation.md) for the
+complete tier model and [`backend-parity-coverage.md`](../validation/backend-parity-coverage.md)
 for the full parity test matrix.
 
 ---
@@ -871,7 +871,7 @@ After stamping, all future schema changes are managed by Alembic.
 | Phase 3 | Remove backward-compat re-exports from `server.py` | Planned — requires test import audit |
 | Phase 4 | Remove legacy SQL migrator (`storage/migrations/`) | Planned — requires migration-path documentation cutover |
 
-See [`docs/legacy-path-cleanup.md`](legacy-path-cleanup.md) for the full
+See [`legacy-path-cleanup.md`](legacy-path-cleanup.md) for the full
 cleanup plan and rationale.
 
 ---
@@ -1189,7 +1189,7 @@ veritas-migrate trustlog --source /data/logs/trust_log.jsonl --dry-run --json
 - **リカバリドリル**: `scripts/drill_postgres_recovery.sh` でバックアップ → リストア → 検証を一括実行
 - **CI モード**: `scripts/drill_postgres_recovery.sh --ci` でエフェメラル CI 環境向けドリル
 - **Makefile ターゲット**: `make drill-backup`, `make drill-restore`, `make drill-recovery`, `make drill-recovery-ci`
-- 詳細は [`docs/postgresql-drill-runbook.md`](postgresql-drill-runbook.md) を参照
+- 詳細は [`postgresql-drill-runbook.md`](postgresql-drill-runbook.md) を参照
 
 ## 10. レプリケーション / HA
 

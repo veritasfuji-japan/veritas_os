@@ -5,7 +5,7 @@ services:
   #   Dev/local:   Use as-is with default credentials below.
   #   Staging:     Override VERITAS_DB_USER/PASSWORD via .env or CI secrets.
   #   Prod:        Use a managed PostgreSQL service (RDS, Cloud SQL) instead
-  #                of this container.  See docs/postgresql-production-guide.md.
+  #                of this container.  See docs/en/operations/postgresql-production-guide.md.
   #
   #   Production checklist:
   #     - Set VERITAS_DB_SSLMODE=verify-full
