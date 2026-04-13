@@ -51,3 +51,29 @@ def test_prov_export_not_found(monkeypatch) -> None:
 
     assert resp.status_code == 404
     assert resp.json()["ok"] is False
+
+
+def test_prov_export_non_finite_risk_is_sanitized(monkeypatch) -> None:
+    """Endpoint should ignore non-finite risk values before PROV export."""
+    monkeypatch.setenv("VERITAS_API_KEY", "test-key")
+    monkeypatch.setattr(
+        server,
+        "get_trust_logs_by_request",
+        lambda _rid: [{"request_id": "req-1", "risk": float("nan")}],
+    )
+
+    observed: dict[str, object] = {}
+
+    def _build_w3c_prov_document(**kwargs):
+        observed["risk"] = kwargs.get("risk")
+        return {"entity": {}, "activity": {}, "agent": {}}
+
+    monkeypatch.setattr(server, "build_w3c_prov_document", _build_w3c_prov_document)
+
+    resp = client.get(
+        "/v1/trust/req-1/prov",
+        headers={"X-API-Key": "test-key"},
+    )
+
+    assert resp.status_code == 200
+    assert observed["risk"] is None

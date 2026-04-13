@@ -397,22 +397,27 @@ class PostgresMemoryStore(_PostgresBase):
     async def get(self, key: str) -> Optional[Dict[str, Any]]:
         """Return the value stored under *key*, or ``None``.
 
-        When multiple users share the same key the earliest-inserted
-        record wins (``ORDER BY id LIMIT 1``), matching the linear-scan
-        behaviour of the JSON backend.
+        If multiple users share the same key this method returns ``None``
+        (fail-closed) to avoid cross-user data leakage when the caller
+        cannot provide ``user_id``.
         """
         pool = await self._get_pool()
         async with pool.connection() as conn:
             cur = await conn.execute(
-                "SELECT value FROM memory_records"
-                " WHERE key = %s ORDER BY id LIMIT 1",
+                "SELECT user_id, value FROM memory_records"
+                " WHERE key = %s ORDER BY id",
                 (key,),
             )
-            row = await cur.fetchone()
-            if row is None:
+            rows = await cur.fetchall()
+            if not rows:
                 return None
-            val = row[0]
-            return val if isinstance(val, dict) else None
+            owners = {str(row[0]) for row in rows}
+            if len(owners) > 1:
+                return None
+            val = rows[0][1]
+            if isinstance(val, dict):
+                return val
+            return None
 
     # --------------------------------------------------------- text extraction
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -41,7 +42,10 @@ def _parse_risk_from_trust_entry(entry: Dict[str, Any]) -> float | None:
         try:
             if item is None:
                 continue
-            return float(item)
+            risk_value = float(item)
+            if not math.isfinite(risk_value):
+                continue
+            return risk_value
         except (TypeError, ValueError):
             continue
     return None

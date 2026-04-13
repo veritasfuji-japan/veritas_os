@@ -200,6 +200,28 @@ def test_mask_pii_handles_non_string_bytes_via_detector() -> None:
     assert "〔メール〕" in masked
 
 
+def test_url_credential_detection_ignores_query_email_like_values() -> None:
+    """Query strings containing emails must not be treated as URL credentials."""
+    text = "参照: https://example.com?contact=a@b.com"
+
+    result = detect_pii(text)
+
+    assert not any(item["type"] == "url_credential" for item in result)
+
+
+def test_url_credential_detection_keeps_authority_userinfo() -> None:
+    """Actual userinfo@host URLs should still be detected."""
+    text = "危険URL: https://token123@example.com/path"
+
+    result = detect_pii(text)
+
+    assert any(
+        item["type"] == "url_credential"
+        and item["value"] == "https://token123@example.com"
+        for item in result
+    )
+
+
 def test_detect_resolves_cross_pattern_overlap_by_confidence() -> None:
     """Overlap resolution should keep only the highest-confidence match."""
     detector = PIIDetector(validate_checksums=False)
