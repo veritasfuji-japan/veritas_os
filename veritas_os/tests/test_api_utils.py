@@ -207,6 +207,10 @@ class TestParseRiskFromTrustEntry:
     def test_non_dict(self):
         assert _parse_risk_from_trust_entry("bad") is None
 
+    def test_non_finite_risk(self):
+        assert _parse_risk_from_trust_entry({"risk": float("nan")}) is None
+        assert _parse_risk_from_trust_entry({"risk": float("inf")}) is None
+
 
 class TestProvActorForEntry:
     def test_updated_by(self):
