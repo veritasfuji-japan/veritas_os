@@ -58,11 +58,20 @@ export function toFiniteNumber(value: unknown): number | null {
 
 /**
  * Builds a human-readable assistant message from decide API payload.
+ *
+ * When user_summary is present (simple_qa / knowledge_qa modes),
+ * returns the polished natural-language summary directly.
+ * Otherwise falls back to the structured decision/chosen/rejection format.
  */
 export function toAssistantMessage(
   payload: DecideResponse,
   t: (ja: string, en: string) => string,
 ): string {
+  const userSummary = payload.user_summary;
+  if (typeof userSummary === "string" && userSummary.trim().length > 0) {
+    return userSummary;
+  }
+
   const decision = payload.decision_status ?? "unknown";
   const chosen = payload.chosen ? renderValue(payload.chosen) : t("なし", "none");
   const rejection = payload.rejection_reason ?? t("なし", "none");

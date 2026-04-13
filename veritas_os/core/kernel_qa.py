@@ -143,6 +143,41 @@ def detect_simple_qa(q: str) -> str | None:
     return None
 
 
+def format_simple_qa_summary(kind: str, answer_str: str) -> str:
+    """
+    Generate a polished natural-language user summary for simple_qa.
+
+    The output follows the structure:
+      - Line 1: direct conclusion
+      - Line 2: concise supporting context
+      - Line 3 (optional): note on data source
+
+    Args:
+        kind: QA type ("time", "weekday", "date")
+        answer_str: The raw answer value (e.g. "14:30", "月曜日", "2026-04-13")
+
+    Returns:
+        A short, natural Japanese string for user-facing display.
+    """
+    if kind == "time":
+        return (
+            f"現在時刻は {answer_str} (UTC) です。\n"
+            "サーバーのシステム時刻から取得しています。"
+        )
+    elif kind == "weekday":
+        return (
+            f"今日は{answer_str}です。\n"
+            "システム日付から取得しました。"
+        )
+    elif kind == "date":
+        return (
+            f"今日の日付は {answer_str} です。\n"
+            "サーバーのシステム日付 (UTC) に基づいています。"
+        )
+    else:
+        return "回答を生成できませんでした。通常のパイプラインをご利用ください。"
+
+
 def handle_simple_qa(
     kind: str,
     q: str,
@@ -186,6 +221,8 @@ def handle_simple_qa(
         answer_str = ""
         title = "simple QA モードで回答できませんでした"
         description = "想定外のsimple QA種別のため、通常のdecisionパイプラインを利用してください。"
+
+    user_summary = format_simple_qa_summary(kind, answer_str)
 
     chosen = {
         "id": uuid.uuid4().hex,
@@ -236,6 +273,7 @@ def handle_simple_qa(
         "rsi_note": None,
         "summary": "simple QA モードで直接回答しました。",
         "description": description,
+        "user_summary": user_summary,
         "extras": extras,
         "gate": {
             "risk": 0.05,
@@ -459,6 +497,7 @@ def handle_knowledge_qa(
 __all__ = [
     "detect_simple_qa",
     "handle_simple_qa",
+    "format_simple_qa_summary",
     "detect_knowledge_qa",
     "handle_knowledge_qa",
     "SIMPLE_QA_PATTERNS",

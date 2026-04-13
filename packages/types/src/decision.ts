@@ -591,6 +591,13 @@ export interface DecideResponse extends DecideResponseMeta {
    */
   continuation?: ContinuationOutput | null;
 
+  /**
+   * Polished natural-language answer for user-facing display.
+   * Present in simple_qa and knowledge_qa modes. Frontends should
+   * prefer this over raw chosen/meta fields when available.
+   */
+  user_summary?: string | null;
+
   [key: string]: unknown;
 }
 

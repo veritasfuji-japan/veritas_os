@@ -98,4 +98,45 @@ describe("toAssistantMessage", () => {
     expect(message).toContain("Chosen: none");
     expect(message).toContain("Rejection: Too risky");
   });
+
+  it("prefers user_summary when present (simple_qa mode)", () => {
+    const payload = {
+      decision_status: "allow",
+      chosen: { id: "abc", title: "現在時刻は 14:30 頃です" },
+      rejection_reason: null,
+      user_summary: "現在時刻は 14:30 (UTC) です。\nサーバーのシステム時刻から取得しています。",
+    } as unknown as DecideResponse;
+    const t = (ja: string, _en: string) => ja;
+    const message = toAssistantMessage(payload, t);
+    expect(message).toBe("現在時刻は 14:30 (UTC) です。\nサーバーのシステム時刻から取得しています。");
+    expect(message).not.toContain("判定");
+    expect(message).not.toContain("採択案");
+    expect(message).not.toContain("id");
+    expect(message).not.toContain("score");
+  });
+
+  it("falls back to structured format when user_summary is null", () => {
+    const payload = {
+      decision_status: "allow",
+      chosen: { id: "x", title: "Option X" },
+      rejection_reason: null,
+      user_summary: null,
+    } as unknown as DecideResponse;
+    const t = (ja: string, _en: string) => ja;
+    const message = toAssistantMessage(payload, t);
+    expect(message).toContain("判定: allow");
+    expect(message).toContain("採択案:");
+  });
+
+  it("falls back to structured format when user_summary is empty string", () => {
+    const payload = {
+      decision_status: "allow",
+      chosen: { id: "x", title: "Option X" },
+      rejection_reason: null,
+      user_summary: "   ",
+    } as unknown as DecideResponse;
+    const t = (ja: string, _en: string) => ja;
+    const message = toAssistantMessage(payload, t);
+    expect(message).toContain("判定: allow");
+  });
 });
