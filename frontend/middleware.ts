@@ -84,54 +84,117 @@ export function shouldWarnInsecureCspReportOnlyEndpoint(): boolean {
 }
 
 /**
+ * Returns whether the runtime should be treated as a development environment.
+ *
+ * Used to apply pragmatic CSP relaxations for Next.js / Turbopack / React dev
+ * tooling (eval-based source maps, HMR WebSocket, inline bootstrap scripts)
+ * without weakening the production security posture.
+ */
+export function isDevelopmentRuntime(): boolean {
+  const veritasEnv = (process.env.VERITAS_ENV ?? "").toLowerCase();
+  const nodeEnv = (process.env.NODE_ENV ?? "").toLowerCase();
+  return (
+    veritasEnv === "development" ||
+    veritasEnv === "dev" ||
+    (!veritasEnv && nodeEnv !== "production")
+  );
+}
+
+/**
  * Builds an enforced CSP policy string.
  *
  * Compatibility mode keeps `unsafe-inline` for scripts to avoid blocking
  * framework inline bootstrap scripts. Strict mode switches to nonce-based
  * script execution and is intended for phased rollout after runtime validation.
+ *
+ * Development relaxations (isDev=true):
+ * - `'unsafe-eval'` in script-src: required by Turbopack / webpack for
+ *   eval-based source maps and React Fast Refresh instrumentation.
+ * - `ws:` in connect-src: required for HMR WebSocket connections
+ *   (ws://localhost:…/_next/webpack-hmr).
+ * - `upgrade-insecure-requests` omitted: prevents localhost HTTP resources
+ *   from being force-upgraded to HTTPS which would break local dev.
  */
-export function buildCspEnforced(nonce: string, enforceNonce: boolean): string {
-  const scriptDirective = enforceNonce
-    ? `script-src 'self' 'nonce-${nonce}'`
-    : "script-src 'self' 'unsafe-inline'";
+export function buildCspEnforced(nonce: string, enforceNonce: boolean, isDev = false): string {
+  const scriptTokens = enforceNonce
+    ? [`'self'`, `'nonce-${nonce}'`]
+    : [`'self'`, `'unsafe-inline'`];
+  if (isDev) {
+    scriptTokens.push(`'unsafe-eval'`);
+  }
 
-  return [
+  const connectTokens = [`'self'`];
+  if (isDev) {
+    connectTokens.push("ws:");
+  }
+
+  const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    scriptDirective,
+    `script-src ${scriptTokens.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    `connect-src ${connectTokens.join(" ")}`,
     "form-action 'self'",
-    "upgrade-insecure-requests",
-    "block-all-mixed-content",
-  ].join("; ");
+  ];
+
+  if (!isDev) {
+    directives.push("upgrade-insecure-requests");
+  }
+
+  return directives.join("; ");
 }
 
 /**
  * Builds a strict report-only CSP policy string bound to a nonce.
+ *
+ * Development relaxations (isDev=true):
+ * - `'unsafe-inline'` in script-src alongside nonce: silences report-only
+ *   violations from Next.js inline bootstrap scripts that cannot receive the
+ *   middleware nonce (e.g. hydration, RSC payload). Note: per CSP Level 2+,
+ *   when a nonce is present `'unsafe-inline'` is ignored in enforcing mode,
+ *   but the report-only header still fires console warnings for each inline
+ *   script — adding it here suppresses those dev-only warnings.
+ * - `'unsafe-eval'` in script-src: matches enforced policy to avoid duplicate
+ *   eval violation noise.
+ * - `ws:` in connect-src: matches enforced policy for HMR WebSocket.
+ * - `upgrade-insecure-requests` omitted: same rationale as enforced policy.
  */
-export function buildCspReportOnly(nonce: string): string {
+export function buildCspReportOnly(nonce: string, isDev = false): string {
   const reportOnlyEndpoint = resolveCspReportOnlyEndpoint();
 
-  return [
+  const scriptTokens = [`'self'`, `'nonce-${nonce}'`];
+  if (isDev) {
+    scriptTokens.push(`'unsafe-inline'`, `'unsafe-eval'`);
+  }
+
+  const connectTokens = [`'self'`];
+  if (isDev) {
+    connectTokens.push("ws:");
+  }
+
+  const directives = [
     "default-src 'self'",
     "base-uri 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
-    `script-src 'self' 'nonce-${nonce}'`,
+    `script-src ${scriptTokens.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    "connect-src 'self'",
+    `connect-src ${connectTokens.join(" ")}`,
     "form-action 'self'",
     `report-uri ${reportOnlyEndpoint}`,
-    "upgrade-insecure-requests",
-    "block-all-mixed-content",
-  ].join("; ");
+  ];
+
+  if (!isDev) {
+    directives.push("upgrade-insecure-requests");
+  }
+
+  return directives.join("; ");
 }
 
 /**
@@ -243,8 +306,9 @@ export function middleware(request: NextRequest): NextResponse {
   }
 
   const nonce = generateNonce();
-  const cspEnforced = buildCspEnforced(nonce, shouldEnforceNonceCsp());
-  const cspReportOnly = buildCspReportOnly(nonce);
+  const devMode = isDevelopmentRuntime();
+  const cspEnforced = buildCspEnforced(nonce, shouldEnforceNonceCsp(), devMode);
+  const cspReportOnly = buildCspReportOnly(nonce, devMode);
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
