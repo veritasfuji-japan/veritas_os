@@ -85,4 +85,17 @@ describe("GET /api/auth/dev-login", () => {
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("http://localhost:3000/console");
   });
+
+  it("rejects protocol-relative redirect attempts", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("VERITAS_BFF_SESSION_TOKEN", "dev-token");
+
+    const response = await GET(
+      makeRequest("http://localhost:3000/api/auth/dev-login?redirect=//evil.example.com"),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/console");
+  });
 });

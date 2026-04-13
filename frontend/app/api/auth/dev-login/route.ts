@@ -59,7 +59,11 @@ export async function GET(request: Request): Promise<Response> {
   const redirectTarget = url.searchParams.get("redirect") ?? "/console";
 
   // Validate redirect is a safe relative path (no open-redirect).
-  const safeRedirect = redirectTarget.startsWith("/") ? redirectTarget : "/console";
+  // Reject protocol-relative URLs (//evil.example) and non-relative paths.
+  const safeRedirect =
+    redirectTarget.startsWith("/") && !redirectTarget.startsWith("//")
+      ? redirectTarget
+      : "/console";
 
   const response = NextResponse.redirect(new URL(safeRedirect, url.origin));
 
