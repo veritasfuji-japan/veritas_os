@@ -35,6 +35,9 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 const AUTH_RETRY_PAUSE_MS = 60000;
 
 const FILTERS: EventFilter[] = ["all", "critical", "degraded", "health"];
+const EVENT_SEVERITIES: EventSeverity[] = ["critical", "degraded", "health"];
+const EVENT_STAGES: EventStage[] = ["detect", "triage", "mitigate", "resolved"];
+const LINKED_PAGES: LiveEvent["linked_page"][] = ["decision", "trustlog", "governance", "risk"];
 
 const EVENT_TYPE_LABEL: Record<EventType, string> = {
   fuji_reject: "FUJI reject",
@@ -130,25 +133,34 @@ function toLiveEvent(payload: unknown): LiveEvent | null {
   const validType = Object.keys(EVENT_TYPE_LABEL).includes(record.type ?? "")
     ? (record.type as EventType)
     : null;
+  const validSeverity = EVENT_SEVERITIES.includes(record.severity as EventSeverity)
+    ? (record.severity as EventSeverity)
+    : null;
+  const validStage = EVENT_STAGES.includes(record.stage as EventStage)
+    ? (record.stage as EventStage)
+    : null;
+  const validLinkedPage = LINKED_PAGES.includes(record.linked_page as LiveEvent["linked_page"])
+    ? (record.linked_page as LiveEvent["linked_page"])
+    : null;
 
   if (!validType || !record.id) {
     return null;
   }
 
-  if (!record.severity || !record.stage || !record.request_id || !record.decision_id || !record.occurred_at || !record.owner || !record.linked_page || !record.summary) {
+  if (!validSeverity || !validStage || !record.request_id || !record.decision_id || !record.occurred_at || !record.owner || !validLinkedPage || !record.summary) {
     return null;
   }
 
   return {
     id: String(record.id),
     type: validType,
-    severity: record.severity,
-    stage: record.stage,
+    severity: validSeverity,
+    stage: validStage,
     request_id: record.request_id,
     decision_id: record.decision_id,
     occurred_at: record.occurred_at,
     owner: record.owner,
-    linked_page: record.linked_page,
+    linked_page: validLinkedPage,
     summary: record.summary,
   } as LiveEvent;
 }

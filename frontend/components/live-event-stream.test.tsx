@@ -149,6 +149,30 @@ describe("LiveEventStream", () => {
     expect(screen.queryByText("evt-bad")).not.toBeInTheDocument();
   });
 
+  it("ignores SSE events with invalid enum fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: createReadableStream([
+          "data: {\"id\":\"evt-invalid\",\"type\":\"risk_burst\",\"severity\":\"urgent\",\"stage\":\"detect\",\"request_id\":\"req_invalid\",\"decision_id\":\"dec_invalid\",\"occurred_at\":\"2026-03-09T06:25:00Z\",\"owner\":\"Risk Ops\",\"linked_page\":\"risk\",\"summary\":\"Should be dropped due to invalid severity.\"}\n\n",
+          "data: {\"id\":\"evt-007\",\"type\":\"risk_burst\",\"severity\":\"critical\",\"stage\":\"detect\",\"request_id\":\"req_107\",\"decision_id\":\"dec_107\",\"occurred_at\":\"2026-03-09T06:27:00Z\",\"owner\":\"Risk Ops\",\"linked_page\":\"risk\",\"summary\":\"Valid event remains visible.\"}\n\n",
+        ]),
+      }),
+    );
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("Valid event remains visible.")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Should be dropped due to invalid severity.")).not.toBeInTheDocument();
+  });
+
   it("parses an SSE message that arrives in incomplete chunks", async () => {
     vi.stubGlobal(
       "fetch",
