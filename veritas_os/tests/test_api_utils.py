@@ -138,6 +138,11 @@ class TestCoerceDecidePayload:
         result = _coerce_decide_payload({"options": [{"title": "a"}]})
         assert len(result["alternatives"]) == 1
 
+    def test_options_and_alternatives_are_not_aliases(self):
+        result = _coerce_decide_payload({"alternatives": [{"title": "a"}]})
+        result["options"][0]["title"] = "mutated"
+        assert result["alternatives"][0]["title"] == "a"
+
 
 class TestCoerceFujiPayload:
     def test_non_dict(self):
