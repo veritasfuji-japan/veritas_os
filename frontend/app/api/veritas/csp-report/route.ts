@@ -75,7 +75,7 @@ export function normalizeViolation(
   if (legacy && typeof legacy === "object") {
     const report = legacy as Record<string, unknown>;
     return {
-      directive: String(report["violated-directive"] ?? report["effective-directive"] ?? ""),
+      directive: String(report["effective-directive"] ?? report["violated-directive"] ?? ""),
       blockedUri: String(report["blocked-uri"] ?? ""),
       documentUri: String(report["document-uri"] ?? ""),
       sourceFile: String(report["source-file"] ?? ""),
@@ -99,9 +99,9 @@ export function normalizeViolation(
 
   // Flat object fallback (non-standard agents)
   const flat = body as Record<string, unknown>;
-  if (flat["effective-directive"] || flat["effectiveDirective"] || flat["violated-directive"]) {
+  if (flat["effectiveDirective"] || flat["effective-directive"] || flat["violated-directive"]) {
     return {
-      directive: String(flat["effective-directive"] ?? flat["effectiveDirective"] ?? flat["violated-directive"] ?? ""),
+      directive: String(flat["effectiveDirective"] ?? flat["effective-directive"] ?? flat["violated-directive"] ?? ""),
       blockedUri: String(flat["blocked-uri"] ?? flat["blockedURL"] ?? ""),
       documentUri: String(flat["document-uri"] ?? flat["documentURL"] ?? ""),
       sourceFile: String(flat["source-file"] ?? flat["sourceFile"] ?? ""),
