@@ -307,4 +307,103 @@ describe("LiveEventStream", () => {
     });
     expect(screen.queryByText("Should not be processed after unmount.")).not.toBeInTheDocument();
   });
+
+  it("does not surface unhandled rejection when reader.cancel() rejects on unmount", async () => {
+    // Simulates the "BodyStreamBuffer was aborted" scenario: reader.cancel()
+    // rejects because the stream was already torn down by controller.abort().
+    const cancel = vi.fn().mockRejectedValue(new DOMException("BodyStreamBuffer was aborted", "AbortError"));
+    const read = vi.fn().mockImplementation(
+      () => new Promise<ReadableStreamReadResult<Uint8Array>>(() => {
+        // Never resolves – simulates a pending read that is aborted on cleanup.
+      }),
+    );
+    const getReader = vi.fn(() => ({ read, cancel }));
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        body: { getReader },
+      }),
+    );
+
+    const rendered = render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(getReader).toHaveBeenCalledTimes(1);
+    });
+
+    // Unmount should NOT throw or produce an unhandled promise rejection.
+    expect(() => rendered.unmount()).not.toThrow();
+
+    await waitFor(() => {
+      expect(cancel).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("suppresses AbortError during reconnect cleanup without logging", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const abortError = new DOMException("The operation was aborted", "AbortError");
+
+    // Use a cancel mock that returns a resolved promise so cleanup is safe.
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    const fetchMock = vi
+      .fn()
+      // First call succeeds but the first read immediately rejects (simulates abort).
+      .mockResolvedValueOnce({
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: vi.fn().mockRejectedValueOnce(abortError),
+            cancel,
+          }),
+        },
+      })
+      .mockResolvedValue({ ok: true, body: createPersistentReadableStream() });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    // AbortError should never be forwarded to console.warn.
+    const abortWarnings = warnSpy.mock.calls.filter(
+      (args) => typeof args[1] === "object" && args[1]?.name === "AbortError",
+    );
+    expect(abortWarnings).toHaveLength(0);
+    warnSpy.mockRestore();
+  });
+
+  it("still logs genuine network errors during stream read", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValueOnce(new Error("network down")).mockResolvedValue({ ok: true, body: createPersistentReadableStream() }),
+    );
+
+    render(
+      <I18nProvider>
+        <LiveEventStream />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => {
+      expect(warnSpy).toHaveBeenCalledWith(
+        "LiveEventStream connection error:",
+        expect.objectContaining({ message: "network down" }),
+      );
+    });
+    warnSpy.mockRestore();
+  });
 });

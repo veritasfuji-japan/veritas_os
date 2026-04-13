@@ -195,6 +195,10 @@ export function LiveEventStream(): JSX.Element {
     let mounted = true;
     let controller: AbortController | null = null;
     let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+    // Tracks whether the effect cleanup is in progress so that expected
+    // stream aborts (from React unmount, Fast Refresh, or reconnect) are
+    // not surfaced as unhandled errors or Next.js dev-overlay fatals.
+    let cleaningUp = false;
 
     const connect = async (): Promise<void> => {
       if (!mounted) {
@@ -266,8 +270,16 @@ export function LiveEventStream(): JSX.Element {
           }
         }
       } catch (err: unknown) {
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          // Log non-abort errors for observability
+        // During React unmount, Fast Refresh, or reconnect the
+        // AbortController is intentionally aborted which causes
+        // reader.read() / fetch() to throw an AbortError.  These are
+        // expected lifecycle events and must NOT surface as console
+        // errors or trigger the Next.js dev-overlay.
+        const isAbort =
+          err instanceof DOMException && err.name === "AbortError";
+        const isExpectedShutdown =
+          !mounted || cleaningUp || controller?.signal.aborted;
+        if (!isAbort && !isExpectedShutdown) {
           // eslint-disable-next-line no-console
           console.warn("LiveEventStream connection error:", err);
         }
@@ -288,8 +300,24 @@ export function LiveEventStream(): JSX.Element {
 
     return () => {
       mounted = false;
+      cleaningUp = true;
       controller?.abort();
-      void reader?.cancel();
+      // reader.cancel() may reject if the underlying body stream was
+      // already aborted by controller.abort().  Wrapping with
+      // Promise.resolve() guards against environments where cancel()
+      // returns undefined (e.g. jsdom).  Catching the rejection prevents
+      // an unhandled promise rejection (the exact cause of the Next.js
+      // dev overlay "BodyStreamBuffer was aborted" error).
+      if (reader) {
+        try {
+          Promise.resolve(reader.cancel()).catch(() => {
+            // Expected: the stream body is already torn down during
+            // cleanup / unmount / Fast Refresh – nothing to act on.
+          });
+        } catch {
+          // Synchronous throw from cancel() during cleanup – safe to ignore.
+        }
+      }
       if (reconnectRef.current) {
         clearTimeout(reconnectRef.current);
       }
