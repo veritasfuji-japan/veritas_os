@@ -4,6 +4,7 @@ import {
   buildCspEnforced,
   buildCspReportOnly,
   generateNonce,
+  isDevelopmentRuntime,
   isProductionRuntime,
   middleware,
   resolveCspReportOnlyEndpoint,
@@ -32,6 +33,9 @@ describe("middleware CSP", () => {
 
     expect(csp).toContain("default-src 'self'");
     expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(csp).toContain("upgrade-insecure-requests");
+    expect(csp).not.toContain("'unsafe-eval'");
+    expect(csp).not.toContain("ws:");
   });
 
   it("builds enforced CSP in strict mode without unsafe-inline in script-src", () => {
@@ -43,6 +47,7 @@ describe("middleware CSP", () => {
     expect(csp).toContain("default-src 'self'");
     expect(scriptDirective).toContain("'nonce-sample-nonce'");
     expect(scriptDirective).not.toContain("'unsafe-inline'");
+    expect(csp).toContain("upgrade-insecure-requests");
   });
 
   it("builds nonce-based report-only CSP without unsafe-inline in script-src", () => {
@@ -54,6 +59,54 @@ describe("middleware CSP", () => {
     expect(csp).toContain("default-src 'self'");
     expect(scriptDirective).toContain("'nonce-sample-nonce'");
     expect(scriptDirective).not.toContain("'unsafe-inline'");
+    expect(csp).toContain("report-uri /api/veritas/csp-report");
+    expect(csp).toContain("upgrade-insecure-requests");
+    expect(csp).not.toContain("'unsafe-eval'");
+    expect(csp).not.toContain("ws:");
+  });
+
+  // ---------- Development CSP relaxations ----------
+
+  it("adds unsafe-eval and ws: to enforced CSP in dev mode", () => {
+    const csp = buildCspEnforced("dev-nonce", false, true);
+    const scriptDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
+    const connectDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("connect-src"));
+
+    expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(scriptDirective).toContain("'unsafe-eval'");
+    expect(connectDirective).toContain("ws:");
+    expect(csp).not.toContain("upgrade-insecure-requests");
+  });
+
+  it("adds unsafe-eval to enforced CSP in dev strict-nonce mode", () => {
+    const csp = buildCspEnforced("dev-nonce", true, true);
+    const scriptDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
+
+    expect(scriptDirective).toContain("'nonce-dev-nonce'");
+    expect(scriptDirective).toContain("'unsafe-eval'");
+    expect(scriptDirective).not.toContain("'unsafe-inline'");
+  });
+
+  it("adds unsafe-inline and unsafe-eval to report-only CSP in dev mode", () => {
+    const csp = buildCspReportOnly("dev-nonce", true);
+    const scriptDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
+    const connectDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("connect-src"));
+
+    expect(scriptDirective).toContain("'nonce-dev-nonce'");
+    expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(scriptDirective).toContain("'unsafe-eval'");
+    expect(connectDirective).toContain("ws:");
+    expect(csp).not.toContain("upgrade-insecure-requests");
     expect(csp).toContain("report-uri /api/veritas/csp-report");
   });
 
@@ -165,6 +218,41 @@ describe("middleware CSP", () => {
     expect(isProductionRuntime()).toBe(false);
   });
 
+  // ---------- isDevelopmentRuntime ----------
+
+  it("detects development runtime from VERITAS_ENV=development", () => {
+    vi.stubEnv("VERITAS_ENV", "development");
+
+    expect(isDevelopmentRuntime()).toBe(true);
+  });
+
+  it("detects development runtime from VERITAS_ENV=dev", () => {
+    vi.stubEnv("VERITAS_ENV", "dev");
+
+    expect(isDevelopmentRuntime()).toBe(true);
+  });
+
+  it("detects development runtime when VERITAS_ENV is unset and NODE_ENV is not production", () => {
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("NODE_ENV", "development");
+
+    expect(isDevelopmentRuntime()).toBe(true);
+  });
+
+  it("does not treat production runtime as development", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(isDevelopmentRuntime()).toBe(false);
+  });
+
+  it("does not treat NODE_ENV=production as development even without VERITAS_ENV", () => {
+    vi.stubEnv("VERITAS_ENV", "");
+    vi.stubEnv("NODE_ENV", "production");
+
+    expect(isDevelopmentRuntime()).toBe(false);
+  });
+
   it("allows shared BFF session cookie issuance in non-production", () => {
     vi.stubEnv("VERITAS_ENV", "development");
     vi.stubEnv("NODE_ENV", "development");
@@ -188,7 +276,7 @@ describe("middleware CSP", () => {
     expect(shouldIssueDefaultBffSessionCookie()).toBe(true);
   });
 
-  it("sets CSP headers and forwards nonce to the Next.js request", () => {
+  it("sets dev-relaxed CSP headers and forwards nonce in development runtime", () => {
     const response = middleware({ headers: new Headers() } as never);
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     const cspReportOnly =
@@ -206,9 +294,41 @@ describe("middleware CSP", () => {
 
     expect(leakedNonce).toBeNull();
     expect(scriptDirective).toContain("'unsafe-inline'");
+    expect(scriptDirective).toContain("'unsafe-eval'");
     expect(forwardedNonce).not.toBe("");
     expect(reportOnlyScriptDirective).toContain(`'nonce-${forwardedNonce}'`);
+    expect(reportOnlyScriptDirective).toContain("'unsafe-inline'");
+    expect(reportOnlyScriptDirective).toContain("'unsafe-eval'");
+    expect(csp).toContain("ws:");
+    expect(csp).not.toContain("upgrade-insecure-requests");
+  });
+
+  it("sets strict CSP headers in production runtime", () => {
+    vi.stubEnv("VERITAS_ENV", "production");
+    vi.stubEnv("NODE_ENV", "production");
+
+    const response = middleware({ headers: new Headers() } as never);
+    const csp = response.headers.get("Content-Security-Policy") ?? "";
+    const cspReportOnly =
+      response.headers.get("Content-Security-Policy-Report-Only") ?? "";
+    const forwardedNonce =
+      response.headers.get("x-middleware-request-x-nonce") ?? "";
+
+    const scriptDirective = csp
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
+    const reportOnlyScriptDirective = cspReportOnly
+      .split(";")
+      .find((directive) => directive.trim().startsWith("script-src"));
+
+    expect(scriptDirective).toContain("'nonce-");
+    expect(scriptDirective).not.toContain("'unsafe-inline'");
+    expect(scriptDirective).not.toContain("'unsafe-eval'");
+    expect(reportOnlyScriptDirective).toContain(`'nonce-${forwardedNonce}'`);
     expect(reportOnlyScriptDirective).not.toContain("'unsafe-inline'");
+    expect(reportOnlyScriptDirective).not.toContain("'unsafe-eval'");
+    expect(csp).not.toContain("ws:");
+    expect(csp).toContain("upgrade-insecure-requests");
   });
 
   it("uses x-forwarded-proto to determine secure cookie semantics", () => {
