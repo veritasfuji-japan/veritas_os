@@ -42,6 +42,8 @@ def _parse_risk_from_trust_entry(entry: Dict[str, Any]) -> float | None:
         try:
             if item is None:
                 continue
+            if isinstance(item, bool):
+                continue
             risk_value = float(item)
             if not math.isfinite(risk_value):
                 continue
