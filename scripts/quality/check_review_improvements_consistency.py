@@ -13,7 +13,7 @@ import pathlib
 import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-REVIEW_PATH = REPO_ROOT / "REVIEW_CURRENT_IMPROVEMENTS_2026-03-30.md"
+REVIEW_PATH = REPO_ROOT / "docs/archive/reviews/review-current-improvements-2026-03-30.md"
 
 REQUIRED_TOKENS = (
     "対象: API / Frontend / 運用設定 / セキュリティ境界。",

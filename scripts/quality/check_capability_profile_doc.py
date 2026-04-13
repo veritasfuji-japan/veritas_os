@@ -12,7 +12,7 @@ import pathlib
 import sys
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-RUNBOOK_PATH = REPO_ROOT / "docs/operations/ENTERPRISE_SLO_SLI_RUNBOOK_JP.md"
+RUNBOOK_PATH = REPO_ROOT / "docs/ja/operations/enterprise_slo_sli_runbook_ja.md"
 REQUIRED_TOKENS = (
     "## 6.3 capability profile / strict mode 推奨",
     "### production 推奨設定",

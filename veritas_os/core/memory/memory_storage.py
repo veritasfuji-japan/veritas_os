@@ -21,7 +21,7 @@ from ..config import capability_cfg, emit_capability_manifest
 
 logger = logging.getLogger(__name__)
 
-PICKLE_MIGRATION_GUIDE_PATH = "docs/operations/MEMORY_PICKLE_MIGRATION.md"
+PICKLE_MIGRATION_GUIDE_PATH = "docs/en/operations/memory_pickle_migration.md"
 
 # OS 判定
 IS_WIN = os.name == "nt"
