@@ -680,6 +680,17 @@ class DecideResponse(BaseModel):
         ),
     )
 
+    # User-facing summary for simple_qa mode.
+    # When present, frontends should display this instead of raw chosen/meta fields.
+    user_summary: Optional[str] = Field(
+        default=None,
+        description=(
+            "Polished natural-language answer for user-facing display. "
+            "Present in simple_qa and knowledge_qa modes. Frontends should "
+            "prefer this over raw chosen/meta fields when available."
+        ),
+    )
+
     # persist 用 meta
     meta: Dict[str, Any] = Field(default_factory=dict)
     coercion_events: List[str] = Field(default_factory=list, exclude=True)
