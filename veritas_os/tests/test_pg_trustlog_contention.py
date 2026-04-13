@@ -21,7 +21,7 @@ at the bottom of this module.  Those are executed in the CI
 ``test-postgresql`` job against a Postgres 16 service container.
 
 See also:
-    * ``docs/postgresql-production-guide.md`` §15 — Known Limitations
+    * ``docs/en/operations/postgresql-production-guide.md`` §15 — Known Limitations
     * ``veritas_os/storage/postgresql.py`` — implementation
 """
 
@@ -936,8 +936,8 @@ class TestThreadedContention:
 #   Run in the CI test-postgresql job against a PG 16 service container.
 #
 # See also:
-#   docs/postgresql-production-guide.md §12 — Contention Tests
-#   docs/BACKEND_PARITY_COVERAGE.md §8 — Contention, Metrics, Recovery
+#   docs/en/operations/postgresql-production-guide.md §12 — Contention Tests
+#   docs/en/validation/backend-parity-coverage.md §8 — Contention, Metrics, Recovery
 # ===================================================================
 
 # ---------------------------------------------------------------------------

@@ -149,7 +149,7 @@ class TestScriptContent:
 class TestRunbookCoherence:
     """Verify the drill runbook references all scripts and key concepts."""
 
-    RUNBOOK = REPO_ROOT / "docs" / "postgresql-drill-runbook.md"
+    RUNBOOK = REPO_ROOT / "docs" / "en" / "operations" / "postgresql-drill-runbook.md"
 
     def test_runbook_exists(self) -> None:
         assert self.RUNBOOK.exists(), "postgresql-drill-runbook.md not found"

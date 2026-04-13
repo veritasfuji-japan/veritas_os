@@ -217,7 +217,7 @@ def derive_defaults(posture: PostureLevel) -> PostureDefaults:
 #
 # Currently the only concrete backends that satisfy secure/prod are the
 # existing AWS implementations (KMS signer + S3 Object Lock mirror).
-# See docs/PRODUCTION_VALIDATION.md for the full capability contract.
+# See docs/en/validation/production-validation.md for the full capability contract.
 
 
 class BackendCapability(str, enum.Enum):

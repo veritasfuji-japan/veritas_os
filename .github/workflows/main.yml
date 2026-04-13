@@ -1,7 +1,7 @@
 # ============================================================================
 # VERITAS OS — CI (Tier 1 — every PR and push to main)
 #
-# Tier Model (see docs/PRODUCTION_VALIDATION.md for full explanation):
+# Tier Model (see docs/en/validation/production-validation.md for full explanation):
 #   Tier 1 — lint + governance-smoke   Fast gates, blocking on every PR (~5-8 min)
 #   Tier 1 — dependency-audit          CVE scan, blocking on every PR
 #   Tier 1 — test (py matrix)          Full unit tests + 85% coverage gate

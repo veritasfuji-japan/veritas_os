@@ -21,7 +21,7 @@ Downgrade warning
 -----------------
 Running ``downgrade`` drops all three tables and their data.
 This is **destructive** and **irreversible** in production.
-See ``docs/database-migrations.md`` for the operational policy.
+See ``docs/en/operations/database-migrations.md`` for the operational policy.
 """
 
 from __future__ import annotations
