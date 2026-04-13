@@ -263,6 +263,16 @@ class _MemoryStoreContractSuite:
         u2_keys = {r.get("key") for r in u2_records}
         assert "k2" not in u1_keys and "k1" not in u2_keys
 
+    def test_get_returns_none_for_cross_user_duplicate_key(self, store) -> None:
+        """get must fail closed when multiple users share the same key."""
+
+        async def _go():
+            await store.put("shared", {"v": 1}, user_id="u1")
+            await store.put("shared", {"v": 2}, user_id="u2")
+            return await store.get("shared")
+
+        assert asyncio.run(_go()) is None
+
     # -- search -----------------------------------------------------------
 
     def test_search_respects_limit(self, store) -> None:

@@ -19,10 +19,17 @@ class JsonMemoryStore:
 
     async def get(self, key: str) -> Optional[Dict[str, Any]]:
         records = self._store.list_all()
-        for record in records:
-            if record.get("key") == key:
-                stored = record.get("value")
-                return stored if isinstance(stored, dict) else None
+        matching = [record for record in records if record.get("key") == key]
+        if not matching:
+            return None
+
+        owners = {str(record.get("user_id", "")) for record in matching}
+        if len(owners) > 1:
+            return None
+
+        stored = matching[0].get("value")
+        if isinstance(stored, dict):
+            return stored
         return None
 
     async def search(

@@ -87,6 +87,8 @@ class _InMemoryStorage:
             return self._handle_insert(params)
         if sql_upper.startswith("SELECT VALUE FROM"):
             return self._handle_get(params)
+        if sql_upper.startswith("SELECT USER_ID, VALUE FROM"):
+            return self._handle_get_with_user(params)
         if sql_upper.startswith("SELECT KEY, USER_ID, VALUE,"):
             if "LIKE ANY" in sql_upper:
                 return self._handle_search(sql, params)
@@ -131,6 +133,14 @@ class _InMemoryStorage:
             if row["key"] == key:
                 return _MockCursor([(row["value"],)])
         return _MockCursor([])
+
+    def _handle_get_with_user(self, params: Tuple[Any, ...]) -> _MockCursor:
+        (key,) = params
+        result: List[Tuple[Any, ...]] = []
+        for row in sorted(self._rows, key=lambda r: r["id"]):
+            if row["key"] == key:
+                result.append((row["user_id"], row["value"]))
+        return _MockCursor(result)
 
     def _handle_list(self, params: Tuple[Any, ...]) -> _MockCursor:
         (user_id,) = params
