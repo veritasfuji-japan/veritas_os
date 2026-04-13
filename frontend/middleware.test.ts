@@ -277,6 +277,9 @@ describe("middleware CSP", () => {
   });
 
   it("sets dev-relaxed CSP headers and forwards nonce in development runtime", () => {
+    vi.stubEnv("VERITAS_ENV", "development");
+    vi.stubEnv("NODE_ENV", "development");
+
     const response = middleware({ headers: new Headers() } as never);
     const csp = response.headers.get("Content-Security-Policy") ?? "";
     const cspReportOnly =
