@@ -23,6 +23,8 @@ venv/
 # --- 環境変数・秘密情報 ---
 .env
 .env.*
+# Track frontend dev defaults (no real secrets — only dev-mode BFF tokens).
+!frontend/.env.development
 *.pem
 *.key
 
