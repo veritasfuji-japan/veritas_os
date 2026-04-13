@@ -90,6 +90,11 @@ services:
       - "3000:3000"
     environment:
       VERITAS_API_BASE_URL: ${VERITAS_API_BASE_URL:-http://backend:8000}
+      # BFF auth defaults for local Docker development.
+      # The session token is minted as an httpOnly cookie by middleware,
+      # and the tokens JSON maps it to an admin role for full access.
+      VERITAS_BFF_SESSION_TOKEN: ${VERITAS_BFF_SESSION_TOKEN:-veritas-dev-session}
+      VERITAS_BFF_AUTH_TOKENS_JSON: ${VERITAS_BFF_AUTH_TOKENS_JSON:-'{"veritas-dev-session":"admin"}'}
     volumes:
       - ./frontend:/app/frontend
       - ./packages:/app/packages
