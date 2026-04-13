@@ -264,21 +264,21 @@ class TestUserGuide:
     REPO_ROOT = Path(__file__).resolve().parents[2]
 
     def test_user_guide_exists(self) -> None:
-        path = self.REPO_ROOT / "docs" / "user_guide_eu_ai_act.md"
+        path = self.REPO_ROOT / "docs" / "ja" / "governance" / "user-guide-eu-ai-act.md"
         assert path.exists(), f"Missing: {path}"
 
     def test_user_guide_contains_intended_use(self) -> None:
-        path = self.REPO_ROOT / "docs" / "user_guide_eu_ai_act.md"
+        path = self.REPO_ROOT / "docs" / "ja" / "governance" / "user-guide-eu-ai-act.md"
         content = path.read_text(encoding="utf-8")
         assert "意図された用途" in content or "intended" in content.lower()
 
     def test_user_guide_contains_human_oversight(self) -> None:
-        path = self.REPO_ROOT / "docs" / "user_guide_eu_ai_act.md"
+        path = self.REPO_ROOT / "docs" / "ja" / "governance" / "user-guide-eu-ai-act.md"
         content = path.read_text(encoding="utf-8")
         assert "人間" in content or "human" in content.lower()
 
     def test_user_guide_contains_contestation(self) -> None:
         """Art. 13 requires info on how to contest AI decisions."""
-        path = self.REPO_ROOT / "docs" / "user_guide_eu_ai_act.md"
+        path = self.REPO_ROOT / "docs" / "ja" / "governance" / "user-guide-eu-ai-act.md"
         content = path.read_text(encoding="utf-8")
         assert "異議" in content or "contest" in content.lower()
