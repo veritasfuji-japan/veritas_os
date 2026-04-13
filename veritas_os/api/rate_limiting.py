@@ -80,13 +80,24 @@ _nonce_lock = threading.Lock()
 
 
 def _effective_nonce_max() -> int:
-    """Resolve _NONCE_MAX, checking server module for test overrides."""
+    """Resolve nonce-store capacity with safe lower-bound validation.
+
+    The configured value can come from module defaults, environment variables,
+    or test/runtime overrides via ``veritas_os.api.server``. Non-positive
+    values would effectively disable nonce replay protection by pruning all
+    entries during cleanup, so those values are rejected.
+    """
+    def _sanitize_nonce_max(value: object) -> int:
+        if isinstance(value, int) and value > 0:
+            return value
+        return _NONCE_MAX if isinstance(_NONCE_MAX, int) and _NONCE_MAX > 0 else 5000
+
     try:
         from veritas_os.api import server as srv
         v = getattr(srv, "_NONCE_MAX", _NONCE_MAX)
-        return v if isinstance(v, int) else _NONCE_MAX
+        return _sanitize_nonce_max(v)
     except Exception:
-        return _NONCE_MAX
+        return _sanitize_nonce_max(_NONCE_MAX)
 
 
 def _cleanup_nonces_unsafe() -> None:

@@ -12,6 +12,7 @@ from veritas_os.api.rate_limiting import (
     _cleanup_nonces_unsafe,
     _cleanup_rate_bucket,
     _cleanup_rate_bucket_unsafe,
+    _effective_nonce_max,
     _env_int_safe,
     _nonce_lock,
     _nonce_store,
@@ -62,3 +63,14 @@ class TestCleanupNonces:
         # Clean up
         with _nonce_lock:
             _nonce_store.pop("valid_nonce_test", None)
+
+
+def test_effective_nonce_max_falls_back_for_non_positive_server_override(monkeypatch):
+    import veritas_os.api as api_pkg
+
+    class _DummyServer:
+        _NONCE_MAX = 0
+
+    monkeypatch.setattr(api_pkg, "server", _DummyServer, raising=False)
+    monkeypatch.setattr("veritas_os.api.rate_limiting._NONCE_MAX", 77)
+    assert _effective_nonce_max() == 77
