@@ -96,7 +96,8 @@ def _coerce_alt_list(v: Any) -> list:
         d.setdefault("description", d.get("description") or "")
         if "score" in d and d["score"] is not None:
             try:
-                d["score"] = float(d["score"])
+                score_value = float(d["score"])
+                d["score"] = score_value if math.isfinite(score_value) else 1.0
             except Exception:
                 d["score"] = 1.0
         else:
