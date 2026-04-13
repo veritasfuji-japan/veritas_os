@@ -112,6 +112,11 @@ class TestCoerceAltList:
         result = _coerce_alt_list([{"title": "x", "score": "bad"}])
         assert result[0]["score"] == 1.0
 
+    @pytest.mark.parametrize("score", [True, False])
+    def test_boolean_score_is_rejected(self, score):
+        result = _coerce_alt_list([{"title": "x", "score": score}])
+        assert result[0]["score"] == 1.0
+
     @pytest.mark.parametrize("score", [float("nan"), float("inf"), float("-inf")])
     def test_non_finite_score(self, score):
         result = _coerce_alt_list([{"title": "x", "score": score}])

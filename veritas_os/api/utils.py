@@ -96,6 +96,8 @@ def _coerce_alt_list(v: Any) -> list:
         d.setdefault("description", d.get("description") or "")
         if "score" in d and d["score"] is not None:
             try:
+                if isinstance(d["score"], bool):
+                    raise TypeError("boolean score is not supported")
                 score_value = float(d["score"])
                 d["score"] = score_value if math.isfinite(score_value) else 1.0
             except Exception:
