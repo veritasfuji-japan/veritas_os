@@ -34,9 +34,12 @@ if ENV_REPO_ROOT:
 else:
     REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# ログディレクトリ
-LOG_DIR = REPO_ROOT / "scripts" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Canonical log directory: runtime/<namespace>/logs (not scripts/logs)
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+LOG_DIR = _CANONICAL_LOG_DIR
 
 # テンプレート: veritas_os/templates/*
 TEMPLATE_ROOT = REPO_ROOT / "templates"

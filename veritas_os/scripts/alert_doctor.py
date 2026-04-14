@@ -19,15 +19,19 @@ from pathlib import Path
 from typing import Optional
 
 # ================================
-# パス設定（scripts/logs に統一）
+# パス設定（canonical runtime paths）
 # ================================
 THIS_FILE = Path(__file__).resolve()
 SCRIPTS_DIR = THIS_FILE.parent  # .../veritas_os/scripts
 VERITAS_DIR = SCRIPTS_DIR.parent  # .../veritas_os
-LOG_DIR = SCRIPTS_DIR / "logs"  # ★ 新しい正規パス
-REPORT_JSON = LOG_DIR / "doctor_report.json"  # ★ ここだけを使用
 
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR,
+    DOCTOR_REPORT_JSON,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+REPORT_JSON = DOCTOR_REPORT_JSON
 
 # ================================
 # 環境変数

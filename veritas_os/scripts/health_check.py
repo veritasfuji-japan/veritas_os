@@ -28,18 +28,27 @@ if HAS_REQUESTS:
     import requests
 
 # ===== パス設定 =====
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    DOCTOR_DIR,
+    DOCTOR_REPORT_JSON,
+    DOCTOR_DASHBOARD_HTML,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+
 HERE = Path(__file__).resolve().parent  # .../veritas_os/scripts
 VERITAS_DIR = HERE.parent  # .../veritas_os
 
-# scripts 配下を正規の運用ディレクトリとして扱う
+# Scripts use canonical runtime paths (not scripts/logs)
 SCRIPTS_BASE = HERE
-LOGS_DIR = SCRIPTS_BASE / "logs"
+LOGS_DIR = _CANONICAL_LOG_DIR
 BACKUPS_DIR = SCRIPTS_BASE / "backups"
 
-# Doctor レポートは veritas_os/reports 配下に保存する
-REPORT_DIR = VERITAS_DIR / "reports"
-REPORT_HTML  = REPORT_DIR / "doctor_dashboard.html"
-REPORT_JSON  = REPORT_DIR / "doctor_report.json"
+# Doctor reports go to the canonical doctor directory
+REPORT_DIR = DOCTOR_DIR
+REPORT_HTML  = DOCTOR_DASHBOARD_HTML
+REPORT_JSON  = DOCTOR_REPORT_JSON
 
 # 旧来ファイルもあればついでに見る
 SUMMARY_CSV  = LOGS_DIR / "summary.csv"

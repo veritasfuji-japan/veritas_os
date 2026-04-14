@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 try:
-    # 既存の LOG_DIR 設定をそのまま利用
+    # Canonical runtime paths
     from veritas_os.logging.paths import LOG_DIR
 except Exception:
-    # 念のためのフォールバック（プロジェクト直下の scripts/logs）
-    BASE_DIR = Path(__file__).resolve().parents[2]
-    LOG_DIR = str(BASE_DIR / "veritas_os" / "scripts" / "logs")
+    # Fallback: compute canonical runtime path from file location
+    from veritas_os.scripts._runtime_paths import LOG_DIR  # type: ignore[assignment]
 
 LOG_PATH = Path(LOG_DIR)
 REPORT_PATH = LOG_PATH / "doctor_report.json"

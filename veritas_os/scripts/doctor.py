@@ -19,23 +19,32 @@ from pathlib import Path
 from datetime import datetime
 
 # ==== パス定義 ====
-# doctor.py の場所: veritas_os/scripts/doctor.py を想定
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+# (previously scattered under veritas_os/scripts/logs)
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    DOCTOR_DIR,
+    DOCTOR_REPORT_JSON,
+    TRUST_LOG_JSONL as _CANONICAL_TRUST_LOG,
+    BENCH_LOG_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+
 HERE = Path(__file__).resolve().parent          # .../veritas_os/scripts
 REPO_ROOT = HERE.parent                         # .../veritas_os
 
-# ログ置き場（decide_*.json, health_*.json など）
-LOG_DIR = HERE / "logs"                         # .../veritas_os/scripts/logs
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# ログ置き場（canonical: runtime/<ns>/logs）
+LOG_DIR = _CANONICAL_LOG_DIR
 
 # ベンチマーク結果置き場（P2-2: 精度モニタリング）
-BENCH_DIR = REPO_ROOT / "benchmarks" / "results"
+BENCH_DIR = BENCH_LOG_DIR
 
 # 監査用 JSONL
-TRUST_LOG_JSON = LOG_DIR / "trust_log.jsonl"
+TRUST_LOG_JSON = _CANONICAL_TRUST_LOG
 LOG_JSONL = TRUST_LOG_JSON  # 互換のための別名
 
 # ダッシュボード用レポート出力先
-REPORT_PATH = LOG_DIR / "doctor_report.json"
+REPORT_PATH = DOCTOR_REPORT_JSON
 
 # 解析対象パターン（JSONL優先／重複除去）
 PATTERNS = [
@@ -475,11 +484,12 @@ def _bump_kw(counter: dict, text: str):
 
 # ---- main analyzer -----------------------------------------------------
 def analyze_logs():
+    _ensure_runtime_dirs()
     files = _iter_files()
 
     # TRUST_LOG_JSON がなくても、とりあえず警告だけでOK
     if not files and not os.path.exists(LOG_JSONL):
-        print("⚠️ scripts/logs 内に解析対象のログが見つかりません。")
+        print(f"⚠️ {LOG_DIR} 内に解析対象のログが見つかりません。")
         return
 
     found_total  = len(files)

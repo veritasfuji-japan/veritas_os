@@ -42,8 +42,13 @@ DEFAULT_TIMEOUT = 180  # 秒
 
 REPO_ROOT = Path(__file__).resolve().parents[1]          # .../veritas_os
 BENCH_DIR = REPO_ROOT / "benchmarks"
-LOG_ROOT  = REPO_ROOT / "scripts" / "logs" / "benchmarks"
-LOG_ROOT.mkdir(parents=True, exist_ok=True)
+
+# Canonical benchmark log directory: runtime/<namespace>/benchmarks
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    BENCH_LOG_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+LOG_ROOT = BENCH_LOG_DIR
 
 _API_KEY_PLACEHOLDER = "YOUR_API_KEY_HERE"
 

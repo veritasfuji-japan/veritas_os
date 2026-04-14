@@ -26,8 +26,12 @@ API_BASE = os.getenv("VERITAS_API_BASE", "http://127.0.0.1:8000")
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 BENCH_DIR = REPO_ROOT / "benchmarks"
 
-LOG_DIR = REPO_ROOT / "scripts" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Canonical log directory: runtime/<namespace>/logs (not scripts/logs)
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+LOG_DIR = _CANONICAL_LOG_DIR
 
 
 def run_bench(yaml_name: str) -> None:

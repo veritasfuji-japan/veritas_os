@@ -15,12 +15,17 @@ from datetime import datetime
 from collections import Counter, defaultdict
 
 # ========================================
-#  パス設定（veritas_os からの相対）
+#  パス設定（canonical runtime paths）
 # ========================================
 
 BASE_DIR = Path(__file__).resolve().parents[1]          # .../veritas_os
-LOG_DIR  = BASE_DIR / "scripts" / "logs"                # .../veritas_os/scripts/logs
-REPORT_JSON = LOG_DIR / "doctor_report.json"            # Web Doctor 用
+
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR,
+    DOCTOR_REPORT_JSON,
+)
+REPORT_JSON = DOCTOR_REPORT_JSON
 
 # decide_YYYYMMDD_HHMMSS.json または decide_YYYYMMDD_HHMMSS_123.json に対応
 FNAME_RE = re.compile(r"decide_(\d{8})_(\d{6})(?:_\d+)?\.json")
