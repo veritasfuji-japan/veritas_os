@@ -28,17 +28,25 @@ from .utils import _safe_float
 logger = logging.getLogger(__name__)
 
 # ==== パス設定 ====
+# Canonical runtime paths — use logging.paths for consistency
+from veritas_os.logging.paths import (
+    DOCTOR_DIR as _CANONICAL_DOCTOR_DIR,
+    DOCTOR_REPORT_JSON as _CANONICAL_DOCTOR_REPORT,
+    BENCH_LOG_DIR as _CANONICAL_BENCH_DIR,
+)
 
-BASE_DIR = Path(__file__).resolve().parents[2]  # .../veritas_clean_test2
+BASE_DIR = Path(__file__).resolve().parents[2]  # project root
 VERITAS_DIR = BASE_DIR / "veritas_os"
 
-# doctor_report は env 優先、なければ veritas_os/reports
-DEFAULT_DOCTOR = VERITAS_DIR / "reports" / "doctor_report.json"
-DOCTOR_REPORT_PATH = Path(os.getenv("VERITAS_DOCTOR_REPORT", str(DEFAULT_DOCTOR)))
+# doctor_report: env override → canonical runtime path
+DOCTOR_REPORT_PATH = Path(
+    os.getenv("VERITAS_DOCTOR_REPORT", str(_CANONICAL_DOCTOR_REPORT))
+)
 
-# bench ログディレクトリ (env 優先)
-DEFAULT_BENCH_DIR = VERITAS_DIR / "scripts" / "logs"
-BENCH_LOG_DIR = Path(os.getenv("VERITAS_BENCH_LOG_DIR", str(DEFAULT_BENCH_DIR)))
+# bench ログディレクトリ: env override → canonical runtime path
+BENCH_LOG_DIR = Path(
+    os.getenv("VERITAS_BENCH_LOG_DIR", str(_CANONICAL_BENCH_DIR))
+)
 
 
 # ==== 小さなヘルパー群 ====

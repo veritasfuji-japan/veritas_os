@@ -17,9 +17,11 @@ import datetime
 from typing import Any, Dict, List
 
 
-# scripts/ から見て logs/benchmarks/ を見る
+# Canonical benchmark log directory: runtime/<namespace>/benchmarks
+from veritas_os.scripts._runtime_paths import BENCH_LOG_DIR  # noqa: E402
+
 SCRIPT_DIR = Path(__file__).resolve().parent
-BENCH_DIR = SCRIPT_DIR / "logs" / "benchmarks"
+BENCH_DIR = BENCH_LOG_DIR
 
 
 def _parse_single_bench(path: Path) -> Dict[str, Any] | None:

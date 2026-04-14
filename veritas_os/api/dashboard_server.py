@@ -155,7 +155,8 @@ def _get_ephemeral_password_file_path() -> Path:
     if veritas_home:
         base_dir = Path(veritas_home).expanduser()
     else:
-        base_dir = Path.home() / ".veritas_os"
+        # Default to repo-local runtime path instead of Path.home().
+        base_dir = Path(__file__).resolve().parents[2] / "runtime" / "dev"
 
     return base_dir / "runtime_secrets" / "dashboard_ephemeral_password"
 
@@ -542,7 +543,17 @@ def verify_credentials(
 # ===== パス設定 =====
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-default_log_dir = BASE_DIR / "scripts" / "logs"
+# Canonical log directory: runtime/<namespace>/logs (not scripts/logs).
+_ds_runtime_root = Path(
+    (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip()
+    or str(BASE_DIR.parent / "runtime")
+)
+_ds_runtime_ns = (
+    (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
+    or (os.getenv("VERITAS_ENV") or "").strip().lower()
+    or "dev"
+)
+default_log_dir = _ds_runtime_root / Path(_ds_runtime_ns) / "logs"
 
 
 def _is_sensitive_path(path: Path) -> bool:
