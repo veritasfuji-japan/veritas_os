@@ -26,29 +26,25 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 # ===== パス設定 =====
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+)
 
-# このファイル: veritas_os/scripts/merge_trust_logs.py を想定
-# parents[0] = .../veritas_os/scripts
-# parents[1] = .../veritas_os
-# parents[2] = .../repo_root
-REPO_ROOT = Path(__file__).resolve().parents[2]
-TOP_SCRIPTS_DIR = REPO_ROOT / "scripts"
-TOP_LOGS_DIR = TOP_SCRIPTS_DIR / "logs"
-
+# The canonical log directory replaces both old scripts/logs candidates.
 PKG_ROOT = Path(__file__).resolve().parents[1]          # .../veritas_os
 PKG_SCRIPTS_DIR = PKG_ROOT / "scripts"
-PKG_LOGS_DIR = PKG_SCRIPTS_DIR / "logs"
 
-# デフォルトで見るログディレクトリ候補（存在するものを優先）
-LOG_DIR_CANDIDATES = [PKG_LOGS_DIR, TOP_LOGS_DIR]
+# デフォルトで見るログディレクトリ: canonical runtime path
+LOG_DIR_CANDIDATES = [_CANONICAL_LOG_DIR]
 
 def _pick_default_logs_dir() -> Path:
     for d in LOG_DIR_CANDIDATES:
         if d.exists():
             return d
-    # どこもない場合は veritas_os/scripts/logs を優先で作る
-    PKG_LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    return PKG_LOGS_DIR
+    # Create canonical directory if it doesn't exist
+    _CANONICAL_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    return _CANONICAL_LOG_DIR
 
 
 DEFAULT_LOGS_DIR = _pick_default_logs_dir()

@@ -11,24 +11,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # --------------------------------------------------
-# 📂 パス設定
-#   - このファイル: veritas_os/scripts/memory_sync.py
-#   - プロジェクトルート: .../veritas_os
-#   - ログ:           .../veritas_os/scripts/logs
-#   - MemoryOS保存:   .../veritas_os/.veritas/memory.json
+# 📂 パス設定（canonical runtime paths）
+#   All outputs go to runtime/<namespace>/ (not scripts/logs or .veritas/)
 # --------------------------------------------------
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# ログディレクトリ（doctor_report.json が出る場所）
-LOG_DIR = REPO_ROOT / "scripts" / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
-REPORT_PATH = LOG_DIR / "doctor_report.json"
+# Canonical paths
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR,
+    DOCTOR_REPORT_JSON,
+    DATA_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
+REPORT_PATH = DOCTOR_REPORT_JSON
 
-# MemoryOS 用ローカルディレクトリ（ホームではなくプロジェクト内）
-LOCAL_VERITAS_DIR = REPO_ROOT / ".veritas"
-LOCAL_VERITAS_DIR.mkdir(parents=True, exist_ok=True)
-MEM_PATH = LOCAL_VERITAS_DIR / "memory.json"
+# MemoryOS uses canonical data directory (not .veritas/)
+MEM_PATH = DATA_DIR / "memory.json"
 
 USER_ID = os.getenv("VERITAS_USER_ID", "cli")  # 任意で切替
 

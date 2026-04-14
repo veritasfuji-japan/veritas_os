@@ -19,13 +19,21 @@ from typing import Iterable, List
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 RUNTIME_DIRS: tuple[str, ...] = (
+    # Primary canonical runtime tree (all generated artifacts)
     "runtime",
+    # Legacy locations that may still have stale artifacts
     "logs",
+    "veritas_os/scripts/logs",
     "scripts/logs",
     "datasets/generated",
     "data/runtime",
     "storage",
     "cache",
+    # Legacy locations that older scripts may have created
+    "veritas_os/.veritas",
+    "veritas_os/reports",
+    "veritas_os/datasets",
+    "veritas_os/core/models",
 )
 
 RUNTIME_FILE_GLOBS: tuple[str, ...] = ("*.log", "*.tmp", "*.jsonl", "*.sqlite", "*.db")
@@ -33,6 +41,7 @@ RUNTIME_FILE_GLOBS: tuple[str, ...] = ("*.log", "*.tmp", "*.jsonl", "*.sqlite", 
 RUNTIME_FILE_SEARCH_DIRS: tuple[str, ...] = (
     "runtime",
     "logs",
+    "veritas_os/scripts/logs",
     "scripts/logs",
     "data/runtime",
     "datasets/generated",

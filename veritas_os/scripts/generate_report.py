@@ -43,26 +43,29 @@ SCRIPTS_DIR = REPO_ROOT / "scripts"
 # プロジェクトルート（.../veritas_clean_test2）
 PROJECT_ROOT = REPO_ROOT.parent
 
-# ログディレクトリは scripts/logs 固定
-LOG_DIR = SCRIPTS_DIR / "logs"
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    DOCTOR_REPORT_JSON,
+    DOCTOR_DASHBOARD_HTML,
+    DATA_DIR as _CANONICAL_DATA_DIR,
+    ensure_dirs as _ensure_runtime_dirs,
+)
 
-REPORT_HTML = LOG_DIR / "doctor_dashboard.html"
-# doctor.py が doctor_report.json を書くので、ここでも同じ名前で上書きして OK
-REPORT_JSON = LOG_DIR / "doctor_report.json"
+LOG_DIR = _CANONICAL_LOG_DIR
 
-# Value は .veritas/value_stats.json または project_root/data/value_stats.json を見る
-DATA_DIR = PROJECT_ROOT / "data"
-VERITAS_DIR = REPO_ROOT / ".veritas"
+REPORT_HTML = DOCTOR_DASHBOARD_HTML
+REPORT_JSON = DOCTOR_REPORT_JSON
+
+# Value / Memory: use canonical runtime data directory
+DATA_DIR = _CANONICAL_DATA_DIR
 
 VALUE_CANDIDATES = [
-    VERITAS_DIR / "value_stats.json",
     DATA_DIR / "value_stats.json",
 ]
 
 MEMORY_CANDIDATES = [
-    VERITAS_DIR / "memory.json",
-    LOG_DIR / "memory.json",
+    DATA_DIR / "memory.json",
 ]
 
 # ---------- 共通関数 ----------

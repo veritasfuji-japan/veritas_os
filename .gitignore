@@ -77,6 +77,12 @@ cache/
 *.db
 *.tmp
 
+# Legacy script output directories (now centralized under runtime/)
+veritas_os/scripts/logs/
+veritas_os/.veritas/
+veritas_os/reports/
+veritas_os/core/models/
+
 # バックアップ系
 backups/
 backup/

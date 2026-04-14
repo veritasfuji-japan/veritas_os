@@ -160,6 +160,16 @@ VAL_JSON = DATA_DIR / "value_stats.json"
 # ReasonOS メタログ
 META_LOG = LOG_DIR / "meta_log.jsonl"
 
+# ---- Script / doctor / benchmark canonical paths ----
+# All scripts MUST use these instead of inventing their own paths.
+DOCTOR_DIR = LOG_ROOT / "doctor"
+DOCTOR_REPORT_JSON = DOCTOR_DIR / "doctor_report.json"
+DOCTOR_DASHBOARD_HTML = DOCTOR_DIR / "doctor_dashboard.html"
+
+BENCH_LOG_DIR = RUNTIME_DIR / "benchmarks"
+REPORT_DIR = RUNTIME_DIR / "reports"
+MODELS_DIR = RUNTIME_DIR / "models"
+
 
 def ensure_runtime_dirs() -> None:
     """Create and harden runtime directories for logging paths.
@@ -167,7 +177,10 @@ def ensure_runtime_dirs() -> None:
     This function is intentionally explicit so importing ``veritas_os.logging.paths``
     does not mutate the filesystem (M-2 import-time side effect reduction).
     """
-    for directory in (LOG_ROOT, DASH_DIR, DATA_DIR):
+    for directory in (
+        LOG_ROOT, DASH_DIR, DATA_DIR,
+        DOCTOR_DIR, BENCH_LOG_DIR, REPORT_DIR,
+    ):
         directory.mkdir(parents=True, exist_ok=True)
         _ensure_secure_permissions(directory)
 
@@ -188,5 +201,11 @@ __all__ = [
     "DATA_DIR",
     "VAL_JSON",
     "META_LOG",
+    "DOCTOR_DIR",
+    "DOCTOR_REPORT_JSON",
+    "DOCTOR_DASHBOARD_HTML",
+    "BENCH_LOG_DIR",
+    "REPORT_DIR",
+    "MODELS_DIR",
     "ensure_runtime_dirs",
 ]

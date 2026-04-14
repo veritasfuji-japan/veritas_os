@@ -9,24 +9,21 @@ from collections import Counter
 from pathlib import Path
 from typing import Iterable
 
-# ▼ ここを修正：VERITAS_DIR を「このリポジトリ」にする
-#   .../veritas_clean_test2/veritas_os/scripts/memory_train.py
-#   という位置にある前提で、1つ上が repo root
+# Canonical runtime paths — all outputs go to runtime/<namespace>/
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    DATASET_DIR,
+    LOG_DIR as _CANONICAL_LOG_DIR,
+    MODELS_DIR as MODEL_PATH,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]  # .../veritas_os
 VERITAS_DIR = REPO_ROOT
 
-# データセット置き場（リポジトリ内）
-DATASET_DIR = VERITAS_DIR / "datasets"
-DATASET_DIR.mkdir(parents=True, exist_ok=True)
-
 DATA_DIRS = [
     DATASET_DIR,
-    VERITAS_DIR / "scripts" / "logs",  # 必要なら使う
+    _CANONICAL_LOG_DIR,
 ]
 
-# ▼ モデルの保存先もリポジトリ内 core/models に統一
-MODEL_PATH = VERITAS_DIR / "core" / "models"
-MODEL_PATH.mkdir(parents=True, exist_ok=True)
 MODEL_ONNX_FILE = MODEL_PATH / "memory_model.onnx"
 MODEL_METADATA_FILE = MODEL_PATH / "memory_model.metadata.json"
 

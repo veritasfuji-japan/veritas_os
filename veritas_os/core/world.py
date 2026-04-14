@@ -178,10 +178,11 @@ def _resolve_data_dir() -> Path:
     try:
         return _validate_path_safety(path, "data directory")
     except ValueError:
-        # Fall back to default on validation failure
-        default_path = Path.home() / "veritas"
-        logger.warning("Using default data directory: %s", default_path)
-        return default_path
+        # Fall back to repo-local runtime default on validation failure.
+        # Never write to Path.home() — all defaults must be repo-local.
+        fallback = Path(__file__).resolve().parents[2] / "runtime" / "dev" / "data"
+        logger.warning("Using repo-local default data directory: %s", fallback)
+        return fallback
 
 
 def _resolve_world_path() -> Path:
