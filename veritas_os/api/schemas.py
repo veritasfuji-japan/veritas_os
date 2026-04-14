@@ -32,7 +32,18 @@ MAX_KIND_LENGTH = 50  # Max characters for kind/retention_class fields
 
 # Shared decision status literal used across FujiDecision, Gate, DecideResponse
 DecisionStatusLiteral = Literal["allow", "modify", "rejected", "block", "abstain"]
-GateDecisionLiteral = Literal["allow", "hold", "deny", "modify", "rejected", "block", "abstain", "unknown"]
+GateDecisionLiteral = Literal[
+    "proceed",
+    "hold",
+    "block",
+    "human_review_required",
+    "allow",
+    "deny",
+    "modify",
+    "rejected",
+    "abstain",
+    "unknown",
+]
 BusinessDecisionLiteral = Literal[
     "APPROVE",
     "DENY",

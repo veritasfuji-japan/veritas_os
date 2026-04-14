@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 try:
     from pydantic import ValidationError as _PydanticValidationError
@@ -67,6 +67,46 @@ def _as_string_list(value: Any) -> list[str]:
     return []
 
 
+def _is_falsey_flag(value: Any) -> bool:
+    """Return True when a context flag explicitly indicates missing readiness."""
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized in {"0", "false", "no", "off", "missing", "unknown", "undefined"}
+    return False
+
+
+def _extract_stop_reasons(
+    *,
+    gate_reason: str,
+    missing_evidence: List[str],
+    context: Dict[str, Any],
+) -> List[str]:
+    """Collect fail-closed stop reasons used for gate decision classification."""
+    reasons: List[str] = []
+    reason_lc = gate_reason.lower()
+    env_name = str(context.get("environment") or os.getenv("VERITAS_ENV", "")).lower()
+    secure_or_prod = env_name in {"secure", "prod", "production"}
+
+    if missing_evidence:
+        reasons.append("required_evidence_missing")
+    if ("policy_definition_required" in reason_lc) or _is_falsey_flag(context.get("rule_defined")):
+        reasons.append("rule_undefined")
+    if _is_falsey_flag(context.get("approval_boundary_defined")):
+        reasons.append("approval_boundary_unknown")
+    if _is_falsey_flag(context.get("audit_trail_complete")):
+        reasons.append("audit_trail_incomplete")
+    if _is_falsey_flag(context.get("rollback_supported")):
+        reasons.append("rollback_not_supported")
+    if _is_falsey_flag(context.get("secure_controls_ready")):
+        reasons.append("secure_controls_missing")
+    if secure_or_prod and _is_falsey_flag(context.get("production_controls_ready")):
+        reasons.append("secure_prod_controls_missing")
+
+    return reasons
+
+
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     """Derive public decision semantics from internal gate outputs.
 
@@ -75,7 +115,7 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     - business_decision: case lifecycle status (APPROVE/HOLD/...)
     - next_action: operator/system action guidance
     """
-    gate_decision = str(
+    raw_gate_decision = str(
         ctx.fuji_dict.get("decision_status")
         or ctx.fuji_dict.get("status")
         or ctx.decision_status
@@ -90,16 +130,44 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     human_review_required = bool(
         ctx.context.get("human_review_required")
         or fuji_status == "needs_human_review"
-        or gate_decision == "hold"
+        or raw_gate_decision == "hold"
     )
+    stop_reasons = _extract_stop_reasons(
+        gate_reason=gate_reason,
+        missing_evidence=missing_evidence,
+        context=ctx.context,
+    )
+
+    if "rollback_not_supported" in stop_reasons:
+        gate_decision = "block"
+    elif "secure_prod_controls_missing" in stop_reasons:
+        gate_decision = "block"
+    elif raw_gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
+        gate_decision = "block"
+    elif "required_evidence_missing" in stop_reasons:
+        gate_decision = "hold"
+    elif "approval_boundary_unknown" in stop_reasons or human_review_required:
+        gate_decision = "human_review_required"
+        human_review_required = True
+    elif any(
+        item in stop_reasons
+        for item in {
+            "rule_undefined",
+            "audit_trail_incomplete",
+            "secure_controls_missing",
+        }
+    ) or raw_gate_decision in {"hold", "modify", "abstain"}:
+        gate_decision = "hold"
+    else:
+        gate_decision = "proceed"
 
     if missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"
-    elif gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
+    elif gate_decision == "block":
         business_decision = "DENY"
-    elif human_review_required:
+    elif gate_decision == "human_review_required":
         business_decision = "REVIEW_REQUIRED"
-    elif gate_decision in {"hold", "modify", "abstain"}:
+    elif gate_decision == "hold":
         business_decision = "HOLD"
     elif "policy_definition_required" in gate_reason.lower():
         business_decision = "POLICY_DEFINITION_REQUIRED"
@@ -114,8 +182,12 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "POLICY_DEFINITION_REQUIRED": "DEFINE_POLICY_AND_REASSESS",
         "EVIDENCE_REQUIRED": "COLLECT_REQUIRED_EVIDENCE",
     }
-    rationale = gate_reason or "Decision derived from FUJI gate outcome and available evidence."
-    refusal_reason = gate_reason if business_decision == "DENY" else None
+    rationale_parts = [gate_reason] if gate_reason else []
+    if stop_reasons:
+        rationale_parts.append(f"stop_reasons={', '.join(sorted(set(stop_reasons)))}")
+    if not rationale_parts:
+        rationale_parts.append("Decision derived from FUJI gate outcome and available evidence.")
+    refusal_reason = "; ".join(rationale_parts) if gate_decision == "block" else None
     return {
         "gate_decision": gate_decision,
         "business_decision": business_decision,
@@ -123,7 +195,7 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "required_evidence": required_evidence,
         "missing_evidence": missing_evidence,
         "human_review_required": human_review_required,
-        "rationale": rationale,
+        "rationale": " | ".join(rationale_parts),
         "refusal_reason": refusal_reason,
     }
 

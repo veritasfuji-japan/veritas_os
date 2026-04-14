@@ -58,7 +58,7 @@ Key fields (simplified):
 | `debate[]`         | Pseudo multi-agent debate results (pro / con / third-party views)                                    |
 | `telos_score`      | Alignment score vs. ValueCore’s value function                                                       |
 | `fuji`             | FUJI Gate safety / ethics judgement (allow / modify / rejected)                                      |
-| `gate_decision`    | Safety gate outcome (`allow`/`hold`/`deny`...) for control-plane gating                              |
+| `gate_decision`    | Canonical gate outcome (`proceed`/`hold`/`block`/`human_review_required`) with fail-closed posture  |
 | `business_decision`| Case lifecycle state (`APPROVE`/`DENY`/`HOLD`/`REVIEW_REQUIRED`/...)                                  |
 | `next_action`      | Action guidance derived from business state (kept separate from `business_decision`)                  |
 | `human_review_required` | Explicit human-review flag                                                                      |
@@ -71,6 +71,11 @@ Pipeline mental model:
 Options → Evidence → Critique → Debate → Planner → ValueCore → FUJI → TrustLog
 (Local FastAPI server with OpenAPI 3.1 / Swagger UI, no external deps after startup)
 ````
+
+Fail-closed gate behavior highlights:
+- Missing required evidence / undefined policy / incomplete audit trail => `hold`
+- Unknown approval boundary => `human_review_required`
+- Non-rollbackable change or secure/prod control gap => `block`
 
 Bundled subsystems:
 
