@@ -3,46 +3,55 @@
 ## 対象範囲
 - Python ワークスペースとフロントエンドワークスペースの構造整合性。
 - ツールチェーン整合性（lint / test / 依存関係健全性）。
-- Planner / Kernel / Fuji / MemoryOS に関する責務境界のサンプリング確認。
+- Planner / Kernel / Fuji / MemoryOS に関する責務境界の確認（構成 + ルールチェック）。
 - リポジトリ設定と依存関係制約に基づくセキュリティ観点の確認。
 
-## 実行コマンド
+## 実行コマンド（2026-04-14 UTC）
 1. `pytest -q tests/test_continuation_enforcement.py tests/test_continuation_integration.py tests/test_debate_safety_heuristics.py`
-   - 結果: **90 passed**
+   - 結果: **90 passed in 4.78s**
 2. `ruff check .`
    - 結果: **All checks passed**
 3. `cd frontend && pnpm vitest run components/ui/status-badge.test.tsx`
    - 結果: **1 file passed, 4 tests passed**
 4. `python -m pip check`
    - 結果: **No broken requirements found**
+5. `python scripts/architecture/check_responsibility_boundaries.py`
+   - 結果: **Responsibility boundary check passed**
+6. `python scripts/quality/check_operational_docs_consistency.py`
+   - 結果: **Operational documentation consistency checks passed**
+7. `python scripts/quality/check_review_improvements_consistency.py`
+   - 結果: **Review improvements consistency checks passed**
+8. `python scripts/security/check_subprocess_shell_usage.py`
+   - 結果: **No risky subprocess usage detected**
+9. `python scripts/security/check_unsafe_dynamic_execution_usage.py`
+   - 結果: **No unsafe dynamic execution/deserialization usage detected**
+10. `python scripts/security/check_next_public_key_exposure.py`
+    - 結果: **No disallowed NEXT_PUBLIC secret-like variable names found**
 
 ## 所見
 
-### 1) クロススタックの基礎整合性は良好
-- Python lint、選択したバックエンドテスト、選択したフロントエンドテスト、依存関係整合性チェックが本環境で全て通過。
-- コード・テストハーネス・ピン留め依存関係の間で、即時の整合性破綻は確認されなかった。
+### 1) クロススタック整合性は「良好」かつ再現可能性が改善
+- Python 側 lint / backend テスト、frontend コンポーネントテスト、依存関係健全性チェックがすべて通過。
+- 加えて docs 一貫性・レビュー改善一貫性の自動チェックも通過しており、単発の成功ではなく「運用レビュー文書まで含めた整合性」が確認できた。
 
-### 2) 責務境界は維持されている（サンプルベース）
-- ドキュメントとモジュール構成上、主要責務（監査/信頼ログ、ガバナンス、メモリ、意思決定パイプライン）は分離されている。
-- ただし CI 上での静的なアーキテクチャ境界ルール検証は、この簡易レビュー経路では自動化されていない。
-- したがって本判定は「構成確認 + テスト通過」に基づく推定であり、形式的証明ではない。
+### 2) 責務境界（Planner / Kernel / Fuji / MemoryOS）は、今回サンプル範囲で逸脱なし
+- `check_responsibility_boundaries.py` が通過し、責務の越境を機械的に検知する最低限のガードが有効であることを確認。
+- ただし本レビューはサンプル実行（代表テスト + 代表チェック）であり、全シナリオを網羅する形式検証ではない。
 
-### 3) セキュリティ警告（必須対応 / 継続監視）
-1. **開発用環境ファイル `frontend/.env.development` が追跡されている。**
-   - リスク: 値が設定された状態で秘密情報が混入する恐れ。
-   - 推奨: テンプレート用途の非機密値のみ維持し、`.gitignore` 運用を再確認、CI に secret scanning を必須化。
-2. **運用ハードニング確認が簡易レビュー経路に含まれていない。**
-   - リスク: 「整合性 OK」に見えても、ヘッダー/Auth/ポリシーゲートの運用姿勢が退行する可能性。
-   - 推奨: バックエンド・フロントエンド・ポリシー検証を束ねた「integrity + security gate」CI ターゲットを追加。
+### 3) セキュリティ警告（継続監視）
+1. **`frontend/.env.development` が Git 追跡されている点は引き続き要注意。**
+   - 現状ファイル内容は開発用ダミー値（例: `dev-api-key`）で、直ちに機密漏えいとは断定できない。
+   - ただし将来の運用で実値が混入するリスクは残るため、テンプレート化（`.env.development.example`）+ 実体の ignore + secret scanning を推奨。
+2. **簡易レビューを「通過」しても、運用防御が十分とは限らない。**
+   - 今回は静的チェック中心で、ヘッダー強制・認可回帰・実運用ポリシー適用の E2E 防御までは完全に担保しない。
+   - 既存の security/quality スクリプトを CI の必須ゲートへ束ね、`main` マージ条件に昇格させることを推奨。
 
-### 4) 改善提案
-- トップレベルの統合検証コマンド（例: `make verify` / `just verify`）を用意し、以下を連結実行する。
-  - バックエンド lint + 代表的 unit/integration tests
-  - フロントエンド lint + 代表的 component/API tests
-  - 依存関係健全性チェック
-  - セキュリティポリシーチェック
-- ローカル検証と CI 検証の差分を縮小し、整合性レビューの再現性を高める。
+### 4) 改善提案（優先度付き）
+- **High**: `verify` 系の単一エントリポイント（`make verify` / `just verify`）に、今回実行した lint/test/quality/security/architecture チェックを統合。
+- **Medium**: `.env.development` の取り扱いを「追跡ファイル」から「テンプレート + ローカル実体」に移行し、secret scanning ルールに反映。
+- **Medium**: 責務境界チェックを PR 必須ジョブ化し、Planner / Kernel / Fuji / MemoryOS の越境をレビュー前に検知。
 
 ## 判定
 - **現時点の判定**: サンプル対象に限れば、整合性は **良好**。
-- **確信度**: **medium**（スモーク〜中程度の確認。全サブシステム・全環境を網羅する監査ではない）。
+- **確信度**: **medium-high**（前版の medium から改善。理由: 責務境界・ドキュメント整合・複数セキュリティ静的チェックを追加実行）。
+- **レビュー結論**: 現時点で「即時の追加修正が必須な不整合」は確認されないため、次アクションは **CI ゲート統合の実装レビュー**を推奨。
