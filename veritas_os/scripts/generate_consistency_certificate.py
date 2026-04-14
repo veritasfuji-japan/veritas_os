@@ -14,8 +14,7 @@ try:
     from veritas_os.logging.paths import LOG_DIR
 except Exception:
     # Fallback: compute canonical runtime path from file location
-    _cert_project_root = Path(__file__).resolve().parents[2]
-    LOG_DIR = str(_cert_project_root / "runtime" / "dev" / "logs")
+    from veritas_os.scripts._runtime_paths import LOG_DIR  # type: ignore[assignment]
 
 LOG_PATH = Path(LOG_DIR)
 REPORT_PATH = LOG_PATH / "doctor_report.json"

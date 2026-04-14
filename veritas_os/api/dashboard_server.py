@@ -544,16 +544,10 @@ def verify_credentials(
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 # Canonical log directory: runtime/<namespace>/logs (not scripts/logs).
-_ds_runtime_root = Path(
-    (os.getenv("VERITAS_RUNTIME_ROOT") or "").strip()
-    or str(BASE_DIR.parent / "runtime")
+from veritas_os.scripts._runtime_paths import (  # noqa: E402
+    LOG_DIR as _canonical_log_dir,
 )
-_ds_runtime_ns = (
-    (os.getenv("VERITAS_RUNTIME_NAMESPACE") or "").strip().lower()
-    or (os.getenv("VERITAS_ENV") or "").strip().lower()
-    or "dev"
-)
-default_log_dir = _ds_runtime_root / Path(_ds_runtime_ns) / "logs"
+default_log_dir = _canonical_log_dir
 
 
 def _is_sensitive_path(path: Path) -> bool:
