@@ -160,6 +160,25 @@ class TestDecideResponse:
         assert resp.request_id == "req1"
         assert resp.answer == "Test answer"
 
+    def test_public_decision_fields_have_defaults(self):
+        """公開判定スキーマの意味分離フィールドが常に存在する。"""
+        resp = schemas_mod.DecideResponse(request_id="req-public")
+        assert resp.gate_decision == "unknown"
+        assert resp.business_decision == "HOLD"
+        assert resp.next_action == "REVISE_AND_RESUBMIT"
+        assert resp.required_evidence == []
+        assert resp.human_review_required is False
+
+    def test_business_decision_enum_accepts_review_required(self):
+        """business_decision は action ではなく案件状態 enum で保持する。"""
+        resp = schemas_mod.DecideResponse(
+            request_id="req-enum",
+            business_decision="REVIEW_REQUIRED",
+            next_action="ROUTE_TO_HUMAN_REVIEW",
+        )
+        assert resp.business_decision == "REVIEW_REQUIRED"
+        assert resp.next_action == "ROUTE_TO_HUMAN_REVIEW"
+
 
 class TestOption:
     """Tests for Option model if it exists."""

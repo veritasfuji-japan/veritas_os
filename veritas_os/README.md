@@ -58,7 +58,11 @@ Key fields (simplified):
 | `debate[]`         | Pseudo multi-agent debate results (pro / con / third-party views)                                    |
 | `telos_score`      | Alignment score vs. ValueCore’s value function                                                       |
 | `fuji`             | FUJI Gate safety / ethics judgement (allow / modify / rejected)                                      |
-| `gate.decision_status` | Final decision status (Enum `DecisionStatus`)                                                    |
+| `gate_decision`    | Safety gate outcome (`allow`/`hold`/`deny`...) for control-plane gating                              |
+| `business_decision`| Case lifecycle state (`APPROVE`/`DENY`/`HOLD`/`REVIEW_REQUIRED`/...)                                  |
+| `next_action`      | Action guidance derived from business state (kept separate from `business_decision`)                  |
+| `human_review_required` | Explicit human-review flag                                                                      |
+| `gate.decision_status` | Legacy/internal-compatible gate status (kept for backward compatibility)                         |
 | `trust_log`        | Hash-chained TrustLog entry with `sha256_prev` (for auditability)                                   |
 
 Pipeline mental model:
