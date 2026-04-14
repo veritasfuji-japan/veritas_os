@@ -60,6 +60,74 @@ BACKWARD_COMPAT_FIELDS = (
 )
 
 
+def _as_string_list(value: Any) -> list[str]:
+    """Normalize arbitrary values to a list[str] for public response fields."""
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
+    """Derive public decision semantics from internal gate outputs.
+
+    This helper separates:
+    - gate_decision: safety gate outcome (allow/hold/deny...)
+    - business_decision: case lifecycle status (APPROVE/HOLD/...)
+    - next_action: operator/system action guidance
+    """
+    gate_decision = str(
+        ctx.fuji_dict.get("decision_status")
+        or ctx.fuji_dict.get("status")
+        or ctx.decision_status
+        or "unknown"
+    ).lower()
+    gate_reason = str(ctx.rejection_reason or ctx.fuji_dict.get("rejection_reason") or "").strip()
+    required_evidence = _as_string_list(ctx.context.get("required_evidence"))
+    satisfied_evidence = set(_as_string_list(ctx.context.get("satisfied_evidence")))
+    missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
+
+    fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
+    human_review_required = bool(
+        ctx.context.get("human_review_required")
+        or fuji_status == "needs_human_review"
+        or gate_decision == "hold"
+    )
+
+    if missing_evidence:
+        business_decision = "EVIDENCE_REQUIRED"
+    elif gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
+        business_decision = "DENY"
+    elif human_review_required:
+        business_decision = "REVIEW_REQUIRED"
+    elif gate_decision in {"hold", "modify", "abstain"}:
+        business_decision = "HOLD"
+    elif "policy_definition_required" in gate_reason.lower():
+        business_decision = "POLICY_DEFINITION_REQUIRED"
+    else:
+        business_decision = "APPROVE"
+
+    next_action_map = {
+        "APPROVE": "EXECUTE_WITH_STANDARD_MONITORING",
+        "DENY": "DO_NOT_EXECUTE",
+        "HOLD": "REVISE_AND_RESUBMIT",
+        "REVIEW_REQUIRED": "ROUTE_TO_HUMAN_REVIEW",
+        "POLICY_DEFINITION_REQUIRED": "DEFINE_POLICY_AND_REASSESS",
+        "EVIDENCE_REQUIRED": "COLLECT_REQUIRED_EVIDENCE",
+    }
+    rationale = gate_reason or "Decision derived from FUJI gate outcome and available evidence."
+    refusal_reason = gate_reason if business_decision == "DENY" else None
+    return {
+        "gate_decision": gate_decision,
+        "business_decision": business_decision,
+        "next_action": next_action_map[business_decision],
+        "required_evidence": required_evidence,
+        "missing_evidence": missing_evidence,
+        "human_review_required": human_review_required,
+        "rationale": rationale,
+        "refusal_reason": refusal_reason,
+    }
+
+
 def _build_response_layers(
     ctx: PipelineContext,
     *,
@@ -95,6 +163,7 @@ def _build_response_layers(
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
     }
+    core.update(_derive_business_fields(ctx))
 
     audit_debug_internal = {
         "extras": ctx.response_extras,

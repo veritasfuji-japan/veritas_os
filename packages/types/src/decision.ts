@@ -8,6 +8,14 @@
  */
 
 export type DecisionStatus = "allow" | "modify" | "rejected" | "block" | "abstain";
+export type GateDecisionStatus = "allow" | "hold" | "deny" | "modify" | "rejected" | "block" | "abstain" | "unknown";
+export type BusinessDecisionStatus =
+  | "APPROVE"
+  | "DENY"
+  | "HOLD"
+  | "REVIEW_REQUIRED"
+  | "POLICY_DEFINITION_REQUIRED"
+  | "EVIDENCE_REQUIRED";
 
 /** Severity level used in CritiqueItem. */
 export type CritiqueSeverity = "low" | "med" | "high";
@@ -536,6 +544,22 @@ export interface DecideResponse extends DecideResponseMeta {
   options: DecisionAlternative[];
   decision_status: DecisionStatus;
   rejection_reason: string | null;
+  /** Public safety gate outcome (separate from business case status). */
+  gate_decision?: GateDecisionStatus;
+  /** Public business/case lifecycle status (not an action command). */
+  business_decision?: BusinessDecisionStatus;
+  /** Recommended next action, separate from business_decision state. */
+  next_action?: string;
+  /** Required evidence keys declared for this decision. */
+  required_evidence?: string[];
+  /** Required evidence that is still missing. */
+  missing_evidence?: string[];
+  /** Explicit indicator that human review is required. */
+  human_review_required?: boolean;
+  /** Human-readable rationale for gate/business decision separation. */
+  rationale?: string | null;
+  /** Refusal reason used when business_decision is DENY. */
+  refusal_reason?: string | null;
 
   values: ValuesOut | null;
   telos_score: number;

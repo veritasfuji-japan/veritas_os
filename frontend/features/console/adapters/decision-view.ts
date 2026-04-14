@@ -128,8 +128,9 @@ export function toFujiGateView(result: DecideResponse | null): FujiGateView {
     ...(result.gate as Record<string, unknown>),
   };
 
+  const topLevelGateDecision = readText(result as Record<string, unknown>, "gate_decision");
   return {
-    decision: readText(merged, "decision_status", "status"),
+    decision: topLevelGateDecision !== "n/a" ? topLevelGateDecision : readText(merged, "decision_status", "status"),
     ruleHit: readText(merged, "rule_hit", "rule", "policy_rule", "code"),
     severity: readText(merged, "severity", "risk_level"),
     remediationHint: readText(merged, "remediation_hint", "hint", "action"),
