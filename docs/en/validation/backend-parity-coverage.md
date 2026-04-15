@@ -3,6 +3,9 @@
 > **Document purpose**: Describe what is tested, what semantic differences
 > exist, and what remains uncovered for the JSONL ↔ PostgreSQL backend
 > switch capability in VERITAS OS.
+>
+> For a single-entry public evidence summary focused on **live PostgreSQL**
+> validation, see [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md).
 
 ## 1. Architecture Overview
 

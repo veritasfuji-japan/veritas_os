@@ -1,5 +1,8 @@
 # VERITAS OS — Production Validation Strategy
 
+> For a single-entry public evidence summary focused on **live PostgreSQL**
+> validation, see [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md).
+
 ## Overview
 
 This document describes the **tiered CI/release validation** model for VERITAS OS.
