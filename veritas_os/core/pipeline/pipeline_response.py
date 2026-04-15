@@ -120,8 +120,16 @@ def _rank_action_candidates(
     stop_reasons: List[str],
     missing_evidence: List[str],
     human_review_required: bool,
+    context: Dict[str, Any],
+    value_total: float,
 ) -> List[Dict[str, Any]]:
-    """Return sorted action candidates aligned to FUJI gate constraints."""
+    """Return sorted action candidates aligned to FUJI gate constraints.
+
+    Candidate scoring remains rule-based but adapts to:
+    - governance stop reasons (fail-closed conditions),
+    - dependency/urgency context hints, and
+    - Value Core aggregate score (`value_total`).
+    """
     if gate_decision == "block":
         candidates = [
             _make_action_candidate(
@@ -233,6 +241,33 @@ def _rank_action_candidates(
                 reason="Targeted checks reduce tail risk but delay immediate value realization.",
             ),
         ]
+    normalized_value_total = min(1.0, max(0.0, float(value_total)))
+    dependency_penalty = 0.08 if bool(context.get("critical_dependency_pending")) else 0.0
+    urgency_boost = 0.06 if bool(context.get("urgency_high")) else 0.0
+    for candidate in candidates:
+        if candidate["action"] == "EXECUTE_WITH_STANDARD_MONITORING":
+            if human_review_required or "high_risk_ambiguity" in stop_reasons:
+                candidate["risk_reduction"] = min(1.0, candidate["risk_reduction"] + 0.22)
+                candidate["expected_value"] = max(0.0, candidate["expected_value"] - 0.28)
+        if candidate["action"] == "COLLECT_REQUIRED_EVIDENCE" and missing_evidence:
+            candidate["expected_value"] = min(1.0, candidate["expected_value"] + 0.10)
+            candidate["urgency"] = min(1.0, candidate["urgency"] + 0.08)
+        if candidate["action"] in {"PREPARE_HUMAN_REVIEW_PACKET", "ROUTE_TO_HUMAN_REVIEW"}:
+            if human_review_required:
+                candidate["expected_value"] = min(1.0, candidate["expected_value"] + 0.08)
+                candidate["risk_reduction"] = min(1.0, candidate["risk_reduction"] + 0.05)
+        if dependency_penalty > 0.0 and candidate["action"] in {
+            "ESCALATE_POLICY_EXCEPTION_REVIEW",
+            "DEFINE_POLICY_AND_REASSESS",
+            "ROUTE_TO_HUMAN_REVIEW",
+        }:
+            candidate["dependency"] = min(1.0, candidate["dependency"] + dependency_penalty)
+        if urgency_boost > 0.0:
+            candidate["urgency"] = min(1.0, candidate["urgency"] + urgency_boost)
+        if normalized_value_total <= 0.40:
+            candidate["expected_value"] = max(0.0, candidate["expected_value"] - 0.04)
+            candidate["risk_reduction"] = min(1.0, candidate["risk_reduction"] + 0.03)
+        candidate["score"] = _calc_action_score(candidate)
     return sorted(candidates, key=lambda item: item["score"], reverse=True)
 
 
@@ -311,10 +346,20 @@ def _extract_stop_reasons(
         reasons.append("audit_trail_incomplete")
     if _is_falsey_flag(context.get("rollback_supported")):
         reasons.append("rollback_not_supported")
+    if bool(context.get("irreversible_action")):
+        reasons.append("irreversible_action")
     if _is_falsey_flag(context.get("secure_controls_ready")):
         reasons.append("secure_controls_missing")
     if secure_or_prod and _is_falsey_flag(context.get("production_controls_ready")):
         reasons.append("secure_prod_controls_missing")
+    try:
+        context_risk_score = float(context.get("risk_score", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        context_risk_score = 0.0
+    if bool(context.get("high_risk_ambiguity")) or (
+        bool(context.get("ambiguity_detected")) and context_risk_score >= 0.8
+    ):
+        reasons.append("high_risk_ambiguity")
 
     return reasons
 
@@ -339,6 +384,10 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
 
     fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
+    try:
+        risk_score = float(ctx.context.get("risk_score", ctx.fuji_dict.get("risk", 0.0)) or 0.0)
+    except (TypeError, ValueError):
+        risk_score = 0.0
     human_review_required = bool(
         ctx.context.get("human_review_required")
         or fuji_status == "needs_human_review"
@@ -352,12 +401,17 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
 
     if "rollback_not_supported" in stop_reasons:
         gate_decision = "block"
+    elif "irreversible_action" in stop_reasons and "audit_trail_incomplete" in stop_reasons:
+        gate_decision = "block"
     elif "secure_prod_controls_missing" in stop_reasons:
         gate_decision = "block"
     elif raw_gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
         gate_decision = "block"
     elif "required_evidence_missing" in stop_reasons:
         gate_decision = "hold"
+    elif "high_risk_ambiguity" in stop_reasons and risk_score >= 0.8:
+        gate_decision = "human_review_required"
+        human_review_required = True
     elif "approval_boundary_unknown" in stop_reasons or human_review_required:
         gate_decision = "human_review_required"
         human_review_required = True
@@ -392,6 +446,8 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         stop_reasons=stop_reasons,
         missing_evidence=missing_evidence,
         human_review_required=human_review_required,
+        context=ctx.context,
+        value_total=float(ctx.values_payload.get("total", 0.0) or 0.0),
     )
     selected_candidate = action_candidates[0]
     next_action = selected_candidate["action"]
