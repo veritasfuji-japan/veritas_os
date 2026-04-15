@@ -72,3 +72,9 @@ def test_run_pnpm_audit_preserves_other_failures(monkeypatch) -> None:
 
     monkeypatch.setattr(pnpm_audit_gate.subprocess, "run", _fake_run)
     assert pnpm_audit_gate.run_pnpm_audit(["--audit-level=high", "--prod"]) == 42
+
+
+def test_parse_args_accepts_pnpm_options_without_separator() -> None:
+    """CLI passthrough should accept unknown pnpm options as audit args."""
+    parsed = pnpm_audit_gate.parse_args(["--audit-level=high", "--prod"])
+    assert parsed.audit_args == ["--audit-level=high", "--prod"]

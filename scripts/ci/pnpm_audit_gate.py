@@ -82,7 +82,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         nargs="*",
         help="Arguments passed through to `pnpm audit`.",
     )
-    return parser.parse_args(argv)
+    parsed, unknown = parser.parse_known_args(argv)
+    parsed.audit_args.extend(unknown)
+    return parsed
 
 
 def main(argv: Sequence[str] | None = None) -> int:
