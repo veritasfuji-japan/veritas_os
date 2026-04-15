@@ -80,18 +80,37 @@ VERITAS OS is built to solve that layer.
 
 ### Independent Technical DD Score
 
-| Category | Score |
-|---|---|
-| Architecture | 85 |
-| Code Quality | 82 |
-| Security | 85 |
-| Testing | 84 |
-| Production Readiness | 84 |
-| Governance | 85 |
-| **Overall** | **84 / 100** |
-| **Verdict** | **A- (production-grade governance infrastructure with comprehensive safety foundations)** |
+| Category | 2026-03-15 | 2026-04-15 | Delta |
+|---|---|---|---|
+| Architecture | 82 | 85 | +3 |
+| Code Quality | 83 | 84 | +1 |
+| Security | 80 | 86 | +6 |
+| Testing | 88 | 89 | +1 |
+| Production Readiness | 80 | 85 | +5 |
+| Governance | 82 | 86 | +4 |
+| Docs | 80 | 83 | +3 |
+| Differentiation | 84 | 86 | +2 |
+| **Overall** | **82** | **85 / 100** | **+3** |
+| **Verdict** | B+ → A- | **A- (matured production-grade governance infrastructure)** | |
 
-> Re-evaluated by independent full-code technical due diligence review (2026-04-04). Previous review: `docs/ja/reviews/technical_dd_review_ja_20260315.md`
+> Re-evaluated (2026-04-15) against the previous full-code technical due diligence review (`docs/ja/reviews/technical_dd_review_ja_20260315.md`).
+
+**What changed since 2026-03-15 (verified in code):**
+
+- **Decision schema cleanup** — `gate_decision` (safety/policy outcome), `business_decision` (case lifecycle), and `next_action` are separated so that "allow" is no longer conflated with case approval (`api/schemas.py`, `core/pipeline/pipeline_response.py`).
+- **Strengthened FUJI gate fail-closed** — additional fail-closed paths on gate adjudication, with value-ranked `next_action` candidates flowing from Value Core (`core/pipeline/pipeline_gate.py`, `core/value_core.py`).
+- **Governance artifact identity** — `/v1/decide` responses carry `governance_identity` (`policy_version`, `digest`, `signature_verified`, `signer_id`, `verified_at`) threaded into decision, replay, and audit artifacts (`policy/governance_identity.py`).
+- **Capability-aware posture enforcement** — startup validator checks `managed_signing`, `immutable_retention`, `transparency_anchoring`, `fail_closed` capabilities rather than vendor names; `aws_kms` + `s3_object_lock` satisfy secure/prod requirements (`core/posture.py`).
+- **PostgreSQL production path matured** — live validation CI tier (`production-validation.yml`), contention/metrics/drill test suites, PostgreSQL Drill Runbook, single-entry live validation evidence doc.
+- **Continuation Runtime (Phase-1) — chain-level observation** — snapshot/receipt/enforcement event architecture running beside step-level FUJI (observe default in dev/staging, advisory in secure/prod).
+- **Test growth** — roughly 2× growth in test functions over the 2026-03-15 baseline (chaos tests, contention tests, drill tests, adversarial prompt regression, PostgreSQL parity).
+
+**Residual risks (unchanged structural limits):**
+
+- LLM response non-determinism even at `temperature=0`; Replay is positioned as "high-fidelity reproducible re-execution with divergence detection" rather than strict deterministic replay.
+- Web-search toxicity filter is rule-based (5 regex + 7 compact markers, with NFKC/URL-decode/base64/leet-speak normalization); sophisticated multi-turn or semantic prompt injection is not fully defended.
+- Multi-tenant RBAC is header-based (`X-Role`); full IdP / JWT-scope integration is future work.
+- Live distributed-lock / Redis failure-mode testing beyond chaos harness is out of scope for this re-evaluation.
 
 ---
 
