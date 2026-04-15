@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks verify verify-backend verify-frontend validate-compose validate-compose-report validate-live validate-live-report validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks verify verify-backend verify-frontend validate validate-compose validate-compose-report validate-live validate-live-report validate-postgresql-live validate-live-postgresql validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -214,6 +214,31 @@ validate-live-report:
 	@echo "[veritas] Running live provider validation with JSON report..."
 	@mkdir -p release-artifacts
 	@bash scripts/live_provider_validation.sh --json-report=release-artifacts/live-provider-report.json
+
+validate-postgresql-live:
+	@echo "[veritas] Running live PostgreSQL validation (contention subset)..."
+	@bash -c '\
+		if [ -z "$$VERITAS_DATABASE_URL" ]; then \
+			echo "[veritas] Error: VERITAS_DATABASE_URL is required."; \
+			echo "[veritas] Example: export VERITAS_DATABASE_URL=postgresql+psycopg://veritas:veritas@localhost:5432/veritas"; \
+			exit 1; \
+		fi; \
+		if [ -z "$$VERITAS_MEMORY_BACKEND" ] || [ -z "$$VERITAS_TRUSTLOG_BACKEND" ]; then \
+			echo "[veritas] Error: VERITAS_MEMORY_BACKEND and VERITAS_TRUSTLOG_BACKEND are required."; \
+			echo "[veritas] Example: export VERITAS_MEMORY_BACKEND=postgresql"; \
+			echo "[veritas] Example: export VERITAS_TRUSTLOG_BACKEND=postgresql"; \
+			exit 1; \
+		fi; \
+	'
+	@alembic upgrade head
+	@pytest -q \
+		veritas_os/tests/test_pg_trustlog_contention.py \
+		-m "postgresql and contention" \
+		-v \
+		--tb=short \
+		--durations=10
+
+validate-live-postgresql: validate-postgresql-live
 
 validate-staged-report:
 	@echo "[veritas] Generating staged operational readiness report..."
