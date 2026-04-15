@@ -2,6 +2,9 @@
 
 > **Audience**: Operations / DevOps / SRE teams deploying VERITAS OS with PostgreSQL  
 > **Last updated**: 2026-04-12
+>
+> For a single-entry public evidence summary focused on **live PostgreSQL**
+> validation, see [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md).
 
 ---
 

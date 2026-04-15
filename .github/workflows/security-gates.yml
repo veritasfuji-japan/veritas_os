@@ -66,7 +66,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Node dependency audit (production dependencies, blocking)
-        run: pnpm audit --audit-level=high --prod
+        run: python scripts/ci/pnpm_audit_gate.py --audit-level=high --prod
 
       - name: Node dependency audit (all dependencies, informational)
         run: |
@@ -74,7 +74,7 @@ jobs:
           pnpm audit --audit-level=high
           status=$?
           if [ "$status" -ne 0 ]; then
-            echo "::warning::High vulnerabilities detected in non-production dependency tree (likely tooling)."
+            echo "::warning::High vulnerabilities detected in non-production dependency tree (or npm audit endpoint instability)."
           fi
           exit 0
 

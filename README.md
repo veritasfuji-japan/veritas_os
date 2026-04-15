@@ -110,6 +110,7 @@ VERITAS OS is built to solve that layer.
 - **Security Hardening**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
 - **Database Migrations**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
 - **Backend Parity Coverage**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
+- **Live PostgreSQL Validation Evidence**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
 - **Legacy Path Cleanup**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 - **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **Documentation Hub (EN)**: [`docs/en/README.md`](docs/en/README.md)
@@ -163,6 +164,7 @@ Verification-oriented docs:
 - [`docs/postgresql-production-guide.md` (canonical: `docs/en/operations/postgresql-production-guide.md`)](docs/en/operations/postgresql-production-guide.md)
 - [`docs/BACKEND_PARITY_COVERAGE.md` (canonical: `docs/en/validation/backend-parity-coverage.md`)](docs/en/validation/backend-parity-coverage.md)
 - [`docs/PRODUCTION_VALIDATION.md` (canonical: `docs/en/validation/production-validation.md`)](docs/en/validation/production-validation.md)
+- [`docs/live-postgresql-validation.md` (single-entry public evidence for live PostgreSQL validation)](docs/live-postgresql-validation.md)
 
 ### Guarantee boundary (current)
 
