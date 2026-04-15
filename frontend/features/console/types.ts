@@ -92,7 +92,11 @@ export interface PublicDecisionSchemaView {
   businessDecision: string;
   nextAction: string;
   requiredEvidence: string[];
+  missingEvidence: string[];
   humanReviewRequired: boolean;
+  activePosture: string | null;
+  backend: string | null;
+  verifyStatus: string | null;
 }
 
 export interface FujiViolationView {

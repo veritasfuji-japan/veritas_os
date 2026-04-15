@@ -134,14 +134,22 @@ describe("toPublicDecisionSchemaView", () => {
       business_decision: "REVIEW_REQUIRED",
       next_action: "ROUTE_TO_HUMAN_REVIEW",
       required_evidence: ["approval_ticket"],
+      missing_evidence: ["approval_ticket"],
       human_review_required: true,
+      active_posture: "strict",
+      backend: "gpt-5.3-mini",
+      verify_status: "verified",
     } as never);
     const view = toPublicDecisionSchemaView(result);
     expect(view.gateDecision).toBe("allow");
     expect(view.businessDecision).toBe("REVIEW_REQUIRED");
     expect(view.nextAction).toBe("ROUTE_TO_HUMAN_REVIEW");
     expect(view.requiredEvidence).toEqual(["approval_ticket"]);
+    expect(view.missingEvidence).toEqual(["approval_ticket"]);
     expect(view.humanReviewRequired).toBe(true);
+    expect(view.activePosture).toBe("strict");
+    expect(view.backend).toBe("gpt-5.3-mini");
+    expect(view.verifyStatus).toBe("verified");
   });
 
   it("adds non-approval label for gate allow to avoid regression", () => {

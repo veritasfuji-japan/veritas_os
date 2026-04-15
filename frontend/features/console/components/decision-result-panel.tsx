@@ -37,6 +37,8 @@ function ScoreBar({ score, label }: { score: number | null; label: string }): JS
 export function DecisionResultPanel({ result }: DecisionResultPanelProps): JSX.Element {
   const view = toDecisionResultView(result);
   const publicDecision = toPublicDecisionSchemaView(result);
+  const missingEvidence = publicDecision.missingEvidence;
+  const evidencePending = missingEvidence.length > 0;
 
   return (
     <div className="space-y-3">
@@ -79,14 +81,53 @@ export function DecisionResultPanel({ result }: DecisionResultPanelProps): JSX.E
       )}
 
       <div className="grid gap-3 md:grid-cols-3">
+        <section className="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2">
+          <header className="space-y-2">
+            <h3 className="text-sm font-semibold text-foreground">Public decision output</h3>
+            <p><span className="text-muted-foreground">gate_decision:</span> {publicDecision.gateDecision}</p>
+            <p><span className="text-muted-foreground">gate meaning:</span> {publicDecision.gateDecisionLabel}</p>
+            <p><span className="text-muted-foreground">business_decision:</span> {publicDecision.businessDecision}</p>
+            <p><span className="text-muted-foreground">human_review_required:</span> {publicDecision.humanReviewRequired ? "true" : "false"}</p>
+          </header>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <article className="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3">
+              <h4 className="font-semibold text-foreground">不足証拠 / Missing evidence</h4>
+              {evidencePending ? (
+                <ul className="list-disc space-y-1 pl-4">
+                  {missingEvidence.map((item) => (
+                    <li key={item} className="font-mono text-[11px] text-foreground">{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground">不足証拠はありません。</p>
+              )}
+              <p><span className="text-muted-foreground">required_evidence:</span> {publicDecision.requiredEvidence.length > 0 ? publicDecision.requiredEvidence.join(", ") : "none"}</p>
+            </article>
+
+            <article className="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3">
+              <h4 className="font-semibold text-foreground">次に実行するアクション / Next action</h4>
+              <p className="font-mono text-[11px] text-foreground">{publicDecision.nextAction}</p>
+              <p className="text-muted-foreground">
+                案件状態（business_decision）とは分離された実行ガイダンスです。
+              </p>
+            </article>
+          </div>
+        </section>
+
         <section className="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs">
-          <h3 className="text-sm font-semibold text-foreground">Public decision output</h3>
-          <p><span className="text-muted-foreground">gate_decision:</span> {publicDecision.gateDecision}</p>
-          <p><span className="text-muted-foreground">gate meaning:</span> {publicDecision.gateDecisionLabel}</p>
-          <p><span className="text-muted-foreground">business_decision:</span> {publicDecision.businessDecision}</p>
-          <p><span className="text-muted-foreground">next_action:</span> {publicDecision.nextAction}</p>
-          <p><span className="text-muted-foreground">required_evidence:</span> {publicDecision.requiredEvidence.length > 0 ? publicDecision.requiredEvidence.join(", ") : "none"}</p>
-          <p><span className="text-muted-foreground">human_review_required:</span> {publicDecision.humanReviewRequired ? "true" : "false"}</p>
+          <h3 className="text-sm font-semibold text-foreground">Viewer focus</h3>
+          <div className="space-y-2 rounded-md border border-border/70 bg-background/70 p-2">
+            <p className="font-medium text-foreground">監査人向け</p>
+            <p><span className="text-muted-foreground">判定:</span> {publicDecision.businessDecision}</p>
+            <p><span className="text-muted-foreground">人手審査:</span> {publicDecision.humanReviewRequired ? "必須" : "不要"}</p>
+          </div>
+          <div className="space-y-2 rounded-md border border-border/70 bg-background/70 p-2">
+            <p className="font-medium text-foreground">開発者向け</p>
+            <p><span className="text-muted-foreground">active posture:</span> {publicDecision.activePosture ?? "n/a"}</p>
+            <p><span className="text-muted-foreground">backend:</span> {publicDecision.backend ?? "n/a"}</p>
+            <p><span className="text-muted-foreground">verify status:</span> {publicDecision.verifyStatus ?? "n/a"}</p>
+          </div>
         </section>
 
         <section className="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs">
