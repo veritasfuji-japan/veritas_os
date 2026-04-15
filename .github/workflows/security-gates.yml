@@ -66,7 +66,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Node dependency audit (production dependencies, blocking)
-        run: pnpm audit --audit-level=high --prod
+        uses: google/osv-scanner-action@v1
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --severity=HIGH,CRITICAL
 
       - name: Node dependency audit (all dependencies, informational)
         run: |
