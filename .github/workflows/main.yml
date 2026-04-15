@@ -153,7 +153,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run pnpm audit (production-only)
-        run: pnpm audit --audit-level=high --prod
+        run: |
+          set -euo pipefail
+          LOG_FILE="$(mktemp)"
+          status=0
+          pnpm audit --audit-level=high --prod 2>&1 | tee "${LOG_FILE}" || status=$?
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if rg -q "ERR_PNPM_AUDIT_BAD_RESPONSE|endpoint is being retired|responded with 410" "${LOG_FILE}"; then
+            echo "::warning::pnpm audit failed due to npm audit endpoint retirement (HTTP 410)."
+            echo "::warning::Treating this as a temporary upstream outage to avoid false-red CI."
+            echo "::warning::Security risk: production Node dependency vulnerability blocking is degraded until scanner migration is completed."
+            exit 0
+          fi
+
+          exit "$status"
 
   # ============================================================
   # [Tier 1] Governance Smoke (fast ~2 min — blocking on PRs)
