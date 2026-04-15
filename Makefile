@@ -7,7 +7,7 @@ PYTEST_MARKEXPR ?= not slow
 COVERAGE_XML ?= coverage.xml
 COVERAGE_HTML_DIR ?= coverage-html
 
-.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks validate-compose validate-compose-report validate-live validate-live-report validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
+.PHONY: setup dev dev-frontend dev-all up down logs health clean-venv test test-cov test-split test-production test-smoke quality-checks verify verify-backend verify-frontend validate-compose validate-compose-report validate-live validate-live-report validate-staged-report db-upgrade db-downgrade db-downgrade-base db-current db-history db-revision
 
 # ── Setup & Development ──────────────────────────────────────────────────
 
@@ -161,6 +161,27 @@ quality-checks:
 	@python scripts/quality/check_replay_pipeline_version_unknown_rate.py --max-unknown-rate 0.0
 	@python scripts/quality/check_deployment_env_defaults.py
 	@python scripts/security/check_runtime_pickle_artifacts.py
+
+verify: verify-backend verify-frontend
+	@echo "[veritas] Verification suite completed."
+
+verify-backend:
+	@echo "[veritas] Running backend verification suite..."
+	@pytest -q tests/test_continuation_enforcement.py \
+		tests/test_continuation_integration.py \
+		tests/test_debate_safety_heuristics.py
+	@ruff check .
+	@python -m pip check
+	@python scripts/architecture/check_responsibility_boundaries.py
+	@python scripts/quality/check_operational_docs_consistency.py
+	@python scripts/quality/check_review_improvements_consistency.py
+	@python scripts/security/check_subprocess_shell_usage.py
+	@python scripts/security/check_unsafe_dynamic_execution_usage.py
+	@python scripts/security/check_next_public_key_exposure.py
+
+verify-frontend:
+	@echo "[veritas] Running frontend verification suite..."
+	@cd frontend && pnpm vitest run components/ui/status-badge.test.tsx
 
 # ── Production-like Validation ───────────────────────────────────────────
 

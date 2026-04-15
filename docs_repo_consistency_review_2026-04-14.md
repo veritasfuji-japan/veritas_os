@@ -27,6 +27,14 @@
    - 結果: **No unsafe dynamic execution/deserialization usage detected**
 10. `python scripts/security/check_next_public_key_exposure.py`
     - 結果: **No disallowed NEXT_PUBLIC secret-like variable names found**
+11. `make verify`
+    - 結果: **backend / frontend を含む統合 verify が通過**
+
+## 実施した改善（2026-04-14）
+- **High 優先改善を実装**: `Makefile` に `verify` / `verify-backend` / `verify-frontend` ターゲットを追加し、本レビューで実行した代表チェックを単一エントリポイントへ統合。
+- `verify-backend` は、継続実行関連テスト・`ruff`・`pip check`・責務境界チェック・運用ドキュメント整合・レビュー整合・主要セキュリティ静的チェックを連続実行。
+- `verify-frontend` は、`frontend` ワークスペースの代表 UI テスト（`status-badge`）を実行。
+- これにより「レビュー時に人手でコマンド列を再現する状態」から「`make verify` 1 コマンドで再現する状態」へ改善。
 
 ## 所見
 
@@ -47,11 +55,11 @@
    - 既存の security/quality スクリプトを CI の必須ゲートへ束ね、`main` マージ条件に昇格させることを推奨。
 
 ### 4) 改善提案（優先度付き）
-- **High**: `verify` 系の単一エントリポイント（`make verify` / `just verify`）に、今回実行した lint/test/quality/security/architecture チェックを統合。
+- **Done (High)**: `make verify` に lint/test/quality/security/architecture の代表チェックを統合（本日実装済み）。
 - **Medium**: `.env.development` の取り扱いを「追跡ファイル」から「テンプレート + ローカル実体」に移行し、secret scanning ルールに反映。
 - **Medium**: 責務境界チェックを PR 必須ジョブ化し、Planner / Kernel / Fuji / MemoryOS の越境をレビュー前に検知。
 
 ## 判定
 - **現時点の判定**: サンプル対象に限れば、整合性は **良好**。
-- **確信度**: **medium-high**（前版の medium から改善。理由: 責務境界・ドキュメント整合・複数セキュリティ静的チェックを追加実行）。
-- **レビュー結論**: 現時点で「即時の追加修正が必須な不整合」は確認されないため、次アクションは **CI ゲート統合の実装レビュー**を推奨。
+- **確信度**: **high**（`make verify` を追加実装し、再現性をコード化できたため）。
+- **レビュー結論**: 本日時点で「即時の追加修正が必須な不整合」は確認されない。残課題は **運用 hardening（CI 必須ゲート化と `.env.development` 運用変更）** のレビュー対象とする。
