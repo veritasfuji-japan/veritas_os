@@ -1,5 +1,16 @@
 # PostgreSQL Production Guide
 
+> **この文書の目的 / Document purpose**: This is the canonical source for
+> PostgreSQL production operations: deployment configuration, monitoring,
+> backup/restore, recovery drills, and runtime hardening.
+>
+> **Role in documentation set**: 運用・監視・復旧・本番設定の正本
+>
+> For backend parity / implementation verification, see
+> [`../validation/backend-parity-coverage.md`](../validation/backend-parity-coverage.md).
+> For tier and release/promotion gate rules, see
+> [`../validation/production-validation.md`](../validation/production-validation.md).
+>
 > **Audience**: Operations / DevOps / SRE teams deploying VERITAS OS with PostgreSQL  
 > **Last updated**: 2026-04-12
 >
@@ -63,7 +74,12 @@ VERITAS OS supports two storage backend families:
 
 - Single-process development or demo deployments.
 - Air-gapped environments where PostgreSQL infrastructure is unavailable.
-- CI test pipelines (mock pools simulate PostgreSQL behaviour without a live database).
+- CI test pipelines where fast mock-pool regression coverage is preferred.
+
+For real PostgreSQL evidence boundaries (what is live-tested vs mock-tested),
+refer to [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md)
+and parity details in
+[`../validation/backend-parity-coverage.md`](../validation/backend-parity-coverage.md).
 
 ### Environment variables for backend selection
 

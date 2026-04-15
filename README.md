@@ -161,10 +161,10 @@ development and migration workflows, not as the recommended production baseline.
 
 Verification-oriented docs:
 
-- [`docs/postgresql-production-guide.md` (canonical: `docs/en/operations/postgresql-production-guide.md`)](docs/en/operations/postgresql-production-guide.md)
-- [`docs/BACKEND_PARITY_COVERAGE.md` (canonical: `docs/en/validation/backend-parity-coverage.md`)](docs/en/validation/backend-parity-coverage.md)
-- [`docs/PRODUCTION_VALIDATION.md` (canonical: `docs/en/validation/production-validation.md`)](docs/en/validation/production-validation.md)
-- [`docs/live-postgresql-validation.md` (single-entry public evidence for live PostgreSQL validation)](docs/live-postgresql-validation.md)
+- [`docs/en/validation/backend-parity-coverage.md` — canonical parity/implementation verification source](docs/en/validation/backend-parity-coverage.md)
+- [`docs/en/validation/production-validation.md` — canonical tier/promotion/release-gate source](docs/en/validation/production-validation.md)
+- [`docs/en/operations/postgresql-production-guide.md` — canonical PostgreSQL operations/monitoring/recovery source](docs/en/operations/postgresql-production-guide.md)
+- [`docs/live-postgresql-validation.md` — canonical public evidence entrypoint for live PostgreSQL validation](docs/live-postgresql-validation.md)
 
 ### Guarantee boundary (current)
 

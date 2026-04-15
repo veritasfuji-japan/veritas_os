@@ -1,5 +1,15 @@
 # VERITAS OS — Production Validation Strategy
 
+> **この文書の目的 / Document purpose**: This is the canonical source for
+> tier definitions, promotion/release gates, and blocking semantics.
+>
+> **Role in documentation set**: promotion/release validation 正本
+>
+> For backend parity and PostgreSQL implementation coverage, see
+> [`backend-parity-coverage.md`](backend-parity-coverage.md). For operations,
+> monitoring, recovery, and production runtime configuration, see
+> [`../operations/postgresql-production-guide.md`](../operations/postgresql-production-guide.md).
+>
 > For a single-entry public evidence summary focused on **live PostgreSQL**
 > validation, see [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md).
 
@@ -9,6 +19,16 @@ This document describes the **tiered CI/release validation** model for VERITAS O
 It complements the existing unit/integration test suite (5800+ tests, 87% coverage)
 with production-realistic verification that exercises external dependencies,
 deployment topology, and fail-closed security controls.
+
+Mock vs real PostgreSQL split is intentionally layered:
+
+- **Mock-heavy tests** provide broad, fast regression coverage.
+- **Real PostgreSQL validation** provides high-fidelity evidence for live DB
+  behaviour in designated jobs (e.g., contention and docker/service checks).
+
+Detailed parity-level guarantees and non-guarantees are maintained in
+[`backend-parity-coverage.md`](backend-parity-coverage.md), while this document
+defines *when* those checks block promotion/release.
 
 ## Tier Model
 
