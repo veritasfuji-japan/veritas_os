@@ -194,6 +194,7 @@ cryptographic evidence needed to independently verify decisions.
 veritas_bundle_decision_<uuid>/
 ├── manifest.json              # SHA-256 hashes, metadata, optional signature
 ├── witness_entries.jsonl       # Witness ledger slice
+├── decision_record.json        # Auditor-facing single-decision snapshot
 ├── verification_report.json   # Automated verification results
 ├── signer_metadata.json       # Ed25519 signer info
 ├── anchor_receipts/
@@ -206,6 +207,16 @@ veritas_bundle_decision_<uuid>/
 ├── incident_metadata.json     # (incident bundles only)
 └── release_provenance.json    # (release bundles only)
 ```
+
+`decision_record.json` is the canonical external handoff artifact for one
+decision. It includes:
+
+- full compact `decision_payload`
+- `gate_decision` / `business_decision` / `next_action`
+- `required_evidence` / `human_review_required`
+- TrustLog references (`payload_hash`, `full_payload_hash`, signature/anchor/mirror)
+- verification pointer (`verification_report.json`)
+- provenance metadata + runtime context (posture/backend/version)
 
 ### Generating Bundles
 
@@ -255,6 +266,25 @@ else:
     for error in result["errors"]:
         print(f"  - {error}")
 ```
+
+### CLI (recommended for ops runbooks)
+
+```bash
+veritas-evidence-bundle generate \
+  --bundle-type decision \
+  --witness-ledger runtime/dev/logs/trustlog.jsonl \
+  --output-dir ./bundles \
+  --request-id req-12345
+
+veritas-evidence-bundle verify \
+  --bundle-dir ./bundles/veritas_bundle_decision_<uuid>
+```
+
+### Financial template sample bundle
+
+Representative fixture:
+
+- `veritas_os/benchmarks/evidence/fixtures/financial_template_bundle_sample.json`
 
 ### Creating Archives
 

@@ -491,9 +491,13 @@ class TestEvidenceBundleGeneration:
         # Verify manifest on disk
         bundle_dir = Path(result["bundle_dir"])
         manifest = json.loads((bundle_dir / "manifest.json").read_text())
-        assert manifest["schema_version"] == "1.0.0"
+        assert manifest["schema_version"] == "1.1.0"
         assert manifest["bundle_type"] == "decision"
         assert manifest["entry_count"] == 1
+        decision_record = json.loads((bundle_dir / "decision_record.json").read_text())
+        assert decision_record["decision_payload"]["request_id"] == "r-bundle-1"
+        assert "trustlog_references" in decision_record
+        assert decision_record["verification"]["report_path"] == "verification_report.json"
 
     def test_incident_bundle_generation(self, _trustlog_env):
         """Generate an incident evidence bundle with multiple entries."""
@@ -848,7 +852,7 @@ class TestEvidenceBundleSchema:
 
     def test_schema_version(self):
         from veritas_os.audit.evidence_bundle_schema import BUNDLE_SCHEMA_VERSION
-        assert BUNDLE_SCHEMA_VERSION == "1.0.0"
+        assert BUNDLE_SCHEMA_VERSION == "1.1.0"
 
     def test_bundle_types(self):
         from veritas_os.audit.evidence_bundle_schema import BUNDLE_TYPES
@@ -861,3 +865,10 @@ class TestEvidenceBundleSchema:
         assert "schema_version" in MANIFEST_REQUIRED_FIELDS
         assert "bundle_type" in MANIFEST_REQUIRED_FIELDS
         assert "bundle_id" in MANIFEST_REQUIRED_FIELDS
+
+    def test_decision_snapshot_required_fields(self):
+        from veritas_os.audit.evidence_bundle_schema import DECISION_SNAPSHOT_REQUIRED_FIELDS
+
+        assert "gate_decision" in DECISION_SNAPSHOT_REQUIRED_FIELDS
+        assert "business_decision" in DECISION_SNAPSHOT_REQUIRED_FIELDS
+        assert "next_action" in DECISION_SNAPSHOT_REQUIRED_FIELDS

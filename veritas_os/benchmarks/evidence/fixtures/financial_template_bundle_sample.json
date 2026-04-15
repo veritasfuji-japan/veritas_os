@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.1.0",
+  "bundle_type": "decision",
+  "case": "financial.high_risk_wire_transfer",
+  "decision_record": {
+    "decision_payload": {
+      "request_id": "fin-wire-2026-0001",
+      "decision_id": "dec-fin-wire-2026-0001",
+      "gate_decision": "human_review_required",
+      "business_decision": "REVIEW_REQUIRED",
+      "next_action": "ROUTE_TO_HUMAN_REVIEW",
+      "required_evidence": [
+        "kyc_verification",
+        "source_of_funds_attestation",
+        "aml_screening_receipt"
+      ],
+      "human_review_required": true
+    },
+    "trustlog_references": {
+      "decision_id": "dec-fin-wire-2026-0001",
+      "request_id": "fin-wire-2026-0001",
+      "anchor_status": "anchored"
+    },
+    "verification": {
+      "report_path": "verification_report.json",
+      "ledger_ok": true
+    }
+  }
+}
