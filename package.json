@@ -1,7 +1,7 @@
 {
   "name": "veritas-os-monorepo",
   "private": true,
-  "packageManager": "pnpm@9.15.3",
+  "packageManager": "pnpm@10.0.0",
   "scripts": {
     "ui:dev": "pnpm --filter frontend dev",
     "ui:build": "pnpm --filter frontend build",
