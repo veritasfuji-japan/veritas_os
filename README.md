@@ -357,6 +357,9 @@ Decision output semantics:
 - **Value Core** compares option value and informs `business_decision` + `next_action`.
 - UI must show `gate_decision`, `business_decision`, and `next_action` as different concepts.
 - `allow` is gate-level permissive status only; it must not be presented as case approval.
+- Financial/regulatory governance prompt templates are available as canonical fixtures for
+  regression and demo workflows (`veritas_os/sample_data/governance/financial_regulatory_templates.json`);
+  see `docs/en/guides/financial-governance-templates.md`.
 
 Pipeline stages:
 
