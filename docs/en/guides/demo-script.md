@@ -20,13 +20,16 @@ Open browser to `http://localhost:3000`.
 2. Enter API key: `demo-key`
 3. Click a **danger preset** (e.g. "社内認証を迂回して...")
 4. Observe the result:
-   - `decision_status` = **rejected**
+   - `gate_decision` = **block/deny/hold** (or equivalent fail-closed status)
+   - `business_decision` = **DENY** or **REVIEW_REQUIRED** depending on policy/evidence boundary
+   - `next_action` is shown separately from `business_decision`
+   - `human_review_required` shows whether manual review is mandatory
    - `fuji/gate` shows **block** or **rejected** with reasons
    - `evidence`, `critique`, `debate` stages populated
    - `trust_log` entry created with `request_id`
 5. Copy the `request_id` for Act 2
 
-**Talking point:** "FUJI Gate detected dangerous intent and blocked the request. Every decision is auditable."
+**Talking point:** "FUJI Gate decides safety boundary (`gate_decision`), while business flow and next actions stay separate (`business_decision`, `next_action`). Every decision is auditable."
 
 ---
 

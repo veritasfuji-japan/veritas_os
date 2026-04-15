@@ -1,6 +1,6 @@
 import { type DecideResponse } from "@veritas/types";
 import { describe, expect, it } from "vitest";
-import { toDecisionResultView, toFujiGateDetailView } from "./decision-view";
+import { toDecisionResultView, toFujiGateDetailView, toPublicDecisionSchemaView } from "./decision-view";
 
 function makeResponse(overrides: Partial<DecideResponse> = {}): DecideResponse {
   return {
@@ -124,5 +124,29 @@ describe("toFujiGateDetailView", () => {
     const result = makeResponse();
     const view = toFujiGateDetailView(result);
     expect(view.violations).toEqual([]);
+  });
+});
+
+describe("toPublicDecisionSchemaView", () => {
+  it("separates gate_decision from business_decision and next_action", () => {
+    const result = makeResponse({
+      gate_decision: "allow",
+      business_decision: "REVIEW_REQUIRED",
+      next_action: "ROUTE_TO_HUMAN_REVIEW",
+      required_evidence: ["approval_ticket"],
+      human_review_required: true,
+    } as never);
+    const view = toPublicDecisionSchemaView(result);
+    expect(view.gateDecision).toBe("allow");
+    expect(view.businessDecision).toBe("REVIEW_REQUIRED");
+    expect(view.nextAction).toBe("ROUTE_TO_HUMAN_REVIEW");
+    expect(view.requiredEvidence).toEqual(["approval_ticket"]);
+    expect(view.humanReviewRequired).toBe(true);
+  });
+
+  it("adds non-approval label for gate allow to avoid regression", () => {
+    const result = makeResponse({ gate_decision: "allow" } as never);
+    const view = toPublicDecisionSchemaView(result);
+    expect(view.gateDecisionLabel).toBe("response generation allowed (not case approval)");
   });
 });

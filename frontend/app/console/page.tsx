@@ -17,6 +17,7 @@ import { StepExpansionPanel } from "../../features/console/components/step-expan
 import { ReplayDiffViewer } from "../../features/console/components/replay-diff-viewer";
 import { ContinuationStatusCard } from "../../features/console/components/continuation-status-card";
 import { useConsoleState } from "../../features/console/state/useConsoleState";
+import { DECISION_SAMPLE_QUESTIONS } from "../../features/console/constants";
 import { startManagedEventStream } from "../../lib/managed-sse";
 
 export default function DecisionConsolePage(): JSX.Element {
@@ -155,6 +156,14 @@ export default function DecisionConsolePage(): JSX.Element {
             <p className="font-semibold text-foreground">{tk("startPromptTitle")}</p>
             <p className="mt-1">{tk("startPromptHint")}</p>
             <p className="mt-1">{tk("startPromptExplainer")}</p>
+            <div className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sample QA fixtures</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-xs">
+                {DECISION_SAMPLE_QUESTIONS.map((sample) => (
+                  <li key={sample}>{sample}</li>
+                ))}
+              </ul>
+            </div>
           </div>
         )}
       </Card>

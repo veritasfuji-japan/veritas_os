@@ -16,6 +16,13 @@ describe("DecisionConsolePage", () => {
     expect(screen.getByRole("button", { name: /Input/i })).toBeInTheDocument();
   });
 
+  it("shows sample QA fixtures in empty state", () => {
+    render(<DecisionConsolePage />);
+    expect(screen.getByText("Sample QA fixtures")).toBeInTheDocument();
+    expect(screen.getByText(/最低条件は何か/)).toBeInTheDocument();
+    expect(screen.getByText(/FujiGate と Value Core の責務を分離/)).toBeInTheDocument();
+  });
+
 
   it("renders structured sections from decide response", async () => {
     vi.spyOn(global, "fetch").mockResolvedValue({
