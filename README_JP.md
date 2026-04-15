@@ -35,18 +35,37 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 
 ### 独立技術DDスコア
 
-| カテゴリ | スコア |
-|---|---|
-| Architecture | 85 |
-| Code Quality | 82 |
-| Security | 85 |
-| Testing | 84 |
-| Production Readiness | 84 |
-| Governance | 85 |
-| **Overall** | **84 / 100** |
-| **判定** | **A-（包括的な安全基盤を備えた本番グレードのガバナンスインフラ）** |
+| カテゴリ | 2026-03-15 | 2026-04-15 | 変動 |
+|---|---|---|---|
+| Architecture | 82 | 85 | +3 |
+| Code Quality | 83 | 84 | +1 |
+| Security | 80 | 86 | +6 |
+| Testing | 88 | 89 | +1 |
+| Production Readiness | 80 | 85 | +5 |
+| Governance | 82 | 86 | +4 |
+| Docs | 80 | 83 | +3 |
+| Differentiation | 84 | 86 | +2 |
+| **Overall** | **82** | **85 / 100** | **+3** |
+| **判定** | B+ → A- | **A-（成熟した本番グレードのガバナンスインフラ）** | |
 
-> 全コード精読による独立技術デューデリジェンス再評価（2026-04-04）。前回レビュー: `docs/ja/reviews/technical_dd_review_ja_20260315.md`
+> 前回の全コード精読技術デューデリジェンスレビュー（`docs/ja/reviews/technical_dd_review_ja_20260315.md`）に対する再評価（2026-04-15）。
+
+**2026-03-15 以降の変更点（コードで確認済み）:**
+
+- **意思決定スキーマの整理** — `gate_decision`（安全/ポリシー判定）、`business_decision`（ケースライフサイクル）、`next_action` が分離され、「allow」が「ケース承認」と混同されなくなりました（`api/schemas.py`、`core/pipeline/pipeline_response.py`）。
+- **FUJI Gate fail-closed の強化** — ゲート判定経路に fail-closed パスを追加し、Value Core からの価値ランク付き `next_action` 候補を反映（`core/pipeline/pipeline_gate.py`、`core/value_core.py`）。
+- **ガバナンス成果物ID** — `/v1/decide` レスポンスに `governance_identity`（`policy_version`、`digest`、`signature_verified`、`signer_id`、`verified_at`）が含まれ、意思決定・Replay・監査成果物に連結されます（`policy/governance_identity.py`）。
+- **Capability 対応ポスチャ強制** — 起動時バリデーションがベンダー名ではなく `managed_signing` / `immutable_retention` / `transparency_anchoring` / `fail_closed` の各 capability を検証。secure/prod では `aws_kms` + `s3_object_lock` で要件を充足（`core/posture.py`）。
+- **PostgreSQL 本番パスの成熟** — ライブ検証 CI ティア（`production-validation.yml`）、競合/メトリクス/ドリルテストスイート、PostgreSQL Drill Runbook、ライブ検証エビデンス単一入口ドキュメント。
+- **Continuation Runtime (Phase-1) — チェーンレベル観測** — snapshot/receipt/enforcement event アーキテクチャがステップレベル FUJI の横で動作（dev/staging は observe、secure/prod は advisory がデフォルト）。
+- **テスト拡充** — 2026-03-15 基準からおよそ2倍のテスト関数増加（chaos テスト、競合テスト、ドリルテスト、敵対プロンプト回帰、PostgreSQL パリティ）。
+
+**構造的制約として残る残存リスク:**
+
+- LLM 応答は `temperature=0` でも非決定的。Replay は「厳密決定論的リプレイ」ではなく「差分検知付き高再現性再実行」として位置づけ。
+- Web 検索毒性フィルタは依然としてルールベース（5 正規表現 + 7 compact markers、NFKC / URL デコード / base64 / leet-speak 正規化付き）。高度な multi-turn / semantic プロンプトインジェクションは完全防御ではありません。
+- Multi-tenant RBAC は `X-Role` ヘッダベースであり、本格的な IdP / JWT スコープ連携は今後の課題。
+- 実分散ロック / Redis 障害モード試験は chaos harness の範囲で実施済みですが、本再評価の対象範囲外です。
 
 ---
 
