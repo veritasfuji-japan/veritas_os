@@ -75,13 +75,19 @@ describe("toFiniteNumber", () => {
 describe("toAssistantMessage", () => {
   it("formats decision response for Japanese", () => {
     const payload = {
-      decision_status: "approved",
+      decision_status: "allow",
+      gate_decision: "allow",
+      business_decision: "APPROVE",
+      next_action: "EXECUTE_WITH_STANDARD_MONITORING",
+      human_review_required: false,
       chosen: "Option A",
       rejection_reason: null,
     } as DecideResponse;
     const t = (ja: string, _en: string) => ja;
     const message = toAssistantMessage(payload, t);
-    expect(message).toContain("判定: approved");
+    expect(message).toContain("案件状態: APPROVE");
+    expect(message).toContain("ゲート判定: allow (案件承認ではなく、応答出力可)");
+    expect(message).toContain("次アクション: EXECUTE_WITH_STANDARD_MONITORING");
     expect(message).toContain("採択案: Option A");
     expect(message).toContain("拒否理由: なし");
   });
@@ -89,12 +95,19 @@ describe("toAssistantMessage", () => {
   it("formats decision response for English", () => {
     const payload = {
       decision_status: "rejected",
+      gate_decision: "deny",
+      business_decision: "DENY",
+      next_action: "DO_NOT_EXECUTE",
+      human_review_required: true,
       chosen: null,
-      rejection_reason: "Too risky",
+      refusal_reason: "Too risky",
     } as unknown as DecideResponse;
     const t = (_ja: string, en: string) => en;
     const message = toAssistantMessage(payload, t);
-    expect(message).toContain("Decision: rejected");
+    expect(message).toContain("Business Decision: DENY");
+    expect(message).toContain("Gate Decision: deny");
+    expect(message).toContain("Next Action: DO_NOT_EXECUTE");
+    expect(message).toContain("Human Review: required");
     expect(message).toContain("Chosen: none");
     expect(message).toContain("Rejection: Too risky");
   });
@@ -124,7 +137,7 @@ describe("toAssistantMessage", () => {
     } as unknown as DecideResponse;
     const t = (ja: string, _en: string) => ja;
     const message = toAssistantMessage(payload, t);
-    expect(message).toContain("判定: allow");
+    expect(message).toContain("案件状態: HOLD");
     expect(message).toContain("採択案:");
   });
 
@@ -137,6 +150,23 @@ describe("toAssistantMessage", () => {
     } as unknown as DecideResponse;
     const t = (ja: string, _en: string) => ja;
     const message = toAssistantMessage(payload, t);
-    expect(message).toContain("判定: allow");
+    expect(message).toContain("案件状態: HOLD");
+  });
+
+  it("does not present gate allow as business approval text", () => {
+    const payload = {
+      decision_status: "allow",
+      gate_decision: "allow",
+      business_decision: "REVIEW_REQUIRED",
+      next_action: "ROUTE_TO_HUMAN_REVIEW",
+      human_review_required: true,
+      chosen: { id: "x", title: "Option X" },
+      rejection_reason: null,
+    } as unknown as DecideResponse;
+    const t = (ja: string, _en: string) => ja;
+    const message = toAssistantMessage(payload, t);
+    expect(message).toContain("案件状態: REVIEW_REQUIRED");
+    expect(message).not.toContain("案件状態: allow");
+    expect(message).toContain("ゲート判定: allow (案件承認ではなく、応答出力可)");
   });
 });

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 try:
     from pydantic import ValidationError as _PydanticValidationError
@@ -59,6 +59,392 @@ BACKWARD_COMPAT_FIELDS = (
     "options",
 )
 
+ACTION_CANDIDATE_WEIGHTS = {
+    "expected_value": 0.35,
+    "risk_reduction": 0.30,
+    "urgency": 0.20,
+    "cost": 0.10,
+    "dependency": 0.05,
+}
+
+
+def _is_dev_mode_enabled(context: Dict[str, Any]) -> bool:
+    """Return whether action-candidate diagnostics should be exposed."""
+    explicit_flag = context.get("dev_mode") or context.get("debug")
+    if isinstance(explicit_flag, bool):
+        return explicit_flag
+    env_value = str(os.getenv("VERITAS_DEV_MODE", "")).strip().lower()
+    return env_value in {"1", "true", "yes", "on"}
+
+
+def _calc_action_score(candidate: Dict[str, Any]) -> float:
+    """Compute a weighted score for an action candidate."""
+    score = (
+        ACTION_CANDIDATE_WEIGHTS["expected_value"] * float(candidate["expected_value"])
+        + ACTION_CANDIDATE_WEIGHTS["risk_reduction"] * float(candidate["risk_reduction"])
+        + ACTION_CANDIDATE_WEIGHTS["urgency"] * float(candidate["urgency"])
+        - ACTION_CANDIDATE_WEIGHTS["cost"] * float(candidate["cost"])
+        - ACTION_CANDIDATE_WEIGHTS["dependency"] * float(candidate["dependency"])
+    )
+    return round(score, 4)
+
+
+def _make_action_candidate(
+    *,
+    action: str,
+    expected_value: float,
+    risk_reduction: float,
+    cost: float,
+    dependency: float,
+    urgency: float,
+    reason: str,
+) -> Dict[str, Any]:
+    """Build one ranked action candidate entry."""
+    candidate = {
+        "action": action,
+        "expected_value": round(expected_value, 4),
+        "risk_reduction": round(risk_reduction, 4),
+        "cost": round(cost, 4),
+        "dependency": round(dependency, 4),
+        "urgency": round(urgency, 4),
+        "reason": reason,
+    }
+    candidate["score"] = _calc_action_score(candidate)
+    return candidate
+
+
+def _rank_action_candidates(
+    *,
+    gate_decision: str,
+    business_decision: str,
+    stop_reasons: List[str],
+    missing_evidence: List[str],
+    human_review_required: bool,
+) -> List[Dict[str, Any]]:
+    """Return sorted action candidates aligned to FUJI gate constraints."""
+    if gate_decision == "block":
+        candidates = [
+            _make_action_candidate(
+                action="DO_NOT_EXECUTE",
+                expected_value=0.78,
+                risk_reduction=0.98,
+                cost=0.05,
+                dependency=0.02,
+                urgency=0.97,
+                reason="FUJI gate is BLOCK; safest high-value action is to halt execution.",
+            ),
+            _make_action_candidate(
+                action="ESCALATE_POLICY_EXCEPTION_REVIEW",
+                expected_value=0.52,
+                risk_reduction=0.75,
+                cost=0.34,
+                dependency=0.65,
+                urgency=0.84,
+                reason="Policy exception path may recover value but needs human/process dependencies.",
+            ),
+            _make_action_candidate(
+                action="COLLECT_REQUIRED_EVIDENCE",
+                expected_value=0.40,
+                risk_reduction=0.62,
+                cost=0.46,
+                dependency=0.48,
+                urgency=0.70,
+                reason="Additional evidence can support later re-assessment without executing now.",
+            ),
+        ]
+    elif business_decision == "REVIEW_REQUIRED":
+        candidates = [
+            _make_action_candidate(
+                action="PREPARE_HUMAN_REVIEW_PACKET",
+                expected_value=0.74,
+                risk_reduction=0.88,
+                cost=0.22,
+                dependency=0.44,
+                urgency=0.86,
+                reason="Boundary ambiguity requires rapid preparation for reviewer adjudication.",
+            ),
+            _make_action_candidate(
+                action="COLLECT_REQUIRED_EVIDENCE",
+                expected_value=0.68,
+                risk_reduction=0.80,
+                cost=0.31,
+                dependency=0.36,
+                urgency=0.79,
+                reason="Evidence strengthens review quality and reduces rework during adjudication.",
+            ),
+            _make_action_candidate(
+                action="ROUTE_TO_HUMAN_REVIEW",
+                expected_value=0.66,
+                risk_reduction=0.83,
+                cost=0.28,
+                dependency=0.50,
+                urgency=0.82,
+                reason="Formal human handoff aligns with gate constraints and governance policy.",
+            ),
+        ]
+    elif business_decision in {"HOLD", "EVIDENCE_REQUIRED", "POLICY_DEFINITION_REQUIRED"}:
+        candidates = [
+            _make_action_candidate(
+                action="COLLECT_REQUIRED_EVIDENCE",
+                expected_value=0.76 if missing_evidence else 0.64,
+                risk_reduction=0.84,
+                cost=0.24,
+                dependency=0.30,
+                urgency=0.83,
+                reason="Missing evidence is the shortest path to unlock the decision safely.",
+            ),
+            _make_action_candidate(
+                action="REVISE_AND_RESUBMIT",
+                expected_value=0.62,
+                risk_reduction=0.70,
+                cost=0.38,
+                dependency=0.42,
+                urgency=0.72,
+                reason="Plan revision may unblock policy-fit gaps but has wider rework cost.",
+            ),
+            _make_action_candidate(
+                action="DEFINE_POLICY_AND_REASSESS",
+                expected_value=0.58 if "rule_undefined" in stop_reasons else 0.44,
+                risk_reduction=0.64,
+                cost=0.52,
+                dependency=0.66,
+                urgency=0.69,
+                reason="Policy work is valuable when rules are undefined but heavier operationally.",
+            ),
+        ]
+    else:
+        candidates = [
+            _make_action_candidate(
+                action="EXECUTE_WITH_STANDARD_MONITORING",
+                expected_value=0.83,
+                risk_reduction=0.47,
+                cost=0.22,
+                dependency=0.18,
+                urgency=0.75,
+                reason="Gate permits proceed; monitored execution captures value with bounded risk.",
+            ),
+            _make_action_candidate(
+                action="RUN_TARGETED_VALIDATION_CHECKS",
+                expected_value=0.60,
+                risk_reduction=0.71,
+                cost=0.33,
+                dependency=0.26,
+                urgency=0.64,
+                reason="Targeted checks reduce tail risk but delay immediate value realization.",
+            ),
+        ]
+    return sorted(candidates, key=lambda item: item["score"], reverse=True)
+
+
+def _build_question_first_answer(
+    *,
+    query: str,
+    required_evidence: List[str],
+    missing_evidence: List[str],
+    stop_reasons: List[str],
+) -> Dict[str, Any] | None:
+    """Return a structured answer when the user asks condition/evidence questions."""
+    query_lower = (query or "").strip().lower()
+    if not query_lower:
+        return None
+    asks_minimum = any(token in query_lower for token in ("最低条件", "minimum", "必須条件"))
+    asks_boundary = any(token in query_lower for token in ("境界条件", "boundary"))
+    asks_evidence = any(
+        token in query_lower for token in ("必要証拠", "必要な証拠", "required evidence", "evidence")
+    )
+    if not (asks_minimum or asks_boundary or asks_evidence):
+        return None
+    return {
+        "minimum_conditions": {
+            "required_evidence_count": len(required_evidence),
+            "missing_evidence_count": len(missing_evidence),
+            "all_required_evidence_ready": len(missing_evidence) == 0,
+        },
+        "boundary_conditions": {
+            "stop_reasons": sorted(set(stop_reasons)),
+            "has_policy_boundary_risk": any(
+                item in {"rule_undefined", "approval_boundary_unknown", "rollback_not_supported"}
+                for item in stop_reasons
+            ),
+        },
+        "required_evidence": required_evidence,
+        "missing_evidence": missing_evidence,
+    }
+
+
+def _as_string_list(value: Any) -> list[str]:
+    """Normalize arbitrary values to a list[str] for public response fields."""
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _is_falsey_flag(value: Any) -> bool:
+    """Return True when a context flag explicitly indicates missing readiness."""
+    if isinstance(value, bool):
+        return value is False
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return normalized in {"0", "false", "no", "off", "missing", "unknown", "undefined"}
+    return False
+
+
+def _extract_stop_reasons(
+    *,
+    gate_reason: str,
+    missing_evidence: List[str],
+    context: Dict[str, Any],
+) -> List[str]:
+    """Collect fail-closed stop reasons used for gate decision classification."""
+    reasons: List[str] = []
+    reason_lc = gate_reason.lower()
+    env_name = str(context.get("environment") or os.getenv("VERITAS_ENV", "")).lower()
+    secure_or_prod = env_name in {"secure", "prod", "production"}
+
+    if missing_evidence:
+        reasons.append("required_evidence_missing")
+    if ("policy_definition_required" in reason_lc) or _is_falsey_flag(context.get("rule_defined")):
+        reasons.append("rule_undefined")
+    if _is_falsey_flag(context.get("approval_boundary_defined")):
+        reasons.append("approval_boundary_unknown")
+    if _is_falsey_flag(context.get("audit_trail_complete")):
+        reasons.append("audit_trail_incomplete")
+    if _is_falsey_flag(context.get("rollback_supported")):
+        reasons.append("rollback_not_supported")
+    if _is_falsey_flag(context.get("secure_controls_ready")):
+        reasons.append("secure_controls_missing")
+    if secure_or_prod and _is_falsey_flag(context.get("production_controls_ready")):
+        reasons.append("secure_prod_controls_missing")
+
+    return reasons
+
+
+def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
+    """Derive public decision semantics from internal gate outputs.
+
+    This helper separates:
+    - gate_decision: safety gate outcome (allow/hold/deny...)
+    - business_decision: case lifecycle status (APPROVE/HOLD/...)
+    - next_action: operator/system action guidance
+    """
+    raw_gate_decision = str(
+        ctx.fuji_dict.get("decision_status")
+        or ctx.fuji_dict.get("status")
+        or ctx.decision_status
+        or "unknown"
+    ).lower()
+    gate_reason = str(ctx.rejection_reason or ctx.fuji_dict.get("rejection_reason") or "").strip()
+    required_evidence = _as_string_list(ctx.context.get("required_evidence"))
+    satisfied_evidence = set(_as_string_list(ctx.context.get("satisfied_evidence")))
+    missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
+
+    fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
+    human_review_required = bool(
+        ctx.context.get("human_review_required")
+        or fuji_status == "needs_human_review"
+        or raw_gate_decision == "hold"
+    )
+    stop_reasons = _extract_stop_reasons(
+        gate_reason=gate_reason,
+        missing_evidence=missing_evidence,
+        context=ctx.context,
+    )
+
+    if "rollback_not_supported" in stop_reasons:
+        gate_decision = "block"
+    elif "secure_prod_controls_missing" in stop_reasons:
+        gate_decision = "block"
+    elif raw_gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
+        gate_decision = "block"
+    elif "required_evidence_missing" in stop_reasons:
+        gate_decision = "hold"
+    elif "approval_boundary_unknown" in stop_reasons or human_review_required:
+        gate_decision = "human_review_required"
+        human_review_required = True
+    elif any(
+        item in stop_reasons
+        for item in {
+            "rule_undefined",
+            "audit_trail_incomplete",
+            "secure_controls_missing",
+        }
+    ) or raw_gate_decision in {"hold", "modify", "abstain"}:
+        gate_decision = "hold"
+    else:
+        gate_decision = "proceed"
+
+    if missing_evidence:
+        business_decision = "EVIDENCE_REQUIRED"
+    elif gate_decision == "block":
+        business_decision = "DENY"
+    elif gate_decision == "human_review_required":
+        business_decision = "REVIEW_REQUIRED"
+    elif gate_decision == "hold":
+        business_decision = "HOLD"
+    elif "policy_definition_required" in gate_reason.lower():
+        business_decision = "POLICY_DEFINITION_REQUIRED"
+    else:
+        business_decision = "APPROVE"
+
+    action_candidates = _rank_action_candidates(
+        gate_decision=gate_decision,
+        business_decision=business_decision,
+        stop_reasons=stop_reasons,
+        missing_evidence=missing_evidence,
+        human_review_required=human_review_required,
+    )
+    selected_candidate = action_candidates[0]
+    next_action = selected_candidate["action"]
+    next_action_reason = selected_candidate["reason"]
+    rationale_parts = [gate_reason] if gate_reason else []
+    if stop_reasons:
+        rationale_parts.append(f"stop_reasons={', '.join(sorted(set(stop_reasons)))}")
+    if not rationale_parts:
+        rationale_parts.append("Decision derived from FUJI gate outcome and available evidence.")
+    rationale_parts.append(f"next_action_reason={next_action_reason}")
+    if len(action_candidates) > 1:
+        score_gap = round(
+            float(selected_candidate["score"]) - float(action_candidates[1]["score"]),
+            4,
+        )
+        rationale_parts.append(f"next_action_score_gap={score_gap}")
+
+    structured_answer = _build_question_first_answer(
+        query=ctx.query,
+        required_evidence=required_evidence,
+        missing_evidence=missing_evidence,
+        stop_reasons=stop_reasons,
+    )
+    refusal_reason = "; ".join(rationale_parts) if gate_decision == "block" else None
+    result = {
+        "gate_decision": gate_decision,
+        "business_decision": business_decision,
+        "next_action": next_action,
+        "required_evidence": required_evidence,
+        "missing_evidence": missing_evidence,
+        "human_review_required": human_review_required,
+        "rationale": " | ".join(rationale_parts),
+        "refusal_reason": refusal_reason,
+        "action_selection": {
+            "evaluation_axes": [
+                "expected_value",
+                "risk_reduction",
+                "cost",
+                "dependency",
+                "urgency",
+            ],
+            "selected": selected_candidate,
+            "candidates_considered": len(action_candidates),
+        },
+    }
+    if structured_answer is not None:
+        result["structured_answer"] = structured_answer
+    if _is_dev_mode_enabled(ctx.context):
+        result["action_candidates"] = action_candidates
+    else:
+        result["action_candidates"] = []
+    return result
+
 
 def _build_response_layers(
     ctx: PipelineContext,
@@ -95,6 +481,7 @@ def _build_response_layers(
         "decision_status": ctx.decision_status,
         "rejection_reason": ctx.rejection_reason,
     }
+    core.update(_derive_business_fields(ctx))
 
     audit_debug_internal = {
         "extras": ctx.response_extras,

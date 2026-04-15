@@ -21,7 +21,7 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
       )}
       <div className="mt-2 grid gap-2 text-xs md:grid-cols-5">
         <div className="rounded border border-border/70 bg-background/70 p-2">
-          <p className="text-muted-foreground">decision status</p>
+          <p className="text-muted-foreground">gate decision</p>
           <p className={`font-semibold ${decisionColor}`}>{view.decision}</p>
         </div>
         <div className="rounded border border-border/70 bg-background/70 p-2">

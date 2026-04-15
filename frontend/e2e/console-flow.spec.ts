@@ -11,14 +11,15 @@ test.describe("Console: decision flow", () => {
   test("renders pipeline stages and empty result placeholder", async ({
     page,
   }) => {
-    await expect(page.getByText("Pipeline Operations View")).toBeVisible();
+    const pipeline = page.getByRole("region", { name: "pipeline visualizer" });
+    await expect(pipeline.getByText("Pipeline Operations View")).toBeVisible();
     await expect(
       page.getByText(/Start with a real decision question|実際の意思決定を問いかけましょう/),
     ).toBeVisible();
     // Evidence, FUJI, TrustLog stages visible
-    await expect(page.locator("li", { hasText: "Evidence" })).toBeVisible();
-    await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
-    await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /2\.\s*Evidence/i })).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /7\.\s*FUJI/i })).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /8\.\s*TrustLog/i })).toBeVisible();
   });
 
   test("query input accepts text and shows send button", async ({ page }) => {
