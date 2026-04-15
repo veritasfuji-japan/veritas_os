@@ -2,10 +2,18 @@
 
 > Purpose: live PostgreSQL validation に関する公開証拠を 1 箇所に集約し、
 > 「何が real PostgreSQL で検証され、何が mock か」を追跡しやすくする。
+>
+> **Role in documentation set**: live PG validation の公開証拠の正本
+>
+> Canonical companions:
+> - Parity source of truth: `docs/en/validation/backend-parity-coverage.md`
+> - Promotion/release gate source of truth: `docs/en/validation/production-validation.md`
+> - Operations source of truth: `docs/en/operations/postgresql-production-guide.md`
 
 ## Scope
 
-この文書は以下の実体を突き合わせて要約する。
+この文書は以下の実体を突き合わせて要約する（本書自体は証拠集約であり、
+tier 定義・運用手順・parity 詳細の一次定義は companion docs 側）。
 
 - Validation docs:
   - `docs/en/validation/backend-parity-coverage.md`
@@ -196,4 +204,3 @@ curl -sf http://localhost:8000/health | python3 -m json.tool
 推奨アンカー文言:
 
 - **"Live PostgreSQL validation evidence (single entrypoint)"**
-

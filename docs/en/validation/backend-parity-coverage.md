@@ -1,11 +1,18 @@
 # Backend Parity Coverage — JSONL ↔ PostgreSQL
 
-> **Document purpose**: Describe what is tested, what semantic differences
-> exist, and what remains uncovered for the JSONL ↔ PostgreSQL backend
-> switch capability in VERITAS OS.
+> **この文書の目的 / Document purpose**: This is the canonical source for
+> backend parity and PostgreSQL implementation verification (what is covered,
+> what differs, and what is intentionally out of parity scope).
+>
+> **Role in documentation set**: parity 正本（backend parity / PostgreSQL 実装検証）
 >
 > For a single-entry public evidence summary focused on **live PostgreSQL**
 > validation, see [`../../live-postgresql-validation.md`](../../live-postgresql-validation.md).
+>
+> For release gate / tier / promotion rules, see
+> [`production-validation.md`](production-validation.md). For operations,
+> monitoring, recovery, and production configuration, see
+> [`../operations/postgresql-production-guide.md`](../operations/postgresql-production-guide.md).
 
 ## 1. Architecture Overview
 
@@ -54,15 +61,19 @@ and raises `ValueError` for unknown backends.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### How Mock Pools Work
+### How Mock Pools Work (mock vs real PostgreSQL split)
 
-All PostgreSQL tests use **in-memory mock pools** that simulate the
-SQL behaviour of `psycopg3` without requiring a live database. This
-allows the tests to run in any CI environment, including those without
-PostgreSQL.
+Most PostgreSQL-focused tests use **in-memory mock pools** that simulate
+the SQL behaviour of `psycopg3` without requiring a live database. This
+keeps parity/contract regression fast and stable in CI.
 
 The CI job `test-postgresql` additionally runs Alembic migrations
 against a real PostgreSQL 16 service container.
+
+Real PostgreSQL evidence is concentrated in contention-focused tests and
+Docker/service validation paths; see
+[`../../live-postgresql-validation.md`](../../live-postgresql-validation.md)
+for the public single-entry evidence view.
 
 ## 3. Coverage Matrix
 
@@ -170,6 +181,10 @@ or know which backend is active.
 | `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification **+ real PostgreSQL advisory-lock contention tests** (Tier 3) |
 
 ### Smoke / Release Validation Path
+
+Tier semantics (promotion/release gating) are owned by
+[`production-validation.md`](production-validation.md). This section only
+maps how parity-relevant checks are exercised across those tiers.
 
 Smoke tests (`@pytest.mark.smoke`) verify that the active backend —
 whichever it is — satisfies governance invariants. In Docker Compose
