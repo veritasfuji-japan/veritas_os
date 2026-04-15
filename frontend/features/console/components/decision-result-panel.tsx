@@ -1,5 +1,5 @@
 import { type DecideResponse } from "@veritas/types";
-import { toDecisionResultView } from "../adapters/decision-view";
+import { toDecisionResultView, toPublicDecisionSchemaView } from "../adapters/decision-view";
 
 interface DecisionResultPanelProps {
   result: DecideResponse;
@@ -36,6 +36,7 @@ function ScoreBar({ score, label }: { score: number | null; label: string }): JS
  */
 export function DecisionResultPanel({ result }: DecisionResultPanelProps): JSX.Element {
   const view = toDecisionResultView(result);
+  const publicDecision = toPublicDecisionSchemaView(result);
 
   return (
     <div className="space-y-3">
@@ -78,6 +79,16 @@ export function DecisionResultPanel({ result }: DecisionResultPanelProps): JSX.E
       )}
 
       <div className="grid gap-3 md:grid-cols-3">
+        <section className="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs">
+          <h3 className="text-sm font-semibold text-foreground">Public decision output</h3>
+          <p><span className="text-muted-foreground">gate_decision:</span> {publicDecision.gateDecision}</p>
+          <p><span className="text-muted-foreground">gate meaning:</span> {publicDecision.gateDecisionLabel}</p>
+          <p><span className="text-muted-foreground">business_decision:</span> {publicDecision.businessDecision}</p>
+          <p><span className="text-muted-foreground">next_action:</span> {publicDecision.nextAction}</p>
+          <p><span className="text-muted-foreground">required_evidence:</span> {publicDecision.requiredEvidence.length > 0 ? publicDecision.requiredEvidence.join(", ") : "none"}</p>
+          <p><span className="text-muted-foreground">human_review_required:</span> {publicDecision.humanReviewRequired ? "true" : "false"}</p>
+        </section>
+
         <section className="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs">
           <h3 className="text-sm font-semibold text-foreground">Chosen</h3>
           <p><span className="text-muted-foreground">final decision:</span> {view.chosen.finalDecision}</p>

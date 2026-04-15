@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { isDangerPresetsEnabled } from "./constants";
+import { DECISION_SAMPLE_QUESTIONS, isDangerPresetsEnabled } from "./constants";
 
 describe("isDangerPresetsEnabled", () => {
   afterEach(() => {
@@ -26,5 +26,18 @@ describe("isDangerPresetsEnabled", () => {
     vi.stubEnv("NEXT_PUBLIC_ENABLE_DANGER_PRESETS", "false");
 
     expect(isDangerPresetsEnabled()).toBe(false);
+  });
+});
+
+describe("DECISION_SAMPLE_QUESTIONS", () => {
+  it("includes regression-focused prompts for the public decision schema", () => {
+    expect(DECISION_SAMPLE_QUESTIONS.length).toBeGreaterThanOrEqual(6);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("最低条件は何か"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("人手審査境界"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("必要証拠"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("通しすぎと止めすぎ"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("ルールを形式化"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("FujiGate と Value Core"))).toBe(true);
+    expect(DECISION_SAMPLE_QUESTIONS.some((q) => q.includes("gate_decision"))).toBe(true);
   });
 });
