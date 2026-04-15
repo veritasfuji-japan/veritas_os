@@ -30,10 +30,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from veritas_os.audit.evidence_bundle_schema import (
-    BUNDLE_SCHEMA_VERSION,
-    BUNDLE_TYPES,
-)
+from veritas_os.audit.evidence_bundle_schema import BUNDLE_SCHEMA_VERSION, BUNDLE_TYPES
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 _logger = logging.getLogger(__name__)
@@ -146,6 +143,68 @@ def _collect_file_hashes(directory: Path) -> Dict[str, str]:
             rel = str(file_path.relative_to(directory))
             hashes[rel] = _sha256_file(file_path)
     return hashes
+
+
+def _runtime_context_from_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Build runtime metadata describing active posture/backends/versions."""
+    decision_payload = entry.get("decision_payload") if isinstance(entry, dict) else {}
+    decision_payload = decision_payload if isinstance(decision_payload, dict) else {}
+    return {
+        "posture": os.getenv("VERITAS_POSTURE", "dev"),
+        "trustlog_backend": os.getenv("VERITAS_TRUSTLOG_BACKEND", "jsonl"),
+        "memory_backend": os.getenv("VERITAS_MEMORY_BACKEND", "json"),
+        "trustlog_signer_backend": os.getenv("VERITAS_TRUSTLOG_SIGNER_BACKEND", "file"),
+        "api_version": os.getenv("VERITAS_API_VERSION", "veritas-api 1.x"),
+        "kernel_version": os.getenv("VERITAS_KERNEL_VERSION", "core-kernel 0.x"),
+        "pipeline_version": os.getenv("VERITAS_PIPELINE_VERSION", "unknown"),
+        "decision_version": decision_payload.get("version"),
+    }
+
+
+def _decision_record(entry: Dict[str, Any], verification_report: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract auditor-facing decision snapshot from one TrustLog witness entry."""
+    payload = entry.get("decision_payload")
+    payload = payload if isinstance(payload, dict) else {}
+    governance_identity = payload.get("governance_identity")
+    decision_id = entry.get("decision_id") or payload.get("decision_id")
+
+    return {
+        "decision_payload": payload,
+        "gate_decision": payload.get("gate_decision", "unknown"),
+        "business_decision": payload.get("business_decision", "HOLD"),
+        "next_action": payload.get("next_action", "REVISE_AND_RESUBMIT"),
+        "required_evidence": payload.get("required_evidence", []),
+        "human_review_required": bool(payload.get("human_review_required", False)),
+        "trustlog_references": {
+            "decision_id": decision_id,
+            "request_id": payload.get("request_id"),
+            "previous_hash": entry.get("previous_hash"),
+            "payload_hash": entry.get("payload_hash"),
+            "full_payload_hash": entry.get("full_payload_hash"),
+            "signature": entry.get("signature"),
+            "anchor_backend": entry.get("anchor_backend"),
+            "anchor_status": entry.get("anchor_status"),
+            "anchor_receipt": entry.get("anchor_receipt"),
+            "mirror_backend": entry.get("mirror_backend"),
+            "mirror_receipt": entry.get("mirror_receipt"),
+            "artifact_ref": entry.get("artifact_ref"),
+        },
+        "verification": {
+            "report_path": "verification_report.json",
+            "ledger_ok": verification_report.get("ok"),
+            "chain_ok": verification_report.get("chain_ok"),
+            "signature_ok": verification_report.get("signature_ok"),
+            "errors": verification_report.get("total_errors"),
+            "notes": verification_report.get("total_notes"),
+        },
+        "provenance": {
+            "witness_timestamp": entry.get("timestamp"),
+            "bundle_generated_at": _utc_now_iso8601(),
+            "signer_metadata": entry.get("signer_metadata"),
+            "governance_identity": governance_identity,
+        },
+        "runtime_context": _runtime_context_from_entry(entry),
+    }
 
 
 def generate_evidence_bundle(
@@ -287,6 +346,7 @@ def generate_evidence_bundle(
         _write_json_file(bundle_dir, "release_provenance.json", release_provenance)
         written_files.append("release_provenance.json")
 
+    verify_result: Dict[str, Any] = {}
     # Run verification and include report
     try:
         from veritas_os.audit.trustlog_verify import verify_witness_ledger
@@ -302,6 +362,12 @@ def generate_evidence_bundle(
         written_files.append("verification_report.json")
     except Exception as exc:  # noqa: BLE001
         _logger.warning("Bundle verification skipped: %s", exc)
+
+    if bundle_type == "decision":
+        decision_entry = entries[0]
+        decision_record = _decision_record(decision_entry, verify_result)
+        _write_json_file(bundle_dir, "decision_record.json", decision_record)
+        written_files.append("decision_record.json")
 
     # Compute file hashes for manifest
     file_hashes = _collect_file_hashes(bundle_dir)

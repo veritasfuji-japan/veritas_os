@@ -16,9 +16,11 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from veritas_os.audit.evidence_bundle_schema import (
+    BUNDLE_TYPE_CONTENTS,
     BUNDLE_SCHEMA_VERSION,
     BUNDLE_TYPES,
     MANIFEST_REQUIRED_FIELDS,
+    validate_decision_snapshot_shape,
 )
 
 _logger = logging.getLogger(__name__)
@@ -104,6 +106,29 @@ def verify_evidence_bundle(
     if bundle_type not in BUNDLE_TYPES:
         errors.append(f"Invalid bundle_type: {bundle_type}")
         result["ok"] = False
+    else:
+        required_contents = BUNDLE_TYPE_CONTENTS.get(bundle_type, {}).get("required", [])
+        for required in required_contents:
+            if not (bundle_dir / required).exists():
+                errors.append(f"Required bundle content missing: {required}")
+                result["tampered"] = True
+
+    if bundle_type == "decision":
+        decision_record_path = bundle_dir / "decision_record.json"
+        if decision_record_path.exists():
+            try:
+                decision_record = json.loads(decision_record_path.read_text(encoding="utf-8"))
+            except (json.JSONDecodeError, OSError) as exc:
+                errors.append(f"Failed to read decision_record.json: {exc}")
+                result["tampered"] = True
+            else:
+                shape_errors = validate_decision_snapshot_shape(decision_record)
+                if shape_errors:
+                    errors.extend(shape_errors)
+                    result["tampered"] = True
+        else:
+            errors.append("decision bundle missing decision_record.json")
+            result["tampered"] = True
 
     # Verify file hashes
     expected_hashes = manifest.get("file_hashes", {})
