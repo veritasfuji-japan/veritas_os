@@ -26,6 +26,15 @@ export const DANGER_PRESETS = [
   },
 ] as const;
 
+export const DECISION_SAMPLE_QUESTIONS = [
+  "最低条件は何か。gate_decision / business_decision / next_action / required_evidence / human_review_required で返してください。",
+  "人手審査境界はどこか。どの条件で human_review_required=true になるかを示してください。",
+  "必要証拠は何か。required_evidence と missing_evidence を分けて返してください。",
+  "通しすぎと止めすぎを比較し、最も妥当な next_action を示してください。",
+  "ルールを形式化してください。FujiGate 判定条件と Value Core 比較軸を分離して列挙してください。",
+  "FujiGate と Value Core の責務を分離して説明し、最終出力を構造化してください。",
+] as const;
+
 /**
  * 危険プロンプトの表示可否を返します。
  *

@@ -6,6 +6,7 @@ import {
   type FujiGateDetailView,
   type FujiGateView,
   type FujiViolationView,
+  type PublicDecisionSchemaView,
   type PipelineStageStatus,
   type PipelineStageView,
 } from "../types";
@@ -110,6 +111,35 @@ function readText(record: Record<string, unknown>, ...keys: string[]): string {
     }
   }
   return "n/a";
+}
+
+function getGateDecisionLabel(gateDecision: string): string {
+  if (gateDecision === "allow") {
+    return "response generation allowed (not case approval)";
+  }
+  if (gateDecision === "hold") {
+    return "gate hold";
+  }
+  if (gateDecision === "deny" || gateDecision === "rejected" || gateDecision === "block") {
+    return "blocked by gate";
+  }
+  return "gate status";
+}
+
+export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisionSchemaView {
+  const requiredEvidenceRaw = result.required_evidence;
+  const requiredEvidence = Array.isArray(requiredEvidenceRaw)
+    ? requiredEvidenceRaw.filter((item): item is string => typeof item === "string")
+    : [];
+  const gateDecision = readText(result as Record<string, unknown>, "gate_decision", "decision_status");
+  return {
+    gateDecision,
+    gateDecisionLabel: getGateDecisionLabel(gateDecision),
+    businessDecision: readText(result as Record<string, unknown>, "business_decision"),
+    nextAction: readText(result as Record<string, unknown>, "next_action"),
+    requiredEvidence,
+    humanReviewRequired: result.human_review_required === true,
+  };
 }
 
 export function toFujiGateView(result: DecideResponse | null): FujiGateView {

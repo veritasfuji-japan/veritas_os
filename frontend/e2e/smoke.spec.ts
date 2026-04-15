@@ -11,12 +11,11 @@ test.describe("Smoke: 3-minute demo flow", () => {
     await page.goto("/console");
     // Use heading role to avoid strict-mode clash with the sidebar nav text
     await expect(page.getByRole("heading", { name: "Decision Console" })).toBeVisible();
-    await expect(page.getByText("Pipeline Operations View")).toBeVisible();
-    await expect(page.locator("li", { hasText: "Evidence" })).toBeVisible();
-    // Scope to <li> so strict mode won't match the separate "FUJI Gate Status" heading
-    await expect(page.locator("li", { hasText: "FUJI" })).toBeVisible();
-    // Scope to <li> to avoid matching sidebar's "TrustLog Explorer"
-    await expect(page.locator("li", { hasText: "TrustLog" })).toBeVisible();
+    const pipeline = page.getByRole("region", { name: "pipeline visualizer" });
+    await expect(pipeline.getByText("Pipeline Operations View")).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /2\.\s*Evidence/i })).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /7\.\s*FUJI/i })).toBeVisible();
+    await expect(pipeline.getByRole("button", { name: /8\.\s*TrustLog/i })).toBeVisible();
 
     const presetButtons = page.locator("button").filter({ hasText: "..." });
     const hasDangerPresets = process.env.NEXT_PUBLIC_ENABLE_DANGER_PRESETS === "true";

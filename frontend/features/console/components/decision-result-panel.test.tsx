@@ -9,6 +9,11 @@ describe("DecisionResultPanel", () => {
     request_id: "req-test",
     version: "1.0",
     decision_status: "allow",
+    gate_decision: "allow",
+    business_decision: "REVIEW_REQUIRED",
+    next_action: "ROUTE_TO_HUMAN_REVIEW",
+    required_evidence: ["risk_assessment", "approval_ticket"],
+    human_review_required: true,
     rejection_reason: null,
     chosen: { id: "a1", title: "Option A" },
     alternatives: [
@@ -72,5 +77,25 @@ describe("DecisionResultPanel", () => {
     render(<DecisionResultPanel result={baseResult as never} />);
     expect(screen.getByText("Rejected reasons")).toBeInTheDocument();
     expect(screen.getByText("FUJI block:")).toBeInTheDocument();
+  });
+
+  it("renders separated public decision schema fields", () => {
+    render(<DecisionResultPanel result={baseResult as never} />);
+    expect(screen.getByText("Public decision output")).toBeInTheDocument();
+    expect(screen.getByText("gate_decision:")).toBeInTheDocument();
+    expect(screen.getByText("allow")).toBeInTheDocument();
+    expect(screen.getByText("business_decision:")).toBeInTheDocument();
+    expect(screen.getByText("REVIEW_REQUIRED")).toBeInTheDocument();
+    expect(screen.getByText("next_action:")).toBeInTheDocument();
+    expect(screen.getByText("ROUTE_TO_HUMAN_REVIEW")).toBeInTheDocument();
+    expect(screen.getByText("required_evidence:")).toBeInTheDocument();
+    expect(screen.getByText("risk_assessment, approval_ticket")).toBeInTheDocument();
+    expect(screen.getByText("human_review_required:")).toBeInTheDocument();
+    expect(screen.getByText("true")).toBeInTheDocument();
+  });
+
+  it("does not present gate allow as case approval in the public decision meaning", () => {
+    render(<DecisionResultPanel result={baseResult as never} />);
+    expect(screen.getByText("response generation allowed (not case approval)")).toBeInTheDocument();
   });
 });

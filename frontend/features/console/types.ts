@@ -86,6 +86,15 @@ export interface DecisionResultView {
   rejectedReasons: DecisionRejectedReasonsView;
 }
 
+export interface PublicDecisionSchemaView {
+  gateDecision: string;
+  gateDecisionLabel: string;
+  businessDecision: string;
+  nextAction: string;
+  requiredEvidence: string[];
+  humanReviewRequired: boolean;
+}
+
 export interface FujiViolationView {
   rule: string;
   detail: string;
