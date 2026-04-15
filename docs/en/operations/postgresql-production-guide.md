@@ -810,12 +810,12 @@ a PostgreSQL 16 service container.
 # Mock-pool tests (no database needed)
 pytest veritas_os/tests/test_pg_trustlog_contention.py -m "not (postgresql and contention)"
 
-# Real PostgreSQL contention tests (requires VERITAS_DATABASE_URL + migrations)
+# Real PostgreSQL contention tests (CI `test-postgresql` equivalent)
 export VERITAS_DATABASE_URL="postgresql://user:pass@localhost:5432/veritas"
+export VERITAS_MEMORY_BACKEND="postgresql"
+export VERITAS_TRUSTLOG_BACKEND="postgresql"
 alembic upgrade head
-pytest veritas_os/tests/test_pg_trustlog_contention.py \
-  -m "postgresql and contention" \
-  -v --tb=short
+make validate-postgresql-live
 ```
 
 ### Metrics test suite (`test_pg_metrics.py`)
@@ -1265,9 +1265,10 @@ PostgreSQL 16 サービスコンテナを使って実際のアドバイザリロ
 ```bash
 # 実 PostgreSQL コンテンションテスト
 export VERITAS_DATABASE_URL="postgresql://user:pass@localhost:5432/veritas"
+export VERITAS_MEMORY_BACKEND="postgresql"
+export VERITAS_TRUSTLOG_BACKEND="postgresql"
 alembic upgrade head
-pytest veritas_os/tests/test_pg_trustlog_contention.py \
-  -m "postgresql and contention" -v
+make validate-postgresql-live
 ```
 
 詳細は英語版 §13 を参照。

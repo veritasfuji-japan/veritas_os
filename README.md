@@ -157,7 +157,7 @@ development and migration workflows, not as the recommended production baseline.
   active backend at runtime.
 - **Live PostgreSQL validation exists in multiple layers:** CI smoke (`pytest -m smoke`),
   production-like validation (`pytest -m "production or smoke"`), and live validation
-  entry points (`make validate`, `make validate-live`, workflow `production-validation.yml`).
+  entry points (`make validate-postgresql-live`, `make validate-live`, workflow `production-validation.yml`).
 
 Verification-oriented docs:
 

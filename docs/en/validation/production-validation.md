@@ -448,6 +448,14 @@ docker compose down
 
 ## Additional Validation Paths
 
+### Local Reproduction Entrypoints (name-aligned with CI docs)
+
+| Purpose | Command | CI equivalent |
+|---------|---------|---------------|
+| Real PostgreSQL contention subset | `make validate-postgresql-live` | `CI` workflow (`main.yml`) job `test-postgresql` step `Run real PostgreSQL contention tests` |
+| Live provider checks (secrets required) | `make validate-live` | `Production Validation` workflow (`production-validation.yml`) optional live checks |
+| Compose governance checks | `make validate-compose` | `Release Gate` / `Production Validation` docker-smoke-style checks |
+
 ### Compose Governance Validation (`scripts/compose_validation.sh`)
 
 Full-stack Docker Compose validation that exercises:
