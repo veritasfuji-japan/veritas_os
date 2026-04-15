@@ -86,7 +86,7 @@ describe("toAssistantMessage", () => {
     const t = (ja: string, _en: string) => ja;
     const message = toAssistantMessage(payload, t);
     expect(message).toContain("案件状態: APPROVE");
-    expect(message).toContain("ゲート判定: allow");
+    expect(message).toContain("ゲート判定: allow (案件承認ではなく、応答出力可)");
     expect(message).toContain("次アクション: EXECUTE_WITH_STANDARD_MONITORING");
     expect(message).toContain("採択案: Option A");
     expect(message).toContain("拒否理由: なし");
@@ -167,5 +167,6 @@ describe("toAssistantMessage", () => {
     const message = toAssistantMessage(payload, t);
     expect(message).toContain("案件状態: REVIEW_REQUIRED");
     expect(message).not.toContain("案件状態: allow");
+    expect(message).toContain("ゲート判定: allow (案件承認ではなく、応答出力可)");
   });
 });

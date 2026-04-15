@@ -293,8 +293,20 @@ Key fields (simplified):
 | `telos_score` | Alignment score vs ValueCore |
 | `fuji` | FUJI Gate result (allow / modify / rejected) |
 | `gate.decision_status` | Normalized final status (`DecisionStatus`) |
+| `gate_decision` | Public gate outcome (`allow`/`hold`/`deny`/`block`...). `allow` means response generation can proceed, **not** case approval. |
+| `business_decision` | Case lifecycle status (`APPROVE`/`HOLD`/`REVIEW_REQUIRED`/`DENY`/...) |
+| `next_action` | Recommended next operator/system action (separate from business state) |
+| `required_evidence[]` | Evidence keys required by current policy/risk boundary |
+| `human_review_required` | Explicit human-review requirement flag |
 | `trust_log` | Hash-chained TrustLog entry (`sha256_prev`) |
 | `extras.metrics` | Per-stage latency, memory hits, web hits |
+
+Decision output semantics:
+
+- **FujiGate** owns safety/policy gate adjudication and emits `gate_decision`.
+- **Value Core** compares option value and informs `business_decision` + `next_action`.
+- UI must show `gate_decision`, `business_decision`, and `next_action` as different concepts.
+- `allow` is gate-level permissive status only; it must not be presented as case approval.
 
 Pipeline stages:
 
