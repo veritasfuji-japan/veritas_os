@@ -469,6 +469,49 @@ def stage_gate_decision(ctx: PipelineContext) -> None:
         )
         ctx.chosen, ctx.alternatives = {}, []
 
+    # Context-aware fail-closed stop conditions.
+    # Keep this stage focused on FUJI gate posture, and leave public shaping
+    # (business_decision / next_action) to pipeline_response.
+    required_evidence = [
+        str(item).strip()
+        for item in (ctx.context.get("required_evidence") or [])
+        if str(item).strip()
+    ]
+    satisfied_evidence = {
+        str(item).strip()
+        for item in (ctx.context.get("satisfied_evidence") or [])
+        if str(item).strip()
+    }
+    missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
+    if ctx.decision_status == "allow" and missing_evidence:
+        ctx.decision_status = "hold"
+        ctx.context["human_review_required"] = True
+        ctx.rejection_reason = (
+            "FUJI gate: required_evidence_missing="
+            + ",".join(sorted(set(missing_evidence)))
+        )
+
+    high_risk_ambiguity = bool(ctx.context.get("high_risk_ambiguity")) or (
+        bool(ctx.context.get("ambiguity_detected")) and ctx.effective_risk >= 0.80
+    )
+    if high_risk_ambiguity:
+        ctx.context["human_review_required"] = True
+        if ctx.decision_status == "allow":
+            ctx.decision_status = "hold"
+            ctx.rejection_reason = (
+                "FUJI gate: high_risk_ambiguity_requires_human_review"
+            )
+
+    irreversible_action = bool(ctx.context.get("irreversible_action"))
+    audit_trail_complete = bool(ctx.context.get("audit_trail_complete", True))
+    if irreversible_action and not audit_trail_complete:
+        ctx.context["human_review_required"] = True
+        ctx.decision_status = "rejected"
+        ctx.rejection_reason = (
+            "FUJI gate: irreversible_action_without_audit_trail"
+        )
+        ctx.chosen, ctx.alternatives = {}, []
+
     ctx.response_extras["metrics"]["stage_latency"]["gate"] = max(
         0,
         int((time.time() - gate_stage_started_at) * 1000),

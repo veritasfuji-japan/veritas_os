@@ -259,3 +259,80 @@ def test_non_dev_mode_hides_action_candidates() -> None:
     )
 
     assert payload["action_candidates"] == []
+
+
+def test_missing_required_evidence_never_returns_approve() -> None:
+    """required_evidence 欠損時は APPROVE を返さない。"""
+    ctx = PipelineContext(
+        request_id="req-11",
+        query="実行してよいか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "required_evidence": ["approval_ticket", "audit_log_ref"],
+            "satisfied_evidence": ["approval_ticket"],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "hold"
+    assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+    assert payload["business_decision"] != "APPROVE"
+
+
+def test_high_risk_ambiguity_forces_human_review() -> None:
+    """高リスク曖昧案件は human_review_required=true を強制する。"""
+    ctx = PipelineContext(
+        request_id="req-12",
+        query="重大影響だが確証がない案件を通すべきか",
+        fuji_dict={"decision_status": "allow", "status": "allow", "risk": 0.92},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "ambiguity_detected": True,
+            "risk_score": 0.91,
+            "required_evidence": ["decision_rationale"],
+            "satisfied_evidence": ["decision_rationale"],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "human_review_required"
+    assert payload["business_decision"] == "REVIEW_REQUIRED"
+    assert payload["human_review_required"] is True
+
+
+def test_irreversible_action_without_audit_trail_is_blocked() -> None:
+    """不可逆アクションかつ監査証跡不足は BLOCK に倒す。"""
+    ctx = PipelineContext(
+        request_id="req-13",
+        query="監査なしで不可逆実行してよいか",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "irreversible_action": True,
+            "audit_trail_complete": False,
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
+    assert payload["next_action"] == "DO_NOT_EXECUTE"
