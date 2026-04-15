@@ -144,6 +144,35 @@ docker compose up --build
 
 > **Prerequisites**: Docker 20+ and Docker Compose v2. For local dev: Python 3.11+, Node.js 20+, pnpm.
 
+## PostgreSQL Production Path & Validation Status
+
+For this repository, **PostgreSQL backend is the formal production path** for both
+MemoryOS and TrustLog. JSON/JSONL backends remain available for local lightweight
+development and migration workflows, not as the recommended production baseline.
+
+- **Default in Docker Compose:** `VERITAS_MEMORY_BACKEND=postgresql` and
+  `VERITAS_TRUSTLOG_BACKEND=postgresql` are set in `docker-compose.yml`.
+- **Runtime verification point:** check `/health` → `storage_backends` to confirm the
+  active backend at runtime.
+- **Live PostgreSQL validation exists in multiple layers:** CI smoke (`pytest -m smoke`),
+  production-like validation (`pytest -m "production or smoke"`), and live validation
+  entry points (`make validate`, `make validate-live`, workflow `production-validation.yml`).
+
+Verification-oriented docs:
+
+- [`docs/postgresql-production-guide.md` (canonical: `docs/en/operations/postgresql-production-guide.md`)](docs/en/operations/postgresql-production-guide.md)
+- [`docs/BACKEND_PARITY_COVERAGE.md` (canonical: `docs/en/validation/backend-parity-coverage.md`)](docs/en/validation/backend-parity-coverage.md)
+- [`docs/PRODUCTION_VALIDATION.md` (canonical: `docs/en/validation/production-validation.md`)](docs/en/validation/production-validation.md)
+
+### Guarantee boundary (current)
+
+- **Guaranteed:** PostgreSQL is the documented production path, Docker Compose defaults
+  to PostgreSQL, backend parity expectations are documented, and production validation
+  documentation includes continuous/live validation paths.
+- **Not guaranteed yet:** this README section alone does not guarantee environment-specific
+  HA/DR posture, cloud-managed service configuration correctness, or operator runbook
+  execution quality in your target production environment.
+
 ## Contents
 
 - [Beta at a Glance](#-beta-at-a-glance)
@@ -419,6 +448,9 @@ veritas_os/                  ← Monorepo root
 ## 💾 Storage Backends
 
 VERITAS OS uses a **pluggable storage backend** pattern for MemoryOS and TrustLog persistence.
+
+> **Positioning:** PostgreSQL is the official production backend path in this repository.
+> JSON/JSONL is retained for local/dev and migration compatibility workflows.
 
 | Backend | MemoryOS | TrustLog | Default (local/CLI) | Default (Docker Compose) | Use case |
 |---------|----------|----------|:-------------------:|:------------------------:|----------|
@@ -1211,6 +1243,8 @@ Additional CI workflows:
 
 **Tier 3** (`production-validation.yml`) — weekly schedule + manual dispatch:
 - Long-running production tests, load tests, external live tests
+- Includes live-provider validation entry points used for ongoing PostgreSQL-backed
+  production-path operational verification
 - Advisory: failures are visible but do not block release
 
 See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for the complete
@@ -1243,6 +1277,9 @@ Production validation is also available as a **separate CI workflow**
 (`production-validation.yml`) triggered manually or on a weekly schedule.
 See [`docs/PRODUCTION_VALIDATION.md`](docs/en/validation/production-validation.md) for
 the complete strategy, verification matrix, and remaining production risks.
+
+For backend semantics parity scope, see
+[`docs/BACKEND_PARITY_COVERAGE.md`](docs/en/validation/backend-parity-coverage.md).
 
 ---
 
