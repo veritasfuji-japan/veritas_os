@@ -65,6 +65,7 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - **セキュリティ強化チェックリスト**: [`docs/en/operations/security-hardening.md`](docs/en/operations/security-hardening.md)
 - **データベースマイグレーション**: [`docs/en/operations/database-migrations.md`](docs/en/operations/database-migrations.md)
 - **バックエンドパリティカバレッジ**: [`docs/en/validation/backend-parity-coverage.md`](docs/en/validation/backend-parity-coverage.md)
+- **ライブPostgreSQL検証エビデンス**: [`docs/live-postgresql-validation.md`](docs/live-postgresql-validation.md)
 - **レガシーパスクリーンアップ**: [`docs/en/operations/legacy-path-cleanup.md`](docs/en/operations/legacy-path-cleanup.md)
 - **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
@@ -99,9 +100,42 @@ docker compose up --build
 
 > **前提条件**: Docker 20+ と Docker Compose v2。ローカル開発の場合: Python 3.11+、Node.js 20+、pnpm。
 
+## PostgreSQL本番パスと検証ステータス
+
+このリポジトリでは、**MemoryOS と TrustLog の両方で PostgreSQL バックエンドが正式な本番パス**です。
+JSON/JSONL バックエンドは、軽量なローカル開発や移行ワークフロー向けに引き続き利用できますが、
+本番推奨ベースラインではありません。
+
+- **Docker Compose のデフォルト:** `docker-compose.yml` で
+  `VERITAS_MEMORY_BACKEND=postgresql` と
+  `VERITAS_TRUSTLOG_BACKEND=postgresql` が設定されています。
+- **実行時の確認ポイント:** 実行時に `/health` → `storage_backends` を確認し、
+  有効なバックエンドを検証します。
+- **ライブ PostgreSQL 検証は複数レイヤで実施:** CI スモーク（`pytest -m smoke`）、
+  本番相当検証（`pytest -m "production or smoke"`）、ライブ検証エントリポイント
+  （`make validate-postgresql-live`、`make validate-live`、workflow `production-validation.yml`）。
+
+検証志向ドキュメント:
+
+- [`docs/en/validation/backend-parity-coverage.md` — パリティ/実装検証の正本ソース](docs/en/validation/backend-parity-coverage.md)
+- [`docs/en/validation/production-validation.md` — tier/promotion/release-gate の正本ソース](docs/en/validation/production-validation.md)
+- [`docs/en/operations/postgresql-production-guide.md` — PostgreSQL運用/監視/復旧の正本ソース](docs/en/operations/postgresql-production-guide.md)
+- [`docs/live-postgresql-validation.md` — ライブ PostgreSQL 検証の公開エビデンス入口](docs/live-postgresql-validation.md)
+
+### 保証境界（現時点）
+
+- **保証されること:** PostgreSQL が本番パスとして明文化されており、Docker Compose は
+  PostgreSQL をデフォルトにし、バックエンドパリティ期待値が文書化され、
+  本番バリデーション文書に継続的/ライブ検証経路が含まれています。
+- **まだ保証しないこと:** この README セクション単体では、環境ごとの HA/DR 体制、
+  クラウド管理サービス設定の正当性、ターゲット本番環境での運用 Runbook 実行品質までは
+  保証しません。
+
 ## 目次
 
 - [ベータ版の位置づけ](#-ベータ版の位置づけ)
+- [PostgreSQL本番パスと検証ステータス](#postgresql本番パスと検証ステータス)
+- [保証境界（現時点）](#保証境界現時点)
 - [ランタイムポスチャ保証](#-ランタイムポスチャ保証)
 - [なぜVERITASか](#-なぜveritasか)
 - [できること](#-できること)
