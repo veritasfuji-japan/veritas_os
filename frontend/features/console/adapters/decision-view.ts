@@ -127,18 +127,30 @@ function getGateDecisionLabel(gateDecision: string): string {
 }
 
 export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisionSchemaView {
+  const resultRecord = result as Record<string, unknown>;
   const requiredEvidenceRaw = result.required_evidence;
   const requiredEvidence = Array.isArray(requiredEvidenceRaw)
     ? requiredEvidenceRaw.filter((item): item is string => typeof item === "string")
     : [];
-  const gateDecision = readText(result as Record<string, unknown>, "gate_decision", "decision_status");
+  const missingEvidenceRaw = resultRecord.missing_evidence;
+  const missingEvidence = Array.isArray(missingEvidenceRaw)
+    ? missingEvidenceRaw.filter((item): item is string => typeof item === "string")
+    : [];
+  const activePosture = typeof resultRecord.active_posture === "string" ? resultRecord.active_posture : null;
+  const backend = typeof resultRecord.backend === "string" ? resultRecord.backend : null;
+  const verifyStatus = typeof resultRecord.verify_status === "string" ? resultRecord.verify_status : null;
+  const gateDecision = readText(resultRecord, "gate_decision", "decision_status");
   return {
     gateDecision,
     gateDecisionLabel: getGateDecisionLabel(gateDecision),
-    businessDecision: readText(result as Record<string, unknown>, "business_decision"),
-    nextAction: readText(result as Record<string, unknown>, "next_action"),
+    businessDecision: readText(resultRecord, "business_decision"),
+    nextAction: readText(resultRecord, "next_action"),
     requiredEvidence,
+    missingEvidence,
     humanReviewRequired: result.human_review_required === true,
+    activePosture,
+    backend,
+    verifyStatus,
   };
 }
 

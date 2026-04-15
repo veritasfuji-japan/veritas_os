@@ -43,6 +43,11 @@ pnpm -r test
 
 **重要:** `gate_decision=allow` は「案件承認」ではなく「応答出力を継続可能」の意味です。UI では承認語として表示しないでください。
 
+### 金融ケース UI フィクスチャ
+
+- Mission Control Console 用の金融サンプルは `frontend/features/console/fixtures/financial-case.ts` を利用してください。
+- 本フィクスチャは `financial.high_risk_wire_transfer` 想定で、`required_evidence` / `missing_evidence` / `next_action` / `human_review_required` の視認回帰をテストします。
+
 
 ## Docker Compose で一括起動
 

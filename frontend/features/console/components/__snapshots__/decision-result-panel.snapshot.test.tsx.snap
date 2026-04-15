@@ -1,0 +1,501 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`DecisionResultPanel snapshots > renders financial human-review scenario without regression 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="chosen vs alternatives comparison"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            Option
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            Summary
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            Value Score
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            Trade-off / Weakness
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              Chosen
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Route to specialist review queue
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                value
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 72%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                72
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              Alt 
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                value
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          Public decision output
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision:
+          </span>
+           
+          human_review_required
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate meaning:
+          </span>
+           
+          gate status
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision:
+          </span>
+           
+          REVIEW_REQUIRED
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required:
+          </span>
+           
+          true
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠 / Missing evidence
+          </h4>
+          <ul
+            class="list-disc space-y-1 pl-4"
+          >
+            <li
+              class="font-mono text-[11px] text-foreground"
+            >
+              source_of_funds_attestation
+            </li>
+          </ul>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence:
+            </span>
+             
+            kyc_verification, source_of_funds_attestation, aml_screening_receipt
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション / Next action
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            ROUTE_TO_HUMAN_REVIEW
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        Viewer focus
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査人向け
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            判定:
+          </span>
+           
+          REVIEW_REQUIRED
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            人手審査:
+          </span>
+           
+          必須
+        </p>
+      </div>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          開発者向け
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            active posture:
+          </span>
+           
+          strict
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            backend:
+          </span>
+           
+          gpt-5.3-mini
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            verify status:
+          </span>
+           
+          anchored
+        </p>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        Chosen
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          final decision:
+        </span>
+         
+        Route to specialist review queue
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          why chosen:
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          supporting evidence summary:
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          value rationale:
+        </span>
+         
+        Human oversight required for high-risk transaction.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          value score
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            style="width: 72%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          72
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        Alternatives
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            option summary:
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off:
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            relative weakness:
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            value score
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        Rejected reasons
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block:
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          weak evidence:
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          poor debate outcome:
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          value conflict:
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;

@@ -13,7 +13,11 @@ describe("DecisionResultPanel", () => {
     business_decision: "REVIEW_REQUIRED",
     next_action: "ROUTE_TO_HUMAN_REVIEW",
     required_evidence: ["risk_assessment", "approval_ticket"],
+    missing_evidence: ["approval_ticket"],
     human_review_required: true,
+    active_posture: "strict",
+    backend: "gpt-5.3-mini",
+    verify_status: "verified",
     rejection_reason: null,
     chosen: { id: "a1", title: "Option A" },
     alternatives: [
@@ -85,9 +89,10 @@ describe("DecisionResultPanel", () => {
     expect(screen.getByText("gate_decision:")).toBeInTheDocument();
     expect(screen.getByText("allow")).toBeInTheDocument();
     expect(screen.getByText("business_decision:")).toBeInTheDocument();
-    expect(screen.getByText("REVIEW_REQUIRED")).toBeInTheDocument();
-    expect(screen.getByText("next_action:")).toBeInTheDocument();
+    expect(screen.getAllByText("REVIEW_REQUIRED").length).toBeGreaterThan(0);
     expect(screen.getByText("ROUTE_TO_HUMAN_REVIEW")).toBeInTheDocument();
+    expect(screen.getByText("不足証拠 / Missing evidence")).toBeInTheDocument();
+    expect(screen.getByText("次に実行するアクション / Next action")).toBeInTheDocument();
     expect(screen.getByText("required_evidence:")).toBeInTheDocument();
     expect(screen.getByText("risk_assessment, approval_ticket")).toBeInTheDocument();
     expect(screen.getByText("human_review_required:")).toBeInTheDocument();
@@ -97,5 +102,17 @@ describe("DecisionResultPanel", () => {
   it("does not present gate allow as case approval in the public decision meaning", () => {
     render(<DecisionResultPanel result={baseResult as never} />);
     expect(screen.getByText("response generation allowed (not case approval)")).toBeInTheDocument();
+  });
+
+  it("shows auditor and developer focused detail blocks", () => {
+    render(<DecisionResultPanel result={baseResult as never} />);
+    expect(screen.getByText("監査人向け")).toBeInTheDocument();
+    expect(screen.getByText("開発者向け")).toBeInTheDocument();
+    expect(screen.getByText("active posture:")).toBeInTheDocument();
+    expect(screen.getByText("strict")).toBeInTheDocument();
+    expect(screen.getByText("backend:")).toBeInTheDocument();
+    expect(screen.getByText("gpt-5.3-mini")).toBeInTheDocument();
+    expect(screen.getByText("verify status:")).toBeInTheDocument();
+    expect(screen.getByText("verified")).toBeInTheDocument();
   });
 });
