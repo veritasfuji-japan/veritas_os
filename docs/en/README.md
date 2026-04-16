@@ -31,6 +31,8 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [External Audit Readiness](validation/external-audit-readiness.md)
 
 ### Governance & Compliance
+- [Decision Semantics Contract](architecture/decision-semantics.md)
+- [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
 
 ### Guides

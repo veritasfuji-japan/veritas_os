@@ -5,6 +5,35 @@
     "decision_domain": "credit_underwriting",
     "title": "Credit underwriting blocks auto-approval when bureau data is missing",
     "question": "申込者の所得証明はあるが、主要信用情報機関の返却データが欠損している。自動承認してよいか？",
+    "context": {
+      "required_evidence": [
+        "credit_bureau_report",
+        "income_verification",
+        "affordability_assessment"
+      ],
+      "satisfied_evidence": [
+        "income_verification",
+        "affordability_assessment"
+      ],
+      "risk_score": 0.42,
+      "high_risk_ambiguity": false,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": true,
+      "rule_defined": true,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "COLLECT_REQUIRED_EVIDENCE",
+    "expected_rationale_summary": "信用情報欠損は fail-closed で hold とし、証拠収集を次アクションにする。",
+    "expected_required_evidence": [
+      "credit_bureau_report",
+      "income_verification",
+      "affordability_assessment"
+    ],
+    "expected_missing_evidence": [
+      "credit_bureau_report"
+    ],
+    "expected_human_review_required": false,
     "expected_governance_behavior": {
       "gate_decision": "hold",
       "business_decision": "EVIDENCE_REQUIRED",
@@ -27,6 +56,34 @@
     "decision_domain": "fraud_detection",
     "title": "Fraud detection chooses immediate block vs step-up authentication",
     "question": "既知の端末ではない高額カード決済。IP は通常地域だが、デバイス指紋と行動パターンが急変している。即時ブロックか追加認証か？",
+    "context": {
+      "required_evidence": [
+        "device_fingerprint_risk",
+        "behavioral_anomaly_score",
+        "transaction_velocity_features"
+      ],
+      "satisfied_evidence": [
+        "device_fingerprint_risk",
+        "behavioral_anomaly_score",
+        "transaction_velocity_features"
+      ],
+      "risk_score": 0.73,
+      "high_risk_ambiguity": false,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": true,
+      "rule_defined": false,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "COLLECT_REQUIRED_EVIDENCE",
+    "expected_rationale_summary": "高リスク信号が重なる場合は即時実行を避け、追加検証に寄せる。",
+    "expected_required_evidence": [
+      "device_fingerprint_risk",
+      "behavioral_anomaly_score",
+      "transaction_velocity_features"
+    ],
+    "expected_missing_evidence": [],
+    "expected_human_review_required": false,
     "expected_governance_behavior": {
       "gate_decision": "hold",
       "business_decision": "HOLD",
@@ -49,6 +106,37 @@
     "decision_domain": "aml_kyc",
     "title": "High-risk country transfer requires human review",
     "question": "KYC は完了しているが、PEP 関連者で高リスク国向けのクロスボーダー送金。自動通過できるか？",
+    "context": {
+      "required_evidence": [
+        "kyc_profile",
+        "pep_screening_result",
+        "source_of_funds_document",
+        "transaction_purpose_statement"
+      ],
+      "satisfied_evidence": [
+        "kyc_profile",
+        "pep_screening_result",
+        "source_of_funds_document",
+        "transaction_purpose_statement"
+      ],
+      "high_risk_ambiguity": true,
+      "risk_score": 0.91,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": true,
+      "rule_defined": true,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "PREPARE_HUMAN_REVIEW_PACKET",
+    "expected_rationale_summary": "高リスク曖昧性が高い場合は human review を優先し、自動通過しない。",
+    "expected_required_evidence": [
+      "kyc_profile",
+      "pep_screening_result",
+      "source_of_funds_document",
+      "transaction_purpose_statement"
+    ],
+    "expected_missing_evidence": [],
+    "expected_human_review_required": true,
     "expected_governance_behavior": {
       "gate_decision": "human_review_required",
       "business_decision": "REVIEW_REQUIRED",
@@ -72,6 +160,36 @@
     "decision_domain": "sanctions_screening",
     "title": "Partial sanctions match stays on hold until disambiguation",
     "question": "送金受取人名が制裁リストと部分一致し、生年月日が未取得。送金を継続してよいか？",
+    "context": {
+      "required_evidence": [
+        "beneficiary_date_of_birth",
+        "beneficiary_address",
+        "sanctions_screening_trace"
+      ],
+      "satisfied_evidence": [
+        "sanctions_screening_trace"
+      ],
+      "high_risk_ambiguity": true,
+      "risk_score": 0.66,
+      "human_review_required": true,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": true,
+      "rule_defined": true,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "COLLECT_REQUIRED_EVIDENCE",
+    "expected_rationale_summary": "部分一致時は hold し、識別証拠の補完を優先する。",
+    "expected_required_evidence": [
+      "beneficiary_date_of_birth",
+      "beneficiary_address",
+      "sanctions_screening_trace"
+    ],
+    "expected_missing_evidence": [
+      "beneficiary_date_of_birth",
+      "beneficiary_address"
+    ],
+    "expected_human_review_required": true,
     "expected_governance_behavior": {
       "gate_decision": "hold",
       "business_decision": "EVIDENCE_REQUIRED",
@@ -94,6 +212,35 @@
     "decision_domain": "client_suitability",
     "title": "Retail suitability for leveraged product",
     "question": "経験年数が短く損失許容度が低い個人顧客に高レバレッジ商品を提示してよいか？",
+    "context": {
+      "required_evidence": [
+        "investment_experience_profile",
+        "risk_tolerance_assessment",
+        "product_risk_disclosure_ack"
+      ],
+      "satisfied_evidence": [
+        "investment_experience_profile",
+        "risk_tolerance_assessment",
+        "product_risk_disclosure_ack"
+      ],
+      "high_risk_ambiguity": false,
+      "risk_score": 0.52,
+      "human_review_required": true,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": true,
+      "rule_defined": true,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "PREPARE_HUMAN_REVIEW_PACKET",
+    "expected_rationale_summary": "適合性の境界案件は human review を要求し、販売継続を即断しない。",
+    "expected_required_evidence": [
+      "investment_experience_profile",
+      "risk_tolerance_assessment",
+      "product_risk_disclosure_ack"
+    ],
+    "expected_missing_evidence": [],
+    "expected_human_review_required": true,
     "expected_governance_behavior": {
       "gate_decision": "hold",
       "business_decision": "REVIEW_REQUIRED",
@@ -116,6 +263,35 @@
     "decision_domain": "high_risk_transaction_hold",
     "title": "High-risk transaction pending release control",
     "question": "短時間で複数口座を経由する高額送金チェーンを検知。取引を即時実行すべきか？",
+    "context": {
+      "required_evidence": [
+        "transaction_chain_graph",
+        "counterparty_risk_rating",
+        "aml_alert_case_id"
+      ],
+      "satisfied_evidence": [
+        "transaction_chain_graph",
+        "counterparty_risk_rating",
+        "aml_alert_case_id"
+      ],
+      "high_risk_ambiguity": false,
+      "risk_score": 0.87,
+      "irreversible_action": true,
+      "audit_trail_complete": false,
+      "approval_boundary_defined": true,
+      "rule_defined": true,
+      "secure_controls_ready": true,
+      "human_review_required": true
+    },
+    "expected_next_action": "DO_NOT_EXECUTE",
+    "expected_rationale_summary": "不可逆操作かつ監査不備は block を優先し、実行停止する。",
+    "expected_required_evidence": [
+      "transaction_chain_graph",
+      "counterparty_risk_rating",
+      "aml_alert_case_id"
+    ],
+    "expected_missing_evidence": [],
+    "expected_human_review_required": true,
     "expected_governance_behavior": {
       "gate_decision": "block",
       "business_decision": "DENY",
@@ -138,6 +314,31 @@
     "decision_domain": "governance_boundary_control",
     "title": "Stop when approval boundary is undefined",
     "question": "与信・AML・制裁の複合案件だが、どの権限者が最終承認するか定義がない。処理を続けるべきか？",
+    "context": {
+      "required_evidence": [
+        "approval_matrix",
+        "policy_owner_confirmation"
+      ],
+      "satisfied_evidence": [
+        "approval_matrix",
+        "policy_owner_confirmation"
+      ],
+      "high_risk_ambiguity": false,
+      "risk_score": 0.48,
+      "irreversible_action": false,
+      "audit_trail_complete": true,
+      "approval_boundary_defined": false,
+      "rule_defined": true,
+      "secure_controls_ready": true
+    },
+    "expected_next_action": "PREPARE_HUMAN_REVIEW_PACKET",
+    "expected_rationale_summary": "承認境界未定義は human review 境界へエスカレーションし処理継続しない。",
+    "expected_required_evidence": [
+      "approval_matrix",
+      "policy_owner_confirmation"
+    ],
+    "expected_missing_evidence": [],
+    "expected_human_review_required": true,
     "expected_governance_behavior": {
       "gate_decision": "human_review_required",
       "business_decision": "REVIEW_REQUIRED",
