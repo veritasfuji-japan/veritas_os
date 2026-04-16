@@ -31,6 +31,10 @@ from .pipeline_types import (
 )
 from .pipeline_helpers import _lazy_import, _apply_value_boost, _warn
 from .pipeline_evidence import _norm_evidence_item
+from veritas_os.core.decision_semantics import (
+    normalize_required_evidence_keys,
+    unique_preserve_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -472,17 +476,18 @@ def stage_gate_decision(ctx: PipelineContext) -> None:
     # Context-aware fail-closed stop conditions.
     # Keep this stage focused on FUJI gate posture, and leave public shaping
     # (business_decision / next_action) to pipeline_response.
-    required_evidence = [
-        str(item).strip()
-        for item in (ctx.context.get("required_evidence") or [])
-        if str(item).strip()
-    ]
-    satisfied_evidence = {
-        str(item).strip()
-        for item in (ctx.context.get("satisfied_evidence") or [])
-        if str(item).strip()
-    }
-    missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
+    required_evidence = unique_preserve_order(
+        [str(item).strip().lower() for item in (ctx.context.get("required_evidence") or []) if str(item).strip()]
+    )
+    satisfied_evidence = unique_preserve_order(
+        [str(item).strip().lower() for item in (ctx.context.get("satisfied_evidence") or []) if str(item).strip()]
+    )
+    satisfied_canonical = set(normalize_required_evidence_keys(satisfied_evidence))
+    missing_evidence = []
+    for item in required_evidence:
+        canonical_item = normalize_required_evidence_keys([item])[0]
+        if canonical_item not in satisfied_canonical:
+            missing_evidence.append(item)
     if ctx.decision_status == "allow" and missing_evidence:
         ctx.decision_status = "hold"
         ctx.context["human_review_required"] = True

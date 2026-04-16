@@ -12,6 +12,12 @@ from pydantic import (
     model_validator,
     field_validator,
 )
+from veritas_os.core.decision_semantics import (
+    canonicalize_gate_decision,
+    normalize_required_evidence_keys,
+    unique_preserve_order,
+    validate_gate_business_combination,
+)
 
 # =========================
 # Input Length Constraints (Security)
@@ -940,6 +946,26 @@ class DecideResponse(BaseModel):
                 len(extras),
                 sorted(extras.keys()),
             )
+
+        canonical_gate_decision = canonicalize_gate_decision(self.gate_decision)
+        if canonical_gate_decision != self.gate_decision:
+            self.gate_decision = canonical_gate_decision
+            events.append("coercion.gate_decision_canonicalized")
+
+        if self.required_evidence:
+            required_set = set(normalize_required_evidence_keys(self.required_evidence))
+            self.missing_evidence = [
+                item
+                for item in self.missing_evidence
+                if normalize_required_evidence_keys([item])[0] in required_set
+            ]
+            self.missing_evidence = unique_preserve_order(self.missing_evidence)
+
+        validate_gate_business_combination(
+            gate_decision=self.gate_decision,
+            business_decision=self.business_decision,
+            human_review_required=self.human_review_required,
+        )
 
         if events:
             unique_events = sorted(set(events))
