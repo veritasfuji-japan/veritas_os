@@ -20,6 +20,12 @@ except ImportError:  # pragma: no cover - pydantic is optional at core layer
 from .pipeline_types import PipelineContext
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
+from veritas_os.core.decision_semantics import (
+    canonicalize_gate_decision,
+    derive_gate_decision_from_stop_reasons,
+    normalize_required_evidence_keys,
+    unique_preserve_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +316,7 @@ def _build_question_first_answer(
 def _as_string_list(value: Any) -> list[str]:
     """Normalize arbitrary values to a list[str] for public response fields."""
     if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
+        return [str(item).strip().lower() for item in value if str(item).strip()]
     return []
 
 
@@ -379,9 +385,14 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         or "unknown"
     ).lower()
     gate_reason = str(ctx.rejection_reason or ctx.fuji_dict.get("rejection_reason") or "").strip()
-    required_evidence = _as_string_list(ctx.context.get("required_evidence"))
-    satisfied_evidence = set(_as_string_list(ctx.context.get("satisfied_evidence")))
-    missing_evidence = [item for item in required_evidence if item not in satisfied_evidence]
+    required_evidence = unique_preserve_order(_as_string_list(ctx.context.get("required_evidence")))
+    satisfied_evidence = unique_preserve_order(_as_string_list(ctx.context.get("satisfied_evidence")))
+    satisfied_canonical = set(normalize_required_evidence_keys(satisfied_evidence))
+    missing_evidence = []
+    for item in required_evidence:
+        canonical_item = normalize_required_evidence_keys([item])[0]
+        if canonical_item not in satisfied_canonical:
+            missing_evidence.append(item)
 
     fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
     try:
@@ -399,33 +410,14 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         context=ctx.context,
     )
 
-    if "rollback_not_supported" in stop_reasons:
-        gate_decision = "block"
-    elif "irreversible_action" in stop_reasons and "audit_trail_incomplete" in stop_reasons:
-        gate_decision = "block"
-    elif "secure_prod_controls_missing" in stop_reasons:
-        gate_decision = "block"
-    elif raw_gate_decision in {"deny", "rejected", "block"} or str(ctx.decision_status).lower() in {"rejected", "block"}:
-        gate_decision = "block"
-    elif "required_evidence_missing" in stop_reasons:
-        gate_decision = "hold"
-    elif "high_risk_ambiguity" in stop_reasons and risk_score >= 0.8:
-        gate_decision = "human_review_required"
-        human_review_required = True
-    elif "approval_boundary_unknown" in stop_reasons or human_review_required:
-        gate_decision = "human_review_required"
-        human_review_required = True
-    elif any(
-        item in stop_reasons
-        for item in {
-            "rule_undefined",
-            "audit_trail_incomplete",
-            "secure_controls_missing",
-        }
-    ) or raw_gate_decision in {"hold", "modify", "abstain"}:
-        gate_decision = "hold"
-    else:
-        gate_decision = "proceed"
+    gate_decision, human_review_required = derive_gate_decision_from_stop_reasons(
+        stop_reasons=stop_reasons,
+        raw_gate_decision=raw_gate_decision,
+        decision_status=str(ctx.decision_status).lower(),
+        risk_score=risk_score,
+        human_review_required=human_review_required,
+    )
+    gate_decision = canonicalize_gate_decision(gate_decision)
 
     if missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"
