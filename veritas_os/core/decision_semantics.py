@@ -29,7 +29,9 @@ GATE_DECISION_ALIAS_TO_CANONICAL = {
     "rejected": "block",
     "modify": "hold",
     "abstain": "hold",
-    "unknown": "proceed",
+    # Keep unknown as-is for schema default/backward compatibility.
+    # Runtime derivation later resolves fallback to proceed when needed.
+    "unknown": "unknown",
     "proceed": "proceed",
     "hold": "hold",
     "block": "block",
