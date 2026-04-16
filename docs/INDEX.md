@@ -32,6 +32,7 @@
 - [Documentation Map (bilingual correspondence)](DOCUMENTATION_MAP.md)
 - [Bilingual Maintenance Rules](BILINGUAL_RULES.md)
 - [Path Migration Table](PATH_MIGRATION.md)
+- [金融 PoC パック（JA）](ja/guides/poc-pack-financial-quickstart.md)
 
 ## Directory Structure
 

@@ -1,0 +1,130 @@
+[
+  {
+    "question_id": "poc_credit_missing_bureau",
+    "category": "credit_underwriting",
+    "question": "所得証明は揃っているが信用情報機関データが未着。自動承認してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "credit_bureau_report",
+        "income_verification",
+        "affordability_assessment"
+      ],
+      "human_review_required": false
+    }
+  },
+  {
+    "question_id": "poc_fraud_stepup_vs_block",
+    "category": "fraud_detection",
+    "question": "高額カード決済でデバイス指紋と行動パターンが急変。即時ブロックか追加認証か？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "HOLD",
+      "next_action": "NEEDS_HUMAN_REVIEW",
+      "required_evidence": [
+        "device_fingerprint_risk",
+        "behavioral_anomaly_score",
+        "transaction_velocity_features"
+      ],
+      "human_review_required": false
+    }
+  },
+  {
+    "question_id": "poc_aml_pep_high_risk_country",
+    "category": "aml_kyc",
+    "question": "PEP 関連者が高リスク国へ送金予定。KYC 完了済みだが自動通過できるか？",
+    "expected_semantics": {
+      "gate_decision": "human_review_required",
+      "business_decision": "REVIEW_REQUIRED",
+      "next_action": "NEEDS_HUMAN_REVIEW",
+      "required_evidence": [
+        "kyc_profile",
+        "pep_screening_result",
+        "source_of_funds_document",
+        "transaction_purpose_statement"
+      ],
+      "human_review_required": true
+    }
+  },
+  {
+    "question_id": "poc_sanctions_partial_match",
+    "category": "sanctions_screening",
+    "question": "受取人名が制裁リストと部分一致し生年月日未取得。送金を続行してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "beneficiary_date_of_birth",
+        "beneficiary_address",
+        "sanctions_screening_trace"
+      ],
+      "human_review_required": true
+    }
+  },
+  {
+    "question_id": "poc_suitability_leveraged_product",
+    "category": "client_suitability",
+    "question": "投資経験が浅く損失許容度が低い顧客に高レバレッジ商品を提示してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "REVIEW_REQUIRED",
+      "next_action": "NEEDS_HUMAN_REVIEW",
+      "required_evidence": [
+        "investment_experience_profile",
+        "risk_tolerance_assessment",
+        "product_risk_disclosure_ack"
+      ],
+      "human_review_required": true
+    }
+  },
+  {
+    "question_id": "poc_high_risk_transaction_chain",
+    "category": "high_risk_transaction_hold",
+    "question": "短時間で複数口座を経由する高額送金チェーンを検知。実行すべきか？",
+    "expected_semantics": {
+      "gate_decision": "block",
+      "business_decision": "DENY",
+      "next_action": "REJECT_REQUEST",
+      "required_evidence": [
+        "transaction_chain_graph",
+        "counterparty_risk_rating",
+        "aml_alert_case_id"
+      ],
+      "human_review_required": true
+    }
+  },
+  {
+    "question_id": "poc_approval_boundary_undefined",
+    "category": "governance_boundary_control",
+    "question": "与信・AML・制裁の複合案件だが最終承認者の定義がない。継続してよいか？",
+    "expected_semantics": {
+      "gate_decision": "human_review_required",
+      "business_decision": "REVIEW_REQUIRED",
+      "next_action": "NEEDS_HUMAN_REVIEW",
+      "required_evidence": [
+        "approval_matrix",
+        "policy_owner_confirmation"
+      ],
+      "human_review_required": true
+    }
+  },
+  {
+    "question_id": "poc_cross_border_purpose_unknown",
+    "category": "cross_border_transfer",
+    "question": "クロスボーダー高額送金で送金目的が不明瞭。暫定で実行してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "transaction_purpose_statement",
+        "source_of_funds_document",
+        "beneficiary_risk_profile"
+      ],
+      "human_review_required": true
+    }
+  }
+]
