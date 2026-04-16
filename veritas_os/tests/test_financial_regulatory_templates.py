@@ -17,8 +17,8 @@ FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_regulatory_temp
 TAXONOMY_PATH = Path("veritas_os/sample_data/governance/required_evidence_taxonomy_v0.json")
 
 
-class ExpectedGovernanceBehavior(BaseModel):
-    """Expected governance behavior for one regulated-domain template."""
+class ExpectedSemantics(BaseModel):
+    """Expected decision semantics for one regulated-domain template."""
 
     gate_decision: Literal[
         "proceed",
@@ -40,8 +40,11 @@ class ExpectedGovernanceBehavior(BaseModel):
         "POLICY_DEFINITION_REQUIRED",
         "EVIDENCE_REQUIRED",
     ]
+    next_action: str = Field(min_length=1)
     required_evidence: List[str] = Field(min_length=1)
+    missing_evidence: List[str] = Field(default_factory=list)
     human_review_required: bool
+    rationale_summary: str = Field(min_length=1)
     rationale_expectations: List[str] = Field(min_length=2)
 
 
@@ -54,12 +57,19 @@ class FinancialGovernanceTemplate(BaseModel):
     title: str
     question: str
     context: Dict[str, object]
-    expected_next_action: str = Field(min_length=1)
-    expected_rationale_summary: str = Field(min_length=1)
-    expected_required_evidence: List[str] = Field(min_length=1)
-    expected_missing_evidence: List[str] = Field(default_factory=list)
-    expected_human_review_required: bool
-    expected_governance_behavior: ExpectedGovernanceBehavior
+    expected_semantics: ExpectedSemantics
+
+
+class FinancialGovernanceTemplatePack(BaseModel):
+    """Canonical industry-pack shape for financial governance templates."""
+
+    pack_id: str
+    pack_type: Literal["industry_governance_templates"]
+    industry: str
+    version: str
+    taxonomy_policy: Dict[str, str]
+    beachhead: Dict[str, str]
+    templates: List[FinancialGovernanceTemplate] = Field(min_length=1)
 
 
 class TaxonomyItem(BaseModel):
@@ -82,10 +92,10 @@ class RequiredEvidenceTaxonomy(BaseModel):
     items: List[TaxonomyItem]
 
 
-def _load_templates() -> List[FinancialGovernanceTemplate]:
-    """Load and parse the canonical financial governance fixture file."""
+def _load_template_pack() -> FinancialGovernanceTemplatePack:
+    """Load and parse the canonical financial governance template pack file."""
     raw_data = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-    return [FinancialGovernanceTemplate.model_validate(item) for item in raw_data]
+    return FinancialGovernanceTemplatePack.model_validate(raw_data)
 
 
 def _load_taxonomy() -> RequiredEvidenceTaxonomy:
@@ -96,15 +106,18 @@ def _load_taxonomy() -> RequiredEvidenceTaxonomy:
 
 def test_financial_templates_fixture_loads() -> None:
     """Fixture file should be loadable for dev/demo and tests."""
-    templates = _load_templates()
+    pack = _load_template_pack()
+    templates = pack.templates
 
     assert len(templates) >= 7
     assert all(template.question.strip() for template in templates)
+    assert pack.beachhead["decision_domain"] == "aml_kyc"
+    assert pack.beachhead["template_id"] == "aml_kyc_high_risk_country_wire_manual_review"
 
 
 def test_financial_templates_include_mandatory_domains() -> None:
     """Template pack must cover the required financial/regulatory domains."""
-    templates = _load_templates()
+    templates = _load_template_pack().templates
     template_ids = {item.template_id for item in templates}
 
     assert "credit_missing_bureau_data_no_auto_approval" in template_ids
@@ -118,32 +131,35 @@ def test_financial_templates_include_mandatory_domains() -> None:
 
 def test_financial_template_shape_includes_context_and_expected_fields() -> None:
     """Template fixtures must define context + explicit expected output fields."""
-    templates = _load_templates()
+    templates = _load_template_pack().templates
 
     for template in templates:
         assert isinstance(template.context.get("required_evidence"), list)
         assert isinstance(template.context.get("satisfied_evidence"), list)
-        assert template.expected_required_evidence == template.expected_governance_behavior.required_evidence
-        assert template.expected_human_review_required is template.expected_governance_behavior.human_review_required
+        expected = template.expected_semantics
+        assert expected.required_evidence == template.context["required_evidence"]
+        assert set(expected.missing_evidence) == (
+            set(expected.required_evidence) - set(template.context["satisfied_evidence"])
+        )
 
 
 def test_financial_templates_are_compatible_with_decide_response_schema() -> None:
     """Expected template outputs should map to the public DecideResponse schema."""
-    templates = _load_templates()
+    templates = _load_template_pack().templates
 
     for template in templates:
-        expected = template.expected_governance_behavior
+        expected = template.expected_semantics
         payload = DecideResponse.model_validate(
             {
                 "request_id": f"fixture-{template.template_id}",
                 "query": template.question,
                 "gate_decision": expected.gate_decision,
                 "business_decision": expected.business_decision,
-                "next_action": template.expected_next_action,
+                "next_action": expected.next_action,
                 "required_evidence": expected.required_evidence,
-                "missing_evidence": template.expected_missing_evidence,
+                "missing_evidence": expected.missing_evidence,
                 "human_review_required": expected.human_review_required,
-                "rationale": template.expected_rationale_summary,
+                "rationale": expected.rationale_summary,
             }
         )
 
@@ -155,7 +171,7 @@ def test_financial_templates_are_compatible_with_decide_response_schema() -> Non
 
 def test_regression_approval_boundary_undefined_requires_human_review() -> None:
     """Approval boundary undefined case should fail closed to review-required."""
-    template_map = {item.template_id: item for item in _load_templates()}
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
     template = template_map["approval_boundary_undefined_stop"]
     ctx = PipelineContext(
         request_id="financial-template-regression",
@@ -184,11 +200,11 @@ def test_regression_representative_financial_templates_governance_alignment() ->
         "aml_kyc_high_risk_country_wire_manual_review",
         "high_risk_transaction_pending_release",
     ]
-    templates = {item.template_id: item for item in _load_templates()}
+    templates = {item.template_id: item for item in _load_template_pack().templates}
 
     for template_id in template_ids:
         template = templates[template_id]
-        expected = template.expected_governance_behavior
+        expected = template.expected_semantics
         ctx = PipelineContext(
             request_id=f"financial-template-{template_id}",
             query=template.question,
@@ -205,10 +221,21 @@ def test_regression_representative_financial_templates_governance_alignment() ->
         )
         assert payload["gate_decision"] == expected.gate_decision
         assert payload["business_decision"] == expected.business_decision
-        assert payload["next_action"] == template.expected_next_action
-        assert payload["required_evidence"] == template.expected_required_evidence
-        assert payload["missing_evidence"] == template.expected_missing_evidence
-        assert payload["human_review_required"] is template.expected_human_review_required
+        assert payload["next_action"] == expected.next_action
+        assert payload["required_evidence"] == expected.required_evidence
+        assert payload["missing_evidence"] == expected.missing_evidence
+        assert payload["human_review_required"] is expected.human_review_required
+
+
+def test_financial_templates_expected_semantics_has_required_fields() -> None:
+    """Expected semantics should include next_action and rationale expectations."""
+    templates = _load_template_pack().templates
+
+    for template in templates:
+        expected = template.expected_semantics
+        assert expected.next_action.strip()
+        assert expected.rationale_summary.strip()
+        assert len(expected.rationale_expectations) >= 2
 
 
 def test_required_evidence_taxonomy_has_unique_canonical_keys_and_aliases() -> None:

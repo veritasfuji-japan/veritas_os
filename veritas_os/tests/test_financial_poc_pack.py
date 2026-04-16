@@ -14,6 +14,9 @@ from veritas_os.api.schemas import DecideResponse
 
 POC_DOC_PATH = Path("docs/ja/guides/poc-pack-financial-quickstart.md")
 POC_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
+REGULATORY_TEMPLATE_PATH = Path(
+    "veritas_os/sample_data/governance/financial_regulatory_templates.json"
+)
 
 
 class ExpectedSemantics(BaseModel):
@@ -50,6 +53,7 @@ class FinancialPocQuestion(BaseModel):
     question_id: str
     category: str
     question: str
+    template_id: str | None = None
     expected_semantics: ExpectedSemantics
 
 
@@ -57,6 +61,13 @@ def _load_poc_questions() -> list[FinancialPocQuestion]:
     """Load and validate PoC question fixtures."""
     raw_data = json.loads(POC_FIXTURE_PATH.read_text(encoding="utf-8"))
     return [FinancialPocQuestion.model_validate(item) for item in raw_data]
+
+
+def _load_regulatory_template_ids() -> set[str]:
+    """Load canonical template IDs from the industry template pack."""
+    payload = json.loads(REGULATORY_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    templates = payload.get("templates", [])
+    return {item["template_id"] for item in templates}
 
 
 def _extract_markdown_links(content: str) -> list[str]:
@@ -130,3 +141,15 @@ def test_financial_poc_sample_artifact_references_exist() -> None:
 
     for path in sample_paths:
         assert path.exists(), f"Missing sample artifact: {path}"
+
+
+def test_financial_poc_questions_reference_templates_without_reverse_lookup() -> None:
+    """PoC questions should link directly to canonical template IDs."""
+    questions = _load_poc_questions()
+    template_ids = _load_regulatory_template_ids()
+
+    linked_questions = [item for item in questions if item.template_id is not None]
+    assert linked_questions, "At least one PoC question must reference a template_id."
+
+    for item in linked_questions:
+        assert item.template_id in template_ids
