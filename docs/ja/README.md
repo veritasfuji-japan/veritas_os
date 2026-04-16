@@ -20,6 +20,8 @@ English version: [../en/README.md](../en/README.md)
 - [テスト強化後カバレッジ追跡](validation/coverage-after-hardening.md)
 
 ### ガバナンス・コンプライアンス
+- [Decision Semantics 契約](architecture/decision-semantics.md)
+- [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [EU AI Act 準拠レビュー](governance/eu-ai-act-compliance-review.md)
 - [エンドユーザー向け EU AI Act 使用説明書](governance/user-guide-eu-ai-act.md)
 - [Policy-as-Code 解説](governance/policy-as-code.md)
