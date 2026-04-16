@@ -29,6 +29,7 @@ English version: [../en/README.md](../en/README.md)
 - [FUJI エラーコードリファレンス](guides/fuji-error-codes.md)
 - [FUJI EU AI Act & Enterprise Strict Pack 使い方](guides/fuji-eu-enterprise-strict-usage.md)
 - [自己修復ループ解説](guides/self-healing-loop.md)
+- [金融 PoC パック（1日クイックスタート）](guides/poc-pack-financial-quickstart.md)
 
 ### コードレビュー
 - [レビュー文書インデックス](reviews/README.md)

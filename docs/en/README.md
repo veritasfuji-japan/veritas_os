@@ -36,6 +36,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 ### Guides
 - [3-Minute Demo Script](guides/demo-script.md)
 - [File-to-PostgreSQL Migration Guide](guides/migration-guide.md) (bilingual)
+- [Financial PoC Pack (1-day quickstart, JA)](../ja/guides/poc-pack-financial-quickstart.md)
 
 ### Reviews
 - [Reviews Index](reviews/README.md)
