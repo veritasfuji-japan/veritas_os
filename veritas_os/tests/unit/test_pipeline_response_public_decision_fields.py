@@ -286,6 +286,30 @@ def test_missing_required_evidence_never_returns_approve() -> None:
     assert payload["business_decision"] != "APPROVE"
 
 
+def test_required_evidence_alias_is_not_misclassified_as_missing() -> None:
+    """Alias/canonical 表記ゆれで required_evidence_missing を誤検知しない。"""
+    ctx = PipelineContext(
+        request_id="req-11b",
+        query="証拠は足りているか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "required_evidence": ["source_of_funds_document"],
+            "satisfied_evidence": ["source_of_funds_record"],
+        },
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    assert payload["missing_evidence"] == []
+    assert payload["business_decision"] == "APPROVE"
+
+
 def test_high_risk_ambiguity_forces_human_review() -> None:
     """高リスク曖昧案件は human_review_required=true を強制する。"""
     ctx = PipelineContext(

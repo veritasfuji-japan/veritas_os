@@ -23,7 +23,7 @@
     "expected_semantics": {
       "gate_decision": "hold",
       "business_decision": "HOLD",
-      "next_action": "NEEDS_HUMAN_REVIEW",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
       "required_evidence": [
         "device_fingerprint_risk",
         "behavioral_anomaly_score",
@@ -40,7 +40,7 @@
     "expected_semantics": {
       "gate_decision": "human_review_required",
       "business_decision": "REVIEW_REQUIRED",
-      "next_action": "NEEDS_HUMAN_REVIEW",
+      "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
       "required_evidence": [
         "kyc_profile",
         "pep_screening_result",
@@ -73,9 +73,9 @@
     "category": "client_suitability",
     "question": "投資経験が浅く損失許容度が低い顧客に高レバレッジ商品を提示してよいか？",
     "expected_semantics": {
-      "gate_decision": "hold",
+      "gate_decision": "human_review_required",
       "business_decision": "REVIEW_REQUIRED",
-      "next_action": "NEEDS_HUMAN_REVIEW",
+      "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
       "required_evidence": [
         "investment_experience_profile",
         "risk_tolerance_assessment",
@@ -92,7 +92,7 @@
     "expected_semantics": {
       "gate_decision": "block",
       "business_decision": "DENY",
-      "next_action": "REJECT_REQUEST",
+      "next_action": "DO_NOT_EXECUTE",
       "required_evidence": [
         "transaction_chain_graph",
         "counterparty_risk_rating",
@@ -109,7 +109,7 @@
     "expected_semantics": {
       "gate_decision": "human_review_required",
       "business_decision": "REVIEW_REQUIRED",
-      "next_action": "NEEDS_HUMAN_REVIEW",
+      "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
       "required_evidence": [
         "approval_matrix",
         "policy_owner_confirmation"

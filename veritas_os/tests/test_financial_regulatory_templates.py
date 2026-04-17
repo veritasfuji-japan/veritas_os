@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from veritas_os.api.schemas import DecideResponse
 from veritas_os.core.pipeline.pipeline_response import assemble_response
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
+from veritas_os.tests.helpers.semantics import assert_expected_semantics
 
 FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_regulatory_templates.json")
 TAXONOMY_PATH = Path("veritas_os/sample_data/governance/required_evidence_taxonomy_v0.json")
@@ -219,12 +220,10 @@ def test_regression_representative_financial_templates_governance_alignment() ->
             load_persona_fn=lambda: {},
             plan={"steps": [], "source": "test"},
         )
-        assert payload["gate_decision"] == expected.gate_decision
-        assert payload["business_decision"] == expected.business_decision
-        assert payload["next_action"] == expected.next_action
-        assert payload["required_evidence"] == expected.required_evidence
-        assert payload["missing_evidence"] == expected.missing_evidence
-        assert payload["human_review_required"] is expected.human_review_required
+        assert_expected_semantics(
+            payload,
+            expected.model_dump(),
+        )
 
 
 def test_financial_templates_expected_semantics_has_required_fields() -> None:
@@ -255,3 +254,53 @@ def test_required_evidence_taxonomy_has_unique_canonical_keys_and_aliases() -> N
             existing = alias_to_canonical.get(alias)
             assert existing in {None, item.canonical_key}
             alias_to_canonical[alias] = item.canonical_key
+
+
+def test_regression_financial_question_first_response_includes_structure() -> None:
+    """Financial template query should return question-first structured answer."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["credit_missing_bureau_data_no_auto_approval"]
+    ctx = PipelineContext(
+        request_id="financial-template-question-first",
+        query="最低条件と必要証拠は何ですか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={**template.context, "debug": True},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    structured = payload["structured_answer"]
+    assert structured["minimum_conditions"]["required_evidence_count"] == 3
+    assert structured["minimum_conditions"]["missing_evidence_count"] == 1
+    assert payload["next_action"] == "COLLECT_REQUIRED_EVIDENCE"
+
+
+def test_regression_dev_mode_action_ranking_trace_is_visible() -> None:
+    """Dev/debug path should expose action ranking trace for diagnostics."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_high_risk_country_wire_manual_review"]
+    ctx = PipelineContext(
+        request_id="financial-template-ranking-trace",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={**template.context, "dev_mode": True},
+    )
+
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+
+    ranking_trace = payload["action_selection"]["ranking_trace"]
+    assert ranking_trace["weights"]["expected_value"] == 0.35
+    assert ranking_trace["ordered_actions"][0]["action"] == payload["next_action"]
+    assert "high_risk_ambiguity" in ranking_trace["stop_reasons"]
