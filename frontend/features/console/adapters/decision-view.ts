@@ -9,6 +9,8 @@ import {
   type PublicDecisionSchemaView,
   type PipelineStageStatus,
   type PipelineStageView,
+  type RuntimeStatusView,
+  type EvidenceBundleDraft,
 } from "../types";
 
 const STAGE_ALIASES: Record<PipelineStageName, string[]> = {
@@ -103,6 +105,40 @@ export function toPipelineStageViews(
   });
 }
 
+
+
+function normalizeStatusValue(value: unknown): string {
+  if (typeof value !== "string") {
+    return "n/a";
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : "n/a";
+}
+
+export function toRuntimeStatusView(result: DecideResponse): RuntimeStatusView {
+  const record = result as Record<string, unknown>;
+  return {
+    activePosture: normalizeStatusValue(record.active_posture),
+    backend: normalizeStatusValue(record.backend),
+    verifyStatus: normalizeStatusValue(record.verify_status),
+  };
+}
+
+export function toEvidenceBundleDraft(result: DecideResponse): EvidenceBundleDraft {
+  const publicDecision = toPublicDecisionSchemaView(result);
+  return {
+    requestId: result.request_id,
+    generatedAt: new Date().toISOString(),
+    gateDecision: publicDecision.gateDecision,
+    businessDecision: publicDecision.businessDecision,
+    nextAction: publicDecision.nextAction,
+    humanReviewRequired: publicDecision.humanReviewRequired,
+    requiredEvidence: publicDecision.requiredEvidence,
+    missingEvidence: publicDecision.missingEvidence,
+    runtimeStatus: toRuntimeStatusView(result),
+  };
+}
+
 function readText(record: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const value = record[key];
@@ -136,9 +172,7 @@ export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisi
   const missingEvidence = Array.isArray(missingEvidenceRaw)
     ? missingEvidenceRaw.filter((item): item is string => typeof item === "string")
     : [];
-  const activePosture = typeof resultRecord.active_posture === "string" ? resultRecord.active_posture : null;
-  const backend = typeof resultRecord.backend === "string" ? resultRecord.backend : null;
-  const verifyStatus = typeof resultRecord.verify_status === "string" ? resultRecord.verify_status : null;
+  const runtimeStatus = toRuntimeStatusView(result);
   const gateDecision = readText(resultRecord, "gate_decision", "decision_status");
   return {
     gateDecision,
@@ -148,9 +182,9 @@ export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisi
     requiredEvidence,
     missingEvidence,
     humanReviewRequired: result.human_review_required === true,
-    activePosture,
-    backend,
-    verifyStatus,
+    activePosture: runtimeStatus.activePosture,
+    backend: runtimeStatus.backend,
+    verifyStatus: runtimeStatus.verifyStatus,
   };
 }
 

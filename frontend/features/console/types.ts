@@ -86,6 +86,26 @@ export interface DecisionResultView {
   rejectedReasons: DecisionRejectedReasonsView;
 }
 
+
+export type ConsoleViewerRole = "auditor" | "operator" | "developer";
+
+export interface RuntimeStatusView {
+  activePosture: string;
+  backend: string;
+  verifyStatus: string;
+}
+
+export interface EvidenceBundleDraft {
+  requestId: string;
+  generatedAt: string;
+  gateDecision: string;
+  businessDecision: string;
+  nextAction: string;
+  humanReviewRequired: boolean;
+  requiredEvidence: string[];
+  missingEvidence: string[];
+  runtimeStatus: RuntimeStatusView;
+}
 export interface PublicDecisionSchemaView {
   gateDecision: string;
   gateDecisionLabel: string;
@@ -94,9 +114,9 @@ export interface PublicDecisionSchemaView {
   requiredEvidence: string[];
   missingEvidence: string[];
   humanReviewRequired: boolean;
-  activePosture: string | null;
-  backend: string | null;
-  verifyStatus: string | null;
+  activePosture: string;
+  backend: string;
+  verifyStatus: string;
 }
 
 export interface FujiViolationView {

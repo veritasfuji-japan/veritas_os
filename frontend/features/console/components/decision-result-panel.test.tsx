@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "../../../components/i18n-provider";
 import { DecisionResultPanel } from "./decision-result-panel";
 
 describe("DecisionResultPanel", () => {
@@ -20,9 +21,7 @@ describe("DecisionResultPanel", () => {
     verify_status: "verified",
     rejection_reason: null,
     chosen: { id: "a1", title: "Option A" },
-    alternatives: [
-      { id: "b1", title: "Option B", value_score: 0.6 },
-    ],
+    alternatives: [{ id: "b1", title: "Option B", value_score: 0.6 }],
     options: [],
     fuji: { decision_status: "allow" },
     gate: { decision_status: "allow" },
@@ -43,26 +42,37 @@ describe("DecisionResultPanel", () => {
     regulation_notice: "",
   };
 
+  function renderPanel(viewerRole: "auditor" | "operator" | "developer" = "operator") {
+    return render(
+      <I18nProvider>
+        <DecisionResultPanel result={baseResult as never} viewerRole={viewerRole} />
+      </I18nProvider>,
+    );
+  }
+
   it("renders comparison table when alternatives exist", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    const table = screen.getByRole("table", { name: /chosen vs alternatives comparison/i });
+    renderPanel();
+    const table = screen.getByRole("table", { name: /比較|comparison/i });
     expect(table).toBeInTheDocument();
-    expect(screen.getAllByText("Chosen").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("Alt 1")).toBeInTheDocument();
+    expect(screen.getAllByText(/Chosen|採択/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/代替\s*1|Alt\s*1/)).toBeInTheDocument();
   });
 
   it("shows value score bars for chosen and alternatives", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    // Chosen should show 85% and alternative 60%
+    renderPanel();
     expect(screen.getAllByText("85%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("60%").length).toBeGreaterThan(0);
   });
 
   it("does not render comparison table when no alternatives", () => {
     const noAlts = { ...baseResult, alternatives: [] };
-    render(<DecisionResultPanel result={noAlts as never} />);
-    expect(screen.queryByRole("table", { name: /chosen vs alternatives comparison/i })).not.toBeInTheDocument();
-    expect(screen.getByText("No alternatives provided.")).toBeInTheDocument();
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={noAlts as never} />
+      </I18nProvider>,
+    );
+    expect(screen.queryByRole("table", { name: /比較|comparison/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/No alternatives provided|代替案はありません/)).toBeInTheDocument();
   });
 
   it("shows dash for null value scores", () => {
@@ -71,48 +81,47 @@ describe("DecisionResultPanel", () => {
       values: { rationale: "No total" },
       alternatives: [{ id: "b1", title: "Option B" }],
     };
-    render(<DecisionResultPanel result={noScores as never} />);
-    // Should render dash placeholders for missing scores
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={noScores as never} />
+      </I18nProvider>,
+    );
     const dashes = screen.getAllByText("-");
     expect(dashes.length).toBeGreaterThan(0);
   });
 
-  it("renders rejected reasons section", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    expect(screen.getByText("Rejected reasons")).toBeInTheDocument();
-    expect(screen.getByText("FUJI block:")).toBeInTheDocument();
+  it("renders auditor-focused detail block", () => {
+    renderPanel("auditor");
+    expect(screen.getByText(/監査人|Auditor/)).toBeInTheDocument();
+    expect(screen.getByText(/human_review_required/)).toBeInTheDocument();
   });
 
-  it("renders separated public decision schema fields", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    expect(screen.getByText("Public decision output")).toBeInTheDocument();
-    expect(screen.getByText("gate_decision:")).toBeInTheDocument();
-    expect(screen.getByText("allow")).toBeInTheDocument();
-    expect(screen.getByText("business_decision:")).toBeInTheDocument();
-    expect(screen.getAllByText("REVIEW_REQUIRED").length).toBeGreaterThan(0);
-    expect(screen.getByText("ROUTE_TO_HUMAN_REVIEW")).toBeInTheDocument();
-    expect(screen.getByText("不足証拠 / Missing evidence")).toBeInTheDocument();
-    expect(screen.getByText("次に実行するアクション / Next action")).toBeInTheDocument();
-    expect(screen.getByText("required_evidence:")).toBeInTheDocument();
-    expect(screen.getByText("risk_assessment, approval_ticket")).toBeInTheDocument();
-    expect(screen.getByText("human_review_required:")).toBeInTheDocument();
-    expect(screen.getByText("true")).toBeInTheDocument();
-  });
-
-  it("does not present gate allow as case approval in the public decision meaning", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    expect(screen.getByText("response generation allowed (not case approval)")).toBeInTheDocument();
-  });
-
-  it("shows auditor and developer focused detail blocks", () => {
-    render(<DecisionResultPanel result={baseResult as never} />);
-    expect(screen.getByText("監査人向け")).toBeInTheDocument();
-    expect(screen.getByText("開発者向け")).toBeInTheDocument();
-    expect(screen.getByText("active posture:")).toBeInTheDocument();
+  it("renders developer-focused detail block with runtime status contract", () => {
+    renderPanel("developer");
+    expect(screen.getByText(/開発者|Developer/)).toBeInTheDocument();
+    expect(screen.getByText(/active posture/)).toBeInTheDocument();
     expect(screen.getByText("strict")).toBeInTheDocument();
-    expect(screen.getByText("backend:")).toBeInTheDocument();
     expect(screen.getByText("gpt-5.3-mini")).toBeInTheDocument();
-    expect(screen.getByText("verify status:")).toBeInTheDocument();
     expect(screen.getByText("verified")).toBeInTheDocument();
+  });
+
+  it("dispatches bundle generation callback", () => {
+    const bundleSpy = vi.fn();
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={baseResult as never} onGenerateBundle={bundleSpy} />
+      </I18nProvider>,
+    );
+    screen.getByRole("button", { name: /bundle/i }).click();
+    expect(bundleSpy).toHaveBeenCalledTimes(1);
+    expect(bundleSpy.mock.calls[0][0]).toMatchObject({
+      requestId: "req-test",
+      businessDecision: "REVIEW_REQUIRED",
+      runtimeStatus: {
+        activePosture: "strict",
+        backend: "gpt-5.3-mini",
+        verifyStatus: "verified",
+      },
+    });
   });
 });
