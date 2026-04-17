@@ -487,6 +487,9 @@ class TestEvidenceBundleGeneration:
         assert result["entry_count"] == 1
         assert "manifest.json" in result["files"]
         assert "witness_entries.jsonl" in result["files"]
+        assert "acceptance_checklist.json" in result["files"]
+        assert "README.txt" in result["files"]
+        assert "ui_delivery_hook.json" in result["files"]
 
         # Verify manifest on disk
         bundle_dir = Path(result["bundle_dir"])
@@ -498,6 +501,32 @@ class TestEvidenceBundleGeneration:
         assert decision_record["decision_payload"]["request_id"] == "r-bundle-1"
         assert "trustlog_references" in decision_record
         assert decision_record["verification"]["report_path"] == "verification_report.json"
+        assert "runtime_context" not in decision_record
+
+    def test_decision_bundle_full_profile_contains_full_fields(self, _trustlog_env):
+        """Decision full profile includes runtime and evidence fields."""
+        env = _trustlog_env
+        output_dir = env["tmp_path"] / "bundles"
+
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-bundle-full", "decision": "allow"}
+        )
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+
+        result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=output_dir,
+            request_ids=["r-bundle-full"],
+            decision_record_profile="full",
+        )
+
+        bundle_dir = Path(result["bundle_dir"])
+        decision_record = json.loads((bundle_dir / "decision_record.json").read_text())
+        assert "runtime_context" in decision_record
+        assert "required_evidence" in decision_record
+        assert "human_review_required" in decision_record
 
     def test_incident_bundle_generation(self, _trustlog_env):
         """Generate an incident evidence bundle with multiple entries."""
@@ -649,6 +678,33 @@ class TestEvidenceBundleVerification:
         assert verify_result["ok"] is True
         assert verify_result["tampered"] is False
         assert not verify_result["errors"]
+
+    def test_verify_bundle_regression_with_contract_artifacts(self, _trustlog_env):
+        """Verification remains green with README/checklist/UI hook artifacts."""
+        env = _trustlog_env
+        output_dir = env["tmp_path"] / "bundles"
+
+        trustlog_signed.append_signed_decision(
+            {"request_id": "r-regression", "decision": "allow"}
+        )
+
+        from veritas_os.audit.evidence_bundle import generate_evidence_bundle
+        from veritas_os.audit.verify_bundle import verify_evidence_bundle
+
+        result = generate_evidence_bundle(
+            bundle_type="decision",
+            witness_ledger_path=env["log_path"],
+            output_dir=output_dir,
+            request_ids=["r-regression"],
+            decision_record_profile="minimum",
+        )
+        bundle_dir = Path(result["bundle_dir"])
+        checklist = json.loads((bundle_dir / "acceptance_checklist.json").read_text())
+        checklist_ids = {item["id"] for item in checklist["items"]}
+        assert "decision_record_contract" in checklist_ids
+
+        verify_result = verify_evidence_bundle(bundle_dir)
+        assert verify_result["ok"] is True
 
     def test_detect_tampered_file(self, _trustlog_env):
         """Verification detects tampered witness entries file."""
@@ -867,8 +923,14 @@ class TestEvidenceBundleSchema:
         assert "bundle_id" in MANIFEST_REQUIRED_FIELDS
 
     def test_decision_snapshot_required_fields(self):
-        from veritas_os.audit.evidence_bundle_schema import DECISION_SNAPSHOT_REQUIRED_FIELDS
+        from veritas_os.audit.evidence_bundle_schema import (
+            DECISION_SNAPSHOT_FULL_REQUIRED_FIELDS,
+            DECISION_SNAPSHOT_MINIMUM_REQUIRED_FIELDS,
+            DECISION_SNAPSHOT_REQUIRED_FIELDS,
+        )
 
         assert "gate_decision" in DECISION_SNAPSHOT_REQUIRED_FIELDS
         assert "business_decision" in DECISION_SNAPSHOT_REQUIRED_FIELDS
         assert "next_action" in DECISION_SNAPSHOT_REQUIRED_FIELDS
+        assert "runtime_context" in DECISION_SNAPSHOT_FULL_REQUIRED_FIELDS
+        assert "runtime_context" not in DECISION_SNAPSHOT_MINIMUM_REQUIRED_FIELDS

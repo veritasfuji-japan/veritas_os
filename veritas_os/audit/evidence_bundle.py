@@ -55,6 +55,84 @@ def _utc_now_iso8601() -> str:
     )
 
 
+def _build_acceptance_checklist(
+    bundle_type: str,
+    written_files: Sequence[str],
+    *,
+    decision_record_profile: str,
+) -> Dict[str, Any]:
+    """Build acceptance checklist used for external audit submission gating."""
+    written = set(written_files)
+    checklist = [
+        {
+            "id": "manifest_integrity",
+            "title": "Manifest and file hashes exist",
+            "required": True,
+            "status": "pass" if "manifest.json" in written else "fail",
+            "evidence": ["manifest.json"],
+        },
+        {
+            "id": "witness_entries_present",
+            "title": "Witness entries included",
+            "required": True,
+            "status": "pass" if "witness_entries.jsonl" in written else "fail",
+            "evidence": ["witness_entries.jsonl"],
+        },
+        {
+            "id": "verification_report_present",
+            "title": "Verification report included",
+            "required": True,
+            "status": "pass" if "verification_report.json" in written else "fail",
+            "evidence": ["verification_report.json"],
+        },
+        {
+            "id": "decision_record_contract",
+            "title": "Decision record contract profile declared",
+            "required": bundle_type == "decision",
+            "status": (
+                "pass" if bundle_type != "decision" or "decision_record.json" in written else "fail"
+            ),
+            "evidence": ["decision_record.json"] if bundle_type == "decision" else [],
+            "details": {"profile": decision_record_profile},
+        },
+    ]
+    return {"bundle_type": bundle_type, "items": checklist}
+
+
+def _build_bundle_readme(
+    bundle_type: str,
+    *,
+    bundle_id: str,
+    decision_record_profile: str,
+) -> str:
+    """Create a human-readable README shipped with each evidence bundle."""
+    lines = [
+        "VERITAS External Evidence Bundle",
+        "================================",
+        "",
+        f"Bundle ID: {bundle_id}",
+        f"Bundle Type: {bundle_type}",
+        f"Generated At (UTC): {_utc_now_iso8601()}",
+        "",
+        "Submission contract",
+        "-------------------",
+        "- decision_record minimum set: required for baseline external review",
+        "- decision_record full set: required for legal/deep forensic review",
+        f"- declared profile for this bundle: {decision_record_profile}",
+        "",
+        "Acceptance checklist",
+        "--------------------",
+        "- See acceptance_checklist.json and mark each item PASS before handoff.",
+        "",
+        "Verification",
+        "------------",
+        "- Run: veritas-evidence-bundle verify --bundle-dir <this-directory>",
+        "- Inspect verification_report.json for chain and signature status.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _sha256_file(path: Path) -> str:
     """Compute SHA-256 hex digest of a file."""
     h = hashlib.sha256()
@@ -220,6 +298,7 @@ def generate_evidence_bundle(
     incident_metadata: Optional[Dict[str, Any]] = None,
     signer_fn: Optional[Callable[[str], str]] = None,
     signer_metadata: Optional[Dict[str, Any]] = None,
+    decision_record_profile: str = "minimum",
     bundle_id: Optional[str] = None,
     created_by: str = "veritas_os",
 ) -> Dict[str, Any]:
@@ -237,6 +316,7 @@ def generate_evidence_bundle(
         incident_metadata: Optional incident metadata.
         signer_fn: Optional callable that signs a payload hash and returns base64.
         signer_metadata: Optional signer metadata dict.
+        decision_record_profile: Contract profile used for decision_record.json.
         bundle_id: Optional explicit bundle ID (default: auto-generated UUIDv7).
         created_by: Creator identifier.
 
@@ -248,6 +328,10 @@ def generate_evidence_bundle(
     """
     if bundle_type not in BUNDLE_TYPES:
         raise ValueError(f"Invalid bundle_type: {bundle_type}. Expected one of {BUNDLE_TYPES}")
+    if decision_record_profile not in {"minimum", "full"}:
+        raise ValueError(
+            "Invalid decision_record_profile. Expected one of ['minimum', 'full']"
+        )
 
     if not bundle_id:
         bundle_id = _uuid7()
@@ -366,8 +450,50 @@ def generate_evidence_bundle(
     if bundle_type == "decision":
         decision_entry = entries[0]
         decision_record = _decision_record(decision_entry, verify_result)
+        if decision_record_profile == "minimum":
+            decision_record = {
+                "decision_payload": decision_record["decision_payload"],
+                "gate_decision": decision_record["gate_decision"],
+                "business_decision": decision_record["business_decision"],
+                "next_action": decision_record["next_action"],
+                "trustlog_references": decision_record["trustlog_references"],
+                "verification": decision_record["verification"],
+                "provenance": decision_record["provenance"],
+            }
         _write_json_file(bundle_dir, "decision_record.json", decision_record)
         written_files.append("decision_record.json")
+
+    acceptance_checklist = _build_acceptance_checklist(
+        bundle_type,
+        tuple(sorted(written_files)),
+        decision_record_profile=decision_record_profile,
+    )
+    _write_json_file(bundle_dir, "acceptance_checklist.json", acceptance_checklist)
+    written_files.append("acceptance_checklist.json")
+
+    bundle_readme = _build_bundle_readme(
+        bundle_type,
+        bundle_id=bundle_id,
+        decision_record_profile=decision_record_profile,
+    )
+    readme_path = bundle_dir / "README.txt"
+    readme_path.write_text(bundle_readme, encoding="utf-8")
+    written_files.append("README.txt")
+
+    _write_json_file(
+        bundle_dir,
+        "ui_delivery_hook.json",
+        {
+            "hook_version": "1.0",
+            "bundle_id": bundle_id,
+            "bundle_type": bundle_type,
+            "decision_record_profile": decision_record_profile,
+            "acceptance_checklist_path": "acceptance_checklist.json",
+            "readme_path": "README.txt",
+            "verify_command": "veritas-evidence-bundle verify --bundle-dir <bundle_dir>",
+        },
+    )
+    written_files.append("ui_delivery_hook.json")
 
     # Compute file hashes for manifest
     file_hashes = _collect_file_hashes(bundle_dir)
@@ -382,6 +508,12 @@ def generate_evidence_bundle(
         "contents": sorted(written_files),
         "file_hashes": file_hashes,
         "entry_count": len(entries),
+        "delivery_contract": {
+            "decision_record_profile": decision_record_profile,
+            "acceptance_checklist_path": "acceptance_checklist.json",
+            "readme_path": "README.txt",
+            "ui_delivery_hook_path": "ui_delivery_hook.json",
+        },
         "time_range": {
             "earliest": entries[0].get("timestamp") if entries else None,
             "latest": entries[-1].get("timestamp") if entries else None,

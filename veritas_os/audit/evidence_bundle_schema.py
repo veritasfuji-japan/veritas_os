@@ -24,8 +24,19 @@ MANIFEST_REQUIRED_FIELDS = frozenset({
     "entry_count",
 })
 
-#: Required keys for the decision snapshot payload used in decision bundles.
-DECISION_SNAPSHOT_REQUIRED_FIELDS = frozenset({
+#: Required keys for the decision snapshot payload minimum contract.
+DECISION_SNAPSHOT_MINIMUM_REQUIRED_FIELDS = frozenset({
+    "decision_payload",
+    "gate_decision",
+    "business_decision",
+    "next_action",
+    "trustlog_references",
+    "verification",
+    "provenance",
+})
+
+#: Required keys for the decision snapshot full contract.
+DECISION_SNAPSHOT_FULL_REQUIRED_FIELDS = frozenset({
     "decision_payload",
     "gate_decision",
     "business_decision",
@@ -37,6 +48,11 @@ DECISION_SNAPSHOT_REQUIRED_FIELDS = frozenset({
     "provenance",
     "runtime_context",
 })
+
+#: Backwards-compatible alias for the strict/full requirement set.
+DECISION_SNAPSHOT_REQUIRED_FIELDS = DECISION_SNAPSHOT_FULL_REQUIRED_FIELDS
+
+DECISION_RECORD_PROFILES = frozenset({"minimum", "full"})
 
 #: Valid bundle types.
 BUNDLE_TYPES = frozenset({"decision", "incident", "release"})
@@ -52,6 +68,9 @@ BUNDLE_TYPE_CONTENTS = {
             "verification_report.json",
             "signer_metadata.json",
             "governance_identity.json",
+            "acceptance_checklist.json",
+            "README.txt",
+            "ui_delivery_hook.json",
         ],
     },
     "incident": {
@@ -64,6 +83,9 @@ BUNDLE_TYPE_CONTENTS = {
             "signer_metadata.json",
             "governance_identity.json",
             "incident_metadata.json",
+            "acceptance_checklist.json",
+            "README.txt",
+            "ui_delivery_hook.json",
         ],
     },
     "release": {
@@ -76,20 +98,32 @@ BUNDLE_TYPE_CONTENTS = {
             "signer_metadata.json",
             "governance_identity.json",
             "release_provenance.json",
+            "acceptance_checklist.json",
+            "README.txt",
+            "ui_delivery_hook.json",
         ],
     },
 }
 
 
-def validate_decision_snapshot_shape(payload: dict) -> list[str]:
+def validate_decision_snapshot_shape(payload: dict, profile: str = "minimum") -> list[str]:
     """Validate required fields for ``decision_record.json``.
 
     Returns a list of human-readable validation errors.
     """
     errors: list[str] = []
-    missing = DECISION_SNAPSHOT_REQUIRED_FIELDS - set(payload.keys())
+    if profile not in DECISION_RECORD_PROFILES:
+        errors.append(f"decision_record profile must be one of {sorted(DECISION_RECORD_PROFILES)}")
+        return errors
+
+    required_fields = (
+        DECISION_SNAPSHOT_MINIMUM_REQUIRED_FIELDS
+        if profile == "minimum"
+        else DECISION_SNAPSHOT_FULL_REQUIRED_FIELDS
+    )
+    missing = required_fields - set(payload.keys())
     if missing:
-        errors.append(f"decision_record missing fields: {sorted(missing)}")
+        errors.append(f"decision_record missing fields ({profile}): {sorted(missing)}")
 
     if "required_evidence" in payload and not isinstance(payload.get("required_evidence"), list):
         errors.append("decision_record.required_evidence must be a list")
@@ -106,5 +140,9 @@ def validate_decision_snapshot_shape(payload: dict) -> list[str]:
     verification = payload.get("verification")
     if verification is not None and not isinstance(verification, dict):
         errors.append("decision_record.verification must be an object")
+
+    decision_payload = payload.get("decision_payload")
+    if decision_payload is not None and not isinstance(decision_payload, dict):
+        errors.append("decision_record.decision_payload must be an object")
 
     return errors

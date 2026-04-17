@@ -114,6 +114,12 @@ def verify_evidence_bundle(
                 result["tampered"] = True
 
     if bundle_type == "decision":
+        delivery_contract = manifest.get("delivery_contract", {})
+        decision_profile = "minimum"
+        if isinstance(delivery_contract, dict):
+            maybe_profile = delivery_contract.get("decision_record_profile")
+            if isinstance(maybe_profile, str):
+                decision_profile = maybe_profile
         decision_record_path = bundle_dir / "decision_record.json"
         if decision_record_path.exists():
             try:
@@ -122,13 +128,20 @@ def verify_evidence_bundle(
                 errors.append(f"Failed to read decision_record.json: {exc}")
                 result["tampered"] = True
             else:
-                shape_errors = validate_decision_snapshot_shape(decision_record)
+                shape_errors = validate_decision_snapshot_shape(
+                    decision_record,
+                    profile=decision_profile,
+                )
                 if shape_errors:
                     errors.extend(shape_errors)
                     result["tampered"] = True
         else:
             errors.append("decision bundle missing decision_record.json")
             result["tampered"] = True
+
+    checklist_path = bundle_dir / "acceptance_checklist.json"
+    if not checklist_path.exists():
+        warnings.append("acceptance_checklist.json not found")
 
     # Verify file hashes
     expected_hashes = manifest.get("file_hashes", {})
