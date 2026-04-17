@@ -66,8 +66,8 @@ describe("DecisionConsolePage", () => {
     fireEvent.click(screen.getByRole("button", { name: "送信" }));
 
     await waitFor(() => {
-      expect(screen.getByText("final decision:", { exact: false })).toBeInTheDocument();
-      expect(screen.getByText("Rejected reasons")).toBeInTheDocument();
+      expect(screen.getByText(/最終判断:|final decision:/)).toBeInTheDocument();
+      expect(screen.getByText(/却下理由|Rejected reasons/)).toBeInTheDocument();
       expect(screen.getByText("Cost-Benefit Analytics")).toBeInTheDocument();
       expect(screen.getByText("Total Token Cost")).toBeInTheDocument();
       expect(screen.getByRole("list", { name: "チャットメッセージ一覧" })).toBeInTheDocument();

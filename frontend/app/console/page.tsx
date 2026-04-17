@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { type ConsoleViewerRole } from "../../features/console/types";
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
 import { renderValue, toArray } from "../../features/console/analytics/utils";
@@ -34,6 +35,7 @@ export default function DecisionConsolePage(): JSX.Element {
     governanceDriftAlert,
   } = useConsoleState();
   const [activeResultTab, setActiveResultTab] = useState<"insights" | "raw">("insights");
+  const [viewerRole, setViewerRole] = useState<ConsoleViewerRole>("operator");
 
   const { loading, error, executionStatus, latestEvent, notifySseActivity, runDecision } = useDecide({
     t,
@@ -116,7 +118,19 @@ export default function DecisionConsolePage(): JSX.Element {
         {result ? (
           <div className="space-y-4">
             <EUAIActDisclosure result={result} />
-            <DecisionResultPanel result={result} />
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-muted-foreground">Viewer role:</span>
+              <select
+                className="rounded-md border border-border bg-background px-2 py-1"
+                value={viewerRole}
+                onChange={(event) => setViewerRole(event.target.value as ConsoleViewerRole)}
+              >
+                <option value="auditor">Auditor</option>
+                <option value="operator">Operator</option>
+                <option value="developer">Developer</option>
+              </select>
+            </div>
+            <DecisionResultPanel result={result} viewerRole={viewerRole} />
             <div className="grid gap-3 md:grid-cols-3">
               <ResultSection title="Evidence sources" value={toArray(result.evidence).map((item) => (item as Record<string, unknown>).source)} />
               <ResultSection title="Critique highlights" value={toArray(result.critique).slice(0, 5)} />

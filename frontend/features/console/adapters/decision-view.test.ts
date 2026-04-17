@@ -1,6 +1,12 @@
 import { type DecideResponse } from "@veritas/types";
 import { describe, expect, it } from "vitest";
-import { toDecisionResultView, toFujiGateDetailView, toPublicDecisionSchemaView } from "./decision-view";
+import {
+  toDecisionResultView,
+  toEvidenceBundleDraft,
+  toFujiGateDetailView,
+  toPublicDecisionSchemaView,
+  toRuntimeStatusView,
+} from "./decision-view";
 
 function makeResponse(overrides: Partial<DecideResponse> = {}): DecideResponse {
   return {
@@ -156,5 +162,45 @@ describe("toPublicDecisionSchemaView", () => {
     const result = makeResponse({ gate_decision: "allow" } as never);
     const view = toPublicDecisionSchemaView(result);
     expect(view.gateDecisionLabel).toBe("response generation allowed (not case approval)");
+  });
+});
+
+
+describe("runtime status + bundle mapping", () => {
+  it("normalizes runtime status fields with fallback", () => {
+    const result = makeResponse({
+      active_posture: "",
+      backend: "gpt-5.3-mini",
+      verify_status: undefined,
+    } as never);
+    const view = toRuntimeStatusView(result);
+    expect(view).toEqual({
+      activePosture: "n/a",
+      backend: "gpt-5.3-mini",
+      verifyStatus: "n/a",
+    });
+  });
+
+  it("creates evidence bundle draft contract", () => {
+    const result = makeResponse({
+      request_id: "req-bundle",
+      gate_decision: "hold",
+      business_decision: "REVIEW_REQUIRED",
+      next_action: "ROUTE_TO_HUMAN_REVIEW",
+      required_evidence: ["approval_ticket"],
+      missing_evidence: ["approval_ticket"],
+      active_posture: "strict",
+      backend: "gpt-5.3-mini",
+      verify_status: "verified",
+    } as never);
+
+    const bundle = toEvidenceBundleDraft(result);
+    expect(bundle.requestId).toBe("req-bundle");
+    expect(bundle.businessDecision).toBe("REVIEW_REQUIRED");
+    expect(bundle.runtimeStatus).toEqual({
+      activePosture: "strict",
+      backend: "gpt-5.3-mini",
+      verifyStatus: "verified",
+    });
   });
 });

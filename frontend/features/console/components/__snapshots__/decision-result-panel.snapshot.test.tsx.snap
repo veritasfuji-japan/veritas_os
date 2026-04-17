@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`DecisionResultPanel snapshots > renders financial human-review scenario without regression 1`] = `
+exports[`DecisionResultPanel snapshots > renders four fixture states without regression > ambiguity_human_review 1`] = `
 <div
   class="space-y-3"
 >
@@ -8,7 +8,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
     class="overflow-x-auto rounded-md border border-border bg-background/60"
   >
     <table
-      aria-label="chosen vs alternatives comparison"
+      aria-label="採択案と代替案の比較"
       class="min-w-full text-xs"
     >
       <thead
@@ -18,22 +18,22 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <th
             class="px-2 py-1.5"
           >
-            Option
+            選択肢
           </th>
           <th
             class="px-2 py-1.5"
           >
-            Summary
+            要約
           </th>
           <th
             class="px-2 py-1.5"
           >
-            Value Score
+            価値スコア
           </th>
           <th
             class="px-2 py-1.5"
           >
-            Trade-off / Weakness
+            トレードオフ / 弱み
           </th>
         </tr>
       </thead>
@@ -47,7 +47,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
             <span
               class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
             >
-              Chosen
+              採択
             </span>
           </td>
           <td
@@ -64,21 +64,21 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
               <span
                 class="text-muted-foreground"
               >
-                value
+                価値スコア
                 :
               </span>
               <div
                 class="relative h-2 w-20 rounded-full bg-muted/30"
               >
                 <div
-                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
-                  style="width: 72%;"
+                  class="absolute inset-y-0 left-0 rounded-full bg-amber-500"
+                  style="width: 56%;"
                 />
               </div>
               <span
                 class="font-mono text-foreground"
               >
-                72
+                56
                 %
               </span>
             </div>
@@ -98,7 +98,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
             <span
               class="text-[10px] text-muted-foreground"
             >
-              Alt 
+              代替
+               
               1
             </span>
           </td>
@@ -116,7 +117,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
               <span
                 class="text-muted-foreground"
               >
-                value
+                価値スコア
                 :
               </span>
               <div
@@ -156,13 +157,14 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <h3
           class="text-sm font-semibold text-foreground"
         >
-          Public decision output
+          公開判定出力
         </h3>
         <p>
           <span
             class="text-muted-foreground"
           >
-            gate_decision:
+            gate_decision
+            :
           </span>
            
           human_review_required
@@ -171,7 +173,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            gate meaning:
+            gate の意味
+            :
           </span>
            
           gate status
@@ -180,16 +183,18 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            business_decision:
+            business_decision
+            :
           </span>
            
-          REVIEW_REQUIRED
+          AMBIGUOUS_HUMAN_REVIEW
         </p>
         <p>
           <span
             class="text-muted-foreground"
           >
-            human_review_required:
+            human_review_required
+            :
           </span>
            
           true
@@ -204,7 +209,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <h4
             class="font-semibold text-foreground"
           >
-            不足証拠 / Missing evidence
+            不足証拠
           </h4>
           <ul
             class="list-disc space-y-1 pl-4"
@@ -212,17 +217,18 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
             <li
               class="font-mono text-[11px] text-foreground"
             >
-              source_of_funds_attestation
+              analyst_commentary
             </li>
           </ul>
           <p>
             <span
               class="text-muted-foreground"
             >
-              required_evidence:
+              required_evidence
+              :
             </span>
              
-            kyc_verification, source_of_funds_attestation, aml_screening_receipt
+            analyst_commentary, beneficiary_background
           </p>
         </article>
         <article
@@ -231,7 +237,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <h4
             class="font-semibold text-foreground"
           >
-            次に実行するアクション / Next action
+            次に実行するアクション
           </h4>
           <p
             class="font-mono text-[11px] text-foreground"
@@ -252,7 +258,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
       <h3
         class="text-sm font-semibold text-foreground"
       >
-        Viewer focus
+        閲覧者別フォーカス
       </h3>
       <div
         class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
@@ -260,62 +266,58 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <p
           class="font-medium text-foreground"
         >
-          監査人向け
+          監査人
         </p>
         <p>
           <span
             class="text-muted-foreground"
           >
-            判定:
+            判定
+            :
           </span>
            
-          REVIEW_REQUIRED
+          AMBIGUOUS_HUMAN_REVIEW
         </p>
         <p>
           <span
             class="text-muted-foreground"
           >
-            人手審査:
+            人手審査
+            :
           </span>
            
           必須
         </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            required_evidence
+            :
+          </span>
+           
+          2
+        </p>
       </div>
       <div
-        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+        class="rounded-md border border-border/70 bg-background/70 p-2"
       >
         <p
           class="font-medium text-foreground"
         >
-          開発者向け
+          監査証跡バンドル
         </p>
-        <p>
-          <span
-            class="text-muted-foreground"
-          >
-            active posture:
-          </span>
-           
-          strict
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
         </p>
-        <p>
-          <span
-            class="text-muted-foreground"
-          >
-            backend:
-          </span>
-           
-          gpt-5.3-mini
-        </p>
-        <p>
-          <span
-            class="text-muted-foreground"
-          >
-            verify status:
-          </span>
-           
-          anchored
-        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
       </div>
     </section>
     <section
@@ -324,13 +326,14 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
       <h3
         class="text-sm font-semibold text-foreground"
       >
-        Chosen
+        採択案
       </h3>
       <p>
         <span
           class="text-muted-foreground"
         >
-          final decision:
+          最終判断
+          :
         </span>
          
         Route to specialist review queue
@@ -339,7 +342,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          why chosen:
+          採択理由
+          :
         </span>
          
         n/a
@@ -348,7 +352,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          supporting evidence summary:
+          証拠サマリ
+          :
         </span>
          
         kyc_system
@@ -357,10 +362,11 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          value rationale:
+          価値根拠
+          :
         </span>
          
-        Human oversight required for high-risk transaction.
+        Ambiguous risk signals need reviewer judgment.
       </p>
       <div
         class="flex items-center gap-2"
@@ -368,21 +374,21 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          value score
+          価値スコア
           :
         </span>
         <div
           class="relative h-2 w-20 rounded-full bg-muted/30"
         >
           <div
-            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
-            style="width: 72%;"
+            class="absolute inset-y-0 left-0 rounded-full bg-amber-500"
+            style="width: 56%;"
           />
         </div>
         <span
           class="font-mono text-foreground"
         >
-          72
+          56
           %
         </span>
       </div>
@@ -393,7 +399,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
       <h3
         class="text-sm font-semibold text-foreground"
       >
-        Alternatives
+        代替案
       </h3>
       <div
         class="rounded border border-border/70 bg-background/70 p-2"
@@ -402,7 +408,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            option summary:
+            選択肢要約
+            :
           </span>
            
           Collect evidence and re-evaluate
@@ -411,7 +418,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            trade-off:
+            trade-off
+            :
           </span>
            
           n/a
@@ -420,7 +428,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            relative weakness:
+            相対的弱み
+            :
           </span>
            
           n/a
@@ -431,7 +440,7 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
           <span
             class="text-muted-foreground"
           >
-            value score
+            価値スコア
             :
           </span>
           <div
@@ -457,13 +466,24 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
       <h3
         class="text-sm font-semibold text-foreground"
       >
-        Rejected reasons
+        却下理由
       </h3>
       <p>
         <span
           class="text-muted-foreground"
         >
-          FUJI block:
+          FUJI block
+          :
+        </span>
+         
+        Conflicting risk indicators
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
         </span>
          
         n/a
@@ -472,16 +492,8 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          weak evidence:
-        </span>
-         
-        n/a
-      </p>
-      <p>
-        <span
-          class="text-muted-foreground"
-        >
-          poor debate outcome:
+          討論結果の弱さ
+          :
         </span>
          
         Debate did not provide decisive support.
@@ -490,7 +502,3075 @@ exports[`DecisionResultPanel snapshots > renders financial human-review scenario
         <span
           class="text-muted-foreground"
         >
-          value conflict:
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders four fixture states without regression > block 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Route to specialist review queue
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-red-500"
+                  style="width: 19%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                19
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          block
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          blocked by gate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          DENY
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          true
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <ul
+            class="list-disc space-y-1 pl-4"
+          >
+            <li
+              class="font-mono text-[11px] text-foreground"
+            >
+              regulatory_exception_ticket
+            </li>
+          </ul>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            regulatory_exception_ticket
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            DO_NOT_EXECUTE
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査人
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            判定
+            :
+          </span>
+           
+          DENY
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            人手審査
+            :
+          </span>
+           
+          必須
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            required_evidence
+            :
+          </span>
+           
+          1
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Route to specialist review queue
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        Risk exceeds permitted threshold.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-red-500"
+            style="width: 19%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          19
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        Sanctions match unresolved
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders four fixture states without regression > evidence_required 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Route to specialist review queue
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-amber-500"
+                  style="width: 42%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                42
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          hold
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          gate hold
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          EVIDENCE_REQUIRED
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          false
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <ul
+            class="list-disc space-y-1 pl-4"
+          >
+            <li
+              class="font-mono text-[11px] text-foreground"
+            >
+              source_of_funds_attestation
+            </li>
+            <li
+              class="font-mono text-[11px] text-foreground"
+            >
+              beneficiary_verification
+            </li>
+          </ul>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            source_of_funds_attestation, beneficiary_verification
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            COLLECT_EVIDENCE_AND_REEVALUATE
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          運用者
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            次に実行するアクション
+            :
+          </span>
+           
+          COLLECT_EVIDENCE_AND_REEVALUATE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            不足証拠
+            :
+          </span>
+           
+          2
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          hold
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Route to specialist review queue
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        Decision quality is bounded by missing evidence.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-amber-500"
+            style="width: 42%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          42
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders four fixture states without regression > proceed 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Proceed with transfer
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 91%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                91
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          response generation allowed (not case approval)
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          APPROVE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          false
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <p
+            class="text-muted-foreground"
+          >
+            不足証拠はありません。
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            kyc_verification
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            EXECUTE_WITH_STANDARD_MONITORING
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          運用者
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            次に実行するアクション
+            :
+          </span>
+           
+          EXECUTE_WITH_STANDARD_MONITORING
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            不足証拠
+            :
+          </span>
+           
+          0
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Proceed with transfer
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        All controls satisfied.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            style="width: 91%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          91
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders role-based views without regression > auditor 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Proceed with transfer
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 91%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                91
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          response generation allowed (not case approval)
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          APPROVE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          false
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <p
+            class="text-muted-foreground"
+          >
+            不足証拠はありません。
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            kyc_verification
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            EXECUTE_WITH_STANDARD_MONITORING
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査人
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            判定
+            :
+          </span>
+           
+          APPROVE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            人手審査
+            :
+          </span>
+           
+          不要
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            required_evidence
+            :
+          </span>
+           
+          1
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Proceed with transfer
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        All controls satisfied.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            style="width: 91%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          91
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders role-based views without regression > developer 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Proceed with transfer
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 91%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                91
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          response generation allowed (not case approval)
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          APPROVE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          false
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <p
+            class="text-muted-foreground"
+          >
+            不足証拠はありません。
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            kyc_verification
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            EXECUTE_WITH_STANDARD_MONITORING
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          開発者
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            active posture
+            :
+          </span>
+           
+          strict
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            backend
+            :
+          </span>
+           
+          gpt-5.3-mini
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            verify status
+            :
+          </span>
+           
+          anchored
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Proceed with transfer
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        All controls satisfied.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            style="width: 91%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          91
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
+        </span>
+         
+        n/a
+      </p>
+    </section>
+  </div>
+</div>
+`;
+
+exports[`DecisionResultPanel snapshots > renders role-based views without regression > operator 1`] = `
+<div
+  class="space-y-3"
+>
+  <div
+    class="overflow-x-auto rounded-md border border-border bg-background/60"
+  >
+    <table
+      aria-label="採択案と代替案の比較"
+      class="min-w-full text-xs"
+    >
+      <thead
+        class="border-b border-border/70 text-left text-muted-foreground"
+      >
+        <tr>
+          <th
+            class="px-2 py-1.5"
+          >
+            選択肢
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            要約
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            価値スコア
+          </th>
+          <th
+            class="px-2 py-1.5"
+          >
+            トレードオフ / 弱み
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          class="border-b border-primary/20 bg-primary/5"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="inline-block rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary"
+            >
+              採択
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 font-medium text-foreground"
+          >
+            Proceed with transfer
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 91%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                91
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+        <tr
+          class="border-b border-border/50"
+        >
+          <td
+            class="px-2 py-1.5"
+          >
+            <span
+              class="text-[10px] text-muted-foreground"
+            >
+              代替
+               
+              1
+            </span>
+          </td>
+          <td
+            class="px-2 py-1.5 text-foreground"
+          >
+            Collect evidence and re-evaluate
+          </td>
+          <td
+            class="px-2 py-1.5"
+          >
+            <div
+              class="flex items-center gap-2"
+            >
+              <span
+                class="text-muted-foreground"
+              >
+                価値スコア
+                :
+              </span>
+              <div
+                class="relative h-2 w-20 rounded-full bg-muted/30"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+                  style="width: 71%;"
+                />
+              </div>
+              <span
+                class="font-mono text-foreground"
+              >
+                71
+                %
+              </span>
+            </div>
+          </td>
+          <td
+            class="px-2 py-1.5 text-muted-foreground"
+          >
+            n/a
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div
+    class="grid gap-3 md:grid-cols-3"
+  >
+    <section
+      class="space-y-3 rounded-md border border-border bg-background/60 p-3 text-xs md:col-span-2"
+    >
+      <header
+        class="space-y-2"
+      >
+        <h3
+          class="text-sm font-semibold text-foreground"
+        >
+          公開判定出力
+        </h3>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate の意味
+            :
+          </span>
+           
+          response generation allowed (not case approval)
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            business_decision
+            :
+          </span>
+           
+          APPROVE
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            human_review_required
+            :
+          </span>
+           
+          false
+        </p>
+      </header>
+      <div
+        class="grid gap-3 md:grid-cols-2"
+      >
+        <article
+          class="space-y-2 rounded-md border border-amber-400/40 bg-amber-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            不足証拠
+          </h4>
+          <p
+            class="text-muted-foreground"
+          >
+            不足証拠はありません。
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              required_evidence
+              :
+            </span>
+             
+            kyc_verification
+          </p>
+        </article>
+        <article
+          class="space-y-2 rounded-md border border-emerald-400/40 bg-emerald-500/5 p-3"
+        >
+          <h4
+            class="font-semibold text-foreground"
+          >
+            次に実行するアクション
+          </h4>
+          <p
+            class="font-mono text-[11px] text-foreground"
+          >
+            EXECUTE_WITH_STANDARD_MONITORING
+          </p>
+          <p
+            class="text-muted-foreground"
+          >
+            案件状態（business_decision）とは分離された実行ガイダンスです。
+          </p>
+        </article>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        閲覧者別フォーカス
+      </h3>
+      <div
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          運用者
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            次に実行するアクション
+            :
+          </span>
+           
+          EXECUTE_WITH_STANDARD_MONITORING
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            不足証拠
+            :
+          </span>
+           
+          0
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            gate_decision
+            :
+          </span>
+           
+          allow
+        </p>
+      </div>
+      <div
+        class="rounded-md border border-border/70 bg-background/70 p-2"
+      >
+        <p
+          class="font-medium text-foreground"
+        >
+          監査証跡バンドル
+        </p>
+        <p
+          class="text-muted-foreground"
+        >
+          監査提出用に判定サマリと証拠要件をJSON化します。
+        </p>
+        <button
+          class="mt-2 rounded-md border border-border px-2 py-1 text-xs"
+          type="button"
+        >
+          Evidence Bundle を生成
+        </button>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        採択案
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          最終判断
+          :
+        </span>
+         
+        Proceed with transfer
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          採択理由
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠サマリ
+          :
+        </span>
+         
+        kyc_system
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値根拠
+          :
+        </span>
+         
+        All controls satisfied.
+      </p>
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="text-muted-foreground"
+        >
+          価値スコア
+          :
+        </span>
+        <div
+          class="relative h-2 w-20 rounded-full bg-muted/30"
+        >
+          <div
+            class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+            style="width: 91%;"
+          />
+        </div>
+        <span
+          class="font-mono text-foreground"
+        >
+          91
+          %
+        </span>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        代替案
+      </h3>
+      <div
+        class="rounded border border-border/70 bg-background/70 p-2"
+      >
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            選択肢要約
+            :
+          </span>
+           
+          Collect evidence and re-evaluate
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            trade-off
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            相対的弱み
+            :
+          </span>
+           
+          n/a
+        </p>
+        <div
+          class="flex items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            価値スコア
+            :
+          </span>
+          <div
+            class="relative h-2 w-20 rounded-full bg-muted/30"
+          >
+            <div
+              class="absolute inset-y-0 left-0 rounded-full bg-emerald-500"
+              style="width: 71%;"
+            />
+          </div>
+          <span
+            class="font-mono text-foreground"
+          >
+            71
+            %
+          </span>
+        </div>
+      </div>
+    </section>
+    <section
+      class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
+    >
+      <h3
+        class="text-sm font-semibold text-foreground"
+      >
+        却下理由
+      </h3>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          FUJI block
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          証拠の弱さ
+          :
+        </span>
+         
+        n/a
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          討論結果の弱さ
+          :
+        </span>
+         
+        Debate did not provide decisive support.
+      </p>
+      <p>
+        <span
+          class="text-muted-foreground"
+        >
+          価値衝突
+          :
         </span>
          
         n/a
