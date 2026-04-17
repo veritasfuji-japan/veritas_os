@@ -195,6 +195,9 @@ veritas_bundle_decision_<uuid>/
 ├── manifest.json              # SHA-256 hashes, metadata, optional signature
 ├── witness_entries.jsonl       # Witness ledger slice
 ├── decision_record.json        # Auditor-facing single-decision snapshot
+├── acceptance_checklist.json   # Submission acceptance contract checks
+├── README.txt                  # Human-readable review and handoff guide
+├── ui_delivery_hook.json       # Backend hook for future UI integrations
 ├── verification_report.json   # Automated verification results
 ├── signer_metadata.json       # Ed25519 signer info
 ├── anchor_receipts/
@@ -217,6 +220,29 @@ decision. It includes:
 - TrustLog references (`payload_hash`, `full_payload_hash`, signature/anchor/mirror)
 - verification pointer (`verification_report.json`)
 - provenance metadata + runtime context (posture/backend/version)
+
+#### decision_record contract profiles
+
+- **minimum set** (baseline external review): `decision_payload`,
+  `gate_decision`, `business_decision`, `next_action`,
+  `trustlog_references`, `verification`, `provenance`.
+- **full set** (legal/deep forensic review): minimum set +
+  `required_evidence`, `human_review_required`, `runtime_context`.
+
+`veritas-evidence-bundle generate` defaults to minimum set and can opt into
+full set with `--decision-record-profile full`.
+
+#### Acceptance checklist contract
+
+Each bundle now ships `acceptance_checklist.json` with machine-readable checks:
+
+- manifest + file hash integrity material present
+- witness entries present
+- verification report present
+- decision_record contract profile declared (decision bundles)
+
+This checklist is intended to be the explicit pre-submission gate for
+external auditors/customers/legal.
 
 ### Generating Bundles
 
@@ -274,7 +300,8 @@ veritas-evidence-bundle generate \
   --bundle-type decision \
   --witness-ledger runtime/dev/logs/trustlog.jsonl \
   --output-dir ./bundles \
-  --request-id req-12345
+  --request-id req-12345 \
+  --decision-record-profile full
 
 veritas-evidence-bundle verify \
   --bundle-dir ./bundles/veritas_bundle_decision_<uuid>
@@ -294,6 +321,18 @@ from veritas_os.audit.evidence_bundle import create_bundle_archive
 archive = create_bundle_archive(Path("veritas_bundle_decision_<uuid>"))
 # → veritas_bundle_decision_<uuid>.tar.gz
 ```
+
+### External delivery policy (auditor/customer/legal)
+
+1. Generate bundle with explicit decision_record profile (`minimum` or `full`).
+2. Verify with `veritas-evidence-bundle verify`.
+3. Confirm all `acceptance_checklist.json` items are PASS.
+4. Include `README.txt` unchanged in handoff package.
+5. Deliver as read-only `.tar.gz` plus detached transfer checksum.
+
+Security note: Any tampering with `manifest.json`, `witness_entries.jsonl`,
+or hash-referenced files invalidates the delivery contract and requires
+regeneration from TrustLog source data.
 
 ---
 

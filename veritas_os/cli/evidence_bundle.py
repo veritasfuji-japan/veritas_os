@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--time-range-start")
     gen.add_argument("--time-range-end")
     gen.add_argument("--created-by", default="veritas_os")
+    gen.add_argument(
+        "--decision-record-profile",
+        choices=["minimum", "full"],
+        default="minimum",
+    )
     gen.add_argument("--governance-meta", action="append")
     gen.add_argument("--release-meta", action="append")
     gen.add_argument("--incident-meta", action="append")
@@ -73,6 +78,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             governance_identity=governance or None,
             release_provenance=release or None,
             incident_metadata=incident or None,
+            decision_record_profile=args.decision_record_profile,
             created_by=args.created_by,
         )
         if args.json:
