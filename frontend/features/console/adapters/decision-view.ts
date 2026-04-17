@@ -149,31 +149,14 @@ function readText(record: Record<string, unknown>, ...keys: string[]): string {
   return "n/a";
 }
 
-function canonicalizeGateDecision(value: string): string {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "allow") {
-    return "proceed";
-  }
-  if (normalized === "deny" || normalized === "rejected") {
-    return "block";
-  }
-  if (normalized === "modify" || normalized === "abstain") {
-    return "hold";
-  }
-  return normalized || "unknown";
-}
-
 function getGateDecisionLabel(gateDecision: string): string {
-  if (gateDecision === "proceed") {
-    return "gate proceed (not business approval)";
+  if (gateDecision === "allow") {
+    return "response generation allowed (not case approval)";
   }
   if (gateDecision === "hold") {
     return "gate hold";
   }
-  if (gateDecision === "human_review_required") {
-    return "human review required by gate";
-  }
-  if (gateDecision === "block") {
+  if (gateDecision === "deny" || gateDecision === "rejected" || gateDecision === "block") {
     return "blocked by gate";
   }
   return "gate status";
@@ -190,7 +173,7 @@ export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisi
     ? missingEvidenceRaw.filter((item): item is string => typeof item === "string")
     : [];
   const runtimeStatus = toRuntimeStatusView(result);
-  const gateDecision = canonicalizeGateDecision(readText(resultRecord, "gate_decision", "decision_status"));
+  const gateDecision = readText(resultRecord, "gate_decision", "decision_status");
   return {
     gateDecision,
     gateDecisionLabel: getGateDecisionLabel(gateDecision),
