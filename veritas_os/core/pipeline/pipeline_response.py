@@ -489,6 +489,17 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         result["structured_answer"] = structured_answer
     if _is_dev_mode_enabled(ctx.context):
         result["action_candidates"] = action_candidates
+        result["action_selection"]["ranking_trace"] = {
+            "weights": dict(ACTION_CANDIDATE_WEIGHTS),
+            "ordered_actions": [
+                {
+                    "action": item["action"],
+                    "score": item["score"],
+                }
+                for item in action_candidates
+            ],
+            "stop_reasons": sorted(set(stop_reasons)),
+        }
     else:
         result["action_candidates"] = []
     return result

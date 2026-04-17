@@ -11,6 +11,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from veritas_os.api.schemas import DecideResponse
+from veritas_os.core.pipeline.pipeline_response import assemble_response
+from veritas_os.core.pipeline.pipeline_types import PipelineContext
+from veritas_os.tests.helpers.semantics import assert_expected_semantics
 
 POC_DOC_PATH = Path("docs/ja/guides/poc-pack-financial-quickstart.md")
 POC_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
@@ -68,6 +71,13 @@ def _load_regulatory_template_ids() -> set[str]:
     payload = json.loads(REGULATORY_TEMPLATE_PATH.read_text(encoding="utf-8"))
     templates = payload.get("templates", [])
     return {item["template_id"] for item in templates}
+
+
+def _load_regulatory_templates_by_id() -> dict[str, dict[str, object]]:
+    """Load canonical template payloads indexed by template_id."""
+    payload = json.loads(REGULATORY_TEMPLATE_PATH.read_text(encoding="utf-8"))
+    templates = payload.get("templates", [])
+    return {item["template_id"]: item for item in templates}
 
 
 def _extract_markdown_links(content: str) -> list[str]:
@@ -153,3 +163,32 @@ def test_financial_poc_questions_reference_templates_without_reverse_lookup() ->
 
     for item in linked_questions:
         assert item.template_id in template_ids
+
+
+def test_financial_poc_linked_questions_runtime_semantics_regression() -> None:
+    """Linked PoC questions should keep runtime semantics aligned with templates."""
+    questions = _load_poc_questions()
+    templates_by_id = _load_regulatory_templates_by_id()
+
+    for item in questions:
+        if item.template_id is None:
+            continue
+        template = templates_by_id[item.template_id]
+        ctx = PipelineContext(
+            request_id=f"poc-runtime-{item.question_id}",
+            query=item.question,
+            fuji_dict={"decision_status": "allow", "status": "allow"},
+            decision_status="allow",
+            rejection_reason=None,
+            context=template["context"],
+        )
+        payload = assemble_response(
+            ctx,
+            load_persona_fn=lambda: {},
+            plan={"steps": [], "source": "test"},
+        )
+
+        assert_expected_semantics(
+            payload,
+            item.expected_semantics.model_dump(),
+        )
