@@ -82,6 +82,23 @@ Open browser to `http://localhost:3000`.
 
 ---
 
+## Optional PoC Reproducibility Add-on (60 sec)
+
+After the UI demo, run a deterministic PoC summary:
+
+```bash
+python scripts/run_financial_poc.py \
+  --dry-run \
+  --output-json veritas_os/scripts/logs/financial_poc_dry_run_report.json
+```
+
+Then point to:
+
+- [Financial PoC Pack (1-day quickstart, EN)](poc-pack-financial-quickstart.md)
+- [Financial PoC Success Criteria](financial-poc-success-criteria.md)
+
+---
+
 ## CI Quality Checklist
 
 - [x] Backend: ruff + bandit + pytest (40%+ coverage)

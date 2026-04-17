@@ -37,6 +37,8 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 
 ### Guides
 - [3-Minute Demo Script](guides/demo-script.md)
+- [Financial PoC Pack (1-day quickstart, EN)](guides/poc-pack-financial-quickstart.md)
+- [Financial PoC Success Criteria](guides/financial-poc-success-criteria.md)
 - [File-to-PostgreSQL Migration Guide](guides/migration-guide.md) (bilingual)
 - [Financial PoC Pack (1-day quickstart, JA)](../ja/guides/poc-pack-financial-quickstart.md)
 

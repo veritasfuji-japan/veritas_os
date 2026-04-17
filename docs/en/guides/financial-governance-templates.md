@@ -83,3 +83,15 @@ This domain is used as the first expansion anchor because it combines:
 
 Template fixtures should remain synthetic and free of PII, account numbers,
 production sanctions watchlists, and customer-identifiable traces.
+
+## PoC Reproducibility Runner
+
+To execute the lightweight PoC fixture set and compare expected semantics against
+runtime output, use:
+
+- `scripts/run_financial_poc.py`
+- `veritas_os/scripts/financial_poc_runner.py`
+
+Runbook:
+
+- [Financial PoC Pack (1-day quickstart, EN)](poc-pack-financial-quickstart.md)
