@@ -13,18 +13,48 @@ The templates are intentionally designed to verify fail-closed behavior around:
 - explicit human review boundaries, and
 - separation between `gate_decision` and `business_decision`.
 
-## Fixture Location
+## Canonical Industry Pack Location
 
 - Canonical fixture: `veritas_os/sample_data/governance/financial_regulatory_templates.json`
+
+The fixture is a **pack object** with metadata and a `templates` array.
+
+Pack-level fields include:
+
+- `pack_id` / `pack_type` / `industry` / `version`
+- `taxonomy_policy` (canonical taxonomy key policy and alias handling)
+- `beachhead` (starter domain and representative template)
 
 Each template entry includes:
 
 - `question`
-- `expected_governance_behavior.gate_decision`
-- `expected_governance_behavior.business_decision`
-- `expected_governance_behavior.required_evidence`
-- `expected_governance_behavior.human_review_required`
-- `expected_governance_behavior.rationale_expectations`
+- `context`
+- `expected_semantics.gate_decision`
+- `expected_semantics.business_decision`
+- `expected_semantics.next_action`
+- `expected_semantics.required_evidence` / `missing_evidence`
+- `expected_semantics.human_review_required`
+- `expected_semantics.rationale_summary` / `rationale_expectations`
+
+## Beachhead
+
+Current beachhead is `aml_kyc` with template
+`aml_kyc_high_risk_country_wire_manual_review`.
+This domain is used as the first expansion anchor because it combines:
+
+- high regulatory sensitivity,
+- evidence-first progression requirements, and
+- explicit human review boundaries.
+
+## Role Split: Regulatory Templates vs PoC Questions
+
+- **Regulatory templates** (`financial_regulatory_templates.json`)
+  - Canonical, context-rich fixtures for regression and contract validation.
+  - Carry full `context` and complete expected semantics for deterministic tests.
+- **PoC questions** (`financial_poc_questions.json`)
+  - Lightweight scenario prompts for demo and rapid PoC runs.
+  - May reference `template_id` directly to avoid reverse lookup from
+    `fixture_contexts`/category heuristics.
 
 ## What This Verifies
 

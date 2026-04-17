@@ -13,7 +13,8 @@
         "affordability_assessment"
       ],
       "human_review_required": false
-    }
+    },
+    "template_id": "credit_missing_bureau_data_no_auto_approval"
   },
   {
     "question_id": "poc_fraud_stepup_vs_block",
@@ -29,7 +30,8 @@
         "transaction_velocity_features"
       ],
       "human_review_required": false
-    }
+    },
+    "template_id": "fraud_realtime_block_vs_stepup_auth"
   },
   {
     "question_id": "poc_aml_pep_high_risk_country",
@@ -46,7 +48,8 @@
         "transaction_purpose_statement"
       ],
       "human_review_required": true
-    }
+    },
+    "template_id": "aml_kyc_high_risk_country_wire_manual_review"
   },
   {
     "question_id": "poc_sanctions_partial_match",
@@ -62,7 +65,8 @@
         "sanctions_screening_trace"
       ],
       "human_review_required": true
-    }
+    },
+    "template_id": "sanctions_partial_name_match_hold"
   },
   {
     "question_id": "poc_suitability_leveraged_product",
@@ -78,7 +82,8 @@
         "product_risk_disclosure_ack"
       ],
       "human_review_required": true
-    }
+    },
+    "template_id": "suitability_leveraged_product_retail_client"
   },
   {
     "question_id": "poc_high_risk_transaction_chain",
@@ -94,7 +99,8 @@
         "aml_alert_case_id"
       ],
       "human_review_required": true
-    }
+    },
+    "template_id": "high_risk_transaction_pending_release"
   },
   {
     "question_id": "poc_approval_boundary_undefined",
@@ -109,7 +115,8 @@
         "policy_owner_confirmation"
       ],
       "human_review_required": true
-    }
+    },
+    "template_id": "approval_boundary_undefined_stop"
   },
   {
     "question_id": "poc_cross_border_purpose_unknown",
