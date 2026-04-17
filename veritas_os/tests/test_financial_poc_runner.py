@@ -38,6 +38,7 @@ def test_compare_expected_semantics_reports_field_level_diff() -> None:
         "business_decision": "EVIDENCE_REQUIRED",
         "next_action": "COLLECT_REQUIRED_EVIDENCE",
         "required_evidence": ["evidence_a"],
+        "missing_evidence": ["evidence_a"],
         "human_review_required": False,
     }
     actual = {
@@ -45,6 +46,7 @@ def test_compare_expected_semantics_reports_field_level_diff() -> None:
         "business_decision": "APPROVE",
         "next_action": "DO_NOT_EXECUTE",
         "required_evidence": [],
+        "missing_evidence": [],
         "human_review_required": True,
     }
 
@@ -58,8 +60,20 @@ def test_compare_expected_semantics_reports_field_level_diff() -> None:
     assert diff["next_action"]["actual"] == "DO_NOT_EXECUTE"
     assert diff["required_evidence"]["expected"] == ["evidence_a"]
     assert diff["required_evidence"]["actual"] == []
+    assert diff["missing_evidence"]["expected"] == ["evidence_a"]
+    assert diff["missing_evidence"]["actual"] == []
     assert diff["human_review_required"]["expected"] is False
     assert diff["human_review_required"]["actual"] is True
+
+
+def test_compare_expected_semantics_accepts_same_next_action_family() -> None:
+    """Next action mismatch is ignored when actions are in the same family."""
+    expected = {"next_action": "PREPARE_HUMAN_REVIEW_PACKET"}
+    actual = {"next_action": "ROUTE_TO_HUMAN_REVIEW"}
+
+    diff = compare_expected_semantics(expected, actual)
+
+    assert "next_action" not in diff
 
 
 def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:

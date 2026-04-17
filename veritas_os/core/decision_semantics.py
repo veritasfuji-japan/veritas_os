@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable, Mapping
+from typing import Any, Iterable, Mapping
 
 CANONICAL_GATE_DECISIONS = {
     "proceed",
@@ -126,6 +126,40 @@ def normalize_required_evidence_keys(values: Iterable[object] | None) -> list[st
     return out
 
 
+@lru_cache(maxsize=1)
+def get_required_evidence_category_map() -> dict[str, str]:
+    """Return canonical_key -> category map from taxonomy v0."""
+    payload = _load_required_evidence_taxonomy()
+    items = payload.get("items")
+    out: dict[str, str] = {}
+    if not isinstance(items, list):
+        return out
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        canonical_key = str(item.get("canonical_key", "")).strip().lower()
+        category = str(item.get("category", "")).strip().lower()
+        if canonical_key and category:
+            out[canonical_key] = category
+    return out
+
+
+def build_required_evidence_profile(values: Iterable[object] | None) -> list[dict[str, Any]]:
+    """Build machine-readable evidence profile entries with taxonomy categories."""
+    canonical_values = unique_preserve_order(normalize_required_evidence_keys(values))
+    categories = get_required_evidence_category_map()
+    profile: list[dict[str, Any]] = []
+    for key in canonical_values:
+        profile.append(
+            {
+                "key": key,
+                "category": categories.get(key, "free_string"),
+                "taxonomy_matched": key in categories,
+            }
+        )
+    return profile
+
+
 def unique_preserve_order(values: Iterable[str]) -> list[str]:
     """Return unique items preserving first-seen order."""
     out: list[str] = []
@@ -191,4 +225,19 @@ def validate_gate_business_combination(
         raise ValueError(
             "forbidden combination: gate_decision=human_review_required "
             "requires human_review_required=true"
+        )
+    if gate_decision == "proceed" and human_review_required:
+        raise ValueError(
+            "forbidden combination: gate_decision=proceed "
+            "requires human_review_required=false"
+        )
+    if business_decision == "REVIEW_REQUIRED" and not human_review_required:
+        raise ValueError(
+            "forbidden combination: business_decision=REVIEW_REQUIRED "
+            "requires human_review_required=true"
+        )
+    if business_decision == "APPROVE" and human_review_required:
+        raise ValueError(
+            "forbidden combination: business_decision=APPROVE "
+            "requires human_review_required=false"
         )

@@ -44,7 +44,7 @@
       "required_evidence": [
         "kyc_profile",
         "pep_screening_result",
-        "source_of_funds_document",
+        "source_of_funds_record",
         "transaction_purpose_statement"
       ],
       "human_review_required": true
@@ -112,7 +112,7 @@
       "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
       "required_evidence": [
         "approval_matrix",
-        "policy_owner_confirmation"
+        "policy_definition_record"
       ],
       "human_review_required": true
     },
@@ -128,7 +128,7 @@
       "next_action": "COLLECT_REQUIRED_EVIDENCE",
       "required_evidence": [
         "transaction_purpose_statement",
-        "source_of_funds_document",
+        "source_of_funds_record",
         "beneficiary_risk_profile"
       ],
       "human_review_required": true

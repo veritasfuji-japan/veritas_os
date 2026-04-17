@@ -226,6 +226,55 @@ def test_regression_representative_financial_templates_governance_alignment() ->
         )
 
 
+def test_regression_sanctions_partial_match_does_not_proceed() -> None:
+    """Sanctions partial-name match must not pass through proceed path."""
+    templates = {item.template_id: item for item in _load_template_pack().templates}
+    template = templates["sanctions_partial_name_match_hold"]
+    ctx = PipelineContext(
+        request_id="financial-template-sanctions-partial",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context=template.context,
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] != "proceed"
+    assert payload["business_decision"] in {"HOLD", "EVIDENCE_REQUIRED", "REVIEW_REQUIRED"}
+
+
+def test_regression_source_of_funds_missing_does_not_approve() -> None:
+    """Missing source-of-funds evidence should fail closed to non-APPROVE."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_high_risk_country_wire_manual_review"]
+    ctx = PipelineContext(
+        request_id="financial-template-sof-missing",
+        query="高リスク国送金だが source of funds が未提出。自動承認できるか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            **template.context,
+            "satisfied_evidence": [
+                "kyc_profile",
+                "pep_screening_result",
+                "transaction_purpose_statement",
+            ],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert "source_of_funds_record" in payload["missing_evidence"]
+    assert payload["business_decision"] != "APPROVE"
+
+
 def test_financial_templates_expected_semantics_has_required_fields() -> None:
     """Expected semantics should include next_action and rationale expectations."""
     templates = _load_template_pack().templates

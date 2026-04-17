@@ -77,7 +77,15 @@ The runner compares these fields per case:
 - `business_decision`
 - `next_action`
 - `required_evidence`
+- `missing_evidence`
 - `human_review_required`
+
+Comparator helper:
+
+- `veritas_os/scripts/expected_semantics_compare.py`
+- Used by `veritas_os/scripts/financial_poc_runner.py` for machine-readable diffs
+  with gate canonicalization, taxonomy-aware evidence comparison, and next-action
+  family fallback.
 
 Example mismatch output (JSON excerpt):
 
@@ -92,7 +100,7 @@ Example mismatch output (JSON excerpt):
       "actual": "proceed"
     },
     "required_evidence": {
-      "expected": ["transaction_purpose_statement", "source_of_funds_document"],
+      "expected": ["transaction_purpose_statement", "source_of_funds_record"],
       "actual": []
     }
   }

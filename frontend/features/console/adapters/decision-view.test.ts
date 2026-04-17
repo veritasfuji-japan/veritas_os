@@ -147,7 +147,7 @@ describe("toPublicDecisionSchemaView", () => {
       verify_status: "verified",
     } as never);
     const view = toPublicDecisionSchemaView(result);
-    expect(view.gateDecision).toBe("allow");
+    expect(view.gateDecision).toBe("proceed");
     expect(view.businessDecision).toBe("REVIEW_REQUIRED");
     expect(view.nextAction).toBe("ROUTE_TO_HUMAN_REVIEW");
     expect(view.requiredEvidence).toEqual(["approval_ticket"]);
@@ -158,10 +158,10 @@ describe("toPublicDecisionSchemaView", () => {
     expect(view.verifyStatus).toBe("verified");
   });
 
-  it("adds non-approval label for gate allow to avoid regression", () => {
+  it("adds non-approval label for canonical gate proceed", () => {
     const result = makeResponse({ gate_decision: "allow" } as never);
     const view = toPublicDecisionSchemaView(result);
-    expect(view.gateDecisionLabel).toBe("response generation allowed (not case approval)");
+    expect(view.gateDecisionLabel).toBe("gate proceed (not business approval)");
   });
 });
 

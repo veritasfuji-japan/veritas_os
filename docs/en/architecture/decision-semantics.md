@@ -2,10 +2,17 @@
 
 This document is the **source-of-truth contract** for Phase-1 decision semantics.
 
-## Current behavior
+## Runtime enforcement status
 
-This spec records the current behavior implemented in `veritas_os/core/pipeline/pipeline_response.py::_derive_business_fields` and related schema literals.
-It does **not** introduce a runtime change.
+This contract is now **runtime-enforced** in:
+
+- `veritas_os/core/pipeline/pipeline_response.py::_derive_business_fields`
+- `veritas_os/api/schemas.py::DecideResponse`
+- `veritas_os/core/decision_semantics.py`
+
+Spec and runtime are aligned: gate canonicalization, stop-reason ordering, and
+forbidden gate/business/human-review combinations are validated before response
+finalization.
 
 ## Legacy / alias values
 
@@ -61,7 +68,13 @@ It does **not** introduce a runtime change.
 | `gate=hold` + `business=HOLD` | Allowed |
 | `gate=hold` + `business=EVIDENCE_REQUIRED` | Allowed |
 | `gate=human_review_required` + `business=REVIEW_REQUIRED` | Allowed |
-| legacy gate values with canonical business values | Non-recommended but currently tolerated |
+| legacy gate values with canonical business values | Input-tolerated, runtime-normalized to canonical |
+
+Additional runtime invariants:
+
+- `gate=proceed` + `human_review_required=true` is forbidden.
+- `business=REVIEW_REQUIRED` + `human_review_required=false` is forbidden.
+- `business=APPROVE` + `human_review_required=true` is forbidden.
 
 ## D. stop_reasons priority (current implementation order)
 

@@ -18,21 +18,15 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any, Callable
 
 import requests
 
-from veritas_os.core.decision_semantics import canonicalize_gate_decision
+from veritas_os.scripts.expected_semantics_compare import compare_expected_semantics
 
 DEFAULT_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
 DEFAULT_API_URL = "http://localhost:8000/v1/decide"
 DEFAULT_TIMEOUT_SECONDS = 15.0
-
-_NEXT_ACTION_ALIASES = {
-    "NEEDS_HUMAN_REVIEW": "PREPARE_HUMAN_REVIEW_PACKET",
-    "REJECT_REQUEST": "DO_NOT_EXECUTE",
-}
-
 
 @dataclass(frozen=True)
 class PocQuestion:
@@ -56,58 +50,6 @@ class CaseResult:
     template_id: str | None
     request_id: str | None
     error: str | None
-
-
-def _normalize_next_action(value: Any) -> str:
-    """Normalize next_action labels into stable canonical labels."""
-    normalized = str(value or "").strip().upper()
-    if not normalized:
-        return ""
-    return _NEXT_ACTION_ALIASES.get(normalized, normalized)
-
-
-def compare_expected_semantics(
-    expected: Mapping[str, Any],
-    actual: Mapping[str, Any],
-) -> dict[str, dict[str, Any]]:
-    """Return field-level mismatch diff between expected and actual semantics."""
-    mismatches: dict[str, dict[str, Any]] = {}
-
-    expected_gate = canonicalize_gate_decision(expected.get("gate_decision"))
-    actual_gate = canonicalize_gate_decision(actual.get("gate_decision"))
-    if expected_gate != actual_gate:
-        mismatches["gate_decision"] = {"expected": expected_gate, "actual": actual_gate}
-
-    expected_business = expected.get("business_decision")
-    actual_business = actual.get("business_decision")
-    if expected_business != actual_business:
-        mismatches["business_decision"] = {
-            "expected": expected_business,
-            "actual": actual_business,
-        }
-
-    expected_action = _normalize_next_action(expected.get("next_action"))
-    actual_action = _normalize_next_action(actual.get("next_action"))
-    if expected_action != actual_action:
-        mismatches["next_action"] = {"expected": expected_action, "actual": actual_action}
-
-    expected_evidence = expected.get("required_evidence")
-    actual_evidence = actual.get("required_evidence")
-    if expected_evidence != actual_evidence:
-        mismatches["required_evidence"] = {
-            "expected": expected_evidence,
-            "actual": actual_evidence,
-        }
-
-    expected_human = bool(expected.get("human_review_required"))
-    actual_human = bool(actual.get("human_review_required"))
-    if expected_human != actual_human:
-        mismatches["human_review_required"] = {
-            "expected": expected_human,
-            "actual": actual_human,
-        }
-
-    return mismatches
 
 
 def load_questions(path: Path) -> list[PocQuestion]:
