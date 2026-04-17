@@ -30,87 +30,57 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 - **Release Status:** Beta
 - **Author:** Takeshi Fujishita
 
-## Why VERITAS OS
+## What VERITAS OS is
 
-As agent execution becomes easier to provision, the scarce layer shifts from runtime setup to governance.
+VERITAS OS is a **Decision Governance OS for AI Agents**.
+It is the **governance layer before execution** that determines whether an AI decision may proceed, must be held, blocked, or escalated for human review.
 
-The key problem is no longer only:
+### What problem it solves
 
-- How do we run agents?
+In enterprise and regulated environments, the key failure mode is often not model intelligence but **uncontrolled execution**.
+VERITAS addresses this by making decisions:
 
-It becomes:
+- **Reviewable** before action
+- **Traceable** to evidence and policy context
+- **Replayable** with divergence awareness
+- **Auditable** through tamper-evident artifacts
+- **Enforceable** through fail-closed policy and safety gates
 
-- Who can authorize a decision and at which boundary?
-- What evidence was used and preserved?
-- Which safety and policy gates were passed?
-- What was actually committed to audit artifacts?
-- How can a decision be replayed and inspected afterward?
-- How is governance enforced consistently across environments?
+### How it differs from runtime/orchestration tools
 
-VERITAS OS is built to solve that layer.
+Many agent stacks optimize task execution and tool wiring.
+VERITAS OS focuses on **decision governance**:
 
-## Key Highlights
+- Governance controls are applied **before real-world effect**.
+- FUJI gate behavior is **fail-closed by default** on unsafe/undefined paths.
+- TrustLog + governance identity create **audit-grade decision lineage**.
+- Mission Control provides an operator-facing governance surface, not only developer telemetry.
 
-- **20+ stage decision pipeline**
-  Structured decision flow with reproducibility hooks and divergence-aware replay support.
+### Why this fits regulated / enterprise use
 
-- **Fail-closed FUJI safety gate**
-  Unsafe or policy-violating paths are rejected by default rather than silently continuing.
-
-- **Hash-chained TrustLog**
-  Tamper-evident decision records with signing support for audit accountability.
-
-- **Mission Control dashboard**
-  Real-time operational visibility into governed decision flows and risk posture.
-
-- **Replayable decision paths**
-  Reconstruct and inspect how decisions were formed and executed.
-
-- **Approval and authority controls**
-  Includes governance-oriented approval boundaries and role-aware access patterns.
-
-- **Compliance-facing architecture**
-  Designed for audit export, reporting, and enterprise deployment readiness checks.
+- Explicit approval boundaries and policy enforcement points
+- Evidence capture and replay pathways for post-incident review
+- Signed and hash-linked governance artifacts for accountability
+- Posture-based secure/prod startup checks to reduce permissive misconfiguration
 
 ## What VERITAS OS is / is not
 
-- **Is:** a governance layer that sits before action execution and enforces policy, safety, and audit controls.
-- **Is not:** only an agent runtime abstraction or orchestration convenience wrapper.
+- **Is:** a Decision Governance OS for AI agents and a governance layer before execution.
+- **Is not:** a replacement for all agent runtimes, nor only an orchestration convenience wrapper.
 
+## Fact vs roadmap (read this first)
 
-### Independent Technical DD Score
+- **Current fact (beta):** Core decision pipeline, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
+- **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
+- **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
 
-| Category | 2026-03-15 | 2026-04-15 | Delta |
-|---|---|---|---|
-| Architecture | 82 | 85 | +3 |
-| Code Quality | 83 | 84 | +1 |
-| Security | 80 | 86 | +6 |
-| Testing | 88 | 89 | +1 |
-| Production Readiness | 80 | 85 | +5 |
-| Governance | 82 | 86 | +4 |
-| Docs | 80 | 83 | +3 |
-| Differentiation | 84 | 86 | +2 |
-| **Overall** | **82** | **85 / 100** | **+3** |
-| **Verdict** | B+ → A- | **A- (matured production-grade governance infrastructure)** | |
+### Technical Maturity Snapshot (internal)
 
-> Re-evaluated (2026-04-15) against the previous full-code technical due diligence review (`docs/ja/reviews/technical_dd_review_ja_20260315.md`).
+> This is a **self-assessment / internal re-evaluation** summary (not third-party certification).
 
-**What changed since 2026-03-15 (verified in code):**
-
-- **Decision schema cleanup** — `gate_decision` (safety/policy outcome), `business_decision` (case lifecycle), and `next_action` are separated so that "allow" is no longer conflated with case approval (`api/schemas.py`, `core/pipeline/pipeline_response.py`).
-- **Strengthened FUJI gate fail-closed** — additional fail-closed paths on gate adjudication, with value-ranked `next_action` candidates flowing from Value Core (`core/pipeline/pipeline_gate.py`, `core/value_core.py`).
-- **Governance artifact identity** — `/v1/decide` responses carry `governance_identity` (`policy_version`, `digest`, `signature_verified`, `signer_id`, `verified_at`) threaded into decision, replay, and audit artifacts (`policy/governance_identity.py`).
-- **Capability-aware posture enforcement** — startup validator checks `managed_signing`, `immutable_retention`, `transparency_anchoring`, `fail_closed` capabilities rather than vendor names; `aws_kms` + `s3_object_lock` satisfy secure/prod requirements (`core/posture.py`).
-- **PostgreSQL production path matured** — live validation CI tier (`production-validation.yml`), contention/metrics/drill test suites, PostgreSQL Drill Runbook, single-entry live validation evidence doc.
-- **Continuation Runtime (Phase-1) — chain-level observation** — snapshot/receipt/enforcement event architecture running beside step-level FUJI (observe default in dev/staging, advisory in secure/prod).
-- **Test growth** — roughly 2× growth in test functions over the 2026-03-15 baseline (chaos tests, contention tests, drill tests, adversarial prompt regression, PostgreSQL parity).
-
-**Residual risks (unchanged structural limits):**
-
-- LLM response non-determinism even at `temperature=0`; Replay is positioned as "high-fidelity reproducible re-execution with divergence detection" rather than strict deterministic replay.
-- Web-search toxicity filter is rule-based (5 regex + 7 compact markers, with NFKC/URL-decode/base64/leet-speak normalization); sophisticated multi-turn or semantic prompt injection is not fully defended.
-- Multi-tenant RBAC is header-based (`X-Role`); full IdP / JWT-scope integration is future work.
-- Live distributed-lock / Redis failure-mode testing beyond chaos harness is out of scope for this re-evaluation.
+- Latest internal re-evaluation date: **2026-04-15**
+- Internal overall snapshot: **85 / 100** (from 82 on 2026-03-15)
+- Full internal table, change log, and residual risks: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 
 ---
 
@@ -134,6 +104,8 @@ VERITAS OS is built to solve that layer.
 - **Review Document Map**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **Documentation Hub (EN)**: [`docs/en/README.md`](docs/en/README.md)
 - **Documentation Hub (JA)**: [`docs/ja/README.md`](docs/ja/README.md)
+- **Public Positioning Guide (EN)**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
+- **Public Positioning Guide (JA)**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **Decision Semantics Contract**: [`docs/en/architecture/decision-semantics.md`](docs/en/architecture/decision-semantics.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)

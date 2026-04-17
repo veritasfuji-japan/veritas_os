@@ -18,54 +18,58 @@
 **Release Status**: ベータ版  
 **Author**: Takeshi Fujishita
 
-VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-closed安全ゲート付き・ハッシュチェーン監査可能** な意思決定パイプラインで包み、リアルタイム運用可視化のための **Mission Controlダッシュボード**（Next.js）を提供します。現在の公開リリースは、**ベータ品質のガバナンス基盤** として位置づけるのが適切です。機能範囲は広く、監査性も高い一方で、安全な運用には環境ごとの設定と検証が前提になります。
+VERITAS OS は **Decision Governance OS for AI Agents**（AIエージェント向け意思決定ガバナンスOS）です。
+エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。
 
-> メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision / Agent OS**
+> メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
 
-### 主要ハイライト
+## VERITAS OS は何か
 
-| | |
-|---|---|
-| **20以上のステージ意思決定パイプライン** | 構造化・高再現性・差分検知付きリプレイ |
-| **FUJI Gate（fail-closed）** | PII検出、プロンプトインジェクション防御、毒性フィルタ、ポリシールール |
-| **ハッシュチェーンTrustLog** | Ed25519署名、WORMミラー、Transparency logアンカー、W3C PROV輸出 |
-| **エンタープライズガバナンス** | 4-eyes承認、RBAC/ABAC、SSEアラート、外部シークレットマネージャー強制 |
-| **Mission Controlダッシュボード** | Next.js 16 — リアルタイムイベントストリーム、リスク分析、ガバナンス管理 |
-| **EU AI Act準拠** | コンプライアンスレポート生成、監査エクスポート、デプロイメント準備チェック |
+- 実行前に意思決定を評価し、`proceed / hold / block / human_review_required` を判定するガバナンス層
+- 意思決定を **reviewable / traceable / replayable / auditable / enforceable** にするための製品基盤
+- Mission Control を通じて運用者がガバナンス状態を把握・運用できる実装
 
-### 独立技術DDスコア
+## 何を解決するか
 
-| カテゴリ | 2026-03-15 | 2026-04-15 | 変動 |
-|---|---|---|---|
-| Architecture | 82 | 85 | +3 |
-| Code Quality | 83 | 84 | +1 |
-| Security | 80 | 86 | +6 |
-| Testing | 88 | 89 | +1 |
-| Production Readiness | 80 | 85 | +5 |
-| Governance | 82 | 86 | +4 |
-| Docs | 80 | 83 | +3 |
-| Differentiation | 84 | 86 | +2 |
-| **Overall** | **82** | **85 / 100** | **+3** |
-| **判定** | B+ → A- | **A-（成熟した本番グレードのガバナンスインフラ）** | |
+企業環境・規制領域では「推論できるか」よりも「統制された実行ができるか」が課題になります。
+VERITAS OS は次を実現します。
 
-> 前回の全コード精読技術デューデリジェンスレビュー（`docs/ja/reviews/technical_dd_review_ja_20260315.md`）に対する再評価（2026-04-15）。
+- **Reviewable**: 実行前レビュー可能な意思決定
+- **Traceable**: 根拠とポリシーの追跡可能性
+- **Replayable**: 差分検知つき再実行
+- **Auditable**: 改ざん検知可能な監査証跡
+- **Enforceable**: fail-closed 前提の制御強制
 
-**2026-03-15 以降の変更点（コードで確認済み）:**
+## runtime/orchestration ツールとの違い
 
-- **意思決定スキーマの整理** — `gate_decision`（安全/ポリシー判定）、`business_decision`（ケースライフサイクル）、`next_action` が分離され、「allow」が「ケース承認」と混同されなくなりました（`api/schemas.py`、`core/pipeline/pipeline_response.py`）。
-- **FUJI Gate fail-closed の強化** — ゲート判定経路に fail-closed パスを追加し、Value Core からの価値ランク付き `next_action` 候補を反映（`core/pipeline/pipeline_gate.py`、`core/value_core.py`）。
-- **ガバナンス成果物ID** — `/v1/decide` レスポンスに `governance_identity`（`policy_version`、`digest`、`signature_verified`、`signer_id`、`verified_at`）が含まれ、意思決定・Replay・監査成果物に連結されます（`policy/governance_identity.py`）。
-- **Capability 対応ポスチャ強制** — 起動時バリデーションがベンダー名ではなく `managed_signing` / `immutable_retention` / `transparency_anchoring` / `fail_closed` の各 capability を検証。secure/prod では `aws_kms` + `s3_object_lock` で要件を充足（`core/posture.py`）。
-- **PostgreSQL 本番パスの成熟** — ライブ検証 CI ティア（`production-validation.yml`）、競合/メトリクス/ドリルテストスイート、PostgreSQL Drill Runbook、ライブ検証エビデンス単一入口ドキュメント。
-- **Continuation Runtime (Phase-1) — チェーンレベル観測** — snapshot/receipt/enforcement event アーキテクチャがステップレベル FUJI の横で動作（dev/staging は observe、secure/prod は advisory がデフォルト）。
-- **テスト拡充** — 2026-03-15 基準からおよそ2倍のテスト関数増加（chaos テスト、競合テスト、ドリルテスト、敵対プロンプト回帰、PostgreSQL パリティ）。
+- 主眼はタスク実行最適化ではなく、**意思決定ガバナンス**
+- ポリシー・安全ゲートは **real-world effect の前** に適用
+- TrustLog と governance identity により、監査可能な意思決定系譜を保持
 
-**構造的制約として残る残存リスク:**
+## regulated / enterprise に適する理由
 
-- LLM 応答は `temperature=0` でも非決定的。Replay は「厳密決定論的リプレイ」ではなく「差分検知付き高再現性再実行」として位置づけ。
-- Web 検索毒性フィルタは依然としてルールベース（5 正規表現 + 7 compact markers、NFKC / URL デコード / base64 / leet-speak 正規化付き）。高度な multi-turn / semantic プロンプトインジェクションは完全防御ではありません。
-- Multi-tenant RBAC は `X-Role` ヘッダベースであり、本格的な IdP / JWT スコープ連携は今後の課題。
-- 実分散ロック / Redis 障害モード試験は chaos harness の範囲で実施済みですが、本再評価の対象範囲外です。
+- 承認境界とポリシー適用ポイントが明示されている
+- 事後検証向けのエビデンス保存とReplay経路がある
+- secure/prod で fail-closed 起動検証を行うポスチャ設計
+
+## VERITAS OS が「あるもの」と「ないもの」
+
+- **あるもの**: AIエージェント向け Decision Governance OS（実行前ガバナンス層）
+- **ないもの**: すべてのランタイムを置き換える実行基盤、または単なるオーケストレーション便利層
+
+## 事実とロードマップの境界
+
+- **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
+- **現時点の境界**: 本番適用には環境ごとのハードニング・統合・運用審査が必要
+- **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
+
+### Technical Maturity Snapshot（内部）
+
+> 本セクションは **self-assessment / internal re-evaluation**（内部再評価）であり、第三者認証ではありません。
+
+- 最新の内部再評価日: **2026-04-15**
+- 内部総合スナップショット: **85 / 100**（2026-03-15 の 82 から改善）
+- 詳細テーブル・変更点・残存リスク: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 
 ---
 
@@ -89,6 +93,8 @@ VERITAS OS は、LLM（例: OpenAI GPT-4.1-mini）を **高再現性・fail-clos
 - **レビュー文書マップ**: [`docs/ja/reviews/code-review-document-map.md`](docs/ja/reviews/code-review-document-map.md)
 - **ドキュメント入口（英語）**: [`docs/en/README.md`](docs/en/README.md)
 - **ドキュメント入口（日本語）**: [`docs/ja/README.md`](docs/ja/README.md)
+- **公開ポジショニングガイド（英語）**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
+- **公開ポジショニングガイド（日本語）**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **ガバナンス署名運用Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)

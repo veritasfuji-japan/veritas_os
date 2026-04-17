@@ -1,4 +1,6 @@
-# VERITAS OS v2.0 — Proto-AGI Decision OS
+# VERITAS OS v2.0 — Decision Governance OS for AI Agents
+
+**Reviewable, traceable, replayable, auditable, and enforceable AI decisions before real-world effect.**
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17688094.svg)](https://doi.org/10.5281/zenodo.17688094)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -7,15 +9,24 @@
 [![CI](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml/badge.svg)](https://github.com/veritasfuji-japan/veritas_os/actions/workflows/main.yml)
 [![Coverage](https://img.shields.io/badge/coverage-92%25-brightgreen.svg)](../docs/COVERAGE_REPORT.md)
 
-
 **Version**: 2.0.0
 **Release Date**: 2025-12-01  
 **Author**: Takeshi Fujishita
 
-This repository contains **VERITAS OS** — a **Proto-AGI framework** that wraps an LLM  
-(e.g. **OpenAI GPT-4.1-mini**) as a **safe, consistent, and auditable decision OS**.
+VERITAS OS is a **Decision Governance OS for AI Agents**.
+It operates as a **governance layer before execution**, so model output is not executed directly without policy, safety, and audit controls.
 
-- Mental model: **“LLM = CPU”**, **“VERITAS OS = Decision / Agent OS on top”**
+- Mental model: **“LLM = CPU”**, **“VERITAS OS = Decision Governance OS on top”**
+
+## What VERITAS OS is / is not
+
+- **Is:** a governance layer before execution that makes AI decisions reviewable, traceable, replayable, auditable, and enforceable.
+- **Is not:** merely an agent runtime wrapper or generic orchestration convenience layer.
+
+## Commercial positioning vs research background
+
+- **Public product positioning:** Decision Governance OS for AI Agents (enterprise/regulated deployment focus).
+- **Research background:** earlier “Proto-AGI” framing is retained only as historical context in legacy artifacts and citation records.
 
 **Readmes**
 
@@ -27,7 +38,7 @@ This repository contains **VERITAS OS** — a **Proto-AGI framework** that wraps
 ## 📑 Table of Contents
 
 1. [What can it do?](#-1-what-can-it-do)
-2. [Context Schema (for AGI tasks)](#-2-context-schema-for-agi-tasks)
+2. [Context Schema (for governed decision tasks)](#-2-context-schema-for-governed-decision-tasks)
 3. [Directory Layout](#-3-directory-layout)
 4. [core/ Module Responsibilities](#-4-core-module-responsibilities)
 5. [LLM Client](#-5-llm-client)
@@ -86,14 +97,14 @@ Bundled subsystems:
 * **TrustLog** – cryptographic, hash-chained decision log
 * **Doctor Dashboard** – self-diagnostics & health monitoring
 
-**Goal:** Research & experimentation platform for using LLMs as
-**safe, reproducible, and cryptographically auditable Proto-AGI skeletons.**
+**Goal:** Provide a governance-first operating layer for AI agent decisions,
+with production-facing controls and auditability for enterprise and regulated use.
 
 Typical use cases:
 
-* AGI / agent **research**
-* **AI Safety** experiments
-* Enterprise / regulated-environment **audit pipelines**
+* Enterprise / regulated-environment **decision audit pipelines**
+* **AI safety and governance** operations
+* Applied research on governed agent behavior (secondary context)
 
 ### 1.2 Other APIs
 
@@ -110,9 +121,9 @@ All protected endpoints require `X-API-Key` authentication.
 
 ---
 
-## 🧠 2. Context Schema (for AGI tasks)
+## 🧠 2. Context Schema (for governed decision tasks)
 
-For meta-decision tasks (AGI-ish planning, self-improvement, etc.) VERITAS expects a `Context` object:
+For governed decision tasks, VERITAS expects a `Context` object:
 
 ```yaml
 Context:
@@ -141,9 +152,9 @@ Context:
 
 Typical queries you can hand off to `/v1/decide`:
 
-* “What is the optimal next step in my AGI research plan?”
-* “How should I design my self-improvement loop?”
-* “Within my safety boundaries, how far can I push this experiment?”
+* “What is the optimal next step in my governance validation plan?”
+* “How should I prioritize actions under current policy constraints?”
+* “Which action can proceed now, and which requires human review?”
 
 The OS decides **both** the multi-step plan and the immediate next action.
 
@@ -883,7 +894,7 @@ For academic use, please cite the DOI:
 ```bibtex
 @software{veritas_os_2025,
   author = {Fujishita, Takeshi},
-  title  = {VERITAS OS: Proto-AGI Decision OS},
+  title  = {VERITAS OS: Decision Governance OS for AI Agents},
   year   = {2025},
   doi    = {10.5281/zenodo.17688094},
   url    = {https://github.com/veritasfuji-japan/veritas_os}
@@ -935,6 +946,6 @@ This project is influenced by:
 
 ---
 
-**VERITAS OS v2.0 — Safe, Auditable, Proto-AGI Decision OS**
+**VERITAS OS v2.0 — Safe, Auditable Decision Governance OS for AI Agents**
 
 © 2025 Takeshi Fujishita. **All Rights Reserved.**
