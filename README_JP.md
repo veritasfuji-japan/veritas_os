@@ -59,7 +59,7 @@ VERITAS OS は次を実現します。
 
 ## 事実とロードマップの境界
 
-- **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済み
+- **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
 - **現時点の境界**: 本番適用には環境ごとのハードニング・統合・運用審査が必要
 - **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
 
