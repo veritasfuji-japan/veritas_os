@@ -52,7 +52,7 @@ gh run watch --workflow=release-gate.yml
 The release gate runs three parallel groups:
 
 1. **Tier 1** (`governance-smoke` + `security-checks`) — fast, ~3-5 min
-2. **Tier 2** (`trustlog-production-matrix` + `production-tests` + `docker-smoke` + `governance-report`) — ~10-15 min
+2. **Tier 2** (`trustlog-production-matrix` + `production-tests` + `governance-backend-validation` + `docker-smoke` + `governance-report`) — ~10-15 min
 3. **Final** (`release-readiness`) — 1 min summary gate
 
 ### TrustLog gating policy
@@ -154,15 +154,15 @@ gh workflow run release-gate.yml --ref v2.1.0 -f tier3_external=true
 
 | What | Workflow | When | Blocks |
 |------|----------|------|--------|
-| Lint + security scripts + smoke | `main.yml` | Every PR | ✅ PR merge |
+| Lint + security scripts + smoke + governance backend fast invariants | `main.yml` | Every PR | ✅ PR merge |
 | Dependency CVE scan | `main.yml` | Every PR | ✅ PR merge |
 | Unit tests (85% coverage) | `main.yml` | Every PR | ✅ PR merge |
 | Frontend lint/test/E2E | `main.yml` | Every PR | ✅ PR merge |
-| Production tests + Docker smoke | `release-gate.yml` | `v*` tag push | ✅ Release |
+| Production tests + governance backend validation + Docker smoke | `release-gate.yml` | `v*` tag push | ✅ Release |
 | TrustLog production matrix (`dev`/`secure`/`prod`) | `release-gate.yml` | `release/*`, `rc/*`, `v*` | ✅ Release candidate / release |
 | Governance readiness report | `release-gate.yml` | `v*` tag push | ✅ Release |
 | External/live tests | `release-gate.yml` | Manual only | ⚠️ Advisory |
-| Long-running production validation | `production-validation.yml` | Weekly + manual | Advisory |
+| Long-running production validation (+ governance backend longrun) | `production-validation.yml` | Weekly + manual | Advisory |
 | SBOM generation | `sbom-nightly.yml` | Nightly | Advisory |
 | CodeQL analysis | `codeql.yml` | PR + weekly | Advisory (Security tab) |
 | Docker image publish | `publish-ghcr.yml` | Push to `main` | Advisory |

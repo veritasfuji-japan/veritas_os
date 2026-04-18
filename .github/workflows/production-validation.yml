@@ -86,6 +86,77 @@ jobs:
           path: test-reports/production.xml
           if-no-files-found: warn
 
+  # ── Tier 3 governance backend deep validation ─────────────────────────
+  governance-backend-longrun:
+    name: governance-backend-longrun
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_GOVERNANCE_BACKEND: "postgresql"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool alembic pytest httpx anyio
+
+      - name: Run Alembic migrations
+        run: |
+          set -euxo pipefail
+          alembic upgrade head
+
+      - name: Run Tier 3 governance backend deep tests
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_governance_backend_selection.py \
+            veritas_os/tests/test_governance_postgresql_repository.py \
+            veritas_os/tests/test_governance_artifact_signing.py \
+            veritas_os/tests/test_production_governance.py \
+            --tb=short \
+            --durations=30 \
+            --junitxml=test-reports/governance-backend-longrun.xml
+
+      - name: Upload governance backend longrun report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-backend-longrun-report
+          path: test-reports/governance-backend-longrun.xml
+          if-no-files-found: warn
+
   # ── PostgreSQL backend smoke test ────────────────────────────────────
   postgresql-smoke:
     name: postgresql-smoke

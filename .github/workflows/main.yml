@@ -209,11 +209,64 @@ jobs:
           if-no-files-found: warn
 
   # ============================================================
+  # [Tier 1] Governance backend invariants (fast)
+  # Explicit gate for backend selection, rollback approvals,
+  # invalid backend fail-fast, and concurrent audit safety.
+  # ============================================================
+  governance-backend-fast:
+    name: "[Tier 1] governance-backend-fast"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install pytest httpx anyio
+
+      - name: "[Tier 1] Run fast governance backend invariant tests"
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_governance_backend_selection.py \
+            veritas_os/tests/test_governance_repository.py \
+            veritas_os/tests/test_governance_artifact_signing.py::TestGovernedRollback \
+            veritas_os/tests/test_governance_artifact_signing.py::TestGovernanceHistoryDigests \
+            --tb=short \
+            --durations=20 \
+            --junitxml=test-reports/governance-backend-fast.xml
+
+      - name: Upload governance backend fast test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-backend-fast-report-${{ github.run_id }}
+          path: test-reports/governance-backend-fast.xml
+          if-no-files-found: warn
+
+  # ============================================================
   # [Tier 1] Test matrix
   # ============================================================
   test:
     name: test (py${{ matrix.python-version }})
-    needs: [lint, dependency-audit, governance-smoke]
+    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -330,7 +383,7 @@ jobs:
   # ============================================================
   test-postgresql:
     name: test-postgresql (py3.12)
-    needs: [lint, dependency-audit, governance-smoke]
+    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -463,7 +516,7 @@ jobs:
 
   test-slow:
     name: test-slow (py3.12)
-    needs: [lint, dependency-audit, governance-smoke]
+    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -523,7 +576,7 @@ jobs:
   # ============================================================
   frontend-quality-gate:
     name: frontend-${{ matrix.gate }}
-    needs: [lint, dependency-audit, governance-smoke]
+    needs: [lint, dependency-audit, governance-smoke, governance-backend-fast]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 

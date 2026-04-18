@@ -7,6 +7,7 @@
 # Tier Model:
 #   Tier 1 — governance-smoke       Fast smoke checks (~2 min) — also runs on every PR
 #   Tier 2 — production-tests       Production-like pytest suite (blocking at release)
+#   Tier 2 — governance-backend-validation Backend/rollback/approval/ordering gate
 #   Tier 2 — docker-smoke           Docker Compose health check (blocking at release)
 #   Tier 2 — governance-report      Governance readiness report (artifact upload)
 #   Tier 3 — external-tests         Live network / secrets tests (opt-in, advisory)
@@ -348,6 +349,83 @@ jobs:
           if-no-files-found: warn
 
   # ============================================================================
+  # Tier 2 — Governance backend validation (release-blocking)
+  # Validates backend selection, PostgreSQL integration, rollback integrity,
+  # four-eyes invariants, history ordering, and startup fail-fast behavior.
+  # ============================================================================
+  governance-backend-validation:
+    name: "[Tier 2] governance-backend-validation"
+    needs: [governance-smoke, security-checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: veritas
+          POSTGRES_PASSWORD: veritas_test
+          POSTGRES_DB: veritas_test
+        options: >-
+          --health-cmd "pg_isready -U veritas"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      PYTHONUNBUFFERED: "1"
+      OPENAI_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_API_KEY: "DUMMY_FOR_CI"
+      VERITAS_DATABASE_URL: "postgresql+psycopg://veritas:veritas_test@localhost:5432/veritas_test"
+      VERITAS_GOVERNANCE_BACKEND: "postgresql"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          set -euxo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r veritas_os/requirements.txt
+          python -m pip install "psycopg[binary]" psycopg-pool alembic pytest httpx anyio
+
+      - name: Run Alembic migrations
+        run: |
+          set -euxo pipefail
+          alembic upgrade head
+
+      - name: "[Tier 2] Run governance backend release-blocking tests"
+        run: |
+          set -euxo pipefail
+          mkdir -p test-reports
+          pytest -q \
+            veritas_os/tests/test_governance_backend_selection.py \
+            veritas_os/tests/test_governance_repository.py \
+            veritas_os/tests/test_governance_postgresql_repository.py \
+            veritas_os/tests/test_governance_artifact_signing.py::TestGovernanceHistoryDigests \
+            veritas_os/tests/test_governance_artifact_signing.py::TestGovernedRollback \
+            --tb=short \
+            --durations=20 \
+            --junitxml=test-reports/governance-backend-release.xml
+
+      - name: Upload governance backend release report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-backend-release-report
+          path: test-reports/governance-backend-release.xml
+          if-no-files-found: warn
+
+  # ============================================================================
   # Tier 2 — Docker Compose smoke (blocking at release)
   # ============================================================================
   docker-smoke:
@@ -462,7 +540,7 @@ jobs:
   # ============================================================================
   governance-report:
     name: "[Tier 2] governance-report"
-    needs: [production-tests]
+    needs: [production-tests, governance-backend-validation]
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -584,7 +662,7 @@ jobs:
   # ============================================================================
   release-readiness:
     name: "✅ Release Readiness Gate"
-    needs: [governance-smoke, security-checks, trustlog-production-matrix, production-tests, docker-smoke, governance-report]
+    needs: [governance-smoke, security-checks, trustlog-production-matrix, production-tests, governance-backend-validation, docker-smoke, governance-report]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -596,6 +674,7 @@ jobs:
           SECURITY_RESULT: ${{ needs.security-checks.result }}
           TRUSTLOG_RESULT: ${{ needs.trustlog-production-matrix.result }}
           PRODUCTION_RESULT: ${{ needs.production-tests.result }}
+          GOVERNANCE_BACKEND_RESULT: ${{ needs.governance-backend-validation.result }}
           DOCKER_RESULT: ${{ needs.docker-smoke.result }}
           GOVERNANCE_REPORT_RESULT: ${{ needs.governance-report.result }}
         run: |
@@ -627,6 +706,7 @@ jobs:
           check "security-checks"    "[Tier 1]" "$SECURITY_RESULT"
           check "trustlog-production-matrix" "[Tier 2]" "$TRUSTLOG_RESULT"
           check "production-tests"   "[Tier 2]" "$PRODUCTION_RESULT"
+          check "governance-backend-validation" "[Tier 2]" "$GOVERNANCE_BACKEND_RESULT"
           check "docker-smoke"       "[Tier 2]" "$DOCKER_RESULT"
           check "governance-report"  "[Tier 2]" "$GOVERNANCE_REPORT_RESULT"
 
