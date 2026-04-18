@@ -163,6 +163,12 @@ describe("toPublicDecisionSchemaView", () => {
     const view = toPublicDecisionSchemaView(result);
     expect(view.gateDecisionLabel).toBe("proceed (execution guidance, not business approval)");
   });
+
+  it("falls back to unknown for non-canonical gate outputs", () => {
+    const result = makeResponse({ gate_decision: "totally_custom_status" } as never);
+    const view = toPublicDecisionSchemaView(result);
+    expect(view.gateDecision).toBe("unknown");
+  });
 });
 
 

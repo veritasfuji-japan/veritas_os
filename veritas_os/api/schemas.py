@@ -13,7 +13,7 @@ from pydantic import (
     field_validator,
 )
 from veritas_os.core.decision_semantics import (
-    canonicalize_gate_decision,
+    canonicalize_public_gate_decision,
     normalize_required_evidence_keys,
     unique_preserve_order,
     validate_gate_business_combination,
@@ -948,7 +948,7 @@ class DecideResponse(BaseModel):
                 sorted(extras.keys()),
             )
 
-        canonical_gate_decision = canonicalize_gate_decision(self.gate_decision)
+        canonical_gate_decision = canonicalize_public_gate_decision(self.gate_decision)
         if canonical_gate_decision != self.gate_decision:
             self.gate_decision = canonical_gate_decision
             events.append("coercion.gate_decision_canonicalized")

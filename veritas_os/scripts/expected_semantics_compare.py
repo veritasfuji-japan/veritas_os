@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from veritas_os.core.decision_semantics import (
-    canonicalize_gate_decision,
+    canonicalize_public_gate_decision,
     normalize_required_evidence_keys,
     unique_preserve_order,
 )
@@ -50,8 +50,8 @@ def compare_expected_semantics(
     """Return field-level mismatch diff between expected and actual semantics."""
     mismatches: dict[str, dict[str, Any]] = {}
 
-    expected_gate = canonicalize_gate_decision(expected.get("gate_decision"))
-    actual_gate = canonicalize_gate_decision(actual.get("gate_decision"))
+    expected_gate = canonicalize_public_gate_decision(expected.get("gate_decision"))
+    actual_gate = canonicalize_public_gate_decision(actual.get("gate_decision"))
     if expected_gate != actual_gate:
         mismatches["gate_decision"] = {"expected": expected_gate, "actual": actual_gate}
 

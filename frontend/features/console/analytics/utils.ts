@@ -1,4 +1,5 @@
 import { type DecideResponse } from "@veritas/types";
+import { canonicalizePublicGateDecision } from "../adapters/decision-semantics";
 
 /**
  * Render-safe serializer for unknown values.
@@ -73,8 +74,10 @@ export function toAssistantMessage(
   }
 
   const businessDecision = payload.business_decision ?? "HOLD";
-  const gateDecision = payload.gate_decision ?? payload.decision_status ?? "unknown";
-  const gateDecisionWithMeaning = gateDecision === "allow"
+  const gateDecision = canonicalizePublicGateDecision(
+    payload.gate_decision ?? payload.decision_status ?? "unknown",
+  );
+  const gateDecisionWithMeaning = gateDecision === "proceed"
     ? `${gateDecision} (${t("案件承認ではなく、応答出力可", "not case approval; response may be returned")})`
     : gateDecision;
   const nextAction = payload.next_action ?? t("要再評価", "Reassess required");
