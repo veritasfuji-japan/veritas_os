@@ -131,6 +131,28 @@ class TestInitialMigration:
         assert source.count('"metadata"') >= 2
 
 
+class TestGovernanceMigration:
+    """Verify governance-specific migration metadata and DDL intent."""
+
+    @pytest.fixture()
+    def migration(self) -> ModuleType:
+        return _load_migration("0002_governance_policy_tables")
+
+    def test_revision_id(self, migration: ModuleType):
+        assert migration.revision == "0002"
+
+    def test_down_revision(self, migration: ModuleType):
+        assert migration.down_revision == "0001"
+
+    def test_upgrade_contains_governance_tables(self, migration: ModuleType):
+        import inspect
+
+        source = inspect.getsource(migration.upgrade)
+        assert "governance_policies" in source
+        assert "governance_policy_events" in source
+        assert "governance_approvals" in source
+
+
 # ── Revision chain integrity ────────────────────────────────────────────
 
 

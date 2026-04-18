@@ -388,6 +388,7 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
         proposer=proposer,
         approvers=approver_ids,
         event_type=event_type,
+        approval_records=approvals if isinstance(approvals, list) else None,
     )
 
     # Notify subscribers (e.g. FUJI hot-reload) — best-effort, non-blocking
@@ -533,6 +534,8 @@ def rollback_policy(
         restored=result,
         proposer=_sanitize_updated_by(rolled_back_by),
         approvers=approver_ids,
+        approval_records=approvals if isinstance(approvals, list) else None,
+        reason=reason,
     )
 
     _notify_policy_update(result)

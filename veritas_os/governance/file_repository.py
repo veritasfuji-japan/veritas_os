@@ -121,7 +121,10 @@ class FileGovernanceRepository(GovernanceRepository):
         proposer: str,
         approvers: list[str],
         event_type: str,
+        approval_records: list[dict[str, str]] | None = None,
+        reason: str = "",
     ) -> None:
+        del approval_records, reason
         self.save_policy(updated)
         self.append_policy_event(
             self._build_event(
@@ -140,7 +143,10 @@ class FileGovernanceRepository(GovernanceRepository):
         restored: dict[str, Any],
         proposer: str,
         approvers: list[str],
+        approval_records: list[dict[str, str]] | None = None,
+        reason: str = "",
     ) -> None:
+        del approval_records, reason
         self.save_policy(restored)
         self.append_policy_event(
             self._build_event(
