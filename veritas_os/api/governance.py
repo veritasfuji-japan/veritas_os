@@ -15,6 +15,8 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 from veritas_os.governance import file_repository as _file_repo_mod
+from veritas_os.governance.config import get_governance_backend
+from veritas_os.governance.factory import create_governance_repository
 from veritas_os.governance.file_repository import FileGovernanceRepository
 from veritas_os.governance.models import GovernancePolicyEventRecord
 from veritas_os.governance.repository import GovernanceRepository
@@ -132,8 +134,8 @@ def _policy_path() -> Path:
 
 
 def _build_default_repository() -> GovernanceRepository:
-    """Create file-based governance repository for current module paths."""
-    return FileGovernanceRepository(
+    """Create governance repository selected by environment backend config."""
+    return create_governance_repository(
         policy_path=_DEFAULT_POLICY_PATH,
         history_path=_POLICY_HISTORY_PATH,
         lock=_policy_lock,
@@ -154,6 +156,14 @@ def _get_repository() -> GovernanceRepository:
     if _governance_repository_factory is None:
         return _build_default_repository()
     return _governance_repository_factory()
+
+
+def configure_governance_repository_from_env() -> GovernanceRepository:
+    """Configure repository DI factory from backend env and fail fast on errors."""
+    repository = _build_default_repository()
+    set_governance_repository_factory(lambda: repository)
+    logger.info("Governance repository configured (backend=%s)", get_governance_backend())
+    return repository
 
 
 def _load() -> Dict[str, Any]:

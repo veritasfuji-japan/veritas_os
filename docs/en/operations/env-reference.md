@@ -205,6 +205,7 @@ Variables prefixed with `VERITAS_` are project-specific.
 | `VERITAS_GOVERNANCE_ENFORCE_RBAC` | `1` | Enforce role-based access control |
 | `VERITAS_GOVERNANCE_ALLOWED_ROLES` | `admin,compliance_owner` | Comma-separated roles for governance operations |
 | `VERITAS_GOVERNANCE_TENANT_ID` | `""` | Tenant ID for multi-tenant isolation |
+| `VERITAS_GOVERNANCE_BACKEND` | `file` | Governance repository backend (`file` or `postgresql`) |
 | `VERITAS_EU_AI_ACT_MODE` | `false` | Enable EU AI Act compliance features |
 | `VERITAS_HUMAN_REVIEW_WEBHOOK_URL` | — | Webhook URL for human review escalation notifications |
 | `VERITAS_HUMAN_REVIEW_SLA_SECONDS` | *(module default)* | SLA timeout for human review completion |
