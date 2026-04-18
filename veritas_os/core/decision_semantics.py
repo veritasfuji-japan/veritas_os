@@ -112,6 +112,22 @@ def canonicalize_gate_decision(value: object) -> str:
     return GATE_DECISION_ALIAS_TO_CANONICAL.get(normalized, normalized)
 
 
+def canonicalize_public_gate_decision(
+    value: object,
+    *,
+    fallback: str = "unknown",
+) -> str:
+    """Canonicalize gate_decision for public response surfaces.
+
+    Legacy aliases are normalized to canonical values.
+    Non-canonical / unrecognized values are collapsed to ``fallback``.
+    """
+    canonical_value = canonicalize_gate_decision(value)
+    if canonical_value in CANONICAL_GATE_DECISIONS:
+        return canonical_value
+    return fallback
+
+
 def normalize_required_evidence_keys(values: Iterable[object] | None) -> list[str]:
     """Normalize evidence keys via taxonomy aliases while keeping free strings."""
     if values is None:
@@ -295,6 +311,7 @@ def validate_gate_business_combination(
     *, gate_decision: str, business_decision: str, human_review_required: bool
 ) -> None:
     """Raise ValueError when gate/business combination is forbidden."""
+    gate_decision = canonicalize_public_gate_decision(gate_decision)
     forbidden = {
         ("block", "APPROVE"),
         ("hold", "APPROVE"),

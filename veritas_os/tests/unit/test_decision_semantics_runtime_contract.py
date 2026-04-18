@@ -134,6 +134,23 @@ def test_public_response_prefers_canonical_gate_decision() -> None:
     assert payload["gate_decision"] == "proceed"
 
 
+def test_public_response_avoids_unknown_in_normal_runtime_path() -> None:
+    """Unknown FUJI status should still resolve into canonical public gate decision."""
+    ctx = PipelineContext(
+        request_id="req-gate-unknown-normalized",
+        query="test unknown gate",
+        fuji_dict={"decision_status": "totally_unknown_status", "status": "totally_unknown_status"},
+        decision_status="totally_unknown_status",
+        context={},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] == "proceed"
+
+
 def test_backward_compat_decision_status_stays_legacy_field() -> None:
     """decision_status remains distinct from public gate semantics."""
     payload = DecideResponse.model_validate(

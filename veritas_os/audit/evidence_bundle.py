@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from veritas_os.audit.evidence_bundle_schema import BUNDLE_SCHEMA_VERSION, BUNDLE_TYPES
+from veritas_os.core.decision_semantics import canonicalize_public_gate_decision
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 _logger = logging.getLogger(__name__)
@@ -245,10 +246,11 @@ def _decision_record(entry: Dict[str, Any], verification_report: Dict[str, Any])
     payload = payload if isinstance(payload, dict) else {}
     governance_identity = payload.get("governance_identity")
     decision_id = entry.get("decision_id") or payload.get("decision_id")
+    canonical_gate_decision = canonicalize_public_gate_decision(payload.get("gate_decision"))
 
     return {
         "decision_payload": payload,
-        "gate_decision": payload.get("gate_decision", "unknown"),
+        "gate_decision": canonical_gate_decision,
         "business_decision": payload.get("business_decision", "HOLD"),
         "next_action": payload.get("next_action", "REVISE_AND_RESUBMIT"),
         "required_evidence": payload.get("required_evidence", []),

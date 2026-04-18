@@ -73,3 +73,49 @@ def test_financial_bundle_sample_fixture_exists() -> None:
     assert decision_record["decision_payload"]["gate_decision"] == "human_review_required"
     assert decision_record["decision_payload"]["business_decision"] == "REVIEW_REQUIRED"
     assert decision_record["decision_payload"]["human_review_required"] is True
+
+
+def test_evidence_bundle_decision_record_canonicalizes_gate_decision(
+    tmp_path,
+) -> None:
+    """Decision record gate_decision should use canonical public values."""
+    log_path = tmp_path / "trustlog.jsonl"
+    log_entry = {
+        "decision_id": "dec-fin-wire-2026-0002",
+        "timestamp": "2026-04-18T00:00:00Z",
+        "previous_hash": None,
+        "payload_hash": "dummy",
+        "full_payload_hash": "dummy-full",
+        "signature": "dummy-signature",
+        "decision_payload": {
+            "request_id": "fin-wire-2026-0002",
+            "gate_decision": "allow",
+            "business_decision": "APPROVE",
+            "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+            "required_evidence": [],
+            "human_review_required": False,
+        },
+    }
+    log_path.write_text(json.dumps(log_entry) + "\n", encoding="utf-8")
+
+    from veritas_os.cli.evidence_bundle import main
+
+    out_dir = tmp_path / "bundles"
+    exit_code = main(
+        [
+            "generate",
+            "--bundle-type",
+            "decision",
+            "--witness-ledger",
+            str(log_path),
+            "--output-dir",
+            str(out_dir),
+            "--request-id",
+            "fin-wire-2026-0002",
+            "--json",
+        ]
+    )
+    assert exit_code == 0
+    bundle_dir = next(out_dir.glob("veritas_bundle_decision_*"))
+    decision_record = json.loads((bundle_dir / "decision_record.json").read_text(encoding="utf-8"))
+    assert decision_record["gate_decision"] == "proceed"

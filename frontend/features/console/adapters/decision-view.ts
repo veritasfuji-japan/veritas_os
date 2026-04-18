@@ -1,6 +1,7 @@
 import { type DecideResponse } from "@veritas/types";
 import { toArray } from "../analytics/utils";
 import { PIPELINE_STAGES, type PipelineStageName } from "../constants";
+import { canonicalizePublicGateDecision, gateDecisionLabel } from "./decision-semantics";
 import {
   type DecisionResultView,
   type FujiGateDetailView,
@@ -149,39 +150,6 @@ function readText(record: Record<string, unknown>, ...keys: string[]): string {
   return "n/a";
 }
 
-function getGateDecisionLabel(gateDecision: string): string {
-  if (gateDecision === "proceed") {
-    return "proceed (execution guidance, not business approval)";
-  }
-  if (gateDecision === "hold") {
-    return "gate hold";
-  }
-  if (gateDecision === "block") {
-    return "blocked by gate";
-  }
-  if (gateDecision === "human_review_required") {
-    return "human review required by gate";
-  }
-  return "gate status";
-}
-
-function canonicalizeGateDecision(value: string): string {
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) {
-    return "unknown";
-  }
-  if (normalized === "allow") {
-    return "proceed";
-  }
-  if (normalized === "deny" || normalized === "rejected") {
-    return "block";
-  }
-  if (normalized === "modify" || normalized === "abstain") {
-    return "hold";
-  }
-  return normalized;
-}
-
 export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisionSchemaView {
   const resultRecord = result as Record<string, unknown>;
   const requiredEvidenceRaw = result.required_evidence;
@@ -193,12 +161,12 @@ export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisi
     ? missingEvidenceRaw.filter((item): item is string => typeof item === "string")
     : [];
   const runtimeStatus = toRuntimeStatusView(result);
-  const gateDecision = canonicalizeGateDecision(
+  const gateDecision = canonicalizePublicGateDecision(
     readText(resultRecord, "gate_decision", "decision_status"),
   );
   return {
     gateDecision,
-    gateDecisionLabel: getGateDecisionLabel(gateDecision),
+    gateDecisionLabel: gateDecisionLabel(gateDecision),
     businessDecision: readText(resultRecord, "business_decision"),
     nextAction: readText(resultRecord, "next_action"),
     requiredEvidence,

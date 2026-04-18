@@ -22,7 +22,7 @@ from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
 from veritas_os.core.decision_semantics import (
     build_required_evidence_profile,
-    canonicalize_gate_decision,
+    canonicalize_public_gate_decision,
     derive_gate_decision_from_stop_reasons,
     get_required_evidence_profiles,
     normalize_required_evidence_keys_with_diagnostics,
@@ -519,7 +519,7 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         risk_score=risk_score,
         human_review_required=human_review_required,
     )
-    gate_decision = canonicalize_gate_decision(gate_decision)
+    gate_decision = canonicalize_public_gate_decision(gate_decision)
 
     if missing_evidence:
         business_decision = "EVIDENCE_REQUIRED"

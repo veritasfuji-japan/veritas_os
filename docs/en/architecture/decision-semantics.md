@@ -27,6 +27,14 @@ response finalization.
 - Forbidden combination checks are enforced on canonicalized values.
 - `unknown` remains fallback-compatible, but normal runtime derivation converges to canonical values.
 - Mission Control adapters now canonicalize legacy gate aliases before UI rendering.
+- PoC compare helper normalizes gate decisions to canonical public values before diffing.
+- Evidence Bundle `decision_record.gate_decision` is canonicalized for external-facing audit payloads.
+
+### Canonical-only public surface policy (current)
+
+- Public response assembly (`/v1/decide`) emits canonical gate values by default.
+- `allow|deny|modify|rejected|abstain` remain accepted as backward-compatibility input.
+- Legacy gate labels are compatibility-only and should not be used as new output contracts.
 
 ## A. gate_decision semantics table
 
