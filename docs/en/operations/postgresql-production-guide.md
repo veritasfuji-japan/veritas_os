@@ -236,6 +236,32 @@ make db-downgrade        # → alembic downgrade -1
 alembic upgrade head --sql > migration.sql
 ```
 
+### Governance datastore migration validation
+
+After applying migrations, run governance-specific integrity checks before
+shipping traffic:
+
+```bash
+# Ensure latest governance constraints/indexes are applied.
+alembic upgrade head
+
+# Validate governance PostgreSQL repository behavior.
+pytest -q veritas_os/tests -k "governance and postgresql"
+pytest -q veritas_os/tests -k "governance and concurrency"
+```
+
+Governance migration `0003` hardens production invariants:
+
+- `governance_policies.policy_revision` must remain positive and unique.
+- `governance_approvals.reviewer` must be non-empty after trim.
+
+If an emergency rollback is required, validate downgrade in staging first:
+
+```bash
+alembic downgrade -1
+alembic upgrade head
+```
+
 ### Auto-migration on startup
 
 ```bash

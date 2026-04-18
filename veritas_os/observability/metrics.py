@@ -226,6 +226,21 @@ DB_HEALTH_STATUS = _gauge(
     "db_health_status",
     "Database health (1 = healthy, 0 = unhealthy)",
 )
+GOVERNANCE_REPOSITORY_OPERATION_TOTAL = _counter(
+    "governance_repository_operation_total",
+    "Governance repository operations by backend/operation/status",
+    labelnames=("backend", "operation", "status"),
+)
+GOVERNANCE_REPOSITORY_OPERATION_LATENCY_SECONDS = _histogram(
+    "governance_repository_operation_latency_seconds",
+    "Governance repository operation latency by backend/operation",
+    labelnames=("backend", "operation"),
+)
+GOVERNANCE_REPOSITORY_CONFLICT_TOTAL = _counter(
+    "governance_repository_conflict_total",
+    "Governance repository optimistic-lock conflicts",
+    labelnames=("backend",),
+)
 
 # Desirable / advanced PostgreSQL metrics
 LONG_RUNNING_QUERY_COUNT = _gauge(
@@ -480,6 +495,33 @@ def set_db_backend_selected(component: str, backend: str) -> None:
 
 def set_db_health_status(healthy: bool) -> None:
     DB_HEALTH_STATUS.set(1.0 if healthy else 0.0)
+
+
+def record_governance_repository_operation(
+    *,
+    backend: Any,
+    operation: Any,
+    status: Any,
+    duration_seconds: float,
+) -> None:
+    """Record governance repository operation counters and latency."""
+    labels = {
+        "backend": _label(backend, "unknown"),
+        "operation": _label(operation, "unknown"),
+        "status": _label(status, "unknown"),
+    }
+    GOVERNANCE_REPOSITORY_OPERATION_TOTAL.labels(**labels).inc()
+    GOVERNANCE_REPOSITORY_OPERATION_LATENCY_SECONDS.labels(
+        backend=labels["backend"],
+        operation=labels["operation"],
+    ).observe(max(0.0, duration_seconds))
+
+
+def record_governance_repository_conflict(*, backend: Any) -> None:
+    """Record optimistic-lock conflicts for governance writes."""
+    GOVERNANCE_REPOSITORY_CONFLICT_TOTAL.labels(
+        backend=_label(backend, "unknown")
+    ).inc()
 
 
 def set_long_running_query_count(count: int) -> None:

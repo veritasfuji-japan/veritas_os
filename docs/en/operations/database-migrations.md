@@ -1,6 +1,6 @@
 # Database Migrations (Alembic)
 
-> **Last updated**: 2026-04-11
+> **Last updated**: 2026-04-18
 > **Applies to**: PostgreSQL backend only (file-based backends are unaffected)
 
 ---
@@ -77,6 +77,8 @@ Migrations live in `alembic/versions/` and follow this naming pattern:
 | Revision | Description | Tables |
 |----------|-------------|--------|
 | `0001`   | Initial schema | `memory_records`, `trustlog_entries`, `trustlog_chain_state` |
+| `0002`   | Governance policy datastore tables | `governance_policies`, `governance_policy_events`, `governance_approvals` |
+| `0003`   | Governance integrity hardening | Adds revision uniqueness + approval reviewer non-empty checks |
 
 ---
 

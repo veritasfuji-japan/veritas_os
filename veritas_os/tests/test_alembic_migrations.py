@@ -153,6 +153,27 @@ class TestGovernanceMigration:
         assert "governance_approvals" in source
 
 
+class TestGovernanceIntegrityMigration:
+    """Verify governance integrity hardening migration metadata and DDL intent."""
+
+    @pytest.fixture()
+    def migration(self) -> ModuleType:
+        return _load_migration("0003_governance_integrity_hardening")
+
+    def test_revision_id(self, migration: ModuleType):
+        assert migration.revision == "0003"
+
+    def test_down_revision(self, migration: ModuleType):
+        assert migration.down_revision == "0002"
+
+    def test_upgrade_contains_integrity_constraints(self, migration: ModuleType):
+        import inspect
+
+        source = inspect.getsource(migration.upgrade)
+        assert "ck_governance_policies_policy_revision_positive" in source
+        assert "uq_governance_policies_policy_revision" in source
+        assert "ck_governance_approvals_reviewer_non_empty" in source
+
 # ── Revision chain integrity ────────────────────────────────────────────
 
 
