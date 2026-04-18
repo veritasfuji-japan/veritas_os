@@ -126,6 +126,39 @@ def normalize_required_evidence_keys(values: Iterable[object] | None) -> list[st
     return out
 
 
+def normalize_required_evidence_keys_with_diagnostics(
+    values: Iterable[object] | None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Normalize evidence keys and return diagnostics for telemetry.
+
+    Diagnostics include:
+    - ``alias_normalized_count``: values changed from alias to canonical.
+    - ``unknown_keys``: normalized keys not in taxonomy categories.
+    """
+    if values is None:
+        return [], {"alias_normalized_count": 0, "unknown_keys": []}
+    alias_map = get_required_evidence_alias_map()
+    category_map = get_required_evidence_category_map()
+    normalized: list[str] = []
+    alias_normalized_count = 0
+    for value in values:
+        raw_key = str(value).strip().lower()
+        if not raw_key:
+            continue
+        canonical_key = alias_map.get(raw_key, raw_key)
+        if canonical_key != raw_key:
+            alias_normalized_count += 1
+        normalized.append(canonical_key)
+    unknown_keys = unique_preserve_order(
+        [key for key in normalized if key not in category_map]
+    )
+    diagnostics = {
+        "alias_normalized_count": alias_normalized_count,
+        "unknown_keys": unknown_keys,
+    }
+    return normalized, diagnostics
+
+
 @lru_cache(maxsize=1)
 def get_required_evidence_category_map() -> dict[str, str]:
     """Return canonical_key -> category map from taxonomy v0."""
@@ -243,6 +276,8 @@ def derive_gate_decision_from_stop_reasons(
     if raw_gate_decision in deny_family or decision_status in deny_family:
         return "block", human_review_required
     if "required_evidence_missing" in reasons:
+        return "hold", human_review_required
+    if "sanctions_partial_match" in reasons:
         return "hold", human_review_required
     if "high_risk_ambiguity" in reasons and risk_score >= 0.8:
         return "human_review_required", True

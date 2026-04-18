@@ -276,6 +276,52 @@ def test_regression_source_of_funds_missing_does_not_approve() -> None:
     assert payload["business_decision"] != "APPROVE"
 
 
+def test_regression_high_risk_ambiguity_forces_human_review_required() -> None:
+    """High risk ambiguity should force human_review_required escalation."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_high_risk_country_wire_manual_review"]
+    ctx = PipelineContext(
+        request_id="financial-template-high-risk-ambiguity",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={**template.context, "high_risk_ambiguity": True, "risk_score": 0.92},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["human_review_required"] is True
+    assert payload["gate_decision"] == "human_review_required"
+
+
+def test_regression_secure_prod_controls_missing_blocks_execution() -> None:
+    """Secure/prod controls missing should force block in secure environment."""
+    ctx = PipelineContext(
+        request_id="financial-template-secure-controls",
+        query="secure controls missing",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "decision_domain": "aml_kyc",
+            "environment": "secure",
+            "production_controls_ready": False,
+            "required_evidence": ["kyc_profile"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] != "APPROVE"
+
+
 def test_financial_templates_expected_semantics_has_required_fields() -> None:
     """Expected semantics should include next_action and rationale expectations."""
     templates = _load_template_pack().templates

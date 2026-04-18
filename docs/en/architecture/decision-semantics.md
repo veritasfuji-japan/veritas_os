@@ -26,6 +26,7 @@ response finalization.
 - Legacy values (`allow|deny|modify|rejected|abstain`) are normalized before validation.
 - Forbidden combination checks are enforced on canonicalized values.
 - `unknown` remains fallback-compatible, but normal runtime derivation converges to canonical values.
+- Mission Control adapters now canonicalize legacy gate aliases before UI rendering.
 
 ## A. gate_decision semantics table
 

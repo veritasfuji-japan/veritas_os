@@ -24,6 +24,8 @@ from veritas_os.core.decision_semantics import (
     build_required_evidence_profile,
     canonicalize_gate_decision,
     derive_gate_decision_from_stop_reasons,
+    get_required_evidence_profiles,
+    normalize_required_evidence_keys_with_diagnostics,
     normalize_required_evidence_keys,
     unique_preserve_order,
     validate_gate_business_combination,
@@ -73,6 +75,13 @@ ACTION_CANDIDATE_WEIGHTS = {
     "urgency": 0.20,
     "cost": 0.10,
     "dependency": 0.05,
+}
+
+AML_KYC_PROFILE_ENFORCEMENT_KEYS = {
+    "kyc_profile",
+    "sanctions_screening_trace",
+    "pep_screening_result",
+    "source_of_funds_record",
 }
 
 
@@ -391,8 +400,43 @@ def _extract_stop_reasons(
         bool(context.get("ambiguity_detected")) and context_risk_score >= 0.8
     ):
         reasons.append("high_risk_ambiguity")
+    if bool(context.get("sanctions_partial_match")):
+        reasons.append("sanctions_partial_match")
 
     return reasons
+
+
+def _build_required_evidence_telemetry(
+    *,
+    decision_domain: str,
+    template_id: str,
+    required_diagnostics: Dict[str, Any],
+    satisfied_diagnostics: Dict[str, Any],
+    unknown_keys: List[str],
+    profile_missing_keys: List[str],
+) -> Dict[str, Any]:
+    """Build required-evidence telemetry counters for warning-first rollout."""
+    return {
+        "domain": decision_domain or "unknown",
+        "template_id": template_id or "unknown",
+        "unknown_required_evidence_key_total": len(unknown_keys),
+        "required_evidence_alias_normalized_total": int(
+            required_diagnostics.get("alias_normalized_count", 0)
+        ) + int(satisfied_diagnostics.get("alias_normalized_count", 0)),
+        "required_evidence_profile_miss_total": len(profile_missing_keys),
+        "top_unknown_keys": unknown_keys[:5],
+        "profile_missing_keys": profile_missing_keys,
+    }
+
+
+def _should_enforce_aml_kyc_profile(
+    decision_domain: str,
+    required_evidence: List[str],
+) -> bool:
+    """Return whether AML/KYC profile strictness should be applied."""
+    if decision_domain != "aml_kyc":
+        return False
+    return bool(AML_KYC_PROFILE_ENFORCEMENT_KEYS & set(required_evidence))
 
 
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
@@ -410,10 +454,46 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         or "unknown"
     ).lower()
     gate_reason = str(ctx.rejection_reason or ctx.fuji_dict.get("rejection_reason") or "").strip()
-    required_evidence_input = unique_preserve_order(_as_string_list(ctx.context.get("required_evidence")))
-    satisfied_evidence_input = unique_preserve_order(_as_string_list(ctx.context.get("satisfied_evidence")))
-    required_evidence = unique_preserve_order(normalize_required_evidence_keys(required_evidence_input))
-    satisfied_evidence = unique_preserve_order(normalize_required_evidence_keys(satisfied_evidence_input))
+    decision_domain = str(
+        ctx.context.get("decision_domain")
+        or ctx.context.get("category")
+        or ""
+    ).strip().lower()
+    template_id = str(ctx.context.get("template_id") or "").strip()
+    required_evidence_input = unique_preserve_order(
+        _as_string_list(ctx.context.get("required_evidence"))
+    )
+    satisfied_evidence_input = unique_preserve_order(
+        _as_string_list(ctx.context.get("satisfied_evidence"))
+    )
+    required_normalized, required_diag = normalize_required_evidence_keys_with_diagnostics(
+        required_evidence_input
+    )
+    satisfied_normalized, satisfied_diag = normalize_required_evidence_keys_with_diagnostics(
+        satisfied_evidence_input
+    )
+    required_evidence = unique_preserve_order(required_normalized)
+    satisfied_evidence = unique_preserve_order(satisfied_normalized)
+    profiles = get_required_evidence_profiles()
+    domain_profile = profiles.get(decision_domain, {})
+    profile_required_keys = unique_preserve_order(
+        normalize_required_evidence_keys(domain_profile.get("required"))
+    )
+    enforce_profile = bool(
+        profile_required_keys
+        and _should_enforce_aml_kyc_profile(decision_domain, required_evidence)
+    )
+    profile_missing_keys = (
+        [key for key in profile_required_keys if key not in set(required_evidence)]
+        if enforce_profile
+        else []
+    )
+    if enforce_profile:
+        required_evidence = unique_preserve_order(required_evidence + profile_required_keys)
+    unknown_keys = unique_preserve_order(
+        list(required_diag.get("unknown_keys", []))
+        + list(satisfied_diag.get("unknown_keys", []))
+    )
     satisfied_canonical = set(satisfied_evidence)
     missing_evidence = [item for item in required_evidence if item not in satisfied_canonical]
 
@@ -500,11 +580,15 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "satisfied_evidence": satisfied_evidence,
         "required_evidence_profile": build_required_evidence_profile(
             required_evidence,
-            decision_domain=str(
-                ctx.context.get("decision_domain")
-                or ctx.context.get("category")
-                or ""
-            ),
+            decision_domain=decision_domain,
+        ),
+        "required_evidence_telemetry": _build_required_evidence_telemetry(
+            decision_domain=decision_domain,
+            template_id=template_id,
+            required_diagnostics=required_diag,
+            satisfied_diagnostics=satisfied_diag,
+            unknown_keys=unknown_keys,
+            profile_missing_keys=profile_missing_keys,
         ),
         "human_review_required": human_review_required,
         "rationale": " | ".join(rationale_parts),
@@ -523,6 +607,26 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     }
     if structured_answer is not None:
         result["structured_answer"] = structured_answer
+    if unknown_keys:
+        logger.warning(
+            "required-evidence unknown keys observed: domain=%s template_id=%s keys=%s",
+            decision_domain or "unknown",
+            template_id or "unknown",
+            unknown_keys,
+        )
+        result.setdefault("warnings", []).append(
+            "unknown_required_evidence_keys_detected"
+        )
+    if profile_missing_keys:
+        logger.warning(
+            "required-evidence profile miss: domain=%s template_id=%s missing=%s",
+            decision_domain or "unknown",
+            template_id or "unknown",
+            profile_missing_keys,
+        )
+        result.setdefault("warnings", []).append(
+            "required_evidence_profile_missing_keys"
+        )
     if _is_dev_mode_enabled(ctx.context):
         result["action_candidates"] = action_candidates
         result["action_selection"]["ranking_trace"] = {
