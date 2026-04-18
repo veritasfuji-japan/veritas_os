@@ -10,7 +10,8 @@
   "beachhead": {
     "decision_domain": "aml_kyc",
     "template_id": "aml_kyc_high_risk_country_wire_manual_review",
-    "why": "high regulatory sensitivity with evidence-first escalation and clear human review boundaries"
+    "why": "high regulatory sensitivity with evidence-first escalation and clear human review boundaries",
+    "evidence_profile": "aml_kyc_beachhead_v1"
   },
   "templates": [
     {
@@ -111,15 +112,23 @@
       "context": {
         "required_evidence": [
           "kyc_profile",
+          "sanctions_screening_trace",
           "pep_screening_result",
           "source_of_funds_record",
-          "transaction_purpose_statement"
+          "approval_matrix",
+          "audit_trail_export",
+          "secure_controls_attestation",
+          "policy_definition_record"
         ],
         "satisfied_evidence": [
           "kyc_profile",
+          "sanctions_screening_trace",
           "pep_screening_result",
           "source_of_funds_record",
-          "transaction_purpose_statement"
+          "approval_matrix",
+          "audit_trail_export",
+          "secure_controls_attestation",
+          "policy_definition_record"
         ],
         "high_risk_ambiguity": true,
         "risk_score": 0.91,
@@ -135,9 +144,13 @@
         "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
         "required_evidence": [
           "kyc_profile",
+          "sanctions_screening_trace",
           "pep_screening_result",
           "source_of_funds_record",
-          "transaction_purpose_statement"
+          "approval_matrix",
+          "audit_trail_export",
+          "secure_controls_attestation",
+          "policy_definition_record"
         ],
         "missing_evidence": [],
         "human_review_required": true,
@@ -171,7 +184,8 @@
         "audit_trail_complete": true,
         "approval_boundary_defined": true,
         "rule_defined": true,
-        "secure_controls_ready": true
+        "secure_controls_ready": true,
+        "sanctions_partial_match": true
       },
       "expected_semantics": {
         "gate_decision": "hold",
@@ -264,7 +278,9 @@
         "approval_boundary_defined": true,
         "rule_defined": true,
         "secure_controls_ready": true,
-        "human_review_required": true
+        "human_review_required": true,
+        "environment": "secure",
+        "production_controls_ready": false
       },
       "expected_semantics": {
         "gate_decision": "block",
@@ -306,7 +322,8 @@
         "audit_trail_complete": true,
         "approval_boundary_defined": false,
         "rule_defined": true,
-        "secure_controls_ready": true
+        "secure_controls_ready": true,
+        "decision_domain": "aml_kyc"
       },
       "expected_semantics": {
         "gate_decision": "human_review_required",

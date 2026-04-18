@@ -292,11 +292,17 @@ def _build_question_first_answer(
         return None
     asks_minimum = any(token in query_lower for token in ("最低条件", "minimum", "必須条件"))
     asks_boundary = any(token in query_lower for token in ("境界条件", "boundary"))
+    asks_review = any(token in query_lower for token in ("人手審査", "human review", "manual review"))
     asks_evidence = any(
         token in query_lower for token in ("必要証拠", "必要な証拠", "required evidence", "evidence")
     )
-    if not (asks_minimum or asks_boundary or asks_evidence):
+    asks_sanctions = any(token in query_lower for token in ("sanctions", "制裁", "一致"))
+    asks_sof = any(
+        token in query_lower for token in ("source of funds", "source_of_funds", "資金源", "funds")
+    )
+    if not (asks_minimum or asks_boundary or asks_evidence or asks_review or asks_sanctions or asks_sof):
         return None
+    stop_reason_set = sorted(set(stop_reasons))
     return {
         "minimum_conditions": {
             "required_evidence_count": len(required_evidence),
@@ -304,14 +310,31 @@ def _build_question_first_answer(
             "all_required_evidence_ready": len(missing_evidence) == 0,
         },
         "boundary_conditions": {
-            "stop_reasons": sorted(set(stop_reasons)),
+            "stop_reasons": stop_reason_set,
             "has_policy_boundary_risk": any(
                 item in {"rule_undefined", "approval_boundary_unknown", "rollback_not_supported"}
                 for item in stop_reasons
             ),
         },
+        "review_boundary": {
+            "human_review_triggered": any(
+                item in {"approval_boundary_unknown", "high_risk_ambiguity"}
+                for item in stop_reasons
+            ),
+        },
+        "sanctions_controls": {
+            "must_hold_or_review": "high_risk_ambiguity" in stop_reasons or bool(missing_evidence),
+            "stop_reasons": [
+                item for item in stop_reason_set if item in {"high_risk_ambiguity", "required_evidence_missing"}
+            ],
+        },
+        "source_of_funds_controls": {
+            "source_of_funds_missing": "source_of_funds_record" in set(missing_evidence),
+            "required_before_approval": "source_of_funds_record" in set(required_evidence),
+        },
         "required_evidence": required_evidence,
         "missing_evidence": missing_evidence,
+        "next_action_hint": "Gather missing evidence first, then route to review if boundary ambiguity remains.",
     }
 
 
@@ -402,7 +425,6 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     human_review_required = bool(
         ctx.context.get("human_review_required")
         or fuji_status == "needs_human_review"
-        or raw_gate_decision == "hold"
     )
     stop_reasons = _extract_stop_reasons(
         gate_reason=gate_reason,
@@ -476,7 +498,14 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "required_evidence": required_evidence,
         "missing_evidence": missing_evidence,
         "satisfied_evidence": satisfied_evidence,
-        "required_evidence_profile": build_required_evidence_profile(required_evidence),
+        "required_evidence_profile": build_required_evidence_profile(
+            required_evidence,
+            decision_domain=str(
+                ctx.context.get("decision_domain")
+                or ctx.context.get("category")
+                or ""
+            ),
+        ),
         "human_review_required": human_review_required,
         "rationale": " | ".join(rationale_parts),
         "refusal_reason": refusal_reason,

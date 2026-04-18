@@ -16,13 +16,16 @@ finalization.
 
 ## Legacy / alias values
 
-`gate_decision` currently accepts both canonical values and legacy/alias values for compatibility.
+`gate_decision` now prefers canonical public output.
+Legacy values are accepted on ingestion/compatibility paths and normalized before
+response finalization.
 
-## Future tightening candidates
+## Tightening status (implemented in runtime)
 
-- Restrict `gate_decision` to canonical values (`proceed|hold|block|human_review_required`).
-- Move legacy values (`allow|deny|modify|rejected|abstain|unknown`) to adapter-only input normalization.
-- Enforce invalid combination checks at response validation.
+- Canonical public values are prioritized: `proceed|hold|block|human_review_required`.
+- Legacy values (`allow|deny|modify|rejected|abstain`) are normalized before validation.
+- Forbidden combination checks are enforced on canonicalized values.
+- `unknown` remains fallback-compatible, but normal runtime derivation converges to canonical values.
 
 ## A. gate_decision semantics table
 

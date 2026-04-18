@@ -57,6 +57,10 @@ AML/KYC beachhead evidence profile (canonical keys):
 - `secure_controls_attestation`
 - `policy_definition_record`
 
+Runtime now treats this as a machine-readable profile (`aml_kyc_beachhead_v1`)
+with `required`, `optional`, and `escalation_sensitive` key classes for
+regression and response shaping.
+
 ## Role Split: Regulatory Templates vs PoC Questions
 
 - **Regulatory templates** (`financial_regulatory_templates.json`)
@@ -76,6 +80,8 @@ AML/KYC beachhead evidence profile (canonical keys):
 2. **Governance posture under ambiguity**
    - Missing evidence, sanctions partial matches, high-risk-country transfer
      context, and undefined approval boundaries trend toward hold/review/block.
+   - Sanctions partial matches and source-of-funds gaps are explicitly covered in
+     AML/KYC regressions to reduce false-pass behavior.
 3. **Operationally safe behavior**
    - Templates avoid investment advice and legal determinations, and instead
      require auditable escalation and evidence collection.

@@ -22,7 +22,10 @@ from typing import Any, Callable
 
 import requests
 
-from veritas_os.scripts.expected_semantics_compare import compare_expected_semantics
+from veritas_os.scripts.expected_semantics_compare import (
+    compare_expected_semantics,
+    summarize_semantic_mismatches,
+)
 
 DEFAULT_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
 DEFAULT_API_URL = "http://localhost:8000/v1/decide"
@@ -222,6 +225,7 @@ def run_financial_poc(
                 "status": result.status,
                 "mismatch_count": result.mismatch_count,
                 "mismatches": result.mismatches,
+                "mismatch_summary": summarize_semantic_mismatches(result.mismatches),
                 "request_id": result.request_id,
                 "error": result.error,
             }

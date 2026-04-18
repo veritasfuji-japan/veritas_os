@@ -94,7 +94,7 @@ def compare_expected_semantics(
     actual_missing = unique_preserve_order(
         normalize_required_evidence_keys(actual.get("missing_evidence"))
     )
-    if expected_missing and expected_missing != actual_missing:
+    if "missing_evidence" in expected and expected_missing != actual_missing:
         mismatches["missing_evidence"] = {
             "expected": expected_missing,
             "actual": actual_missing,
@@ -109,3 +109,25 @@ def compare_expected_semantics(
         }
 
     return mismatches
+
+
+def summarize_semantic_mismatches(mismatches: Mapping[str, Mapping[str, Any]]) -> str:
+    """Return a compact human-readable mismatch summary for runner outputs."""
+    if not mismatches:
+        return "no mismatches"
+    segments: list[str] = []
+    for field_name in (
+        "gate_decision",
+        "business_decision",
+        "required_evidence",
+        "missing_evidence",
+        "human_review_required",
+        "next_action",
+    ):
+        item = mismatches.get(field_name)
+        if not isinstance(item, Mapping):
+            continue
+        expected = item.get("expected")
+        actual = item.get("actual")
+        segments.append(f"{field_name}: expected={expected} actual={actual}")
+    return " | ".join(segments) if segments else "mismatch details unavailable"
