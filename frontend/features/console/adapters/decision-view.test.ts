@@ -158,6 +158,17 @@ describe("toPublicDecisionSchemaView", () => {
     expect(view.verifyStatus).toBe("verified");
   });
 
+  it("canonicalizes business_decision and next_action aliases", () => {
+    const result = makeResponse({
+      gate_decision: "allow",
+      business_decision: "allow",
+      next_action: "needs_human_review",
+    } as never);
+    const view = toPublicDecisionSchemaView(result);
+    expect(view.businessDecision).toBe("APPROVE");
+    expect(view.nextAction).toBe("PREPARE_HUMAN_REVIEW_PACKET");
+  });
+
   it("adds canonical label for proceed gate to avoid approval confusion", () => {
     const result = makeResponse({ gate_decision: "allow" } as never);
     const view = toPublicDecisionSchemaView(result);
@@ -203,6 +214,7 @@ describe("runtime status + bundle mapping", () => {
     const bundle = toEvidenceBundleDraft(result);
     expect(bundle.requestId).toBe("req-bundle");
     expect(bundle.businessDecision).toBe("REVIEW_REQUIRED");
+    expect(bundle.nextAction).toBe("ROUTE_TO_HUMAN_REVIEW");
     expect(bundle.runtimeStatus).toEqual({
       activePosture: "strict",
       backend: "gpt-5.3-mini",

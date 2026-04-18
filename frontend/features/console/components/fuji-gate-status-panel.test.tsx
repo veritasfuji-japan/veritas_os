@@ -17,7 +17,8 @@ describe("FujiGateStatusPanel", () => {
         } as never}
       />,
     );
-    expect(screen.getByText("allow")).toBeInTheDocument();
+    expect(screen.getByText("proceed")).toBeInTheDocument();
+    expect(screen.getByText(/not business approval/i)).toBeInTheDocument();
     expect(screen.getByText("rule hit")).toBeInTheDocument();
   });
 
@@ -64,7 +65,7 @@ describe("FujiGateStatusPanel", () => {
     );
     const statusEl = container.querySelector(".text-destructive");
     expect(statusEl).toBeInTheDocument();
-    expect(statusEl?.textContent).toBe("rejected");
+    expect(statusEl?.textContent).toContain("block");
   });
 
   it("applies destructive color for 'block' decision", () => {
@@ -81,17 +82,17 @@ describe("FujiGateStatusPanel", () => {
     expect(statusEl?.textContent).toBe("block");
   });
 
-  it("applies amber color for 'abstain' decision", () => {
+  it("applies amber color for 'human_review_required' decision", () => {
     const { container } = render(
       <FujiGateStatusPanel
         result={{
-          fuji: { decision_status: "abstain" },
-          gate: { decision_status: "abstain" },
+          fuji: { decision_status: "human_review_required" },
+          gate: { decision_status: "human_review_required" },
         } as never}
       />,
     );
     const statusEl = container.querySelector(".text-amber-400");
     expect(statusEl).toBeInTheDocument();
-    expect(statusEl?.textContent).toBe("abstain");
+    expect(statusEl?.textContent).toContain("human_review_required");
   });
 });

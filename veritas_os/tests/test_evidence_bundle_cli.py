@@ -78,7 +78,7 @@ def test_financial_bundle_sample_fixture_exists() -> None:
 def test_evidence_bundle_decision_record_canonicalizes_gate_decision(
     tmp_path,
 ) -> None:
-    """Decision record gate_decision should use canonical public values."""
+    """Decision record decision semantics should use canonical public values."""
     log_path = tmp_path / "trustlog.jsonl"
     log_entry = {
         "decision_id": "dec-fin-wire-2026-0002",
@@ -90,8 +90,8 @@ def test_evidence_bundle_decision_record_canonicalizes_gate_decision(
         "decision_payload": {
             "request_id": "fin-wire-2026-0002",
             "gate_decision": "allow",
-            "business_decision": "APPROVE",
-            "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+            "business_decision": "allow",
+            "next_action": "needs_human_review",
             "required_evidence": [],
             "human_review_required": False,
         },
@@ -119,3 +119,5 @@ def test_evidence_bundle_decision_record_canonicalizes_gate_decision(
     bundle_dir = next(out_dir.glob("veritas_bundle_decision_*"))
     decision_record = json.loads((bundle_dir / "decision_record.json").read_text(encoding="utf-8"))
     assert decision_record["gate_decision"] == "proceed"
+    assert decision_record["business_decision"] == "APPROVE"
+    assert decision_record["next_action"] == "PREPARE_HUMAN_REVIEW_PACKET"

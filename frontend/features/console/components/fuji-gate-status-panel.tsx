@@ -5,11 +5,11 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
   const view = toFujiGateDetailView(result);
 
   const decisionColor =
-    view.decision === "rejected" || view.decision === "block"
+    view.decision === "block"
       ? "text-destructive"
-      : view.decision === "modify" || view.decision === "abstain"
+      : view.decision === "hold" || view.decision === "human_review_required"
         ? "text-amber-400"
-        : view.decision === "allow"
+        : view.decision === "proceed"
           ? "text-emerald-400"
           : "text-foreground";
 
@@ -23,6 +23,11 @@ export function FujiGateStatusPanel({ result }: { result: DecideResponse | null 
         <div className="rounded border border-border/70 bg-background/70 p-2">
           <p className="text-muted-foreground">gate decision</p>
           <p className={`font-semibold ${decisionColor}`}>{view.decision}</p>
+          {view.decision === "proceed" && (
+            <p className="text-[10px] text-muted-foreground">
+              execution guidance only (not business approval)
+            </p>
+          )}
         </div>
         <div className="rounded border border-border/70 bg-background/70 p-2">
           <p className="text-muted-foreground">rule hit</p>

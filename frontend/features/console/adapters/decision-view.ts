@@ -1,7 +1,12 @@
 import { type DecideResponse } from "@veritas/types";
 import { toArray } from "../analytics/utils";
 import { PIPELINE_STAGES, type PipelineStageName } from "../constants";
-import { canonicalizePublicGateDecision, gateDecisionLabel } from "./decision-semantics";
+import {
+  canonicalizeBusinessDecision,
+  canonicalizeNextAction,
+  canonicalizePublicGateDecision,
+  gateDecisionLabel,
+} from "./decision-semantics";
 import {
   type DecisionResultView,
   type FujiGateDetailView,
@@ -164,11 +169,13 @@ export function toPublicDecisionSchemaView(result: DecideResponse): PublicDecisi
   const gateDecision = canonicalizePublicGateDecision(
     readText(resultRecord, "gate_decision", "decision_status"),
   );
+  const businessDecision = canonicalizeBusinessDecision(readText(resultRecord, "business_decision"));
+  const nextAction = canonicalizeNextAction(readText(resultRecord, "next_action"));
   return {
     gateDecision,
     gateDecisionLabel: gateDecisionLabel(gateDecision),
-    businessDecision: readText(resultRecord, "business_decision"),
-    nextAction: readText(resultRecord, "next_action"),
+    businessDecision,
+    nextAction,
     requiredEvidence,
     missingEvidence,
     humanReviewRequired: result.human_review_required === true,
@@ -195,8 +202,11 @@ export function toFujiGateView(result: DecideResponse | null): FujiGateView {
   };
 
   const topLevelGateDecision = readText(result as Record<string, unknown>, "gate_decision");
+  const resolvedDecision = topLevelGateDecision !== "n/a"
+    ? topLevelGateDecision
+    : readText(merged, "decision_status", "status");
   return {
-    decision: topLevelGateDecision !== "n/a" ? topLevelGateDecision : readText(merged, "decision_status", "status"),
+    decision: canonicalizePublicGateDecision(resolvedDecision),
     ruleHit: readText(merged, "rule_hit", "rule", "policy_rule", "code"),
     severity: readText(merged, "severity", "risk_level"),
     remediationHint: readText(merged, "remediation_hint", "hint", "action"),
