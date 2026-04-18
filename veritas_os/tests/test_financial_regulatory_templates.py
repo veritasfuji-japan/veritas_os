@@ -111,7 +111,7 @@ def test_financial_templates_fixture_loads() -> None:
     pack = _load_template_pack()
     templates = pack.templates
 
-    assert len(templates) >= 7
+    assert len(templates) >= 10
     assert all(template.question.strip() for template in templates)
     assert pack.beachhead["decision_domain"] == "aml_kyc"
     assert pack.beachhead["template_id"] == "aml_kyc_high_risk_country_wire_manual_review"
@@ -129,6 +129,9 @@ def test_financial_templates_include_mandatory_domains() -> None:
     assert "suitability_leveraged_product_retail_client" in template_ids
     assert "high_risk_transaction_pending_release" in template_ids
     assert "approval_boundary_undefined_stop" in template_ids
+    assert "aml_kyc_source_of_funds_missing_hold" in template_ids
+    assert "aml_kyc_sufficient_evidence_proceed" in template_ids
+    assert "aml_kyc_policy_definition_missing" in template_ids
 
 
 def test_financial_template_shape_includes_context_and_expected_fields() -> None:
@@ -295,6 +298,55 @@ def test_regression_high_risk_ambiguity_forces_human_review_required() -> None:
     )
     assert payload["human_review_required"] is True
     assert payload["gate_decision"] == "human_review_required"
+
+
+def test_regression_policy_definition_missing_requires_policy_definition_family() -> None:
+    """Missing policy definition should produce policy-definition-required semantics."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_policy_definition_missing"]
+    ctx = PipelineContext(
+        request_id="financial-template-policy-definition-missing",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context=template.context,
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] in {"hold", "human_review_required"}
+    assert payload["business_decision"] in {
+        "POLICY_DEFINITION_REQUIRED",
+        "EVIDENCE_REQUIRED",
+    }
+    assert payload["next_action"] in {
+        "DEFINE_POLICY_AND_REASSESS",
+        "COLLECT_REQUIRED_EVIDENCE",
+    }
+
+
+def test_regression_sufficient_evidence_allows_proceed_approve_family() -> None:
+    """Sufficient evidence should allow proceed/approve family in low-risk path."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_sufficient_evidence_proceed"]
+    ctx = PipelineContext(
+        request_id="financial-template-sufficient-evidence",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context=template.context,
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] in {"proceed", "allow"}
+    assert payload["business_decision"] == "APPROVE"
 
 
 def test_regression_secure_prod_controls_missing_blocks_execution() -> None:

@@ -137,5 +137,66 @@
       ],
       "human_review_required": true
     }
+  },
+  {
+    "question_id": "poc_source_of_funds_missing",
+    "category": "aml_kyc",
+    "question": "高リスク国向け送金で source_of_funds_record が未提出。暫定承認してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    },
+    "template_id": "aml_kyc_source_of_funds_missing_hold"
+  },
+  {
+    "question_id": "poc_sufficient_evidence_proceed",
+    "category": "aml_kyc",
+    "question": "AML/KYC の必須証拠・承認境界・統制が揃った低リスク送金。処理を進めてよいか？",
+    "expected_semantics": {
+      "gate_decision": "proceed",
+      "business_decision": "APPROVE",
+      "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    },
+    "template_id": "aml_kyc_sufficient_evidence_proceed"
+  },
+  {
+    "question_id": "poc_policy_definition_missing",
+    "category": "aml_kyc",
+    "question": "クロスボーダー送金シナリオだが適用ポリシー定義が未整備。処理を続行してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "POLICY_DEFINITION_REQUIRED",
+      "next_action": "DEFINE_POLICY_AND_REASSESS",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "source_of_funds_record",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    }
   }
 ]
