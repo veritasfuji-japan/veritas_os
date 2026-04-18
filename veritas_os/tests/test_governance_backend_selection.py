@@ -111,7 +111,8 @@ def test_governance_backend_postgresql_path_works(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
 
     class _StubPostgresRepo:
-        pass
+        def health_check(self) -> None:
+            return
 
     monkeypatch.setattr(governance_factory, "PostgresGovernanceRepository", _StubPostgresRepo)
 

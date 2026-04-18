@@ -139,12 +139,15 @@ class TestMetricDefinitions:
             "DB_STATEMENT_TIMEOUTS_TOTAL",
             "TRUSTLOG_APPEND_CONFLICT_TOTAL",
             "SLOW_APPEND_WARNING_TOTAL",
+            "GOVERNANCE_REPOSITORY_OPERATION_TOTAL",
+            "GOVERNANCE_REPOSITORY_CONFLICT_TOTAL",
         ):
             obj = getattr(self.m, name)
             assert hasattr(obj, "inc"), f"{name} must be a Counter-like"
 
     def test_histogram_metrics_exist(self):
         assert hasattr(self.m.TRUSTLOG_APPEND_LATENCY_SECONDS, "observe")
+        assert hasattr(self.m.GOVERNANCE_REPOSITORY_OPERATION_LATENCY_SECONDS, "observe")
 
     def test_backend_and_health_gauges(self):
         assert hasattr(self.m.DB_BACKEND_SELECTED, "labels")
@@ -248,6 +251,37 @@ class TestRecordingHelpers:
             monkeypatch.setattr(self.m, name, probe)
             setter(5)
             assert any(c.get("set") == 5.0 for c in probe.calls)
+
+    def test_record_governance_repository_operation(self, monkeypatch):
+        counter_probe = _MetricProbe()
+        histogram_probe = _MetricProbe()
+        monkeypatch.setattr(self.m, "GOVERNANCE_REPOSITORY_OPERATION_TOTAL", counter_probe)
+        monkeypatch.setattr(
+            self.m,
+            "GOVERNANCE_REPOSITORY_OPERATION_LATENCY_SECONDS",
+            histogram_probe,
+        )
+        self.m.record_governance_repository_operation(
+            backend="postgresql",
+            operation="write_policy_event",
+            status="ok",
+            duration_seconds=0.25,
+        )
+        assert any(
+            c.get("labels") == {
+                "backend": "postgresql",
+                "operation": "write_policy_event",
+                "status": "ok",
+            }
+            for c in counter_probe.calls
+        )
+        assert any(c.get("observe") == 0.25 for c in histogram_probe.calls)
+
+    def test_record_governance_repository_conflict(self, monkeypatch):
+        probe = _MetricProbe()
+        monkeypatch.setattr(self.m, "GOVERNANCE_REPOSITORY_CONFLICT_TOTAL", probe)
+        self.m.record_governance_repository_conflict(backend="postgresql")
+        assert any(c.get("labels") == {"backend": "postgresql"} for c in probe.calls)
 
 
 # ---------------------------------------------------------------------------

@@ -7,6 +7,10 @@ from typing import Any, Callable, Protocol
 from veritas_os.governance.models import GovernancePolicyEventRecord
 
 
+class GovernanceWriteConflictError(RuntimeError):
+    """Raised when governance policy writes detect a stale caller state."""
+
+
 class GovernanceRepository(Protocol):
     """Persistence contract for governance policy and history operations."""
 

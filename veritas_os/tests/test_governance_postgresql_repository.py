@@ -6,6 +6,8 @@ These tests run against an in-memory SQL dispatcher (no live DB) and validate:
 - rollback event persistence
 - deterministic history ordering
 - duplicate approval validation
+- optimistic conflict detection
+- startup health checks
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from typing import Any
 import pytest
 
 from veritas_os.governance.postgresql_repository import PostgresGovernanceRepository
+from veritas_os.governance.repository import GovernanceWriteConflictError
 
 
 class _MockCursor:
@@ -28,6 +31,15 @@ class _MockCursor:
         sql = " ".join(query.strip().split()).lower()
         params = params or tuple()
 
+        if sql == "select 1":
+            self._rows = [(1,)]
+            return
+
+        if sql.startswith("select count(*) from governance_policies where is_current = true"):
+            current = [p for p in self._state["policies"] if p["is_current"]]
+            self._rows = [(len(current),)]
+            return
+
         if sql.startswith("select policy_payload from governance_policies"):
             current = [p for p in self._state["policies"] if p["is_current"]]
             if not current:
@@ -36,16 +48,16 @@ class _MockCursor:
                 self._rows = [(current[-1]["policy_payload"],)]
             return
 
-        if sql.startswith("select id from governance_policies"):
+        if sql.startswith("select id, digest, policy_revision from governance_policies"):
             current = [p for p in self._state["policies"] if p["is_current"]]
-            self._rows = [(current[-1]["id"],)] if current else []
+            self._rows = [
+                (current[-1]["id"], current[-1]["digest"], current[-1]["policy_revision"])
+            ] if current else []
             return
 
-        if sql.startswith("update governance_policies set is_current = false"):
-            policy_id = params[0]
+        if sql.startswith("update governance_policies set is_current = false where is_current = true"):
             for policy in self._state["policies"]:
-                if policy["id"] == policy_id:
-                    policy["is_current"] = False
+                policy["is_current"] = False
             self._rows = []
             return
 
@@ -61,6 +73,8 @@ class _MockCursor:
                     "updated_at": params[3],
                     "updated_by": params[4],
                     "is_current": True,
+                    "policy_revision": params[5],
+                    "metadata_json": params[6],
                 }
             )
             self._rows = [(policy_id,)]
@@ -82,9 +96,10 @@ class _MockCursor:
                     "changed_by": params[6],
                     "changed_at": params[7],
                     "reason": params[8],
+                    "metadata_json": params[9],
                 }
             )
-            self._rows = [(event_id,)]
+            self._rows = [(event_id,)] if "returning id" in sql else []
             return
 
         if sql.startswith("insert into governance_approvals"):
@@ -245,11 +260,10 @@ def test_get_current_policy_works(repository) -> None:
 
 def test_update_creates_policy_event_and_approvals(repository) -> None:
     repo, state = repository
-    previous = _policy("governance_v1", "seed")
     updated = _policy("governance_v2", "alice")
 
     repo.update_policy(
-        previous=previous,
+        previous={},
         updated=updated,
         proposer="alice",
         approvers=["r1", "r2"],
@@ -261,6 +275,7 @@ def test_update_creates_policy_event_and_approvals(repository) -> None:
     )
 
     assert len(state["policies"]) == 1
+    assert state["policies"][0]["policy_revision"] == 1
     assert len(state["events"]) == 1
     assert len(state["approvals"]) == 2
     assert state["events"][0]["event_type"] == "update"
@@ -273,6 +288,13 @@ def test_rollback_creates_rollback_event(repository) -> None:
     v2 = _policy("governance_v2", "alice")
     rollback_target = _policy("governance_v1_restored", "bob")
 
+    repo.update_policy(
+        previous={},
+        updated=v1,
+        proposer="seed",
+        approvers=["r1", "r2"],
+        event_type="seed",
+    )
     repo.update_policy(
         previous=v1,
         updated=v2,
@@ -292,30 +314,40 @@ def test_rollback_creates_rollback_event(repository) -> None:
         reason="manual rollback",
     )
 
-    assert len(state["events"]) == 2
-    assert state["events"][1]["event_type"] == "rollback"
-    assert state["events"][1]["reason"] == "manual rollback"
+    assert len(state["events"]) == 3
+    assert state["events"][2]["event_type"] == "rollback"
+    assert state["events"][2]["reason"] == "manual rollback"
 
 
 def test_list_policy_history_ordering_desc(repository) -> None:
     repo, _state = repository
 
+    v1 = _policy("v1", "seed")
+    v2 = _policy("v2", "alice")
     repo.update_policy(
-        previous=_policy("v1", "seed"),
-        updated=_policy("v2", "alice"),
+        previous={},
+        updated=v1,
+        proposer="seed",
+        approvers=["r1", "r2"],
+        event_type="seed",
+    )
+    repo.update_policy(
+        previous=v1,
+        updated=v2,
         proposer="alice",
         approvers=["r1", "r2"],
         event_type="update",
     )
+
     repo.rollback_policy(
-        previous=_policy("v2", "alice"),
+        previous=v2,
         restored=_policy("v1-restored", "bob"),
         proposer="bob",
         approvers=["r3", "r4"],
     )
 
     history = repo.list_policy_history(limit=10, max_records=500)
-    assert len(history) == 2
+    assert len(history) == 3
     assert history[0]["event_type"] == "rollback"
     assert history[1]["event_type"] == "update"
 
@@ -334,3 +366,83 @@ def test_duplicate_approval_reviewer_rejected(repository) -> None:
                 {"reviewer": "r1", "signature": "sig2"},
             ],
         )
+
+
+def test_duplicate_approval_signature_rejected(repository) -> None:
+    repo, _state = repository
+    with pytest.raises(ValueError, match="duplicate approval signature"):
+        repo.update_policy(
+            previous=_policy("v1", "seed"),
+            updated=_policy("v2", "alice"),
+            proposer="alice",
+            approvers=["r1", "r2"],
+            event_type="update",
+            approval_records=[
+                {"reviewer": "r1", "signature": "sig-dup"},
+                {"reviewer": "r2", "signature": "sig-dup"},
+            ],
+        )
+
+
+def test_conflict_detection_on_stale_previous_state(repository) -> None:
+    repo, _state = repository
+    v1 = _policy("v1", "seed")
+    v2 = _policy("v2", "alice")
+    stale_previous = _policy("v1-stale", "seed")
+
+    repo.update_policy(
+        previous={},
+        updated=v1,
+        proposer="seed",
+        approvers=["r1", "r2"],
+        event_type="seed",
+    )
+    repo.update_policy(
+        previous=v1,
+        updated=v2,
+        proposer="alice",
+        approvers=["r1", "r2"],
+        event_type="update",
+    )
+
+    with pytest.raises(GovernanceWriteConflictError):
+        repo.update_policy(
+            previous=stale_previous,
+            updated=_policy("v3", "charlie"),
+            proposer="charlie",
+            approvers=["r5", "r6"],
+            event_type="update",
+        )
+
+
+def test_health_check_detects_double_current_policy(repository) -> None:
+    repo, state = repository
+    state["policies"].append(
+        {
+            "id": 1,
+            "policy_version": "v1",
+            "policy_payload": _policy("v1", "seed"),
+            "digest": "d1",
+            "updated_at": datetime.now(timezone.utc),
+            "updated_by": "seed",
+            "is_current": True,
+            "policy_revision": 1,
+            "metadata_json": {},
+        }
+    )
+    state["policies"].append(
+        {
+            "id": 2,
+            "policy_version": "v2",
+            "policy_payload": _policy("v2", "alice"),
+            "digest": "d2",
+            "updated_at": datetime.now(timezone.utc),
+            "updated_by": "alice",
+            "is_current": True,
+            "policy_revision": 2,
+            "metadata_json": {},
+        }
+    )
+
+    with pytest.raises(RuntimeError, match="more than one current"):
+        repo.health_check()

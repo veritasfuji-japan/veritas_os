@@ -10,6 +10,7 @@ from veritas_os.governance.config import validate_governance_backend
 from veritas_os.governance.file_repository import FileGovernanceRepository
 from veritas_os.governance.postgresql_repository import PostgresGovernanceRepository
 from veritas_os.governance.repository import GovernanceRepository
+from veritas_os.observability.metrics import set_db_backend_selected
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,13 @@ def create_governance_repository(
     backend = validate_governance_backend()
     if backend == "postgresql":
         logger.info("Governance backend: postgresql")
-        return PostgresGovernanceRepository()
+        set_db_backend_selected("governance", "postgresql")
+        repository = PostgresGovernanceRepository()
+        repository.health_check()
+        return repository
 
     logger.info("Governance backend: file")
+    set_db_backend_selected("governance", "file")
     return FileGovernanceRepository(
         policy_path=policy_path,
         history_path=history_path,

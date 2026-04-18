@@ -9,10 +9,20 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from time import monotonic
 from typing import Any, Callable, Iterator
 
+from veritas_os.governance.repository import (
+    GovernanceRepository,
+    GovernanceWriteConflictError,
+)
 from veritas_os.governance.models import GovernancePolicyEventRecord
-from veritas_os.governance.repository import GovernanceRepository
+from veritas_os.observability.metrics import (
+    record_db_connect_failure,
+    record_governance_repository_conflict,
+    record_governance_repository_operation,
+    set_db_health_status,
+)
 
 
 class PostgresGovernanceRepository(GovernanceRepository):
@@ -20,6 +30,7 @@ class PostgresGovernanceRepository(GovernanceRepository):
 
     def __init__(self, *, database_url: str | None = None) -> None:
         self._database_url = database_url
+        self._backend_name = "postgresql"
 
     @contextmanager
     def _connect(self) -> Iterator[Any]:
@@ -34,7 +45,12 @@ class PostgresGovernanceRepository(GovernanceRepository):
             ) from exc
 
         dsn = self._database_url or build_conninfo()
-        conn = psycopg.connect(dsn)
+        try:
+            conn = psycopg.connect(dsn)
+        except Exception as exc:
+            record_db_connect_failure(type(exc).__name__)
+            set_db_health_status(False)
+            raise
         try:
             yield conn
         finally:
@@ -45,19 +61,33 @@ class PostgresGovernanceRepository(GovernanceRepository):
         *,
         default_factory: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT policy_payload FROM governance_policies "
-                    "WHERE is_current = TRUE LIMIT 1"
-                )
-                row = cur.fetchone()
-                if row is None:
+        started_at = monotonic()
+        status = "ok"
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT policy_payload FROM governance_policies "
+                        "WHERE is_current = TRUE LIMIT 1"
+                    )
+                    row = cur.fetchone()
+                    if row is None:
+                        conn.rollback()
+                        return default_factory()
+                    payload = row[0]
                     conn.rollback()
-                    return default_factory()
-                payload = row[0]
-                conn.rollback()
-                return payload if isinstance(payload, dict) else default_factory()
+                    return payload if isinstance(payload, dict) else default_factory()
+        except Exception:
+            status = "error"
+            set_db_health_status(False)
+            raise
+        finally:
+            record_governance_repository_operation(
+                backend=self._backend_name,
+                operation="get_current_policy",
+                status=status,
+                duration_seconds=monotonic() - started_at,
+            )
 
     def save_policy(self, policy: dict[str, Any]) -> None:
         self.update_policy(
@@ -71,38 +101,53 @@ class PostgresGovernanceRepository(GovernanceRepository):
 
     def append_policy_event(self, event: GovernancePolicyEventRecord) -> None:
         # Keep this helper for interface parity; insert event-only row.
-        with self._connect() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO governance_policy_events (
-                        event_type,
-                        previous_policy_id,
-                        new_policy_id,
-                        previous_digest,
-                        new_digest,
-                        proposer,
-                        changed_by,
-                        changed_at,
-                        reason,
-                        metadata_json
-                    ) VALUES (%s, NULL, NULL, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        event.event_type,
-                        event.previous_digest,
-                        event.new_digest,
-                        event.proposer,
-                        event.changed_by,
-                        self._parse_timestamp(event.changed_at),
-                        "",
-                        {
-                            "previous_version": event.previous_version,
-                            "new_version": event.new_version,
-                        },
-                    ),
-                )
-            conn.commit()
+        started_at = monotonic()
+        status = "ok"
+        try:
+            with self._connect() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO governance_policy_events (
+                            event_type,
+                            previous_policy_id,
+                            new_policy_id,
+                            previous_digest,
+                            new_digest,
+                            proposer,
+                            changed_by,
+                            changed_at,
+                            reason,
+                            metadata_json
+                        ) VALUES (%s, NULL, NULL, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            event.event_type,
+                            event.previous_digest,
+                            event.new_digest,
+                            event.proposer,
+                            event.changed_by,
+                            self._parse_timestamp(event.changed_at),
+                            "",
+                            {
+                                "previous_version": event.previous_version,
+                                "new_version": event.new_version,
+                            },
+                        ),
+                    )
+                conn.commit()
+                set_db_health_status(True)
+        except Exception:
+            status = "error"
+            set_db_health_status(False)
+            raise
+        finally:
+            record_governance_repository_operation(
+                backend=self._backend_name,
+                operation="append_policy_event",
+                status=status,
+                duration_seconds=monotonic() - started_at,
+            )
 
     def list_policy_history(self, *, limit: int, max_records: int) -> list[dict[str, Any]]:
         bounded_limit = max(1, min(limit, max_records))
@@ -235,6 +280,8 @@ class PostgresGovernanceRepository(GovernanceRepository):
     ) -> None:
         from veritas_os.policy.governance_identity import compute_governance_digest
 
+        started_at = monotonic()
+        status = "ok"
         normalized_approvals = self._normalize_approvals(
             approvers=approvers,
             approval_records=approval_records,
@@ -249,20 +296,43 @@ class PostgresGovernanceRepository(GovernanceRepository):
             try:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT id FROM governance_policies "
+                        "SELECT id, digest, policy_revision FROM governance_policies "
                         "WHERE is_current = TRUE "
                         "ORDER BY id DESC LIMIT 1 FOR UPDATE"
                     )
                     row = cur.fetchone()
                     previous_policy_id = row[0] if row is not None else None
+                    current_digest = row[1] if row is not None else ""
+                    current_revision = int(row[2]) if row is not None else 0
+                    expected_digest = compute_governance_digest(previous) if previous else ""
+
+                    if previous and previous_policy_id is None:
+                        status = "conflict"
+                        record_governance_repository_conflict(
+                            backend=self._backend_name
+                        )
+                        raise GovernanceWriteConflictError(
+                            "governance policy write conflict: caller expected an "
+                            "existing policy but no current row was found"
+                        )
+
+                    if previous and previous_policy_id is not None and current_digest != expected_digest:
+                        status = "conflict"
+                        record_governance_repository_conflict(
+                            backend=self._backend_name
+                        )
+                        raise GovernanceWriteConflictError(
+                            "governance policy write conflict: current policy "
+                            "digest does not match caller-provided previous state"
+                        )
 
                     if previous_policy_id is not None:
                         cur.execute(
                             "UPDATE governance_policies SET is_current = FALSE "
-                            "WHERE id = %s",
-                            (previous_policy_id,),
+                            "WHERE is_current = TRUE",
                         )
 
+                    next_revision = current_revision + 1
                     cur.execute(
                         """
                         INSERT INTO governance_policies (
@@ -283,8 +353,8 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             new_digest,
                             changed_at,
                             changed_by,
-                            int(updated.get("policy_revision", 1)),
-                            {},
+                            next_revision,
+                            {"expected_previous_digest": expected_digest},
                         ),
                     )
                     new_policy_id = cur.fetchone()[0]
@@ -318,6 +388,8 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             {
                                 "previous_version": previous.get("version"),
                                 "new_version": updated.get("version"),
+                                "previous_revision": current_revision,
+                                "new_revision": next_revision,
                             },
                         ),
                     )
@@ -341,9 +413,20 @@ class PostgresGovernanceRepository(GovernanceRepository):
                             ),
                         )
                 conn.commit()
+                set_db_health_status(True)
             except Exception:
                 conn.rollback()
+                if status != "conflict":
+                    status = "error"
+                set_db_health_status(False)
                 raise
+            finally:
+                record_governance_repository_operation(
+                    backend=self._backend_name,
+                    operation="write_policy_event",
+                    status=status,
+                    duration_seconds=monotonic() - started_at,
+                )
 
     def _normalize_approvals(
         self,
@@ -365,8 +448,31 @@ class PostgresGovernanceRepository(GovernanceRepository):
             if reviewer in seen_reviewers:
                 raise ValueError("duplicate approval reviewer is not allowed")
             seen_reviewers.add(reviewer)
+            if signature and any(
+                normalized_signature["signature"] == signature
+                for normalized_signature in normalized
+            ):
+                raise ValueError("duplicate approval signature is not allowed")
             normalized.append({"reviewer": reviewer, "signature": signature})
         return normalized
+
+    def health_check(self) -> None:
+        """Verify governance tables are reachable and writable state is coherent."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.execute(
+                    "SELECT COUNT(*) FROM governance_policies WHERE is_current = TRUE"
+                )
+                row = cur.fetchone()
+                current_count = int(row[0]) if row else 0
+                if current_count > 1:
+                    raise RuntimeError(
+                        "governance current policy integrity violated: more than one "
+                        "current policy row exists"
+                    )
+            conn.rollback()
+        set_db_health_status(True)
 
     @staticmethod
     def _parse_timestamp(raw: Any) -> datetime:
