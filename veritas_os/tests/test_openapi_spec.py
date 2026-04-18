@@ -84,7 +84,12 @@ def test_openapi_decide_response_decision_semantics_contract() -> None:
         "human_review_required",
         "block",
     ]
+    assert "not business approval" in decide_schema["gate_decision"]["description"]
     assert decide_schema["human_review_required"]["type"] == "boolean"
+    assert (
+        "REVIEW_REQUIRED must be paired with gate_decision=human_review_required"
+        in decide_schema["human_review_required"]["description"]
+    )
     assert decide_schema["business_decision"]["enum"] == [
         "APPROVE",
         "DENY",

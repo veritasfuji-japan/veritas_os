@@ -37,6 +37,17 @@ def test_decision_semantics_doc_declares_runtime_source_of_truth() -> None:
     assert "FORBIDDEN_GATE_BUSINESS_COMBINATIONS" in content
 
 
+def test_decision_semantics_doc_freeze_wording_and_legacy_matrix_present() -> None:
+    """EN semantics doc should declare freeze policy and legacy alias matrix."""
+    content = Path("docs/en/architecture/decision-semantics.md").read_text(
+        encoding="utf-8"
+    )
+    assert "frozen public contract" in content
+    assert "legacy alias compatibility matrix" in content.lower()
+    assert "`allow` MUST NOT be reintroduced as public canonical label." in content
+    assert "proceed" in content and "not business approval" in content
+
+
 def test_readme_links_to_new_decision_docs() -> None:
     """README hubs should route to the new semantics/taxonomy docs."""
     for path in DOC_FILES:

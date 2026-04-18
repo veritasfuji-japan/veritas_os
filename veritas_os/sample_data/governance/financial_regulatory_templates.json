@@ -236,7 +236,7 @@
         "secure_controls_ready": true
       },
       "expected_semantics": {
-        "gate_decision": "hold",
+        "gate_decision": "human_review_required",
         "business_decision": "REVIEW_REQUIRED",
         "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
         "required_evidence": [

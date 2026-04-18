@@ -385,7 +385,14 @@ def derive_gate_decision_from_stop_reasons(
 def validate_gate_business_combination(
     *, gate_decision: str, business_decision: str, human_review_required: bool
 ) -> None:
-    """Raise ValueError when gate/business combination is forbidden."""
+    """Raise ``ValueError`` when public decision contract invariants are violated.
+
+    Public contract freeze invariants:
+    - ``gate_decision`` is validated on canonical public values.
+    - ``human_review_required`` gate and ``REVIEW_REQUIRED`` business state are
+      coupled (bidirectional) and require ``human_review_required=true``.
+    - ``proceed`` is a gate pass-through signal only, not business approval.
+    """
     gate_decision = canonicalize_public_gate_decision(gate_decision)
     if (gate_decision, business_decision) in FORBIDDEN_GATE_BUSINESS_COMBINATIONS:
         raise ValueError(
@@ -406,6 +413,16 @@ def validate_gate_business_combination(
         raise ValueError(
             "forbidden combination: business_decision=REVIEW_REQUIRED "
             "requires human_review_required=true"
+        )
+    if business_decision == "REVIEW_REQUIRED" and gate_decision != "human_review_required":
+        raise ValueError(
+            "forbidden combination: business_decision=REVIEW_REQUIRED "
+            "requires gate_decision=human_review_required"
+        )
+    if gate_decision == "human_review_required" and business_decision != "REVIEW_REQUIRED":
+        raise ValueError(
+            "forbidden combination: gate_decision=human_review_required "
+            "requires business_decision=REVIEW_REQUIRED"
         )
     if business_decision == "APPROVE" and human_review_required:
         raise ValueError(
