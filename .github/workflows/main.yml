@@ -30,6 +30,7 @@ permissions:
 
 env:
   VERITAS_PIPELINE_VERSION: "${{ github.sha }}"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 # ============================================================
 # [Tier 1] Lint & Security (fast-fail — テストより先に回す)
@@ -484,9 +485,27 @@ jobs:
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          python -m pip install --upgrade pip
-          python -m pip install -r veritas_os/requirements.txt
-          python -m pip install pytest
+          pip_retry() {
+            local cmd="$1"
+            local max_attempts=3
+            local attempt=1
+            local delay=2
+
+            until bash -lc "$cmd"; do
+              if [ "$attempt" -ge "$max_attempts" ]; then
+                echo "Command failed after ${max_attempts} attempts: $cmd" >&2
+                return 1
+              fi
+              echo "Attempt ${attempt}/${max_attempts} failed. Retrying in ${delay}s..." >&2
+              sleep "$delay"
+              attempt=$((attempt + 1))
+              delay=$((delay * 2))
+            done
+          }
+
+          pip_retry "python -m pip install --upgrade pip --retries 5 --timeout 60"
+          pip_retry "python -m pip install --retries 5 --timeout 60 -r veritas_os/requirements.txt"
+          pip_retry "python -m pip install --retries 5 --timeout 60 pytest"
 
       - name: Run slow tests (if any)
         run: |

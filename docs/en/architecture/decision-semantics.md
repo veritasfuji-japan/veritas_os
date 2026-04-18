@@ -6,19 +6,35 @@ This document is the **source-of-truth contract** for Phase-1 decision semantics
 
 This contract is now **runtime-enforced** in:
 
+- `veritas_os/core/decision_semantics.py` (**primary backend source-of-truth**)
 - `veritas_os/core/pipeline/pipeline_response.py::_derive_business_fields`
 - `veritas_os/api/schemas.py::DecideResponse`
-- `veritas_os/core/decision_semantics.py`
 
 Spec and runtime are aligned: gate canonicalization, stop-reason ordering, and
 forbidden gate/business/human-review combinations are validated before response
 finalization.
+
+## Canonical contract source-of-truth (backend)
+
+`veritas_os/core/decision_semantics.py` owns the canonical runtime contract:
+
+- `CANONICAL_GATE_DECISION_VALUES`
+- `LEGACY_GATE_DECISION_ALIASES` (compatibility-only)
+- `COMPATIBLE_GATE_DECISION_VALUES` (ingestion surface)
+- `GATE_DECISION_ALIAS_TO_CANONICAL` (single canonicalization mapping)
+- `FORBIDDEN_GATE_BUSINESS_COMBINATIONS` (single forbidden pair table)
+
+Other modules must reference these helpers/constants rather than redefining
+their own alias tables or forbidden-combination logic.
 
 ## Legacy / alias values
 
 `gate_decision` now prefers canonical public output.
 Legacy values are accepted on ingestion/compatibility paths and normalized before
 response finalization.
+
+Legacy aliases (`allow|deny|modify|rejected|abstain`) are **compatibility-only**
+labels and are not recommended for new public payload contracts.
 
 ## Tightening status (implemented in runtime)
 
@@ -90,7 +106,9 @@ Additional runtime invariants:
 
 ## D. stop_reasons priority (current implementation order)
 
-Current order in `_derive_business_fields`:
+Current order is implemented in
+`veritas_os/core/decision_semantics.py::derive_gate_decision_from_stop_reasons`
+and consumed from `_derive_business_fields`:
 
 1. `rollback_not_supported` → `block`
 2. `irreversible_action` + `audit_trail_incomplete` → `block`
