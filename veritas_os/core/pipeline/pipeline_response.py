@@ -441,11 +441,27 @@ def _build_required_evidence_telemetry(
 def _should_enforce_aml_kyc_profile(
     decision_domain: str,
     profile_required_keys: List[str],
+    required_evidence: List[str],
+    template_id: str,
+    mode: str,
 ) -> bool:
-    """Return whether AML/KYC profile strictness should be applied."""
+    """Return whether AML/KYC full profile strictness should be applied.
+
+    Enforcement is intentionally scoped to avoid unexpected false-fail regressions
+    in non-beachhead AML/KYC-adjacent templates:
+    - always on for strict mode experiments,
+    - always on for beachhead template id,
+    - on when the incoming required evidence already includes beachhead anchors.
+    """
     if decision_domain != "aml_kyc":
         return False
-    return bool(AML_KYC_PROFILE_ENFORCEMENT_KEYS & set(profile_required_keys))
+    if not profile_required_keys:
+        return False
+    if mode == "strict":
+        return True
+    if template_id == "aml_kyc_high_risk_country_wire_manual_review":
+        return True
+    return bool(AML_KYC_PROFILE_ENFORCEMENT_KEYS & set(required_evidence))
 
 
 def _resolve_required_evidence_mode(context: Dict[str, Any], decision_domain: str) -> str:
@@ -504,16 +520,19 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     profile_escalation_sensitive_keys = unique_preserve_order(
         normalize_required_evidence_keys(domain_profile.get("escalation_sensitive"))
     )
-    enforce_profile = bool(
-        profile_required_keys
-        and _should_enforce_aml_kyc_profile(decision_domain, profile_required_keys)
+    mode = _resolve_required_evidence_mode(ctx.context, decision_domain)
+    enforce_profile = _should_enforce_aml_kyc_profile(
+        decision_domain,
+        profile_required_keys,
+        required_evidence,
+        template_id,
+        mode,
     )
     profile_missing_keys = (
         [key for key in profile_required_keys if key not in set(required_evidence)]
         if enforce_profile
         else []
     )
-    mode = _resolve_required_evidence_mode(ctx.context, decision_domain)
     if enforce_profile:
         required_evidence = unique_preserve_order(required_evidence + profile_required_keys)
     unknown_keys = unique_preserve_order(

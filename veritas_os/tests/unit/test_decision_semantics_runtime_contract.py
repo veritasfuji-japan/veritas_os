@@ -326,6 +326,31 @@ def test_approval_matrix_missing_is_reported_as_escalation_sensitive() -> None:
     ]
 
 
+def test_non_beachhead_aml_kyc_template_keeps_declared_required_evidence() -> None:
+    """Warn mode should not force full AML/KYC profile on non-beachhead templates."""
+    ctx = PipelineContext(
+        request_id="req-aml-boundary-template",
+        query="approval boundary undefined",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "template_id": "approval_boundary_undefined_stop",
+            "approval_boundary_defined": False,
+            "required_evidence": ["approval_matrix", "policy_definition_record"],
+            "satisfied_evidence": ["approval_matrix", "policy_definition_record"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["required_evidence"] == ["approval_matrix", "policy_definition_record"]
+    assert payload["missing_evidence"] == []
+    assert payload["gate_decision"] == "human_review_required"
+
+
 def test_question_first_response_prioritizes_structure_not_investigate_decision() -> None:
     """Question-first flow must keep business_decision structured and next_action for follow-up."""
     ctx = PipelineContext(
