@@ -30,6 +30,7 @@ from veritas_os.core.decision_semantics import (
     unique_preserve_order,
     validate_gate_business_combination,
 )
+from veritas_os.observability.metrics import record_required_evidence_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -410,33 +411,69 @@ def _build_required_evidence_telemetry(
     *,
     decision_domain: str,
     template_id: str,
+    source: str,
+    mode: str,
     required_diagnostics: Dict[str, Any],
     satisfied_diagnostics: Dict[str, Any],
     unknown_keys: List[str],
     profile_missing_keys: List[str],
 ) -> Dict[str, Any]:
     """Build required-evidence telemetry counters for warning-first rollout."""
+    normalization_total = len(unknown_keys) + len(profile_missing_keys)
+    alias_hits = int(required_diagnostics.get("alias_normalized_count", 0)) + int(
+        satisfied_diagnostics.get("alias_normalized_count", 0)
+    )
+    denominator = max(1, normalization_total + alias_hits)
     return {
         "domain": decision_domain or "unknown",
         "template_id": template_id or "unknown",
+        "source": source or "unknown",
+        "mode": mode or "warn",
         "unknown_required_evidence_key_total": len(unknown_keys),
-        "required_evidence_alias_normalized_total": int(
-            required_diagnostics.get("alias_normalized_count", 0)
-        ) + int(satisfied_diagnostics.get("alias_normalized_count", 0)),
+        "required_evidence_alias_normalized_total": alias_hits,
         "required_evidence_profile_miss_total": len(profile_missing_keys),
         "top_unknown_keys": unknown_keys[:5],
         "profile_missing_keys": profile_missing_keys,
+        "required_evidence_normalization_hit_rate": round(alias_hits / denominator, 4),
     }
 
 
 def _should_enforce_aml_kyc_profile(
     decision_domain: str,
+    profile_required_keys: List[str],
     required_evidence: List[str],
+    template_id: str,
+    mode: str,
 ) -> bool:
-    """Return whether AML/KYC profile strictness should be applied."""
+    """Return whether AML/KYC full profile strictness should be applied.
+
+    Enforcement is intentionally scoped to avoid unexpected false-fail regressions
+    in non-beachhead AML/KYC-adjacent templates:
+    - always on for strict mode experiments,
+    - always on for beachhead template id,
+    - on when the incoming required evidence already includes beachhead anchors.
+    """
     if decision_domain != "aml_kyc":
         return False
+    if not profile_required_keys:
+        return False
+    if mode == "strict":
+        return True
+    if template_id == "aml_kyc_high_risk_country_wire_manual_review":
+        return True
     return bool(AML_KYC_PROFILE_ENFORCEMENT_KEYS & set(required_evidence))
+
+
+def _resolve_required_evidence_mode(context: Dict[str, Any], decision_domain: str) -> str:
+    """Resolve required evidence hardening mode for runtime behavior."""
+    raw_mode = str(
+        context.get("required_evidence_mode")
+        or os.getenv("VERITAS_REQUIRED_EVIDENCE_MODE", "warn")
+    ).strip().lower()
+    mode = "strict" if raw_mode == "strict" else "warn"
+    if mode == "strict" and decision_domain != "aml_kyc":
+        return "warn"
+    return mode
 
 
 def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
@@ -460,6 +497,7 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         or ""
     ).strip().lower()
     template_id = str(ctx.context.get("template_id") or "").strip()
+    source = str(ctx.context.get("source") or "").strip()
     required_evidence_input = unique_preserve_order(
         _as_string_list(ctx.context.get("required_evidence"))
     )
@@ -479,9 +517,16 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     profile_required_keys = unique_preserve_order(
         normalize_required_evidence_keys(domain_profile.get("required"))
     )
-    enforce_profile = bool(
-        profile_required_keys
-        and _should_enforce_aml_kyc_profile(decision_domain, required_evidence)
+    profile_escalation_sensitive_keys = unique_preserve_order(
+        normalize_required_evidence_keys(domain_profile.get("escalation_sensitive"))
+    )
+    mode = _resolve_required_evidence_mode(ctx.context, decision_domain)
+    enforce_profile = _should_enforce_aml_kyc_profile(
+        decision_domain,
+        profile_required_keys,
+        required_evidence,
+        template_id,
+        mode,
     )
     profile_missing_keys = (
         [key for key in profile_required_keys if key not in set(required_evidence)]
@@ -511,6 +556,28 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         missing_evidence=missing_evidence,
         context=ctx.context,
     )
+    escalation_sensitive_missing = [
+        key for key in profile_escalation_sensitive_keys if key not in satisfied_canonical
+    ]
+    internal_evidence_reasons: list[str] = []
+    if unknown_keys:
+        if mode == "strict":
+            internal_evidence_reasons.append("unknown_required_evidence_key_strict")
+            human_review_required = True
+            stop_reasons.append("unknown_required_evidence_key")
+        else:
+            internal_evidence_reasons.append("unknown_required_evidence_key_warn")
+    if profile_missing_keys:
+        if mode == "strict":
+            internal_evidence_reasons.append("required_evidence_profile_miss_strict")
+            human_review_required = True
+            stop_reasons.append("required_evidence_profile_miss")
+        else:
+            internal_evidence_reasons.append("required_evidence_profile_miss_warn")
+    if escalation_sensitive_missing:
+        human_review_required = True
+        stop_reasons.append("escalation_sensitive_evidence_missing")
+        internal_evidence_reasons.append("escalation_sensitive_evidence_missing")
 
     gate_decision, human_review_required = derive_gate_decision_from_stop_reasons(
         stop_reasons=stop_reasons,
@@ -585,11 +652,21 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "required_evidence_telemetry": _build_required_evidence_telemetry(
             decision_domain=decision_domain,
             template_id=template_id,
+            source=source,
+            mode=mode,
             required_diagnostics=required_diag,
             satisfied_diagnostics=satisfied_diag,
             unknown_keys=unknown_keys,
-            profile_missing_keys=profile_missing_keys,
+            profile_missing_keys=(
+                profile_missing_keys + escalation_sensitive_missing
+            ),
         ),
+        "required_evidence_mode": mode,
+        "required_evidence_assessment": {
+            "internal_reasons": unique_preserve_order(internal_evidence_reasons),
+            "profile_missing_required_keys": profile_missing_keys,
+            "escalation_sensitive_missing_keys": escalation_sensitive_missing,
+        },
         "human_review_required": human_review_required,
         "rationale": " | ".join(rationale_parts),
         "refusal_reason": refusal_reason,
@@ -627,6 +704,24 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         result.setdefault("warnings", []).append(
             "required_evidence_profile_missing_keys"
         )
+    if escalation_sensitive_missing:
+        result.setdefault("warnings", []).append(
+            "escalation_sensitive_required_evidence_missing"
+        )
+    telemetry = result["required_evidence_telemetry"]
+    record_required_evidence_telemetry(
+        domain=telemetry.get("domain"),
+        template_id=telemetry.get("template_id"),
+        source=telemetry.get("source"),
+        mode=telemetry.get("mode"),
+        unknown_key_total=int(telemetry.get("unknown_required_evidence_key_total", 0)),
+        alias_normalized_total=int(
+            telemetry.get("required_evidence_alias_normalized_total", 0)
+        ),
+        profile_miss_total=int(
+            telemetry.get("required_evidence_profile_miss_total", 0)
+        ),
+    )
     if _is_dev_mode_enabled(ctx.context):
         result["action_candidates"] = action_candidates
         result["action_selection"]["ranking_trace"] = {

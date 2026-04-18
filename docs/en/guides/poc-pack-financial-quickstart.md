@@ -50,6 +50,7 @@ python scripts/run_financial_poc.py \
 VERITAS_API_KEY=demo-key \
 python scripts/run_financial_poc.py \
   --api-url http://localhost:8000/v1/decide \
+  --required-evidence-mode strict \
   --output-json veritas_os/scripts/logs/financial_poc_live_report.json
 ```
 
@@ -79,6 +80,7 @@ The runner compares these fields per case:
 - `required_evidence`
 - `missing_evidence`
 - `human_review_required`
+- runtime evidence warnings (`required_evidence_runtime_warnings`)
 
 Comparator helper:
 
@@ -87,6 +89,11 @@ Comparator helper:
   with gate canonicalization, taxonomy-aware evidence comparison, and next-action
   family fallback. Runner output now also includes `mismatch_summary` for
   faster AML/KYC triage.
+  It also surfaces:
+  - canonicalized expected/actual evidence deltas (`only_in_expected`,
+    `only_in_actual`),
+  - unknown key warnings (`top_unknown_keys`), and
+  - profile miss warnings (`profile_missing_keys`).
 
 Example mismatch output (JSON excerpt):
 

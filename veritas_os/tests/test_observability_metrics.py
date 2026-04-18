@@ -84,6 +84,49 @@ def test_fuji_and_memory_metrics(monkeypatch):
     assert any(call.get("labels") == {"operation": "search", "kind": "semantic"} for call in mem_ops.calls)
 
 
+def test_required_evidence_telemetry_metrics(monkeypatch):
+    """Required-evidence hardening counters should emit domain/template labels."""
+    metrics = importlib.import_module("veritas_os.observability.metrics")
+    unknown_total = _MetricProbe()
+    alias_total = _MetricProbe()
+    profile_miss_total = _MetricProbe()
+
+    monkeypatch.setattr(metrics, "UNKNOWN_REQUIRED_EVIDENCE_KEY_TOTAL", unknown_total)
+    monkeypatch.setattr(
+        metrics,
+        "REQUIRED_EVIDENCE_ALIAS_NORMALIZED_TOTAL",
+        alias_total,
+    )
+    monkeypatch.setattr(
+        metrics,
+        "REQUIRED_EVIDENCE_PROFILE_MISS_TOTAL",
+        profile_miss_total,
+    )
+
+    metrics.record_required_evidence_telemetry(
+        domain="aml_kyc",
+        template_id="tmpl-1",
+        source="financial_poc_pack",
+        mode="strict",
+        unknown_key_total=2,
+        alias_normalized_total=3,
+        profile_miss_total=1,
+    )
+
+    expected_labels = {
+        "domain": "aml_kyc",
+        "template_id": "tmpl-1",
+        "source": "financial_poc_pack",
+        "mode": "strict",
+    }
+    assert any(call.get("labels") == expected_labels for call in unknown_total.calls)
+    assert any(call.get("inc") == 2.0 for call in unknown_total.calls)
+    assert any(call.get("labels") == expected_labels for call in alias_total.calls)
+    assert any(call.get("inc") == 3.0 for call in alias_total.calls)
+    assert any(call.get("labels") == expected_labels for call in profile_miss_total.calls)
+    assert any(call.get("inc") == 1.0 for call in profile_miss_total.calls)
+
+
 def test_noop_mode_without_prometheus_client(monkeypatch):
     monkeypatch.setitem(sys.modules, "prometheus_client", None)
     metrics = importlib.reload(importlib.import_module("veritas_os.observability.metrics"))

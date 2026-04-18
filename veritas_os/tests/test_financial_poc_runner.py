@@ -105,6 +105,7 @@ def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:
         api_url="http://localhost:8000/v1/decide",
         api_key="",
         timeout_seconds=5.0,
+        required_evidence_mode="warn",
     )
 
     summary = report["summary"]
@@ -115,6 +116,25 @@ def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:
     assert counts["fail"] == 0
     assert counts["warning"] == 0
     assert summary["pass_rate"] == 1.0
+
+
+def test_compare_expected_semantics_exposes_evidence_runtime_warnings() -> None:
+    """Comparator should highlight unknown/profile miss telemetry from runtime."""
+    expected = {"required_evidence": ["kyc_profile"]}
+    actual = {
+        "required_evidence": ["kyc_profile"],
+        "required_evidence_telemetry": {
+            "top_unknown_keys": ["unknown_custom_doc"],
+            "profile_missing_keys": ["approval_matrix"],
+        },
+    }
+
+    diff = compare_expected_semantics(expected, actual)
+
+    assert "required_evidence_runtime_warnings" in diff
+    warning_payload = diff["required_evidence_runtime_warnings"]["actual"]
+    assert warning_payload["unknown_keys"] == ["unknown_custom_doc"]
+    assert warning_payload["profile_missing_keys"] == ["approval_matrix"]
 
 
 def test_en_quickstart_links_resolve_and_success_criteria_doc_exists() -> None:

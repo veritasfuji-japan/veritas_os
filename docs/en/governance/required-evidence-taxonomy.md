@@ -26,15 +26,32 @@ while preserving free-string compatibility for unknown keys (`allow_free_string=
 
 ## Runtime hardening status (AML/KYC)
 
-AML/KYC profile hardening now operates in warning-first mode:
+AML/KYC profile hardening now supports runtime modes:
+
+- `warn` (default): unknown/profile misses are surfaced as warnings + telemetry.
+- `strict` (AML/KYC-only rollout): unknown/profile misses are routed to stronger
+  hold/review posture (no immediate global hard reject).
+
+In both modes:
 
 - Profile `required` keys are enforced during runtime evidence shaping.
+- Profile `escalation_sensitive` keys missing from `satisfied_evidence` force
+  `human_review_required=true`.
+- Profile `optional` keys are tracked but do not force immediate fail.
 - Unknown keys are not hard-rejected yet, but emit warnings and telemetry:
   - `unknown_required_evidence_key_total`
   - `required_evidence_alias_normalized_total`
   - `required_evidence_profile_miss_total`
-- Telemetry includes domain/template identifiers and top unknown keys to
-  prepare strict-mode migration.
+- Telemetry includes `domain`, `template_id`, `source`, `mode`, top unknown
+  keys, profile-missing keys, and normalization hit rate to prepare strict-mode
+  migration.
+
+Runtime response exposes:
+
+- `required_evidence_mode`
+- `required_evidence_assessment.internal_reasons`
+- `required_evidence_assessment.profile_missing_required_keys`
+- `required_evidence_assessment.escalation_sensitive_missing_keys`
 
 ## Definitions
 
