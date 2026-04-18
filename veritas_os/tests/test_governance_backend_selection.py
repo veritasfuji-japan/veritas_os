@@ -184,3 +184,41 @@ def test_governance_api_history_rollback_approval_flow_postgresql_path(
     assert len(history) == 2
     assert history[0]["event_type"] == "rollback"
     assert history[1]["event_type"] == "update"
+
+
+def test_governance_concurrent_updates_preserve_audit_completeness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent governance updates must remain auditable and complete."""
+    monkeypatch.setenv("VERITAS_GOVERNANCE_BACKEND", "postgresql")
+    monkeypatch.setenv("VERITAS_DATABASE_URL", "postgresql://user:pass@localhost:5432/veritas")
+    monkeypatch.setenv("VERITAS_GOVERNANCE_REQUIRE_FOUR_EYES", "0")
+
+    in_memory_repo = _InMemoryGovernanceRepository()
+    repo_lock = threading.Lock()
+
+    def _fake_create_repo(**_kwargs):
+        return in_memory_repo
+
+    monkeypatch.setattr(gov, "create_governance_repository", _fake_create_repo)
+    gov.configure_governance_repository_from_env()
+
+    def _mutate(index: int) -> None:
+        with repo_lock:
+            gov.update_policy(
+                {
+                    "version": f"governance_v2_{index}",
+                    "updated_by": f"editor-{index}",
+                }
+            )
+
+    threads = [threading.Thread(target=_mutate, args=(idx,)) for idx in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    history = gov.get_policy_history(limit=20)
+    assert len(history) == 6
+    assert all(record["event_type"] == "update" for record in history)
+    assert all("previous_policy" in record and "new_policy" in record for record in history)

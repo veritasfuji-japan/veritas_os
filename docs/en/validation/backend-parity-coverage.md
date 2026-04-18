@@ -173,11 +173,14 @@ or know which backend is active.
 |---|---|---|
 | `test (py3.11)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
 | `test (py3.12)` | JSONL/JSON (default) | Full test suite + 85% coverage gate (includes PG-focused tests with mock pool) |
+| `governance-backend-fast` | Governance file + PG-selection path | Fast governance backend invariants: backend selection, rollback/four-eyes, invalid-backend fail-fast, audit completeness |
 | `test-postgresql` | PostgreSQL (mock + **real PG**) | Backend parity + contract tests (mock-pool) **+ real PostgreSQL advisory-lock contention tests** (`-m "postgresql and contention"`) |
 | `test-slow` | Default | Slow/heavy tests |
 | `governance-smoke` | Default | Smoke tests (Tier 1) |
+| `governance-backend-validation` | Governance PostgreSQL + file path | Release-blocking governance backend validation + migration/startup checks |
 | `docker-smoke` | PostgreSQL (via compose) | Full-stack health + read/write with real PG (Tier 2/3) |
 | `production-tests` | Default | `pytest -m "production or smoke"` (Tier 2) |
+| `governance-backend-longrun` | Governance PostgreSQL + API flow | Tier 3 long-running governance suite incl. rollback/audit/history and production API checks |
 | `postgresql-smoke` | Real PostgreSQL (service container) | Backend parity + health endpoint verification **+ real PostgreSQL advisory-lock contention tests** (Tier 3) |
 
 ### Smoke / Release Validation Path

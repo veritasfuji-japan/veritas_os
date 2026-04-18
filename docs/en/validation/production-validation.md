@@ -72,6 +72,7 @@ Failures include actionable guidance and per-profile JUnit artifacts:
 | `lint` | Ruff, Bandit, architecture checks, security scripts | ✅ Yes |
 | `dependency-audit` | pip-audit CVE scan + pnpm audit | ✅ Yes |
 | `governance-smoke` | `pytest -m smoke` — 16 fast smoke tests | ✅ Yes |
+| `governance-backend-fast` | file/postgresql backend selection, rollback integrity, four-eyes invariants, audit completeness, invalid-backend fail-fast | ✅ Yes |
 | `test (py3.11/3.12)` | Full unit suite + 85% coverage gate | ✅ Yes |
 | `test-slow` | `pytest -m slow` | ✅ Yes |
 | `frontend-quality-gate` | ESLint / Vitest / Playwright E2E | ✅ Yes |
@@ -84,6 +85,7 @@ Failures include actionable guidance and per-profile JUnit artifacts:
 | `security-checks` | Re-runs all security scripts + Bandit | ✅ Yes |
 | `trustlog-production-matrix` | TrustLog release profile matrix (`dev`/`secure`/`prod`) | ✅ Yes (`secure`/`prod` always, `dev` on release refs) |
 | `production-tests` | `pytest -m "production or smoke"` + TLS + load | ✅ Yes |
+| `governance-backend-validation` | release-blocking governance backend suite with PostgreSQL service+migrations | ✅ Yes |
 | `docker-smoke` | Full-stack Docker Compose health check | ✅ Yes |
 | `governance-report` | Generates governance readiness report artifact | ✅ Yes |
 | `external-tests` | Live network tests (opt-in via `tier3_external`) | ⚠️ Advisory |
@@ -94,10 +96,24 @@ Failures include actionable guidance and per-profile JUnit artifacts:
 | Job | Purpose | Blocking |
 |-----|---------|---------|
 | `production-tests` | `pytest -m "production or smoke"` | Advisory |
+| `governance-backend-longrun` | long-running governance backend suite (PG + production API + artifact-signing coverage) | Advisory |
 | `tls-validation` | `pytest -m tls` | Advisory |
 | `load-validation` | `pytest -m load` | Advisory |
 | `docker-smoke` | Docker Compose full-stack smoke | Advisory (schedule/manual only) |
 | `external-tests` | Live network tests | Advisory (opt-in) |
+
+### Governance backend invariants now release-blocking
+
+The governance backend is now treated as a first-class gate, equivalent to the
+Memory/TrustLog backend posture:
+
+- backend selection and initialization (file / PostgreSQL)
+- invalid backend config fail-fast during startup
+- rollback integrity and audit event persistence
+- four-eyes approval invariants
+- concurrent mutation safety and no-silent-failure behavior
+- history ordering and audit completeness (digest/proposer/approvers)
+- PostgreSQL migration/startup path (`alembic upgrade head`) before governance tests
 
 ## Test Profiles
 
