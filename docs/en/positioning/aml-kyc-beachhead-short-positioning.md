@@ -10,6 +10,7 @@ Implemented references:
 - [1-day PoC quickstart](../guides/poc-pack-financial-quickstart.md)
 - [Financial governance templates](../guides/financial-governance-templates.md)
 - [External audit readiness](../validation/external-audit-readiness.md)
+- [Technical proof pack for external review](../validation/technical-proof-pack.md)
 
 ## Customer-facing short explanation
 

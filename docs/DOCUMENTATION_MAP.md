@@ -51,6 +51,14 @@
 | `docs/en/validation/production-validation.md` | EN only | Production validation strategy |
 | `docs/en/validation/backend-parity-coverage.md` | EN only | JSONL vs PostgreSQL parity |
 | `docs/en/validation/external-audit-readiness.md` | EN only | External audit evidence pack |
+| `docs/en/validation/technical-proof-pack.md` | EN only | External review proof-pack entrypoint |
+| `docs/en/validation/governance-capability-matrix.md` | EN only | Governance implemented/pending matrix |
+| `docs/en/validation/validation-evidence-map.md` | EN only | Validation layer to artifact mapping |
+| `docs/en/validation/aml-kyc-pilot-evidence-map.md` | EN only | AML/KYC pilot evidence map |
+| `docs/en/validation/external-reviewer-checklist.md` | EN only | External reviewer verification checklist |
+| `docs/en/validation/implemented-vs-pending-boundary.md` | EN only | Implemented vs pending boundary |
+| `docs/en/validation/short-dd-summary.md` | EN only | Short due-diligence summary |
+| `docs/en/validation/benchmark-reproducibility-appendix.md` | EN only | Optional benchmark/repro appendix |
 
 #### Governance / ガバナンス
 

@@ -39,6 +39,7 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 - [Production Validation Strategy](validation/production-validation.md)
 - [Backend Parity Coverage](validation/backend-parity-coverage.md)
 - [External Audit Readiness](validation/external-audit-readiness.md)
+- [Technical Proof Pack (external review)](validation/technical-proof-pack.md)
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)
