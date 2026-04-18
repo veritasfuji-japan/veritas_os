@@ -36,6 +36,33 @@ from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_j
 
 _logger = logging.getLogger(__name__)
 
+_CANONICAL_BUSINESS_DECISIONS = {
+    "APPROVE",
+    "DENY",
+    "HOLD",
+    "REVIEW_REQUIRED",
+    "EVIDENCE_REQUIRED",
+    "POLICY_DEFINITION_REQUIRED",
+}
+
+_BUSINESS_ALIAS_TO_CANONICAL = {
+    "allow": "APPROVE",
+    "proceed": "APPROVE",
+    "approve": "APPROVE",
+    "deny": "DENY",
+    "rejected": "DENY",
+    "block": "DENY",
+    "hold": "HOLD",
+    "modify": "HOLD",
+    "abstain": "HOLD",
+    "ambiguous_human_review": "REVIEW_REQUIRED",
+}
+
+_NEXT_ACTION_ALIASES = {
+    "NEEDS_HUMAN_REVIEW": "PREPARE_HUMAN_REVIEW_PACKET",
+    "REJECT_REQUEST": "DO_NOT_EXECUTE",
+}
+
 
 def _uuid7() -> str:
     """Generate a UUIDv7-compatible identifier."""
@@ -54,6 +81,26 @@ def _utc_now_iso8601() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
         "+00:00", "Z"
     )
+
+
+def _canonicalize_business_decision(value: Any) -> str:
+    """Normalize business_decision into canonical public decision enums."""
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "HOLD"
+    upper = normalized.upper()
+    if upper in _CANONICAL_BUSINESS_DECISIONS:
+        return upper
+    return _BUSINESS_ALIAS_TO_CANONICAL.get(normalized.lower(), "HOLD")
+
+
+def _canonicalize_next_action(value: Any) -> str:
+    """Normalize next_action aliases into canonical workflow action labels."""
+    normalized = str(value or "").strip()
+    if not normalized:
+        return "REVISE_AND_RESUBMIT"
+    upper = normalized.upper()
+    return _NEXT_ACTION_ALIASES.get(upper, upper)
 
 
 def _build_acceptance_checklist(
@@ -251,8 +298,12 @@ def _decision_record(entry: Dict[str, Any], verification_report: Dict[str, Any])
     return {
         "decision_payload": payload,
         "gate_decision": canonical_gate_decision,
-        "business_decision": payload.get("business_decision", "HOLD"),
-        "next_action": payload.get("next_action", "REVISE_AND_RESUBMIT"),
+        "business_decision": _canonicalize_business_decision(
+            payload.get("business_decision", "HOLD")
+        ),
+        "next_action": _canonicalize_next_action(
+            payload.get("next_action", "REVISE_AND_RESUBMIT")
+        ),
         "required_evidence": payload.get("required_evidence", []),
         "human_review_required": bool(payload.get("human_review_required", False)),
         "trustlog_references": {

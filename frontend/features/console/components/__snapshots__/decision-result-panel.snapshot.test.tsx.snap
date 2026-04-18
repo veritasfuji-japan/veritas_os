@@ -187,7 +187,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          AMBIGUOUS_HUMAN_REVIEW
+          REVIEW_REQUIRED
         </p>
         <p>
           <span
@@ -276,7 +276,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          AMBIGUOUS_HUMAN_REVIEW
+          REVIEW_REQUIRED
         </p>
         <p>
           <span

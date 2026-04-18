@@ -85,6 +85,14 @@ def test_compare_expected_semantics_canonicalizes_gate_aliases() -> None:
     assert "gate_decision" not in diff
 
 
+def test_compare_expected_semantics_canonicalizes_business_aliases() -> None:
+    """Comparator should treat business decision aliases as canonical equivalents."""
+    expected = {"business_decision": "allow"}
+    actual = {"business_decision": "APPROVE"}
+    diff = compare_expected_semantics(expected, actual)
+    assert "business_decision" not in diff
+
+
 def test_mismatch_summary_is_readable() -> None:
     """Mismatch summary helper should produce concise field-first output."""
     summary = summarize_semantic_mismatches(

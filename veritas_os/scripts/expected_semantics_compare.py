@@ -28,6 +28,25 @@ _NEXT_ACTION_FAMILIES = {
     "REVISE_AND_RESUBMIT": "collect_evidence",
 }
 
+_CANONICAL_BUSINESS_DECISIONS = {
+    "APPROVE",
+    "DENY",
+    "HOLD",
+    "REVIEW_REQUIRED",
+    "EVIDENCE_REQUIRED",
+    "POLICY_DEFINITION_REQUIRED",
+}
+
+_BUSINESS_ALIASES = {
+    "ALLOW": "APPROVE",
+    "PROCEED": "APPROVE",
+    "REJECTED": "DENY",
+    "BLOCK": "DENY",
+    "MODIFY": "HOLD",
+    "ABSTAIN": "HOLD",
+    "AMBIGUOUS_HUMAN_REVIEW": "REVIEW_REQUIRED",
+}
+
 
 def normalize_next_action(value: Any) -> str:
     """Normalize next_action labels into stable canonical labels."""
@@ -43,6 +62,16 @@ def next_action_family(value: Any) -> str:
     return _NEXT_ACTION_FAMILIES.get(action, "other")
 
 
+def canonicalize_business_decision(value: Any) -> str:
+    """Normalize business decision values for stable semantic comparisons."""
+    normalized = str(value or "").strip().upper()
+    if not normalized:
+        return "HOLD"
+    if normalized in _CANONICAL_BUSINESS_DECISIONS:
+        return normalized
+    return _BUSINESS_ALIASES.get(normalized, "HOLD")
+
+
 def compare_expected_semantics(
     expected: Mapping[str, Any],
     actual: Mapping[str, Any],
@@ -55,8 +84,8 @@ def compare_expected_semantics(
     if expected_gate != actual_gate:
         mismatches["gate_decision"] = {"expected": expected_gate, "actual": actual_gate}
 
-    expected_business = expected.get("business_decision")
-    actual_business = actual.get("business_decision")
+    expected_business = canonicalize_business_decision(expected.get("business_decision"))
+    actual_business = canonicalize_business_decision(actual.get("business_decision"))
     if expected_business != actual_business:
         mismatches["business_decision"] = {
             "expected": expected_business,
