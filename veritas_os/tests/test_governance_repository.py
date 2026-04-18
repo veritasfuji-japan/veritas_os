@@ -73,7 +73,18 @@ class _InMemoryRepository:
     def list_policy_history(self, *, limit, max_records):
         return list(reversed(self.history))[: max(1, min(limit, max_records))]
 
-    def update_policy(self, *, previous, updated, proposer, approvers, event_type):
+    def update_policy(
+        self,
+        *,
+        previous,
+        updated,
+        proposer,
+        approvers,
+        event_type,
+        approval_records=None,
+        reason="",
+    ):
+        del approval_records, reason
         self.policy = updated
         self.history.append(
             {
@@ -85,7 +96,17 @@ class _InMemoryRepository:
             }
         )
 
-    def rollback_policy(self, *, previous, restored, proposer, approvers):
+    def rollback_policy(
+        self,
+        *,
+        previous,
+        restored,
+        proposer,
+        approvers,
+        approval_records=None,
+        reason="",
+    ):
+        del approval_records, reason
         self.policy = restored
         self.history.append(
             {

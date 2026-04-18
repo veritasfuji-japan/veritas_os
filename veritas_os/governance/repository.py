@@ -34,6 +34,8 @@ class GovernanceRepository(Protocol):
         proposer: str,
         approvers: list[str],
         event_type: str,
+        approval_records: list[dict[str, str]] | None = None,
+        reason: str = "",
     ) -> None:
         """Persist updated policy and record an update event."""
 
@@ -44,5 +46,7 @@ class GovernanceRepository(Protocol):
         restored: dict[str, Any],
         proposer: str,
         approvers: list[str],
+        approval_records: list[dict[str, str]] | None = None,
+        reason: str = "",
     ) -> None:
         """Persist restored policy and record a rollback event."""
