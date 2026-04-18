@@ -111,7 +111,7 @@ Validate that results satisfy minimum demo sign-off:
 After pass criteria, move to external handoff preparation:
 
 1. Review bundle and verifier flow:
-   [External Audit Readiness](../validation/external-audit-readiness.md#evidence-bundle-readiness-path-for-amlkyc-poc)
+   [External Audit Readiness](../validation/external-audit-readiness.md)
 2. Generate decision/incident/release bundle only for synthetic PoC data.
 3. Attach verification report + acceptance checklist before stakeholder sharing.
 
@@ -247,9 +247,9 @@ Runner summary now includes:
 ## Role-based short explanation pointers
 
 - Customer-facing short explanation:
-  [AML/KYC short positioning](../positioning/aml-kyc-beachhead-short-positioning.md#customer-facing-short-explanation)
+  [AML/KYC short positioning](../positioning/aml-kyc-beachhead-short-positioning.md)
 - Investor-facing short explanation:
-  [AML/KYC short positioning](../positioning/aml-kyc-beachhead-short-positioning.md#investor-facing-short-explanation)
+  [AML/KYC short positioning](../positioning/aml-kyc-beachhead-short-positioning.md)
 
 ---
 

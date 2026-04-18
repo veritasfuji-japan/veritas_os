@@ -13,13 +13,13 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 
 ### AML/KYC Beachhead (role-based fastest routes)
 - **Customer (business owner / compliance lead)**:
-  [AML/KYC short positioning](positioning/aml-kyc-beachhead-short-positioning.md#customer-facing-short-explanation)
+  [AML/KYC short positioning](positioning/aml-kyc-beachhead-short-positioning.md)
 - **Operator (implementation / governance owner)**:
   [1-day PoC quickstart + operator guide](guides/poc-pack-financial-quickstart.md)
 - **Investor / board observer**:
-  [Investor-facing short explanation](positioning/aml-kyc-beachhead-short-positioning.md#investor-facing-short-explanation)
+  [Investor-facing short explanation](positioning/aml-kyc-beachhead-short-positioning.md)
 - **Evidence bundle readiness**:
-  [External audit readiness](validation/external-audit-readiness.md#evidence-bundle-readiness-path-for-amlkyc-poc)
+  [External audit readiness](validation/external-audit-readiness.md)
 
 ### Operations & Runbooks
 - [PostgreSQL Production Guide](operations/postgresql-production-guide.md)
