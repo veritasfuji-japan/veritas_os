@@ -953,6 +953,15 @@ class DecideResponse(BaseModel):
             self.gate_decision = canonical_gate_decision
             events.append("coercion.gate_decision_canonicalized")
 
+        # REVIEW_REQUIRED / human_review_required の不整合は fail ではなく
+        # 後方互換優先で安全側へ補正する。
+        if self.business_decision == "REVIEW_REQUIRED" and not self.human_review_required:
+            self.human_review_required = True
+            events.append("coercion.human_review_required_for_review_required")
+        if self.gate_decision == "human_review_required" and not self.human_review_required:
+            self.human_review_required = True
+            events.append("coercion.human_review_required_for_gate_escalation")
+
         if self.required_evidence:
             self.required_evidence = unique_preserve_order(
                 normalize_required_evidence_keys(self.required_evidence)

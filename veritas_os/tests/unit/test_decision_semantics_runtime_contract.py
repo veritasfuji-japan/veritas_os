@@ -33,20 +33,16 @@ def test_forbidden_gate_business_combination_is_rejected() -> None:
         raise AssertionError("ValidationError was expected")
 
 
-def test_review_required_requires_human_review_true() -> None:
-    """REVIEW_REQUIRED must not coexist with human_review_required=false."""
-    try:
-        DecideResponse.model_validate(
-            {
-                "gate_decision": "human_review_required",
-                "business_decision": "REVIEW_REQUIRED",
-                "human_review_required": False,
-            }
-        )
-    except ValidationError as exc:
-        assert "requires human_review_required=true" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("ValidationError was expected")
+def test_review_required_coerces_human_review_required_true() -> None:
+    """REVIEW_REQUIRED は後方互換のため human_review_required=true に補正する。"""
+    payload = DecideResponse.model_validate(
+        {
+            "gate_decision": "human_review_required",
+            "business_decision": "REVIEW_REQUIRED",
+            "human_review_required": False,
+        }
+    )
+    assert payload.human_review_required is True
 
 
 def test_proceed_requires_human_review_false() -> None:
