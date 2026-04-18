@@ -66,6 +66,24 @@ Machine-readable source: `veritas_os/sample_data/governance/required_evidence_ta
 The taxonomy fixture now includes a machine-readable `profiles.aml_kyc` section.
 Profile evaluation is applied **after alias -> canonical normalization**.
 
+Profile shape (runtime contract):
+
+- `profile_id`
+- `profile_version`
+- `canonical_key_list`
+- `required`
+- `optional`
+- `escalation_sensitive`
+
+Validation rules:
+
+- `canonical_key_list` must be canonical taxonomy keys only.
+- `canonical_key_list` must exactly equal
+  `required ∪ optional ∪ escalation_sensitive`.
+- `escalation_sensitive ⊆ required`.
+- Invalid profile shape is fail-soft at runtime (profile skipped) to avoid
+  crashing live decision paths.
+
 - required:
   - `kyc_profile`
   - `sanctions_screening_trace`
@@ -82,6 +100,27 @@ Profile evaluation is applied **after alias -> canonical normalization**.
   - `sanctions_screening_trace`
   - `pep_screening_result`
   - `approval_matrix`
+
+canonical-key-list:
+
+- `kyc_profile`
+- `sanctions_screening_trace`
+- `pep_screening_result`
+- `source_of_funds_record`
+- `approval_matrix`
+- `audit_trail_export`
+- `secure_controls_attestation`
+- `policy_definition_record`
+- `transaction_monitoring_trace`
+- `rollback_plan`
+
+Alias normalization behavior:
+
+- Input keys in `required_evidence` / `missing_evidence` / `satisfied_evidence`
+  are lower-cased and matched against taxonomy aliases.
+- Canonical keys are emitted in runtime response fields.
+- Unknown free strings remain accepted (`allow_free_string=true`) and are tagged
+  as non-taxonomy keys with warning/telemetry for migration readiness.
 
 ## v0 catalog
 

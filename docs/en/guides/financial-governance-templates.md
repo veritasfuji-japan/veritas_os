@@ -66,6 +66,23 @@ template suites can quantify migration readiness before strict reject mode.
 context (`required_evidence_mode=strict`) to route unknown/profile misses into
 stronger hold/review behavior while keeping full reject rollout deferred.
 
+Canonical AML/KYC profile key list (`canonical_key_list`) is fixed as:
+
+- `kyc_profile`
+- `sanctions_screening_trace`
+- `pep_screening_result`
+- `source_of_funds_record`
+- `approval_matrix`
+- `audit_trail_export`
+- `secure_controls_attestation`
+- `policy_definition_record`
+- `transaction_monitoring_trace`
+- `rollback_plan`
+
+Alias normalization is applied before profile matching so templates can still
+provide legacy aliases (for example `sanctions_trace` or `pep_check`) while
+runtime emits canonical keys for deterministic downstream processing.
+
 ## Role Split: Regulatory Templates vs PoC Questions
 
 - **Regulatory templates** (`financial_regulatory_templates.json`)

@@ -130,6 +130,18 @@
     "aml_kyc": {
       "profile_id": "aml_kyc_beachhead_v1",
       "profile_version": "1.0.0",
+      "canonical_key_list": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record",
+        "transaction_monitoring_trace",
+        "rollback_plan"
+      ],
       "required": [
         "kyc_profile",
         "sanctions_screening_trace",
