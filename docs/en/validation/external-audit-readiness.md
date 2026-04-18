@@ -244,6 +244,20 @@ Each bundle now ships `acceptance_checklist.json` with machine-readable checks:
 This checklist is intended to be the explicit pre-submission gate for
 external auditors/customers/legal.
 
+### Evidence-bundle readiness path for AML/KYC PoC
+
+Use this sequence after completing the 1-day AML/KYC quickstart:
+
+1. Run PoC and keep the generated report JSON as baseline evidence.
+2. Select bundle scope (`decision`, `incident`, or `release`) based on review
+   objective.
+3. Generate the bundle and confirm `acceptance_checklist.json` passes.
+4. Run standalone verifier and include `verification_report.json`.
+5. Share only synthetic/sanitized artifacts for PoC-stage external review.
+
+Entry guide:
+- [Financial PoC Pack (1-day quickstart, EN)](../guides/poc-pack-financial-quickstart.md)
+
 ### Generating Bundles
 
 ```python
