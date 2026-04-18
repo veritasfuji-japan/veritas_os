@@ -13,6 +13,9 @@ from pydantic import (
     field_validator,
 )
 from veritas_os.core.decision_semantics import (
+    COMPATIBLE_GATE_DECISION_VALUES,
+    LEGACY_GATE_DECISION_ALIASES,
+    CANONICAL_GATE_DECISION_VALUES,
     canonicalize_public_gate_decision,
     normalize_required_evidence_keys,
     unique_preserve_order,
@@ -50,6 +53,12 @@ GateDecisionLiteral = Literal[
     "abstain",
     "unknown",
 ]
+# NOTE:
+# - Canonical public values are defined in decision_semantics.py:
+#   CANONICAL_GATE_DECISION_VALUES.
+# - Legacy aliases remain compatibility-only:
+#   LEGACY_GATE_DECISION_ALIASES.
+# - This Literal intentionally remains permissive for backward compatibility.
 BusinessDecisionLiteral = Literal[
     "APPROVE",
     "DENY",
@@ -655,7 +664,17 @@ class DecideResponse(BaseModel):
     # /v1/decide 側に合わせた拡張分
     decision_status: DecisionStatusLiteral = "allow"
     rejection_reason: Optional[str] = None
-    gate_decision: GateDecisionLiteral = "unknown"
+    gate_decision: GateDecisionLiteral = Field(
+        default="unknown",
+        description=(
+            "Canonical public values: "
+            f"{', '.join(CANONICAL_GATE_DECISION_VALUES)}. "
+            "Legacy aliases are compatibility-only and normalized at runtime: "
+            f"{', '.join(LEGACY_GATE_DECISION_ALIASES)}. "
+            "Accepted compatibility surface: "
+            f"{', '.join(COMPATIBLE_GATE_DECISION_VALUES)}."
+        ),
+    )
     business_decision: BusinessDecisionLiteral = "HOLD"
     next_action: str = "REVISE_AND_RESUBMIT"
     required_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)

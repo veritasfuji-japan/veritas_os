@@ -1,9 +1,59 @@
 from pydantic import ValidationError
 
 from veritas_os.api.schemas import DecideResponse
-from veritas_os.core.decision_semantics import build_required_evidence_profile
+from veritas_os.core.decision_semantics import (
+    CANONICAL_GATE_DECISION_VALUES,
+    COMPATIBLE_GATE_DECISION_VALUES,
+    FORBIDDEN_GATE_BUSINESS_COMBINATIONS,
+    LEGACY_GATE_DECISION_ALIASES,
+    build_required_evidence_profile,
+    canonicalize_public_gate_decision,
+)
 from veritas_os.core.pipeline.pipeline_response import assemble_response
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
+
+
+def test_canonical_contract_source_of_truth_values_are_stable() -> None:
+    """Canonical and compatibility gate values should be centralized and explicit."""
+    assert CANONICAL_GATE_DECISION_VALUES == (
+        "proceed",
+        "hold",
+        "block",
+        "human_review_required",
+    )
+    assert LEGACY_GATE_DECISION_ALIASES == (
+        "allow",
+        "deny",
+        "modify",
+        "rejected",
+        "abstain",
+    )
+    assert COMPATIBLE_GATE_DECISION_VALUES == (
+        "proceed",
+        "hold",
+        "block",
+        "human_review_required",
+        "allow",
+        "deny",
+        "modify",
+        "rejected",
+        "abstain",
+        "unknown",
+    )
+
+
+def test_legacy_aliases_are_compatibility_only_inputs() -> None:
+    """Legacy aliases must normalize to canonical values for public semantics."""
+    expected_map = {
+        "allow": "proceed",
+        "deny": "block",
+        "modify": "hold",
+        "rejected": "block",
+        "abstain": "hold",
+    }
+    assert set(expected_map) == set(LEGACY_GATE_DECISION_ALIASES)
+    for raw, expected in expected_map.items():
+        assert canonicalize_public_gate_decision(raw) == expected
 
 
 def test_gate_decision_alias_is_canonicalized_in_schema() -> None:
@@ -39,6 +89,17 @@ def test_forbidden_gate_business_combination_is_rejected() -> None:
         assert "forbidden gate/business combination" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("ValidationError was expected")
+
+
+def test_forbidden_pair_table_is_centralized_and_enforced() -> None:
+    """Forbidden gate/business pairs should stay defined in one canonical table."""
+    assert FORBIDDEN_GATE_BUSINESS_COMBINATIONS == frozenset(
+        {
+            ("block", "APPROVE"),
+            ("hold", "APPROVE"),
+            ("proceed", "DENY"),
+        }
+    )
 
 
 def test_review_required_coerces_human_review_required_true() -> None:

@@ -16,12 +16,28 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-CANONICAL_GATE_DECISIONS = {
+CANONICAL_GATE_DECISION_VALUES: tuple[str, ...] = (
     "proceed",
     "hold",
     "block",
     "human_review_required",
-}
+)
+
+CANONICAL_GATE_DECISIONS = set(CANONICAL_GATE_DECISION_VALUES)
+
+LEGACY_GATE_DECISION_ALIASES: tuple[str, ...] = (
+    "allow",
+    "deny",
+    "modify",
+    "rejected",
+    "abstain",
+)
+
+COMPATIBLE_GATE_DECISION_VALUES: tuple[str, ...] = (
+    *CANONICAL_GATE_DECISION_VALUES,
+    *LEGACY_GATE_DECISION_ALIASES,
+    "unknown",
+)
 
 GATE_DECISION_ALIAS_TO_CANONICAL = {
     "allow": "proceed",
@@ -37,6 +53,14 @@ GATE_DECISION_ALIAS_TO_CANONICAL = {
     "block": "block",
     "human_review_required": "human_review_required",
 }
+
+FORBIDDEN_GATE_BUSINESS_COMBINATIONS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("block", "APPROVE"),
+        ("hold", "APPROVE"),
+        ("proceed", "DENY"),
+    }
+)
 
 # Decision-semantics.md section D: single source-of-truth ordering.
 STOP_REASON_GATE_PRIORITY: tuple[tuple[tuple[str, ...], str], ...] = (
@@ -280,8 +304,8 @@ def derive_gate_decision_from_stop_reasons(
 ) -> tuple[str, bool]:
     """Classify canonical gate decision using a single priority definition."""
     reasons = set(stop_reasons)
-    deny_family = {"deny", "rejected", "block"}
-    hold_family = {"hold", "modify", "abstain"}
+    normalized_raw_gate = canonicalize_gate_decision(raw_gate_decision)
+    normalized_decision_status = canonicalize_gate_decision(decision_status)
     # Decision-semantics.md section D priority order.
     if "rollback_not_supported" in reasons:
         return "block", human_review_required
@@ -289,7 +313,7 @@ def derive_gate_decision_from_stop_reasons(
         return "block", human_review_required
     if "secure_prod_controls_missing" in reasons:
         return "block", human_review_required
-    if raw_gate_decision in deny_family or decision_status in deny_family:
+    if normalized_raw_gate == "block" or normalized_decision_status == "block":
         return "block", human_review_required
     if "required_evidence_missing" in reasons:
         return "hold", human_review_required
@@ -301,7 +325,7 @@ def derive_gate_decision_from_stop_reasons(
         return "human_review_required", True
     if (
         {"rule_undefined", "audit_trail_incomplete", "secure_controls_missing"} & reasons
-        or raw_gate_decision in hold_family
+        or normalized_raw_gate == "hold"
     ):
         return "hold", human_review_required
     return "proceed", human_review_required
@@ -312,12 +336,7 @@ def validate_gate_business_combination(
 ) -> None:
     """Raise ValueError when gate/business combination is forbidden."""
     gate_decision = canonicalize_public_gate_decision(gate_decision)
-    forbidden = {
-        ("block", "APPROVE"),
-        ("hold", "APPROVE"),
-        ("proceed", "DENY"),
-    }
-    if (gate_decision, business_decision) in forbidden:
+    if (gate_decision, business_decision) in FORBIDDEN_GATE_BUSINESS_COMBINATIONS:
         raise ValueError(
             "forbidden gate/business combination: "
             f"gate_decision={gate_decision}, business_decision={business_decision}"

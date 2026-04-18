@@ -26,6 +26,17 @@ def test_decision_semantics_docs_exist() -> None:
     assert Path("docs/ja/governance/required-evidence-taxonomy.md").exists()
 
 
+def test_decision_semantics_doc_declares_runtime_source_of_truth() -> None:
+    """EN semantics doc should reference canonical backend source-of-truth constants."""
+    content = Path("docs/en/architecture/decision-semantics.md").read_text(
+        encoding="utf-8"
+    )
+    assert "veritas_os/core/decision_semantics.py" in content
+    assert "CANONICAL_GATE_DECISION_VALUES" in content
+    assert "LEGACY_GATE_DECISION_ALIASES" in content
+    assert "FORBIDDEN_GATE_BUSINESS_COMBINATIONS" in content
+
+
 def test_readme_links_to_new_decision_docs() -> None:
     """README hubs should route to the new semantics/taxonomy docs."""
     for path in DOC_FILES:
