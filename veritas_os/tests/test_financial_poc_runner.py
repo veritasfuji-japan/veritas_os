@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -14,8 +15,20 @@ from veritas_os.scripts.financial_poc_runner import (
 from veritas_os.scripts.expected_semantics_compare import summarize_semantic_mismatches
 
 POC_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
+AML_KYC_PILOT_FIXTURE_PATH = Path(
+    "veritas_os/sample_data/governance/aml_kyc_pilot_cases.json"
+)
+FAILURE_SCENARIO_PATH = Path(
+    "veritas_os/sample_data/governance/aml_kyc_failure_scenarios.json"
+)
+BUNDLE_EXAMPLE_PATH = Path(
+    "veritas_os/sample_data/governance/aml_kyc_expected_evidence_bundle_examples.json"
+)
 EN_QUICKSTART_PATH = Path("docs/en/guides/poc-pack-financial-quickstart.md")
 SUCCESS_CRITERIA_DOC_PATH = Path("docs/en/guides/financial-poc-success-criteria.md")
+PILOT_CHECKLIST_PATH = Path("docs/en/guides/aml-kyc-pilot-checklist.md")
+RUNBOOK_PATH = Path("docs/en/guides/aml-kyc-operator-runbook.md")
+HANDOFF_PATH = Path("docs/en/guides/aml-kyc-customer-handoff-path.md")
 
 
 def _extract_markdown_links(content: str) -> list[str]:
@@ -29,6 +42,15 @@ def test_financial_poc_runner_loads_sample_fixture() -> None:
 
     assert len(questions) >= 11
     assert all(question.question_id for question in questions)
+    assert all(question.expected_semantics for question in questions)
+
+
+def test_aml_kyc_pilot_fixture_is_runner_compatible() -> None:
+    """AML/KYC pilot fixture should stay compatible with runner question model."""
+    questions = load_questions(AML_KYC_PILOT_FIXTURE_PATH)
+
+    assert len(questions) >= 6
+    assert all(question.category == "aml_kyc" for question in questions)
     assert all(question.expected_semantics for question in questions)
 
 
@@ -149,20 +171,24 @@ def test_compare_expected_semantics_exposes_evidence_runtime_warnings() -> None:
     assert warning_payload["profile_missing_keys"] == ["approval_matrix"]
 
 
-def test_en_quickstart_links_resolve_and_success_criteria_doc_exists() -> None:
-    """EN quickstart should have valid relative links and success criteria doc."""
-    content = EN_QUICKSTART_PATH.read_text(encoding="utf-8")
-    links = _extract_markdown_links(content)
-
-    relative_links = [
-        link for link in links if not link.startswith(("http://", "https://", "#"))
-    ]
-
-    for link in relative_links:
-        candidate = (EN_QUICKSTART_PATH.parent / link).resolve()
-        assert candidate.exists(), f"Broken link: {link} -> {candidate}"
-
-    assert SUCCESS_CRITERIA_DOC_PATH.exists()
+def test_en_quickstart_and_pilot_docs_links_resolve() -> None:
+    """Quickstart and pilot companion docs should resolve all relative links."""
+    for path in [
+        EN_QUICKSTART_PATH,
+        SUCCESS_CRITERIA_DOC_PATH,
+        PILOT_CHECKLIST_PATH,
+        RUNBOOK_PATH,
+        HANDOFF_PATH,
+    ]:
+        content = path.read_text(encoding="utf-8")
+        links = _extract_markdown_links(content)
+        relative_links = [
+            link for link in links if not link.startswith(("http://", "https://", "#"))
+        ]
+        for link in relative_links:
+            link_path = link.split("#", 1)[0]
+            candidate = (path.parent / link_path).resolve()
+            assert candidate.exists(), f"Broken link: {link} -> {candidate}"
 
 
 def test_success_criteria_docs_cover_representative_cases() -> None:
@@ -172,12 +198,31 @@ def test_success_criteria_docs_cover_representative_cases() -> None:
     expected_markers = [
         "sanctions partial match",
         "source of funds missing",
-        "approval boundary unknown",
-        "high-risk ambiguity",
-        "sufficient evidence",
         "policy definition missing",
+        "sufficient evidence low-risk",
         "secure/prod controls missing",
     ]
     for marker in expected_markers:
         assert marker in quickstart
         assert marker in criteria
+
+
+def test_failure_scenarios_are_bounded_to_implemented_behavior() -> None:
+    """Failure scenario fixture must explicitly declare bounded implementation scope."""
+    payload = json.loads(FAILURE_SCENARIO_PATH.read_text(encoding="utf-8"))
+
+    assert len(payload) >= 5
+    assert all(item["bounded_to_implemented_behavior"] is True for item in payload)
+
+
+def test_expected_bundle_examples_are_structurally_complete() -> None:
+    """Evidence bundle example fixture should include mandatory acceptance checks."""
+    payload = json.loads(BUNDLE_EXAMPLE_PATH.read_text(encoding="utf-8"))
+    examples = payload["bundle_examples"]
+
+    assert payload["scope"] == "synthetic_only"
+    assert len(examples) >= 3
+    for example in examples:
+        assert "manifest.json" in example["expected_files"]
+        assert "acceptance_checklist.json" in example["expected_files"]
+        assert "verification_report_present" in example["required_acceptance_checks"]

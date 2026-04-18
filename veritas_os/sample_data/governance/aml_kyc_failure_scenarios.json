@@ -1,0 +1,42 @@
+[
+  {
+    "scenario_id": "failure_unknown_required_evidence_key",
+    "category": "taxonomy_drift",
+    "description": "Runtime returns unknown required_evidence key that is not in aml_kyc profile.",
+    "expected_behavior": "warning_or_hold",
+    "operator_action": "triage taxonomy mismatch and block pilot sign-off until classified",
+    "bounded_to_implemented_behavior": true
+  },
+  {
+    "scenario_id": "failure_sanctions_partial_match_proceed_regression",
+    "category": "fail_closed_regression",
+    "description": "Sanctions partial match routes to proceed/approve unexpectedly.",
+    "expected_behavior": "fail",
+    "operator_action": "open blocker incident and stop pilot continuation",
+    "bounded_to_implemented_behavior": true
+  },
+  {
+    "scenario_id": "failure_source_of_funds_missing_approve_regression",
+    "category": "fail_closed_regression",
+    "description": "source_of_funds missing still produces APPROVE family output.",
+    "expected_behavior": "fail",
+    "operator_action": "fail pilot gate and require remediation",
+    "bounded_to_implemented_behavior": true
+  },
+  {
+    "scenario_id": "failure_policy_definition_missing_not_escalated",
+    "category": "policy_contract_regression",
+    "description": "policy definition missing is not routed to POLICY_DEFINITION_REQUIRED family.",
+    "expected_behavior": "fail",
+    "operator_action": "mark acceptance criteria unmet and hand back to engineering",
+    "bounded_to_implemented_behavior": true
+  },
+  {
+    "scenario_id": "failure_secure_controls_missing_not_blocked",
+    "category": "secure_posture_regression",
+    "description": "secure/prod controls missing but gate decision is not block in secure posture.",
+    "expected_behavior": "fail",
+    "operator_action": "treat as security-critical regression and stop rollout",
+    "bounded_to_implemented_behavior": true
+  }
+]

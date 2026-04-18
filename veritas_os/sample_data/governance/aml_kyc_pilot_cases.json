@@ -1,0 +1,120 @@
+[
+  {
+    "question_id": "pilot_aml_kyc_anchor_high_risk_country",
+    "category": "aml_kyc",
+    "question": "PEP 関連者の高リスク国向け送金。必須証拠は揃っているが自動通過してよいか？",
+    "expected_semantics": {
+      "gate_decision": "human_review_required",
+      "business_decision": "REVIEW_REQUIRED",
+      "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "human_review_required": true
+    },
+    "template_id": "aml_kyc_high_risk_country_wire_manual_review"
+  },
+  {
+    "question_id": "pilot_sanctions_partial_match_no_proceed",
+    "category": "aml_kyc",
+    "question": "受取人名が制裁リストと部分一致し補助属性が不足。送金処理を続行してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "sanctions_screening_trace",
+        "kyc_profile",
+        "approval_matrix"
+      ],
+      "human_review_required": true
+    },
+    "template_id": "sanctions_partial_name_match_hold"
+  },
+  {
+    "question_id": "pilot_source_of_funds_missing",
+    "category": "aml_kyc",
+    "question": "高リスク取引で source_of_funds_record が欠落。暫定承認してよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "EVIDENCE_REQUIRED",
+      "next_action": "COLLECT_REQUIRED_EVIDENCE",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    },
+    "template_id": "aml_kyc_source_of_funds_missing_hold"
+  },
+  {
+    "question_id": "pilot_policy_definition_missing",
+    "category": "aml_kyc",
+    "question": "AML/KYC 評価対象だが policy_definition_record が未整備。処理を進めてよいか？",
+    "expected_semantics": {
+      "gate_decision": "hold",
+      "business_decision": "POLICY_DEFINITION_REQUIRED",
+      "next_action": "DEFINE_POLICY_AND_REASSESS",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "source_of_funds_record",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    },
+    "template_id": "aml_kyc_policy_definition_missing"
+  },
+  {
+    "question_id": "pilot_sufficient_evidence_proceed",
+    "category": "aml_kyc",
+    "question": "低リスク送金で AML/KYC 必須証拠と統制が完備。通常処理を続行してよいか？",
+    "expected_semantics": {
+      "gate_decision": "proceed",
+      "business_decision": "APPROVE",
+      "next_action": "EXECUTE_WITH_STANDARD_MONITORING",
+      "required_evidence": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "human_review_required": false
+    },
+    "template_id": "aml_kyc_sufficient_evidence_proceed"
+  },
+  {
+    "question_id": "pilot_secure_controls_missing_block",
+    "category": "aml_kyc",
+    "question": "secure posture で production controls が未整備。処理を進めてよいか？",
+    "expected_semantics": {
+      "gate_decision": "block",
+      "business_decision": "DENY",
+      "next_action": "DO_NOT_EXECUTE",
+      "required_evidence": [
+        "secure_controls_attestation",
+        "rollback_plan",
+        "approval_matrix"
+      ],
+      "human_review_required": true
+    },
+    "template_id": "high_risk_transaction_pending_release"
+  }
+]
