@@ -115,6 +115,7 @@ def summarize_semantic_mismatches(mismatches: Mapping[str, Mapping[str, Any]]) -
     """Return a compact human-readable mismatch summary for runner outputs."""
     if not mismatches:
         return "no mismatches"
+    mismatch_count = len(mismatches)
     segments: list[str] = []
     for field_name in (
         "gate_decision",
@@ -130,4 +131,6 @@ def summarize_semantic_mismatches(mismatches: Mapping[str, Mapping[str, Any]]) -
         expected = item.get("expected")
         actual = item.get("actual")
         segments.append(f"{field_name}: expected={expected} actual={actual}")
-    return " | ".join(segments) if segments else "mismatch details unavailable"
+    if not segments:
+        return f"{mismatch_count} mismatch(es): details unavailable"
+    return f"{mismatch_count} mismatch(es): " + " | ".join(segments)

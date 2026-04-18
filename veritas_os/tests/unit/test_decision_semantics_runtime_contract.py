@@ -163,3 +163,95 @@ def test_aml_kyc_evidence_profile_classifies_requirement_levels() -> None:
         "escalation_sensitive",
     }
     assert by_key["custom_free_text"]["requirement_level"] == "unclassified"
+
+
+def test_aml_kyc_profile_required_keys_are_enforced_in_runtime() -> None:
+    """AML/KYC profile keys should be added to required_evidence at runtime."""
+    ctx = PipelineContext(
+        request_id="req-aml-profile-hardening",
+        query="aml profile hardening",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "required_evidence": ["kyc_profile"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert "source_of_funds_record" in payload["required_evidence"]
+    assert "source_of_funds_record" in payload["missing_evidence"]
+    assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+
+
+def test_unknown_required_evidence_generates_warning_and_telemetry() -> None:
+    """Unknown evidence keys should remain soft-warning with telemetry counters."""
+    ctx = PipelineContext(
+        request_id="req-unknown-evidence",
+        query="unknown evidence",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "category": "aml_kyc",
+            "template_id": "tmpl-unknown-1",
+            "required_evidence": ["kyc_profile", "unknown_custom_doc"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    telemetry = payload["required_evidence_telemetry"]
+    assert telemetry["unknown_required_evidence_key_total"] >= 1
+    assert "unknown_required_evidence_keys_detected" in payload.get("warnings", [])
+
+
+def test_alias_normalization_counter_is_recorded() -> None:
+    """Alias normalization telemetry should increase when aliases are provided."""
+    ctx = PipelineContext(
+        request_id="req-alias-telemetry",
+        query="alias telemetry",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "category": "aml_kyc",
+            "required_evidence": ["sanctions_trace", "pep_check"],
+            "satisfied_evidence": [],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    telemetry = payload["required_evidence_telemetry"]
+    assert telemetry["required_evidence_alias_normalized_total"] >= 2
+
+
+def test_question_first_response_prioritizes_structure_not_investigate_decision() -> None:
+    """Question-first flow must keep business_decision structured and next_action for follow-up."""
+    ctx = PipelineContext(
+        request_id="req-question-first-aml",
+        query="AML/KYC の必要証拠は何か。まず調査すべきか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "required_evidence": ["kyc_profile"],
+            "satisfied_evidence": [],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["business_decision"] in {"EVIDENCE_REQUIRED", "HOLD"}
+    assert payload["next_action"] != "INVESTIGATE_FIRST"
+    assert "structured_answer" in payload

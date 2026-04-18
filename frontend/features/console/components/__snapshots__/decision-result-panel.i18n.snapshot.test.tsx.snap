@@ -177,7 +177,7 @@ exports[`DecisionResultPanel i18n snapshots > renders English locale snapshot 1`
             :
           </span>
            
-          gate status
+          human review required by gate
         </p>
         <p>
           <span
@@ -690,7 +690,7 @@ exports[`DecisionResultPanel i18n snapshots > renders Japanese locale snapshot 1
             :
           </span>
            
-          gate status
+          human review required by gate
         </p>
         <p>
           <span

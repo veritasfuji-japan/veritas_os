@@ -24,6 +24,18 @@ while preserving free-string compatibility for unknown keys (`allow_free_string=
 - Enforce per-domain required evidence profiles.
 - Reject unknown keys only after migration telemetry is stable.
 
+## Runtime hardening status (AML/KYC)
+
+AML/KYC profile hardening now operates in warning-first mode:
+
+- Profile `required` keys are enforced during runtime evidence shaping.
+- Unknown keys are not hard-rejected yet, but emit warnings and telemetry:
+  - `unknown_required_evidence_key_total`
+  - `required_evidence_alias_normalized_total`
+  - `required_evidence_profile_miss_total`
+- Telemetry includes domain/template identifiers and top unknown keys to
+  prepare strict-mode migration.
+
 ## Definitions
 
 - `required_evidence`: evidence keys required for governance-safe decisioning.

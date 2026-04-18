@@ -59,7 +59,9 @@ AML/KYC beachhead evidence profile (canonical keys):
 
 Runtime now treats this as a machine-readable profile (`aml_kyc_beachhead_v1`)
 with `required`, `optional`, and `escalation_sensitive` key classes for
-regression and response shaping.
+regression and response shaping. Runtime hardening now also emits unknown-key
+warnings + telemetry counters instead of immediate hard-fail, so PoC and
+template suites can quantify migration readiness before strict reject mode.
 
 ## Role Split: Regulatory Templates vs PoC Questions
 
