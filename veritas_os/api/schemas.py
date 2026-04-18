@@ -870,11 +870,17 @@ class DecideResponse(BaseModel):
 
     @model_validator(mode="after")
     def _unify_and_sanitize(self) -> "DecideResponse":
-        """Normalize response payload and expose coercion metadata for audits.
+        """Normalize response payload and enforce canonical decision semantics.
 
         ``alternatives`` is the canonical response contract. Legacy ``options``
         remains available for compatibility, but is kept synchronized so that
         clients can migrate without semantic drift.
+
+        Decision hardening rules:
+        - ``gate_decision`` is canonicalized to public values first.
+        - Legacy aliases are accepted as compatibility-only inputs.
+        - Forbidden ``gate_decision``/``business_decision``/``human_review_required``
+          combinations are rejected (no silent correction).
         """
         events: List[str] = []
 
@@ -971,15 +977,6 @@ class DecideResponse(BaseModel):
         if canonical_gate_decision != self.gate_decision:
             self.gate_decision = canonical_gate_decision
             events.append("coercion.gate_decision_canonicalized")
-
-        # REVIEW_REQUIRED / human_review_required の不整合は fail ではなく
-        # 後方互換優先で安全側へ補正する。
-        if self.business_decision == "REVIEW_REQUIRED" and not self.human_review_required:
-            self.human_review_required = True
-            events.append("coercion.human_review_required_for_review_required")
-        if self.gate_decision == "human_review_required" and not self.human_review_required:
-            self.human_review_required = True
-            events.append("coercion.human_review_required_for_gate_escalation")
 
         if self.required_evidence:
             self.required_evidence = unique_preserve_order(

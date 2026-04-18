@@ -104,6 +104,15 @@ Additional runtime invariants:
 - `business=REVIEW_REQUIRED` + `human_review_required=false` is forbidden.
 - `business=APPROVE` + `human_review_required=true` is forbidden.
 
+Contract hardening policy:
+
+- Runtime assembly (`pipeline_response`) validates combinations before emitting
+  the public payload.
+- Schema validation (`DecideResponse`) also rejects forbidden combinations
+  instead of silently coercing boolean flags.
+- Legacy gate aliases remain compatibility-only inputs and are canonicalized
+  before public output.
+
 ## D. stop_reasons priority (current implementation order)
 
 Current order is implemented in

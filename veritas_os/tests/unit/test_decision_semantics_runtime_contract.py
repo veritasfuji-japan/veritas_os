@@ -102,16 +102,41 @@ def test_forbidden_pair_table_is_centralized_and_enforced() -> None:
     )
 
 
-def test_review_required_coerces_human_review_required_true() -> None:
-    """REVIEW_REQUIRED は後方互換のため human_review_required=true に補正する。"""
-    payload = DecideResponse.model_validate(
-        {
-            "gate_decision": "human_review_required",
-            "business_decision": "REVIEW_REQUIRED",
-            "human_review_required": False,
-        }
-    )
-    assert payload.human_review_required is True
+def test_review_required_requires_human_review_required_true() -> None:
+    """REVIEW_REQUIRED requires explicit human_review_required=true."""
+    try:
+        DecideResponse.model_validate(
+            {
+                "gate_decision": "human_review_required",
+                "business_decision": "REVIEW_REQUIRED",
+                "human_review_required": False,
+            }
+        )
+    except ValidationError as exc:
+        message = str(exc)
+        assert (
+            "business_decision=REVIEW_REQUIRED" in message
+            or "gate_decision=human_review_required" in message
+        )
+    else:  # pragma: no cover
+        raise AssertionError("ValidationError was expected")
+
+
+def test_gate_human_review_required_requires_boolean_true() -> None:
+    """gate_decision=human_review_required cannot be combined with false flag."""
+    try:
+        DecideResponse.model_validate(
+            {
+                "gate_decision": "human_review_required",
+                "business_decision": "HOLD",
+                "human_review_required": False,
+            }
+        )
+    except ValidationError as exc:
+        message = str(exc)
+        assert "gate_decision=human_review_required" in message
+    else:  # pragma: no cover
+        raise AssertionError("ValidationError was expected")
 
 
 def test_proceed_requires_human_review_false() -> None:

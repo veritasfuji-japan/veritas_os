@@ -173,8 +173,10 @@ class TestDecideResponse:
         """business_decision は action ではなく案件状態 enum で保持する。"""
         resp = schemas_mod.DecideResponse(
             request_id="req-enum",
+            gate_decision="human_review_required",
             business_decision="REVIEW_REQUIRED",
             next_action="ROUTE_TO_HUMAN_REVIEW",
+            human_review_required=True,
         )
         assert resp.business_decision == "REVIEW_REQUIRED"
         assert resp.next_action == "ROUTE_TO_HUMAN_REVIEW"
