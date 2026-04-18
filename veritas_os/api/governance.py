@@ -1,10 +1,5 @@
 # veritas_os/api/governance.py
-"""
-Governance Policy API — GET / PUT /v1/governance/policy
-
-Storage: file-based (governance.json) with an interface that can be
-swapped to a DB backend later by replacing `_load` / `_save`.
-"""
+"""Governance Policy API — GET / PUT /v1/governance/policy."""
 from __future__ import annotations
 
 import json
@@ -12,7 +7,6 @@ import logging
 import os
 import re
 import threading
-from collections import deque
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,11 +14,10 @@ from typing import Any, Callable, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-try:
-    from veritas_os.core.atomic_io import atomic_write_json as _atomic_write_json
-    _HAS_ATOMIC_IO = True
-except ImportError:  # pragma: no cover
-    _HAS_ATOMIC_IO = False
+from veritas_os.governance import file_repository as _file_repo_mod
+from veritas_os.governance.file_repository import FileGovernanceRepository
+from veritas_os.governance.models import GovernancePolicyEventRecord
+from veritas_os.governance.repository import GovernanceRepository
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +27,13 @@ _POLICY_HISTORY_PATH = Path(__file__).resolve().parent / "governance_history.jso
 
 # Maximum number of policy change records kept in the history file
 _POLICY_HISTORY_MAX = 500
+_HAS_ATOMIC_IO = _file_repo_mod._HAS_ATOMIC_IO
 
 # Thread-safe lock for file I/O
 _policy_lock = threading.Lock()
+
+# Repository provider; override in tests if needed.
+_governance_repository_factory: Callable[[], GovernanceRepository] | None = None
 
 # Callbacks invoked after each successful policy update (e.g. for FUJI hot-reload).
 # Each callable receives the full updated policy dict.
@@ -134,45 +131,41 @@ def _policy_path() -> Path:
     return _DEFAULT_POLICY_PATH
 
 
+def _build_default_repository() -> GovernanceRepository:
+    """Create file-based governance repository for current module paths."""
+    return FileGovernanceRepository(
+        policy_path=_DEFAULT_POLICY_PATH,
+        history_path=_POLICY_HISTORY_PATH,
+        lock=_policy_lock,
+        policy_history_max=_POLICY_HISTORY_MAX,
+        has_atomic_io=_HAS_ATOMIC_IO,
+    )
+
+
+def set_governance_repository_factory(
+    factory: Callable[[], GovernanceRepository] | None,
+) -> None:
+    """Set repository factory used by governance API persistence helpers."""
+    global _governance_repository_factory
+    _governance_repository_factory = factory
+
+
+def _get_repository() -> GovernanceRepository:
+    if _governance_repository_factory is None:
+        return _build_default_repository()
+    return _governance_repository_factory()
+
+
 def _load() -> Dict[str, Any]:
-    """Load governance policy from JSON file."""
-    path = _policy_path()
-    with _policy_lock:
-        if not path.exists():
-            # Return defaults
-            default = GovernancePolicy()
-            return default.model_dump()
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except (OSError, json.JSONDecodeError, ValueError, UnicodeDecodeError) as e:
-            logger.warning("Failed to load governance policy: %s", e)
-            return GovernancePolicy().model_dump()
+    """Load governance policy through repository abstraction."""
+    return _get_repository().get_current_policy(
+        default_factory=lambda: GovernancePolicy().model_dump()
+    )
 
 
 def _save(data: Dict[str, Any]) -> None:
-    """Save governance policy to JSON file atomically (crash-safe)."""
-    path = _policy_path()
-    with _policy_lock:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if _HAS_ATOMIC_IO:
-            _atomic_write_json(path, data, indent=2)
-        else:
-            # Fallback: write to temp file then rename for best-effort atomicity
-            tmp = path.with_suffix(".tmp")
-            try:
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                    f.write("\n")
-                    f.flush()
-                    os.fsync(f.fileno())
-                tmp.replace(path)
-            except Exception:
-                try:
-                    tmp.unlink(missing_ok=True)
-                except OSError:
-                    pass
-                raise
+    """Persist governance policy through repository abstraction."""
+    _get_repository().save_policy(data)
 
 
 def _append_policy_history(
@@ -183,56 +176,37 @@ def _append_policy_history(
     approvers: Optional[List[str]] = None,
     event_type: str = "update",
 ) -> None:
-    """Append a policy change record to the audit history JSONL (best-effort).
-
-    Enhanced with provenance tracking: digest transitions, proposer, approvers,
-    and event classification for audit-grade governance history.
-    """
+    """Append policy history through repository abstraction."""
     try:
         from veritas_os.policy.governance_identity import compute_governance_digest
+
         prev_digest = compute_governance_digest(previous)
         new_digest = compute_governance_digest(updated)
     except Exception:
         prev_digest = ""
         new_digest = ""
 
-    record = {
-        "changed_at": updated.get("updated_at", datetime.now(timezone.utc).isoformat()),
-        "changed_by": updated.get("updated_by", "unknown"),
-        "proposer": proposer or updated.get("updated_by", "unknown"),
-        "approvers": approvers or [],
-        "event_type": event_type,
-        "previous_version": previous.get("version"),
-        "new_version": updated.get("version"),
-        "previous_digest": prev_digest,
-        "new_digest": new_digest,
-        "previous_policy": previous,
-        "new_policy": updated,
-    }
-    line = json.dumps(record, ensure_ascii=False)
-    try:
-        _POLICY_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with _policy_lock:
-            with open(_POLICY_HISTORY_PATH, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-            _trim_policy_history()
-    except Exception as e:
-        logger.warning("Failed to append governance policy history: %s", e)
+    event = GovernancePolicyEventRecord(
+        changed_at=updated.get("updated_at", datetime.now(timezone.utc).isoformat()),
+        changed_by=updated.get("updated_by", "unknown"),
+        proposer=proposer or updated.get("updated_by", "unknown"),
+        approvers=approvers or [],
+        event_type=event_type,
+        previous_version=previous.get("version"),
+        new_version=updated.get("version"),
+        previous_digest=prev_digest,
+        new_digest=new_digest,
+        previous_policy=previous,
+        new_policy=updated,
+    )
+    _get_repository().append_policy_event(event)
 
 
 def _trim_policy_history() -> None:
-    """Keep only the most recent _POLICY_HISTORY_MAX records in the history file."""
-    try:
-        if not _POLICY_HISTORY_PATH.exists():
-            return
-        lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
-        if len(lines) > _POLICY_HISTORY_MAX:
-            trimmed = "".join(lines[-_POLICY_HISTORY_MAX:])
-            tmp = _POLICY_HISTORY_PATH.with_suffix(".tmp")
-            tmp.write_text(trimmed, encoding="utf-8")
-            tmp.replace(_POLICY_HISTORY_PATH)
-    except Exception as e:
-        logger.warning("Failed to trim governance policy history: %s", e)
+    """Keep only the most recent _POLICY_HISTORY_MAX records in history."""
+    repository = _get_repository()
+    if isinstance(repository, FileGovernanceRepository):
+        repository.trim_policy_history()
 
 
 def _notify_policy_update(policy: Dict[str, Any]) -> None:
@@ -396,8 +370,6 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     validated = GovernancePolicy.model_validate(current)
     result = validated.model_dump()
 
-    _save(result)
-
     # Extract provenance metadata from the patch for audit trail.
     approvals = patch.get("approvals")
     approver_ids: List[str] = []
@@ -410,10 +382,9 @@ def update_policy(patch: Dict[str, Any]) -> Dict[str, Any]:
     proposer = _sanitize_updated_by(patch.get("updated_by", "api"))
     event_type = str(patch.get("_event_type", "update"))
 
-    # Record what changed for compliance audit trail
-    _append_policy_history(
-        previous,
-        result,
+    _get_repository().update_policy(
+        previous=previous,
+        updated=result,
         proposer=proposer,
         approvers=approver_ids,
         event_type=event_type,
@@ -471,27 +442,9 @@ def get_policy_history(limit: int = 50) -> List[Dict[str, Any]]:
     Args:
         limit: Maximum number of records to return (capped at _POLICY_HISTORY_MAX).
     """
-    limit = max(1, min(limit, _POLICY_HISTORY_MAX))
-    with _policy_lock:
-        if not _POLICY_HISTORY_PATH.exists():
-            return []
-        try:
-            lines = _POLICY_HISTORY_PATH.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeDecodeError) as e:
-            logger.warning("Failed to read governance policy history: %s", e)
-            return []
-    records: List[Dict[str, Any]] = []
-    for line in reversed(lines):
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-        if len(records) >= limit:
-            break
-    return records
+    return _get_repository().list_policy_history(
+        limit=limit, max_records=_POLICY_HISTORY_MAX
+    )
 
 
 def get_value_drift(telos_baseline: float = DEFAULT_TELOS_BASELINE) -> Dict[str, Any]:
@@ -566,8 +519,6 @@ def rollback_policy(
     validated = GovernancePolicy.model_validate(target_policy)
     result = validated.model_dump()
 
-    _save(result)
-
     # Extract approver identities
     approver_ids: List[str] = []
     if isinstance(approvals, list):
@@ -577,12 +528,11 @@ def rollback_policy(
                 if r:
                     approver_ids.append(r)
 
-    _append_policy_history(
-        previous,
-        result,
+    _get_repository().rollback_policy(
+        previous=previous,
+        restored=result,
         proposer=_sanitize_updated_by(rolled_back_by),
         approvers=approver_ids,
-        event_type="rollback",
     )
 
     _notify_policy_update(result)
