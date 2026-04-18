@@ -177,7 +177,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          gate status
+          human review required by gate
         </p>
         <p>
           <span
@@ -1711,7 +1711,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          allow
+          proceed
         </p>
         <p>
           <span
@@ -1721,7 +1721,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          response generation allowed (not case approval)
+          proceed (execution guidance, not business approval)
         </p>
         <p>
           <span
@@ -1836,7 +1836,7 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
             :
           </span>
            
-          allow
+          proceed
         </p>
       </div>
       <div
@@ -2220,7 +2220,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          allow
+          proceed
         </p>
         <p>
           <span
@@ -2230,7 +2230,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          response generation allowed (not case approval)
+          proceed (execution guidance, not business approval)
         </p>
         <p>
           <span
@@ -2729,7 +2729,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          allow
+          proceed
         </p>
         <p>
           <span
@@ -2739,7 +2739,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          response generation allowed (not case approval)
+          proceed (execution guidance, not business approval)
         </p>
         <p>
           <span
@@ -3238,7 +3238,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          allow
+          proceed
         </p>
         <p>
           <span
@@ -3248,7 +3248,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          response generation allowed (not case approval)
+          proceed (execution guidance, not business approval)
         </p>
         <p>
           <span
@@ -3363,7 +3363,7 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
             :
           </span>
            
-          allow
+          proceed
         </p>
       </div>
       <div
