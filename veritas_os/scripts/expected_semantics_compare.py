@@ -181,9 +181,28 @@ def summarize_semantic_mismatches(mismatches: Mapping[str, Mapping[str, Any]]) -
         item = mismatches.get(field_name)
         if not isinstance(item, Mapping):
             continue
+        if field_name == "required_evidence":
+            expected_list = item.get("expected") or []
+            actual_list = item.get("actual") or []
+            only_expected = item.get("only_in_expected") or []
+            only_actual = item.get("only_in_actual") or []
+            segments.append(
+                "required_evidence"
+                f"[{len(actual_list)}/{len(expected_list)}]"
+                f" missing={only_expected} extra={only_actual}"
+            )
+            continue
+        if field_name == "missing_evidence":
+            expected_list = item.get("expected") or []
+            actual_list = item.get("actual") or []
+            segments.append(
+                "missing_evidence"
+                f"[expected={expected_list} actual={actual_list}]"
+            )
+            continue
         expected = item.get("expected")
         actual = item.get("actual")
-        segments.append(f"{field_name}: expected={expected} actual={actual}")
+        segments.append(f"{field_name}[{expected}→{actual}]")
     if not segments:
         return f"{mismatch_count} mismatch(es): details unavailable"
     return f"{mismatch_count} mismatch(es): " + " | ".join(segments)

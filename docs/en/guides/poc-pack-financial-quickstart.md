@@ -20,6 +20,16 @@ This PoC is intentionally constrained to one beachhead:
 - **Beachhead domain**: `aml_kyc`
 - **Anchor template**: `aml_kyc_high_risk_country_wire_manual_review`
 
+Representative AML/KYC and adjacent governance cases covered by this pack:
+
+- sanctions partial match must **not** become `proceed`
+- source of funds missing must **not** become `APPROVE`
+- approval boundary unknown must go to `human_review_required` or `hold`
+- high-risk ambiguity must go to human review path
+- sufficient evidence should allow `proceed/APPROVE` family
+- policy definition missing must go to `POLICY_DEFINITION_REQUIRED` family
+- secure/prod controls missing must trigger fail-closed `block`
+
 Reference pack semantics and taxonomy:
 
 - [Financial Governance Templates](financial-governance-templates.md)
@@ -62,11 +72,13 @@ Use the criteria in:
 
 - [Financial PoC Success Criteria](financial-poc-success-criteria.md)
 
-At minimum for demo sign-off:
+At minimum for demo sign-off (quantitative):
 
 - `warning_count = 0`
 - `fail_count = 0`
 - `pass_rate >= 0.90` (on evaluated, non-warning cases)
+- `evaluated_count >= 5`
+- anchor case `poc_aml_pep_high_risk_country = pass`
 
 ---
 
@@ -102,6 +114,7 @@ Example mismatch output (JSON excerpt):
   "question_id": "poc_cross_border_purpose_unknown",
   "status": "fail",
   "mismatch_count": 2,
+  "mismatch_summary": "2 mismatch(es): gate_decision[hold→proceed] | required_evidence[0/2] missing=['transaction_purpose_statement', 'source_of_funds_record'] extra=[]",
   "mismatches": {
     "gate_decision": {
       "expected": "hold",
@@ -114,6 +127,14 @@ Example mismatch output (JSON excerpt):
   }
 }
 ```
+
+Runner summary now includes:
+
+- `summary.outcome`: `pass` / `warning` / `fail`
+- `summary.evaluated`
+- `summary.warning_rate`
+- `summary.mismatch_field_counts`
+- `mismatch_overview` (non-pass cases only; easy triage view)
 
 ---
 

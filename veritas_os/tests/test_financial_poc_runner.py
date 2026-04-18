@@ -27,7 +27,7 @@ def test_financial_poc_runner_loads_sample_fixture() -> None:
     """Runner should read the sample financial PoC question JSON fixture."""
     questions = load_questions(POC_FIXTURE_PATH)
 
-    assert len(questions) >= 8
+    assert len(questions) >= 11
     assert all(question.question_id for question in questions)
     assert all(question.expected_semantics for question in questions)
 
@@ -101,8 +101,8 @@ def test_mismatch_summary_is_readable() -> None:
             "human_review_required": {"expected": True, "actual": False},
         }
     )
-    assert "gate_decision" in summary
-    assert "human_review_required" in summary
+    assert "gate_decision[hold→proceed]" in summary
+    assert "human_review_required[True→False]" in summary
 
 
 def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:
@@ -119,11 +119,15 @@ def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:
     summary = report["summary"]
     counts = summary["counts"]
 
-    assert summary["total"] >= 8
+    assert summary["total"] >= 11
+    assert summary["evaluated"] == summary["total"]
     assert counts["pass"] == summary["total"]
     assert counts["fail"] == 0
     assert counts["warning"] == 0
     assert summary["pass_rate"] == 1.0
+    assert summary["warning_rate"] == 0.0
+    assert summary["outcome"] == "pass"
+    assert report["mismatch_overview"] == []
 
 
 def test_compare_expected_semantics_exposes_evidence_runtime_warnings() -> None:
@@ -159,3 +163,21 @@ def test_en_quickstart_links_resolve_and_success_criteria_doc_exists() -> None:
         assert candidate.exists(), f"Broken link: {link} -> {candidate}"
 
     assert SUCCESS_CRITERIA_DOC_PATH.exists()
+
+
+def test_success_criteria_docs_cover_representative_cases() -> None:
+    """Docs should explicitly describe required representative scenario contracts."""
+    quickstart = EN_QUICKSTART_PATH.read_text(encoding="utf-8")
+    criteria = SUCCESS_CRITERIA_DOC_PATH.read_text(encoding="utf-8")
+    expected_markers = [
+        "sanctions partial match",
+        "source of funds missing",
+        "approval boundary unknown",
+        "high-risk ambiguity",
+        "sufficient evidence",
+        "policy definition missing",
+        "secure/prod controls missing",
+    ]
+    for marker in expected_markers:
+        assert marker in quickstart
+        assert marker in criteria

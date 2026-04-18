@@ -180,14 +180,34 @@ def _summarize(results: list[CaseResult]) -> dict[str, Any]:
     evaluated = total - counts["warning"]
     pass_rate = (counts["pass"] / evaluated) if evaluated > 0 else 0.0
 
+    mismatch_field_counts: dict[str, int] = {}
+    for result in results:
+        if result.status != "fail":
+            continue
+        for field_name in result.mismatches:
+            mismatch_field_counts[field_name] = mismatch_field_counts.get(field_name, 0) + 1
+
+    warning_rate = (counts["warning"] / total) if total > 0 else 0.0
+    outcome = "pass"
+    if counts["fail"] > 0 or pass_rate < 0.9 or evaluated < 5:
+        outcome = "fail"
+    elif counts["warning"] > 0:
+        outcome = "warning"
+
     return {
         "total": total,
+        "evaluated": evaluated,
         "counts": counts,
         "pass_rate": round(pass_rate, 4),
+        "warning_rate": round(warning_rate, 4),
+        "outcome": outcome,
+        "mismatch_field_counts": mismatch_field_counts,
         "success_criteria": {
             "minimum_pass_rate": 0.9,
+            "minimum_evaluated_cases": 5,
             "no_failures_required_for_demo": True,
             "allow_warnings_for_connectivity_only": True,
+            "aml_kyc_anchor_case_must_pass": True,
         },
     }
 
@@ -226,6 +246,16 @@ def run_financial_poc(
             "required_evidence_mode": required_evidence_mode,
         },
         "summary": summary,
+        "mismatch_overview": [
+            {
+                "question_id": result.question_id,
+                "template_id": result.template_id,
+                "status": result.status,
+                "summary": summarize_semantic_mismatches(result.mismatches),
+            }
+            for result in results
+            if result.status != "pass"
+        ],
         "cases": [
             {
                 "question_id": result.question_id,
@@ -319,14 +349,16 @@ def main() -> None:
     print(
         "[financial-poc] "
         f"total={summary['total']} pass={counts['pass']} fail={counts['fail']} "
-        f"warning={counts['warning']} pass_rate={summary['pass_rate']:.4f}"
+        f"warning={counts['warning']} evaluated={summary['evaluated']} "
+        f"pass_rate={summary['pass_rate']:.4f} outcome={summary['outcome']}"
     )
 
     for case in report["cases"]:
         print(
             " - "
             f"{case['question_id']}: status={case['status']} "
-            f"mismatch_count={case['mismatch_count']}"
+            f"mismatch_count={case['mismatch_count']} "
+            f"summary={case['mismatch_summary']}"
         )
 
     if args.output_json:
