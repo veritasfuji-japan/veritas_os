@@ -44,7 +44,12 @@ def test_sample_questions_return_public_decision_schema(query: str) -> None:
         plan={"steps": [], "source": "test"},
     )
 
-    assert payload["gate_decision"] in {"allow", "proceed", "hold", "human_review_required", "block"}
+    assert payload["gate_decision"] in {
+        "proceed",
+        "hold",
+        "human_review_required",
+        "block",
+    }
     assert payload["business_decision"] in {
         "APPROVE",
         "DENY",
@@ -74,6 +79,6 @@ def test_allow_is_not_used_as_public_business_decision() -> None:
         plan={"steps": [], "source": "test"},
     )
 
-    assert payload["gate_decision"] in {"allow", "proceed"}
+    assert payload["gate_decision"] == "proceed"
     assert payload["business_decision"] != "allow"
     assert payload["next_action"] != payload["business_decision"]

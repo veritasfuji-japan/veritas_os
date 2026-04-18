@@ -669,6 +669,7 @@ class DecideResponse(BaseModel):
         description=(
             "Canonical public values: "
             f"{', '.join(CANONICAL_GATE_DECISION_VALUES)}. "
+            "`proceed` is a gate pass-through state and is not business approval. "
             "Legacy aliases are compatibility-only and normalized at runtime: "
             f"{', '.join(LEGACY_GATE_DECISION_ALIASES)}. "
             "Accepted compatibility surface: "

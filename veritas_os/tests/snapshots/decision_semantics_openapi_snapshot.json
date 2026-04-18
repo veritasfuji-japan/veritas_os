@@ -1,0 +1,36 @@
+{
+  "gate_decision_enum": [
+    "proceed",
+    "hold",
+    "block",
+    "human_review_required",
+    "allow",
+    "deny",
+    "modify",
+    "rejected",
+    "abstain",
+    "unknown"
+  ],
+  "gate_decision_examples": [
+    "proceed",
+    "hold",
+    "human_review_required",
+    "block"
+  ],
+  "business_decision_enum": [
+    "APPROVE",
+    "DENY",
+    "HOLD",
+    "REVIEW_REQUIRED",
+    "POLICY_DEFINITION_REQUIRED",
+    "EVIDENCE_REQUIRED"
+  ],
+  "human_review_required_type": "boolean",
+  "decision_status_enum": [
+    "allow",
+    "modify",
+    "rejected",
+    "block",
+    "abstain"
+  ]
+}

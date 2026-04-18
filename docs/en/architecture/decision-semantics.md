@@ -1,6 +1,8 @@
-# Decision Semantics (Phase-1 Contract)
+# Decision Semantics (Public Contract Freeze)
 
-This document is the **source-of-truth contract** for Phase-1 decision semantics.
+This document is the **frozen public contract** for decision semantics.
+For external integrations (finance, AML/KYC, audit), wording and value meaning
+in this document MUST be treated as stable contract terms.
 
 ## Runtime enforcement status
 
@@ -51,6 +53,7 @@ labels and are not recommended for new public payload contracts.
 - Public response assembly (`/v1/decide`) emits canonical gate values by default.
 - `allow|deny|modify|rejected|abstain` remain accepted as backward-compatibility input.
 - Legacy gate labels are compatibility-only and should not be used as new output contracts.
+- `proceed` indicates gate pass-through only and does **not** mean business approval (`proceed` is not business approval).
 
 ## A. gate_decision semantics table
 
@@ -102,6 +105,8 @@ Additional runtime invariants:
 
 - `gate=proceed` + `human_review_required=true` is forbidden.
 - `business=REVIEW_REQUIRED` + `human_review_required=false` is forbidden.
+- `business=REVIEW_REQUIRED` + `gate!=human_review_required` is forbidden.
+- `gate=human_review_required` + `business!=REVIEW_REQUIRED` is forbidden.
 - `business=APPROVE` + `human_review_required=true` is forbidden.
 
 Contract hardening policy:
@@ -141,3 +146,25 @@ and consumed from `_derive_business_fields`:
 - `decision_status` remains for backward compatibility with older FUJI-facing payloads.
 - `gate_decision` / `business_decision` are public semantics for case governance.
 - Legacy clients may still emit/consume `decision_status` (`allow|modify|rejected|block|abstain`).
+
+## G. legacy alias compatibility matrix (frozen)
+
+| input surface | accepted value | normalized public `gate_decision` | status |
+|---|---|---|---|
+| `gate_decision` | `allow` | `proceed` | compatibility-only |
+| `gate_decision` | `deny` | `block` | compatibility-only |
+| `gate_decision` | `modify` | `hold` | compatibility-only |
+| `gate_decision` | `rejected` | `block` | compatibility-only |
+| `gate_decision` | `abstain` | `hold` | compatibility-only |
+| `decision_status` | `allow` | `proceed` | compatibility-only |
+| `decision_status` | `modify` | `hold` | compatibility-only |
+| `decision_status` | `rejected` | `block` | compatibility-only |
+| `decision_status` | `block` | `block` | compatibility-only |
+| `decision_status` | `abstain` | `hold` | compatibility-only |
+
+Freeze policy:
+
+- New external integrations MUST consume canonical gate values:
+  `proceed|hold|block|human_review_required`.
+- Legacy aliases remain accepted only for migration compatibility.
+- `allow` MUST NOT be reintroduced as public canonical label.

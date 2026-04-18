@@ -667,7 +667,7 @@ components:
               "unknown",
             ]
           default: "unknown"
-          description: "Canonical public values are proceed|hold|block|human_review_required. Legacy aliases remain compatibility-only inputs and are normalized before public output."
+          description: "Canonical public values are proceed|hold|block|human_review_required. Legacy aliases remain compatibility-only inputs and are normalized before public output. proceed indicates gate pass-through only and is not business approval."
           examples: ["proceed", "hold", "human_review_required", "block"]
         business_decision:
           type: string
@@ -707,7 +707,7 @@ components:
         human_review_required:
           type: boolean
           default: false
-          description: "Must be true when gate_decision=human_review_required or business_decision=REVIEW_REQUIRED."
+          description: "Must be true when gate_decision=human_review_required or business_decision=REVIEW_REQUIRED. REVIEW_REQUIRED must be paired with gate_decision=human_review_required."
         rationale:
           type: string
           nullable: true
