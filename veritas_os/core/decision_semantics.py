@@ -222,6 +222,7 @@ def get_required_evidence_profiles() -> dict[str, dict[str, Any]]:
     """Return per-domain evidence profiles keyed by normalized domain name."""
     payload = _load_required_evidence_taxonomy()
     raw_profiles = payload.get("profiles")
+    canonical_keys = set(get_required_evidence_category_map())
     out: dict[str, dict[str, Any]] = {}
     if not isinstance(raw_profiles, Mapping):
         return out
@@ -229,20 +230,70 @@ def get_required_evidence_profiles() -> dict[str, dict[str, Any]]:
         domain_key = str(domain_name).strip().lower()
         if not domain_key or not isinstance(profile, Mapping):
             continue
-        out[domain_key] = {
-            "required": unique_preserve_order(
-                normalize_required_evidence_keys(profile.get("required"))
-            ),
-            "optional": unique_preserve_order(
-                normalize_required_evidence_keys(profile.get("optional"))
-            ),
-            "escalation_sensitive": unique_preserve_order(
-                normalize_required_evidence_keys(profile.get("escalation_sensitive"))
-            ),
-            "profile_id": str(profile.get("profile_id") or "").strip(),
-            "profile_version": str(profile.get("profile_version") or "").strip(),
-        }
+        validated_profile = validate_required_evidence_profile_shape(
+            profile,
+            canonical_keys=canonical_keys,
+        )
+        if validated_profile is None:
+            continue
+        out[domain_key] = validated_profile
     return out
+
+
+def validate_required_evidence_profile_shape(
+    profile: Mapping[str, Any],
+    *,
+    canonical_keys: set[str],
+) -> dict[str, Any] | None:
+    """Validate and normalize one required-evidence profile.
+
+    The profile must include:
+    - ``profile_id`` (non-empty string),
+    - ``profile_version`` (non-empty string),
+    - ``required`` / ``optional`` / ``escalation_sensitive`` lists,
+    - ``canonical_key_list`` list.
+
+    Validation is fail-soft: malformed profiles return ``None`` so runtime can
+    continue with declared context evidence instead of crashing.
+    """
+    required_keys = unique_preserve_order(
+        normalize_required_evidence_keys(profile.get("required"))
+    )
+    optional_keys = unique_preserve_order(
+        normalize_required_evidence_keys(profile.get("optional"))
+    )
+    escalation_sensitive_keys = unique_preserve_order(
+        normalize_required_evidence_keys(profile.get("escalation_sensitive"))
+    )
+    canonical_key_list = unique_preserve_order(
+        normalize_required_evidence_keys(profile.get("canonical_key_list"))
+    )
+    profile_id = str(profile.get("profile_id") or "").strip()
+    profile_version = str(profile.get("profile_version") or "").strip()
+
+    if not profile_id or not profile_version:
+        return None
+    if not required_keys:
+        return None
+    if not canonical_key_list:
+        return None
+    if any(key not in canonical_keys for key in canonical_key_list):
+        return None
+
+    key_union = set(required_keys) | set(optional_keys) | set(escalation_sensitive_keys)
+    if set(canonical_key_list) != key_union:
+        return None
+    if not set(escalation_sensitive_keys) <= set(required_keys):
+        return None
+
+    return {
+        "required": required_keys,
+        "optional": optional_keys,
+        "escalation_sensitive": escalation_sensitive_keys,
+        "canonical_key_list": canonical_key_list,
+        "profile_id": profile_id,
+        "profile_version": profile_version,
+    }
 
 
 def build_required_evidence_profile(

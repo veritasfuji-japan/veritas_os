@@ -520,6 +520,9 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
     profile_escalation_sensitive_keys = unique_preserve_order(
         normalize_required_evidence_keys(domain_profile.get("escalation_sensitive"))
     )
+    profile_canonical_key_list = unique_preserve_order(
+        normalize_required_evidence_keys(domain_profile.get("canonical_key_list"))
+    )
     mode = _resolve_required_evidence_mode(ctx.context, decision_domain)
     enforce_profile = _should_enforce_aml_kyc_profile(
         decision_domain,
@@ -663,6 +666,9 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         ),
         "required_evidence_mode": mode,
         "required_evidence_assessment": {
+            "profile_id": str(domain_profile.get("profile_id") or ""),
+            "profile_version": str(domain_profile.get("profile_version") or ""),
+            "profile_canonical_key_list": profile_canonical_key_list,
             "internal_reasons": unique_preserve_order(internal_evidence_reasons),
             "profile_missing_required_keys": profile_missing_keys,
             "escalation_sensitive_missing_keys": escalation_sensitive_missing,

@@ -361,12 +361,34 @@ def test_aml_kyc_profile_shape_validation() -> None:
     assert aml_profile is not None
     assert aml_profile.get("profile_id") == "aml_kyc_beachhead_v1"
     required_keys = set(aml_profile.get("required", []))
+    optional_keys = set(aml_profile.get("optional", []))
     escalation_keys = set(aml_profile.get("escalation_sensitive", []))
+    canonical_key_list = set(aml_profile.get("canonical_key_list", []))
     assert required_keys
     assert required_keys <= canonical_keys
+    assert optional_keys <= canonical_keys
     assert escalation_keys <= canonical_keys
+    assert canonical_key_list <= canonical_keys
+    assert escalation_keys <= required_keys
+    assert canonical_key_list == (required_keys | optional_keys | escalation_keys)
     assert "source_of_funds_record" in required_keys
     assert "sanctions_screening_trace" in required_keys
+
+
+def test_docs_referenced_aml_kyc_keys_match_taxonomy_profile() -> None:
+    """Docs should list the same canonical AML/KYC profile keys as fixture."""
+    taxonomy = _load_taxonomy()
+    aml_profile = taxonomy.profiles["aml_kyc"]
+    canonical_key_list = aml_profile["canonical_key_list"]
+
+    governance_doc = Path("docs/en/governance/required-evidence-taxonomy.md")
+    guide_doc = Path("docs/en/guides/financial-governance-templates.md")
+    governance_text = governance_doc.read_text(encoding="utf-8")
+    guide_text = guide_doc.read_text(encoding="utf-8")
+
+    for key in canonical_key_list:
+        assert key in governance_text
+        assert key in guide_text
 
 
 def test_regression_financial_question_first_response_includes_structure() -> None:

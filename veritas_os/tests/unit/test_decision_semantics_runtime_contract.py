@@ -8,6 +8,9 @@ from veritas_os.core.decision_semantics import (
     LEGACY_GATE_DECISION_ALIASES,
     build_required_evidence_profile,
     canonicalize_public_gate_decision,
+    get_required_evidence_category_map,
+    get_required_evidence_profiles,
+    validate_required_evidence_profile_shape,
 )
 from veritas_os.core.pipeline.pipeline_response import assemble_response
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
@@ -289,6 +292,50 @@ def test_aml_kyc_profile_required_keys_are_enforced_in_runtime() -> None:
     assert "source_of_funds_record" in payload["required_evidence"]
     assert "source_of_funds_record" in payload["missing_evidence"]
     assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+
+
+def test_required_evidence_profile_shape_validation_rejects_bad_profiles() -> None:
+    """Profile shape validator should reject malformed canonical-key list payloads."""
+    canonical_keys = set(get_required_evidence_category_map())
+    invalid_profile = {
+        "profile_id": "aml_kyc_beachhead_v1",
+        "profile_version": "1.0.0",
+        "required": ["kyc_profile"],
+        "optional": [],
+        "escalation_sensitive": ["kyc_profile"],
+        "canonical_key_list": ["kyc_profile", "non_taxonomy_key"],
+    }
+    validated = validate_required_evidence_profile_shape(
+        invalid_profile,
+        canonical_keys=canonical_keys,
+    )
+    assert validated is None
+
+
+def test_runtime_profile_assessment_exposes_canonical_key_list() -> None:
+    """Runtime assessment should expose canonical key list for AML/KYC profile."""
+    profiles = get_required_evidence_profiles()
+    expected_keys = profiles["aml_kyc"]["canonical_key_list"]
+    ctx = PipelineContext(
+        request_id="req-aml-profile-shape",
+        query="aml profile shape",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "required_evidence": ["kyc_profile"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assessment = payload["required_evidence_assessment"]
+    assert assessment["profile_id"] == "aml_kyc_beachhead_v1"
+    assert assessment["profile_version"] == "1.0.0"
+    assert assessment["profile_canonical_key_list"] == expected_keys
 
 
 def test_unknown_required_evidence_generates_warning_and_telemetry() -> None:
