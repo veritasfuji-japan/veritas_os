@@ -21,10 +21,12 @@ from .pipeline_types import PipelineContext
 from .pipeline_evidence import _norm_evidence_item, _dedupe_evidence
 from .pipeline_helpers import _warn
 from veritas_os.core.decision_semantics import (
+    build_required_evidence_profile,
     canonicalize_gate_decision,
     derive_gate_decision_from_stop_reasons,
     normalize_required_evidence_keys,
     unique_preserve_order,
+    validate_gate_business_combination,
 )
 
 logger = logging.getLogger(__name__)
@@ -385,14 +387,12 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         or "unknown"
     ).lower()
     gate_reason = str(ctx.rejection_reason or ctx.fuji_dict.get("rejection_reason") or "").strip()
-    required_evidence = unique_preserve_order(_as_string_list(ctx.context.get("required_evidence")))
-    satisfied_evidence = unique_preserve_order(_as_string_list(ctx.context.get("satisfied_evidence")))
-    satisfied_canonical = set(normalize_required_evidence_keys(satisfied_evidence))
-    missing_evidence = []
-    for item in required_evidence:
-        canonical_item = normalize_required_evidence_keys([item])[0]
-        if canonical_item not in satisfied_canonical:
-            missing_evidence.append(item)
+    required_evidence_input = unique_preserve_order(_as_string_list(ctx.context.get("required_evidence")))
+    satisfied_evidence_input = unique_preserve_order(_as_string_list(ctx.context.get("satisfied_evidence")))
+    required_evidence = unique_preserve_order(normalize_required_evidence_keys(required_evidence_input))
+    satisfied_evidence = unique_preserve_order(normalize_required_evidence_keys(satisfied_evidence_input))
+    satisfied_canonical = set(satisfied_evidence)
+    missing_evidence = [item for item in required_evidence if item not in satisfied_canonical]
 
     fuji_status = str(ctx.fuji_dict.get("status") or "").lower()
     try:
@@ -431,6 +431,11 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         business_decision = "POLICY_DEFINITION_REQUIRED"
     else:
         business_decision = "APPROVE"
+    validate_gate_business_combination(
+        gate_decision=gate_decision,
+        business_decision=business_decision,
+        human_review_required=human_review_required,
+    )
 
     action_candidates = _rank_action_candidates(
         gate_decision=gate_decision,
@@ -470,6 +475,8 @@ def _derive_business_fields(ctx: PipelineContext) -> Dict[str, Any]:
         "next_action": next_action,
         "required_evidence": required_evidence,
         "missing_evidence": missing_evidence,
+        "satisfied_evidence": satisfied_evidence,
+        "required_evidence_profile": build_required_evidence_profile(required_evidence),
         "human_review_required": human_review_required,
         "rationale": " | ".join(rationale_parts),
         "refusal_reason": refusal_reason,

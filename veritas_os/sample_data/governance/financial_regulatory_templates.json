@@ -112,13 +112,13 @@
         "required_evidence": [
           "kyc_profile",
           "pep_screening_result",
-          "source_of_funds_document",
+          "source_of_funds_record",
           "transaction_purpose_statement"
         ],
         "satisfied_evidence": [
           "kyc_profile",
           "pep_screening_result",
-          "source_of_funds_document",
+          "source_of_funds_record",
           "transaction_purpose_statement"
         ],
         "high_risk_ambiguity": true,
@@ -136,7 +136,7 @@
         "required_evidence": [
           "kyc_profile",
           "pep_screening_result",
-          "source_of_funds_document",
+          "source_of_funds_record",
           "transaction_purpose_statement"
         ],
         "missing_evidence": [],
@@ -294,11 +294,11 @@
       "context": {
         "required_evidence": [
           "approval_matrix",
-          "policy_owner_confirmation"
+          "policy_definition_record"
         ],
         "satisfied_evidence": [
           "approval_matrix",
-          "policy_owner_confirmation"
+          "policy_definition_record"
         ],
         "high_risk_ambiguity": false,
         "risk_score": 0.48,
@@ -314,7 +314,7 @@
         "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
         "required_evidence": [
           "approval_matrix",
-          "policy_owner_confirmation"
+          "policy_definition_record"
         ],
         "missing_evidence": [],
         "human_review_required": true,

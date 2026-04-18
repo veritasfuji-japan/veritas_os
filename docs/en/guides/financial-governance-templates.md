@@ -46,6 +46,17 @@ This domain is used as the first expansion anchor because it combines:
 - evidence-first progression requirements, and
 - explicit human review boundaries.
 
+AML/KYC beachhead evidence profile (canonical keys):
+
+- `kyc_profile`
+- `sanctions_screening_trace`
+- `pep_screening_result`
+- `source_of_funds_record`
+- `approval_matrix`
+- `audit_trail_export`
+- `secure_controls_attestation`
+- `policy_definition_record`
+
 ## Role Split: Regulatory Templates vs PoC Questions
 
 - **Regulatory templates** (`financial_regulatory_templates.json`)

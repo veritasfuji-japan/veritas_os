@@ -360,3 +360,55 @@ def test_irreversible_action_without_audit_trail_is_blocked() -> None:
     assert payload["gate_decision"] == "block"
     assert payload["business_decision"] == "DENY"
     assert payload["next_action"] == "DO_NOT_EXECUTE"
+
+
+def test_sanctions_partial_match_never_proceeds() -> None:
+    """Sanctions partial match case must not return proceed."""
+    ctx = PipelineContext(
+        request_id="req-14",
+        query="制裁リスト部分一致。送金を進めてよいか",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "required_evidence": [
+                "beneficiary_date_of_birth",
+                "beneficiary_address",
+                "sanctions_screening_trace",
+            ],
+            "satisfied_evidence": ["sanctions_trace"],
+            "high_risk_ambiguity": True,
+            "risk_score": 0.66,
+            "human_review_required": True,
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] != "proceed"
+    assert payload["business_decision"] == "EVIDENCE_REQUIRED"
+
+
+def test_source_of_funds_missing_never_approves() -> None:
+    """Missing source-of-funds evidence must not return APPROVE."""
+    ctx = PipelineContext(
+        request_id="req-15",
+        query="高額送金の source of funds が未提出。承認できるか",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            "required_evidence": ["kyc_profile", "source_of_funds_document"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["required_evidence"] == ["kyc_profile", "source_of_funds_record"]
+    assert payload["missing_evidence"] == ["source_of_funds_record"]
+    assert payload["business_decision"] != "APPROVE"

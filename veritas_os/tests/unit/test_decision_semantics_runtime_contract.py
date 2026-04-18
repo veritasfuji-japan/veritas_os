@@ -33,6 +33,34 @@ def test_forbidden_gate_business_combination_is_rejected() -> None:
         raise AssertionError("ValidationError was expected")
 
 
+def test_review_required_coerces_human_review_required_true() -> None:
+    """REVIEW_REQUIRED は後方互換のため human_review_required=true に補正する。"""
+    payload = DecideResponse.model_validate(
+        {
+            "gate_decision": "human_review_required",
+            "business_decision": "REVIEW_REQUIRED",
+            "human_review_required": False,
+        }
+    )
+    assert payload.human_review_required is True
+
+
+def test_proceed_requires_human_review_false() -> None:
+    """Proceed gate should not carry human-review required=true."""
+    try:
+        DecideResponse.model_validate(
+            {
+                "gate_decision": "proceed",
+                "business_decision": "APPROVE",
+                "human_review_required": True,
+            }
+        )
+    except ValidationError as exc:
+        assert "gate_decision=proceed" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("ValidationError was expected")
+
+
 def test_stop_reason_priority_prefers_block_over_required_evidence() -> None:
     """Block-priority stop reasons must override evidence-hold reasons."""
     ctx = PipelineContext(
@@ -77,8 +105,8 @@ def test_required_evidence_taxonomy_aliases_are_normalized() -> None:
         plan={"steps": [], "source": "test"},
     )
 
-    assert payload["required_evidence"] == ["bureau_report", "approval_boundary_matrix"]
-    assert payload["missing_evidence"] == ["approval_boundary_matrix"]
+    assert payload["required_evidence"] == ["credit_bureau_report", "approval_matrix"]
+    assert payload["missing_evidence"] == ["approval_matrix"]
 
 
 def test_backward_compat_decision_status_stays_legacy_field() -> None:

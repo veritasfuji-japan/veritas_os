@@ -4,12 +4,19 @@
 
 `required_evidence`, `missing_evidence`, and `satisfied_evidence` are carried in runtime context.
 For the financial industry pack, canonical taxonomy keys are the primary contract.
+Runtime now canonicalizes alias inputs into taxonomy keys for:
+
+- `required_evidence`
+- `missing_evidence`
+- `satisfied_evidence`
+
+while preserving free-string compatibility for unknown keys (`allow_free_string=true`).
 
 ## Legacy / alias values
 
-- Canonical keys should be emitted first.
-- Free-string evidence values are treated as alias inputs only.
-- Taxonomy v0 introduces canonical keys and aliases for normalization.
+- Canonical keys are emitted in runtime response fields.
+- Free-string evidence values remain accepted as input aliases/backward-compatible values.
+- Taxonomy aliases are normalized before required/missing/satisfied set comparisons.
 
 ## Future tightening candidates
 

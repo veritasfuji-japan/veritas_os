@@ -5,7 +5,11 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from veritas_os.core.decision_semantics import canonicalize_gate_decision
+from veritas_os.core.decision_semantics import (
+    canonicalize_gate_decision,
+    normalize_required_evidence_keys,
+    unique_preserve_order,
+)
 
 _NEXT_ACTION_ALIASES = {
     "NEEDS_HUMAN_REVIEW": "PREPARE_HUMAN_REVIEW_PACKET",
@@ -33,9 +37,13 @@ def assert_expected_semantics(
     assert _normalize_next_action(payload.get("next_action")) == (
         _normalize_next_action(expected.get("next_action"))
     )
-    assert payload.get("required_evidence") == expected.get("required_evidence")
+    assert unique_preserve_order(normalize_required_evidence_keys(payload.get("required_evidence"))) == (
+        unique_preserve_order(normalize_required_evidence_keys(expected.get("required_evidence")))
+    )
     if "missing_evidence" in expected:
-        assert payload.get("missing_evidence") == expected.get("missing_evidence")
+        assert unique_preserve_order(normalize_required_evidence_keys(payload.get("missing_evidence"))) == (
+            unique_preserve_order(normalize_required_evidence_keys(expected.get("missing_evidence")))
+        )
     assert bool(payload.get("human_review_required")) is bool(
         expected.get("human_review_required")
     )

@@ -660,6 +660,7 @@ class DecideResponse(BaseModel):
     next_action: str = "REVISE_AND_RESUBMIT"
     required_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     missing_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    satisfied_evidence: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
     human_review_required: bool = False
     rationale: Optional[str] = None
     refusal_reason: Optional[str] = None
@@ -952,12 +953,29 @@ class DecideResponse(BaseModel):
             self.gate_decision = canonical_gate_decision
             events.append("coercion.gate_decision_canonicalized")
 
+        # REVIEW_REQUIRED / human_review_required の不整合は fail ではなく
+        # 後方互換優先で安全側へ補正する。
+        if self.business_decision == "REVIEW_REQUIRED" and not self.human_review_required:
+            self.human_review_required = True
+            events.append("coercion.human_review_required_for_review_required")
+        if self.gate_decision == "human_review_required" and not self.human_review_required:
+            self.human_review_required = True
+            events.append("coercion.human_review_required_for_gate_escalation")
+
         if self.required_evidence:
-            required_set = set(normalize_required_evidence_keys(self.required_evidence))
+            self.required_evidence = unique_preserve_order(
+                normalize_required_evidence_keys(self.required_evidence)
+            )
+            self.satisfied_evidence = unique_preserve_order(
+                normalize_required_evidence_keys(self.satisfied_evidence)
+            )
+            required_set = set(self.required_evidence)
             self.missing_evidence = [
                 item
                 for item in self.missing_evidence
-                if normalize_required_evidence_keys([item])[0] in required_set
+                if (
+                    normalized := normalize_required_evidence_keys([item])
+                ) and normalized[0] in required_set
             ]
             self.missing_evidence = unique_preserve_order(self.missing_evidence)
 
