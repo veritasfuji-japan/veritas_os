@@ -647,7 +647,71 @@ components:
           type: string
           enum: ["allow", "modify", "rejected", "block", "abstain"]
           default: "allow"
+          description: "Legacy compatibility decision status. Public contract should prefer gate_decision."
         rejection_reason:
+          type: string
+          nullable: true
+        gate_decision:
+          type: string
+          enum:
+            [
+              "proceed",
+              "hold",
+              "block",
+              "human_review_required",
+              "allow",
+              "deny",
+              "modify",
+              "rejected",
+              "abstain",
+              "unknown",
+            ]
+          default: "unknown"
+          description: "Canonical public values are proceed|hold|block|human_review_required. Legacy aliases remain compatibility-only inputs and are normalized before public output."
+          examples: ["proceed", "hold", "human_review_required", "block"]
+        business_decision:
+          type: string
+          enum:
+            [
+              "APPROVE",
+              "DENY",
+              "HOLD",
+              "REVIEW_REQUIRED",
+              "POLICY_DEFINITION_REQUIRED",
+              "EVIDENCE_REQUIRED",
+            ]
+          default: "HOLD"
+          description: "Business lifecycle decision state. Keep distinct from next_action."
+        next_action:
+          type: string
+          default: "REVISE_AND_RESUBMIT"
+          description: "Operational guidance action; separate from business_decision state."
+        required_evidence:
+          type: array
+          default: []
+          maxItems: 100
+          items:
+            type: string
+        missing_evidence:
+          type: array
+          default: []
+          maxItems: 100
+          items:
+            type: string
+        satisfied_evidence:
+          type: array
+          default: []
+          maxItems: 100
+          items:
+            type: string
+        human_review_required:
+          type: boolean
+          default: false
+          description: "Must be true when gate_decision=human_review_required or business_decision=REVIEW_REQUIRED."
+        rationale:
+          type: string
+          nullable: true
+        refusal_reason:
           type: string
           nullable: true
         values:
@@ -715,6 +779,11 @@ components:
           nullable: true
           additionalProperties: true
           description: "決定の決定論的再現に必要なスナップショット"
+        governance_identity:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Identity of the governance artifact in force at decision time."
 
     DecideRequest:
       type: object

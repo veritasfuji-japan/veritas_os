@@ -63,3 +63,35 @@ def test_openapi_includes_runtime_audit_and_governance_routes() -> None:
     for path in critical:
         assert path in runtime_paths
         assert path in paths
+
+
+def test_openapi_decide_response_decision_semantics_contract() -> None:
+    """DecideResponse schema should expose hardened canonical decision fields."""
+    spec = _load_openapi_spec()
+    decide_schema = spec["components"]["schemas"]["DecideResponse"]["properties"]
+
+    gate_enum = decide_schema["gate_decision"]["enum"]
+    assert gate_enum[:4] == [
+        "proceed",
+        "hold",
+        "block",
+        "human_review_required",
+    ]
+    assert "allow" in gate_enum
+    assert decide_schema["gate_decision"]["examples"] == [
+        "proceed",
+        "hold",
+        "human_review_required",
+        "block",
+    ]
+    assert decide_schema["human_review_required"]["type"] == "boolean"
+    assert decide_schema["business_decision"]["enum"] == [
+        "APPROVE",
+        "DENY",
+        "HOLD",
+        "REVIEW_REQUIRED",
+        "POLICY_DEFINITION_REQUIRED",
+        "EVIDENCE_REQUIRED",
+    ]
+    assert decide_schema["next_action"]["type"] == "string"
+    assert "governance_identity" in decide_schema
