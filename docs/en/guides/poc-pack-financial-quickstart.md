@@ -85,7 +85,8 @@ Comparator helper:
 - `veritas_os/scripts/expected_semantics_compare.py`
 - Used by `veritas_os/scripts/financial_poc_runner.py` for machine-readable diffs
   with gate canonicalization, taxonomy-aware evidence comparison, and next-action
-  family fallback.
+  family fallback. Runner output now also includes `mismatch_summary` for
+  faster AML/KYC triage.
 
 Example mismatch output (JSON excerpt):
 

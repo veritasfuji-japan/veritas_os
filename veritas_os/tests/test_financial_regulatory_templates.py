@@ -91,6 +91,7 @@ class RequiredEvidenceTaxonomy(BaseModel):
     scope: str
     allow_free_string: bool
     items: List[TaxonomyItem]
+    profiles: Dict[str, Dict[str, object]] = Field(default_factory=dict)
 
 
 def _load_template_pack() -> FinancialGovernanceTemplatePack:
@@ -305,6 +306,23 @@ def test_required_evidence_taxonomy_has_unique_canonical_keys_and_aliases() -> N
             alias_to_canonical[alias] = item.canonical_key
 
 
+def test_aml_kyc_profile_shape_validation() -> None:
+    """AML/KYC profile should be machine-readable and taxonomy-aligned."""
+    taxonomy = _load_taxonomy()
+    canonical_keys = {item.canonical_key for item in taxonomy.items}
+    aml_profile = taxonomy.profiles.get("aml_kyc")
+
+    assert aml_profile is not None
+    assert aml_profile.get("profile_id") == "aml_kyc_beachhead_v1"
+    required_keys = set(aml_profile.get("required", []))
+    escalation_keys = set(aml_profile.get("escalation_sensitive", []))
+    assert required_keys
+    assert required_keys <= canonical_keys
+    assert escalation_keys <= canonical_keys
+    assert "source_of_funds_record" in required_keys
+    assert "sanctions_screening_trace" in required_keys
+
+
 def test_regression_financial_question_first_response_includes_structure() -> None:
     """Financial template query should return question-first structured answer."""
     template_map = {item.template_id: item for item in _load_template_pack().templates}
@@ -328,6 +346,79 @@ def test_regression_financial_question_first_response_includes_structure() -> No
     assert structured["minimum_conditions"]["required_evidence_count"] == 3
     assert structured["minimum_conditions"]["missing_evidence_count"] == 1
     assert payload["next_action"] == "COLLECT_REQUIRED_EVIDENCE"
+
+
+def test_regression_high_risk_ambiguity_requires_human_review() -> None:
+    """High-risk ambiguity must force human review boundary."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_high_risk_country_wire_manual_review"]
+    ctx = PipelineContext(
+        request_id="financial-template-high-risk-ambiguity",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context=template.context,
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["human_review_required"] is True
+    assert payload["business_decision"] == "REVIEW_REQUIRED"
+
+
+def test_regression_secure_prod_controls_missing_blocks_case() -> None:
+    """Secure/prod controls missing should trigger block in secure posture path."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["high_risk_transaction_pending_release"]
+    ctx = PipelineContext(
+        request_id="financial-template-secure-controls",
+        query=template.question,
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context=template.context,
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] == "block"
+    assert payload["business_decision"] == "DENY"
+
+
+def test_regression_question_first_aml_kyc_returns_controls_and_next_action_hint() -> None:
+    """AML/KYC question-first response should prioritize evidence/review fields."""
+    template_map = {item.template_id: item for item in _load_template_pack().templates}
+    template = template_map["aml_kyc_high_risk_country_wire_manual_review"]
+    ctx = PipelineContext(
+        request_id="financial-template-question-first-aml",
+        query="制裁一致時に何を止めるべきか、source_of_funds がないとき何を保留すべきか？",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        rejection_reason=None,
+        context={
+            **template.context,
+            "satisfied_evidence": [
+                "kyc_profile",
+                "pep_screening_result",
+                "approval_matrix",
+            ],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    structured = payload["structured_answer"]
+    assert "source_of_funds_record" in payload["missing_evidence"]
+    assert payload["business_decision"] in {"EVIDENCE_REQUIRED", "HOLD", "REVIEW_REQUIRED"}
+    assert structured["source_of_funds_controls"]["source_of_funds_missing"] is True
+    assert "next_action_hint" in structured
 
 
 def test_regression_dev_mode_action_ranking_trace_is_visible() -> None:

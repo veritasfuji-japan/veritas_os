@@ -43,9 +43,13 @@
       "next_action": "PREPARE_HUMAN_REVIEW_PACKET",
       "required_evidence": [
         "kyc_profile",
+        "sanctions_screening_trace",
         "pep_screening_result",
         "source_of_funds_record",
-        "transaction_purpose_statement"
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
       ],
       "human_review_required": true
     },

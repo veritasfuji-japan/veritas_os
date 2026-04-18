@@ -32,6 +32,28 @@ while preserving free-string compatibility for unknown keys (`allow_free_string=
 
 Machine-readable source: `veritas_os/sample_data/governance/required_evidence_taxonomy_v0.json`.
 
+## AML/KYC beachhead evidence profile (runtime-enabled)
+
+The taxonomy fixture now includes a machine-readable `profiles.aml_kyc` section.
+Profile evaluation is applied **after alias -> canonical normalization**.
+
+- required:
+  - `kyc_profile`
+  - `sanctions_screening_trace`
+  - `pep_screening_result`
+  - `source_of_funds_record`
+  - `approval_matrix`
+  - `audit_trail_export`
+  - `secure_controls_attestation`
+  - `policy_definition_record`
+- optional:
+  - `transaction_monitoring_trace`
+  - `rollback_plan`
+- escalation-sensitive:
+  - `sanctions_screening_trace`
+  - `pep_screening_result`
+  - `approval_matrix`
+
 ## v0 catalog
 
 | canonical key | display label | category | aliases |

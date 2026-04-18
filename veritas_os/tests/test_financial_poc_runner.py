@@ -11,6 +11,7 @@ from veritas_os.scripts.financial_poc_runner import (
     load_questions,
     run_financial_poc,
 )
+from veritas_os.scripts.expected_semantics_compare import summarize_semantic_mismatches
 
 POC_FIXTURE_PATH = Path("veritas_os/sample_data/governance/financial_poc_questions.json")
 EN_QUICKSTART_PATH = Path("docs/en/guides/poc-pack-financial-quickstart.md")
@@ -74,6 +75,26 @@ def test_compare_expected_semantics_accepts_same_next_action_family() -> None:
     diff = compare_expected_semantics(expected, actual)
 
     assert "next_action" not in diff
+
+
+def test_compare_expected_semantics_canonicalizes_gate_aliases() -> None:
+    """Comparator should treat legacy aliases and canonical gate values as equal."""
+    expected = {"gate_decision": "deny"}
+    actual = {"gate_decision": "block"}
+    diff = compare_expected_semantics(expected, actual)
+    assert "gate_decision" not in diff
+
+
+def test_mismatch_summary_is_readable() -> None:
+    """Mismatch summary helper should produce concise field-first output."""
+    summary = summarize_semantic_mismatches(
+        {
+            "gate_decision": {"expected": "hold", "actual": "proceed"},
+            "human_review_required": {"expected": True, "actual": False},
+        }
+    )
+    assert "gate_decision" in summary
+    assert "human_review_required" in summary
 
 
 def test_financial_poc_runner_dry_run_produces_quantified_summary() -> None:

@@ -1,21 +1,29 @@
 from pydantic import ValidationError
 
 from veritas_os.api.schemas import DecideResponse
+from veritas_os.core.decision_semantics import build_required_evidence_profile
 from veritas_os.core.pipeline.pipeline_response import assemble_response
 from veritas_os.core.pipeline.pipeline_types import PipelineContext
 
 
 def test_gate_decision_alias_is_canonicalized_in_schema() -> None:
-    """legacy gate aliases should normalize to canonical public semantics."""
-    payload = DecideResponse.model_validate(
-        {
-            "gate_decision": "deny",
-            "business_decision": "DENY",
-            "human_review_required": False,
-        }
-    )
-
-    assert payload.gate_decision == "block"
+    """Legacy gate aliases should normalize to canonical public semantics."""
+    cases = {
+        "allow": "proceed",
+        "deny": "block",
+        "rejected": "block",
+        "modify": "hold",
+        "abstain": "hold",
+    }
+    for raw, canonical in cases.items():
+        payload = DecideResponse.model_validate(
+            {
+                "gate_decision": raw,
+                "business_decision": "DENY" if canonical == "block" else "HOLD",
+                "human_review_required": False,
+            }
+        )
+        assert payload.gate_decision == canonical
 
 
 def test_forbidden_gate_business_combination_is_rejected() -> None:
@@ -109,6 +117,23 @@ def test_required_evidence_taxonomy_aliases_are_normalized() -> None:
     assert payload["missing_evidence"] == ["approval_matrix"]
 
 
+def test_public_response_prefers_canonical_gate_decision() -> None:
+    """Public response should expose canonical gate_decision instead of legacy allow."""
+    ctx = PipelineContext(
+        request_id="req-gate-canonical-output",
+        query="test canonical gate",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={},
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["gate_decision"] == "proceed"
+
+
 def test_backward_compat_decision_status_stays_legacy_field() -> None:
     """decision_status remains distinct from public gate semantics."""
     payload = DecideResponse.model_validate(
@@ -122,3 +147,19 @@ def test_backward_compat_decision_status_stays_legacy_field() -> None:
 
     assert payload.decision_status == "allow"
     assert payload.gate_decision == "proceed"
+
+
+def test_aml_kyc_evidence_profile_classifies_requirement_levels() -> None:
+    """AML/KYC profile should classify required/escalation-sensitive keys."""
+    entries = build_required_evidence_profile(
+        ["kyc_profile", "sanctions_trace", "custom_free_text"],
+        decision_domain="aml_kyc",
+    )
+    by_key = {entry["key"]: entry for entry in entries}
+
+    assert by_key["kyc_profile"]["requirement_level"] == "required"
+    assert by_key["sanctions_screening_trace"]["requirement_level"] in {
+        "required",
+        "escalation_sensitive",
+    }
+    assert by_key["custom_free_text"]["requirement_level"] == "unclassified"

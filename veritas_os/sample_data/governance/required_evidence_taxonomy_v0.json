@@ -6,7 +6,11 @@
     {
       "canonical_key": "credit_bureau_report",
       "display_label": "Credit Bureau Report",
-      "aliases": ["bureau_report", "credit_report", "credit_file"],
+      "aliases": [
+        "bureau_report",
+        "credit_report",
+        "credit_file"
+      ],
       "category": "credit_underwriting",
       "description": "External credit bureau output used for underwriting and affordability checks.",
       "notes": "Retail and SME lending; keep bureau source and pull timestamp for audit."
@@ -14,7 +18,10 @@
     {
       "canonical_key": "kyc_profile",
       "display_label": "KYC Profile",
-      "aliases": ["know_your_customer_profile", "customer_identity_profile"],
+      "aliases": [
+        "know_your_customer_profile",
+        "customer_identity_profile"
+      ],
       "category": "identity_and_aml",
       "description": "Consolidated customer identity profile used for KYC verification.",
       "notes": "Applies to onboarding and high-risk transaction reviews."
@@ -22,7 +29,10 @@
     {
       "canonical_key": "pep_screening_result",
       "display_label": "PEP Screening Result",
-      "aliases": ["pep_check", "politically_exposed_person_screen"],
+      "aliases": [
+        "pep_check",
+        "politically_exposed_person_screen"
+      ],
       "category": "identity_and_aml",
       "description": "Outcome and trace of politically exposed person screening.",
       "notes": "Store match confidence and screening provider metadata."
@@ -30,7 +40,10 @@
     {
       "canonical_key": "sanctions_screening_trace",
       "display_label": "Sanctions Screening Trace",
-      "aliases": ["sanctions_trace", "ofac_screening_trace"],
+      "aliases": [
+        "sanctions_trace",
+        "ofac_screening_trace"
+      ],
       "category": "sanctions",
       "description": "Sanctions screening execution trace including list version and match details.",
       "notes": "Required when sanctions false-positive/true-positive adjudication is needed."
@@ -38,7 +51,10 @@
     {
       "canonical_key": "source_of_funds_record",
       "display_label": "Source of Funds Record",
-      "aliases": ["source_of_funds_document", "sof_record"],
+      "aliases": [
+        "source_of_funds_document",
+        "sof_record"
+      ],
       "category": "aml_enhanced_due_diligence",
       "description": "Documented evidence for origin and legitimacy of funds.",
       "notes": "Used in cross-border wires and enhanced due diligence scenarios."
@@ -46,7 +62,10 @@
     {
       "canonical_key": "approval_matrix",
       "display_label": "Approval Matrix",
-      "aliases": ["approval_boundary_matrix", "authority_matrix"],
+      "aliases": [
+        "approval_boundary_matrix",
+        "authority_matrix"
+      ],
       "category": "governance_control",
       "description": "Authority boundary definition for who can approve which case types.",
       "notes": "Cross-domain governance boundary control and escalation workflows."
@@ -54,7 +73,10 @@
     {
       "canonical_key": "transaction_monitoring_trace",
       "display_label": "Transaction Monitoring Trace",
-      "aliases": ["transaction_monitoring_log", "tml_trace"],
+      "aliases": [
+        "transaction_monitoring_log",
+        "tml_trace"
+      ],
       "category": "transaction_monitoring",
       "description": "Trace output of transaction monitoring rules/signals tied to the case.",
       "notes": "Include rule hits and model signal snapshots when available."
@@ -62,7 +84,10 @@
     {
       "canonical_key": "audit_trail_export",
       "display_label": "Audit Trail Export",
-      "aliases": ["audit_log_export", "audit_evidence_export"],
+      "aliases": [
+        "audit_log_export",
+        "audit_evidence_export"
+      ],
       "category": "audit_and_attestation",
       "description": "Export package of audit trail records supporting the decision lifecycle.",
       "notes": "Needed for external audit submission and evidence bundles."
@@ -70,7 +95,10 @@
     {
       "canonical_key": "secure_controls_attestation",
       "display_label": "Secure Controls Attestation",
-      "aliases": ["security_controls_attestation", "secure_controls_ready_attestation"],
+      "aliases": [
+        "security_controls_attestation",
+        "secure_controls_ready_attestation"
+      ],
       "category": "security_controls",
       "description": "Attestation proving required secure/prod controls are in place.",
       "notes": "Critical for secure/prod fail-closed paths."
@@ -78,7 +106,10 @@
     {
       "canonical_key": "rollback_plan",
       "display_label": "Rollback Plan",
-      "aliases": ["rollback_strategy", "rollback_support_plan"],
+      "aliases": [
+        "rollback_strategy",
+        "rollback_support_plan"
+      ],
       "category": "operational_resilience",
       "description": "Documented rollback procedure for irreversible or high-impact operations.",
       "notes": "Used when rollback capability gates decision execution."
@@ -86,10 +117,38 @@
     {
       "canonical_key": "policy_definition_record",
       "display_label": "Policy Definition Record",
-      "aliases": ["policy_owner_confirmation", "policy_definition_required_record"],
+      "aliases": [
+        "policy_owner_confirmation",
+        "policy_definition_required_record"
+      ],
       "category": "policy_governance",
       "description": "Record proving policy/rule definition and ownership for the decision domain.",
       "notes": "Required when rule_undefined or boundary ownership issues appear."
     }
-  ]
+  ],
+  "profiles": {
+    "aml_kyc": {
+      "profile_id": "aml_kyc_beachhead_v1",
+      "profile_version": "1.0.0",
+      "required": [
+        "kyc_profile",
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "source_of_funds_record",
+        "approval_matrix",
+        "audit_trail_export",
+        "secure_controls_attestation",
+        "policy_definition_record"
+      ],
+      "optional": [
+        "transaction_monitoring_trace",
+        "rollback_plan"
+      ],
+      "escalation_sensitive": [
+        "sanctions_screening_trace",
+        "pep_screening_result",
+        "approval_matrix"
+      ]
+    }
+  }
 }

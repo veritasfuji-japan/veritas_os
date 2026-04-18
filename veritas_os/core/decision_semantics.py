@@ -144,20 +144,69 @@ def get_required_evidence_category_map() -> dict[str, str]:
     return out
 
 
-def build_required_evidence_profile(values: Iterable[object] | None) -> list[dict[str, Any]]:
+@lru_cache(maxsize=1)
+def get_required_evidence_profiles() -> dict[str, dict[str, Any]]:
+    """Return per-domain evidence profiles keyed by normalized domain name."""
+    payload = _load_required_evidence_taxonomy()
+    raw_profiles = payload.get("profiles")
+    out: dict[str, dict[str, Any]] = {}
+    if not isinstance(raw_profiles, Mapping):
+        return out
+    for domain_name, profile in raw_profiles.items():
+        domain_key = str(domain_name).strip().lower()
+        if not domain_key or not isinstance(profile, Mapping):
+            continue
+        out[domain_key] = {
+            "required": unique_preserve_order(
+                normalize_required_evidence_keys(profile.get("required"))
+            ),
+            "optional": unique_preserve_order(
+                normalize_required_evidence_keys(profile.get("optional"))
+            ),
+            "escalation_sensitive": unique_preserve_order(
+                normalize_required_evidence_keys(profile.get("escalation_sensitive"))
+            ),
+            "profile_id": str(profile.get("profile_id") or "").strip(),
+            "profile_version": str(profile.get("profile_version") or "").strip(),
+        }
+    return out
+
+
+def build_required_evidence_profile(
+    values: Iterable[object] | None,
+    *,
+    decision_domain: str = "",
+) -> list[dict[str, Any]]:
     """Build machine-readable evidence profile entries with taxonomy categories."""
     canonical_values = unique_preserve_order(normalize_required_evidence_keys(values))
     categories = get_required_evidence_category_map()
-    profile: list[dict[str, Any]] = []
+    profiles = get_required_evidence_profiles()
+    domain_key = str(decision_domain or "").strip().lower()
+    domain_profile = profiles.get(domain_key, {})
+    required_keys = set(domain_profile.get("required", []))
+    optional_keys = set(domain_profile.get("optional", []))
+    escalation_sensitive_keys = set(domain_profile.get("escalation_sensitive", []))
+    entries: list[dict[str, Any]] = []
     for key in canonical_values:
-        profile.append(
+        requirement_level = "unclassified"
+        if key in required_keys:
+            requirement_level = "required"
+        elif key in optional_keys:
+            requirement_level = "optional"
+        elif key in escalation_sensitive_keys:
+            requirement_level = "escalation_sensitive"
+        entries.append(
             {
                 "key": key,
                 "category": categories.get(key, "free_string"),
                 "taxonomy_matched": key in categories,
+                "requirement_level": requirement_level,
+                "domain_profile_matched": key in (
+                    required_keys | optional_keys | escalation_sensitive_keys
+                ),
             }
         )
-    return profile
+    return entries
 
 
 def unique_preserve_order(values: Iterable[str]) -> list[str]:
