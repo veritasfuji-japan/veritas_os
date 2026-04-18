@@ -1,0 +1,59 @@
+{
+  "artifact_type": "aml_kyc_pilot_expected_bundle_examples",
+  "version": "v1",
+  "scope": "synthetic_only",
+  "bundle_examples": [
+    {
+      "bundle_type": "decision",
+      "scenario": "sanctions_partial_match",
+      "expected_files": [
+        "manifest.json",
+        "decision_record.json",
+        "acceptance_checklist.json",
+        "verification_report.json",
+        "witness_entries.jsonl"
+      ],
+      "required_acceptance_checks": [
+        "manifest_integrity_present",
+        "verification_report_present",
+        "decision_record_profile_declared"
+      ]
+    },
+    {
+      "bundle_type": "incident",
+      "scenario": "source_of_funds_missing",
+      "expected_files": [
+        "manifest.json",
+        "incident_metadata.json",
+        "acceptance_checklist.json",
+        "verification_report.json",
+        "witness_entries.jsonl"
+      ],
+      "required_acceptance_checks": [
+        "manifest_integrity_present",
+        "witness_entries_present",
+        "verification_report_present"
+      ]
+    },
+    {
+      "bundle_type": "release",
+      "scenario": "aml_kyc_pilot_exit_review",
+      "expected_files": [
+        "manifest.json",
+        "release_provenance.json",
+        "acceptance_checklist.json",
+        "verification_report.json",
+        "witness_entries.jsonl"
+      ],
+      "required_acceptance_checks": [
+        "manifest_integrity_present",
+        "witness_entries_present",
+        "verification_report_present"
+      ]
+    }
+  ],
+  "boundary_notes": [
+    "Examples are structural expectations, not live customer records.",
+    "No PII or account identifiers are permitted in pilot evidence examples."
+  ]
+}

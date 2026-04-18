@@ -2,7 +2,20 @@
 
 ## Objective
 
-Define a machine-checkable success contract for the financial PoC runner.
+Define a machine-checkable success contract for the AML/KYC pilot package.
+
+---
+
+## Acceptance criteria summary
+
+Pilot acceptance is judged on four gates:
+
+- **Gate A: reproducibility**
+- **Gate B: operational stability**
+- **Gate C: AML/KYC anchor integrity**
+- **Gate D: representative scenario contract coverage**
+
+Any gate failure is a pilot `FAIL`.
 
 ---
 
@@ -10,10 +23,10 @@ Define a machine-checkable success contract for the financial PoC runner.
 
 For one run report:
 
-- `total`: total PoC questions executed
+- `total`: total pilot questions executed
 - `pass_count`: cases with zero semantic mismatches
 - `fail_count`: cases with one or more semantic mismatches
-- `warning_count`: cases not evaluated due to runtime issues (HTTP errors/timeouts)
+- `warning_count`: cases not evaluated or warning-state runtime outcomes
 - `evaluated_count = total - warning_count`
 - `pass_rate = pass_count / evaluated_count`
 - `warning_rate = warning_count / total`
@@ -23,18 +36,16 @@ For one run report:
 - **Gate A (minimum reproducibility)**
   - `evaluated_count >= 5`
   - `pass_rate >= 0.90`
-- **Gate B (demo-ready quality)**
+- **Gate B (pilot-ready quality)**
   - `fail_count = 0`
   - `warning_count = 0`
 - **Gate C (beachhead consistency)**
-  - `aml_kyc` anchor case status is `pass`
+  - AML/KYC anchor case status is `pass`
 - **Gate D (representative scenario contract)**
-  - sanctions partial match case is **not** `proceed`
-  - source of funds missing case is **not** `APPROVE`
-  - approval boundary unknown is `human_review_required` or `hold`
-  - high-risk ambiguity uses human-review path
-  - sufficient evidence case is `proceed/APPROVE` family
+  - sanctions partial match is **not** `proceed`
+  - source of funds missing is **not** `APPROVE`
   - policy definition missing is `POLICY_DEFINITION_REQUIRED` family
+  - sufficient evidence low-risk case is `proceed/APPROVE` family
   - secure/prod controls missing is fail-closed `block`
 
 ---
@@ -44,15 +55,23 @@ For one run report:
 - **PASS**
   - Gate A + Gate B + Gate C + Gate D satisfied.
 - **WARNING**
-  - Gate A + Gate C + Gate D satisfied, but warnings exist (`warning_count > 0`) and no fails.
+  - Gate A + Gate C + Gate D satisfied, but warnings exist and no fails.
 - **FAIL**
-  - Any gate violation; for example `fail_count > 0`, `pass_rate < 0.90`, `evaluated_count < 5`, or representative-case contract failure.
+  - Any gate violation.
 
 ---
 
-## Operational notes
+## Evaluator interpretation notes
 
-- Keep the fixture synthetic and deterministic.
-- Treat warning-only runs as operational instability, not semantics correctness.
-- Track mismatch deltas over time as a regression signal.
-- For live run security, keep `http://` endpoints limited to localhost and avoid production customer data in PoC payloads.
+- Warning-only runs are not sign-off quality for customer pilot review.
+- Failure scenarios must be disclosed, not hidden, in handoff artifacts.
+- Success does not imply legal determination automation.
+
+---
+
+## Security and privacy constraints
+
+- Keep fixtures synthetic and deterministic.
+- Never include production customer data, account identifiers, or raw watchlist
+  extracts in pilot artifacts.
+- Keep `http://` endpoint usage restricted to localhost rehearsal only.

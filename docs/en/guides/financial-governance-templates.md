@@ -136,6 +136,21 @@ runtime emits canonical keys for deterministic downstream processing.
 Template fixtures should remain synthetic and free of PII, account numbers,
 production sanctions watchlists, and customer-identifiable traces.
 
+
+## AML/KYC pilot-ready packaging notes
+
+For customer pilot enablement, pair this template contract with:
+
+- [AML/KYC Pilot Checklist](aml-kyc-pilot-checklist.md)
+- [AML/KYC Operator Runbook](aml-kyc-operator-runbook.md)
+- [AML/KYC Customer Handoff Path](aml-kyc-customer-handoff-path.md)
+- `veritas_os/sample_data/governance/aml_kyc_pilot_cases.json`
+- `veritas_os/sample_data/governance/aml_kyc_failure_scenarios.json`
+- `veritas_os/sample_data/governance/aml_kyc_expected_evidence_bundle_examples.json`
+
+These artifacts stay bounded to implemented AML/KYC semantics and synthetic
+inputs; they do not claim production-data readiness or legal determination.
+
 ## PoC Reproducibility Runner
 
 To execute the lightweight PoC fixture set and compare expected semantics against

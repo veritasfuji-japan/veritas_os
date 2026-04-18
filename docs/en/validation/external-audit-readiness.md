@@ -258,6 +258,17 @@ Use this sequence after completing the 1-day AML/KYC quickstart:
 Entry guide:
 - [Financial PoC Pack (1-day quickstart, EN)](../guides/poc-pack-financial-quickstart.md)
 
+
+### AML/KYC pilot expected bundle examples
+
+For pilot-stage evaluator handoff, use structural expectations from:
+
+- `veritas_os/sample_data/governance/aml_kyc_expected_evidence_bundle_examples.json`
+
+The file defines expected bundle file sets for decision/incident/release sample
+flows and acceptance checklist checks. It is synthetic-only and intended for
+customer review preparation, not production evidence disclosure.
+
 ### Generating Bundles
 
 ```python
