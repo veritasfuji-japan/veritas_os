@@ -6,6 +6,10 @@ This template pack defines **governance expectations**, not legal conclusions, f
 regulated decision domains where VERITAS output is consumed by financial and
 compliance workflows.
 
+This is the contract layer that the AML/KYC 1-day PoC quickstart executes
+against. It is designed so customer, operator, and investor discussions share
+the same factual semantics baseline.
+
 The templates are intentionally designed to verify fail-closed behavior around:
 
 - stop / hold / block actions under uncertainty,
@@ -107,6 +111,15 @@ runtime emits canonical keys for deterministic downstream processing.
 3. **Operationally safe behavior**
    - Templates avoid investment advice and legal determinations, and instead
      require auditable escalation and evidence collection.
+
+## Audience lens (same artifact, different question)
+
+- **Customer asks**: "Can this prevent unsafe auto-proceed in AML/KYC ambiguity?"
+  - Check `gate_decision` + `human_review_required` expectations.
+- **Operator asks**: "Where do we fail and what evidence keys are missing?"
+  - Check required/missing evidence keys and mismatch summaries from PoC runner.
+- **Investor asks**: "Is this only narrative, or measurable?"
+  - Check quantified pass/fail/warning output from the quickstart runner.
 
 ## Domain Coverage
 

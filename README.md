@@ -86,6 +86,10 @@ VERITAS OS focuses on **decision governance**:
 
 ## Quick Links
 
+- **AML/KYC Beachhead (1-day PoC quickstart)**: [`docs/en/guides/poc-pack-financial-quickstart.md`](docs/en/guides/poc-pack-financial-quickstart.md)
+- **AML/KYC Governance Template Contract**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
+- **External Audit / Evidence Bundle Readiness**: [`docs/en/validation/external-audit-readiness.md`](docs/en/validation/external-audit-readiness.md)
+- **AML/KYC Short Positioning (customer / operator / investor)**: [`docs/en/positioning/aml-kyc-beachhead-short-positioning.md`](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 - **GitHub**: https://github.com/veritasfuji-japan/veritas_os
 - **Zenodo paper (EN)**: https://doi.org/10.5281/zenodo.17838349
 - **Zenodo paper (JP)**: https://doi.org/10.5281/zenodo.17838456
@@ -113,6 +117,22 @@ VERITAS OS focuses on **decision governance**:
 - **Operations Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **Governance Signing Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)
 - **Governance Upgrade Press Summary**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
+
+## AML/KYC Beachhead PoC Pack (what you can run in 1 day)
+
+For regulated teams evaluating VERITAS OS in AML/KYC workflows, the beachhead
+pack is documented as an executable path, not only positioning text:
+
+1. Run the 1-day PoC fixture set and quantify pass/fail/warning outcomes.
+2. Review operator checkpoints (fail-closed gate, evidence-first deltas, replay
+   consistency).
+3. Produce evidence-bundle handoff artifacts for external review readiness.
+
+Start here:
+- [1-day PoC Quickstart](docs/en/guides/poc-pack-financial-quickstart.md)
+- [Financial Governance Templates](docs/en/guides/financial-governance-templates.md)
+- [External Audit Readiness](docs/en/validation/external-audit-readiness.md)
+- [Short Positioning by audience](docs/en/positioning/aml-kyc-beachhead-short-positioning.md)
 
 ## 🚀 Quick Start (TL;DR)
 
