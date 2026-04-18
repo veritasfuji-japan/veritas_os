@@ -244,6 +244,21 @@ SLOW_APPEND_WARNING_TOTAL = _counter(
     "slow_append_warning_total",
     "Total TrustLog appends exceeding the slow-append threshold",
 )
+UNKNOWN_REQUIRED_EVIDENCE_KEY_TOTAL = _counter(
+    "unknown_required_evidence_key_total",
+    "Unknown required evidence keys observed after canonicalization",
+    labelnames=("domain", "template_id", "source", "mode"),
+)
+REQUIRED_EVIDENCE_ALIAS_NORMALIZED_TOTAL = _counter(
+    "required_evidence_alias_normalized_total",
+    "Alias->canonical normalizations for required evidence keys",
+    labelnames=("domain", "template_id", "source", "mode"),
+)
+REQUIRED_EVIDENCE_PROFILE_MISS_TOTAL = _counter(
+    "required_evidence_profile_miss_total",
+    "Profile misses for required/escalation-sensitive evidence",
+    labelnames=("domain", "template_id", "source", "mode"),
+)
 
 
 def _label(value: Any, fallback: str = "unknown") -> str:
@@ -486,3 +501,30 @@ def set_advisory_lock_contention_count(count: int) -> None:
         ADVISORY_LOCK_CONTENTION_COUNT.set(float(count))
     except (TypeError, ValueError):
         return
+
+
+def record_required_evidence_telemetry(
+    *,
+    domain: Any,
+    template_id: Any,
+    source: Any,
+    mode: Any,
+    unknown_key_total: int,
+    alias_normalized_total: int,
+    profile_miss_total: int,
+) -> None:
+    """Record required-evidence hardening counters for observability."""
+    labels = {
+        "domain": _label(domain, "unknown"),
+        "template_id": _label(template_id, "unknown"),
+        "source": _label(source, "unknown"),
+        "mode": _label(mode, "warn"),
+    }
+    if unknown_key_total > 0:
+        UNKNOWN_REQUIRED_EVIDENCE_KEY_TOTAL.labels(**labels).inc(float(unknown_key_total))
+    if alias_normalized_total > 0:
+        REQUIRED_EVIDENCE_ALIAS_NORMALIZED_TOTAL.labels(**labels).inc(
+            float(alias_normalized_total)
+        )
+    if profile_miss_total > 0:
+        REQUIRED_EVIDENCE_PROFILE_MISS_TOTAL.labels(**labels).inc(float(profile_miss_total))

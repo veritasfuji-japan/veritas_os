@@ -96,16 +96,21 @@ def _call_decide_api(
     api_key: str,
     timeout_seconds: float,
     question: PocQuestion,
+    required_evidence_mode: str,
 ) -> dict[str, Any]:
     """Call `/v1/decide` and return parsed JSON payload."""
     headers = {
         "Content-Type": "application/json",
         "X-API-Key": api_key,
     }
+    payload = _build_request_payload(question)
+    payload_context = payload.setdefault("context", {})
+    if required_evidence_mode:
+        payload_context["required_evidence_mode"] = required_evidence_mode
     response = requests.post(
         api_url,
         headers=headers,
-        json=_build_request_payload(question),
+        json=payload,
         timeout=timeout_seconds,
     )
     response.raise_for_status()
@@ -194,6 +199,7 @@ def run_financial_poc(
     api_url: str,
     api_key: str,
     timeout_seconds: float,
+    required_evidence_mode: str = "warn",
 ) -> dict[str, Any]:
     """Run financial PoC pack and return machine-readable report."""
     questions = load_questions(input_path)
@@ -207,6 +213,7 @@ def run_financial_poc(
                 api_key=api_key,
                 timeout_seconds=timeout_seconds,
                 question=question,
+                required_evidence_mode=required_evidence_mode,
             ),
         )
 
@@ -216,6 +223,7 @@ def run_financial_poc(
             "mode": "dry-run" if dry_run else "live",
             "input_path": str(input_path),
             "api_url": api_url,
+            "required_evidence_mode": required_evidence_mode,
         },
         "summary": summary,
         "cases": [
@@ -261,6 +269,12 @@ def _parse_args() -> argparse.Namespace:
         help="HTTP timeout seconds for each /v1/decide call.",
     )
     parser.add_argument(
+        "--required-evidence-mode",
+        default=os.getenv("VERITAS_REQUIRED_EVIDENCE_MODE", "warn"),
+        choices=("warn", "strict"),
+        help="Required evidence hardening mode injected into request context.",
+    )
+    parser.add_argument(
         "--output-json",
         default="",
         help="Optional output report path in JSON format.",
@@ -297,6 +311,7 @@ def main() -> None:
         api_url=str(args.api_url),
         api_key=str(args.api_key),
         timeout_seconds=float(args.timeout),
+        required_evidence_mode=str(args.required_evidence_mode),
     )
 
     summary = report["summary"]

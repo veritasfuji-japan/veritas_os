@@ -77,7 +77,9 @@ def compare_expected_semantics(
             }
 
     expected_required = unique_preserve_order(
-        normalize_required_evidence_keys(expected.get("required_evidence"))
+        normalize_required_evidence_keys(
+            expected.get("expected_required_evidence", expected.get("required_evidence"))
+        )
     )
     actual_required = unique_preserve_order(
         normalize_required_evidence_keys(actual.get("required_evidence"))
@@ -86,10 +88,14 @@ def compare_expected_semantics(
         mismatches["required_evidence"] = {
             "expected": expected_required,
             "actual": actual_required,
+            "only_in_expected": [item for item in expected_required if item not in set(actual_required)],
+            "only_in_actual": [item for item in actual_required if item not in set(expected_required)],
         }
 
     expected_missing = unique_preserve_order(
-        normalize_required_evidence_keys(expected.get("missing_evidence"))
+        normalize_required_evidence_keys(
+            expected.get("expected_missing_evidence", expected.get("missing_evidence"))
+        )
     )
     actual_missing = unique_preserve_order(
         normalize_required_evidence_keys(actual.get("missing_evidence"))
@@ -98,6 +104,8 @@ def compare_expected_semantics(
         mismatches["missing_evidence"] = {
             "expected": expected_missing,
             "actual": actual_missing,
+            "only_in_expected": [item for item in expected_missing if item not in set(actual_missing)],
+            "only_in_actual": [item for item in actual_missing if item not in set(expected_missing)],
         }
 
     expected_human = bool(expected.get("human_review_required"))
@@ -107,6 +115,21 @@ def compare_expected_semantics(
             "expected": expected_human,
             "actual": actual_human,
         }
+    telemetry = actual.get("required_evidence_telemetry")
+    if isinstance(telemetry, Mapping):
+        unknown_keys = telemetry.get("top_unknown_keys") or []
+        profile_missing = telemetry.get("profile_missing_keys") or []
+        if unknown_keys or profile_missing:
+            mismatches["required_evidence_runtime_warnings"] = {
+                "expected": {
+                    "unknown_keys": [],
+                    "profile_missing_keys": [],
+                },
+                "actual": {
+                    "unknown_keys": list(unknown_keys),
+                    "profile_missing_keys": list(profile_missing),
+                },
+            }
 
     return mismatches
 
@@ -122,6 +145,7 @@ def summarize_semantic_mismatches(mismatches: Mapping[str, Mapping[str, Any]]) -
         "business_decision",
         "required_evidence",
         "missing_evidence",
+        "required_evidence_runtime_warnings",
         "human_review_required",
         "next_action",
     ):

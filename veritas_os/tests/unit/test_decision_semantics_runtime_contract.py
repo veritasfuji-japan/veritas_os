@@ -226,6 +226,7 @@ def test_unknown_required_evidence_generates_warning_and_telemetry() -> None:
     )
     telemetry = payload["required_evidence_telemetry"]
     assert telemetry["unknown_required_evidence_key_total"] >= 1
+    assert telemetry["mode"] == "warn"
     assert "unknown_required_evidence_keys_detected" in payload.get("warnings", [])
 
 
@@ -249,6 +250,80 @@ def test_alias_normalization_counter_is_recorded() -> None:
     )
     telemetry = payload["required_evidence_telemetry"]
     assert telemetry["required_evidence_alias_normalized_total"] >= 2
+
+
+def test_strict_mode_unknown_key_moves_to_human_review_path() -> None:
+    """Strict mode should treat unknown keys as stronger hold/review signals."""
+    ctx = PipelineContext(
+        request_id="req-strict-unknown",
+        query="strict unknown key",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "category": "aml_kyc",
+            "required_evidence_mode": "strict",
+            "required_evidence": ["kyc_profile", "unknown_custom_doc"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["required_evidence_mode"] == "strict"
+    assert payload["gate_decision"] in {"hold", "human_review_required"}
+    assert payload["human_review_required"] is True
+    assert "unknown_required_evidence_key_strict" in payload[
+        "required_evidence_assessment"
+    ]["internal_reasons"]
+
+
+def test_aml_kyc_escalation_sensitive_missing_requires_human_review() -> None:
+    """Missing escalation-sensitive evidence must force human review flow."""
+    ctx = PipelineContext(
+        request_id="req-escalation-sensitive",
+        query="escalation sensitive missing",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "required_evidence": ["kyc_profile", "sanctions_screening_trace"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert payload["human_review_required"] is True
+    assert "sanctions_screening_trace" in payload["required_evidence_assessment"][
+        "escalation_sensitive_missing_keys"
+    ]
+
+
+def test_approval_matrix_missing_is_reported_as_escalation_sensitive() -> None:
+    """approval_matrix missing should appear in escalation-sensitive diagnostics."""
+    ctx = PipelineContext(
+        request_id="req-approval-missing",
+        query="approval matrix missing",
+        fuji_dict={"decision_status": "allow", "status": "allow"},
+        decision_status="allow",
+        context={
+            "decision_domain": "aml_kyc",
+            "required_evidence": ["kyc_profile", "approval_boundary_matrix"],
+            "satisfied_evidence": ["kyc_profile"],
+        },
+    )
+    payload = assemble_response(
+        ctx,
+        load_persona_fn=lambda: {},
+        plan={"steps": [], "source": "test"},
+    )
+    assert "approval_matrix" in payload["required_evidence_assessment"][
+        "escalation_sensitive_missing_keys"
+    ]
 
 
 def test_question_first_response_prioritizes_structure_not_investigate_decision() -> None:

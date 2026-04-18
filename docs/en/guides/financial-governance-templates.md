@@ -62,6 +62,9 @@ with `required`, `optional`, and `escalation_sensitive` key classes for
 regression and response shaping. Runtime hardening now also emits unknown-key
 warnings + telemetry counters instead of immediate hard-fail, so PoC and
 template suites can quantify migration readiness before strict reject mode.
+`strict` mode can now be enabled for AML/KYC beachhead experiments via runtime
+context (`required_evidence_mode=strict`) to route unknown/profile misses into
+stronger hold/review behavior while keeping full reject rollout deferred.
 
 ## Role Split: Regulatory Templates vs PoC Questions
 
