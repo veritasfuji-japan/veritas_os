@@ -291,7 +291,7 @@ def _run_wat_shadow_observer(
             "warning_only_until": _coerce_warning_only_until_epoch(
                 shadow_cfg.get("warning_only_until")
             ),
-            "replay_binding_required": bool(shadow_cfg.get("replay_binding_required", False)),
+            "replay_binding_required": shadow_cfg.get("replay_binding_required", False),
             "drift_weights": drift_runtime_cfg["drift_weights"],
             "drift_thresholds": drift_runtime_cfg["drift_thresholds"],
         },

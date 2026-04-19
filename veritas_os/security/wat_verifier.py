@@ -205,6 +205,51 @@ def _build_audit_event_ref(
     return f"wat_local_verifier:{event_digest[:24]}"
 
 
+def _is_missing_text(value: Any) -> bool:
+    """Return ``True`` when a replay-binding text field is missing."""
+    return not str(value or "").strip()
+
+
+def _resolve_replay_binding_failure(
+    *,
+    required: bool,
+    claim_action_digest: str,
+    action_digest_local: str,
+    claim_nonce: str,
+    execution_nonce: str,
+    claim_session_id: str,
+    session_id: str,
+) -> str | None:
+    """Resolve replay-binding failures for strict and observer-only modes.
+
+    Strict mode requires action-digest + nonce + session-id to all exist and
+    match exactly. Observer-only mode keeps historical behavior by rejecting
+    only explicit mismatches.
+    """
+    claim_missing = {
+        "action_digest": _is_missing_text(claim_action_digest),
+        "nonce": _is_missing_text(claim_nonce),
+        "session_id": _is_missing_text(claim_session_id),
+    }
+    local_missing = {
+        "action_digest": _is_missing_text(action_digest_local),
+        "nonce": _is_missing_text(execution_nonce),
+        "session_id": _is_missing_text(session_id),
+    }
+
+    if required:
+        missing_any = any(claim_missing.values()) or any(local_missing.values())
+        if missing_any:
+            missing_count = sum(claim_missing.values()) + sum(local_missing.values())
+            return "replay_binding_missing" if missing_count >= 4 else "replay_binding_incomplete"
+
+    if claim_action_digest != action_digest_local:
+        return "action_digest_mismatch"
+    if claim_nonce != execution_nonce or claim_session_id != session_id:
+        return "replay_binding_incomplete" if required else "replay_detected"
+    return None
+
+
 def validate_local(
     *,
     signed_wat: Mapping[str, Any],
@@ -263,6 +308,7 @@ def validate_local(
     binding_key = f"{claim_action_digest}:{execution_nonce}:{session_id}"
     revocation_status = _derive_revocation_status(revocation_state)
     partial_allowed = _is_partial_allowed(cfg, current_ts)
+    replay_binding_required = bool(cfg.get("replay_binding_required", False))
 
     if revocation_status == "revoked_confirmed":
         drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
@@ -281,52 +327,58 @@ def validate_local(
         drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
         status = "invalid"
         failure_type = "psid_full_mismatch"
-    elif claim_action_digest != action_digest_local:
-        drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
-        status = "invalid"
-        failure_type = "action_digest_mismatch"
-    elif claim_observable_digest != observable_digest_local:
-        drift_vector = DriftVector(0.0, 0.0, 1.0, 0.0)
-        status = "invalid"
-        failure_type = "observable_digest_mismatch"
-    elif claim_nonce != execution_nonce or claim_session_id != session_id:
-        drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
-        status = "invalid"
-        failure_type = "replay_detected"
-    elif replay_cache is not None and binding_key in replay_cache:
-        drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
-        status = "invalid"
-        failure_type = "replay_detected"
-    elif claim_expiry_ts is not None and current_ts > claim_expiry_ts:
-        drift_vector = DriftVector(0.0, 0.0, 0.0, 1.0)
-        status = "stale"
-        failure_type = "expired_token"
-    elif revocation_status == "revoked_pending":
-        drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
-        status = "revoked_pending"
-        failure_type = "revocation_pending"
-    elif bool(cfg.get("allow_partial_validation", False)):
-        drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
-        status = "partial"
-        failure_type = "partial_validation_mode"
     else:
-        temporal_drift = 0.0
-        failure_type = None
-        skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
-        if issuance_ts_local is not None and claim_issuance_ts is not None:
-            if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
-                temporal_drift = 1.0
-                failure_type = "timestamp_skew_exceeded"
-        if expiry_ts_local is not None and claim_expiry_ts is not None:
-            if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
-                temporal_drift = max(temporal_drift, 1.0)
-                failure_type = failure_type or "timestamp_skew_exceeded"
-        if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
-            if claim_issuance_ts != issuance_ts_local:
-                temporal_drift = 0.4
-                failure_type = "timestamp_skew_within_tolerance"
-        drift_vector = DriftVector(0.0, 0.0, 0.0, temporal_drift)
-        status = "invalid" if failure_type == "timestamp_skew_exceeded" else "valid"
+        replay_binding_failure = _resolve_replay_binding_failure(
+            required=replay_binding_required,
+            claim_action_digest=claim_action_digest,
+            action_digest_local=action_digest_local,
+            claim_nonce=claim_nonce,
+            execution_nonce=execution_nonce,
+            claim_session_id=claim_session_id,
+            session_id=session_id,
+        )
+        if replay_binding_failure is not None:
+            drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
+            status = "invalid"
+            failure_type = replay_binding_failure
+        elif claim_observable_digest != observable_digest_local:
+            drift_vector = DriftVector(0.0, 0.0, 1.0, 0.0)
+            status = "invalid"
+            failure_type = "observable_digest_mismatch"
+        elif replay_cache is not None and binding_key in replay_cache:
+            drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
+            status = "invalid"
+            failure_type = "replay_detected"
+        elif claim_expiry_ts is not None and current_ts > claim_expiry_ts:
+            drift_vector = DriftVector(0.0, 0.0, 0.0, 1.0)
+            status = "stale"
+            failure_type = "expired_token"
+        elif revocation_status == "revoked_pending":
+            drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
+            status = "revoked_pending"
+            failure_type = "revocation_pending"
+        elif bool(cfg.get("allow_partial_validation", False)):
+            drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
+            status = "partial"
+            failure_type = "partial_validation_mode"
+        else:
+            temporal_drift = 0.0
+            failure_type = None
+            skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
+            if issuance_ts_local is not None and claim_issuance_ts is not None:
+                if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
+                    temporal_drift = 1.0
+                    failure_type = "timestamp_skew_exceeded"
+            if expiry_ts_local is not None and claim_expiry_ts is not None:
+                if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
+                    temporal_drift = max(temporal_drift, 1.0)
+                    failure_type = failure_type or "timestamp_skew_exceeded"
+            if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
+                if claim_issuance_ts != issuance_ts_local:
+                    temporal_drift = 0.4
+                    failure_type = "timestamp_skew_within_tolerance"
+            drift_vector = DriftVector(0.0, 0.0, 0.0, temporal_drift)
+            status = "invalid" if failure_type == "timestamp_skew_exceeded" else "valid"
 
     if replay_cache is not None and status in {"valid", "partial", "revoked_pending"}:
         replay_cache.add(binding_key)
