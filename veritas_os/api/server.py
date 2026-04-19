@@ -895,6 +895,14 @@ from veritas_os.api.routes_system import (  # noqa: E402,F401 -- backward compat
     system_halt_status,
     compliance_deployment_readiness,
 )
+from veritas_os.api.routes_wat import router as _wat_router  # noqa: E402
+from veritas_os.api.routes_wat import (  # noqa: E402,F401 -- backward compat
+    issue_shadow_wat,
+    validate_shadow_wat,
+    get_wat_by_id,
+    get_wat_events,
+    revoke_wat,
+)
 
 # Include routers with appropriate auth dependencies.
 # Auth functions are defined above this point, so no circular import occurs.
@@ -905,6 +913,7 @@ app.include_router(_system_public_router)  # health, status, root — no auth
 app.include_router(_decide_router, dependencies=_auth_deps)
 app.include_router(_memory_router, dependencies=_auth_deps)
 app.include_router(_trust_router, dependencies=_auth_deps)
+app.include_router(_wat_router, dependencies=_auth_deps)
 app.include_router(_governance_router, dependencies=_gov_deps)
 app.include_router(_system_router, dependencies=[Depends(require_api_key)])
 app.include_router(_events_router, dependencies=[Depends(require_api_key_header_or_query)])

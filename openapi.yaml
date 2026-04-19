@@ -1117,6 +1117,84 @@ components:
           maxLength: 200
           description: "消去を行うアクター名"
 
+    WatEvent:
+      type: object
+      required: [event_id, ts, lane, wat_id, event_type, actor, status]
+      properties:
+        event_id:
+          type: string
+        ts:
+          type: string
+          format: date-time
+        lane:
+          type: string
+          enum: ["wat_shadow"]
+        wat_id:
+          type: string
+        event_type:
+          type: string
+        actor:
+          type: string
+        status:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+        trustlog_anchor_ref:
+          type: object
+          additionalProperties: true
+
+    WatIssueShadowRequest:
+      type: object
+      required: [psid]
+      properties:
+        wat_id:
+          type: string
+        psid:
+          type: string
+        observable_digest:
+          type: string
+          nullable: true
+        ttl_seconds:
+          type: integer
+          minimum: 1
+          maximum: 86400
+          default: 300
+        metadata:
+          type: object
+          additionalProperties: true
+
+    WatValidateShadowRequest:
+      type: object
+      required: [wat_id]
+      properties:
+        wat_id:
+          type: string
+        outcome_event:
+          type: string
+          default: wat_validated
+        psid:
+          type: string
+          nullable: true
+        observable_digest:
+          type: string
+          nullable: true
+        details:
+          type: object
+          additionalProperties: true
+
+    WatRevocationRequest:
+      type: object
+      properties:
+        confirmed:
+          type: boolean
+          default: true
+        reason:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
 security:
   - ApiKeyAuth: []
 
@@ -1478,6 +1556,112 @@ paths:
       responses:
         "200":
           description: PROV export payload
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/wat/issue-shadow:
+    post:
+      summary: Persist shadow-only WAT issuance event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatIssueShadowRequest'
+      responses:
+        "200":
+          description: WAT shadow issuance recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/wat/validate-shadow:
+    post:
+      summary: Persist shadow-only WAT validation event
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatValidateShadowRequest'
+      responses:
+        "200":
+          description: WAT shadow validation recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/wat/{wat_id}:
+    get:
+      summary: Get latest WAT event and timeline by WAT id
+      parameters:
+        - in: path
+          name: wat_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: WAT event summary
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/wat/events:
+    get:
+      summary: List WAT shadow event lane records
+      parameters:
+        - in: query
+          name: wat_id
+          schema:
+            type: string
+        - in: query
+          name: event_type
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+      responses:
+        "200":
+          description: WAT event list
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /v1/wat/revocation/{wat_id}:
+    post:
+      summary: Persist WAT revocation pending/confirmed shadow events
+      parameters:
+        - in: path
+          name: wat_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatRevocationRequest'
+      responses:
+        "200":
+          description: WAT revocation events recorded
           content:
             application/json:
               schema:

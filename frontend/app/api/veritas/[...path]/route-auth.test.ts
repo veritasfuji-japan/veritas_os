@@ -122,6 +122,18 @@ describe("matchPolicy", () => {
     expect(result).not.toBeNull();
   });
 
+  it("matches WAT read endpoint for viewer", () => {
+    const result = matchPolicy(["v1", "wat", "wat_123"], "GET");
+    expect(result).not.toBeNull();
+    expect(result!.policy.roles).toContain("viewer");
+  });
+
+  it("matches WAT mutate endpoint for operator/admin", () => {
+    const result = matchPolicy(["v1", "wat", "issue-shadow"], "POST");
+    expect(result).not.toBeNull();
+    expect(result!.policy.roles).toContain("operator");
+  });
+
   it("matches system halt for admin only", () => {
     const result = matchPolicy(["v1", "system", "halt"], "POST");
     expect(result).not.toBeNull();
