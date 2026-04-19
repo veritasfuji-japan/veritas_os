@@ -1159,15 +1159,13 @@ class TestRunFujiGate:
         assert "risk" in result
         assert "violations" in result
 
-    def test_handles_fuji_error(self):
-        """FUJI エラー時にフォールバックが動作するか"""
+    def test_handles_fuji_error_fail_closed(self):
+        """FUJI 例外時に fail-closed で拒否を返すか (CLAUDE.md §4.2)"""
         from veritas_os.core.kernel_stages import run_fuji_gate
 
-        # fuji モジュールを直接パッチ
         with patch("veritas_os.core.fuji.evaluate") as mock_evaluate:
-            mock_evaluate.side_effect = Exception("FUJI error")
+            mock_evaluate.side_effect = RuntimeError("FUJI error")
 
-            # エラーでもクラッシュせずに結果を返す
             result = run_fuji_gate(
                 query="test",
                 context={"user_id": "test"},
@@ -1175,9 +1173,35 @@ class TestRunFujiGate:
                 alternatives=[],
             )
 
-            # エラー時は allow で低リスクを返す
-            assert result["status"] == "allow"
-            assert result["risk"] == 0.05
+            # Fail-closed: 例外発生時は必ず deny + risk=1.0
+            assert result["status"] == "deny"
+            assert result["decision_status"] == "deny"
+            assert result["risk"] == 1.0
+            assert result["rejection_reason"] is not None
+            assert "RuntimeError" in result["rejection_reason"]
+            assert "FUJI_INTERNAL_ERROR" in result["violations"]
+            assert result.get("meta", {}).get("fuji_internal_error") is True
+
+    def test_fail_closed_on_generic_exception(self):
+        """任意の Exception サブクラスでも fail-closed になるか"""
+        from veritas_os.core.kernel_stages import run_fuji_gate
+
+        class _CustomErr(Exception):
+            pass
+
+        with patch("veritas_os.core.fuji.evaluate") as mock_evaluate:
+            mock_evaluate.side_effect = _CustomErr("boom")
+
+            result = run_fuji_gate(
+                query="test",
+                context={"user_id": "test"},
+                evidence=[],
+                alternatives=[],
+            )
+
+            assert result["status"] == "deny"
+            assert result["decision_status"] == "deny"
+            assert result["risk"] == 1.0
 
 
 # =============================================================================
@@ -1639,8 +1663,8 @@ class TestRunFujiGateFullExecution:
         mock_evaluate.assert_called_once()
 
     @patch("veritas_os.core.fuji.evaluate")
-    def test_fuji_evaluate_exception_returns_allow(self, mock_evaluate):
-        """fuji.evaluate raises → fallback allow result."""
+    def test_fuji_evaluate_exception_fail_closed(self, mock_evaluate):
+        """fuji.evaluate raises → fail-closed deny (CLAUDE.md §4.2)."""
         from veritas_os.core import kernel_stages
 
         mock_evaluate.side_effect = Exception("fuji crash")
@@ -1652,8 +1676,11 @@ class TestRunFujiGateFullExecution:
             alternatives=[],
         )
 
-        assert result["status"] == "allow"
-        assert result["risk"] == 0.05
+        assert result["status"] == "deny"
+        assert result["decision_status"] == "deny"
+        assert result["risk"] == 1.0
+        assert result["rejection_reason"] is not None
+        assert "FUJI_INTERNAL_ERROR" in result["violations"]
         assert any("fuji_error" in r for r in result["reasons"])
 
 
