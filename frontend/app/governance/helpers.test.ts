@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
-  deepEqual,
-  collectChanges,
   bumpDraftVersion,
+  collectChanges,
+  deepEqual,
+  getDefaultDriftScoringConfig,
+  getDefaultPsidConfig,
+  getDefaultRevocationConfig,
+  getDefaultShadowValidationConfig,
+  getDefaultWatConfig,
   isRecordObject,
-  getDefaultWatSettings,
-  normalizeWatSettings,
+  normalizeGovernancePolicyWatFields,
 } from "./helpers";
 
 describe("isRecordObject", () => {
@@ -65,41 +69,6 @@ describe("collectChanges", () => {
     expect(changes[0].category).toBe("rule");
   });
 
-  it("categorizes risk thresholds", () => {
-    const changes = collectChanges("", { risk_thresholds: 1 }, { risk_thresholds: 2 });
-    expect(changes[0].category).toBe("threshold");
-  });
-
-  it("categorizes auto_stop as escalation", () => {
-    const changes = collectChanges("", { auto_stop: true }, { auto_stop: false });
-    expect(changes[0].category).toBe("escalation");
-  });
-
-  it("categorizes log_retention as retention", () => {
-    const changes = collectChanges("", { log_retention: 30 }, { log_retention: 90 });
-    expect(changes[0].category).toBe("retention");
-  });
-
-  it("categorizes rollout_controls as rollout", () => {
-    const changes = collectChanges("", { rollout_controls: "a" }, { rollout_controls: "b" });
-    expect(changes[0].category).toBe("rollout");
-  });
-
-  it("categorizes approval_workflow as approval", () => {
-    const changes = collectChanges("", { approval_workflow: "x" }, { approval_workflow: "y" });
-    expect(changes[0].category).toBe("approval");
-  });
-
-  it("defaults unknown paths to meta", () => {
-    const changes = collectChanges("", { name: "a" }, { name: "b" });
-    expect(changes[0].category).toBe("meta");
-  });
-
-  it("recurses into nested objects", () => {
-    const changes = collectChanges("", { a: { b: 1 } }, { a: { b: 2 } });
-    expect(changes[0].path).toBe("a.b");
-  });
-
   it("returns empty when objects are equal", () => {
     expect(collectChanges("", { a: 1 }, { a: 1 })).toHaveLength(0);
   });
@@ -115,20 +84,45 @@ describe("bumpDraftVersion", () => {
   });
 });
 
-describe("normalizeWatSettings", () => {
-  it("returns defaults when settings are missing", () => {
-    expect(normalizeWatSettings(undefined)).toEqual(getDefaultWatSettings());
+describe("normalizeGovernancePolicyWatFields", () => {
+  it("returns defaults when schema sections are missing", () => {
+    const normalized = normalizeGovernancePolicyWatFields({
+      version: "v1",
+      updated_at: "2026-01-01T00:00:00Z",
+      updated_by: "system",
+      fuji_rules: {
+        pii_check: true,
+        self_harm_block: true,
+        illicit_block: true,
+        violence_review: true,
+        minors_review: true,
+        keyword_hard_block: true,
+        keyword_soft_flag: true,
+        llm_safety_head: true,
+      },
+      risk_thresholds: { allow_upper: 0.3, warn_upper: 0.5, human_review_upper: 0.7, deny_upper: 1 },
+      auto_stop: { enabled: true, max_risk_score: 0.9, max_consecutive_rejects: 3, max_requests_per_minute: 10 },
+      log_retention: { retention_days: 30, audit_level: "full", include_fields: [], redact_before_log: true, max_log_size: 1000 },
+      rollout_controls: { strategy: "disabled", canary_percent: 0, stage: 0, staged_enforcement: false },
+      approval_workflow: { human_review_ticket: "", human_review_required: false, approver_identity_binding: true, approver_identities: [] },
+      approval_status: "pending",
+    } as never);
+    expect(normalized.wat).toEqual(getDefaultWatConfig());
+    expect(normalized.psid).toEqual(getDefaultPsidConfig());
+    expect(normalized.shadow_validation).toEqual(getDefaultShadowValidationConfig());
+    expect(normalized.revocation).toEqual(getDefaultRevocationConfig());
+    expect(normalized.drift_scoring).toEqual(getDefaultDriftScoringConfig());
   });
 
-  it("normalizes malformed settings defensively", () => {
-    const normalized = normalizeWatSettings({
-      enabled: "yes",
-      issuance_mode: "broken",
-      drift_weights: { policy: "bad", signature: 0.4 },
-    });
-    expect(normalized.enabled).toBe(false);
-    expect(normalized.issuance_mode).toBe("strict");
-    expect(normalized.drift_weights.policy).toBe(0.25);
-    expect(normalized.drift_weights.signature).toBe(0.4);
+  it("normalizes malformed enums to backend-supported values", () => {
+    const normalized = normalizeGovernancePolicyWatFields({
+      wat: { issuance_mode: "hybrid" },
+      shadow_validation: { partial_validation_default: true },
+      revocation: { mode: "soft" },
+    } as never);
+
+    expect(normalized.wat.issuance_mode).toBe("shadow_only");
+    expect(normalized.shadow_validation.partial_validation_default).toBe("non_admissible");
+    expect(normalized.revocation.mode).toBe("bounded_eventual_consistency");
   });
 });

@@ -67,6 +67,33 @@ const MOCK_POLICY = {
     approver_identity_binding: true,
     approver_identities: [],
   },
+
+  wat: {
+    enabled: true,
+    issuance_mode: "shadow_only",
+    require_observable_digest: true,
+    default_ttl_seconds: 300,
+  },
+  psid: {
+    display_length: 12,
+  },
+  shadow_validation: {
+    replay_binding_required: false,
+    partial_validation_default: "non_admissible",
+    warning_only_until: "",
+    timestamp_skew_tolerance_seconds: 5,
+  },
+  revocation: {
+    mode: "bounded_eventual_consistency",
+  },
+  drift_scoring: {
+    policy_weight: 0.4,
+    signature_weight: 0.3,
+    observable_weight: 0.2,
+    temporal_weight: 0.1,
+    healthy_threshold: 0.2,
+    critical_threshold: 0.5,
+  },
 };
 
 describe("useGovernanceState", () => {
@@ -273,6 +300,12 @@ describe("useGovernanceState", () => {
       "/api/veritas/v1/governance/policy",
       expect.objectContaining({ method: "PUT" }),
     );
+    const putRequest = mockFetch.mock.calls.at(-1)?.[1] as { body?: string };
+    const payload = JSON.parse(putRequest.body ?? "{}");
+    expect(payload.wat.issuance_mode).toBe("shadow_only");
+    expect(payload.shadow_validation.partial_validation_default).toBe("non_admissible");
+    expect(payload.revocation.mode).toBe("bounded_eventual_consistency");
+    expect(payload).not.toHaveProperty("wat_settings");
     expect(result.current.success).toContain("applied");
     expect(result.current.savedPolicy!.version).toBe("v2.0");
   });

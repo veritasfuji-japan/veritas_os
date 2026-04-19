@@ -1,4 +1,12 @@
-import type { DiffChange, WatSettingsUI } from "./governance-types";
+import type {
+  DiffChange,
+  DriftScoringConfigUI,
+  GovernancePolicyUI,
+  PsidConfigUI,
+  RevocationConfigUI,
+  ShadowValidationConfigUI,
+  WatConfigUI,
+} from "./governance-types";
 
 /**
  * Validates that a runtime value is a plain object record.
@@ -63,75 +71,108 @@ function toNumberOrFallback(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-export function getDefaultWatSettings(): WatSettingsUI {
+export function getDefaultWatConfig(): WatConfigUI {
   return {
     enabled: false,
-    issuance_mode: "strict",
+    issuance_mode: "shadow_only",
     require_observable_digest: true,
     default_ttl_seconds: 300,
-    psid_display_length: 8,
-    replay_binding_required: true,
-    partial_validation_default: false,
+  };
+}
+
+export function getDefaultPsidConfig(): PsidConfigUI {
+  return { display_length: 12 };
+}
+
+export function getDefaultShadowValidationConfig(): ShadowValidationConfigUI {
+  return {
+    replay_binding_required: false,
+    partial_validation_default: "non_admissible",
     warning_only_until: "",
-    timestamp_skew_tolerance_seconds: 30,
-    revocation_mode: "soft",
-    drift_weights: {
-      policy: 0.25,
-      signature: 0.25,
-      observable: 0.25,
-      temporal: 0.25,
-    },
+    timestamp_skew_tolerance_seconds: 5,
+  };
+}
+
+export function getDefaultRevocationConfig(): RevocationConfigUI {
+  return { mode: "bounded_eventual_consistency" };
+}
+
+export function getDefaultDriftScoringConfig(): DriftScoringConfigUI {
+  return {
+    policy_weight: 0.4,
+    signature_weight: 0.3,
+    observable_weight: 0.2,
+    temporal_weight: 0.1,
+    healthy_threshold: 0.2,
+    critical_threshold: 0.5,
   };
 }
 
 /**
- * Normalizes partially-populated WAT settings from backend payloads.
- * Unknown or malformed values are replaced with safe defaults.
+ * Normalizes governance payload sections to backend schema-aligned WAT controls.
+ *
+ * This keeps frontend state schema-first and removes legacy `wat_settings` drift.
  */
-export function normalizeWatSettings(value: unknown): WatSettingsUI {
-  const defaults = getDefaultWatSettings();
-  if (!isRecordObject(value)) {
-    return defaults;
-  }
+export function normalizeGovernancePolicyWatFields(policy: GovernancePolicyUI): GovernancePolicyUI {
+  const watDefaults = getDefaultWatConfig();
+  const psidDefaults = getDefaultPsidConfig();
+  const shadowDefaults = getDefaultShadowValidationConfig();
+  const revocationDefaults = getDefaultRevocationConfig();
+  const driftDefaults = getDefaultDriftScoringConfig();
 
-  const driftWeights = isRecordObject(value.drift_weights) ? value.drift_weights : {};
-  const issuanceMode = value.issuance_mode;
-  const revocationMode = value.revocation_mode;
+  const watValue = isRecordObject(policy.wat) ? policy.wat : {};
+  const psidValue = isRecordObject(policy.psid) ? policy.psid : {};
+  const shadowValue = isRecordObject(policy.shadow_validation) ? policy.shadow_validation : {};
+  const revocationValue = isRecordObject(policy.revocation) ? policy.revocation : {};
+  const driftValue = isRecordObject(policy.drift_scoring) ? policy.drift_scoring : {};
 
   return {
-    enabled: typeof value.enabled === "boolean" ? value.enabled : defaults.enabled,
-    issuance_mode: issuanceMode === "strict" || issuanceMode === "shadow" || issuanceMode === "hybrid"
-      ? issuanceMode
-      : defaults.issuance_mode,
-    require_observable_digest: typeof value.require_observable_digest === "boolean"
-      ? value.require_observable_digest
-      : defaults.require_observable_digest,
-    default_ttl_seconds: Math.max(1, Math.floor(toNumberOrFallback(value.default_ttl_seconds, defaults.default_ttl_seconds))),
-    psid_display_length: Math.max(4, Math.floor(toNumberOrFallback(value.psid_display_length, defaults.psid_display_length))),
-    replay_binding_required: typeof value.replay_binding_required === "boolean"
-      ? value.replay_binding_required
-      : defaults.replay_binding_required,
-    partial_validation_default: typeof value.partial_validation_default === "boolean"
-      ? value.partial_validation_default
-      : defaults.partial_validation_default,
-    warning_only_until: typeof value.warning_only_until === "string"
-      ? value.warning_only_until
-      : defaults.warning_only_until,
-    timestamp_skew_tolerance_seconds: Math.max(
-      0,
-      Math.floor(
-        toNumberOrFallback(
-          value.timestamp_skew_tolerance_seconds,
-          defaults.timestamp_skew_tolerance_seconds,
+    ...policy,
+    wat: {
+      enabled: typeof watValue.enabled === "boolean" ? watValue.enabled : watDefaults.enabled,
+      issuance_mode: watValue.issuance_mode === "shadow_only" || watValue.issuance_mode === "disabled"
+        ? watValue.issuance_mode
+        : watDefaults.issuance_mode,
+      require_observable_digest: typeof watValue.require_observable_digest === "boolean"
+        ? watValue.require_observable_digest
+        : watDefaults.require_observable_digest,
+      default_ttl_seconds: Math.max(1, Math.floor(toNumberOrFallback(watValue.default_ttl_seconds, watDefaults.default_ttl_seconds))),
+    },
+    psid: {
+      display_length: Math.max(4, Math.floor(toNumberOrFallback(psidValue.display_length, psidDefaults.display_length))),
+    },
+    shadow_validation: {
+      replay_binding_required: typeof shadowValue.replay_binding_required === "boolean"
+        ? shadowValue.replay_binding_required
+        : shadowDefaults.replay_binding_required,
+      partial_validation_default: shadowValue.partial_validation_default === "non_admissible"
+        ? shadowValue.partial_validation_default
+        : shadowDefaults.partial_validation_default,
+      warning_only_until: typeof shadowValue.warning_only_until === "string"
+        ? shadowValue.warning_only_until
+        : shadowDefaults.warning_only_until,
+      timestamp_skew_tolerance_seconds: Math.max(
+        0,
+        Math.floor(
+          toNumberOrFallback(
+            shadowValue.timestamp_skew_tolerance_seconds,
+            shadowDefaults.timestamp_skew_tolerance_seconds,
+          ),
         ),
       ),
-    ),
-    revocation_mode: revocationMode === "soft" || revocationMode === "hard" ? revocationMode : defaults.revocation_mode,
-    drift_weights: {
-      policy: toNumberOrFallback(driftWeights.policy, defaults.drift_weights.policy),
-      signature: toNumberOrFallback(driftWeights.signature, defaults.drift_weights.signature),
-      observable: toNumberOrFallback(driftWeights.observable, defaults.drift_weights.observable),
-      temporal: toNumberOrFallback(driftWeights.temporal, defaults.drift_weights.temporal),
+    },
+    revocation: {
+      mode: revocationValue.mode === "bounded_eventual_consistency"
+        ? revocationValue.mode
+        : revocationDefaults.mode,
+    },
+    drift_scoring: {
+      policy_weight: toNumberOrFallback(driftValue.policy_weight, driftDefaults.policy_weight),
+      signature_weight: toNumberOrFallback(driftValue.signature_weight, driftDefaults.signature_weight),
+      observable_weight: toNumberOrFallback(driftValue.observable_weight, driftDefaults.observable_weight),
+      temporal_weight: toNumberOrFallback(driftValue.temporal_weight, driftDefaults.temporal_weight),
+      healthy_threshold: toNumberOrFallback(driftValue.healthy_threshold, driftDefaults.healthy_threshold),
+      critical_threshold: toNumberOrFallback(driftValue.critical_threshold, driftDefaults.critical_threshold),
     },
   };
 }

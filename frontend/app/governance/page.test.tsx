@@ -51,23 +51,31 @@ const MOCK_POLICY = {
       approver_identity_binding: true,
       approver_identities: [],
     },
-    wat_settings: {
+    wat: {
       enabled: true,
-      issuance_mode: "hybrid",
+      issuance_mode: "shadow_only",
       require_observable_digest: true,
       default_ttl_seconds: 300,
-      psid_display_length: 8,
+    },
+    psid: {
+      display_length: 12,
+    },
+    shadow_validation: {
       replay_binding_required: true,
-      partial_validation_default: false,
+      partial_validation_default: "non_admissible",
       warning_only_until: "2026-12-31T00:00:00Z",
       timestamp_skew_tolerance_seconds: 30,
-      revocation_mode: "soft",
-      drift_weights: {
-        policy: 0.2,
-        signature: 0.3,
-        observable: 0.3,
-        temporal: 0.2,
-      },
+    },
+    revocation: {
+      mode: "bounded_eventual_consistency",
+    },
+    drift_scoring: {
+      policy_weight: 0.4,
+      signature_weight: 0.3,
+      observable_weight: 0.2,
+      temporal_weight: 0.1,
+      healthy_threshold: 0.2,
+      critical_threshold: 0.5,
     },
     updated_at: "2026-02-12T00:00:00+00:00",
     updated_by: "system",
@@ -124,6 +132,24 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByText("Current vs Draft Diff")).toBeInTheDocument();
       expect(screen.getByText("Apply Flow")).toBeInTheDocument();
       expect(screen.getByText("Change History")).toBeInTheDocument();
+    });
+  });
+
+
+
+  it("renders backend-aligned WAT controls", async () => {
+    mockPolicyFetch();
+    render(<GovernanceControlPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "ポリシーを読み込む" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("wat.enabled")).toBeInTheDocument();
+      expect(screen.getByLabelText("wat.issuance_mode")).toBeInTheDocument();
+      expect(screen.getByText("psid.display_length")).toBeInTheDocument();
+      expect(screen.getByText("shadow_validation.replay_binding_required")).toBeInTheDocument();
+      expect(screen.getByLabelText("revocation.mode")).toBeInTheDocument();
+      expect(screen.queryByText("wat_settings")).not.toBeInTheDocument();
     });
   });
 
@@ -211,7 +237,7 @@ describe("GovernanceControlPage", () => {
 
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
     expect(screen.getByRole("switch", { name: "PII Check" })).toBeDisabled();
-    expect(screen.getByLabelText("issuance_mode")).toBeDisabled();
+    expect(screen.getByLabelText("wat.issuance_mode")).toBeDisabled();
     expect(screen.getByText("Read-only role: WAT settings are visible but cannot be mutated.")).toBeInTheDocument();
   });
 

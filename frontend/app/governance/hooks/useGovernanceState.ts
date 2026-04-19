@@ -13,7 +13,7 @@ import type {
   TrustLogEntry,
   UserRole,
 } from "../governance-types";
-import { bumpDraftVersion, collectChanges, deepEqual, isRecordObject, normalizeWatSettings } from "../helpers";
+import { bumpDraftVersion, collectChanges, deepEqual, isRecordObject, normalizeGovernancePolicyWatFields } from "../helpers";
 
 type PendingConfirm = { description: string; onConfirm: () => void };
 
@@ -86,16 +86,13 @@ export function useGovernanceState() {
         setError(t("レスポンスの検証に失敗しました。フォーマット不整合の可能性があります。", "Response validation failed. Possible format mismatch."));
         return;
       }
-      const normalized = {
+      const normalized = normalizeGovernancePolicyWatFields({
         ...validation.data.policy,
-        wat_settings: normalizeWatSettings(
-          (validation.data.policy as { wat_settings?: unknown }).wat_settings,
-        ),
         effective_at: validation.data.policy.updated_at,
         last_applied: validation.data.policy.updated_at,
         approval_status: "approved" as ApprovalStatus,
         draft_version: bumpDraftVersion(validation.data.policy.version),
-      } as GovernancePolicyUI;
+      } as GovernancePolicyUI);
       setSavedPolicy(normalized);
       setDraft(structuredClone(normalized));
       appendHistory("load", `version ${normalized.version} loaded`);
@@ -152,16 +149,13 @@ export function useGovernanceState() {
               setError(t("適用レスポンスの検証に失敗しました。TrustLog を確認してください。", "Apply response validation failed. Check TrustLog."));
               return;
             }
-            const nextPolicy = {
+            const nextPolicy = normalizeGovernancePolicyWatFields({
               ...validation.data.policy,
-              wat_settings: normalizeWatSettings(
-                (validation.data.policy as { wat_settings?: unknown }).wat_settings,
-              ),
               effective_at: new Date().toISOString(),
               last_applied: new Date().toISOString(),
               approval_status: "approved" as ApprovalStatus,
               draft_version: bumpDraftVersion(validation.data.policy.version),
-            } as GovernancePolicyUI;
+            } as GovernancePolicyUI);
             setSavedPolicy(nextPolicy);
             setDraft(structuredClone(nextPolicy));
             appendHistory("apply", `version ${nextPolicy.version} applied`);
