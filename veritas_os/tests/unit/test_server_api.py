@@ -21,6 +21,7 @@ import os
 import time
 import hmac
 import hashlib
+from pathlib import Path
 from types import SimpleNamespace
 
 # ★ テスト用APIキーを設定（認証付きエンドポイントのテスト用）
@@ -36,10 +37,12 @@ import pytest
 import veritas_os.api.server as server
 import veritas_os.api.routes_decide as routes_decide
 from veritas_os.api.schemas import (
+    DecideRequest,
     MemoryGetRequest,
     MemoryPutRequest,
     MemorySearchRequest,
 )
+from veritas_os.security.signing import build_trustlog_signer
 
 
 client = TestClient(server.app)
@@ -1104,6 +1107,55 @@ def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypat
     assert payload.get("meta", {}).get("wat_shadow", {}).get("validation_status") == "invalid"
 
 
+def test_decide_wat_shadow_uses_sign_wat(monkeypatch):
+    """Shadow lane must build/sign WAT instead of using placeholder signatures."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-sign",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
+    calls = {"sign_wat": 0}
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    original_sign_wat = routes_decide.sign_wat
+
+    def _tracked_sign_wat(claims, signer):
+        calls["sign_wat"] += 1
+        return original_sign_wat(claims, signer)
+
+    monkeypatch.setattr(routes_decide, "sign_wat", _tracked_sign_wat)
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert calls["sign_wat"] == 1
+    assert response.json()["decision"] == "allow"
+
+
 def test_decide_wat_shadow_pointer_missing_digest_alive(monkeypatch):
     """Missing pointer refs should still produce digest and validation metadata."""
 
@@ -1249,6 +1301,124 @@ def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monk
     assert validate_config.get("timestamp_skew_tolerance_seconds") == 5
     assert validate_config.get("warning_only_until") is None
     assert validate_config.get("replay_binding_required") is False
+    assert "signature_verifier" not in validate_config
+
+
+def test_run_wat_shadow_observer_tampered_signature_invalid(monkeypatch, tmp_path):
+    """Tampered signed WAT must fail local verification as signature_invalid."""
+
+    class DummyServer:
+        def __init__(self):
+            self._cache = set()
+            self.events = []
+
+        def get_wat_shadow_replay_cache(self):
+            return self._cache
+
+        def _publish_event(self, event_type, payload):
+            self.events.append((event_type, payload))
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
+
+    signer = build_trustlog_signer(
+        private_key_path=Path(tmp_path) / "keys" / "private.key",
+        public_key_path=Path(tmp_path) / "keys" / "public.key",
+        ensure_local_keys=True,
+        backend="file",
+    )
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    monkeypatch.setattr(routes_decide, "_resolve_wat_shadow_signer", lambda _cfg: signer)
+    monkeypatch.setattr(routes_decide, "persist_wat_issuance_event", lambda **_kwargs: {"event_id": "issue-1"})
+    monkeypatch.setattr(routes_decide, "persist_wat_validation_event", lambda **_kwargs: {"event_id": "validate-1"})
+    monkeypatch.setattr(routes_decide, "persist_wat_replay_event", lambda **_kwargs: {"event_id": "replay-1"})
+
+    original_sign_wat = routes_decide.sign_wat
+
+    def _tampered_sign_wat(claims, active_signer):
+        signed = original_sign_wat(claims, active_signer)
+        signed["claims"]["nonce"] = "tampered-nonce"
+        return signed
+
+    monkeypatch.setattr(routes_decide, "sign_wat", _tampered_sign_wat)
+
+    summary = routes_decide._run_wat_shadow_observer(
+        srv=DummyServer(),
+        req=DecideRequest(query="tamper"),
+        coerced={
+            "request_id": "rid-tamper",
+            "query": "tamper",
+            "decision": "allow",
+            "business_decision": "APPROVE",
+        },
+    )
+
+    assert summary is not None
+    assert summary["validation_status"] == "invalid"
+    assert summary["admissibility_state"] == "non_admissible"
+
+
+def test_run_wat_shadow_observer_valid_signature(monkeypatch, tmp_path):
+    """Valid signed WAT should pass strict local signature verification."""
+
+    class DummyServer:
+        def __init__(self):
+            self._cache = set()
+            self.events = []
+
+        def get_wat_shadow_replay_cache(self):
+            return self._cache
+
+        def _publish_event(self, event_type, payload):
+            self.events.append((event_type, payload))
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
+
+    signer = build_trustlog_signer(
+        private_key_path=Path(tmp_path) / "keys" / "private.key",
+        public_key_path=Path(tmp_path) / "keys" / "public.key",
+        ensure_local_keys=True,
+        backend="file",
+    )
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    monkeypatch.setattr(routes_decide, "_resolve_wat_shadow_signer", lambda _cfg: signer)
+    monkeypatch.setattr(routes_decide, "persist_wat_issuance_event", lambda **_kwargs: {"event_id": "issue-1"})
+    monkeypatch.setattr(routes_decide, "persist_wat_validation_event", lambda **_kwargs: {"event_id": "validate-1"})
+    monkeypatch.setattr(routes_decide, "persist_wat_replay_event", lambda **_kwargs: {"event_id": "replay-1"})
+
+    summary = routes_decide._run_wat_shadow_observer(
+        srv=DummyServer(),
+        req=DecideRequest(query="valid"),
+        coerced={
+            "request_id": "rid-valid",
+            "query": "valid",
+            "decision": "allow",
+            "business_decision": "APPROVE",
+        },
+    )
+
+    assert summary is not None
+    assert summary["validation_status"] == "valid"
+    assert summary["admissibility_state"] == "admissible"
 
 
 def test_fuji_validate_uses_validate_action(monkeypatch):
