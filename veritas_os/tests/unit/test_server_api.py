@@ -1325,6 +1325,36 @@ def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monk
     assert "signature_verifier" not in validate_config
 
 
+def test_resolve_shadow_revocation_state_defaults_to_pending_when_configured(monkeypatch):
+    """No revocation telemetry should use conservative pending fallback."""
+    monkeypatch.setattr(
+        routes_decide,
+        "derive_latest_revocation_state",
+        lambda _wat_id: {"status": "active", "source": "wat_events"},
+    )
+    state = routes_decide._resolve_shadow_revocation_state(
+        wat_id="wat-missing",
+        degrade_on_pending=True,
+    )
+    assert state["status"] == "revoked_pending"
+    assert state["source"] == "shadow_default"
+
+
+def test_resolve_shadow_revocation_state_keeps_active_when_pending_disabled(monkeypatch):
+    """Conservative fallback must not trigger when pending degradation is disabled."""
+    monkeypatch.setattr(
+        routes_decide,
+        "derive_latest_revocation_state",
+        lambda _wat_id: {"status": "active", "source": "wat_events"},
+    )
+    state = routes_decide._resolve_shadow_revocation_state(
+        wat_id="wat-missing",
+        degrade_on_pending=False,
+    )
+    assert state["status"] == "active"
+    assert state["source"] == "wat_events"
+
+
 def test_decide_wat_shadow_passes_policy_drift_scoring_to_verifier(monkeypatch):
     """Governance drift_scoring values must be forwarded to local verifier config."""
 
