@@ -223,6 +223,43 @@ def get_wat_event(wat_id: str, *, path: Optional[Path] = None) -> Optional[Dict[
     return None
 
 
+def derive_latest_revocation_state(
+    wat_id: str,
+    *,
+    path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Derive structured local revocation state from latest WAT lane event.
+
+    Returns a mapping compatible with ``validate_local(revocation_state=...)``:
+    ``status`` is always one of ``active``, ``revoked_pending``,
+    ``revoked_confirmed``.
+    """
+    target = str(wat_id or "").strip()
+    if not target:
+        return {"status": "active", "source": "wat_events"}
+
+    timeline = list_wat_events(wat_id=target, limit=500, path=path)
+    for event in timeline:
+        event_type = str(event.get("event_type", "")).strip()
+        if event_type == "wat_revoked_confirmed":
+            return {
+                "status": "revoked_confirmed",
+                "source": "wat_events",
+                "event_type": event_type,
+                "event_id": event.get("event_id"),
+                "ts": event.get("ts"),
+            }
+        if event_type == "wat_revocation_pending":
+            return {
+                "status": "revoked_pending",
+                "source": "wat_events",
+                "event_type": event_type,
+                "event_id": event.get("event_id"),
+                "ts": event.get("ts"),
+            }
+    return {"status": "active", "source": "wat_events"}
+
+
 def list_wat_events(
     *,
     wat_id: Optional[str] = None,

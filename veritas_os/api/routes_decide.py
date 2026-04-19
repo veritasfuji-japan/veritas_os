@@ -24,6 +24,7 @@ from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.pipeline_orchestrator import resolve_dynamic_steps
 from veritas_os.audit.wat_events import (
+    derive_latest_revocation_state,
     persist_wat_issuance_event,
     persist_wat_replay_event,
     persist_wat_validation_event,
@@ -270,6 +271,13 @@ def _run_wat_shadow_observer(
         psid_display_length=int(psid_cfg.get("display_length", 12)),
     )
     signed_wat = sign_wat(claims, signer)
+    event_lane_revocation = derive_latest_revocation_state(wat_id)
+    degrade_on_pending = bool(revocation_cfg.get("degrade_on_pending", True))
+    effective_revocation_status = str(event_lane_revocation.get("status", "active"))
+    revocation_state = {
+        **event_lane_revocation,
+        "status": effective_revocation_status,
+    }
 
     verifier_result = validate_local(
         signed_wat=signed_wat,
@@ -281,10 +289,11 @@ def _run_wat_shadow_observer(
         expiry_ts_local=expiry_ts,
         execution_nonce=request_id or "unknown-request",
         session_id=request_id or "unknown-session",
-        revocation_state="revoked_pending" if bool(revocation_cfg.get("degrade_on_pending", True)) else "active",
+        revocation_state=revocation_state,
         config={
             "observer_only_mode": True,
             "allow_partial_validation": False,
+            "degrade_on_pending": degrade_on_pending,
             "timestamp_skew_tolerance_seconds": int(
                 shadow_cfg.get("timestamp_skew_tolerance_seconds", 5)
             ),
@@ -344,7 +353,7 @@ def _run_wat_shadow_observer(
         "admissibility_state": verifier_result.get("admissibility_state"),
         "drift_vector": drift_vector,
         "replay_status": replay_status,
-        "revocation_status": "revoked_pending" if bool(revocation_cfg.get("degrade_on_pending", True)) else "active",
+        "revocation_status": effective_revocation_status,
         "integrity_summary": integrity_summary,
         "issue_event_id": issue_event.get("event_id"),
         "validation_event_id": persisted_validation.get("event_id"),

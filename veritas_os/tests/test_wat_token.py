@@ -9,6 +9,7 @@ from veritas_os.security.wat_token import (
     WAT_VERSION_V1,
     build_wat_claims,
     canonicalize_wat_claims,
+    compute_observable_digests,
     compute_observable_digest,
     make_psid_display,
     sign_wat,
@@ -110,3 +111,35 @@ def test_observable_digest_is_deterministic() -> None:
     first = compute_observable_digest(observable_refs)
     second = compute_observable_digest(observable_refs)
     assert first == second
+
+
+def test_build_wat_claims_includes_observable_digest_list() -> None:
+    observable_refs = [{"obs": "A"}, {"obs": "B"}]
+    claims = build_wat_claims(
+        version=WAT_VERSION_V1,
+        psid_full="psid-full-003",
+        action_payload={"action": "allow"},
+        observable_refs=observable_refs,
+        issuance_ts=1_712_000_000,
+        expiry_ts=1_712_000_600,
+        session_id="s-3",
+        nonce="n-3",
+        signer_metadata={"source": "unit-test"},
+    )
+    assert claims["observable_digest_list"] == compute_observable_digests(observable_refs)
+
+
+def test_canonicalization_contains_observable_digest_list_field() -> None:
+    claims = build_wat_claims(
+        version=WAT_VERSION_V1,
+        psid_full="psid-full-004",
+        action_payload={"action": "allow"},
+        observable_refs=[{"obs": "A"}],
+        issuance_ts=1_712_000_000,
+        expiry_ts=1_712_000_600,
+        session_id="s-4",
+        nonce="n-4",
+        signer_metadata={"source": "unit-test"},
+    )
+    canonical = canonicalize_wat_claims(claims).decode("utf-8")
+    assert '"observable_digest_list"' in canonical
