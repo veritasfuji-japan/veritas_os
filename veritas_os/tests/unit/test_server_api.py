@@ -1312,7 +1312,84 @@ def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monk
     assert validate_config.get("timestamp_skew_tolerance_seconds") == 5
     assert validate_config.get("warning_only_until") is None
     assert validate_config.get("replay_binding_required") is False
+    assert validate_config.get("drift_weights") == {
+        "policy": 0.4,
+        "signature": 0.3,
+        "observable": 0.2,
+        "temporal": 0.1,
+    }
+    assert validate_config.get("drift_thresholds") == {
+        "healthy": 0.2,
+        "critical": 0.5,
+    }
     assert "signature_verifier" not in validate_config
+
+
+def test_decide_wat_shadow_passes_policy_drift_scoring_to_verifier(monkeypatch):
+    """Governance drift_scoring values must be forwarded to local verifier config."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-drift",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": True},
+        "drift_scoring": {
+            "policy_weight": 0.5,
+            "signature_weight": 0.2,
+            "observable_weight": 0.2,
+            "temporal_weight": 0.1,
+            "healthy_threshold": 0.1,
+            "critical_threshold": 0.3,
+        },
+    }
+    captured_validate_kwargs = {}
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: captured_validate_kwargs.update(kwargs) or {
+            "validation_status": "valid",
+            "admissibility_state": "admissible",
+            "failure_type": "",
+            "drift_vector": {},
+        },
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    validate_config = captured_validate_kwargs.get("config", {})
+    assert validate_config.get("drift_weights") == {
+        "policy": 0.5,
+        "signature": 0.2,
+        "observable": 0.2,
+        "temporal": 0.1,
+    }
+    assert validate_config.get("drift_thresholds") == {
+        "healthy": 0.1,
+        "critical": 0.3,
+    }
 
 
 def test_run_wat_shadow_observer_tampered_signature_invalid(monkeypatch, tmp_path):

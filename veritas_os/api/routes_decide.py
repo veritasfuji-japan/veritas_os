@@ -141,6 +141,26 @@ def _policy_section(policy: Dict[str, Any], key: str) -> Dict[str, Any]:
     return {}
 
 
+def _build_drift_runtime_config(drift_scoring_cfg: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+    """Build verifier drift runtime config from governance policy values.
+
+    The local verifier consumes normalized axis names:
+    ``policy``, ``signature``, ``observable``, and ``temporal``.
+    """
+    return {
+        "drift_weights": {
+            "policy": float(drift_scoring_cfg.get("policy_weight", 0.4)),
+            "signature": float(drift_scoring_cfg.get("signature_weight", 0.3)),
+            "observable": float(drift_scoring_cfg.get("observable_weight", 0.2)),
+            "temporal": float(drift_scoring_cfg.get("temporal_weight", 0.1)),
+        },
+        "drift_thresholds": {
+            "healthy": float(drift_scoring_cfg.get("healthy_threshold", 0.2)),
+            "critical": float(drift_scoring_cfg.get("critical_threshold", 0.5)),
+        },
+    }
+
+
 
 
 def _build_wat_signer_metadata(signer: Signer) -> Dict[str, Any]:
@@ -195,7 +215,8 @@ def _run_wat_shadow_observer(
     psid_cfg = _policy_section(policy, "psid")
     shadow_cfg = _policy_section(policy, "shadow_validation")
     revocation_cfg = _policy_section(policy, "revocation")
-    _policy_section(policy, "drift_scoring")
+    drift_scoring_cfg = _policy_section(policy, "drift_scoring")
+    drift_runtime_cfg = _build_drift_runtime_config(drift_scoring_cfg)
     request_id = str(coerced.get("request_id") or "")
     query = str(getattr(req, "query", "") or coerced.get("query") or "")
     candidate_action = _resolve_candidate_action(coerced)
@@ -271,6 +292,8 @@ def _run_wat_shadow_observer(
                 shadow_cfg.get("warning_only_until")
             ),
             "replay_binding_required": bool(shadow_cfg.get("replay_binding_required", False)),
+            "drift_weights": drift_runtime_cfg["drift_weights"],
+            "drift_thresholds": drift_runtime_cfg["drift_thresholds"],
         },
         signer=signer,
         replay_cache=replay_cache,

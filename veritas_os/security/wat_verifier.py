@@ -18,8 +18,10 @@ from veritas_os.security.wat_token import verify_wat_signature
 ValidationStatus = str
 AdmissibilityState = str
 
-_HEALTHY_THRESHOLD = 0.2
-_WARNING_THRESHOLD = 0.5
+_DEFAULT_THRESHOLDS: dict[str, float] = {
+    "healthy": 0.2,
+    "critical": 0.5,
+}
 
 _DEFAULT_WEIGHTS: dict[str, float] = {
     "policy": 0.4,
@@ -67,11 +69,26 @@ class VerifierResult:
 def score_drift(
     drift_vector: DriftVector,
     weights: Mapping[str, float] | None = None,
+    thresholds: Mapping[str, float] | None = None,
 ) -> DriftScore:
-    """Compute weighted drift score and severity classification."""
+    """Compute weighted drift score and severity classification.
+
+    Classification bands:
+    - ``healthy``: score < healthy threshold.
+    - ``warning``: healthy threshold <= score < critical threshold.
+    - ``critical``: score >= critical threshold.
+    """
     applied_weights = dict(_DEFAULT_WEIGHTS)
     if weights:
         applied_weights.update(weights)
+    applied_thresholds = dict(_DEFAULT_THRESHOLDS)
+    if thresholds:
+        applied_thresholds.update(thresholds)
+
+    healthy_threshold = float(applied_thresholds["healthy"])
+    critical_threshold = float(applied_thresholds["critical"])
+    if critical_threshold < healthy_threshold:
+        healthy_threshold, critical_threshold = critical_threshold, healthy_threshold
 
     score = (
         drift_vector.policy_drift * applied_weights["policy"]
@@ -80,9 +97,9 @@ def score_drift(
         + drift_vector.temporal_drift * applied_weights["temporal"]
     )
 
-    if score < _HEALTHY_THRESHOLD:
+    if score < healthy_threshold:
         classification = "healthy"
-    elif score < _WARNING_THRESHOLD:
+    elif score < critical_threshold:
         classification = "warning"
     else:
         classification = "critical"
@@ -314,7 +331,11 @@ def validate_local(
     if replay_cache is not None and status in {"valid", "partial", "revoked_pending"}:
         replay_cache.add(binding_key)
 
-    drift_score = score_drift(drift_vector, cfg.get("drift_weights"))
+    drift_score = score_drift(
+        drift_vector,
+        cfg.get("drift_weights"),
+        cfg.get("drift_thresholds"),
+    )
     admissibility_state = resolve_admissibility_state(
         validation_status=status,
         drift_score=drift_score,
