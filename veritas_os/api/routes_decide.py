@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import time
+from pathlib import Path
 from typing import Any, Dict
 from uuid import uuid4
 
@@ -28,12 +29,17 @@ from veritas_os.audit.wat_events import (
     persist_wat_validation_event,
 )
 from veritas_os.security.wat_token import (
+    WAT_VERSION_V1,
+    build_wat_claims,
     compute_action_digest,
     compute_observable_digests,
     compute_observable_digest,
     make_psid_display,
+    sign_wat,
 )
 from veritas_os.security.wat_verifier import validate_local
+from veritas_os.security.signing import Signer, build_trustlog_signer
+from veritas_os.logging.paths import LOG_DIR
 from veritas_os.api.utils import (
     _classify_decide_failure,
     _coerce_decide_payload,
@@ -135,6 +141,32 @@ def _policy_section(policy: Dict[str, Any], key: str) -> Dict[str, Any]:
     return {}
 
 
+
+
+def _build_wat_signer_metadata(signer: Signer) -> Dict[str, Any]:
+    """Build normalized signer metadata embedded into WAT claims."""
+    return {
+        "signer_type": signer.signer_type,
+        "signer_key_id": signer.signer_key_id(),
+        "signer_key_version": signer.signer_key_version(),
+        "signature_algorithm": signer.signature_algorithm(),
+        "public_key_fingerprint": signer.public_key_fingerprint(),
+    }
+
+
+def _resolve_wat_shadow_signer(wat_cfg: Dict[str, Any]) -> Signer:
+    """Resolve shadow-lane WAT signer using existing signing abstraction."""
+    keys_dir = Path(LOG_DIR) / "keys"
+    backend_raw = str(wat_cfg.get("signer_backend", "existing_signer")).strip().lower()
+    backend = None if backend_raw in {"", "existing_signer"} else backend_raw
+    ensure_local_keys = backend in {None, "file", "file_ed25519"}
+    return build_trustlog_signer(
+        private_key_path=keys_dir / "trustlog_ed25519_private.key",
+        public_key_path=keys_dir / "trustlog_ed25519_public.key",
+        ensure_local_keys=ensure_local_keys,
+        backend=backend,
+    )
+
 def _run_wat_shadow_observer(
     *,
     srv: Any,
@@ -202,19 +234,21 @@ def _run_wat_shadow_observer(
     )
 
     replay_cache = srv.get_wat_shadow_replay_cache()
-    signed_wat = {
-        "claims": {
-            "wat_id": wat_id,
-            "psid_full": psid_full,
-            "action_digest": action_digest,
-            "observable_digest": aggregate_observable_digest,
-            "issuance_ts": now_ts,
-            "expiry_ts": expiry_ts,
-            "nonce": request_id or "unknown-request",
-            "session_id": request_id or "unknown-session",
-        },
-        "signature": "observer-only-shadow",
-    }
+    signer = _resolve_wat_shadow_signer(wat_cfg)
+    claims = build_wat_claims(
+        version=WAT_VERSION_V1,
+        wat_id=wat_id,
+        psid_full=psid_full,
+        action_payload=candidate_action,
+        observable_refs=observables,
+        issuance_ts=now_ts,
+        expiry_ts=expiry_ts,
+        nonce=request_id or "unknown-request",
+        session_id=request_id or "unknown-session",
+        signer_metadata=_build_wat_signer_metadata(signer),
+        psid_display_length=int(psid_cfg.get("display_length", 12)),
+    )
+    signed_wat = sign_wat(claims, signer)
 
     verifier_result = validate_local(
         signed_wat=signed_wat,
@@ -237,8 +271,8 @@ def _run_wat_shadow_observer(
                 shadow_cfg.get("warning_only_until")
             ),
             "replay_binding_required": bool(shadow_cfg.get("replay_binding_required", False)),
-            "signature_verifier": lambda _claims, _signature: True,
         },
+        signer=signer,
         replay_cache=replay_cache,
     )
 
