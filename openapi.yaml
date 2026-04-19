@@ -464,6 +464,172 @@ components:
           minimum: 100
           maximum: 1000000
 
+    RolloutControls:
+      type: object
+      description: "段階的適用コントロール"
+      properties:
+        strategy:
+          type: string
+          default: "disabled"
+          enum: ["disabled", "canary", "staged", "full"]
+        canary_percent:
+          type: integer
+          default: 0
+          minimum: 0
+          maximum: 100
+        stage:
+          type: integer
+          default: 0
+          minimum: 0
+          maximum: 10
+        staged_enforcement:
+          type: boolean
+          default: false
+
+    ApprovalWorkflowConfig:
+      type: object
+      description: "人手承認ワークフロー設定"
+      properties:
+        human_review_ticket:
+          type: string
+          default: ""
+        human_review_required:
+          type: boolean
+          default: false
+        approver_identity_binding:
+          type: boolean
+          default: true
+        approver_identities:
+          type: array
+          items:
+            type: string
+
+    WatConfig:
+      type: object
+      description: "WAT 発行制御設定"
+      properties:
+        enabled:
+          type: boolean
+          default: false
+        issuance_mode:
+          type: string
+          default: "shadow_only"
+          enum: ["shadow_only", "disabled"]
+        require_observable_digest:
+          type: boolean
+          default: true
+        default_ttl_seconds:
+          type: integer
+          default: 300
+          minimum: 1
+          maximum: 86400
+        signer_backend:
+          type: string
+          default: "existing_signer"
+
+    PsidConfig:
+      type: object
+      description: "PSID 表示・適用設定"
+      properties:
+        enforcement_mode:
+          type: string
+          default: "full_digest_only"
+          enum: ["full_digest_only"]
+        display_length:
+          type: integer
+          default: 12
+          minimum: 4
+          maximum: 128
+
+    ShadowValidationConfig:
+      type: object
+      description: "シャドウ検証設定"
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        partial_validation_default:
+          type: string
+          default: "non_admissible"
+          enum: ["non_admissible"]
+        warning_only_until:
+          type: string
+          default: ""
+        timestamp_skew_tolerance_seconds:
+          type: integer
+          default: 5
+          minimum: 0
+          maximum: 3600
+        replay_binding_required:
+          type: boolean
+          default: false
+
+    RevocationConfig:
+      type: object
+      description: "失効反映の整合性設定"
+      properties:
+        enabled:
+          type: boolean
+          default: true
+        mode:
+          type: string
+          default: "bounded_eventual_consistency"
+          enum: ["bounded_eventual_consistency"]
+        alert_target_seconds:
+          type: integer
+          default: 30
+          minimum: 1
+          maximum: 86400
+        convergence_target_p95_seconds:
+          type: integer
+          default: 60
+          minimum: 1
+          maximum: 86400
+        degrade_on_pending:
+          type: boolean
+          default: true
+
+    DriftScoringConfig:
+      type: object
+      description: "ドリフト評価スコア重み"
+      properties:
+        policy_weight:
+          type: number
+          format: float
+          default: 0.4
+          minimum: 0
+          maximum: 1
+        signature_weight:
+          type: number
+          format: float
+          default: 0.3
+          minimum: 0
+          maximum: 1
+        observable_weight:
+          type: number
+          format: float
+          default: 0.2
+          minimum: 0
+          maximum: 1
+        temporal_weight:
+          type: number
+          format: float
+          default: 0.1
+          minimum: 0
+          maximum: 1
+        healthy_threshold:
+          type: number
+          format: float
+          default: 0.2
+          minimum: 0
+          maximum: 1
+        critical_threshold:
+          type: number
+          format: float
+          default: 0.5
+          minimum: 0
+          maximum: 1
+
     GovernancePolicy:
       type: object
       description: "ガバナンスポリシー設定"
@@ -479,6 +645,20 @@ components:
           $ref: '#/components/schemas/AutoStop'
         log_retention:
           $ref: '#/components/schemas/LogRetention'
+        rollout_controls:
+          $ref: '#/components/schemas/RolloutControls'
+        approval_workflow:
+          $ref: '#/components/schemas/ApprovalWorkflowConfig'
+        wat:
+          $ref: '#/components/schemas/WatConfig'
+        psid:
+          $ref: '#/components/schemas/PsidConfig'
+        shadow_validation:
+          $ref: '#/components/schemas/ShadowValidationConfig'
+        revocation:
+          $ref: '#/components/schemas/RevocationConfig'
+        drift_scoring:
+          $ref: '#/components/schemas/DriftScoringConfig'
         updated_at:
           type: string
           format: date-time
