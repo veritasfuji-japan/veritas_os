@@ -333,6 +333,59 @@ def _run_wat_shadow_observer(
     return summary
 
 
+def _normalize_wat_drift_vector(raw_vector: Any) -> Dict[str, float]:
+    """Normalize WAT drift vector keys for the public DecideResponse contract.
+
+    Canonical public keys are ``policy``, ``signature``, ``observable``,
+    and ``temporal``. Legacy backend keys (``*_drift``) are accepted and
+    mapped additively to preserve compatibility with existing producers.
+    """
+    if not isinstance(raw_vector, dict):
+        raw_vector = {}
+    key_map = {
+        "policy": "policy",
+        "policy_drift": "policy",
+        "signature": "signature",
+        "signature_drift": "signature",
+        "observable": "observable",
+        "observable_drift": "observable",
+        "temporal": "temporal",
+        "temporal_drift": "temporal",
+    }
+    normalized: Dict[str, float] = {}
+    for source_key, target_key in key_map.items():
+        if target_key in normalized:
+            continue
+        value = raw_vector.get(source_key)
+        if isinstance(value, (int, float)):
+            normalized[target_key] = float(value)
+    for key in ("policy", "signature", "observable", "temporal"):
+        normalized.setdefault(key, 0.0)
+    return normalized
+
+
+def _attach_wat_contract_fields(payload: Dict[str, Any], wat_shadow: Dict[str, Any]) -> None:
+    """Attach additive canonical WAT fields to decide payload.
+
+    This keeps legacy ``meta["wat_shadow"]`` intact while promoting stable,
+    frontend-consumable top-level fields.
+    """
+    integrity_state = "healthy" if str(wat_shadow.get("validation_status")) == "valid" else "warning"
+    if str(wat_shadow.get("admissibility_state")) in {"non_admissible", "blocked"}:
+        integrity_state = "critical"
+    payload["wat_integrity"] = {
+        "integrity_state": integrity_state,
+        "wat_id": wat_shadow.get("wat_id"),
+        "psid_display": wat_shadow.get("psid_display"),
+        "validation_status": wat_shadow.get("validation_status"),
+        "admissibility_state": wat_shadow.get("admissibility_state"),
+        "replay_status": wat_shadow.get("replay_status"),
+        "revocation_status": wat_shadow.get("revocation_status"),
+        "action_summary": "observer_only_validation",
+    }
+    payload["wat_drift_vector"] = _normalize_wat_drift_vector(wat_shadow.get("drift_vector"))
+
+
 # ------------------------------------------------------------------
 # /v1/decide
 # ------------------------------------------------------------------
@@ -405,6 +458,7 @@ async def decide(req: DecideRequest, request: Request):
                 meta = {}
                 coerced["meta"] = meta
             meta["wat_shadow"] = wat_shadow
+            _attach_wat_contract_fields(coerced, wat_shadow)
     except Exception:
         logger.debug("observer-only WAT shadow hook failed", exc_info=True)
 

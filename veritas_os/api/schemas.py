@@ -734,6 +734,21 @@ class DecideResponse(BaseModel):
             "status, and signer identity."
         ),
     )
+    wat_integrity: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Canonical additive WAT integrity summary for UI consumers. "
+            "Top-level contract mirrors shadow validation outputs while "
+            "legacy meta.wat_shadow remains available for compatibility."
+        ),
+    )
+    wat_drift_vector: Optional[Dict[str, float]] = Field(
+        default=None,
+        description=(
+            "Canonical additive WAT drift vector using normalized keys: "
+            "policy, signature, observable, temporal."
+        ),
+    )
 
     # User-facing summary for simple_qa mode.
     # When present, frontends should display this instead of raw chosen/meta fields.

@@ -752,6 +752,52 @@ components:
           nullable: true
           description: "ゲートのリスクスコア"
 
+    WatIntegrity:
+      type: object
+      properties:
+        integrity_state:
+          type: string
+          description: "WAT integrity state summary (healthy / warning / critical)"
+        wat_id:
+          type: string
+          nullable: true
+        psid_display:
+          type: string
+          nullable: true
+        validation_status:
+          type: string
+          nullable: true
+        admissibility_state:
+          type: string
+          nullable: true
+        replay_status:
+          type: string
+          nullable: true
+        revocation_status:
+          type: string
+          nullable: true
+        action_summary:
+          type: string
+          nullable: true
+      additionalProperties: true
+
+    WatDriftVector:
+      type: object
+      properties:
+        policy:
+          type: number
+          default: 0.0
+        signature:
+          type: number
+          default: 0.0
+        observable:
+          type: number
+          default: 0.0
+        temporal:
+          type: number
+          default: 0.0
+      additionalProperties: false
+
     DecideResponse:
       type: object
       properties:
@@ -964,6 +1010,14 @@ components:
           nullable: true
           additionalProperties: true
           description: "Identity of the governance artifact in force at decision time."
+        wat_integrity:
+          $ref: '#/components/schemas/WatIntegrity'
+          nullable: true
+          description: "Canonical additive WAT integrity summary for console consumers."
+        wat_drift_vector:
+          $ref: '#/components/schemas/WatDriftVector'
+          nullable: true
+          description: "Canonical additive WAT drift vector with normalized keys."
 
     DecideRequest:
       type: object

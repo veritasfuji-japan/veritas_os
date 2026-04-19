@@ -534,6 +534,25 @@ export interface ContinuationOutput {
   receipt: ContinuationReceiptSummary;
 }
 
+export interface WatIntegrity {
+  integrity_state?: string;
+  wat_id?: string | null;
+  psid_display?: string | null;
+  validation_status?: string | null;
+  admissibility_state?: string | null;
+  replay_status?: string | null;
+  revocation_status?: string | null;
+  action_summary?: string | null;
+  [key: string]: unknown;
+}
+
+export interface WatDriftVector {
+  policy: number;
+  signature: number;
+  observable: number;
+  temporal: number;
+}
+
 export interface DecideResponse extends DecideResponseMeta {
   /* ------------------------------------------------------------------ */
   /* Core decision contract fields                                      */
@@ -608,6 +627,10 @@ export interface DecideResponse extends DecideResponseMeta {
   pipeline_steps?: string[] | null;
   /** Snapshot for deterministic replay of this decision. */
   deterministic_replay?: Record<string, unknown> | null;
+  /** Canonical additive WAT integrity summary for console consumers. */
+  wat_integrity?: WatIntegrity | null;
+  /** Canonical additive WAT drift vector with normalized keys. */
+  wat_drift_vector?: WatDriftVector | null;
 
   /**
    * Continuation runtime output (shadow/observe — phase-1).
@@ -668,7 +691,9 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     (value.affected_parties_notice === null || value.affected_parties_notice === undefined || isRecord(value.affected_parties_notice)) &&
     (value.query === null || value.query === undefined || typeof value.query === "string") &&
     (value.pipeline_steps === null || value.pipeline_steps === undefined || Array.isArray(value.pipeline_steps)) &&
-    (value.deterministic_replay === null || value.deterministic_replay === undefined || isRecord(value.deterministic_replay))
+    (value.deterministic_replay === null || value.deterministic_replay === undefined || isRecord(value.deterministic_replay)) &&
+    (value.wat_integrity === null || value.wat_integrity === undefined || isRecord(value.wat_integrity)) &&
+    (value.wat_drift_vector === null || value.wat_drift_vector === undefined || isRecord(value.wat_drift_vector))
   );
 }
 
