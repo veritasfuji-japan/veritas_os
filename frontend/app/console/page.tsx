@@ -29,6 +29,39 @@ function safeNumber(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "n/a";
 }
 
+function toRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function resolveWatDriftVector(
+  topLevel: Record<string, unknown>,
+  legacyShadow: Record<string, unknown>,
+): Record<string, unknown> {
+  const candidate = Object.keys(topLevel).length > 0 ? topLevel : toRecord(legacyShadow.drift_vector);
+  return {
+    policy: candidate.policy ?? candidate.policy_drift ?? 0,
+    signature: candidate.signature ?? candidate.signature_drift ?? 0,
+    observable: candidate.observable ?? candidate.observable_drift ?? 0,
+    temporal: candidate.temporal ?? candidate.temporal_drift ?? 0,
+  };
+}
+
+function resolveWatIntegrity(
+  topLevel: Record<string, unknown>,
+  legacyShadow: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.keys(topLevel).length > 0 ? topLevel : {
+    integrity_state: legacyShadow.admissibility_state === "non_admissible" ? "critical" : "warning",
+    wat_id: legacyShadow.wat_id,
+    psid_display: legacyShadow.psid_display,
+    validation_status: legacyShadow.validation_status,
+    admissibility_state: legacyShadow.admissibility_state,
+    replay_status: legacyShadow.replay_status,
+    revocation_status: legacyShadow.revocation_status,
+    action_summary: "observer_only_validation",
+  };
+}
+
 export default function DecisionConsolePage(): JSX.Element {
   const { t, tk } = useI18n();
   const {
@@ -75,10 +108,16 @@ export default function DecisionConsolePage(): JSX.Element {
   }, [notifySseActivity]);
 
   const decisionId = String((result?.chosen as Record<string, unknown> | undefined)?.id ?? result?.request_id ?? "");
-  const watIntegrity = (result as Record<string, unknown> | null)?.wat_integrity;
-  const watDrift = (result as Record<string, unknown> | null)?.wat_drift_vector;
-  const watIntegrityRecord = typeof watIntegrity === "object" && watIntegrity !== null ? watIntegrity as Record<string, unknown> : {};
-  const watDriftRecord = typeof watDrift === "object" && watDrift !== null ? watDrift as Record<string, unknown> : {};
+  const resultRecord = (result as Record<string, unknown> | null) ?? {};
+  const watShadowRecord = toRecord(toRecord(resultRecord.meta).wat_shadow);
+  const watIntegrityRecord = resolveWatIntegrity(
+    toRecord(resultRecord.wat_integrity),
+    watShadowRecord,
+  );
+  const watDriftRecord = resolveWatDriftVector(
+    toRecord(resultRecord.wat_drift_vector),
+    watShadowRecord,
+  );
   const integrityState = safeText(watIntegrityRecord.integrity_state, "warning");
   const integrityAccent = integrityState === "critical" ? "danger" : integrityState === "warning" ? "warning" : "success";
 

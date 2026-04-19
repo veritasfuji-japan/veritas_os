@@ -1053,6 +1053,9 @@ def test_decide_wat_shadow_enabled_emits_events_without_mutating_action(monkeypa
     assert wat_shadow.get("wat_id")
     assert wat_shadow.get("psid_display")
     assert wat_shadow.get("validation_status")
+    assert body.get("wat_integrity", {}).get("wat_id") == wat_shadow.get("wat_id")
+    drift_vector = body.get("wat_drift_vector", {})
+    assert set(drift_vector.keys()) == {"policy", "signature", "observable", "temporal"}
 
 
 def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypatch):
@@ -1105,6 +1108,14 @@ def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypat
     assert payload["decision"] == "allow"
     assert payload["business_decision"] == "APPROVE"
     assert payload.get("meta", {}).get("wat_shadow", {}).get("validation_status") == "invalid"
+    assert payload.get("wat_integrity", {}).get("validation_status") == "invalid"
+    assert payload.get("wat_integrity", {}).get("integrity_state") == "critical"
+    assert payload.get("wat_drift_vector") == {
+        "policy": 0.0,
+        "signature": 1.0,
+        "observable": 0.0,
+        "temporal": 0.0,
+    }
 
 
 def test_decide_wat_shadow_uses_sign_wat(monkeypatch):
