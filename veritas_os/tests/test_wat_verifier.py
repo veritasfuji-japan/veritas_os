@@ -302,3 +302,32 @@ def test_drift_score_classification() -> None:
     assert healthy.classification == "healthy"
     assert warning.classification == "warning"
     assert critical.classification == "critical"
+
+
+def test_drift_score_custom_weights_affect_classification() -> None:
+    """Custom weight map from policy must influence drift classification."""
+    drift_vector = DriftVector(0.0, 0.7, 0.0, 0.0)
+    baseline = score_drift(drift_vector)
+    custom = score_drift(
+        drift_vector,
+        weights={
+            "policy": 0.7,
+            "signature": 0.1,
+            "observable": 0.1,
+            "temporal": 0.1,
+        },
+    )
+    assert baseline.classification == "warning"
+    assert custom.classification == "healthy"
+
+
+def test_drift_score_custom_thresholds_affect_classification() -> None:
+    """Custom threshold map from policy must influence drift classification."""
+    drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
+    default_score = score_drift(drift_vector)
+    custom_score = score_drift(
+        drift_vector,
+        thresholds={"healthy": 0.05, "critical": 0.15},
+    )
+    assert default_score.classification == "healthy"
+    assert custom_score.classification == "warning"
