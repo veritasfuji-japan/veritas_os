@@ -522,19 +522,27 @@ def run_fuji_gate(
         return fuji_result
 
     except Exception as e:
-        log.error("FUJI Gate failed: %s", e)
+        # Fail-closed: FUJI Gate exceptions MUST produce a rejection with
+        # maximum risk. Silent pass-through would allow unsafe outputs to
+        # bypass the safety gate (CLAUDE.md §4.2).
+        log.error("FUJI Gate failed (fail-closed): %s", e, exc_info=True)
         return {
-            "status": "allow",
-            "decision_status": "allow",
-            "rejection_reason": None,
+            "status": "deny",
+            "decision_status": "deny",
+            "rejection_reason": f"fuji_internal_error:{type(e).__name__}",
             "reasons": [f"fuji_error:{repr(e)[:80]}"],
-            "violations": [],
-            "risk": 0.05,
+            "violations": ["FUJI_INTERNAL_ERROR"],
+            "risk": 1.0,
             "checks": [],
-            "guidance": None,
+            "guidance": "FUJI safety gate raised an internal exception; "
+            "failing closed per safety policy.",
             "modifications": [],
             "redactions": [],
             "safe_instructions": [],
+            "meta": {
+                "fuji_internal_error": True,
+                "exception_type": type(e).__name__,
+            },
         }
 
 
