@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { deepEqual, collectChanges, bumpDraftVersion, isRecordObject } from "./helpers";
+import {
+  deepEqual,
+  collectChanges,
+  bumpDraftVersion,
+  isRecordObject,
+  getDefaultWatSettings,
+  normalizeWatSettings,
+} from "./helpers";
 
 describe("isRecordObject", () => {
   it("returns true for plain objects", () => {
@@ -105,5 +112,23 @@ describe("bumpDraftVersion", () => {
 
   it("appends -draft.1 when version has no trailing number pattern", () => {
     expect(bumpDraftVersion("alpha")).toBe("alpha-draft.1");
+  });
+});
+
+describe("normalizeWatSettings", () => {
+  it("returns defaults when settings are missing", () => {
+    expect(normalizeWatSettings(undefined)).toEqual(getDefaultWatSettings());
+  });
+
+  it("normalizes malformed settings defensively", () => {
+    const normalized = normalizeWatSettings({
+      enabled: "yes",
+      issuance_mode: "broken",
+      drift_weights: { policy: "bad", signature: 0.4 },
+    });
+    expect(normalized.enabled).toBe(false);
+    expect(normalized.issuance_mode).toBe("strict");
+    expect(normalized.drift_weights.policy).toBe(0.25);
+    expect(normalized.drift_weights.signature).toBe(0.4);
   });
 });

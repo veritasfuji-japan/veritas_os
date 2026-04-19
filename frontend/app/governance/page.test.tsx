@@ -51,6 +51,24 @@ const MOCK_POLICY = {
       approver_identity_binding: true,
       approver_identities: [],
     },
+    wat_settings: {
+      enabled: true,
+      issuance_mode: "hybrid",
+      require_observable_digest: true,
+      default_ttl_seconds: 300,
+      psid_display_length: 8,
+      replay_binding_required: true,
+      partial_validation_default: false,
+      warning_only_until: "2026-12-31T00:00:00Z",
+      timestamp_skew_tolerance_seconds: 30,
+      revocation_mode: "soft",
+      drift_weights: {
+        policy: 0.2,
+        signature: 0.3,
+        observable: 0.3,
+        temporal: 0.2,
+      },
+    },
     updated_at: "2026-02-12T00:00:00+00:00",
     updated_by: "system",
   },
@@ -102,6 +120,7 @@ describe("GovernanceControlPage", () => {
     await waitFor(() => {
       expect(screen.getByText("Policy Meta")).toBeInTheDocument();
       expect(screen.getByText("FUJI rules / thresholds / escalation")).toBeInTheDocument();
+      expect(screen.getByText("WAT Settings")).toBeInTheDocument();
       expect(screen.getByText("Current vs Draft Diff")).toBeInTheDocument();
       expect(screen.getByText("Apply Flow")).toBeInTheDocument();
       expect(screen.getByText("Change History")).toBeInTheDocument();
@@ -192,6 +211,8 @@ describe("GovernanceControlPage", () => {
 
     fireEvent.change(screen.getByLabelText("role"), { target: { value: "viewer" } });
     expect(screen.getByRole("switch", { name: "PII Check" })).toBeDisabled();
+    expect(screen.getByLabelText("issuance_mode")).toBeDisabled();
+    expect(screen.getByText("Read-only role: WAT settings are visible but cannot be mutated.")).toBeInTheDocument();
   });
 
   it("executes dry-run and shows status", async () => {

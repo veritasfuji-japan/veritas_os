@@ -70,6 +70,16 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     roles: ["viewer", "operator", "admin"],
   },
   {
+    pathPattern: /^v1\/wat\/settings$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/wat\/settings$/,
+    method: "PUT",
+    roles: ["admin"],
+  },
+  {
     pathPattern: /^v1\/wat\/issue-shadow$/,
     method: "POST",
     roles: ["operator", "admin"],

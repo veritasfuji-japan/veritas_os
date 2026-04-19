@@ -21,6 +21,14 @@ import { useConsoleState } from "../../features/console/state/useConsoleState";
 import { DECISION_SAMPLE_QUESTIONS } from "../../features/console/constants";
 import { startManagedEventStream } from "../../lib/managed-sse";
 
+function safeText(value: unknown, fallback = "n/a"): string {
+  return typeof value === "string" && value.trim() ? value.slice(0, 128) : fallback;
+}
+
+function safeNumber(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(2) : "n/a";
+}
+
 export default function DecisionConsolePage(): JSX.Element {
   const { t, tk } = useI18n();
   const {
@@ -67,6 +75,12 @@ export default function DecisionConsolePage(): JSX.Element {
   }, [notifySseActivity]);
 
   const decisionId = String((result?.chosen as Record<string, unknown> | undefined)?.id ?? result?.request_id ?? "");
+  const watIntegrity = (result as Record<string, unknown> | null)?.wat_integrity;
+  const watDrift = (result as Record<string, unknown> | null)?.wat_drift_vector;
+  const watIntegrityRecord = typeof watIntegrity === "object" && watIntegrity !== null ? watIntegrity as Record<string, unknown> : {};
+  const watDriftRecord = typeof watDrift === "object" && watDrift !== null ? watDrift as Record<string, unknown> : {};
+  const integrityState = safeText(watIntegrityRecord.integrity_state, "warning");
+  const integrityAccent = integrityState === "critical" ? "danger" : integrityState === "warning" ? "warning" : "success";
 
   return (
     <div className="space-y-6">
@@ -113,6 +127,31 @@ export default function DecisionConsolePage(): JSX.Element {
         showAlert={showDriftAlert}
         setShowAlert={setShowDriftAlert}
       />
+
+      {result ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Card title="WAT Integrity Status" titleSize="sm" variant="elevated" accent={integrityAccent}>
+            <div className="grid gap-1 text-xs">
+              <p>status: <span className="font-mono">{integrityState}</span></p>
+              <p>wat_id: <span className="font-mono">{safeText(watIntegrityRecord.wat_id)}</span></p>
+              <p>psid_display: <span className="font-mono">{safeText(watIntegrityRecord.psid_display)}</span></p>
+              <p>validation_status: <span className="font-mono">{safeText(watIntegrityRecord.validation_status)}</span></p>
+              <p>admissibility_state: <span className="font-mono">{safeText(watIntegrityRecord.admissibility_state)}</span></p>
+              <p>replay status: <span className="font-mono">{safeText(watIntegrityRecord.replay_status)}</span></p>
+              <p>revocation status: <span className="font-mono">{safeText(watIntegrityRecord.revocation_status)}</span></p>
+              <p>action summary: <span className="font-mono">{safeText(watIntegrityRecord.action_summary)}</span></p>
+            </div>
+          </Card>
+          <Card title="Drift Vector Breakdown" titleSize="sm" variant="elevated">
+            <div className="grid gap-1 text-xs">
+              <p>policy: <span className="font-mono">{safeNumber(watDriftRecord.policy)}</span></p>
+              <p>signature: <span className="font-mono">{safeNumber(watDriftRecord.signature)}</span></p>
+              <p>observable: <span className="font-mono">{safeNumber(watDriftRecord.observable)}</span></p>
+              <p>temporal: <span className="font-mono">{safeNumber(watDriftRecord.temporal)}</span></p>
+            </div>
+          </Card>
+        </div>
+      ) : null}
 
       <Card title="Result" titleSize="md" variant="elevated" accent={result ? "success" : undefined}>
         {result ? (
