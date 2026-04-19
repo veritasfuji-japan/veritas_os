@@ -59,6 +59,31 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     method: "GET",
     roles: ["viewer", "operator", "admin"],
   },
+  {
+    pathPattern: /^v1\/wat\/[^/]+$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/wat\/events$/,
+    method: "GET",
+    roles: ["viewer", "operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/wat\/issue-shadow$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/wat\/validate-shadow$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
+  {
+    pathPattern: /^v1\/wat\/revocation\/[^/]+$/,
+    method: "POST",
+    roles: ["operator", "admin"],
+  },
 
   // Trust log chain (signed)
   {
