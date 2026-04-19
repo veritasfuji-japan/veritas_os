@@ -34,6 +34,22 @@ def _signed_wat(tmp_path: Path) -> tuple[FileEd25519Signer, dict[str, object]]:
     return signer, sign_wat(claims, signer)
 
 
+def _signed_wat_with_claim_overrides(
+    tmp_path: Path,
+    *,
+    remove_keys: set[str] | None = None,
+    updates: dict[str, object] | None = None,
+) -> tuple[FileEd25519Signer, dict[str, object]]:
+    """Build a signed WAT with controlled claim mutations for verifier tests."""
+    signer, signed_wat = _signed_wat(tmp_path)
+    claims = dict(signed_wat["claims"])
+    for key in remove_keys or set():
+        claims.pop(key, None)
+    if updates:
+        claims.update(updates)
+    return signer, sign_wat(claims, signer)
+
+
 def test_validate_local_valid_path(tmp_path: Path) -> None:
     signer, signed_wat = _signed_wat(tmp_path)
     claims = signed_wat["claims"]
@@ -187,6 +203,160 @@ def test_validate_local_replay_detected_by_binding_reuse(tmp_path: Path) -> None
     )
     assert first["validation_status"] == "valid"
     assert second["failure_type"] == "replay_detected"
+
+
+def test_validate_local_replay_cache_hit_fails_when_required_true(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    claims = signed_wat["claims"]
+    replay_cache: set[str] = set()
+    _ = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+        replay_cache=replay_cache,
+    )
+    replay = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+        replay_cache=replay_cache,
+    )
+    assert replay["validation_status"] == "invalid"
+    assert replay["failure_type"] == "replay_detected"
+
+
+def test_validate_local_required_true_fails_on_missing_nonce(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat_with_claim_overrides(tmp_path, remove_keys={"nonce"})
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "replay_binding_incomplete"
+    assert "replay_binding_incomplete" in result["operator_message"]
+
+
+def test_validate_local_required_true_fails_on_missing_session(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat_with_claim_overrides(tmp_path, remove_keys={"session_id"})
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "replay_binding_incomplete"
+
+
+def test_validate_local_required_true_fails_on_missing_action_digest(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat_with_claim_overrides(tmp_path, remove_keys={"action_digest"})
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local="",
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce=str(claims["nonce"]),
+        session_id=str(claims["session_id"]),
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "replay_binding_incomplete"
+
+
+def test_validate_local_required_true_fails_on_binding_mismatch(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-mismatch",
+        session_id="session-1",
+        revocation_state="active",
+        config={"replay_binding_required": True},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "replay_binding_incomplete"
+
+
+def test_validate_local_required_false_keeps_observer_friendly_missing_binding(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat_with_claim_overrides(
+        tmp_path,
+        remove_keys={"nonce", "session_id"},
+    )
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="",
+        session_id="",
+        revocation_state="active",
+        config={"replay_binding_required": False},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "valid"
+    assert result["failure_type"] is None
 
 
 def test_validate_local_revoked_pending_is_warning_only(tmp_path: Path) -> None:
