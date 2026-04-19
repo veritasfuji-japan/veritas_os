@@ -60,7 +60,8 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     roles: ["viewer", "operator", "admin"],
   },
   {
-    pathPattern: /^v1\/wat\/[^/]+$/,
+    // WAT settings are governed via /v1/governance/policy (canonical source of truth).
+    pathPattern: /^v1\/wat\/(?!settings$)[^/]+$/,
     method: "GET",
     roles: ["viewer", "operator", "admin"],
   },
@@ -68,16 +69,6 @@ const ROUTE_POLICIES: readonly RoutePolicy[] = [
     pathPattern: /^v1\/wat\/events$/,
     method: "GET",
     roles: ["viewer", "operator", "admin"],
-  },
-  {
-    pathPattern: /^v1\/wat\/settings$/,
-    method: "GET",
-    roles: ["viewer", "operator", "admin"],
-  },
-  {
-    pathPattern: /^v1\/wat\/settings$/,
-    method: "PUT",
-    roles: ["admin"],
   },
   {
     pathPattern: /^v1\/wat\/issue-shadow$/,
