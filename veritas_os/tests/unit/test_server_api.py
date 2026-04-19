@@ -966,6 +966,11 @@ def test_decide_wat_shadow_disabled_keeps_response_shape(monkeypatch):
 
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
     monkeypatch.setattr(routes_decide, "get_policy", server.get_policy)
+    monkeypatch.setattr(
+        routes_decide,
+        "persist_wat_issuance_event",
+        lambda **_kwargs: pytest.fail("shadow hook should not run when WAT is disabled"),
+    )
 
     response = client.post(
         "/v1/decide",
@@ -997,14 +1002,20 @@ def test_decide_wat_shadow_enabled_emits_events_without_mutating_action(monkeypa
                 "selected_option": {"title": "Ship"},
             }
 
-    class _Policy:
-        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
-        psid = SimpleNamespace(display_length=10)
-        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
-        revocation = SimpleNamespace(degrade_on_pending=False)
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 10},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
 
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
-    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
     monkeypatch.setattr(
         routes_decide,
         "persist_wat_issuance_event",
@@ -1056,14 +1067,20 @@ def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypat
                 "result": "ok",
             }
 
-    class _Policy:
-        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
-        psid = SimpleNamespace(display_length=12)
-        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
-        revocation = SimpleNamespace(degrade_on_pending=False)
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
 
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
-    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
     monkeypatch.setattr(
         routes_decide,
         "validate_local",
@@ -1103,14 +1120,20 @@ def test_decide_wat_shadow_pointer_missing_digest_alive(monkeypatch):
                 "trust_log": {"event": "no-pointers"},
             }
 
-    class _Policy:
-        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
-        psid = SimpleNamespace(display_length=12)
-        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
-        revocation = SimpleNamespace(degrade_on_pending=False)
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
 
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
-    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
 
     response = client.post(
         "/v1/decide",
@@ -1139,15 +1162,21 @@ def test_decide_wat_shadow_replay_suspected_is_surfaced(monkeypatch):
                 "result": "ok",
             }
 
-    class _Policy:
-        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
-        psid = SimpleNamespace(display_length=12)
-        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
-        revocation = SimpleNamespace(degrade_on_pending=False)
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": False},
+        "drift_scoring": {},
+    }
 
     replay_events = []
     monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
-    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
     monkeypatch.setattr(
         routes_decide,
         "validate_local",
@@ -1173,6 +1202,53 @@ def test_decide_wat_shadow_replay_suspected_is_surfaced(monkeypatch):
     wat_shadow = response.json().get("meta", {}).get("wat_shadow", {})
     assert wat_shadow.get("replay_status") == "suspected"
     assert replay_events
+
+
+def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monkeypatch):
+    """Missing nested config must still keep shadow observer path stable."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-defaults",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    captured_validate_kwargs = {}
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: {"wat": {"enabled": True}})
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: captured_validate_kwargs.update(kwargs) or {
+            "validation_status": "valid",
+            "admissibility_state": "warning_only_shadow",
+            "failure_type": "",
+            "drift_vector": {},
+        },
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "allow"
+    assert payload["business_decision"] == "APPROVE"
+    wat_shadow = payload.get("meta", {}).get("wat_shadow", {})
+    assert wat_shadow.get("revocation_status") == "revoked_pending"
+    validate_config = captured_validate_kwargs.get("config", {})
+    assert validate_config.get("timestamp_skew_tolerance_seconds") == 5
+    assert validate_config.get("warning_only_until") is None
+    assert validate_config.get("replay_binding_required") is False
 
 
 def test_fuji_validate_uses_validate_action(monkeypatch):
