@@ -88,7 +88,9 @@ export function useGovernanceState() {
       }
       const normalized = {
         ...validation.data.policy,
-        wat_settings: normalizeWatSettings((validation.data.policy as Record<string, unknown>).wat_settings),
+        wat_settings: normalizeWatSettings(
+          (validation.data.policy as { wat_settings?: unknown }).wat_settings,
+        ),
         effective_at: validation.data.policy.updated_at,
         last_applied: validation.data.policy.updated_at,
         approval_status: "approved" as ApprovalStatus,
@@ -152,7 +154,9 @@ export function useGovernanceState() {
             }
             const nextPolicy = {
               ...validation.data.policy,
-              wat_settings: normalizeWatSettings((validation.data.policy as Record<string, unknown>).wat_settings),
+              wat_settings: normalizeWatSettings(
+                (validation.data.policy as { wat_settings?: unknown }).wat_settings,
+              ),
               effective_at: new Date().toISOString(),
               last_applied: new Date().toISOString(),
               approval_status: "approved" as ApprovalStatus,
