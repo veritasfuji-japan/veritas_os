@@ -71,6 +71,10 @@ function toNumberOrFallback(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return isRecordObject(value) ? value : {};
+}
+
 export function getDefaultWatConfig(): WatConfigUI {
   return {
     enabled: false,
@@ -120,11 +124,11 @@ export function normalizeGovernancePolicyWatFields(policy: GovernancePolicyUI): 
   const revocationDefaults = getDefaultRevocationConfig();
   const driftDefaults = getDefaultDriftScoringConfig();
 
-  const watValue = isRecordObject(policy.wat) ? policy.wat : {};
-  const psidValue = isRecordObject(policy.psid) ? policy.psid : {};
-  const shadowValue = isRecordObject(policy.shadow_validation) ? policy.shadow_validation : {};
-  const revocationValue = isRecordObject(policy.revocation) ? policy.revocation : {};
-  const driftValue = isRecordObject(policy.drift_scoring) ? policy.drift_scoring : {};
+  const watValue = asRecord(policy.wat);
+  const psidValue = asRecord(policy.psid);
+  const shadowValue = asRecord(policy.shadow_validation);
+  const revocationValue = asRecord(policy.revocation);
+  const driftValue = asRecord(policy.drift_scoring);
 
   return {
     ...policy,

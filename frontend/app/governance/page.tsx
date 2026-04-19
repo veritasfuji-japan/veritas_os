@@ -160,6 +160,8 @@ export default function GovernanceControlPage(): JSX.Element {
 
           <Card title="WAT Settings" titleSize="md" variant="elevated">
             {(() => {
+              const draft = state.draft;
+              if (!draft) return null;
               const isViewer = state.selectedRole === "viewer";
               return (
                 <div className="space-y-4">
@@ -176,7 +178,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <input
                         type="checkbox"
                         className="ml-2"
-                        checked={state.draft.wat.enabled}
+                        checked={draft.wat.enabled}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat: { ...prev.wat, enabled: event.target.checked } }))}
                       />
@@ -185,7 +187,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <select
                         aria-label="wat.issuance_mode"
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.wat.issuance_mode}
+                        value={draft.wat.issuance_mode}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -200,7 +202,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <input
                         type="checkbox"
                         className="ml-2"
-                        checked={state.draft.wat.require_observable_digest}
+                        checked={draft.wat.require_observable_digest}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat: { ...prev.wat, require_observable_digest: event.target.checked } }))}
                       />
@@ -210,7 +212,7 @@ export default function GovernanceControlPage(): JSX.Element {
                         type="number"
                         min={1}
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.wat.default_ttl_seconds}
+                        value={draft.wat.default_ttl_seconds}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -223,7 +225,7 @@ export default function GovernanceControlPage(): JSX.Element {
                         type="number"
                         min={4}
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.psid.display_length}
+                        value={draft.psid.display_length}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -235,7 +237,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <input
                         type="checkbox"
                         className="ml-2"
-                        checked={state.draft.shadow_validation.replay_binding_required}
+                        checked={draft.shadow_validation.replay_binding_required}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -247,7 +249,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <select
                         aria-label="shadow_validation.partial_validation_default"
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.shadow_validation.partial_validation_default}
+                        value={draft.shadow_validation.partial_validation_default}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -264,7 +266,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <input
                         type="text"
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.shadow_validation.warning_only_until}
+                        value={draft.shadow_validation.warning_only_until}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -280,7 +282,7 @@ export default function GovernanceControlPage(): JSX.Element {
                         type="number"
                         min={0}
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.shadow_validation.timestamp_skew_tolerance_seconds}
+                        value={draft.shadow_validation.timestamp_skew_tolerance_seconds}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -295,7 +297,7 @@ export default function GovernanceControlPage(): JSX.Element {
                       <select
                         aria-label="revocation.mode"
                         className="mt-1 w-full rounded border px-2 py-1"
-                        value={state.draft.revocation.mode}
+                        value={draft.revocation.mode}
                         disabled={isViewer}
                         onChange={(event) => state.updateDraft((prev) => ({
                           ...prev,
@@ -325,7 +327,7 @@ export default function GovernanceControlPage(): JSX.Element {
                             min={0}
                             max={1}
                             className="mt-1 w-full rounded border px-2 py-1"
-                            value={state.draft.drift_scoring[axis]}
+                            value={draft.drift_scoring[axis]}
                             disabled={isViewer}
                             onChange={(event) => state.updateDraft((prev) => ({
                               ...prev,
