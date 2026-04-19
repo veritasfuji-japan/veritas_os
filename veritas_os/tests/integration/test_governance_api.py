@@ -204,6 +204,62 @@ class TestGovernanceModule:
         assert policy.risk_thresholds.allow_upper == 0.40
         assert policy.auto_stop.enabled is True
         assert policy.log_retention.retention_days == 90
+        assert policy.wat.enabled is False
+        assert policy.wat.issuance_mode == "shadow_only"
+        assert policy.psid.enforcement_mode == "full_digest_only"
+        assert policy.shadow_validation.partial_validation_default == "non_admissible"
+        assert policy.revocation.mode == "bounded_eventual_consistency"
+        assert policy.drift_scoring.policy_weight == 0.4
+
+    def test_update_policy_patches_nested_wat_fields(self):
+        result = gov_mod.update_policy(
+            _approved(
+                {
+                    "wat": {
+                        "enabled": True,
+                        "default_ttl_seconds": 600,
+                        "require_observable_digest": True,
+                    }
+                }
+            )
+        )
+        assert result["wat"]["enabled"] is True
+        assert result["wat"]["default_ttl_seconds"] == 600
+        assert result["wat"]["issuance_mode"] == "shadow_only"
+
+    def test_policy_history_preserves_new_wat_fields(self):
+        gov_mod.update_policy(
+            _approved(
+                {
+                    "wat": {"enabled": True},
+                    "psid": {"display_length": 16},
+                    "shadow_validation": {"replay_binding_required": True},
+                }
+            )
+        )
+        records = gov_mod.get_policy_history(limit=1)
+        assert len(records) == 1
+        latest = records[0]["new_policy"]
+        assert latest["wat"]["enabled"] is True
+        assert latest["psid"]["display_length"] == 16
+        assert latest["shadow_validation"]["replay_binding_required"] is True
+
+    def test_existing_policy_without_wat_fields_still_validates(self, tmp_path):
+        policy_path = tmp_path / "legacy_governance.json"
+        legacy_payload = gov_mod.GovernancePolicy().model_dump()
+        for key in ("wat", "psid", "shadow_validation", "revocation", "drift_scoring"):
+            legacy_payload.pop(key, None)
+        policy_path.write_text(json.dumps(legacy_payload), encoding="utf-8")
+
+        with patch.object(gov_mod, "_DEFAULT_POLICY_PATH", policy_path):
+            loaded = gov_mod.get_policy()
+            assert "wat" not in loaded
+
+            updated = gov_mod.update_policy(_approved({"fuji_rules": {"pii_check": False}}))
+
+        assert updated["fuji_rules"]["pii_check"] is False
+        assert updated["wat"]["enabled"] is False
+        assert updated["psid"]["display_length"] == 12
 
     def test_load_returns_defaults_when_file_missing(self, tmp_path, monkeypatch):
         """When governance file does not exist, return defaults."""
