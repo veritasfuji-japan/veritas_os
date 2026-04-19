@@ -127,6 +127,14 @@ def _coerce_warning_only_until_epoch(value: Any) -> int | None:
     return None
 
 
+def _policy_section(policy: Dict[str, Any], key: str) -> Dict[str, Any]:
+    """Return a policy subsection as dict, falling back to empty mapping."""
+    section = policy.get(key)
+    if isinstance(section, dict):
+        return section
+    return {}
+
+
 def _run_wat_shadow_observer(
     *,
     srv: Any,
@@ -143,16 +151,19 @@ def _run_wat_shadow_observer(
     except Exception:
         logger.debug("WAT shadow policy load failed", exc_info=True)
         return None
-
-    wat_cfg = getattr(policy, "wat", None)
-    if wat_cfg is None or not bool(getattr(wat_cfg, "enabled", False)):
-        return None
-    if str(getattr(wat_cfg, "issuance_mode", "shadow_only")) != "shadow_only":
+    if not isinstance(policy, dict):
         return None
 
-    psid_cfg = getattr(policy, "psid", None)
-    shadow_cfg = getattr(policy, "shadow_validation", None)
-    revocation_cfg = getattr(policy, "revocation", None)
+    wat_cfg = _policy_section(policy, "wat")
+    if not bool(wat_cfg.get("enabled", False)):
+        return None
+    if str(wat_cfg.get("issuance_mode", "shadow_only")) != "shadow_only":
+        return None
+
+    psid_cfg = _policy_section(policy, "psid")
+    shadow_cfg = _policy_section(policy, "shadow_validation")
+    revocation_cfg = _policy_section(policy, "revocation")
+    _policy_section(policy, "drift_scoring")
     request_id = str(coerced.get("request_id") or "")
     query = str(getattr(req, "query", "") or coerced.get("query") or "")
     candidate_action = _resolve_candidate_action(coerced)
@@ -163,7 +174,7 @@ def _run_wat_shadow_observer(
     )
     psid_display = make_psid_display(
         psid_full,
-        display_length=int(getattr(psid_cfg, "display_length", 12)),
+        display_length=int(psid_cfg.get("display_length", 12)),
     )
 
     observables = _build_shadow_observables(coerced)
@@ -171,7 +182,7 @@ def _run_wat_shadow_observer(
     action_digest = compute_action_digest(candidate_action)
     aggregate_observable_digest = compute_observable_digest(observables)
     now_ts = int(time.time())
-    ttl = int(getattr(wat_cfg, "default_ttl_seconds", 300))
+    ttl = int(wat_cfg.get("default_ttl_seconds", 300))
     expiry_ts = now_ts + max(1, ttl)
     wat_id = f"wat_{uuid4().hex}"
 
@@ -215,16 +226,17 @@ def _run_wat_shadow_observer(
         expiry_ts_local=expiry_ts,
         execution_nonce=request_id or "unknown-request",
         session_id=request_id or "unknown-session",
-        revocation_state="revoked_pending" if bool(getattr(revocation_cfg, "degrade_on_pending", True)) else "active",
+        revocation_state="revoked_pending" if bool(revocation_cfg.get("degrade_on_pending", True)) else "active",
         config={
             "observer_only_mode": True,
             "allow_partial_validation": False,
             "timestamp_skew_tolerance_seconds": int(
-                getattr(shadow_cfg, "timestamp_skew_tolerance_seconds", 5)
+                shadow_cfg.get("timestamp_skew_tolerance_seconds", 5)
             ),
             "warning_only_until": _coerce_warning_only_until_epoch(
-                getattr(shadow_cfg, "warning_only_until", None)
+                shadow_cfg.get("warning_only_until")
             ),
+            "replay_binding_required": bool(shadow_cfg.get("replay_binding_required", False)),
             "signature_verifier": lambda _claims, _signature: True,
         },
         replay_cache=replay_cache,
@@ -275,7 +287,7 @@ def _run_wat_shadow_observer(
         "admissibility_state": verifier_result.get("admissibility_state"),
         "drift_vector": drift_vector,
         "replay_status": replay_status,
-        "revocation_status": "revoked_pending" if bool(getattr(revocation_cfg, "degrade_on_pending", True)) else "active",
+        "revocation_status": "revoked_pending" if bool(revocation_cfg.get("degrade_on_pending", True)) else "active",
         "integrity_summary": integrity_summary,
         "issue_event_id": issue_event.get("event_id"),
         "validation_event_id": persisted_validation.get("event_id"),
