@@ -15,6 +15,7 @@ kernel.py は decision 本体、pipeline.py はオーケストレーションを
 """
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ from typing import Any, Dict, List, Optional
 from . import adapt
 from . import fuji as fuji_core
 from .utils import _safe_float
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -430,18 +433,31 @@ def handle_knowledge_qa(
             alternatives=[chosen],
         )
     except Exception as e:
+        # Fail-closed: FUJI Gate exceptions MUST produce a rejection with
+        # maximum risk. Silent pass-through would allow unsafe outputs to
+        # bypass the safety gate (CLAUDE.md §4.2).
+        logger.error(
+            "FUJI gate (knowledge QA) failed, defaulting to deny: %s",
+            repr(e),
+            exc_info=True,
+        )
         fuji_result = {
-            "status": "allow",
-            "decision_status": "allow",
-            "rejection_reason": None,
+            "status": "deny",
+            "decision_status": "deny",
+            "rejection_reason": f"fuji_internal_error:{type(e).__name__}",
             "reasons": [f"fuji_error:{repr(e)[:80]}"],
-            "violations": [],
-            "risk": 0.05,
+            "violations": ["FUJI_INTERNAL_ERROR"],
+            "risk": 1.0,
             "checks": [],
-            "guidance": None,
+            "guidance": "FUJI safety gate raised an internal exception; "
+            "failing closed per safety policy.",
             "modifications": [],
             "redactions": [],
             "safe_instructions": [],
+            "meta": {
+                "fuji_internal_error": True,
+                "exception_type": type(e).__name__,
+            },
         }
 
     gate = {
