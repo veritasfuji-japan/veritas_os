@@ -134,16 +134,9 @@ describe("matchPolicy", () => {
     expect(result!.policy.roles).toContain("operator");
   });
 
-  it("matches WAT settings read endpoint for viewer", () => {
-    const result = matchPolicy(["v1", "wat", "settings"], "GET");
-    expect(result).not.toBeNull();
-    expect(result!.policy.roles).toContain("viewer");
-  });
-
-  it("blocks WAT settings mutation for non-admin", () => {
-    const result = matchPolicy(["v1", "wat", "settings"], "PUT");
-    expect(result).not.toBeNull();
-    expect(result!.policy.roles).toEqual(["admin"]);
+  it("does not expose legacy WAT settings endpoints in BFF policy", () => {
+    expect(matchPolicy(["v1", "wat", "settings"], "GET")).toBeNull();
+    expect(matchPolicy(["v1", "wat", "settings"], "PUT")).toBeNull();
   });
 
   it("matches system halt for admin only", () => {
