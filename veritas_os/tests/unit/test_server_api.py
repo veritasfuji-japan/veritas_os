@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 import veritas_os.api.server as server
+import veritas_os.api.routes_decide as routes_decide
 from veritas_os.api.schemas import (
     MemoryGetRequest,
     MemoryPutRequest,
@@ -946,6 +947,232 @@ def test_decide_accepts_list_stage_payloads_for_event_summary(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data.get("ok") is True
+
+
+def test_decide_wat_shadow_disabled_keeps_response_shape(monkeypatch):
+    """WAT disabled policy must keep /v1/decide behavior unchanged."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-disabled",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", server.get_policy)
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "allow"
+    assert "wat_shadow" not in payload.get("meta", {})
+
+
+def test_decide_wat_shadow_enabled_emits_events_without_mutating_action(monkeypatch):
+    """Observer-only WAT hook emits telemetry while leaving production decision untouched."""
+    captured_events = []
+    captured_issue = []
+    captured_validate = []
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-shadow",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+                "selected_option": {"title": "Ship"},
+            }
+
+    class _Policy:
+        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
+        psid = SimpleNamespace(display_length=10)
+        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
+        revocation = SimpleNamespace(degrade_on_pending=False)
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(
+        routes_decide,
+        "persist_wat_issuance_event",
+        lambda **kwargs: captured_issue.append(kwargs) or {"event_id": "issue-1"},
+    )
+    monkeypatch.setattr(
+        routes_decide,
+        "persist_wat_validation_event",
+        lambda **kwargs: captured_validate.append(kwargs) or {"event_id": "validate-1"},
+    )
+    monkeypatch.setattr(
+        routes_decide,
+        "persist_wat_replay_event",
+        lambda **kwargs: captured_validate.append(kwargs) or {"event_id": "replay-1"},
+    )
+    monkeypatch.setattr(server, "_publish_event", lambda event_type, payload: captured_events.append((event_type, payload)))
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["decision"] == "allow"
+    assert body["business_decision"] == "APPROVE"
+    assert captured_issue
+    assert captured_validate
+    assert any(event_type == "wat.shadow.validation" for event_type, _ in captured_events)
+    wat_shadow = body.get("meta", {}).get("wat_shadow", {})
+    assert wat_shadow.get("wat_id")
+    assert wat_shadow.get("psid_display")
+    assert wat_shadow.get("validation_status")
+
+
+def test_decide_wat_shadow_validation_failure_does_not_change_decision(monkeypatch):
+    """Validation failure in shadow lane must not alter final production decision."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-fail",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    class _Policy:
+        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
+        psid = SimpleNamespace(display_length=12)
+        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
+        revocation = SimpleNamespace(degrade_on_pending=False)
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: {
+            "validation_status": "invalid",
+            "admissibility_state": "non_admissible",
+            "failure_type": "signature_invalid",
+            "drift_vector": {"policy_drift": 0.0, "signature_drift": 1.0, "observable_drift": 0.0, "temporal_drift": 0.0},
+        },
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["decision"] == "allow"
+    assert payload["business_decision"] == "APPROVE"
+    assert payload.get("meta", {}).get("wat_shadow", {}).get("validation_status") == "invalid"
+
+
+def test_decide_wat_shadow_pointer_missing_digest_alive(monkeypatch):
+    """Missing pointer refs should still produce digest and validation metadata."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-pointerless",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+                "trust_log": {"event": "no-pointers"},
+            }
+
+    class _Policy:
+        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
+        psid = SimpleNamespace(display_length=12)
+        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
+        revocation = SimpleNamespace(degrade_on_pending=False)
+
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    wat_shadow = response.json().get("meta", {}).get("wat_shadow", {})
+    integrity_summary = wat_shadow.get("integrity_summary", {})
+    assert integrity_summary.get("pointer_missing_digest_alive") is True
+    assert isinstance(integrity_summary.get("observable_digest"), str)
+
+
+def test_decide_wat_shadow_replay_suspected_is_surfaced(monkeypatch):
+    """Replay suspected in shadow verifier should be surfaced in response metadata."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-replay",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    class _Policy:
+        wat = SimpleNamespace(enabled=True, issuance_mode="shadow_only", default_ttl_seconds=60)
+        psid = SimpleNamespace(display_length=12)
+        shadow_validation = SimpleNamespace(timestamp_skew_tolerance_seconds=5, warning_only_until=None)
+        revocation = SimpleNamespace(degrade_on_pending=False)
+
+    replay_events = []
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: _Policy())
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: {
+            "validation_status": "invalid",
+            "admissibility_state": "non_admissible",
+            "failure_type": "replay_detected",
+            "drift_vector": {"policy_drift": 1.0, "signature_drift": 0.0, "observable_drift": 0.0, "temporal_drift": 0.0},
+        },
+    )
+    monkeypatch.setattr(
+        routes_decide,
+        "persist_wat_replay_event",
+        lambda **kwargs: replay_events.append(kwargs) or {"event_id": "replay-1"},
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    wat_shadow = response.json().get("meta", {}).get("wat_shadow", {})
+    assert wat_shadow.get("replay_status") == "suspected"
+    assert replay_events
 
 
 def test_fuji_validate_uses_validate_action(monkeypatch):

@@ -333,11 +333,17 @@ class _SSEEventHub(SSEEventHub):
 
 
 _event_hub = _SSEEventHub()
+_wat_shadow_replay_cache: set[str] = set()
 
 
 def _publish_event(event_type: str, payload: Dict[str, Any]) -> None:
     """Best-effort SSE event publication. Must never break API handlers."""
     publish_event_best_effort(event_hub=_event_hub, event_type=event_type, payload=payload)
+
+
+def get_wat_shadow_replay_cache() -> set[str]:
+    """Return process-local replay cache used by observer-only WAT shadow checks."""
+    return _wat_shadow_replay_cache
 
 
 def _format_sse_message(event: Dict[str, Any]) -> str:

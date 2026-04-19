@@ -8,17 +8,32 @@ stops, and response coercion/validation lives in
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from typing import Any, Dict
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
+from veritas_os.api.governance import get_policy
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import DecideRequest, DecideResponse, FujiDecision
 from veritas_os.api.pipeline_orchestrator import resolve_dynamic_steps
+from veritas_os.audit.wat_events import (
+    persist_wat_issuance_event,
+    persist_wat_replay_event,
+    persist_wat_validation_event,
+)
+from veritas_os.security.wat_token import (
+    compute_action_digest,
+    compute_observable_digests,
+    compute_observable_digest,
+    make_psid_display,
+)
+from veritas_os.security.wat_verifier import validate_local
 from veritas_os.api.utils import (
     _classify_decide_failure,
     _coerce_decide_payload,
@@ -56,6 +71,220 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
+
+
+def _resolve_candidate_action(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve a stable candidate action envelope from a decide payload."""
+    decision = payload.get("decision")
+    business_decision = payload.get("business_decision")
+    return {
+        "decision": decision,
+        "business_decision": business_decision,
+        "selected_option": payload.get("selected_option"),
+    }
+
+
+def _derive_psid_full(
+    *,
+    request_id: str,
+    query: str,
+    candidate_action: Dict[str, Any],
+) -> str:
+    """Derive policy-scoped identifier seed for observer-only shadow lane."""
+    material = {
+        "request_id": request_id,
+        "query": query,
+        "candidate_action": candidate_action,
+    }
+    encoded = repr(material).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _build_shadow_observables(payload: Dict[str, Any]) -> list[Any]:
+    """Build observable reference list for WAT digesting, preserving missing pointers."""
+    trust_log = payload.get("trust_log")
+    if isinstance(trust_log, dict):
+        pointers = trust_log.get("pointers")
+        if isinstance(pointers, list):
+            return pointers
+    evidence = payload.get("evidence")
+    if isinstance(evidence, list):
+        return evidence
+    return []
+
+
+def _coerce_warning_only_until_epoch(value: Any) -> int | None:
+    """Coerce shadow validation warning horizon to epoch seconds when possible."""
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.isdigit():
+        return int(text)
+    return None
+
+
+def _run_wat_shadow_observer(
+    *,
+    srv: Any,
+    req: DecideRequest,
+    coerced: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    """Execute observer-only WAT issuance + strict local validation shadow hook.
+
+    This helper is additive-only: it never mutates enforcement decisions and
+    never raises into the production /v1/decide flow.
+    """
+    try:
+        policy = get_policy()
+    except Exception:
+        logger.debug("WAT shadow policy load failed", exc_info=True)
+        return None
+
+    wat_cfg = getattr(policy, "wat", None)
+    if wat_cfg is None or not bool(getattr(wat_cfg, "enabled", False)):
+        return None
+    if str(getattr(wat_cfg, "issuance_mode", "shadow_only")) != "shadow_only":
+        return None
+
+    psid_cfg = getattr(policy, "psid", None)
+    shadow_cfg = getattr(policy, "shadow_validation", None)
+    revocation_cfg = getattr(policy, "revocation", None)
+    request_id = str(coerced.get("request_id") or "")
+    query = str(getattr(req, "query", "") or coerced.get("query") or "")
+    candidate_action = _resolve_candidate_action(coerced)
+    psid_full = _derive_psid_full(
+        request_id=request_id,
+        query=query,
+        candidate_action=candidate_action,
+    )
+    psid_display = make_psid_display(
+        psid_full,
+        display_length=int(getattr(psid_cfg, "display_length", 12)),
+    )
+
+    observables = _build_shadow_observables(coerced)
+    observable_digest_list = compute_observable_digests(observables)
+    action_digest = compute_action_digest(candidate_action)
+    aggregate_observable_digest = compute_observable_digest(observables)
+    now_ts = int(time.time())
+    ttl = int(getattr(wat_cfg, "default_ttl_seconds", 300))
+    expiry_ts = now_ts + max(1, ttl)
+    wat_id = f"wat_{uuid4().hex}"
+
+    issue_event = persist_wat_issuance_event(
+        wat_id=wat_id,
+        actor="api:decide_observer",
+        details={
+            "mode": "shadow",
+            "request_id": request_id,
+            "psid": psid_full,
+            "psid_display": psid_display,
+            "action_digest": action_digest,
+            "observable_digest": aggregate_observable_digest,
+            "observable_digest_list": observable_digest_list,
+            "ttl_seconds": ttl,
+        },
+    )
+
+    replay_cache = srv.get_wat_shadow_replay_cache()
+    signed_wat = {
+        "claims": {
+            "wat_id": wat_id,
+            "psid_full": psid_full,
+            "action_digest": action_digest,
+            "observable_digest": aggregate_observable_digest,
+            "issuance_ts": now_ts,
+            "expiry_ts": expiry_ts,
+            "nonce": request_id or "unknown-request",
+            "session_id": request_id or "unknown-session",
+        },
+        "signature": "observer-only-shadow",
+    }
+
+    verifier_result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local=psid_full,
+        action_digest_local=action_digest,
+        observable_refs_local=observables,
+        observable_digest_local=aggregate_observable_digest,
+        issuance_ts_local=now_ts,
+        expiry_ts_local=expiry_ts,
+        execution_nonce=request_id or "unknown-request",
+        session_id=request_id or "unknown-session",
+        revocation_state="revoked_pending" if bool(getattr(revocation_cfg, "degrade_on_pending", True)) else "active",
+        config={
+            "observer_only_mode": True,
+            "allow_partial_validation": False,
+            "timestamp_skew_tolerance_seconds": int(
+                getattr(shadow_cfg, "timestamp_skew_tolerance_seconds", 5)
+            ),
+            "warning_only_until": _coerce_warning_only_until_epoch(
+                getattr(shadow_cfg, "warning_only_until", None)
+            ),
+            "signature_verifier": lambda _claims, _signature: True,
+        },
+        replay_cache=replay_cache,
+    )
+
+    failure_type = str(verifier_result.get("failure_type") or "")
+    validation_status = str(verifier_result.get("validation_status") or "invalid")
+    if failure_type == "replay_detected":
+        persisted_validation = persist_wat_replay_event(
+            wat_id=wat_id,
+            actor="api:decide_observer",
+            details={
+                "request_id": request_id,
+                "psid_display": psid_display,
+                "validation_status": validation_status,
+            },
+        )
+        replay_status = "suspected"
+    else:
+        event_type = "wat_validated" if validation_status == "valid" else "wat_validation_failed"
+        persisted_validation = persist_wat_validation_event(
+            wat_id=wat_id,
+            actor="api:decide_observer",
+            event_type=event_type,
+            status="ok" if event_type == "wat_validated" else "warning",
+            details={
+                "request_id": request_id,
+                "psid_display": psid_display,
+                "validation_status": validation_status,
+                "failure_type": failure_type or None,
+                "observable_digest_list": observable_digest_list,
+            },
+        )
+        replay_status = "suspected" if failure_type == "replay_detected" else "clear"
+
+    drift_vector = verifier_result.get("drift_vector")
+    integrity_summary = {
+        "action_digest": action_digest,
+        "observable_digest": aggregate_observable_digest,
+        "observable_digest_list": observable_digest_list,
+        "pointer_missing_digest_alive": bool(not observables and aggregate_observable_digest),
+    }
+    summary = {
+        "observer_only": True,
+        "wat_id": wat_id,
+        "psid_display": psid_display,
+        "validation_status": validation_status,
+        "admissibility_state": verifier_result.get("admissibility_state"),
+        "drift_vector": drift_vector,
+        "replay_status": replay_status,
+        "revocation_status": "revoked_pending" if bool(getattr(revocation_cfg, "degrade_on_pending", True)) else "active",
+        "integrity_summary": integrity_summary,
+        "issue_event_id": issue_event.get("event_id"),
+        "validation_event_id": persisted_validation.get("event_id"),
+    }
+    try:
+        srv._publish_event("wat.shadow.validation", summary)
+    except Exception:
+        logger.debug("wat.shadow.validation event publish failed", exc_info=True)
+    return summary
 
 
 # ------------------------------------------------------------------
@@ -121,6 +350,17 @@ async def decide(req: DecideRequest, request: Request):
             logger.debug("stage event publish failed (best-effort)", exc_info=True)
 
     coerced = _coerce_decide_payload(payload, seed=getattr(req, "query", "") or "")
+
+    try:
+        wat_shadow = _run_wat_shadow_observer(srv=srv, req=req, coerced=coerced)
+        if wat_shadow:
+            meta = coerced.get("meta")
+            if not isinstance(meta, dict):
+                meta = {}
+                coerced["meta"] = meta
+            meta["wat_shadow"] = wat_shadow
+    except Exception:
+        logger.debug("observer-only WAT shadow hook failed", exc_info=True)
 
     coerced, stop_response = _svc.apply_compliance_stop(coerced, srv._publish_event)
     if stop_response is not None:
