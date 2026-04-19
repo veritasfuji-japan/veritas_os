@@ -105,6 +105,54 @@ class ApprovalWorkflowConfig(BaseModel):
     approver_identities: list[str] = Field(default_factory=list)
 
 
+class WatConfig(BaseModel):
+    """Witness attestation token (WAT) issuance controls."""
+
+    enabled: bool = False
+    issuance_mode: Literal["shadow_only", "disabled"] = "shadow_only"
+    require_observable_digest: bool = True
+    default_ttl_seconds: int = Field(default=300, ge=1, le=86_400)
+    signer_backend: str = "existing_signer"
+
+
+class PsidConfig(BaseModel):
+    """Policy-scoped identifier display and enforcement settings."""
+
+    enforcement_mode: Literal["full_digest_only"] = "full_digest_only"
+    display_length: int = Field(default=12, ge=4, le=128)
+
+
+class ShadowValidationConfig(BaseModel):
+    """Shadow validation behavior for non-disruptive rollout checks."""
+
+    enabled: bool = True
+    partial_validation_default: Literal["non_admissible"] = "non_admissible"
+    warning_only_until: str = ""
+    timestamp_skew_tolerance_seconds: int = Field(default=5, ge=0, le=3600)
+    replay_binding_required: bool = False
+
+
+class RevocationConfig(BaseModel):
+    """Revocation consistency targets and degraded-mode posture."""
+
+    enabled: bool = True
+    mode: Literal["bounded_eventual_consistency"] = "bounded_eventual_consistency"
+    alert_target_seconds: int = Field(default=30, ge=1, le=86_400)
+    convergence_target_p95_seconds: int = Field(default=60, ge=1, le=86_400)
+    degrade_on_pending: bool = True
+
+
+class DriftScoringConfig(BaseModel):
+    """Weights and thresholds used for drift scoring telemetry."""
+
+    policy_weight: float = Field(default=0.4, ge=0.0, le=1.0)
+    signature_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+    observable_weight: float = Field(default=0.2, ge=0.0, le=1.0)
+    temporal_weight: float = Field(default=0.1, ge=0.0, le=1.0)
+    healthy_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
+    critical_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
 class GovernancePolicy(BaseModel):
     version: str = "governance_v1"
     fuji_rules: FujiRules = Field(default_factory=FujiRules)
@@ -113,6 +161,11 @@ class GovernancePolicy(BaseModel):
     log_retention: LogRetention = Field(default_factory=LogRetention)
     rollout_controls: RolloutControls = Field(default_factory=RolloutControls)
     approval_workflow: ApprovalWorkflowConfig = Field(default_factory=ApprovalWorkflowConfig)
+    wat: WatConfig = Field(default_factory=WatConfig)
+    psid: PsidConfig = Field(default_factory=PsidConfig)
+    shadow_validation: ShadowValidationConfig = Field(default_factory=ShadowValidationConfig)
+    revocation: RevocationConfig = Field(default_factory=RevocationConfig)
+    drift_scoring: DriftScoringConfig = Field(default_factory=DriftScoringConfig)
     updated_at: str = ""
     updated_by: str = "system"
 
@@ -124,6 +177,11 @@ _NESTED_POLICY_MODELS = {
     "log_retention": LogRetention,
     "rollout_controls": RolloutControls,
     "approval_workflow": ApprovalWorkflowConfig,
+    "wat": WatConfig,
+    "psid": PsidConfig,
+    "shadow_validation": ShadowValidationConfig,
+    "revocation": RevocationConfig,
+    "drift_scoring": DriftScoringConfig,
 }
 
 
