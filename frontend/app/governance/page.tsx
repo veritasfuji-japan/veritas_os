@@ -16,6 +16,7 @@ import { ApplyFlow } from "./components/ApplyFlow";
 import { TrustLogStream } from "./components/TrustLogStream";
 import { ChangeHistory } from "./components/ChangeHistory";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
+import { getDefaultWatSettings } from "./helpers";
 
 /* ------------------------------------------------------------------ */
 /*  Main page component                                                */
@@ -157,6 +158,153 @@ export default function GovernanceControlPage(): JSX.Element {
             isViewer={state.selectedRole === "viewer"}
             onUpdate={state.updateDraft}
           />
+
+          <Card title="WAT Settings" titleSize="md" variant="elevated">
+            {(() => {
+              const watSettings = state.draft.wat_settings ?? getDefaultWatSettings();
+              const isViewer = state.selectedRole === "viewer";
+              return (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground">
+                    Minimal Mission Control controls for WAT issuance, validation, replay binding, and drift weighting.
+                  </p>
+                  {isViewer ? (
+                    <p className="rounded border border-warning/30 bg-warning/10 px-2 py-1 text-xs text-warning-foreground">
+                      Read-only role: WAT settings are visible but cannot be mutated.
+                    </p>
+                  ) : null}
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="text-xs">enabled
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={watSettings.enabled}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, enabled: event.target.checked } }))}
+                      />
+                    </label>
+                    <label className="text-xs">issuance_mode
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.issuance_mode}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, issuance_mode: event.target.value as typeof watSettings.issuance_mode } }))}
+                      >
+                        <option value="strict">strict</option>
+                        <option value="shadow">shadow</option>
+                        <option value="hybrid">hybrid</option>
+                      </select>
+                    </label>
+                    <label className="text-xs">require_observable_digest
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={watSettings.require_observable_digest}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, require_observable_digest: event.target.checked } }))}
+                      />
+                    </label>
+                    <label className="text-xs">default_ttl_seconds
+                      <input
+                        type="number"
+                        min={1}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.default_ttl_seconds}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, default_ttl_seconds: Number(event.target.value) || 1 } }))}
+                      />
+                    </label>
+                    <label className="text-xs">psid display length
+                      <input
+                        type="number"
+                        min={4}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.psid_display_length}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, psid_display_length: Number(event.target.value) || 4 } }))}
+                      />
+                    </label>
+                    <label className="text-xs">replay_binding_required
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={watSettings.replay_binding_required}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, replay_binding_required: event.target.checked } }))}
+                      />
+                    </label>
+                    <label className="text-xs">partial_validation_default
+                      <input
+                        type="checkbox"
+                        className="ml-2"
+                        checked={watSettings.partial_validation_default}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, partial_validation_default: event.target.checked } }))}
+                      />
+                    </label>
+                    <label className="text-xs">warning_only_until
+                      <input
+                        type="text"
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.warning_only_until}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, warning_only_until: event.target.value.slice(0, 64) } }))}
+                      />
+                    </label>
+                    <label className="text-xs">timestamp_skew_tolerance_seconds
+                      <input
+                        type="number"
+                        min={0}
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.timestamp_skew_tolerance_seconds}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, timestamp_skew_tolerance_seconds: Math.max(0, Number(event.target.value) || 0) } }))}
+                      />
+                    </label>
+                    <label className="text-xs">revocation mode
+                      <select
+                        className="mt-1 w-full rounded border px-2 py-1"
+                        value={watSettings.revocation_mode}
+                        disabled={isViewer}
+                        onChange={(event) => state.updateDraft((prev) => ({ ...prev, wat_settings: { ...watSettings, revocation_mode: event.target.value as typeof watSettings.revocation_mode } }))}
+                      >
+                        <option value="soft">soft</option>
+                        <option value="hard">hard</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold">drift weights</p>
+                    <div className="mt-1 grid gap-2 md:grid-cols-4">
+                      {(["policy", "signature", "observable", "temporal"] as const).map((axis) => (
+                        <label key={axis} className="text-[11px]">
+                          {axis}
+                          <input
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={watSettings.drift_weights[axis]}
+                            disabled={isViewer}
+                            onChange={(event) => state.updateDraft((prev) => ({
+                              ...prev,
+                              wat_settings: {
+                                ...watSettings,
+                                drift_weights: {
+                                  ...watSettings.drift_weights,
+                                  [axis]: Number(event.target.value) || 0,
+                                },
+                              },
+                            }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </Card>
 
           <Card title="Current vs Draft Diff" titleSize="md" variant="elevated">
             <DiffPreview before={state.savedPolicy} after={state.draft} />
