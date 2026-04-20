@@ -12,6 +12,9 @@ from fastapi.responses import JSONResponse
 from veritas_os.api.auth import require_permission
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
+    GovernanceBindReceiptListResponse,
+    GovernanceBindReceiptResponse,
+    GovernanceDecisionExportResponse,
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
@@ -237,7 +240,11 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
         )
 
 
-@router.get("/v1/governance/decisions/export", dependencies=[Depends(require_permission(Permission.governance_read))])
+@router.get(
+    "/v1/governance/decisions/export",
+    response_model=GovernanceDecisionExportResponse,
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
 def governance_decision_export(
     limit: int = Query(default=100, ge=1, le=1000),
     status: str | None = Query(default=None),
@@ -287,7 +294,36 @@ def governance_decision_export(
 
 
 @router.get(
+    "/v1/governance/bind-receipts",
+    response_model=GovernanceBindReceiptListResponse,
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
+def governance_bind_receipts(
+    decision_id: str | None = Query(default=None),
+    execution_intent_id: str | None = Query(default=None),
+):
+    """Return bind receipt artifacts filtered by decision/execution intent lineage."""
+    try:
+        receipts = find_bind_receipts(
+            decision_id=decision_id,
+            execution_intent_id=execution_intent_id,
+        )
+        return {
+            "ok": True,
+            "count": len(receipts),
+            "items": [receipt.to_dict() for receipt in receipts],
+        }
+    except Exception as e:
+        logger.error("governance_bind_receipts failed: %s", e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load bind receipts"},
+        )
+
+
+@router.get(
     "/v1/governance/bind-receipts/{bind_receipt_id}",
+    response_model=GovernanceBindReceiptResponse,
     dependencies=[Depends(require_permission(Permission.governance_read))],
 )
 def governance_bind_receipt(bind_receipt_id: str):

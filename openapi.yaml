@@ -676,6 +676,128 @@ components:
         policy:
           $ref: '#/components/schemas/GovernancePolicy'
 
+    ExecutionIntent:
+      type: object
+      description: "Decision-linked execution attempt descriptor."
+      properties:
+        execution_intent_id:
+          type: string
+        decision_id:
+          type: string
+        request_id:
+          type: string
+        policy_snapshot_id:
+          type: string
+        actor_identity:
+          type: string
+        target_system:
+          type: string
+        target_resource:
+          type: string
+        intended_action:
+          type: string
+        evidence_refs:
+          type: array
+          items:
+            type: string
+        decision_hash:
+          type: string
+        decision_ts:
+          type: string
+        ttl_seconds:
+          type: integer
+          nullable: true
+        expected_state_fingerprint:
+          type: string
+          nullable: true
+        approval_context:
+          type: object
+          nullable: true
+          additionalProperties: true
+
+    BindReceipt:
+      type: object
+      description: "Bind-time governance artifact linked to decision lineage."
+      properties:
+        bind_receipt_id:
+          type: string
+        execution_intent_id:
+          type: string
+        decision_id:
+          type: string
+        bind_ts:
+          type: string
+        live_state_fingerprint_before:
+          type: string
+        live_state_fingerprint_after:
+          type: string
+        authority_check_result:
+          type: object
+          additionalProperties: true
+        constraint_check_result:
+          type: object
+          additionalProperties: true
+        drift_check_result:
+          type: object
+          additionalProperties: true
+        risk_check_result:
+          type: object
+          additionalProperties: true
+        admissibility_result:
+          type: object
+          additionalProperties: true
+        final_outcome:
+          type: string
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+        rollback_reason:
+          type: string
+          nullable: true
+        escalation_reason:
+          type: string
+          nullable: true
+        trustlog_hash:
+          type: string
+        prev_bind_hash:
+          type: string
+          nullable: true
+
+    GovernanceDecisionExportItem:
+      type: object
+      description: "Governance decision export row with bind summary."
+      properties:
+        request_id:
+          type: string
+        decision_id:
+          type: string
+        decision_status:
+          type: string
+        risk:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+        approver:
+          type: string
+        trace_sha256:
+          type: string
+          nullable: true
+        bind_outcome:
+          type: string
+          nullable: true
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+        bind_failure_reason:
+          type: string
+          nullable: true
+        bind_reason_code:
+          type: string
+          nullable: true
+        bind_receipt_id:
+          type: string
+          nullable: true
+        execution_intent_id:
+          type: string
+          nullable: true
+
     TrustFeedbackRequest:
       type: object
       description: "信頼フィードバックリクエスト（全フィールドにデフォルト値あり）"
@@ -1854,6 +1976,109 @@ paths:
                           $ref: '#/components/schemas/GovernancePolicy'
                         new:
                           $ref: '#/components/schemas/GovernancePolicy'
+
+  /v1/governance/decisions/export:
+    get:
+      summary: Governance decision export
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: bind_outcome
+          required: false
+          schema:
+            type: string
+            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+      responses:
+        "200":
+          description: Decision export rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GovernanceDecisionExportItem'
+
+  /v1/governance/bind-receipts:
+    get:
+      summary: Bind receipt search by lineage filters
+      parameters:
+        - in: query
+          name: decision_id
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: execution_intent_id
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bind receipts by filter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  count:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BindReceipt'
+
+  /v1/governance/bind-receipts/{bind_receipt_id}:
+    get:
+      summary: Bind receipt retrieval by ID
+      parameters:
+        - in: path
+          name: bind_receipt_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bind receipt artifact
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  bind_receipt:
+                    $ref: '#/components/schemas/BindReceipt'
+                  bind_outcome:
+                    type: string
+                    nullable: true
+                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+                  bind_failure_reason:
+                    type: string
+                    nullable: true
+                  bind_reason_code:
+                    type: string
+                    nullable: true
 
   /v1/compliance/config:
     get:

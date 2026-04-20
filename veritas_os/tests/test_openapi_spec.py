@@ -56,6 +56,9 @@ def test_openapi_includes_runtime_audit_and_governance_routes() -> None:
     critical = {
         "/v1/governance/policy",
         "/v1/governance/policy/history",
+        "/v1/governance/decisions/export",
+        "/v1/governance/bind-receipts",
+        "/v1/governance/bind-receipts/{bind_receipt_id}",
         "/v1/trustlog/verify",
         "/v1/trust/{request_id}/prov",
     }
@@ -100,3 +103,19 @@ def test_openapi_decide_response_decision_semantics_contract() -> None:
     ]
     assert decide_schema["next_action"]["type"] == "string"
     assert "governance_identity" in decide_schema
+
+
+def test_openapi_includes_bind_artifact_schemas() -> None:
+    """OpenAPI should expose bind-boundary artifact models and summary fields."""
+    spec = _load_openapi_spec()
+    schemas = spec["components"]["schemas"]
+
+    assert "ExecutionIntent" in schemas
+    assert "BindReceipt" in schemas
+
+    export_item = schemas["GovernanceDecisionExportItem"]["properties"]
+    assert "bind_outcome" in export_item
+    assert "bind_failure_reason" in export_item
+    assert "bind_reason_code" in export_item
+    assert "bind_receipt_id" in export_item
+    assert "execution_intent_id" in export_item
