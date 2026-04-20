@@ -1307,7 +1307,7 @@ def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monk
     assert payload["decision"] == "allow"
     assert payload["business_decision"] == "APPROVE"
     wat_shadow = payload.get("meta", {}).get("wat_shadow", {})
-    assert wat_shadow.get("revocation_status") == "revoked_pending"
+    assert wat_shadow.get("revocation_status") == "active"
     validate_config = captured_validate_kwargs.get("config", {})
     assert validate_config.get("timestamp_skew_tolerance_seconds") == 5
     assert validate_config.get("warning_only_until") is None
@@ -1325,34 +1325,89 @@ def test_decide_wat_shadow_missing_nested_config_uses_conservative_defaults(monk
     assert "signature_verifier" not in validate_config
 
 
-def test_resolve_shadow_revocation_state_defaults_to_pending_when_configured(monkeypatch):
-    """No revocation telemetry should use conservative pending fallback."""
+def test_resolve_shadow_revocation_state_uses_event_lane_active_default(monkeypatch):
+    """No revocation telemetry should preserve event-lane ``active`` state."""
     monkeypatch.setattr(
         routes_decide,
         "derive_latest_revocation_state",
         lambda _wat_id: {"status": "active", "source": "wat_events"},
     )
-    state = routes_decide._resolve_shadow_revocation_state(
-        wat_id="wat-missing",
-        degrade_on_pending=True,
-    )
-    assert state["status"] == "revoked_pending"
-    assert state["source"] == "shadow_default"
-
-
-def test_resolve_shadow_revocation_state_keeps_active_when_pending_disabled(monkeypatch):
-    """Conservative fallback must not trigger when pending degradation is disabled."""
-    monkeypatch.setattr(
-        routes_decide,
-        "derive_latest_revocation_state",
-        lambda _wat_id: {"status": "active", "source": "wat_events"},
-    )
-    state = routes_decide._resolve_shadow_revocation_state(
-        wat_id="wat-missing",
-        degrade_on_pending=False,
-    )
+    state = routes_decide._resolve_shadow_revocation_state(wat_id="wat-missing")
     assert state["status"] == "active"
     assert state["source"] == "wat_events"
+
+
+def test_resolve_shadow_revocation_state_preserves_pending_from_event_lane(monkeypatch):
+    """Pending state should be forwarded from event lane without mutation."""
+    monkeypatch.setattr(
+        routes_decide,
+        "derive_latest_revocation_state",
+        lambda _wat_id: {
+            "status": "revoked_pending",
+            "source": "wat_events",
+            "event_id": "evt-pending",
+        },
+    )
+    state = routes_decide._resolve_shadow_revocation_state(wat_id="wat-pending")
+    assert state["status"] == "revoked_pending"
+    assert state["source"] == "wat_events"
+
+
+def test_decide_wat_shadow_surfaces_revocation_status_from_derived_state(monkeypatch):
+    """Decide response must mirror event-lane-derived revocation status."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-derived-revocation",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {"timestamp_skew_tolerance_seconds": 5},
+        "revocation": {"degrade_on_pending": True},
+        "drift_scoring": {},
+    }
+    captured_validate_kwargs = {}
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    monkeypatch.setattr(
+        routes_decide,
+        "derive_latest_revocation_state",
+        lambda _wat_id: {
+            "status": "revoked_pending",
+            "source": "wat_events",
+            "event_id": "evt-123",
+        },
+    )
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: captured_validate_kwargs.update(kwargs) or {
+            "validation_status": "revoked_pending",
+            "admissibility_state": "warning_only_shadow",
+            "failure_type": "",
+            "drift_vector": {},
+        },
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload.get("meta", {}).get("wat_shadow", {}).get("revocation_status") == "revoked_pending"
+    assert payload.get("wat_integrity", {}).get("revocation_status") == "revoked_pending"
+    assert captured_validate_kwargs.get("revocation_state", {}).get("status") == "revoked_pending"
 
 
 def test_decide_wat_shadow_passes_policy_drift_scoring_to_verifier(monkeypatch):

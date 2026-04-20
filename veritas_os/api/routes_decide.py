@@ -197,24 +197,16 @@ def _resolve_wat_shadow_signer(wat_cfg: Dict[str, Any]) -> Signer:
     )
 
 
-def _resolve_shadow_revocation_state(
-    *,
-    wat_id: str,
-    degrade_on_pending: bool,
-) -> Dict[str, Any]:
-    """Resolve shadow-lane revocation state with conservative defaults.
+def _resolve_shadow_revocation_state(*, wat_id: str) -> Dict[str, Any]:
+    """Resolve runtime revocation status from the WAT event lane source.
 
     Security:
-        If no revocation telemetry exists and degradation is enabled, default
-        to ``revoked_pending`` to keep observer-only posture conservative.
+        This observer uses event-lane-derived structured state as the single
+        runtime source of truth and does not synthesize fallback statuses.
     """
     state = dict(derive_latest_revocation_state(wat_id))
-    status = str(state.get("status", "active"))
-    has_event_ref = bool(state.get("event_id") or state.get("event_type"))
-    if status == "active" and degrade_on_pending and not has_event_ref:
-        status = "revoked_pending"
-        state["source"] = "shadow_default"
-    state["status"] = status
+    state["status"] = str(state.get("status", "active") or "active")
+    state.setdefault("source", "wat_events")
     return state
 
 
@@ -301,12 +293,9 @@ def _run_wat_shadow_observer(
         psid_display_length=int(psid_cfg.get("display_length", 12)),
     )
     signed_wat = sign_wat(claims, signer)
-    degrade_on_pending = bool(revocation_cfg.get("degrade_on_pending", True))
-    revocation_state = _resolve_shadow_revocation_state(
-        wat_id=wat_id,
-        degrade_on_pending=degrade_on_pending,
-    )
+    revocation_state = _resolve_shadow_revocation_state(wat_id=wat_id)
     effective_revocation_status = str(revocation_state.get("status", "active"))
+    degrade_on_pending = bool(revocation_cfg.get("degrade_on_pending", True))
 
     verifier_result = validate_local(
         signed_wat=signed_wat,
