@@ -59,6 +59,12 @@
 - `scripts/production_validation.sh` の Phase 0 で danger preset 本番ガードを実行するよう更新。
 - 回帰テスト `veritas_os/tests/test_check_danger_presets_flag.py` を追加し、
   非本番スキップ・本番fail条件・CLI終了コード・redactedログを検証。
+- `scripts/security/report_security_flag_posture.py` を追加し、
+  query API key 互換フラグと danger preset フラグの有効/無効状態を**値を秘匿したまま**一括サマリー出力する運用可観測性を追加。
+- `scripts/production_validation.sh` の Phase 0 先頭で上記サマリーを出力するよう更新し、
+  本番検証ジョブでのフラグ監査を1箇所に集約。
+- 回帰テスト `veritas_os/tests/test_report_security_flag_posture.py` を追加し、
+  サマリー内容（enabled/disabled）と redacted 出力（生値非表示）を検証。
 
 ## 追加提案（任意）
 - セキュリティフラグ（query認証移行フラグ、danger presetフラグ）の**起動時サマリー出力**を1箇所へ集約し、SREの可観測性を向上。
