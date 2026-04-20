@@ -13,7 +13,7 @@ from typing import Any, Mapping, MutableSet, Sequence
 
 from veritas_os.security.hash import canonical_json_dumps, sha256_hex
 from veritas_os.security.signing import Signer
-from veritas_os.security.wat_token import verify_wat_signature
+from veritas_os.security.wat_token import compute_observable_digests, verify_wat_signature
 
 ValidationStatus = str
 AdmissibilityState = str
@@ -111,6 +111,7 @@ def resolve_admissibility_state(
     validation_status: ValidationStatus,
     drift_score: DriftScore,
     partial_allowed: bool,
+    pending_is_warning: bool = True,
 ) -> AdmissibilityState:
     """Resolve admissibility state from status and drift posture."""
     if validation_status in {"invalid", "stale", "revoked_confirmed"}:
@@ -118,7 +119,7 @@ def resolve_admissibility_state(
     if validation_status == "partial":
         return "warning_only_shadow" if partial_allowed else "non_admissible"
     if validation_status == "revoked_pending":
-        return "warning_only_shadow"
+        return "warning_only_shadow" if pending_is_warning else "non_admissible"
     if drift_score.classification in {"warning", "critical"}:
         return "warning_only_shadow"
     return "admissible"
@@ -157,6 +158,15 @@ def _derive_revocation_status(revocation_state: Any) -> str:
         if isinstance(value, str):
             return value
     return "active"
+
+
+def _normalize_observable_digest_list(raw_value: Any) -> list[str] | None:
+    """Normalize observable digest list claim values for strict comparison."""
+    if raw_value is None:
+        return None
+    if not isinstance(raw_value, Sequence) or isinstance(raw_value, (str, bytes, bytearray)):
+        return None
+    return [str(item) for item in raw_value]
 
 
 def _is_partial_allowed(config: Mapping[str, Any], now_ts: int) -> bool:
@@ -300,6 +310,9 @@ def validate_local(
     claim_psid_full = str(claims.get("psid_full", ""))
     claim_action_digest = str(claims.get("action_digest", ""))
     claim_observable_digest = str(claims.get("observable_digest", ""))
+    claim_observable_digest_list = _normalize_observable_digest_list(
+        claims.get("observable_digest_list")
+    )
     claim_issuance_ts = _to_epoch(claims.get("issuance_ts"))
     claim_expiry_ts = _to_epoch(claims.get("expiry_ts"))
     claim_nonce = str(claims.get("nonce", ""))
@@ -345,6 +358,46 @@ def validate_local(
             drift_vector = DriftVector(0.0, 0.0, 1.0, 0.0)
             status = "invalid"
             failure_type = "observable_digest_mismatch"
+        elif observable_refs_local is not None and claim_observable_digest_list is not None:
+            local_observable_digest_list = compute_observable_digests(observable_refs_local)
+            if claim_observable_digest_list != local_observable_digest_list:
+                drift_vector = DriftVector(0.0, 0.0, 1.0, 0.0)
+                status = "invalid"
+                failure_type = "observable_digest_list_mismatch"
+            elif replay_cache is not None and binding_key in replay_cache:
+                drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
+                status = "invalid"
+                failure_type = "replay_detected"
+            elif claim_expiry_ts is not None and current_ts > claim_expiry_ts:
+                drift_vector = DriftVector(0.0, 0.0, 0.0, 1.0)
+                status = "stale"
+                failure_type = "expired_token"
+            elif revocation_status == "revoked_pending":
+                drift_vector = DriftVector(0.6, 0.0, 0.0, 0.0)
+                status = "revoked_pending"
+                failure_type = "revocation_pending"
+            elif bool(cfg.get("allow_partial_validation", False)):
+                drift_vector = DriftVector(0.3, 0.0, 0.0, 0.0)
+                status = "partial"
+                failure_type = "partial_validation_mode"
+            else:
+                temporal_drift = 0.0
+                failure_type = None
+                skew_tolerance = int(cfg.get("timestamp_skew_tolerance_seconds", 30))
+                if issuance_ts_local is not None and claim_issuance_ts is not None:
+                    if abs(claim_issuance_ts - issuance_ts_local) > skew_tolerance:
+                        temporal_drift = 1.0
+                        failure_type = "timestamp_skew_exceeded"
+                if expiry_ts_local is not None and claim_expiry_ts is not None:
+                    if abs(claim_expiry_ts - expiry_ts_local) > skew_tolerance:
+                        temporal_drift = max(temporal_drift, 1.0)
+                        failure_type = failure_type or "timestamp_skew_exceeded"
+                if temporal_drift == 0.0 and issuance_ts_local is not None and claim_issuance_ts is not None:
+                    if claim_issuance_ts != issuance_ts_local:
+                        temporal_drift = 0.4
+                        failure_type = "timestamp_skew_within_tolerance"
+                drift_vector = DriftVector(0.0, 0.0, 0.0, temporal_drift)
+                status = "invalid" if failure_type == "timestamp_skew_exceeded" else "valid"
         elif replay_cache is not None and binding_key in replay_cache:
             drift_vector = DriftVector(1.0, 0.0, 0.0, 0.0)
             status = "invalid"
@@ -392,6 +445,7 @@ def validate_local(
         validation_status=status,
         drift_score=drift_score,
         partial_allowed=partial_allowed,
+        pending_is_warning=bool(cfg.get("degrade_on_pending", True)),
     )
 
     if status == "partial" and not partial_allowed:
@@ -421,5 +475,4 @@ def validate_local(
         mission_control_event_name=result.mission_control_event_name,
         operator_message=operator_message,
     )
-    _ = observable_refs_local
     return result.to_dict()

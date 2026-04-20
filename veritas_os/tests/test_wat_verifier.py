@@ -5,7 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from veritas_os.security.signing import FileEd25519Signer
-from veritas_os.security.wat_token import WAT_VERSION_V1, build_wat_claims, sign_wat
+from veritas_os.security.wat_token import (
+    WAT_VERSION_V1,
+    build_wat_claims,
+    compute_observable_digest,
+    sign_wat,
+)
 from veritas_os.security.wat_verifier import DriftVector, score_drift, validate_local
 
 
@@ -147,6 +152,58 @@ def test_validate_local_observable_digest_mismatch(tmp_path: Path) -> None:
         now_ts=1_712_000_100,
     )
     assert result["failure_type"] == "observable_digest_mismatch"
+
+
+def test_validate_local_observable_digest_list_mismatch(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "B"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state="active",
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "invalid"
+    assert result["failure_type"] == "observable_digest_list_mismatch"
+
+
+def test_validate_local_empty_observables_with_matching_aggregate_is_valid(tmp_path: Path) -> None:
+    signer = _make_signer(tmp_path)
+    claims = build_wat_claims(
+        version=WAT_VERSION_V1,
+        psid_full="psid-full-empty",
+        action_payload={"action": "allow", "resource": "r-1"},
+        observable_refs=[],
+        issuance_ts=1_712_000_000,
+        expiry_ts=1_712_000_600,
+        session_id="session-empty",
+        nonce="nonce-empty",
+        signer_metadata={"source": "unit-test"},
+    )
+    signed_wat = sign_wat(claims, signer)
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-empty",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[],
+        observable_digest_local=compute_observable_digest([]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-empty",
+        session_id="session-empty",
+        revocation_state="active",
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "valid"
 
 
 def test_validate_local_expired_token_returns_stale(tmp_path: Path) -> None:
@@ -377,6 +434,28 @@ def test_validate_local_revoked_pending_is_warning_only(tmp_path: Path) -> None:
     )
     assert result["validation_status"] == "revoked_pending"
     assert result["admissibility_state"] == "warning_only_shadow"
+
+
+def test_validate_local_revoked_pending_blocks_when_degrade_disabled(tmp_path: Path) -> None:
+    signer, signed_wat = _signed_wat(tmp_path)
+    claims = signed_wat["claims"]
+    result = validate_local(
+        signed_wat=signed_wat,
+        psid_full_local="psid-full-001",
+        action_digest_local=str(claims["action_digest"]),
+        observable_refs_local=[{"obs": "A"}],
+        observable_digest_local=str(claims["observable_digest"]),
+        issuance_ts_local=int(claims["issuance_ts"]),
+        expiry_ts_local=int(claims["expiry_ts"]),
+        execution_nonce="nonce-1",
+        session_id="session-1",
+        revocation_state={"status": "revoked_pending"},
+        config={"degrade_on_pending": False},
+        signer=signer,
+        now_ts=1_712_000_100,
+    )
+    assert result["validation_status"] == "revoked_pending"
+    assert result["admissibility_state"] == "non_admissible"
 
 
 def test_validate_local_revoked_confirmed_is_hard_fail(tmp_path: Path) -> None:

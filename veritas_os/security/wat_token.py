@@ -76,6 +76,7 @@ def build_wat_claims(
     psid_display_length: int = 12,
 ) -> dict[str, Any]:
     """Build immutable WAT claims with required fields for v1."""
+    observable_digest_list = compute_observable_digests(observable_refs)
     claims: dict[str, Any] = {
         "wat_id": wat_id or str(uuid4()),
         "version": version,
@@ -83,7 +84,8 @@ def build_wat_claims(
         "psid_display": make_psid_display(psid_full, psid_display_length),
         "action_digest": compute_action_digest(action_payload),
         "observable_refs": list(observable_refs),
-        "observable_digest": compute_observable_digest(observable_refs),
+        "observable_digest_list": observable_digest_list,
+        "observable_digest": sha256_hex(canonical_json_dumps(observable_digest_list)),
         "issuance_ts": issuance_ts,
         "expiry_ts": expiry_ts,
         "session_id": session_id,
