@@ -56,6 +56,13 @@ FAILURES=0
 # ── Phase 0: Security configuration guards ────────────────────────────────
 
 log_info "Phase 0: Running security configuration guards..."
+if python scripts/security/report_security_flag_posture.py; then
+    log_info "Phase 0: Security flag posture summary emitted ✓"
+else
+    log_error "Phase 0: Security flag posture summary FAILED ✗"
+    FAILURES=$((FAILURES + 1))
+fi
+
 if python scripts/security/check_query_api_key_compat_flags.py; then
     log_info "Phase 0: Query API key compatibility flag guard PASSED ✓"
 else
