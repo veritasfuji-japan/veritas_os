@@ -9,6 +9,10 @@ contracts:
 2. `BindReceipt`
 
 It also introduces `FinalOutcome` for bind-time terminal status.
+In addition, bind-boundary artifacts are now appended to the existing TrustLog
+path so auditors can traverse native lineage:
+
+`decision artifact -> execution intent -> bind receipt`
 
 ## Why these artifacts exist
 
@@ -34,6 +38,21 @@ This PR is **schema-first only** and does not introduce:
 - Mission Control UI workflow rewiring
 - broad pipeline behavior changes
 
+## TrustLog and lineage integration
+
+- `ExecutionIntent` appends as `kind=governance.execution_intent` via the
+  existing `append_trust_log` implementation (same hash-chain/signing path).
+- `BindReceipt` appends as `kind=governance.bind_receipt` via the same TrustLog
+  append pipeline and receives the TrustLog chain hash in `trustlog_hash`.
+- `prev_bind_hash` chaining is derived from prior bind receipts already stored
+  in TrustLog (`bind_receipt_hash`), not from a new logging plane.
+- Retrieval helpers resolve bind receipts by `bind_receipt_id`,
+  `execution_intent_id`, or `decision_id` directly from TrustLog entries.
+
+This keeps decision artifacts primary while extending native VERITAS governance
+lineage toward bind-boundary control.
+
 ## Runtime behavior impact
 
-None. Existing decision flows remain backward compatible.
+Low and additive. Existing decision flows remain backward compatible, and no
+execution adapter/orchestration behavior is introduced in this PR.

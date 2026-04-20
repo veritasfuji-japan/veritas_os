@@ -19,7 +19,7 @@ Design constraints
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
@@ -154,3 +154,126 @@ def hash_execution_intent(intent: ExecutionIntent) -> str:
 def hash_bind_receipt(receipt: BindReceipt) -> str:
     """Compute SHA-256 over canonical ``BindReceipt`` payload."""
     return sha256_of_canonical_json(receipt.to_dict())
+
+
+def build_execution_intent_trustlog_entry(intent: ExecutionIntent) -> dict[str, Any]:
+    """Build a native TrustLog entry payload for ``ExecutionIntent`` lineage."""
+    return {
+        "kind": "governance.execution_intent",
+        "request_id": intent.request_id or intent.decision_id,
+        "decision_id": intent.decision_id,
+        "execution_intent_id": intent.execution_intent_id,
+        "policy_snapshot_id": intent.policy_snapshot_id,
+        "actor_identity": intent.actor_identity,
+        "decision_hash": intent.decision_hash,
+        "execution_intent_hash": hash_execution_intent(intent),
+        "execution_intent": intent.to_dict(),
+    }
+
+
+def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
+    """Return ``BindReceipt`` when entry is a bind-receipt trustlog record."""
+    if entry.get("kind") != "governance.bind_receipt":
+        return None
+    payload = entry.get("bind_receipt")
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return BindReceipt(
+            bind_receipt_id=str(payload.get("bind_receipt_id") or ""),
+            execution_intent_id=str(payload.get("execution_intent_id") or ""),
+            decision_id=str(payload.get("decision_id") or ""),
+            bind_ts=str(payload.get("bind_ts") or ""),
+            live_state_fingerprint_before=str(payload.get("live_state_fingerprint_before") or ""),
+            live_state_fingerprint_after=str(payload.get("live_state_fingerprint_after") or ""),
+            authority_check_result=dict(payload.get("authority_check_result") or {}),
+            constraint_check_result=dict(payload.get("constraint_check_result") or {}),
+            drift_check_result=dict(payload.get("drift_check_result") or {}),
+            risk_check_result=dict(payload.get("risk_check_result") or {}),
+            admissibility_result=dict(payload.get("admissibility_result") or {}),
+            final_outcome=FinalOutcome(str(payload.get("final_outcome") or FinalOutcome.BLOCKED.value)),
+            rollback_reason=payload.get("rollback_reason"),
+            escalation_reason=payload.get("escalation_reason"),
+            trustlog_hash=str(payload.get("trustlog_hash") or ""),
+            prev_bind_hash=payload.get("prev_bind_hash"),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def get_previous_bind_hash(*, decision_id: str = "", execution_intent_id: str = "") -> str | None:
+    """Find the latest bind hash for lineage chaining using native TrustLog."""
+    from veritas_os.logging.trust_log import iter_trust_log
+
+    for entry in iter_trust_log(reverse=True):
+        if entry.get("kind") != "governance.bind_receipt":
+            continue
+        if decision_id and entry.get("decision_id") != decision_id:
+            continue
+        if execution_intent_id and entry.get("execution_intent_id") != execution_intent_id:
+            continue
+        value = entry.get("bind_receipt_hash")
+        if isinstance(value, str) and value:
+            return value
+    return None
+
+
+def append_execution_intent_trustlog(intent: ExecutionIntent) -> dict[str, Any]:
+    """Append ``ExecutionIntent`` to TrustLog using existing hash-chain/sign path."""
+    from veritas_os.logging.trust_log import append_trust_log
+
+    return append_trust_log(build_execution_intent_trustlog_entry(intent))
+
+
+def append_bind_receipt_trustlog(receipt: BindReceipt) -> BindReceipt:
+    """Append ``BindReceipt`` via native TrustLog and return linked receipt."""
+    from veritas_os.logging.trust_log import append_trust_log
+
+    prev_bind_hash = receipt.prev_bind_hash or get_previous_bind_hash(
+        decision_id=receipt.decision_id,
+        execution_intent_id=receipt.execution_intent_id,
+    )
+    candidate = replace(receipt, prev_bind_hash=prev_bind_hash)
+    bind_receipt_hash = hash_bind_receipt(candidate)
+
+    entry = append_trust_log(
+        {
+            "kind": "governance.bind_receipt",
+            "request_id": candidate.decision_id,
+            "decision_id": candidate.decision_id,
+            "execution_intent_id": candidate.execution_intent_id,
+            "bind_receipt_id": candidate.bind_receipt_id,
+            "bind_ts": candidate.bind_ts,
+            "final_outcome": candidate.final_outcome.value,
+            "prev_bind_hash": candidate.prev_bind_hash,
+            "bind_receipt_hash": bind_receipt_hash,
+            "bind_receipt": candidate.to_dict(),
+        }
+    )
+    trustlog_hash = str(entry.get("sha256") or "")
+    return replace(candidate, trustlog_hash=trustlog_hash)
+
+
+def find_bind_receipts(
+    *,
+    bind_receipt_id: str | None = None,
+    execution_intent_id: str | None = None,
+    decision_id: str | None = None,
+) -> list[BindReceipt]:
+    """Retrieve bind receipts from TrustLog filtered by lineage identifiers."""
+    from veritas_os.logging.trust_log import iter_trust_log
+
+    matched: list[BindReceipt] = []
+    for entry in iter_trust_log(reverse=False):
+        if entry.get("kind") != "governance.bind_receipt":
+            continue
+        if bind_receipt_id and entry.get("bind_receipt_id") != bind_receipt_id:
+            continue
+        if execution_intent_id and entry.get("execution_intent_id") != execution_intent_id:
+            continue
+        if decision_id and entry.get("decision_id") != decision_id:
+            continue
+        receipt = _extract_bind_receipt(entry)
+        if receipt is not None:
+            matched.append(receipt)
+    return matched
