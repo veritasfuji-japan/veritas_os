@@ -14,6 +14,7 @@ from .bind_artifacts import (
     hash_bind_receipt,
     hash_execution_intent,
 )
+from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
 from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
 from .hash import canonical_ir_json, semantic_policy_hash
@@ -32,6 +33,9 @@ __all__ = [
     "ExecutionIntent",
     "BindReceipt",
     "FinalOutcome",
+    "BindBoundaryAdapter",
+    "ReferenceBindAdapter",
+    "execute_bind_boundary",
     "append_execution_intent_trustlog",
     "append_bind_receipt_trustlog",
     "find_bind_receipts",
