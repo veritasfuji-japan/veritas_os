@@ -46,7 +46,15 @@
 - CORSは wildcard + credentials を防止する実装で、典型的な誤設定事故を抑止している。
 - TrustLog/ガバナンス周辺の対象テストは今回実行範囲で全件成功。
 
+## 改善対応（2026-04-20 実施）
+- `scripts/security/check_query_api_key_compat_flags.py` を追加し、`VERITAS_ENV` が `prod/production` の場合に
+  `VERITAS_ALLOW_SSE_QUERY_API_KEY` / `VERITAS_ALLOW_WS_QUERY_API_KEY` が有効化されていれば **fail** するガードを実装。
+- `scripts/production_validation.sh` に Phase 0 を追加し、上記ガードを本番検証フローの先頭で実行するよう更新。
+- 回帰テスト `veritas_os/tests/test_check_query_compat_flags.py` を追加し、
+  非本番スキップ・本番fail条件・CLI終了コードを検証。
+- CodeQL 指摘（clear-text logging of sensitive information）に対応し、CLI失敗時ログは
+  フラグ名/値を出力せず `redacted` 表記に統一。
+
 ## 追加提案（任意）
 - セキュリティフラグ（query認証移行フラグ、danger presetフラグ）の**起動時サマリー出力**を1箇所へ集約し、SREの可観測性を向上。
-- `scripts/production_validation.sh` に「query API key フラグ=OFF」を検証する明示チェックを追加。
-
+- フロントエンドの `NEXT_PUBLIC_ENABLE_DANGER_PRESETS` についても、`production_validation.sh` で明示ガードを追加すると運用事故をさらに減らせる。
