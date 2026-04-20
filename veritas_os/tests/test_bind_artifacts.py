@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+import pytest
+
 from veritas_os.api.schemas import BindReceipt as ApiBindReceipt
 from veritas_os.api.schemas import DecideResponse
 from veritas_os.api.schemas import ExecutionIntent as ApiExecutionIntent
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent, FinalOutcome
+from veritas_os.policy.bind_artifacts import append_bind_receipt_trustlog
+from veritas_os.policy.bind_artifacts import append_execution_intent_trustlog
 from veritas_os.policy.bind_artifacts import canonical_bind_receipt_json
 from veritas_os.policy.bind_artifacts import canonical_execution_intent_json
+from veritas_os.policy.bind_artifacts import find_bind_receipts, get_previous_bind_hash
 from veritas_os.policy.bind_artifacts import hash_bind_receipt, hash_execution_intent
 
 
@@ -158,3 +165,83 @@ def test_backward_compatibility_existing_decide_response_unchanged() -> None:
     api_receipt = ApiBindReceipt(execution_intent_id="ei-001", decision_id="dec-001")
     assert api_intent.decision_id == "dec-001"
     assert api_receipt.decision_id == "dec-001"
+
+
+@pytest.fixture()
+def trustlog_env(tmp_path, monkeypatch):
+    """Redirect TrustLog paths to temporary files with a generated key."""
+    from veritas_os.logging import trust_log
+    from veritas_os.logging.encryption import generate_key
+
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(trust_log, "LOG_JSON", tmp_path / "trust_log.json", raising=False)
+    monkeypatch.setattr(trust_log, "LOG_JSONL", tmp_path / "trust_log.jsonl", raising=False)
+    monkeypatch.setattr(trust_log, "_append_stats", {"success": 0, "failure": 0}, raising=False)
+
+    def _open_for_append():
+        trust_log.LOG_JSONL.parent.mkdir(parents=True, exist_ok=True)
+        return open(trust_log.LOG_JSONL, "a", encoding="utf-8")
+
+    monkeypatch.setattr(trust_log, "open_trust_log_for_append", _open_for_append)
+    return tmp_path
+
+
+def test_trustlog_append_and_lineage_linkage_for_bind_receipt(trustlog_env) -> None:
+    """Decision -> execution intent -> bind receipt should be linked in TrustLog."""
+    intent = ExecutionIntent(
+        execution_intent_id="ei-100",
+        decision_id="dec-100",
+        request_id="req-100",
+        policy_snapshot_id="policy-v2",
+        actor_identity="mission-control-operator",
+        decision_hash="1" * 64,
+    )
+    intent_entry = append_execution_intent_trustlog(intent)
+    assert intent_entry["kind"] == "governance.execution_intent"
+    assert intent_entry["decision_id"] == "dec-100"
+
+    receipt = BindReceipt(
+        bind_receipt_id="br-100",
+        execution_intent_id="ei-100",
+        decision_id="dec-100",
+        bind_ts="2026-04-20T00:00:00Z",
+        final_outcome=FinalOutcome.COMMITTED,
+    )
+    stored_receipt = append_bind_receipt_trustlog(receipt)
+    assert stored_receipt.trustlog_hash
+
+    by_bind_id = find_bind_receipts(bind_receipt_id="br-100")
+    by_intent_id = find_bind_receipts(execution_intent_id="ei-100")
+    by_decision_id = find_bind_receipts(decision_id="dec-100")
+
+    assert len(by_bind_id) == 1
+    assert len(by_intent_id) == 1
+    assert len(by_decision_id) == 1
+    assert by_decision_id[0].execution_intent_id == "ei-100"
+
+
+def test_previous_bind_hash_chaining_uses_existing_trustlog(trustlog_env) -> None:
+    """Second bind receipt should link to previous bind-receipt hash."""
+    first = BindReceipt(
+        bind_receipt_id="br-201",
+        execution_intent_id="ei-200",
+        decision_id="dec-200",
+        bind_ts="2026-04-20T10:00:00Z",
+        final_outcome=FinalOutcome.BLOCKED,
+    )
+    first_stored = append_bind_receipt_trustlog(first)
+
+    second = replace(
+        first,
+        bind_receipt_id="br-202",
+        bind_ts="2026-04-20T10:01:00Z",
+        final_outcome=FinalOutcome.COMMITTED,
+    )
+    second_stored = append_bind_receipt_trustlog(second)
+
+    assert first_stored.prev_bind_hash is None
+    assert get_previous_bind_hash(decision_id="dec-200", execution_intent_id="ei-200")
+    assert second_stored.prev_bind_hash == hash_bind_receipt(
+        replace(first_stored, trustlog_hash="")
+    )
