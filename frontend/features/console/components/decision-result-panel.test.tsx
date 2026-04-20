@@ -144,7 +144,7 @@ describe("DecisionResultPanel", () => {
         <DecisionResultPanel result={bindResult as never} viewerRole="operator" />
       </I18nProvider>,
     );
-    expect(screen.getByText("Bind-phase governance")).toBeInTheDocument();
+    expect(screen.getByText(/Bind-phase governance|Bindフェーズ統治/)).toBeInTheDocument();
     expect(screen.getByText(/Decision phase:/)).toBeInTheDocument();
     expect(screen.getByText(/Bind phase:/)).toBeInTheDocument();
     expect(screen.getByText("BLOCKED")).toBeInTheDocument();

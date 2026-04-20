@@ -251,6 +251,137 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            human_review_required
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -764,6 +895,137 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            block
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -1282,6 +1544,137 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            hold
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -1791,6 +2184,137 @@ exports[`DecisionResultPanel snapshots > renders four fixture states without reg
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            allow
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -2300,6 +2824,137 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            allow
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -2809,6 +3464,137 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            allow
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"
@@ -3318,6 +4104,137 @@ exports[`DecisionResultPanel snapshots > renders role-based views without regres
           </p>
         </article>
       </div>
+      <article
+        class="space-y-2 rounded-md border border-border/70 bg-background/70 p-3"
+      >
+        <h4
+          class="font-semibold text-foreground"
+        >
+          Bindフェーズ統治
+        </h4>
+        <div
+          class="flex flex-wrap items-center gap-2"
+        >
+          <span
+            class="text-muted-foreground"
+          >
+            Decision phase
+            :
+          </span>
+          <span
+            class="font-mono text-[11px]"
+          >
+            allow
+          </span>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind phase
+            :
+          </span>
+          <span
+            class="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-muted text-muted-foreground"
+          >
+            UNKNOWN
+          </span>
+        </div>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Bind receipt
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Execution intent
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Failure reason
+            :
+          </span>
+           
+          n/a
+        </p>
+        <p>
+          <span
+            class="text-muted-foreground"
+          >
+            Reason code
+            :
+          </span>
+           
+          <span
+            class="font-mono text-[11px]"
+          >
+            n/a
+          </span>
+        </p>
+        <div
+          class="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2"
+        >
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              authority
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              constraints
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              drift
+              :
+            </span>
+             
+            n/a
+          </p>
+          <p>
+            <span
+              class="text-muted-foreground"
+            >
+              risk
+              :
+            </span>
+             
+            n/a
+          </p>
+        </div>
+      </article>
     </section>
     <section
       class="space-y-2 rounded-md border border-border bg-background/60 p-3 text-xs"

@@ -163,24 +163,24 @@ export function DecisionResultPanel({
           </div>
 
           <article className="space-y-2 rounded-md border border-border/70 bg-background/70 p-3">
-            <h4 className="font-semibold text-foreground">Bind-phase governance</h4>
+            <h4 className="font-semibold text-foreground">{tk("decisionPanelBindPhaseTitle")}</h4>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-muted-foreground">Decision phase:</span>
+              <span className="text-muted-foreground">{tk("decisionPanelDecisionPhaseLabel")}:</span>
               <span className="font-mono text-[11px]">{bindPhase.decisionPhase}</span>
-              <span className="text-muted-foreground">Bind phase:</span>
+              <span className="text-muted-foreground">{tk("decisionPanelBindPhaseLabel")}:</span>
               <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${bindBadgeClass}`}>
                 {bindPhase.bindPhase}
               </span>
             </div>
-            <p><span className="text-muted-foreground">Bind receipt:</span> <span className="font-mono text-[11px]">{bindPhase.bindReceiptId}</span></p>
-            <p><span className="text-muted-foreground">Execution intent:</span> <span className="font-mono text-[11px]">{bindPhase.executionIntentId}</span></p>
-            <p><span className="text-muted-foreground">Failure reason:</span> {bindPhase.bindFailureReason}</p>
-            <p><span className="text-muted-foreground">Reason code:</span> <span className="font-mono text-[11px]">{bindPhase.bindReasonCode}</span></p>
+            <p><span className="text-muted-foreground">{tk("decisionPanelBindReceiptLabel")}:</span> <span className="font-mono text-[11px]">{bindPhase.bindReceiptId}</span></p>
+            <p><span className="text-muted-foreground">{tk("decisionPanelExecutionIntentLabel")}:</span> <span className="font-mono text-[11px]">{bindPhase.executionIntentId}</span></p>
+            <p><span className="text-muted-foreground">{tk("decisionPanelBindFailureReasonLabel")}:</span> {bindPhase.bindFailureReason}</p>
+            <p><span className="text-muted-foreground">{tk("decisionPanelBindReasonCodeLabel")}:</span> <span className="font-mono text-[11px]">{bindPhase.bindReasonCode}</span></p>
             <div className="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2">
-              <p><span className="text-muted-foreground">authority:</span> {bindPhase.checks.authority}</p>
-              <p><span className="text-muted-foreground">constraints:</span> {bindPhase.checks.constraints}</p>
-              <p><span className="text-muted-foreground">drift:</span> {bindPhase.checks.drift}</p>
-              <p><span className="text-muted-foreground">risk:</span> {bindPhase.checks.risk}</p>
+              <p><span className="text-muted-foreground">{tk("decisionPanelBindAuthorityLabel")}:</span> {bindPhase.checks.authority}</p>
+              <p><span className="text-muted-foreground">{tk("decisionPanelBindConstraintsLabel")}:</span> {bindPhase.checks.constraints}</p>
+              <p><span className="text-muted-foreground">{tk("decisionPanelBindDriftLabel")}:</span> {bindPhase.checks.drift}</p>
+              <p><span className="text-muted-foreground">{tk("decisionPanelBindRiskLabel")}:</span> {bindPhase.checks.risk}</p>
             </div>
           </article>
         </section>
