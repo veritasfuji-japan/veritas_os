@@ -14,6 +14,12 @@ interface FlaggedRequestsListProps {
 
 export const FlaggedRequestsList = memo(function FlaggedRequestsList({ entries, selectedPointId, onSelectPoint }: FlaggedRequestsListProps): JSX.Element {
   const { t } = useI18n();
+  const bindBadgeClass = (outcome: FlaggedEntry["bindOutcome"]): string => {
+    if (outcome === "COMMITTED") return "bg-emerald-500/20 text-emerald-700 border-emerald-600/30";
+    if (outcome === "BLOCKED") return "bg-rose-500/20 text-rose-700 border-rose-600/30";
+    if (outcome === "ESCALATED") return "bg-amber-500/20 text-amber-700 border-amber-600/30";
+    return "bg-orange-500/20 text-orange-700 border-orange-600/30";
+  };
 
   return (
     <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs">
@@ -42,9 +48,25 @@ export const FlaggedRequestsList = memo(function FlaggedRequestsList({ entries, 
                   </div>
                 </div>
                 <p className="mt-0.5 text-muted-foreground">risk {entry.point.risk.toFixed(2)} / uncertainty {entry.point.uncertainty.toFixed(2)}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1 text-[9px]">
+                  <span className="rounded border border-border/50 px-1.5 py-0.5">
+                    decision: {entry.decisionOutcome}
+                  </span>
+                  <span className={`rounded border px-1.5 py-0.5 font-semibold ${bindBadgeClass(entry.bindOutcome)}`}>
+                    bind: {entry.bindOutcome}
+                  </span>
+                  {entry.bindFailureReason !== "none" ? (
+                    <span className="rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-warning">
+                      {entry.bindFailureReason}
+                    </span>
+                  ) : null}
+                </div>
                 <div className="mt-1 flex gap-1">
                   <Link href={`/console?request_id=${encodeURIComponent(entry.point.id)}`} className="rounded border border-border/50 px-1.5 py-0.5 text-[9px] hover:bg-muted/40" onClick={(event) => event.stopPropagation()}>
                     Open in Decision
+                  </Link>
+                  <Link href={entry.bindLineageHref} className="rounded border border-border/50 px-1.5 py-0.5 text-[9px] hover:bg-muted/40" onClick={(event) => event.stopPropagation()}>
+                    Bind lineage
                   </Link>
                   <Link href={`/audit?request_id=${encodeURIComponent(entry.point.id)}`} className="rounded border border-border/50 px-1.5 py-0.5 text-[9px] hover:bg-muted/40" onClick={(event) => event.stopPropagation()}>
                     Open in TrustLog

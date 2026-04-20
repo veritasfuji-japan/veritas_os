@@ -1,4 +1,15 @@
-import type { ClusterKind, FlaggedEntry, FlagReason, RiskPoint, Severity, RequestStatus, TrendBucket } from "./risk-types";
+import type {
+  BindBreakdown,
+  BindPhaseOutcome,
+  ClusterKind,
+  DecisionPhaseOutcome,
+  FlaggedEntry,
+  FlagReason,
+  RiskPoint,
+  Severity,
+  RequestStatus,
+  TrendBucket,
+} from "./risk-types";
 import {
   ALERT_CLUSTER_THRESHOLD,
   RISK_CONFIDENCE_WEIGHT,
@@ -72,6 +83,72 @@ export function deriveStatus(point: RiskPoint): RequestStatus {
   return "new";
 }
 
+function deriveDecisionOutcome(point: RiskPoint): DecisionPhaseOutcome {
+  if (point.risk >= 0.9) return "deny";
+  if (point.risk >= 0.75 || point.uncertainty >= 0.8) return "modify";
+  if (point.uncertainty >= 0.65) return "hold";
+  return "allow";
+}
+
+/**
+ * Builds synthetic bind-phase state for Mission Control visualization.
+ *
+ * The values are deterministic from risk telemetry so tests and UI state stay
+ * stable without introducing backend coupling.
+ */
+function deriveBindPhase(point: RiskPoint): {
+  outcome: BindPhaseOutcome;
+  failureReason: string;
+  breakdown: BindBreakdown;
+} {
+  if (point.risk >= 0.92) {
+    return {
+      outcome: "BLOCKED",
+      failureReason: "Authority denied due to critical policy risk.",
+      breakdown: {
+        authority: "FAIL",
+        constraints: "PASS",
+        drift: "PASS",
+        risk: "FAIL",
+      },
+    };
+  }
+  if (point.risk >= 0.84 && point.uncertainty >= 0.78) {
+    return {
+      outcome: "ESCALATED",
+      failureReason: "Human escalation required for unstable high-risk profile.",
+      breakdown: {
+        authority: "PASS",
+        constraints: "PASS",
+        drift: "FAIL",
+        risk: "FAIL",
+      },
+    };
+  }
+  if (point.uncertainty >= 0.88) {
+    return {
+      outcome: "ROLLED_BACK",
+      failureReason: "Bind was rolled back after drift threshold exceeded.",
+      breakdown: {
+        authority: "PASS",
+        constraints: "PASS",
+        drift: "FAIL",
+        risk: "PASS",
+      },
+    };
+  }
+  return {
+    outcome: "COMMITTED",
+    failureReason: "none",
+    breakdown: {
+      authority: "PASS",
+      constraints: "PASS",
+      drift: "PASS",
+      risk: "PASS",
+    },
+  };
+}
+
 export function buildFlagReason(point: RiskPoint): FlagReason {
   const cluster = getCluster(point);
   const policyConfidence = Math.max(0, 1 - point.risk * RISK_CONFIDENCE_WEIGHT - point.uncertainty * UNCERTAINTY_CONFIDENCE_WEIGHT);
@@ -117,11 +194,19 @@ function deriveStageAnomalies(point: RiskPoint): string[] {
 }
 
 export function enrichFlaggedEntry(point: RiskPoint): FlaggedEntry {
+  const bindPhase = deriveBindPhase(point);
+  const bindReceiptId = `bind-${point.id}`;
   return {
     point,
     cluster: getCluster(point),
     severity: deriveSeverity(point),
     status: deriveStatus(point),
+    decisionOutcome: deriveDecisionOutcome(point),
+    bindOutcome: bindPhase.outcome,
+    bindFailureReason: bindPhase.failureReason,
+    bindReceiptId,
+    bindLineageHref: `/audit?bind_receipt_id=${encodeURIComponent(bindReceiptId)}`,
+    bindBreakdown: bindPhase.breakdown,
     reason: buildFlagReason(point),
     relatedPolicyHits: deriveRelatedPolicyHits(point),
     stageAnomalies: deriveStageAnomalies(point),

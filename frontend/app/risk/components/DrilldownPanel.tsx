@@ -12,6 +12,12 @@ interface DrilldownPanelProps {
 
 export const DrilldownPanel = memo(function DrilldownPanel({ entry }: DrilldownPanelProps): JSX.Element {
   const { t } = useI18n();
+  const bindBadgeClass = (outcome: FlaggedEntry["bindOutcome"]): string => {
+    if (outcome === "COMMITTED") return "bg-emerald-500/20 text-emerald-700 border-emerald-600/30";
+    if (outcome === "BLOCKED") return "bg-rose-500/20 text-rose-700 border-rose-600/30";
+    if (outcome === "ESCALATED") return "bg-amber-500/20 text-amber-700 border-amber-600/30";
+    return "bg-orange-500/20 text-orange-700 border-orange-600/30";
+  };
 
   return (
     <div className="rounded-lg border border-border/50 bg-background/60 p-3 text-xs" data-testid="drilldown-panel">
@@ -42,6 +48,20 @@ export const DrilldownPanel = memo(function DrilldownPanel({ entry }: DrilldownP
                 <span className="rounded bg-muted/40 px-1 py-0.5 text-[9px]">{STATUS_LABELS[entry.status]}</span>
               </div>
             </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase text-muted-foreground">Decision vs Bind outcome</p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px]">
+                <span className="rounded border border-border/50 px-1.5 py-0.5">
+                  Decision phase: {entry.decisionOutcome}
+                </span>
+                <span className={`rounded border px-1.5 py-0.5 font-semibold ${bindBadgeClass(entry.bindOutcome)}`}>
+                  Bind phase: {entry.bindOutcome}
+                </span>
+              </div>
+              {entry.bindFailureReason !== "none" ? (
+                <p className="mt-1 text-[10px] text-warning">Failure reason: {entry.bindFailureReason}</p>
+              ) : null}
+            </div>
           </div>
           <div className="space-y-2">
             <div>
@@ -68,10 +88,22 @@ export const DrilldownPanel = memo(function DrilldownPanel({ entry }: DrilldownP
                 <p className="text-muted-foreground">No anomalies detected</p>
               )}
             </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase text-muted-foreground">Bind breakdown</p>
+              <div className="mt-0.5 grid grid-cols-2 gap-1 text-[10px]">
+                <p className="rounded border border-border/50 px-1.5 py-0.5">authority: {entry.bindBreakdown.authority}</p>
+                <p className="rounded border border-border/50 px-1.5 py-0.5">constraints: {entry.bindBreakdown.constraints}</p>
+                <p className="rounded border border-border/50 px-1.5 py-0.5">drift: {entry.bindBreakdown.drift}</p>
+                <p className="rounded border border-border/50 px-1.5 py-0.5">risk: {entry.bindBreakdown.risk}</p>
+              </div>
+            </div>
           </div>
           <div className="md:col-span-2 flex flex-wrap gap-1 border-t border-border/30 pt-2">
             <Link href={`/console?request_id=${encodeURIComponent(entry.point.id)}`} className="rounded border border-border/60 px-2 py-0.5 text-[10px] font-semibold hover:bg-muted/40 inline-flex items-center gap-1">
               <span aria-hidden>⚡</span> Open in Decision
+            </Link>
+            <Link href={entry.bindLineageHref} className="rounded border border-border/60 px-2 py-0.5 text-[10px] font-semibold hover:bg-muted/40 inline-flex items-center gap-1">
+              <span aria-hidden>🧬</span> Bind lineage ({entry.bindReceiptId})
             </Link>
             <Link href={`/audit?request_id=${encodeURIComponent(entry.point.id)}`} className="rounded border border-border/60 px-2 py-0.5 text-[10px] font-semibold hover:bg-muted/40 inline-flex items-center gap-1">
               <span aria-hidden>📋</span> Open in TrustLog

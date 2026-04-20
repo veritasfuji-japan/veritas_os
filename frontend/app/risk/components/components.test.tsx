@@ -36,6 +36,17 @@ const mockEntry: FlaggedEntry = {
   cluster: "critical",
   severity: "critical",
   status: "new",
+  decisionOutcome: "modify",
+  bindOutcome: "BLOCKED",
+  bindFailureReason: "Authority denied due to critical policy risk.",
+  bindReceiptId: "bind-req-001",
+  bindLineageHref: "/audit?bind_receipt_id=bind-req-001",
+  bindBreakdown: {
+    authority: "FAIL",
+    constraints: "PASS",
+    drift: "PASS",
+    risk: "FAIL",
+  },
   reason: {
     policyConfidence: 0.2,
     unstableOutputSignal: true,
@@ -64,6 +75,9 @@ describe("DrilldownPanel", () => {
     expect(screen.getByText("critical")).toBeInTheDocument();
     expect(screen.getByText(/PII detected/)).toBeInTheDocument();
     expect(screen.getByText(/Latency spike/)).toBeInTheDocument();
+    expect(screen.getByText(/Decision phase: modify/)).toBeInTheDocument();
+    expect(screen.getByText(/Bind phase: BLOCKED/)).toBeInTheDocument();
+    expect(screen.getByText(/authority: FAIL/)).toBeInTheDocument();
   });
 
   it("renders navigation links", () => {
@@ -71,6 +85,7 @@ describe("DrilldownPanel", () => {
     expect(screen.getByText("Open in Decision")).toHaveAttribute("href", "/console?request_id=req-001");
     expect(screen.getByText("Open in TrustLog")).toHaveAttribute("href", "/audit?request_id=req-001");
     expect(screen.getByText("Adjust in Governance")).toHaveAttribute("href", "/governance");
+    expect(screen.getByText(/Bind lineage/)).toHaveAttribute("href", "/audit?bind_receipt_id=bind-req-001");
   });
 });
 
@@ -89,6 +104,8 @@ describe("FlaggedRequestsList", () => {
     expect(screen.getByText("critical")).toBeInTheDocument();
     expect(screen.getByText("Open in Decision")).toHaveAttribute("href", "/console?request_id=req-001");
     expect(screen.getByText("Open in TrustLog")).toHaveAttribute("href", "/audit?request_id=req-001");
+    expect(screen.getByText(/bind:\s*BLOCKED/i)).toBeInTheDocument();
+    expect(screen.getByText("Bind lineage")).toHaveAttribute("href", "/audit?bind_receipt_id=bind-req-001");
   });
 
   it("calls onSelectPoint when entry button clicked", () => {
