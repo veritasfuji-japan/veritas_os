@@ -1,6 +1,15 @@
 """Policy-as-Code public interfaces for schema validation and canonicalization."""
 
 from .compiler import COMPILER_VERSION, CompileResult, compile_policy_to_bundle
+from .bind_artifacts import (
+    BindReceipt,
+    ExecutionIntent,
+    FinalOutcome,
+    canonical_bind_receipt_json,
+    canonical_execution_intent_json,
+    hash_bind_receipt,
+    hash_execution_intent,
+)
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
 from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
 from .hash import canonical_ir_json, semantic_policy_hash
@@ -16,6 +25,9 @@ from .schema import load_and_validate_policy, validate_source_policy
 
 __all__ = [
     "OutcomeAction",
+    "ExecutionIntent",
+    "BindReceipt",
+    "FinalOutcome",
     "PolicyCompilationError",
     "PolicyValidationError",
     "SourcePolicy",
@@ -23,6 +35,8 @@ __all__ = [
     "CompileResult",
     "GeneratedPolicyTestCase",
     "canonical_ir_json",
+    "canonical_execution_intent_json",
+    "canonical_bind_receipt_json",
     "compile_policy_to_bundle",
     "build_generated_test_cases",
     "evaluate_runtime_policies",
@@ -30,6 +44,8 @@ __all__ = [
     "load_runtime_bundle",
     "PolicyEvaluationResult",
     "semantic_policy_hash",
+    "hash_execution_intent",
+    "hash_bind_receipt",
     "RuntimePolicy",
     "RuntimePolicyBundle",
     "verify_manifest_signature",

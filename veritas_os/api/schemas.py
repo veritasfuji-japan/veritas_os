@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
     field_validator,
 )
+from veritas_os.policy.bind_artifacts import FinalOutcome
 from veritas_os.core.decision_semantics import (
     COMPATIBLE_GATE_DECISION_VALUES,
     LEGACY_GATE_DECISION_ALIASES,
@@ -320,6 +321,50 @@ class TrustLog(BaseModel):
         Literal["verified", "degraded", "broken", "unknown"]
     ] = None
     chain_verification_reason: Optional[str] = None
+
+
+class ExecutionIntent(BaseModel):
+    """Decision-linked execution attempt descriptor (schema-first contract)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    execution_intent_id: str = Field(default_factory=lambda: uuid4().hex, max_length=MAX_ID_LENGTH)
+    decision_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    request_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    policy_snapshot_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    actor_identity: str = Field(default="", max_length=MAX_ACTOR_LENGTH)
+    target_system: str = Field(default="", max_length=MAX_TITLE_LENGTH)
+    target_resource: str = Field(default="", max_length=MAX_URI_LENGTH)
+    intended_action: str = Field(default="", max_length=MAX_TITLE_LENGTH)
+    evidence_refs: List[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    decision_hash: str = Field(default="", max_length=128)
+    decision_ts: str = ""
+    ttl_seconds: Optional[int] = Field(default=None, ge=0)
+    expected_state_fingerprint: Optional[str] = Field(default=None, max_length=256)
+    approval_context: Optional[Dict[str, Any]] = None
+
+
+class BindReceipt(BaseModel):
+    """Bind-time governance artifact linked to decision lineage."""
+
+    model_config = ConfigDict(extra="allow")
+
+    bind_receipt_id: str = Field(default_factory=lambda: uuid4().hex, max_length=MAX_ID_LENGTH)
+    execution_intent_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    decision_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    bind_ts: str = ""
+    live_state_fingerprint_before: str = Field(default="", max_length=256)
+    live_state_fingerprint_after: str = Field(default="", max_length=256)
+    authority_check_result: Dict[str, Any] = Field(default_factory=dict)
+    constraint_check_result: Dict[str, Any] = Field(default_factory=dict)
+    drift_check_result: Dict[str, Any] = Field(default_factory=dict)
+    risk_check_result: Dict[str, Any] = Field(default_factory=dict)
+    admissibility_result: Dict[str, Any] = Field(default_factory=dict)
+    final_outcome: FinalOutcome = FinalOutcome.BLOCKED
+    rollback_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    escalation_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    trustlog_hash: str = Field(default="", max_length=128)
+    prev_bind_hash: Optional[str] = Field(default=None, max_length=128)
 
 
 # =========================
