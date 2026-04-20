@@ -124,4 +124,45 @@ describe("DecisionResultPanel", () => {
       },
     });
   });
+
+  it("renders bind-phase block with decision-vs-bind distinction and reason", () => {
+    const bindResult = {
+      ...baseResult,
+      gate_decision: "allow",
+      bind_outcome: "BLOCKED",
+      bind_failure_reason: "authority denied",
+      bind_reason_code: "AUTHORITY_DENIED",
+      bind_receipt_id: "br-11",
+      execution_intent_id: "ei-11",
+      authority_check_result: { passed: false },
+      constraint_check_result: { passed: true },
+      drift_check_result: { result: "stable" },
+      risk_check_result: { result: "elevated" },
+    };
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={bindResult as never} viewerRole="operator" />
+      </I18nProvider>,
+    );
+    expect(screen.getByText(/Bind-phase governance|Bindフェーズ統治/)).toBeInTheDocument();
+    expect(screen.getByText(/Decision phase:/)).toBeInTheDocument();
+    expect(screen.getByText(/Bind phase:/)).toBeInTheDocument();
+    expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+    expect(screen.getByText("authority denied")).toBeInTheDocument();
+    expect(screen.getByText("AUTHORITY_DENIED")).toBeInTheDocument();
+    expect(screen.getByText("FAIL")).toBeInTheDocument();
+    expect(screen.getByText("PASS")).toBeInTheDocument();
+  });
+
+  it.each(["COMMITTED", "BLOCKED", "ESCALATED", "ROLLED_BACK"])(
+    "renders bind outcome badge for %s",
+    (outcome) => {
+      render(
+        <I18nProvider>
+          <DecisionResultPanel result={{ ...baseResult, bind_outcome: outcome } as never} viewerRole="operator" />
+        </I18nProvider>,
+      );
+      expect(screen.getByText(outcome)).toBeInTheDocument();
+    },
+  );
 });

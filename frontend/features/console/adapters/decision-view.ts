@@ -17,6 +17,8 @@ import {
   type PipelineStageView,
   type RuntimeStatusView,
   type EvidenceBundleDraft,
+  type BindPhaseView,
+  type BindOutcomeStatus,
 } from "../types";
 
 const STAGE_ALIASES: Record<PipelineStageName, string[]> = {
@@ -121,6 +123,39 @@ function normalizeStatusValue(value: unknown): string {
   return normalized.length > 0 ? normalized : "n/a";
 }
 
+function readObjectField(record: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = record[key];
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function summarizeBindCheck(check: Record<string, unknown>): string {
+  const passed = check.passed;
+  if (typeof passed === "boolean") {
+    return passed ? "PASS" : "FAIL";
+  }
+  const result = check.result;
+  if (typeof result === "string" && result.trim().length > 0) {
+    return result.trim().toUpperCase();
+  }
+  return "n/a";
+}
+
+function normalizeBindOutcome(value: unknown): BindOutcomeStatus {
+  if (typeof value !== "string") {
+    return "UNKNOWN";
+  }
+  const normalized = value.trim().toUpperCase();
+  switch (normalized) {
+    case "COMMITTED":
+    case "BLOCKED":
+    case "ESCALATED":
+    case "ROLLED_BACK":
+      return normalized;
+    default:
+      return "UNKNOWN";
+  }
+}
+
 export function toRuntimeStatusView(result: DecideResponse): RuntimeStatusView {
   const record = result as Record<string, unknown>;
   return {
@@ -142,6 +177,26 @@ export function toEvidenceBundleDraft(result: DecideResponse): EvidenceBundleDra
     requiredEvidence: publicDecision.requiredEvidence,
     missingEvidence: publicDecision.missingEvidence,
     runtimeStatus: toRuntimeStatusView(result),
+  };
+}
+
+export function toBindPhaseView(result: DecideResponse): BindPhaseView {
+  const record = result as Record<string, unknown>;
+  const bindOutcome = normalizeBindOutcome(record.bind_outcome);
+  const gateDecision = readText(record, "gate_decision", "decision_status");
+  return {
+    decisionPhase: gateDecision,
+    bindPhase: bindOutcome,
+    bindReceiptId: readText(record, "bind_receipt_id"),
+    executionIntentId: readText(record, "execution_intent_id"),
+    bindFailureReason: readText(record, "bind_failure_reason", "rollback_reason", "escalation_reason"),
+    bindReasonCode: readText(record, "bind_reason_code"),
+    checks: {
+      authority: summarizeBindCheck(readObjectField(record, "authority_check_result")),
+      constraints: summarizeBindCheck(readObjectField(record, "constraint_check_result")),
+      drift: summarizeBindCheck(readObjectField(record, "drift_check_result")),
+      risk: summarizeBindCheck(readObjectField(record, "risk_check_result")),
+    },
   };
 }
 

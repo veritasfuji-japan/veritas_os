@@ -351,6 +351,76 @@ def test_governance_decision_export_endpoint() -> None:
     assert "items" in body
 
 
+def test_governance_decision_export_includes_bind_summary(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda decision_id=None, **_kwargs: [
+            type(
+                "Receipt",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "bind_receipt_id": "br-101",
+                        "execution_intent_id": "ei-101",
+                        "final_outcome": "BLOCKED",
+                        "constraint_check_result": {"reason_code": "CONSTRAINT_MISMATCH"},
+                        "escalation_reason": "operator escalation required",
+                    }
+                },
+            )()
+        ] if decision_id else [],
+    )
+    resp = client.get("/v1/governance/decisions/export?limit=5&bind_outcome=BLOCKED", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    if body["items"]:
+        item = body["items"][0]
+        assert item["bind_outcome"] == "BLOCKED"
+        assert item["bind_receipt_id"] == "br-101"
+        assert item["execution_intent_id"] == "ei-101"
+        assert item["bind_reason_code"] == "CONSTRAINT_MISMATCH"
+        assert item["bind_failure_reason"] == "operator escalation required"
+
+
+def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda bind_receipt_id=None, **_kwargs: [
+            type(
+                "Receipt",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "bind_receipt_id": bind_receipt_id,
+                        "execution_intent_id": "ei-501",
+                        "decision_id": "dec-501",
+                        "final_outcome": "ROLLED_BACK",
+                        "rollback_reason": "postcondition failed",
+                        "risk_check_result": {"reason_code": "POSTCONDITION_FAIL"},
+                        "authority_check_result": {"passed": True},
+                        "constraint_check_result": {"passed": True},
+                        "drift_check_result": {"passed": False},
+                    }
+                },
+            )()
+        ] if bind_receipt_id == "br-501" else [],
+    )
+    ok_resp = client.get("/v1/governance/bind-receipts/br-501", headers=HEADERS)
+    assert ok_resp.status_code == 200
+    ok_body = ok_resp.json()
+    assert ok_body["ok"] is True
+    assert ok_body["bind_outcome"] == "ROLLED_BACK"
+    assert ok_body["bind_reason_code"] == "POSTCONDITION_FAIL"
+    assert ok_body["bind_failure_reason"] == "postcondition failed"
+    assert ok_body["bind_receipt"]["bind_receipt_id"] == "br-501"
+
+    missing_resp = client.get("/v1/governance/bind-receipts/br-missing", headers=HEADERS)
+    assert missing_resp.status_code == 404
+    missing_body = missing_resp.json()
+    assert missing_body["ok"] is False
+
+
 
 # ----------------------------------------------------------------
 # Server governance endpoint error paths

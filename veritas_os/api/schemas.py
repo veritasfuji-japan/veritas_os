@@ -779,6 +779,46 @@ class DecideResponse(BaseModel):
             "status, and signer identity."
         ),
     )
+    bind_outcome: Optional[FinalOutcome] = Field(
+        default=None,
+        description="Bind-phase governance outcome linked to this decision when available.",
+    )
+    bind_failure_reason: Optional[str] = Field(
+        default=None,
+        max_length=MAX_DESCRIPTION_LENGTH,
+        description="Operator-facing reason when bind phase was blocked/escalated/rolled back.",
+    )
+    bind_reason_code: Optional[str] = Field(
+        default=None,
+        max_length=MAX_TITLE_LENGTH,
+        description="Machine-readable bind reason code for compact governance filtering.",
+    )
+    bind_receipt_id: Optional[str] = Field(
+        default=None,
+        max_length=MAX_ID_LENGTH,
+        description="Lineage pointer to the bind receipt artifact.",
+    )
+    execution_intent_id: Optional[str] = Field(
+        default=None,
+        max_length=MAX_ID_LENGTH,
+        description="Lineage pointer to the execution intent linked to bind phase.",
+    )
+    authority_check_result: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Authority check summary from bind-phase adjudication.",
+    )
+    constraint_check_result: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Constraint check summary from bind-phase adjudication.",
+    )
+    drift_check_result: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Drift check summary from bind-phase adjudication.",
+    )
+    risk_check_result: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Runtime risk check summary from bind-phase adjudication.",
+    )
     wat_integrity: Optional[Dict[str, Any]] = Field(
         default=None,
         description=(
