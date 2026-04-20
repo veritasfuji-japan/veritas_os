@@ -68,7 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     del argv  # reserved for future CLI options
 
     profile = (os.environ.get("VERITAS_ENV", "") or "").strip().lower()
-    ok, findings = validate_query_api_key_compat_flags(dict(os.environ))
+    ok, _findings = validate_query_api_key_compat_flags(dict(os.environ))
     if ok:
         if profile in PRODUCTION_ALIASES:
             print("Query API key compatibility flags are disabled for production.")
@@ -79,8 +79,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         return 0
 
-    for line in findings:
-        print(line)
+    print(
+        "[SECURITY] Query API key compatibility flags must be disabled in "
+        "production deployments."
+    )
+    print(
+        "- enabled_compatibility_flags_detected: true "
+        "(redacted for safe logging)"
+    )
+    print("- action: unset the compatibility flags before release.")
     return 1
 
 

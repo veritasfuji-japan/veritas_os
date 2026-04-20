@@ -61,4 +61,4 @@ def test_main_returns_non_zero_when_production_flag_is_enabled(
 
     assert exit_code == 1
     assert "[SECURITY]" in output
-    assert "VERITAS_ALLOW_WS_QUERY_API_KEY" in output
+    assert "redacted for safe logging" in output
