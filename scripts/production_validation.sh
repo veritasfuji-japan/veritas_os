@@ -63,6 +63,13 @@ else
     FAILURES=$((FAILURES + 1))
 fi
 
+if python scripts/security/check_danger_presets_production_flag.py; then
+    log_info "Phase 0: Danger preset production flag guard PASSED ✓"
+else
+    log_error "Phase 0: Danger preset production flag guard FAILED ✗"
+    FAILURES=$((FAILURES + 1))
+fi
+
 # ── Phase 1: Python production-like tests ─────────────────────────────────
 
 if $RUN_TESTS; then

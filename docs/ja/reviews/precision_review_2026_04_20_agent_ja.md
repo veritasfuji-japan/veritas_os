@@ -54,7 +54,12 @@
   非本番スキップ・本番fail条件・CLI終了コードを検証。
 - CodeQL 指摘（clear-text logging of sensitive information）に対応し、CLI失敗時ログは
   フラグ名/値を出力せず `redacted` 表記に統一。
+- `scripts/security/check_danger_presets_production_flag.py` を追加し、`VERITAS_ENV` または `NODE_ENV` が `prod/production` の場合に
+  `NEXT_PUBLIC_ENABLE_DANGER_PRESETS` が有効化されていれば **fail** するガードを実装。
+- `scripts/production_validation.sh` の Phase 0 で danger preset 本番ガードを実行するよう更新。
+- 回帰テスト `veritas_os/tests/test_check_danger_presets_flag.py` を追加し、
+  非本番スキップ・本番fail条件・CLI終了コード・redactedログを検証。
 
 ## 追加提案（任意）
 - セキュリティフラグ（query認証移行フラグ、danger presetフラグ）の**起動時サマリー出力**を1箇所へ集約し、SREの可観測性を向上。
-- フロントエンドの `NEXT_PUBLIC_ENABLE_DANGER_PRESETS` についても、`production_validation.sh` で明示ガードを追加すると運用事故をさらに減らせる。
+- danger preset ガードの検知結果を監視基盤に転送し、デプロイ前の運用監査を自動化するとさらに堅牢化できる。
