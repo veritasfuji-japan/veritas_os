@@ -421,6 +421,59 @@ def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
     assert missing_body["ok"] is False
 
 
+def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda decision_id=None, execution_intent_id=None, **_kwargs: [
+            type(
+                "Receipt",
+                (),
+                {
+                    "to_dict": lambda self: {
+                        "bind_receipt_id": "br-list-1",
+                        "execution_intent_id": execution_intent_id or "ei-list-1",
+                        "decision_id": decision_id or "dec-list-1",
+                        "final_outcome": "COMMITTED",
+                    }
+                },
+            )()
+        ],
+    )
+    resp = client.get(
+        "/v1/governance/bind-receipts?decision_id=dec-list-1&execution_intent_id=ei-list-1",
+        headers=HEADERS,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["count"] == 1
+    assert body["items"][0]["bind_receipt_id"] == "br-list-1"
+    assert body["items"][0]["decision_id"] == "dec-list-1"
+    assert body["items"][0]["execution_intent_id"] == "ei-list-1"
+
+
+def test_governance_decision_export_backward_compatible_fields(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda **_kwargs: [],
+    )
+    resp = client.get("/v1/governance/decisions/export?limit=1", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    if body["items"]:
+        item = body["items"][0]
+        assert "request_id" in item
+        assert "decision_id" in item
+        assert "decision_status" in item
+        assert "created_at" in item
+        assert "approver" in item
+        assert "trace_sha256" in item
+        assert item.get("bind_outcome") is None
+        assert item.get("bind_receipt_id") is None
+        assert item.get("execution_intent_id") is None
+
+
 
 # ----------------------------------------------------------------
 # Server governance endpoint error paths

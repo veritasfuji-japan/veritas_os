@@ -1310,3 +1310,49 @@ class GovernancePolicyHistoryResponse(BaseModel):
     count: int = 0
     history: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
+
+
+class GovernanceDecisionExportItem(BaseModel):
+    """Public governance decision export record with bind summary fields."""
+
+    request_id: str = ""
+    decision_id: str = ""
+    decision_status: str = "unknown"
+    risk: Optional[float] = None
+    created_at: str = ""
+    approver: str = "system"
+    trace_sha256: Optional[str] = None
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+
+
+class GovernanceDecisionExportResponse(BaseModel):
+    """Response envelope for GET /v1/governance/decisions/export."""
+
+    ok: bool = True
+    count: int = 0
+    items: List[GovernanceDecisionExportItem] = Field(default_factory=list)
+    error: Optional[str] = None
+
+
+class GovernanceBindReceiptResponse(BaseModel):
+    """Response envelope for GET /v1/governance/bind-receipts/{bind_receipt_id}."""
+
+    ok: bool = True
+    bind_receipt: Optional[BindReceipt] = None
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    error: Optional[str] = None
+
+
+class GovernanceBindReceiptListResponse(BaseModel):
+    """Response envelope for GET /v1/governance/bind-receipts."""
+
+    ok: bool = True
+    count: int = 0
+    items: List[BindReceipt] = Field(default_factory=list)
+    error: Optional[str] = None
