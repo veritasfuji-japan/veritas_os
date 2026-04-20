@@ -15,6 +15,7 @@ from veritas_os.api.schemas import (
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
+from veritas_os.policy.bind_artifacts import find_bind_receipts
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -27,6 +28,45 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
+
+
+def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
+    """Resolve a compact operator-facing bind failure reason from receipt fields."""
+    reason_candidates = (
+        bind_receipt.get("rollback_reason"),
+        bind_receipt.get("escalation_reason"),
+        bind_receipt.get("admissibility_result"),
+        bind_receipt.get("risk_check_result"),
+        bind_receipt.get("constraint_check_result"),
+        bind_receipt.get("authority_check_result"),
+        bind_receipt.get("drift_check_result"),
+    )
+    for candidate in reason_candidates:
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+        if isinstance(candidate, dict):
+            nested = candidate.get("reason") or candidate.get("message") or candidate.get("detail")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    return None
+
+
+def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
+    """Extract a stable reason code when present in bind receipt check payloads."""
+    for key in (
+        "admissibility_result",
+        "risk_check_result",
+        "constraint_check_result",
+        "authority_check_result",
+        "drift_check_result",
+    ):
+        value = bind_receipt.get(key)
+        if not isinstance(value, dict):
+            continue
+        raw = value.get("reason_code") or value.get("code")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return None
 
 
 # ------------------------------------------------------------------
@@ -201,6 +241,7 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
 def governance_decision_export(
     limit: int = Query(default=100, ge=1, le=1000),
     status: str | None = Query(default=None),
+    bind_outcome: str | None = Query(default=None),
 ):
     """Export recent decisions for governance/audit integrations."""
     srv = _get_server()
@@ -214,14 +255,26 @@ def governance_decision_export(
             decision_status = str(entry.get("decision_status") or entry.get("status") or "unknown")
             if status and decision_status != status:
                 continue
+            decision_id = str(entry.get("decision_id") or entry.get("request_id") or "")
+            bind_receipts = find_bind_receipts(decision_id=decision_id) if decision_id else []
+            latest_bind = bind_receipts[-1].to_dict() if bind_receipts else {}
+            latest_bind_outcome = str(latest_bind.get("final_outcome") or "")
+            if bind_outcome and latest_bind_outcome != bind_outcome:
+                continue
             normalized.append(
                 {
                     "request_id": str(entry.get("request_id") or ""),
+                    "decision_id": decision_id,
                     "decision_status": decision_status,
                     "risk": entry.get("risk"),
                     "created_at": str(entry.get("created_at") or entry.get("ts") or ""),
                     "approver": str(entry.get("approver") or entry.get("updated_by") or "system"),
                     "trace_sha256": entry.get("sha256"),
+                    "bind_outcome": latest_bind_outcome or None,
+                    "bind_receipt_id": latest_bind.get("bind_receipt_id"),
+                    "execution_intent_id": latest_bind.get("execution_intent_id"),
+                    "bind_failure_reason": _resolve_bind_failure_reason(latest_bind),
+                    "bind_reason_code": _resolve_bind_reason_code(latest_bind),
                 }
             )
         return {"ok": True, "count": len(normalized), "items": normalized}
@@ -230,4 +283,30 @@ def governance_decision_export(
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to export governance decisions"},
+        )
+
+
+@router.get(
+    "/v1/governance/bind-receipts/{bind_receipt_id}",
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
+def governance_bind_receipt(bind_receipt_id: str):
+    """Return a bind receipt artifact by ``bind_receipt_id``."""
+    try:
+        receipts = find_bind_receipts(bind_receipt_id=bind_receipt_id)
+        if not receipts:
+            return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
+        receipt = receipts[-1].to_dict()
+        return {
+            "ok": True,
+            "bind_receipt": receipt,
+            "bind_outcome": receipt.get("final_outcome"),
+            "bind_failure_reason": _resolve_bind_failure_reason(receipt),
+            "bind_reason_code": _resolve_bind_reason_code(receipt),
+        }
+    except Exception as e:
+        logger.error("governance_bind_receipt failed: %s", e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load bind receipt"},
         )

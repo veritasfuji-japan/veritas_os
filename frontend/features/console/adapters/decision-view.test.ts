@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   toDecisionResultView,
   toEvidenceBundleDraft,
+  toBindPhaseView,
   toFujiGateDetailView,
   toPublicDecisionSchemaView,
   toRuntimeStatusView,
@@ -220,5 +221,40 @@ describe("runtime status + bundle mapping", () => {
       backend: "gpt-5.3-mini",
       verifyStatus: "verified",
     });
+  });
+});
+
+describe("toBindPhaseView", () => {
+  it("maps bind outcome and check summaries", () => {
+    const result = makeResponse({
+      gate_decision: "allow",
+      bind_outcome: "BLOCKED",
+      bind_receipt_id: "br-001",
+      execution_intent_id: "ei-001",
+      bind_failure_reason: "Constraint mismatch",
+      bind_reason_code: "CONSTRAINT_MISMATCH",
+      authority_check_result: { passed: true },
+      constraint_check_result: { passed: false },
+      drift_check_result: { result: "stable" },
+      risk_check_result: { result: "high" },
+    } as never);
+    const view = toBindPhaseView(result);
+    expect(view.bindPhase).toBe("BLOCKED");
+    expect(view.bindReceiptId).toBe("br-001");
+    expect(view.executionIntentId).toBe("ei-001");
+    expect(view.bindFailureReason).toBe("Constraint mismatch");
+    expect(view.bindReasonCode).toBe("CONSTRAINT_MISMATCH");
+    expect(view.checks).toEqual({
+      authority: "PASS",
+      constraints: "FAIL",
+      drift: "STABLE",
+      risk: "HIGH",
+    });
+  });
+
+  it("falls back to UNKNOWN bind phase for unsupported values", () => {
+    const result = makeResponse({ bind_outcome: "CUSTOM_STATE" } as never);
+    const view = toBindPhaseView(result);
+    expect(view.bindPhase).toBe("UNKNOWN");
   });
 });

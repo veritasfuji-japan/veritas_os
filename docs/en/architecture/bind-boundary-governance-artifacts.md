@@ -56,3 +56,40 @@ lineage toward bind-boundary control.
 
 Low and additive. Existing decision flows remain backward compatible, and no
 execution adapter/orchestration behavior is introduced in this PR.
+
+## Operator interpretation in Mission Control
+
+Mission Control keeps the decision artifact as the primary record and now shows
+bind-phase as a lower-layer execution-governance outcome:
+
+- Decision approved + `bind_outcome=COMMITTED`: approved and applied.
+- Decision approved + `bind_outcome=BLOCKED`: approved but bind checks blocked.
+- Decision approved + `bind_outcome=ESCALATED`: approved but requires escalation.
+- Decision approved + `bind_outcome=ROLLED_BACK`: approved, attempted, then rolled back.
+
+This distinction prevents operators from misreading decision-phase approval as
+bind-phase commitment.
+
+## Minimal API example
+
+`GET /v1/governance/decisions/export?limit=1`
+
+```json
+{
+  "ok": true,
+  "items": [
+    {
+      "decision_id": "dec-9001",
+      "decision_status": "allow",
+      "bind_outcome": "BLOCKED",
+      "bind_receipt_id": "br-9001",
+      "execution_intent_id": "ei-9001",
+      "bind_failure_reason": "Constraint mismatch",
+      "bind_reason_code": "CONSTRAINT_MISMATCH"
+    }
+  ]
+}
+```
+
+`GET /v1/governance/bind-receipts/br-9001` returns the linked bind receipt
+artifact with authority/constraint/drift/risk check payloads.
