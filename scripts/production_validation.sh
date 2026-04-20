@@ -53,6 +53,16 @@ fi
 cd "${REPO_ROOT}"
 FAILURES=0
 
+# ── Phase 0: Security configuration guards ────────────────────────────────
+
+log_info "Phase 0: Running security configuration guards..."
+if python scripts/security/check_query_api_key_compat_flags.py; then
+    log_info "Phase 0: Query API key compatibility flag guard PASSED ✓"
+else
+    log_error "Phase 0: Query API key compatibility flag guard FAILED ✗"
+    FAILURES=$((FAILURES + 1))
+fi
+
 # ── Phase 1: Python production-like tests ─────────────────────────────────
 
 if $RUN_TESTS; then
