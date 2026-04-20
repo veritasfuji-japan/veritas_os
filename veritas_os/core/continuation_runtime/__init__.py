@@ -42,6 +42,14 @@ from .revalidator import (
     PresentCondition,
     run_continuation_revalidation_shadow,
 )
+from .bind_admissibility import (
+    AdmissibilityOutcome,
+    CheckStatus,
+    CheckResult,
+    BindAdmissibilityInput,
+    BindAdmissibilityResult,
+    evaluate_bind_admissibility,
+)
 from .enforcement import (
     EnforcementMode,
     EnforcementAction,
@@ -77,6 +85,13 @@ __all__ = [
     "ContinuationRevalidator",
     "PresentCondition",
     "run_continuation_revalidation_shadow",
+    # bind-time admissibility
+    "AdmissibilityOutcome",
+    "CheckStatus",
+    "CheckResult",
+    "BindAdmissibilityInput",
+    "BindAdmissibilityResult",
+    "evaluate_bind_admissibility",
     # enforcement (Phase-2)
     "EnforcementMode",
     "EnforcementAction",
