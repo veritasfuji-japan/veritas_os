@@ -1422,6 +1422,73 @@ def test_decide_wat_shadow_passes_policy_drift_scoring_to_verifier(monkeypatch):
     }
 
 
+def test_decide_wat_shadow_invalid_drift_scoring_values_fall_back_to_defaults(monkeypatch):
+    """Invalid drift_scoring values must not break shadow observer validation config."""
+
+    class DummyPipeline:
+        @staticmethod
+        async def run_decide_pipeline(req, request):
+            return {
+                "ok": True,
+                "request_id": "rid-drift-invalid",
+                "query": req.query,
+                "decision": "allow",
+                "business_decision": "APPROVE",
+                "result": "ok",
+            }
+
+    policy = {
+        "wat": {"enabled": True, "issuance_mode": "shadow_only", "default_ttl_seconds": 60},
+        "psid": {"display_length": 12},
+        "shadow_validation": {
+            "timestamp_skew_tolerance_seconds": 5,
+            "warning_only_until": None,
+            "replay_binding_required": False,
+        },
+        "revocation": {"degrade_on_pending": True},
+        "drift_scoring": {
+            "policy_weight": "not-a-float",
+            "signature_weight": None,
+            "observable_weight": {},
+            "temporal_weight": [],
+            "healthy_threshold": "bad-threshold",
+            "critical_threshold": object(),
+        },
+    }
+    captured_validate_kwargs = {}
+    monkeypatch.setattr(server, "get_decision_pipeline", lambda: DummyPipeline())
+    monkeypatch.setattr(routes_decide, "get_policy", lambda: policy)
+    monkeypatch.setattr(
+        routes_decide,
+        "validate_local",
+        lambda **kwargs: captured_validate_kwargs.update(kwargs) or {
+            "validation_status": "valid",
+            "admissibility_state": "admissible",
+            "failure_type": "",
+            "drift_vector": {},
+        },
+    )
+
+    response = client.post(
+        "/v1/decide",
+        json=server._decide_example(),
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    validate_config = captured_validate_kwargs.get("config", {})
+    assert validate_config.get("drift_weights") == {
+        "policy": 0.4,
+        "signature": 0.3,
+        "observable": 0.2,
+        "temporal": 0.1,
+    }
+    assert validate_config.get("drift_thresholds") == {
+        "healthy": 0.2,
+        "critical": 0.5,
+    }
+
+
 def test_run_wat_shadow_observer_tampered_signature_invalid(monkeypatch, tmp_path):
     """Tampered signed WAT must fail local verification as signature_invalid."""
 

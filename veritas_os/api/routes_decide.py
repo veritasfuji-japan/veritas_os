@@ -148,16 +148,24 @@ def _build_drift_runtime_config(drift_scoring_cfg: Dict[str, Any]) -> Dict[str, 
     The local verifier consumes normalized axis names:
     ``policy``, ``signature``, ``observable``, and ``temporal``.
     """
+
+    def _safe_float(value: Any, default: float) -> float:
+        """Defensively coerce numeric policy values to float defaults."""
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
     return {
         "drift_weights": {
-            "policy": float(drift_scoring_cfg.get("policy_weight", 0.4)),
-            "signature": float(drift_scoring_cfg.get("signature_weight", 0.3)),
-            "observable": float(drift_scoring_cfg.get("observable_weight", 0.2)),
-            "temporal": float(drift_scoring_cfg.get("temporal_weight", 0.1)),
+            "policy": _safe_float(drift_scoring_cfg.get("policy_weight"), 0.4),
+            "signature": _safe_float(drift_scoring_cfg.get("signature_weight"), 0.3),
+            "observable": _safe_float(drift_scoring_cfg.get("observable_weight"), 0.2),
+            "temporal": _safe_float(drift_scoring_cfg.get("temporal_weight"), 0.1),
         },
         "drift_thresholds": {
-            "healthy": float(drift_scoring_cfg.get("healthy_threshold", 0.2)),
-            "critical": float(drift_scoring_cfg.get("critical_threshold", 0.5)),
+            "healthy": _safe_float(drift_scoring_cfg.get("healthy_threshold"), 0.2),
+            "critical": _safe_float(drift_scoring_cfg.get("critical_threshold"), 0.5),
         },
     }
 
