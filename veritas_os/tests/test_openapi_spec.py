@@ -59,6 +59,7 @@ def test_openapi_includes_runtime_audit_and_governance_routes() -> None:
         "/v1/governance/decisions/export",
         "/v1/governance/bind-receipts",
         "/v1/governance/bind-receipts/{bind_receipt_id}",
+        "/v1/governance/policy-bundles/promote",
         "/v1/trustlog/verify",
         "/v1/trust/{request_id}/prov",
     }

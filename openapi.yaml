@@ -2163,6 +2163,65 @@ paths:
                     nullable: true
                     additionalProperties: true
 
+  /v1/governance/policy-bundles/promote:
+    post:
+      summary: Promote policy bundle with bind-boundary governance workflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bundle_id:
+                  type: string
+                bundle_dir_name:
+                  type: string
+                decision_id:
+                  type: string
+                request_id:
+                  type: string
+                policy_snapshot_id:
+                  type: string
+                decision_hash:
+                  type: string
+                approval_context:
+                  type: object
+                  additionalProperties: true
+              required:
+                - decision_id
+                - request_id
+                - policy_snapshot_id
+                - decision_hash
+      responses:
+        "200":
+          description: Bind receipt lineage for promotion execution
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  bind_outcome:
+                    type: string
+                    nullable: true
+                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+                  bind_failure_reason:
+                    type: string
+                    nullable: true
+                  bind_reason_code:
+                    type: string
+                    nullable: true
+                  bind_receipt_id:
+                    type: string
+                    nullable: true
+                  execution_intent_id:
+                    type: string
+                    nullable: true
+                  bind_receipt:
+                    $ref: '#/components/schemas/BindReceipt'
+
   /v1/compliance/config:
     get:
       summary: Compliance config read
