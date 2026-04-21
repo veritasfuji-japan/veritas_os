@@ -1,0 +1,156 @@
+"""Concrete bind-boundary adapters for production-adjacent operations.
+
+This module provides one real adapter that promotes an active policy bundle
+pointer in local governance operations. The adapter is file-based, deterministic,
+and supports explicit rollback via snapshot restoration.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from veritas_os.core.atomic_io import atomic_write_json
+from veritas_os.policy.bind_artifacts import ExecutionIntent
+from veritas_os.security.hash import sha256_of_canonical_json
+
+
+@dataclass
+class PolicyBundlePromotionAdapter:
+    """Bind adapter for active policy-bundle pointer promotion.
+
+    The adapter promotes a single pointer file that identifies the active
+    compiled policy bundle directory used by operational code paths.
+    """
+
+    pointer_path: Path
+    allowed_root: Path
+    require_signature: bool = False
+    target_description: str = "governance/policy_bundle_promotion"
+
+    def snapshot(self) -> dict[str, Any]:
+        """Return deterministic snapshot of current pointer state."""
+        if not self.pointer_path.exists():
+            return {
+                "pointer_exists": False,
+                "active_bundle_dir": "",
+                "decision_id": "",
+                "execution_intent_id": "",
+            }
+
+        payload = self._read_pointer_payload(self.pointer_path)
+        return {
+            "pointer_exists": True,
+            "active_bundle_dir": str(payload.get("active_bundle_dir") or ""),
+            "decision_id": str(payload.get("decision_id") or ""),
+            "execution_intent_id": str(payload.get("execution_intent_id") or ""),
+        }
+
+    def fingerprint_state(self, snapshot: Any) -> str:
+        """Return deterministic state fingerprint for snapshot payload."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("BIND_STATE_SNAPSHOT_INVALID")
+        return sha256_of_canonical_json(snapshot)
+
+    def validate_authority(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Require explicit promotion approval in execution intent context."""
+        del snapshot
+        if not isinstance(intent.approval_context, dict):
+            return False
+        return bool(intent.approval_context.get("policy_bundle_promotion_approved"))
+
+    def validate_constraints(
+        self,
+        intent: ExecutionIntent,
+        snapshot: Any,
+    ) -> dict[str, bool] | None:
+        """Validate deterministic local constraints for promotion target."""
+        del snapshot
+        target_dir = self._resolve_target(intent)
+        return {
+            "target_within_allowed_root": self._is_within_allowed_root(target_dir),
+            "manifest_exists": (target_dir / "manifest.json").exists(),
+            "canonical_ir_exists": (target_dir / "compiled" / "canonical_ir.json").exists(),
+        }
+
+    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Assess runtime risk by checking pointer write safety conditions."""
+        del snapshot
+        target_dir = self._resolve_target(intent)
+        return self._is_within_allowed_root(target_dir)
+
+    def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Apply promotion by atomically writing active bundle pointer."""
+        del snapshot
+        target_dir = self._resolve_target(intent)
+        pointer_payload = {
+            "active_bundle_dir": str(target_dir),
+            "decision_id": intent.decision_id,
+            "execution_intent_id": intent.execution_intent_id,
+        }
+        self.pointer_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(self.pointer_path, pointer_payload, indent=2)
+        return True
+
+    def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Verify pointer now references a valid target bundle directory."""
+        del snapshot
+        target_dir = self._resolve_target(intent)
+        payload = self._read_pointer_payload(self.pointer_path)
+        points_to_target = str(payload.get("active_bundle_dir") or "") == str(target_dir)
+        if not points_to_target:
+            return False
+
+        if not (target_dir / "manifest.json").exists():
+            return False
+        if not (target_dir / "compiled" / "canonical_ir.json").exists():
+            return False
+
+        if self.require_signature and not (target_dir / "manifest.sig").exists():
+            return False
+        return True
+
+    def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Revert promotion by restoring pre-apply pointer snapshot."""
+        del intent
+        if not isinstance(snapshot, dict):
+            return False
+
+        pointer_exists = bool(snapshot.get("pointer_exists"))
+        if not pointer_exists:
+            self.pointer_path.unlink(missing_ok=True)
+            return True
+
+        restored_payload = {
+            "active_bundle_dir": str(snapshot.get("active_bundle_dir") or ""),
+            "decision_id": str(snapshot.get("decision_id") or ""),
+            "execution_intent_id": str(snapshot.get("execution_intent_id") or ""),
+        }
+        self.pointer_path.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write_json(self.pointer_path, restored_payload, indent=2)
+        return True
+
+    def describe_target(self) -> str:
+        """Return human-readable target descriptor."""
+        return self.target_description
+
+    def _resolve_target(self, intent: ExecutionIntent) -> Path:
+        target = Path(intent.target_resource).expanduser().resolve()
+        return target
+
+    def _is_within_allowed_root(self, target_dir: Path) -> bool:
+        try:
+            target_dir.relative_to(self.allowed_root.resolve())
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def _read_pointer_payload(path: Path) -> dict[str, Any]:
+        import json
+
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise ValueError("BIND_POINTER_PAYLOAD_INVALID")
+        return loaded
