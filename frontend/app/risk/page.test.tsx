@@ -52,6 +52,17 @@ describe("RiskIntelligencePage", () => {
     expect(drilldown.textContent).toContain("Request ID / Seed");
     expect(drilldown.textContent).toContain("Uncertainty");
     expect(drilldown.textContent).toContain("Risk score");
+    expect(drilldown.textContent).toContain("Decision vs Bind outcome");
+    expect(drilldown.textContent).toContain("Bind breakdown");
+  });
+
+  it("renders bind lineage navigation and bind failure context in risk workflow", () => {
+    render(<RiskIntelligencePage />);
+    fireEvent.click(screen.getAllByRole("button", { name: /risk/i })[0]);
+
+    expect(screen.getAllByText(/Bind lineage/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Decision phase:/)).toBeInTheDocument();
+    expect(screen.getByText(/Bind phase:/)).toBeInTheDocument();
   });
 
   it("renders structured why-flagged with policy confidence and signals", () => {

@@ -165,4 +165,16 @@ describe("DecisionResultPanel", () => {
       expect(screen.getByText(outcome)).toBeInTheDocument();
     },
   );
+
+  it("keeps legacy decision view stable when bind fields are absent", () => {
+    const legacyResult = { ...baseResult };
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={legacyResult as never} viewerRole="operator" />
+      </I18nProvider>,
+    );
+    expect(screen.getByText(/final decision|最終判断/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/gate_decision/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/business_decision/i).length).toBeGreaterThan(0);
+  });
 });
