@@ -1,16 +1,15 @@
-# Bind-Boundary Governance Artifacts (Schema-First)
+# Bind-Boundary Governance Artifacts
 
-## What this PR adds
+## Implemented scope
 
-This change introduces two **native VERITAS governance artifacts** as first-class
-contracts:
+VERITAS includes two **native governance artifacts** as first-class contracts:
 
 1. `ExecutionIntent`
 2. `BindReceipt`
 
-It also introduces `FinalOutcome` for bind-time terminal status.
-In addition, bind-boundary artifacts are now appended to the existing TrustLog
-path so auditors can traverse native lineage:
+`FinalOutcome` models bind-time terminal status.
+Bind-boundary artifacts append to the existing TrustLog path so auditors can
+traverse native lineage:
 
 `decision artifact -> execution intent -> bind receipt`
 
@@ -28,15 +27,20 @@ This extension keeps that architecture intact and adds bind-boundary lineage:
 This provides explicit governance-native artifacts at the decision → bind
 boundary without creating a parallel subsystem.
 
-## Intentionally deferred
+## Current boundary and caveats
 
-This PR is **schema-first only** and does not introduce:
+Implemented in this repository:
 
-- external side-effect adapters
-- runtime bind orchestration
-- rollback engine implementation
-- Mission Control UI workflow rewiring
-- broad pipeline behavior changes
+- bind-time admissibility adjudication inputs on bind receipts
+- bind terminal outcomes (`COMMITTED`, `BLOCKED`, `ESCALATED`, `ROLLED_BACK`)
+- TrustLog lineage pointers and bind receipt retrieval endpoints
+- Mission Control bind-phase rendering on decision results
+
+Not guaranteed by this document alone:
+
+- tenant-specific external side-effect adapter coverage
+- environment-specific production hardening and operational controls
+- universal production-readiness claims across every deployment context
 
 ## TrustLog and lineage integration
 
@@ -54,8 +58,8 @@ lineage toward bind-boundary control.
 
 ## Runtime behavior impact
 
-Low and additive. Existing decision flows remain backward compatible, and no
-execution adapter/orchestration behavior is introduced in this PR.
+Additive to existing decision flows. Decision-phase semantics remain primary;
+bind-phase semantics add an explicit boundary between approval and commitment.
 
 ## Operator interpretation in Mission Control
 

@@ -43,6 +43,8 @@ For the bilingual correspondence table, see [../DOCUMENTATION_MAP.md](../DOCUMEN
 
 ### Governance & Compliance
 - [Decision Semantics Contract](architecture/decision-semantics.md)
+- [Bind-Boundary Governance Artifacts](architecture/bind-boundary-governance-artifacts.md)
+- [Bind-Time Admissibility Evaluator](architecture/bind_time_admissibility_evaluator.md)
 - [Required Evidence Taxonomy v0](governance/required-evidence-taxonomy.md)
 - [Governance Artifact Lifecycle](governance/governance-artifact-lifecycle.md)
 

@@ -58,6 +58,12 @@ Pilot pass requires:
 - `summary.pass_rate >= 0.90`
 - `summary.evaluated >= 5`
 
+Additionally, confirm bind-boundary lineage visibility on sampled decisions:
+
+- `bind_outcome` is present when bind adjudication ran.
+- `execution_intent_id` and `bind_receipt_id` are present for bind-tracked cases.
+- `bind_outcome` is interpreted separately from decision approval status.
+
 ### 5) Failure-path validation
 
 Use the failure scenario file to ensure evaluator has bounded expectations:
@@ -65,6 +71,19 @@ Use the failure scenario file to ensure evaluator has bounded expectations:
 - run scenarios that should hold/block/review, not auto-proceed
 - document each scenario result in pilot readout
 - if runtime behavior diverges, mark as explicit gap (not hidden backlog)
+
+### 6) Bind receipt spot-check (operator API)
+
+```bash
+curl -s "http://localhost:8000/v1/governance/bind-receipts?limit=5"
+```
+
+```bash
+curl -s "http://localhost:8000/v1/governance/bind-receipts/<bind_receipt_id>"
+```
+
+Expected: receipt includes authority/constraint/drift/risk/admissibility
+payloads and a terminal bind outcome (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`).
 
 ## Operator triage rubric
 

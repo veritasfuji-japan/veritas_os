@@ -14,6 +14,7 @@
 | **Validation** | [Validation](en/validation/) | [Validation](ja/validation/) |
 | **Governance** | [Governance](en/governance/) | [Governance](ja/governance/) |
 | **Architecture** | [Architecture](architecture/) | — |
+| **Bind Boundary (EN)** | [Bind-Boundary Governance](en/architecture/bind-boundary-governance-artifacts.md) | — |
 | **EU AI Act** | [EU AI Act](eu_ai_act/) | [EU AI Act (JA)](ja/governance/) |
 | **Guides** | [Guides](en/guides/) | [Guides](ja/guides/) |
 | **Reviews (EN)** | [Reviews](en/reviews/) | — |
