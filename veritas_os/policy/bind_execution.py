@@ -195,7 +195,7 @@ def execute_bind_boundary(
     try:
         pre_snapshot = adapter.snapshot()
         pre_fingerprint = adapter.fingerprint_state(pre_snapshot)
-    except (TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _finalize_receipt(
             execution_intent=execution_intent,
             append_trustlog=append_trustlog,
@@ -279,7 +279,7 @@ def execute_bind_boundary(
 
     try:
         adapter.apply(execution_intent, pre_snapshot)
-    except (TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _finalize_receipt(
             execution_intent=execution_intent,
             append_trustlog=append_trustlog,
@@ -323,7 +323,7 @@ def execute_bind_boundary(
     try:
         post_snapshot = adapter.snapshot()
         post_fingerprint = adapter.fingerprint_state(post_snapshot)
-    except (TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _finalize_receipt(
             execution_intent=execution_intent,
             append_trustlog=append_trustlog,
@@ -380,7 +380,7 @@ def _rollback_after_verification_failure(
     """Handle verify failure with explicit rollback/escalation outcomes."""
     try:
         reverted = adapter.revert(execution_intent, pre_snapshot)
-    except (TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _with_receipt(
             base_receipt,
             live_state_fingerprint_before=pre_fingerprint,
@@ -418,8 +418,27 @@ def _rollback_after_verification_failure(
             escalation_reason="BIND_REVERT_REPORTED_FALSE",
         )
 
-    post_snapshot = adapter.snapshot()
-    post_fingerprint = adapter.fingerprint_state(post_snapshot)
+    try:
+        post_snapshot = adapter.snapshot()
+        post_fingerprint = adapter.fingerprint_state(post_snapshot)
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        return _with_receipt(
+            base_receipt,
+            live_state_fingerprint_before=pre_fingerprint,
+            authority_check_result=authority_result,
+            constraint_check_result=constraint_result,
+            drift_check_result=drift_result,
+            risk_check_result=risk_result,
+            admissibility_result={
+                "admissible": True,
+                "recommended_outcome": recommended_outcome,
+                "reason_codes": ["BIND_POSTCONDITION_FAILED"],
+                "target": adapter.describe_target(),
+            },
+            final_outcome=FinalOutcome.ESCALATED,
+            rollback_reason="BIND_POSTCONDITION_FAILED",
+            escalation_reason=f"BIND_POST_ROLLBACK_SNAPSHOT_FAILED:{exc}",
+        )
 
     return _with_receipt(
         base_receipt,
@@ -457,7 +476,7 @@ def _rollback_after_runtime_signal_failure(
     """Fail closed when critical post-apply runtime signal cannot be read."""
     try:
         reverted = adapter.revert(execution_intent, pre_snapshot)
-    except (TypeError, ValueError, RuntimeError) as exc:
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
         return _with_receipt(
             base_receipt,
             live_state_fingerprint_before=pre_fingerprint,
