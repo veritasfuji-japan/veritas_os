@@ -139,6 +139,23 @@ describe("PolicyBundlePromotionFlow", () => {
     expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", variant);
   });
 
+  it("renders UNKNOWN outcome with muted variant when bind_outcome is non-canonical", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        bind_outcome: "done",
+      }),
+    });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+
+    expect(await screen.findByTestId("status-badge")).toHaveTextContent("UNKNOWN");
+    expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", "muted");
+  });
+
   it("loads bind receipt detail and renders compact bind breakdown", async () => {
     mockFetch
       .mockResolvedValueOnce({
@@ -186,6 +203,64 @@ describe("PolicyBundlePromotionFlow", () => {
     expect(screen.getByText(/^risk:/)).toBeInTheDocument();
     expect(screen.getAllByText("PASS")).toHaveLength(2);
     expect(screen.getAllByText("FAIL")).toHaveLength(2);
+  });
+
+  it("falls back to bind_receipt.final_outcome when bind_outcome is absent", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          bind_outcome: "COMMITTED",
+          bind_receipt_id: "br-101",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          bind_receipt: {
+            final_outcome: "ESCALATED",
+          },
+        }),
+      });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+    fireEvent.click(await screen.findByRole("button", { name: "load bind receipt detail" }));
+
+    expect(await screen.findByText("bind receipt detail loaded")).toBeInTheDocument();
+  });
+
+  it("treats malformed bind check payloads as UNKNOWN", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          bind_outcome: "BLOCKED",
+          bind_receipt_id: "br-102",
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          bind_receipt: {
+            authority_check_result: "pass",
+            constraint_check_result: { unexpected: true },
+          },
+        }),
+      });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+    fireEvent.click(await screen.findByRole("button", { name: "load bind receipt detail" }));
+
+    await screen.findByText("bind receipt detail loaded");
+    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThanOrEqual(2);
   });
 
   it("normalizes legacy success outcome into canonical COMMITTED", async () => {
