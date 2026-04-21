@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
+import type { FinalOutcomeStatus } from "@veritas/types";
 import { StatusBadge } from "../../../components/ui";
 import { veritasFetch } from "../../../lib/api-client";
 
@@ -9,45 +10,90 @@ interface PolicyBundlePromotionFlowProps {
   canOperate: boolean;
 }
 
-type CanonicalBindOutcome =
-  | "COMMITTED"
-  | "BLOCKED"
-  | "ESCALATED"
-  | "ROLLED_BACK"
-  | "APPLY_FAILED"
-  | "SNAPSHOT_FAILED"
-  | "PRECONDITION_FAILED";
+type CanonicalBindOutcome = FinalOutcomeStatus;
 
 type BindCheckSummary = "PASS" | "FAIL" | "UNKNOWN";
+type BindCheckKey =
+  | "authority_check_result"
+  | "constraint_check_result"
+  | "drift_check_result"
+  | "risk_check_result";
+
+type BindCheckPayload = {
+  passed?: boolean;
+  result?: string;
+  reason_code?: string;
+};
+
+type BindReceiptPayload = Record<string, unknown> & Partial<Record<BindCheckKey, BindCheckPayload>>;
 
 interface PromoteResponse {
   ok: boolean;
-  bind_outcome?: string;
+  bind_outcome?: CanonicalBindOutcome;
   bind_failure_reason?: string;
   bind_reason_code?: string;
   bind_receipt_id?: string;
   execution_intent_id?: string;
-  authority_check_result?: unknown;
-  constraint_check_result?: unknown;
-  drift_check_result?: unknown;
-  risk_check_result?: unknown;
-  bind_receipt?: Record<string, unknown>;
+  authority_check_result?: BindCheckPayload;
+  constraint_check_result?: BindCheckPayload;
+  drift_check_result?: BindCheckPayload;
+  risk_check_result?: BindCheckPayload;
+  bind_receipt?: BindReceiptPayload;
   error?: string;
 }
 
 interface BindReceiptResponse {
   ok: boolean;
-  bind_receipt?: Record<string, unknown>;
-  bind_outcome?: string;
+  bind_receipt?: BindReceiptPayload;
+  bind_outcome?: CanonicalBindOutcome;
   bind_failure_reason?: string;
   bind_reason_code?: string;
   bind_receipt_id?: string;
   execution_intent_id?: string;
+  authority_check_result?: BindCheckPayload;
+  constraint_check_result?: BindCheckPayload;
+  drift_check_result?: BindCheckPayload;
+  risk_check_result?: BindCheckPayload;
   error?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function parseBindCheckPayload(value: unknown): BindCheckPayload | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const payload: BindCheckPayload = {
+    passed: typeof value.passed === "boolean" ? value.passed : undefined,
+    result: typeof value.result === "string" ? value.result : undefined,
+    reason_code: typeof value.reason_code === "string" ? value.reason_code : undefined,
+  };
+  if (payload.passed === undefined && payload.result === undefined && payload.reason_code === undefined) {
+    return undefined;
+  }
+  return payload;
+}
+
+function parseBindReceiptPayload(value: unknown): BindReceiptPayload | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const receipt: BindReceiptPayload = { ...value };
+  const keys: BindCheckKey[] = [
+    "authority_check_result",
+    "constraint_check_result",
+    "drift_check_result",
+    "risk_check_result",
+  ];
+  for (const key of keys) {
+    const parsed = parseBindCheckPayload(value[key]);
+    if (parsed) {
+      receipt[key] = parsed;
+    }
+  }
+  return receipt;
 }
 
 function parsePromoteResponse(value: unknown): PromoteResponse | null {
@@ -56,16 +102,16 @@ function parsePromoteResponse(value: unknown): PromoteResponse | null {
   }
   return {
     ok: value.ok,
-    bind_outcome: typeof value.bind_outcome === "string" ? value.bind_outcome : undefined,
+    bind_outcome: normalizeBindOutcome(value.bind_outcome) ?? undefined,
     bind_failure_reason: typeof value.bind_failure_reason === "string" ? value.bind_failure_reason : undefined,
     bind_reason_code: typeof value.bind_reason_code === "string" ? value.bind_reason_code : undefined,
     bind_receipt_id: typeof value.bind_receipt_id === "string" ? value.bind_receipt_id : undefined,
     execution_intent_id: typeof value.execution_intent_id === "string" ? value.execution_intent_id : undefined,
-    authority_check_result: value.authority_check_result,
-    constraint_check_result: value.constraint_check_result,
-    drift_check_result: value.drift_check_result,
-    risk_check_result: value.risk_check_result,
-    bind_receipt: isRecord(value.bind_receipt) ? value.bind_receipt : undefined,
+    authority_check_result: parseBindCheckPayload(value.authority_check_result),
+    constraint_check_result: parseBindCheckPayload(value.constraint_check_result),
+    drift_check_result: parseBindCheckPayload(value.drift_check_result),
+    risk_check_result: parseBindCheckPayload(value.risk_check_result),
+    bind_receipt: parseBindReceiptPayload(value.bind_receipt),
     error: typeof value.error === "string" ? value.error : undefined,
   };
 }
@@ -76,18 +122,25 @@ function parseBindReceiptResponse(value: unknown): BindReceiptResponse | null {
   }
   return {
     ok: value.ok,
-    bind_receipt: isRecord(value.bind_receipt) ? value.bind_receipt : undefined,
-    bind_outcome: typeof value.bind_outcome === "string" ? value.bind_outcome : undefined,
+    bind_receipt: parseBindReceiptPayload(value.bind_receipt),
+    bind_outcome: normalizeBindOutcome(value.bind_outcome) ?? undefined,
     bind_failure_reason: typeof value.bind_failure_reason === "string" ? value.bind_failure_reason : undefined,
     bind_reason_code: typeof value.bind_reason_code === "string" ? value.bind_reason_code : undefined,
     bind_receipt_id: typeof value.bind_receipt_id === "string" ? value.bind_receipt_id : undefined,
     execution_intent_id: typeof value.execution_intent_id === "string" ? value.execution_intent_id : undefined,
+    authority_check_result: parseBindCheckPayload(value.authority_check_result),
+    constraint_check_result: parseBindCheckPayload(value.constraint_check_result),
+    drift_check_result: parseBindCheckPayload(value.drift_check_result),
+    risk_check_result: parseBindCheckPayload(value.risk_check_result),
     error: typeof value.error === "string" ? value.error : undefined,
   };
 }
 
-function normalizeBindOutcome(outcome?: string): CanonicalBindOutcome | "UNKNOWN" {
-  const normalized = (outcome ?? "").trim().toUpperCase();
+function normalizeBindOutcome(outcome: unknown): CanonicalBindOutcome | null {
+  if (typeof outcome !== "string") {
+    return null;
+  }
+  const normalized = outcome.trim().toUpperCase();
   switch (normalized) {
     case "COMMITTED":
     case "SUCCESS":
@@ -105,32 +158,31 @@ function normalizeBindOutcome(outcome?: string): CanonicalBindOutcome | "UNKNOWN
     case "PRECONDITION_FAILED":
       return "PRECONDITION_FAILED";
     default:
-      return "UNKNOWN";
+      return null;
   }
 }
 
-function resolveOutcomeVariant(outcome?: string): "success" | "warning" | "danger" | "muted" {
-  const canonical = normalizeBindOutcome(outcome);
-  if (canonical === "COMMITTED") {
+function resolveOutcomeVariant(outcome: CanonicalBindOutcome | "UNKNOWN"): "success" | "warning" | "danger" | "muted" {
+  if (outcome === "COMMITTED") {
     return "success";
   }
-  if (canonical === "BLOCKED" || canonical === "ROLLED_BACK" || canonical === "PRECONDITION_FAILED") {
+  if (outcome === "BLOCKED" || outcome === "ROLLED_BACK" || outcome === "PRECONDITION_FAILED") {
     return "warning";
   }
-  if (canonical === "ESCALATED" || canonical === "APPLY_FAILED" || canonical === "SNAPSHOT_FAILED") {
+  if (outcome === "ESCALATED" || outcome === "APPLY_FAILED" || outcome === "SNAPSHOT_FAILED") {
     return "danger";
   }
   return "muted";
 }
 
-function summarizeBindCheck(value: unknown): BindCheckSummary {
-  if (!isRecord(value)) {
+function summarizeBindCheck(value: BindCheckPayload | undefined): BindCheckSummary {
+  if (!value) {
     return "UNKNOWN";
   }
-  if (typeof value.passed === "boolean") {
+  if (value.passed !== undefined) {
     return value.passed ? "PASS" : "FAIL";
   }
-  if (typeof value.result === "string") {
+  if (value.result) {
     const result = value.result.trim().toUpperCase();
     if (result === "PASS" || result === "OK" || result === "ALLOW") {
       return "PASS";
@@ -145,11 +197,15 @@ function summarizeBindCheck(value: unknown): BindCheckSummary {
 function resolveCheckResult(
   result: PromoteResponse | null,
   receipt: BindReceiptResponse | null,
-  key: "authority_check_result" | "constraint_check_result" | "drift_check_result" | "risk_check_result",
+  key: BindCheckKey,
 ): BindCheckSummary {
   const fromResult = summarizeBindCheck(result?.[key]);
   if (fromResult !== "UNKNOWN") {
     return fromResult;
+  }
+  const fromReceiptTop = summarizeBindCheck(receipt?.[key]);
+  if (fromReceiptTop !== "UNKNOWN") {
+    return fromReceiptTop;
   }
   const fromReceipt = summarizeBindCheck(receipt?.bind_receipt?.[key]);
   return fromReceipt;
@@ -190,7 +246,7 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
     return null;
   }, [bundleDirName, bundleId]);
 
-  const canonicalOutcome = normalizeBindOutcome(result?.bind_outcome);
+  const canonicalOutcome = result?.bind_outcome ?? "UNKNOWN";
 
   const handleSubmit = async (): Promise<void> => {
     setError(null);
