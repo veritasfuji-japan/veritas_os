@@ -2,7 +2,14 @@ export type ClusterKind = "critical" | "risky" | "uncertain" | "stable";
 export type Severity = "critical" | "high" | "medium" | "low";
 export type RequestStatus = "active" | "mitigated" | "investigating" | "new";
 export type DecisionPhaseOutcome = "allow" | "modify" | "deny" | "hold";
-export type BindPhaseOutcome = "COMMITTED" | "BLOCKED" | "ESCALATED" | "ROLLED_BACK";
+export type BindPhaseOutcome =
+  | "COMMITTED"
+  | "BLOCKED"
+  | "ESCALATED"
+  | "ROLLED_BACK"
+  | "APPLY_FAILED"
+  | "SNAPSHOT_FAILED"
+  | "PRECONDITION_FAILED";
 
 export interface RiskPoint {
   id: string;

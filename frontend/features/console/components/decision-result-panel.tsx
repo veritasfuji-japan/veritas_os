@@ -78,6 +78,12 @@ export function DecisionResultPanel({
         ? "bg-amber-500/20 text-amber-700"
         : bindPhase.bindPhase === "ROLLED_BACK"
           ? "bg-orange-500/20 text-orange-700"
+          : bindPhase.bindPhase === "APPLY_FAILED"
+            ? "bg-red-600/20 text-red-700"
+            : bindPhase.bindPhase === "SNAPSHOT_FAILED"
+              ? "bg-fuchsia-500/20 text-fuchsia-700"
+              : bindPhase.bindPhase === "PRECONDITION_FAILED"
+                ? "bg-violet-500/20 text-violet-700"
           : "bg-muted text-muted-foreground";
 
   const bundleHandler = () => {
@@ -176,6 +182,9 @@ export function DecisionResultPanel({
             <p><span className="text-muted-foreground">{tk("decisionPanelExecutionIntentLabel")}:</span> <span className="font-mono text-[11px]">{bindPhase.executionIntentId}</span></p>
             <p><span className="text-muted-foreground">{tk("decisionPanelBindFailureReasonLabel")}:</span> {bindPhase.bindFailureReason}</p>
             <p><span className="text-muted-foreground">{tk("decisionPanelBindReasonCodeLabel")}:</span> <span className="font-mono text-[11px]">{bindPhase.bindReasonCode}</span></p>
+            {!bindPhase.bindPhaseCanonical ? (
+              <p className="text-muted-foreground">Non-canonical bind outcome reported by runtime contract.</p>
+            ) : null}
             <div className="grid grid-cols-2 gap-2 rounded border border-border/60 bg-background/60 p-2">
               <p><span className="text-muted-foreground">{tk("decisionPanelBindAuthorityLabel")}:</span> {bindPhase.checks.authority}</p>
               <p><span className="text-muted-foreground">{tk("decisionPanelBindConstraintsLabel")}:</span> {bindPhase.checks.constraints}</p>

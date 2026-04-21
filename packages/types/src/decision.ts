@@ -16,6 +16,14 @@ export type BusinessDecisionStatus =
   | "REVIEW_REQUIRED"
   | "POLICY_DEFINITION_REQUIRED"
   | "EVIDENCE_REQUIRED";
+export type FinalOutcomeStatus =
+  | "COMMITTED"
+  | "BLOCKED"
+  | "ESCALATED"
+  | "ROLLED_BACK"
+  | "APPLY_FAILED"
+  | "SNAPSHOT_FAILED"
+  | "PRECONDITION_FAILED";
 
 /** Severity level used in CritiqueItem. */
 export type CritiqueSeverity = "low" | "med" | "high";
@@ -618,6 +626,24 @@ export interface DecideResponse extends DecideResponseMeta {
   ai_disclosure: string;
   /** Art. 50 — regulation reference notice. Always present. */
   regulation_notice: string;
+  /** Bind-phase governance outcome linked to this decision when available. */
+  bind_outcome?: FinalOutcomeStatus | null;
+  /** Operator-facing reason when bind phase was blocked/escalated/rolled back. */
+  bind_failure_reason?: string | null;
+  /** Machine-readable bind reason code for compact governance filtering. */
+  bind_reason_code?: string | null;
+  /** Lineage pointer to the bind receipt artifact. */
+  bind_receipt_id?: string | null;
+  /** Lineage pointer to the execution intent linked to bind phase. */
+  execution_intent_id?: string | null;
+  /** Authority check summary from bind-phase adjudication. */
+  authority_check_result?: Record<string, unknown> | null;
+  /** Constraint check summary from bind-phase adjudication. */
+  constraint_check_result?: Record<string, unknown> | null;
+  /** Drift check summary from bind-phase adjudication. */
+  drift_check_result?: Record<string, unknown> | null;
+  /** Runtime risk check summary from bind-phase adjudication. */
+  risk_check_result?: Record<string, unknown> | null;
   /** Art. 13 — notification record for individuals affected by high-risk decisions. */
   affected_parties_notice?: Record<string, unknown> | null;
 
@@ -688,6 +714,15 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
     (value.trust_log === null || isRecord(value.trust_log)) &&
     typeof value.ai_disclosure === "string" &&
     typeof value.regulation_notice === "string" &&
+    (value.bind_outcome === null || value.bind_outcome === undefined || isFinalOutcomeStatus(value.bind_outcome)) &&
+    (value.bind_failure_reason === null || value.bind_failure_reason === undefined || typeof value.bind_failure_reason === "string") &&
+    (value.bind_reason_code === null || value.bind_reason_code === undefined || typeof value.bind_reason_code === "string") &&
+    (value.bind_receipt_id === null || value.bind_receipt_id === undefined || typeof value.bind_receipt_id === "string") &&
+    (value.execution_intent_id === null || value.execution_intent_id === undefined || typeof value.execution_intent_id === "string") &&
+    (value.authority_check_result === null || value.authority_check_result === undefined || isRecord(value.authority_check_result)) &&
+    (value.constraint_check_result === null || value.constraint_check_result === undefined || isRecord(value.constraint_check_result)) &&
+    (value.drift_check_result === null || value.drift_check_result === undefined || isRecord(value.drift_check_result)) &&
+    (value.risk_check_result === null || value.risk_check_result === undefined || isRecord(value.risk_check_result)) &&
     (value.affected_parties_notice === null || value.affected_parties_notice === undefined || isRecord(value.affected_parties_notice)) &&
     (value.query === null || value.query === undefined || typeof value.query === "string") &&
     (value.pipeline_steps === null || value.pipeline_steps === undefined || Array.isArray(value.pipeline_steps)) &&
@@ -699,6 +734,16 @@ export function isDecideResponse(value: unknown): value is DecideResponse {
 
 function isDecisionStatus(value: unknown): value is DecisionStatus {
   return value === "allow" || value === "modify" || value === "rejected" || value === "block" || value === "abstain";
+}
+
+function isFinalOutcomeStatus(value: unknown): value is FinalOutcomeStatus {
+  return value === "COMMITTED"
+    || value === "BLOCKED"
+    || value === "ESCALATED"
+    || value === "ROLLED_BACK"
+    || value === "APPLY_FAILED"
+    || value === "SNAPSHOT_FAILED"
+    || value === "PRECONDITION_FAILED";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

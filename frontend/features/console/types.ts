@@ -86,7 +86,14 @@ export interface DecisionResultView {
   rejectedReasons: DecisionRejectedReasonsView;
 }
 
-export type BindOutcomeStatus = "COMMITTED" | "BLOCKED" | "ESCALATED" | "ROLLED_BACK" | "UNKNOWN";
+export type BindOutcomeStatus =
+  | "COMMITTED"
+  | "BLOCKED"
+  | "ESCALATED"
+  | "ROLLED_BACK"
+  | "APPLY_FAILED"
+  | "SNAPSHOT_FAILED"
+  | "PRECONDITION_FAILED";
 
 export interface BindCheckBreakdownView {
   authority: string;
@@ -97,7 +104,8 @@ export interface BindCheckBreakdownView {
 
 export interface BindPhaseView {
   decisionPhase: string;
-  bindPhase: BindOutcomeStatus;
+  bindPhase: string;
+  bindPhaseCanonical: boolean;
   bindReceiptId: string;
   executionIntentId: string;
   bindFailureReason: string;
