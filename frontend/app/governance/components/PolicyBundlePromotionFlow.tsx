@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Card } from "@veritas/design-system";
-import type { FinalOutcomeStatus } from "@veritas/types";
 import { StatusBadge } from "../../../components/ui";
 import { veritasFetch } from "../../../lib/api-client";
 
@@ -10,7 +9,14 @@ interface PolicyBundlePromotionFlowProps {
   canOperate: boolean;
 }
 
-type CanonicalBindOutcome = FinalOutcomeStatus;
+type CanonicalBindOutcome =
+  | "COMMITTED"
+  | "BLOCKED"
+  | "ESCALATED"
+  | "ROLLED_BACK"
+  | "APPLY_FAILED"
+  | "SNAPSHOT_FAILED"
+  | "PRECONDITION_FAILED";
 
 type BindCheckSummary = "PASS" | "FAIL" | "UNKNOWN";
 type BindCheckKey =
