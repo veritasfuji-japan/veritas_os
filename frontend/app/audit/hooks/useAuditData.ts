@@ -202,6 +202,17 @@ export function useAuditData(): AuditDataState {
         item.decision_id,
         item.replay_id,
         item.policy_version,
+        item.bind_receipt_id,
+        item.metadata &&
+        typeof item.metadata === "object" &&
+        item.metadata !== null
+          ? (item.metadata as Record<string, unknown>).bind_receipt_id
+          : undefined,
+        item.bind_receipt &&
+        typeof item.bind_receipt === "object" &&
+        item.bind_receipt !== null
+          ? (item.bind_receipt as Record<string, unknown>).bind_receipt_id
+          : undefined,
       ]
         .map((v) => String(v ?? "").toLowerCase())
         .join(" ");

@@ -347,4 +347,38 @@ describe("TrustLogExplorerPage", () => {
     expect(screen.getByText("チェーン")).toBeInTheDocument();
   });
 
+  it("consumes governance bind receipt query URL and shows trace focus status", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-001");
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ bind_receipt_id: "br-001" }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: [
+            {
+              ...MOCK_ITEMS_CHAINED[0],
+              bind_receipt_id: "br-001",
+            },
+          ],
+          cursor: "0",
+          next_cursor: null,
+          limit: 50,
+          has_more: false,
+        }),
+      } as Response);
+
+    render(<TrustLogExplorerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Bind Receipt Trace")).toBeInTheDocument();
+      expect(screen.getByText("br-001")).toBeInTheDocument();
+      expect(screen.getByText("関連する監査ログをタイムラインで選択しました。")).toBeInTheDocument();
+    });
+  });
+
 });

@@ -307,6 +307,47 @@ describe("useAuditData", () => {
       expect.any(Object),
     );
     expect(result.current.bindReceiptFoundInTimeline).toBe(true);
+    expect(result.current.filteredItems).toHaveLength(1);
+    expect(result.current.selected?.bind_receipt_id).toBe("br-001");
+    expect(result.current.detailTab).toBe("related");
+  });
+
+  it("includes bind receipt identifiers in cross-search all-field matching", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          items: [
+            {
+              ...MOCK_ITEMS[0],
+              bind_receipt_id: "br-direct",
+            },
+            {
+              ...MOCK_ITEMS[1],
+              bind_receipt: { bind_receipt_id: "br-nested" },
+            },
+          ],
+          next_cursor: null,
+          has_more: false,
+        }),
+    });
+
+    const { result } = renderHook(() => useAuditData());
+    await act(async () => {
+      await result.current.loadLogs(null, true);
+    });
+
+    act(() => {
+      result.current.setCrossSearch({ query: "br-direct", field: "all" });
+    });
+    expect(result.current.filteredItems).toHaveLength(1);
+    expect(result.current.filteredItems[0].bind_receipt_id).toBe("br-direct");
+
+    act(() => {
+      result.current.setCrossSearch({ query: "br-nested", field: "all" });
+    });
+    expect(result.current.filteredItems).toHaveLength(1);
+    expect(result.current.filteredItems[0].request_id).toBe("req-002");
   });
 
   it("handles invalid bind_receipt_id query param without fetch", async () => {
