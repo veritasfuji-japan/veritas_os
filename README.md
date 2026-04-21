@@ -1,6 +1,6 @@
 # VERITAS OS v2.0 — Decision Governance OS for AI Agents
 
-**Reviewable, traceable, replayable, and enforceable AI decisions before real-world effect.**
+**Reviewable, traceable, replayable, and enforceable AI decisions through decision and bind boundaries before real-world effect.**
 
 [![DOI](https://doi.org/10.5281/zenodo.17838349.svg)](https://doi.org/10.5281/zenodo.17838349)
 [![DOI (JP Paper)](https://zenodo.org/badge/DOI/10.5281/zenodo.17838456.svg)](https://doi.org/10.5281/zenodo.17838456)
@@ -33,7 +33,10 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 ## What VERITAS OS is
 
 VERITAS OS is a **Decision Governance OS for AI Agents**.
-It is the **governance layer before execution** that determines whether an AI decision may proceed, must be held, blocked, or escalated for human review.
+It is the governance layer from **decision adjudication through bind-time boundary checks**:
+it determines whether an AI decision may proceed and whether an approved decision
+can be committed, blocked, escalated, or rolled back at bind time before
+real-world effect.
 
 ### What problem it solves
 
@@ -65,12 +68,12 @@ VERITAS OS focuses on **decision governance**:
 
 ## What VERITAS OS is / is not
 
-- **Is:** a Decision Governance OS for AI agents and a governance layer before execution.
+- **Is:** a Decision Governance OS for AI agents, covering decision governance and bind-boundary governance before real-world effect.
 - **Is not:** a replacement for all agent runtimes, nor only an orchestration convenience wrapper.
 
 ## Fact vs roadmap (read this first)
 
-- **Current fact (beta):** Core decision pipeline, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
+- **Current fact (beta):** Core decision pipeline, bind artifact lineage (`decision -> execution_intent -> bind_receipt`), bind-time admissibility checks, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
 - **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
 
@@ -112,6 +115,8 @@ VERITAS OS focuses on **decision governance**:
 - **Public Positioning Guide (EN)**: [`docs/en/positioning/public-positioning.md`](docs/en/positioning/public-positioning.md)
 - **Public Positioning Guide (JA)**: [`docs/ja/positioning/public-positioning.md`](docs/ja/positioning/public-positioning.md)
 - **Decision Semantics Contract**: [`docs/en/architecture/decision-semantics.md`](docs/en/architecture/decision-semantics.md)
+- **Bind-Boundary Governance Artifacts**: [`docs/en/architecture/bind-boundary-governance-artifacts.md`](docs/en/architecture/bind-boundary-governance-artifacts.md)
+- **Bind-Time Admissibility Evaluator**: [`docs/en/architecture/bind_time_admissibility_evaluator.md`](docs/en/architecture/bind_time_admissibility_evaluator.md)
 - **Required Evidence Taxonomy v0**: [`docs/en/governance/required-evidence-taxonomy.md`](docs/en/governance/required-evidence-taxonomy.md)
 - **AML/KYC contract hardening (canonical gate + evidence profile)**: [`docs/en/guides/financial-governance-templates.md`](docs/en/guides/financial-governance-templates.md)
 - **Documentation Map**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
@@ -312,6 +317,7 @@ VERITAS optimizes for **governance**:
 - **Enterprise governance** — **4-eyes approval** for policy changes, **RBAC/ABAC** access control, **SSE real-time governance alerts**, external secret manager enforcement
 - **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
 - **Operational visibility** via a full-stack **Mission Control dashboard** (Next.js) with real-time event streaming, risk analytics, and governance policy management
+- **Bind-boundary visibility** in Mission Control via bind-phase outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`) with execution intent and bind receipt lineage pointers
 - **EU AI Act compliance** — built-in compliance reporting, audit export, and deployment readiness checks
 
 **Target users**
@@ -345,6 +351,10 @@ Key fields (simplified):
 | `required_evidence[]` | Evidence keys required by current policy/risk boundary |
 | `human_review_required` | Explicit human-review requirement flag |
 | `trust_log` | Hash-chained TrustLog entry (`sha256_prev`) |
+| `bind_outcome` | Bind-phase terminal outcome (`COMMITTED` / `BLOCKED` / `ESCALATED` / `ROLLED_BACK`) |
+| `execution_intent_id` | Lineage pointer to bind attempt context |
+| `bind_receipt_id` | Lineage pointer to TrustLog-linked bind receipt artifact |
+| `bind_failure_reason` | Operator-facing reason when bind-phase is blocked/escalated/rolled back |
 | `extras.metrics` | Per-stage latency, memory hits, web hits |
 
 Decision output semantics:
@@ -353,6 +363,7 @@ Decision output semantics:
 - **Value Core** compares option value and informs `business_decision` + `next_action`.
 - UI must show `gate_decision`, `business_decision`, and `next_action` as different concepts.
 - `allow` is gate-level permissive status only; it must not be presented as case approval.
+- Bind-phase `COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK` is a separate adjudication layer from decision-phase approval.
 - Financial/regulatory governance prompt templates are available as canonical fixtures for
   regression and demo workflows (`veritas_os/sample_data/governance/financial_regulatory_templates.json`);
   see `docs/en/guides/financial-governance-templates.md`.
@@ -651,6 +662,8 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | GET | `/v1/governance/policy/history` | Policy change audit trail (with digest transitions) |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
 | GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
+| GET | `/v1/governance/bind-receipts` | List bind receipts (filter by decision or execution intent lineage) |
+| GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | Retrieve a single bind receipt artifact |
 
 > **Signed governance artifacts** — In secure/prod posture, policy bundles must be Ed25519-signed.
 > Decision artifacts include a `governance_identity` field showing which governance policy was in

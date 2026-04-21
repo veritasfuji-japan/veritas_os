@@ -7,7 +7,9 @@
 Core promise:
 
 - AI decisions are **reviewable, traceable, replayable, auditable, and enforceable before real-world effect**.
-- VERITAS OS functions as a **governance layer before execution**, not only an execution runtime.
+- VERITAS OS functions as a governance layer from **decision adjudication through bind-boundary enforcement**, not only an execution runtime.
+- Current implemented bind-boundary lineage is:
+  `decision artifact -> execution intent -> bind receipt` (TrustLog-integrated).
 
 ## What VERITAS OS is / is not
 
@@ -18,6 +20,7 @@ Core promise:
 
 - Decision Governance OS
 - governance layer before execution
+- decision-to-bind governance boundary
 - reviewable / traceable / replayable / auditable / enforceable
 - fail-closed safety gate
 - tamper-evident TrustLog lineage

@@ -9,6 +9,8 @@
 3. Governance backend repository abstraction (file/postgresql) is implemented.
 4. Evidence bundle generation and standalone TrustLog verification paths are implemented.
 5. Validation strategy docs and pilot checklists are present for reproducible review flow.
+6. Bind-boundary governance artifacts and lineage (`decision -> execution_intent -> bind_receipt`) are implemented.
+7. Bind-time admissibility and terminal bind outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`) are represented in API and operator-facing views.
 
 ## Pending / environment-dependent
 
@@ -31,4 +33,3 @@
 - [Required Evidence Taxonomy](../governance/required-evidence-taxonomy.md)
 - [External Audit Readiness](external-audit-readiness.md)
 - [AML/KYC Pilot Checklist](../guides/aml-kyc-pilot-checklist.md)
-
