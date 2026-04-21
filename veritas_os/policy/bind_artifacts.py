@@ -68,6 +68,7 @@ class ExecutionIntent:
     ttl_seconds: int | None = None
     expected_state_fingerprint: str | None = None
     approval_context: dict[str, Any] | None = None
+    policy_lineage: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -86,6 +87,7 @@ class ExecutionIntent:
             "ttl_seconds": self.ttl_seconds,
             "expected_state_fingerprint": self.expected_state_fingerprint,
             "approval_context": self.approval_context,
+            "policy_lineage": self.policy_lineage,
         }
 
 
