@@ -10,7 +10,13 @@ from veritas_os.policy.bind_artifacts import ExecutionIntent, FinalOutcome
 from veritas_os.policy.bind_execution import ReferenceBindAdapter, execute_bind_boundary
 
 
-def _intent(expected_fingerprint: str = "") -> ExecutionIntent:
+def _intent(
+    expected_fingerprint: str = "",
+    *,
+    ttl_seconds: int | None = None,
+    approval_context: dict[str, object] | None = None,
+    policy_lineage: dict[str, object] | None = None,
+) -> ExecutionIntent:
     return ExecutionIntent(
         execution_intent_id="ei-001",
         decision_id="dec-001",
@@ -22,7 +28,10 @@ def _intent(expected_fingerprint: str = "") -> ExecutionIntent:
         intended_action="mutate",
         decision_hash="a" * 64,
         decision_ts="2026-04-20T12:00:00Z",
+        ttl_seconds=ttl_seconds,
         expected_state_fingerprint=expected_fingerprint,
+        approval_context=approval_context,
+        policy_lineage=policy_lineage,
     )
 
 
@@ -261,3 +270,82 @@ def test_bind_execution_trustlog_lineage_traversal_by_all_ids(trustlog_env) -> N
     assert len(by_bind_receipt_id) == 1
     assert by_decision_id[0].bind_receipt_id == receipt.bind_receipt_id
     assert by_execution_intent_id[0].bind_receipt_id == receipt.bind_receipt_id
+
+
+def test_bind_execution_policy_requires_drift_missing_signal_blocks() -> None:
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint="",
+        policy_lineage={"bind_adjudication": {"drift_required": True}},
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert "BIND_DRIFT_SIGNAL_MISSING" in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_policy_relaxes_drift_allows_commit_without_fingerprint() -> None:
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint="",
+        policy_lineage={"bind_adjudication": {"drift_required": False}},
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert adapter.state["version"] == 2
+
+
+def test_bind_execution_policy_requires_approval_freshness_stale_escalates() -> None:
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={"approval_expires_at": "2026-04-20T12:00:00Z"},
+        policy_lineage={
+            "bind_adjudication": {
+                "approval_freshness_required": True,
+                "missing_signal_default": "escalate",
+            }
+        },
+    )
+
+    receipt = execute_bind_boundary(
+        execution_intent=intent,
+        adapter=adapter,
+        bind_ts="2026-04-20T12:05:00Z",
+    )
+
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+    assert "BIND_APPROVAL_STALE" in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_policy_controls_missing_signal_default_block_vs_escalate() -> None:
+    block_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        runtime_risk_signal=None,
+    )
+    escalate_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        runtime_risk_signal=None,
+    )
+    block_intent = _intent(
+        expected_fingerprint=block_adapter.fingerprint_state({"version": 1}),
+        policy_lineage={"bind_adjudication": {"missing_signal_default": "block"}},
+    )
+    escalate_intent = _intent(
+        expected_fingerprint=escalate_adapter.fingerprint_state({"version": 1}),
+        policy_lineage={"bind_adjudication": {"missing_signal_default": "escalate"}},
+    )
+
+    block_receipt = execute_bind_boundary(execution_intent=block_intent, adapter=block_adapter)
+    escalate_receipt = execute_bind_boundary(
+        execution_intent=escalate_intent,
+        adapter=escalate_adapter,
+    )
+
+    assert block_receipt.final_outcome is FinalOutcome.BLOCKED
+    assert escalate_receipt.final_outcome is FinalOutcome.ESCALATED

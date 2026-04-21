@@ -50,6 +50,9 @@ class BindAdmissibilityInput:
     expected_state_fingerprint: Optional[str]
     runtime_risk_signal: Optional[bool]
     drift_sensitive: bool = True
+    ttl_required: bool = False
+    approval_freshness_required: bool = False
+    missing_signal_outcome: AdmissibilityOutcome = AdmissibilityOutcome.BLOCK
     ttl_expires_at: Optional[str] = None
     approval_expires_at: Optional[str] = None
 
@@ -109,10 +112,11 @@ def evaluate_bind_admissibility(
 def _check_authority(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     signal = evaluation_input.authority_signal
     if signal is None:
+        status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=CheckStatus.FAIL,
+            status=status,
             reason_code="BIND_AUTHORITY_MISSING",
-            message="Authority signal is missing; fail-closed block applied.",
+            message="Authority signal is missing; policy fallback applied.",
         )
     if signal is False:
         return CheckResult(
@@ -130,10 +134,11 @@ def _check_authority(evaluation_input: BindAdmissibilityInput) -> CheckResult:
 def _check_constraints(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     signals = evaluation_input.constraint_signals
     if not signals:
+        status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=CheckStatus.FAIL,
+            status=status,
             reason_code="BIND_CONSTRAINTS_MISSING",
-            message="Constraint signals are missing; fail-closed block applied.",
+            message="Constraint signals are missing; policy fallback applied.",
         )
 
     violating_constraints = sorted(name for name, passed in signals.items() if not passed)
@@ -165,8 +170,9 @@ def _check_drift(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     expected = evaluation_input.expected_state_fingerprint
 
     if not live or not expected:
+        status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=CheckStatus.FAIL,
+            status=status,
             reason_code="BIND_DRIFT_SIGNAL_MISSING",
             message="Drift-sensitive path lacks live or expected state fingerprint.",
         )
@@ -188,10 +194,11 @@ def _check_drift(evaluation_input: BindAdmissibilityInput) -> CheckResult:
 def _check_runtime_risk(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     signal = evaluation_input.runtime_risk_signal
     if signal is None:
+        status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=CheckStatus.FAIL,
+            status=status,
             reason_code="BIND_RUNTIME_RISK_MISSING",
-            message="Runtime risk signal is missing; fail-closed block applied.",
+            message="Runtime risk signal is missing; policy fallback applied.",
         )
     if signal is False:
         return CheckResult(
@@ -209,6 +216,20 @@ def _check_runtime_risk(evaluation_input: BindAdmissibilityInput) -> CheckResult
 def _check_freshness(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     now = _parse_timestamp(evaluation_input.current_timestamp)
 
+    if evaluation_input.ttl_required and not evaluation_input.ttl_expires_at:
+        return CheckResult(
+            status=_missing_signal_status(evaluation_input),
+            reason_code="BIND_TTL_MISSING",
+            message="TTL is required by policy but no TTL signal is available.",
+        )
+
+    if evaluation_input.approval_freshness_required and not evaluation_input.approval_expires_at:
+        return CheckResult(
+            status=_missing_signal_status(evaluation_input),
+            reason_code="BIND_APPROVAL_FRESHNESS_MISSING",
+            message="Approval freshness is required by policy but signal is missing.",
+        )
+
     expiry_fields = [
         ("ttl", evaluation_input.ttl_expires_at, "BIND_TTL_EXPIRED"),
         ("approval", evaluation_input.approval_expires_at, "BIND_APPROVAL_STALE"),
@@ -225,10 +246,11 @@ def _check_freshness(evaluation_input: BindAdmissibilityInput) -> CheckResult:
     if expired:
         labels = ", ".join(name for name, _ in expired)
         primary_reason = expired[0][1]
+        expired_status = _missing_signal_status(evaluation_input)
         return CheckResult(
-            status=CheckStatus.ESCALATE,
+            status=expired_status,
             reason_code=primary_reason,
-            message=f"Freshness window expired ({labels}); escalation required.",
+            message=f"Freshness window expired ({labels}); policy fallback applied.",
         )
 
     return CheckResult(
@@ -244,3 +266,10 @@ def _parse_timestamp(raw_timestamp: str) -> datetime:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
+
+
+def _missing_signal_status(evaluation_input: BindAdmissibilityInput) -> CheckStatus:
+    """Return status dictated by policy for missing/invalid runtime signals."""
+    if evaluation_input.missing_signal_outcome is AdmissibilityOutcome.ESCALATE:
+        return CheckStatus.ESCALATE
+    return CheckStatus.FAIL

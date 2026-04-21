@@ -153,6 +153,16 @@ class ReferenceBindAdapter:
         return self.target_description
 
 
+@dataclass(frozen=True)
+class BindPolicyConfig:
+    """Policy-driven bind adjudication toggles resolved from governance lineage."""
+
+    drift_required: bool = True
+    ttl_required: bool = False
+    approval_freshness_required: bool = False
+    missing_signal_outcome: AdmissibilityOutcome = AdmissibilityOutcome.BLOCK
+
+
 def execute_bind_boundary(
     *,
     execution_intent: ExecutionIntent,
@@ -212,7 +222,9 @@ def execute_bind_boundary(
     authority_signal = adapter.validate_authority(execution_intent, pre_snapshot)
     constraint_signals = adapter.validate_constraints(execution_intent, pre_snapshot)
     runtime_risk_signal = adapter.assess_runtime_risk(execution_intent, pre_snapshot)
+    bind_policy = _resolve_bind_policy_config(execution_intent)
     ttl_expires_at = _build_ttl_expiry(execution_intent)
+    approval_expires_at = _build_approval_expiry(execution_intent)
 
     admissibility = evaluate_bind_admissibility(
         BindAdmissibilityInput(
@@ -223,9 +235,12 @@ def execute_bind_boundary(
             live_state_fingerprint=pre_fingerprint,
             expected_state_fingerprint=execution_intent.expected_state_fingerprint,
             runtime_risk_signal=runtime_risk_signal,
-            drift_sensitive=True,
+            drift_sensitive=bind_policy.drift_required,
+            ttl_required=bind_policy.ttl_required,
+            approval_freshness_required=bind_policy.approval_freshness_required,
+            missing_signal_outcome=bind_policy.missing_signal_outcome,
             ttl_expires_at=ttl_expires_at,
-            approval_expires_at=None,
+            approval_expires_at=approval_expires_at,
         )
     )
 
@@ -532,6 +547,53 @@ def _build_ttl_expiry(execution_intent: ExecutionIntent) -> str | None:
         "+00:00",
         "Z",
     )
+
+
+def _build_approval_expiry(execution_intent: ExecutionIntent) -> str | None:
+    """Return approval expiry from intent approval context when available."""
+    if not isinstance(execution_intent.approval_context, dict):
+        return None
+    approval_expires_at = execution_intent.approval_context.get("approval_expires_at")
+    if not isinstance(approval_expires_at, str) or not approval_expires_at.strip():
+        return None
+    return approval_expires_at.strip()
+
+
+def _resolve_bind_policy_config(execution_intent: ExecutionIntent) -> BindPolicyConfig:
+    """Resolve bind policy from existing governance policy-lineage style fields."""
+    lineage_bind = {}
+    if isinstance(execution_intent.policy_lineage, dict):
+        lineage_bind = execution_intent.policy_lineage.get("bind_adjudication") or {}
+
+    approval_bind = {}
+    if isinstance(execution_intent.approval_context, dict):
+        approval_bind = execution_intent.approval_context.get("bind_adjudication") or {}
+
+    merged = {}
+    if isinstance(lineage_bind, dict):
+        merged.update(lineage_bind)
+    if isinstance(approval_bind, dict):
+        merged.update(approval_bind)
+
+    return BindPolicyConfig(
+        drift_required=bool(merged.get("drift_required", True)),
+        ttl_required=bool(merged.get("ttl_required", False)),
+        approval_freshness_required=bool(merged.get("approval_freshness_required", False)),
+        missing_signal_outcome=_parse_missing_signal_outcome(
+            merged.get("missing_signal_default", AdmissibilityOutcome.BLOCK.value)
+        ),
+    )
+
+
+def _parse_missing_signal_outcome(raw_value: Any) -> AdmissibilityOutcome:
+    """Parse configured missing-signal fallback outcome with fail-safe default."""
+    if isinstance(raw_value, AdmissibilityOutcome):
+        return raw_value
+    if isinstance(raw_value, str):
+        normalized = raw_value.strip().lower()
+        if normalized == AdmissibilityOutcome.ESCALATE.value:
+            return AdmissibilityOutcome.ESCALATE
+    return AdmissibilityOutcome.BLOCK
 
 
 def _with_receipt(base_receipt: BindReceipt, **updates: Any) -> BindReceipt:

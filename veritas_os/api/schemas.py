@@ -342,6 +342,7 @@ class ExecutionIntent(BaseModel):
     ttl_seconds: Optional[int] = Field(default=None, ge=0)
     expected_state_fingerprint: Optional[str] = Field(default=None, max_length=256)
     approval_context: Optional[Dict[str, Any]] = None
+    policy_lineage: Optional[Dict[str, Any]] = None
 
 
 class BindReceipt(BaseModel):
