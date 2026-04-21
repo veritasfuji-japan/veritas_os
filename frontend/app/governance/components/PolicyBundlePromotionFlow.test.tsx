@@ -180,10 +180,12 @@ describe("PolicyBundlePromotionFlow", () => {
     });
 
     expect(await screen.findByText("bind receipt detail loaded")).toBeInTheDocument();
-    expect(screen.getByText(/authority:/)).toBeInTheDocument();
-    expect(screen.getByText(/constraints:/)).toBeInTheDocument();
-    expect(screen.getByText(/drift:/)).toBeInTheDocument();
-    expect(screen.getByText(/risk:/)).toBeInTheDocument();
+    expect(screen.getByText(/^authority:/)).toBeInTheDocument();
+    expect(screen.getByText(/^constraints:/)).toBeInTheDocument();
+    expect(screen.getByText(/^drift:/)).toBeInTheDocument();
+    expect(screen.getByText(/^risk:/)).toBeInTheDocument();
+    expect(screen.getAllByText("PASS")).toHaveLength(2);
+    expect(screen.getAllByText("FAIL")).toHaveLength(2);
   });
 
   it("normalizes legacy success outcome into canonical COMMITTED", async () => {
@@ -215,5 +217,19 @@ describe("PolicyBundlePromotionFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
 
     expect(await screen.findByText("backend failure")).toBeInTheDocument();
+  });
+
+  it("handles malformed promote response payload", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: "yes" }),
+    });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+
+    expect(await screen.findByText("promotion レスポンスの形式が不正です。")).toBeInTheDocument();
   });
 });
