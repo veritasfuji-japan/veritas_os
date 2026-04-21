@@ -76,6 +76,7 @@ const MOCK_ITEMS = [
 describe("useAuditData", () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    window.history.replaceState({}, "", "/audit");
   });
 
   it("initialises with correct defaults", () => {
@@ -260,5 +261,84 @@ describe("useAuditData", () => {
 
     act(() => { result.current.setConfirmPiiRisk(true); });
     expect(result.current.confirmPiiRisk).toBe(true);
+  });
+
+  it("keeps legacy behaviour when bind_receipt_id query is absent", () => {
+    const { result } = renderHook(() => useAuditData());
+    expect(result.current.bindReceiptIdFromQuery).toBeNull();
+    expect(result.current.bindReceiptLookupError).toBeNull();
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("loads bind receipt from query param and then loads trust logs", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-001");
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            items: [
+              {
+                ...MOCK_ITEMS[0],
+                bind_receipt_id: "br-001",
+              },
+            ],
+            next_cursor: null,
+            has_more: false,
+          }),
+      });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptIdFromQuery).toBe("br-001");
+      expect(result.current.items).toHaveLength(1);
+    });
+
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      1,
+      "/api/veritas/v1/governance/bind-receipts/br-001",
+    );
+    expect(mockFetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/veritas/v1/trust/logs?limit=50",
+      expect.any(Object),
+    );
+    expect(result.current.bindReceiptFoundInTimeline).toBe(true);
+  });
+
+  it("handles invalid bind_receipt_id query param without fetch", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=bad%20value");
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("Invalid bind_receipt_id");
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("handles bind receipt not found", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-missing");
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("not found");
+    });
+  });
+
+  it("handles bind receipt fetch failure", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-err");
+    mockFetch.mockRejectedValueOnce(new Error("network"));
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptLookupError).toContain("Network error");
+    });
   });
 });

@@ -5,6 +5,7 @@ import TrustLogExplorerPage from "./page";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.history.replaceState({}, "", "/audit");
 });
 
 const MOCK_ITEMS_CHAINED = [
@@ -345,4 +346,5 @@ describe("TrustLogExplorerPage", () => {
     expect(screen.getByText("タイムスタンプ")).toBeInTheDocument();
     expect(screen.getByText("チェーン")).toBeInTheDocument();
   });
+
 });

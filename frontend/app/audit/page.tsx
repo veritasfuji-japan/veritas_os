@@ -87,12 +87,51 @@ export default function TrustLogExplorerPage(): JSX.Element {
         onLoadLogs={(c, r) => void data.loadLogs(c, r)}
       />
 
+      {data.bindReceiptIdFromQuery ? (
+        <Card
+          title="Bind Receipt Trace"
+          description={t(
+            "Governance から指定された bind receipt を追跡中です。",
+            "Tracing bind receipt specified from Governance.",
+          )}
+          variant="elevated"
+        >
+          <div className="space-y-2 text-xs">
+            <p>
+              bind_receipt_id: <span className="font-mono">{data.bindReceiptIdFromQuery}</span>
+            </p>
+            {data.bindReceiptLookupLoading ? (
+              <p className="text-muted-foreground">
+                {t("bind receipt を取得しています...", "Fetching bind receipt...")}
+              </p>
+            ) : null}
+            {!data.bindReceiptLookupLoading && !data.bindReceiptLookupError ? (
+              <p className={data.bindReceiptFoundInTimeline ? "text-success" : "text-warning"}>
+                {data.bindReceiptFoundInTimeline
+                  ? t(
+                      "関連する監査ログをタイムラインで選択しました。",
+                      "Matched audit log has been focused in the timeline.",
+                    )
+                  : t(
+                      "bind receipt は取得済みですが、現在読み込まれているタイムラインには未表示です。",
+                      "Bind receipt was retrieved, but no matching timeline item is currently loaded.",
+                    )}
+              </p>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
+
       {data.error ? (
         <ErrorBanner
           message={data.error}
           onRetry={() => void data.loadLogs(null, true)}
           retryLabel={t("再試行", "Retry")}
         />
+      ) : null}
+
+      {data.bindReceiptLookupError ? (
+        <ErrorBanner message={data.bindReceiptLookupError} />
       ) : null}
 
       {/* Summary */}
