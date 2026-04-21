@@ -267,13 +267,25 @@ describe("useAuditData", () => {
     const { result } = renderHook(() => useAuditData());
     expect(result.current.bindReceiptIdFromQuery).toBeNull();
     expect(result.current.bindReceiptLookupError).toBeNull();
+    expect(result.current.bindReceiptLookupDetail).toBeNull();
+    expect(result.current.showBindReceiptFallback).toBe(false);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it("loads bind receipt from query param and then loads trust logs", async () => {
     window.history.replaceState({}, "", "/audit?bind_receipt_id=br-001");
     mockFetch
-      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            bind_receipt_id: "br-001",
+            execution_intent_id: "ei-001",
+            bind_outcome: "COMMITTED",
+          }),
+      })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
@@ -307,9 +319,62 @@ describe("useAuditData", () => {
       expect.any(Object),
     );
     expect(result.current.bindReceiptFoundInTimeline).toBe(true);
+    expect(result.current.bindReceiptLookupDetail?.bindReceiptId).toBe("br-001");
+    expect(result.current.showBindReceiptFallback).toBe(false);
     expect(result.current.filteredItems).toHaveLength(1);
     expect(result.current.selected?.bind_receipt_id).toBe("br-001");
     expect(result.current.detailTab).toBe("related");
+  });
+
+  it("preserves bind receipt detail and enables fallback when timeline miss occurs", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-777");
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            ok: true,
+            bind_receipt: {
+              bind_receipt_id: "br-777",
+              execution_intent_id: "ei-777",
+              final_outcome: "ESCALATED",
+              escalation_reason: "manual-review",
+              authority_check_result: { passed: true },
+              constraint_check_result: { passed: false },
+              drift_check_result: { result: "stable" },
+              risk_check_result: { result: "block" },
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () =>
+          Promise.resolve({
+            items: MOCK_ITEMS,
+            next_cursor: null,
+            has_more: false,
+          }),
+      });
+
+    const { result } = renderHook(() => useAuditData());
+
+    await vi.waitFor(() => {
+      expect(result.current.bindReceiptIdFromQuery).toBe("br-777");
+      expect(result.current.bindReceiptLookupLoading).toBe(false);
+      expect(result.current.bindReceiptFoundInTimeline).toBe(false);
+      expect(result.current.showBindReceiptFallback).toBe(true);
+    });
+
+    expect(result.current.bindReceiptTimelineMiss).toBe(true);
+    expect(result.current.bindReceiptLookupSucceeded).toBe(true);
+    expect(result.current.bindReceiptLookupDetail).toMatchObject({
+      bindReceiptId: "br-777",
+      executionIntentId: "ei-777",
+      finalOutcome: "ESCALATED",
+      bindFailureReason: "manual-review",
+    });
   });
 
   it("includes bind receipt identifiers in cross-search all-field matching", async () => {
@@ -358,6 +423,8 @@ describe("useAuditData", () => {
     await vi.waitFor(() => {
       expect(result.current.bindReceiptLookupError).toContain("Invalid bind_receipt_id");
     });
+    expect(result.current.bindReceiptLookupDetail).toBeNull();
+    expect(result.current.showBindReceiptFallback).toBe(false);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -370,6 +437,8 @@ describe("useAuditData", () => {
     await vi.waitFor(() => {
       expect(result.current.bindReceiptLookupError).toContain("not found");
     });
+    expect(result.current.bindReceiptLookupDetail).toBeNull();
+    expect(result.current.showBindReceiptFallback).toBe(false);
   });
 
   it("handles bind receipt fetch failure", async () => {
@@ -381,5 +450,7 @@ describe("useAuditData", () => {
     await vi.waitFor(() => {
       expect(result.current.bindReceiptLookupError).toContain("Network error");
     });
+    expect(result.current.bindReceiptLookupDetail).toBeNull();
+    expect(result.current.showBindReceiptFallback).toBe(false);
   });
 });

@@ -118,6 +118,50 @@ export default function TrustLogExplorerPage(): JSX.Element {
                     )}
               </p>
             ) : null}
+            {data.showBindReceiptFallback && data.bindReceiptLookupDetail ? (
+              <div className="rounded border border-warning/30 bg-warning/10 px-3 py-2 text-[11px]">
+                <p className="mb-1 font-semibold">
+                  {t(
+                    "Timeline に一致ログがないため、取得済み bind receipt detail を表示しています。",
+                    "No matching timeline item is loaded, so showing fetched bind receipt details.",
+                  )}
+                </p>
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-2 gap-y-1">
+                  <dt>bind_receipt_id</dt>
+                  <dd className="font-mono">{data.bindReceiptLookupDetail.bindReceiptId}</dd>
+                  <dt>execution_intent_id</dt>
+                  <dd className="font-mono">{data.bindReceiptLookupDetail.executionIntentId ?? "-"}</dd>
+                  <dt>final_outcome</dt>
+                  <dd>{data.bindReceiptLookupDetail.finalOutcome ?? "-"}</dd>
+                  <dt>bind_failure_reason</dt>
+                  <dd>{data.bindReceiptLookupDetail.bindFailureReason ?? "-"}</dd>
+                  <dt>authority_check_result</dt>
+                  <dd className="font-mono">
+                    {data.bindReceiptLookupDetail.authorityCheckResult
+                      ? JSON.stringify(data.bindReceiptLookupDetail.authorityCheckResult)
+                      : "-"}
+                  </dd>
+                  <dt>constraint_check_result</dt>
+                  <dd className="font-mono">
+                    {data.bindReceiptLookupDetail.constraintCheckResult
+                      ? JSON.stringify(data.bindReceiptLookupDetail.constraintCheckResult)
+                      : "-"}
+                  </dd>
+                  <dt>drift_check_result</dt>
+                  <dd className="font-mono">
+                    {data.bindReceiptLookupDetail.driftCheckResult
+                      ? JSON.stringify(data.bindReceiptLookupDetail.driftCheckResult)
+                      : "-"}
+                  </dd>
+                  <dt>risk_check_result</dt>
+                  <dd className="font-mono">
+                    {data.bindReceiptLookupDetail.riskCheckResult
+                      ? JSON.stringify(data.bindReceiptLookupDetail.riskCheckResult)
+                      : "-"}
+                  </dd>
+                </dl>
+              </div>
+            ) : null}
           </div>
         </Card>
       ) : null}
