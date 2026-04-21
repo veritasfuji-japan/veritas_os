@@ -36,6 +36,10 @@ export interface AuditDataState {
   bindReceiptLookupLoading: boolean;
   bindReceiptIdFromQuery: string | null;
   bindReceiptFoundInTimeline: boolean;
+  bindReceiptLookupDetail: BindReceiptLookupDetail | null;
+  bindReceiptLookupSucceeded: boolean;
+  bindReceiptTimelineMiss: boolean;
+  showBindReceiptFallback: boolean;
 
   /* selected */
   selected: TrustLogItem | null;
@@ -92,6 +96,17 @@ export interface AuditDataState {
   searchByRequestId: () => Promise<void>;
 }
 
+interface BindReceiptLookupDetail {
+  bindReceiptId: string;
+  executionIntentId: string | null;
+  finalOutcome: string | null;
+  bindFailureReason: string | null;
+  authorityCheckResult: Record<string, unknown> | null;
+  constraintCheckResult: Record<string, unknown> | null;
+  driftCheckResult: Record<string, unknown> | null;
+  riskCheckResult: Record<string, unknown> | null;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Hook                                                               */
 /* ------------------------------------------------------------------ */
@@ -109,6 +124,7 @@ export function useAuditData(): AuditDataState {
   const [bindReceiptLookupError, setBindReceiptLookupError] = useState<string | null>(null);
   const [bindReceiptLookupLoading, setBindReceiptLookupLoading] = useState(false);
   const [bindReceiptIdFromQuery, setBindReceiptIdFromQuery] = useState<string | null>(null);
+  const [bindReceiptLookupDetail, setBindReceiptLookupDetail] = useState<BindReceiptLookupDetail | null>(null);
 
   const bindReceiptBootstrappedRef = useRef(false);
 
@@ -160,6 +176,55 @@ export function useAuditData(): AuditDataState {
     }
 
     return false;
+  };
+
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null;
+
+  const asStringOrNull = (value: unknown): string | null => (typeof value === "string" ? value : null);
+
+  const asRecordOrNull = (value: unknown): Record<string, unknown> | null => (isRecord(value) ? value : null);
+
+  const parseBindReceiptLookupDetail = (
+    payload: unknown,
+    fallbackBindReceiptId: string,
+  ): BindReceiptLookupDetail | null => {
+    if (!isRecord(payload)) {
+      return null;
+    }
+    const nested = asRecordOrNull(payload.bind_receipt);
+    return {
+      bindReceiptId:
+        asStringOrNull(payload.bind_receipt_id) ??
+        asStringOrNull(nested?.bind_receipt_id) ??
+        fallbackBindReceiptId,
+      executionIntentId:
+        asStringOrNull(payload.execution_intent_id) ??
+        asStringOrNull(nested?.execution_intent_id),
+      finalOutcome:
+        asStringOrNull(payload.bind_outcome) ??
+        asStringOrNull(payload.final_outcome) ??
+        asStringOrNull(nested?.final_outcome),
+      bindFailureReason:
+        asStringOrNull(payload.bind_failure_reason) ??
+        asStringOrNull(payload.rollback_reason) ??
+        asStringOrNull(payload.escalation_reason) ??
+        asStringOrNull(nested?.bind_failure_reason) ??
+        asStringOrNull(nested?.rollback_reason) ??
+        asStringOrNull(nested?.escalation_reason),
+      authorityCheckResult:
+        asRecordOrNull(payload.authority_check_result) ??
+        asRecordOrNull(nested?.authority_check_result),
+      constraintCheckResult:
+        asRecordOrNull(payload.constraint_check_result) ??
+        asRecordOrNull(nested?.constraint_check_result),
+      driftCheckResult:
+        asRecordOrNull(payload.drift_check_result) ??
+        asRecordOrNull(nested?.drift_check_result),
+      riskCheckResult:
+        asRecordOrNull(payload.risk_check_result) ??
+        asRecordOrNull(nested?.risk_check_result),
+    };
   };
 
   /* ---------------------------------------------------------------- */
@@ -277,6 +342,21 @@ export function useAuditData(): AuditDataState {
     }
     return sortedItems.some((item) => matchesBindReceiptId(item, bindReceiptIdFromQuery));
   }, [bindReceiptIdFromQuery, sortedItems]);
+
+  const bindReceiptLookupSucceeded = useMemo(
+    () => Boolean(bindReceiptIdFromQuery) && !bindReceiptLookupLoading && !bindReceiptLookupError,
+    [bindReceiptIdFromQuery, bindReceiptLookupError, bindReceiptLookupLoading],
+  );
+
+  const bindReceiptTimelineMiss = useMemo(
+    () => bindReceiptLookupSucceeded && !bindReceiptFoundInTimeline,
+    [bindReceiptFoundInTimeline, bindReceiptLookupSucceeded],
+  );
+
+  const showBindReceiptFallback = useMemo(
+    () => bindReceiptTimelineMiss && bindReceiptLookupDetail !== null,
+    [bindReceiptLookupDetail, bindReceiptTimelineMiss],
+  );
 
   /* ---------------------------------------------------------------- */
   /*  Actions                                                          */
@@ -421,6 +501,7 @@ export function useAuditData(): AuditDataState {
     }
 
     if (!/^[A-Za-z0-9._:-]{1,128}$/.test(bindReceiptId)) {
+      setBindReceiptLookupDetail(null);
       setBindReceiptLookupError(
         t(
           "無効な bind_receipt_id が指定されました。",
@@ -442,6 +523,7 @@ export function useAuditData(): AuditDataState {
         );
 
         if (response.status === 404) {
+          setBindReceiptLookupDetail(null);
           setBindReceiptLookupError(
             t(
               "指定された bind receipt は見つかりませんでした。",
@@ -452,12 +534,16 @@ export function useAuditData(): AuditDataState {
         }
 
         if (!response.ok) {
+          setBindReceiptLookupDetail(null);
           setBindReceiptLookupError(`HTTP ${response.status}: Failed to fetch bind receipt.`);
           return;
         }
 
+        const payload: unknown = await response.json();
+        setBindReceiptLookupDetail(parseBindReceiptLookupDetail(payload, bindReceiptId));
         await loadLogs(null, true);
       } catch {
+        setBindReceiptLookupDetail(null);
         setBindReceiptLookupError(
           t(
             "ネットワークエラー: bind receipt 取得に失敗しました。",
@@ -498,6 +584,10 @@ export function useAuditData(): AuditDataState {
     bindReceiptLookupLoading,
     bindReceiptIdFromQuery,
     bindReceiptFoundInTimeline,
+    bindReceiptLookupDetail,
+    bindReceiptLookupSucceeded,
+    bindReceiptTimelineMiss,
+    showBindReceiptFallback,
     selected,
     setSelected,
     requestId,

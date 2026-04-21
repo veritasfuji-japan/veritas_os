@@ -1,6 +1,6 @@
 # VERITAS OS — Dependency Profiles
 
-> Last updated: 2026-03-25
+> Last updated: 2026-04-21
 
 ## Overview
 
@@ -31,7 +31,7 @@ keeping full backward compatibility via the `[full]` extra.
 | fastapi | 0.121.0 | API framework |
 | uvicorn | 0.30.3 | ASGI server |
 | pydantic | 2.8.2 | Data validation / schemas |
-| python-dotenv | 1.0.1 | `.env` file loading |
+| python-dotenv | 1.2.2 | `.env` file loading |
 | orjson | 3.11.6 | Fast JSON serialization |
 | PyYAML | 6.0.1 | Policy YAML parsing |
 | jinja2 | 3.1.6 | Template support (FastAPI transitive) |
