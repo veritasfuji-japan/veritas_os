@@ -17,6 +17,7 @@ type CanonicalBindOutcome =
   | "APPLY_FAILED"
   | "SNAPSHOT_FAILED"
   | "PRECONDITION_FAILED";
+type BindOutcomeDisplay = CanonicalBindOutcome | "UNKNOWN";
 
 type BindCheckSummary = "PASS" | "FAIL" | "UNKNOWN";
 type BindCheckKey =
@@ -63,6 +64,16 @@ interface BindReceiptResponse {
   error?: string;
 }
 
+const CANONICAL_BIND_OUTCOMES: ReadonlySet<CanonicalBindOutcome> = new Set([
+  "COMMITTED",
+  "BLOCKED",
+  "ESCALATED",
+  "ROLLED_BACK",
+  "APPLY_FAILED",
+  "SNAPSHOT_FAILED",
+  "PRECONDITION_FAILED",
+]);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -97,7 +108,9 @@ function parseBindReceiptPayload(value: unknown): BindReceiptPayload | undefined
     const parsed = parseBindCheckPayload(value[key]);
     if (parsed) {
       receipt[key] = parsed;
+      continue;
     }
+    delete receipt[key];
   }
   return receipt;
 }
@@ -126,10 +139,12 @@ function parseBindReceiptResponse(value: unknown): BindReceiptResponse | null {
   if (!isRecord(value) || typeof value.ok !== "boolean") {
     return null;
   }
+  const bindReceipt = parseBindReceiptPayload(value.bind_receipt);
   return {
     ok: value.ok,
-    bind_receipt: parseBindReceiptPayload(value.bind_receipt),
-    bind_outcome: normalizeBindOutcome(value.bind_outcome) ?? undefined,
+    bind_receipt: bindReceipt,
+    bind_outcome:
+      normalizeBindOutcome(value.bind_outcome) ?? normalizeBindOutcome(bindReceipt?.final_outcome) ?? undefined,
     bind_failure_reason: typeof value.bind_failure_reason === "string" ? value.bind_failure_reason : undefined,
     bind_reason_code: typeof value.bind_reason_code === "string" ? value.bind_reason_code : undefined,
     bind_receipt_id: typeof value.bind_receipt_id === "string" ? value.bind_receipt_id : undefined,
@@ -147,28 +162,15 @@ function normalizeBindOutcome(outcome: unknown): CanonicalBindOutcome | null {
     return null;
   }
   const normalized = outcome.trim().toUpperCase();
-  switch (normalized) {
-    case "COMMITTED":
-    case "SUCCESS":
-      return "COMMITTED";
-    case "BLOCKED":
-      return "BLOCKED";
-    case "ROLLED_BACK":
-      return "ROLLED_BACK";
-    case "ESCALATED":
-      return "ESCALATED";
-    case "APPLY_FAILED":
-      return "APPLY_FAILED";
-    case "SNAPSHOT_FAILED":
-      return "SNAPSHOT_FAILED";
-    case "PRECONDITION_FAILED":
-      return "PRECONDITION_FAILED";
-    default:
-      return null;
+  if (normalized === "SUCCESS") {
+    return "COMMITTED";
   }
+  return CANONICAL_BIND_OUTCOMES.has(normalized as CanonicalBindOutcome)
+    ? (normalized as CanonicalBindOutcome)
+    : null;
 }
 
-function resolveOutcomeVariant(outcome: CanonicalBindOutcome | "UNKNOWN"): "success" | "warning" | "danger" | "muted" {
+function resolveOutcomeVariant(outcome: BindOutcomeDisplay): "success" | "warning" | "danger" | "muted" {
   if (outcome === "COMMITTED") {
     return "success";
   }
