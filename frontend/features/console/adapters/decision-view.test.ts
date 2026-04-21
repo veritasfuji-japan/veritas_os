@@ -252,9 +252,26 @@ describe("toBindPhaseView", () => {
     });
   });
 
-  it("falls back to UNKNOWN bind phase for unsupported values", () => {
+  it("keeps unsupported bind outcomes visible for operators", () => {
     const result = makeResponse({ bind_outcome: "CUSTOM_STATE" } as never);
     const view = toBindPhaseView(result);
-    expect(view.bindPhase).toBe("UNKNOWN");
+    expect(view.bindPhase).toBe("CUSTOM_STATE");
+    expect(view.bindPhaseCanonical).toBe(false);
+  });
+
+  it.each(["APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"])(
+    "accepts canonical runtime bind outcome %s",
+    (outcome) => {
+      const result = makeResponse({ bind_outcome: outcome } as never);
+      const view = toBindPhaseView(result);
+      expect(view.bindPhase).toBe(outcome);
+      expect(view.bindPhaseCanonical).toBe(true);
+    },
+  );
+
+  it("marks known bind outcomes as canonical", () => {
+    const result = makeResponse({ bind_outcome: "BLOCKED" } as never);
+    const view = toBindPhaseView(result);
+    expect(view.bindPhaseCanonical).toBe(true);
   });
 });

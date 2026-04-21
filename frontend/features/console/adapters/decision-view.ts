@@ -140,9 +140,9 @@ function summarizeBindCheck(check: Record<string, unknown>): string {
   return "n/a";
 }
 
-function normalizeBindOutcome(value: unknown): BindOutcomeStatus {
+function normalizeBindOutcome(value: unknown): { value: string; canonical: boolean; present: boolean } {
   if (typeof value !== "string") {
-    return "UNKNOWN";
+    return { value: "UNKNOWN", canonical: true, present: false };
   }
   const normalized = value.trim().toUpperCase();
   switch (normalized) {
@@ -150,9 +150,16 @@ function normalizeBindOutcome(value: unknown): BindOutcomeStatus {
     case "BLOCKED":
     case "ESCALATED":
     case "ROLLED_BACK":
-      return normalized;
+    case "APPLY_FAILED":
+    case "SNAPSHOT_FAILED":
+    case "PRECONDITION_FAILED":
+      return { value: normalized as BindOutcomeStatus, canonical: true, present: true };
     default:
-      return "UNKNOWN";
+      return {
+        value: normalized.length > 0 ? normalized : "UNKNOWN",
+        canonical: false,
+        present: normalized.length > 0,
+      };
   }
 }
 
@@ -186,7 +193,8 @@ export function toBindPhaseView(result: DecideResponse): BindPhaseView {
   const gateDecision = readText(record, "gate_decision", "decision_status");
   return {
     decisionPhase: gateDecision,
-    bindPhase: bindOutcome,
+    bindPhase: bindOutcome.value,
+    bindPhaseCanonical: bindOutcome.canonical || !bindOutcome.present,
     bindReceiptId: readText(record, "bind_receipt_id"),
     executionIntentId: readText(record, "execution_intent_id"),
     bindFailureReason: readText(record, "bind_failure_reason", "rollback_reason", "escalation_reason"),

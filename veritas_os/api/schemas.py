@@ -1328,6 +1328,10 @@ class GovernanceDecisionExportItem(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_check_result: Optional[Dict[str, Any]] = None
+    constraint_check_result: Optional[Dict[str, Any]] = None
+    drift_check_result: Optional[Dict[str, Any]] = None
+    risk_check_result: Optional[Dict[str, Any]] = None
 
 
 class GovernanceDecisionExportResponse(BaseModel):
@@ -1347,6 +1351,12 @@ class GovernanceBindReceiptResponse(BaseModel):
     bind_outcome: Optional[FinalOutcome] = None
     bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_check_result: Optional[Dict[str, Any]] = None
+    constraint_check_result: Optional[Dict[str, Any]] = None
+    drift_check_result: Optional[Dict[str, Any]] = None
+    risk_check_result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 

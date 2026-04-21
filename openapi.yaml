@@ -748,7 +748,7 @@ components:
           additionalProperties: true
         final_outcome:
           type: string
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
         rollback_reason:
           type: string
           nullable: true
@@ -784,7 +784,7 @@ components:
         bind_outcome:
           type: string
           nullable: true
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
         bind_failure_reason:
           type: string
           nullable: true
@@ -797,6 +797,22 @@ components:
         execution_intent_id:
           type: string
           nullable: true
+        authority_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+        constraint_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+        drift_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+        risk_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
 
     TrustFeedbackRequest:
       type: object
@@ -1132,6 +1148,47 @@ components:
           nullable: true
           additionalProperties: true
           description: "Identity of the governance artifact in force at decision time."
+        bind_outcome:
+          type: string
+          nullable: true
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+          description: "Bind-phase governance outcome linked to this decision when available."
+        bind_failure_reason:
+          type: string
+          nullable: true
+          description: "Operator-facing reason when bind phase was blocked/escalated/rolled back."
+        bind_reason_code:
+          type: string
+          nullable: true
+          description: "Machine-readable bind reason code for compact governance filtering."
+        bind_receipt_id:
+          type: string
+          nullable: true
+          description: "Lineage pointer to the bind receipt artifact."
+        execution_intent_id:
+          type: string
+          nullable: true
+          description: "Lineage pointer to the execution intent linked to bind phase."
+        authority_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Authority check summary from bind-phase adjudication."
+        constraint_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Constraint check summary from bind-phase adjudication."
+        drift_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Drift check summary from bind-phase adjudication."
+        risk_check_result:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: "Runtime risk check summary from bind-phase adjudication."
         wat_integrity:
           $ref: '#/components/schemas/WatIntegrity'
           nullable: true
@@ -1999,7 +2056,7 @@ paths:
           required: false
           schema:
             type: string
-            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
       responses:
         "200":
           description: Decision export rows
@@ -2072,13 +2129,35 @@ paths:
                   bind_outcome:
                     type: string
                     nullable: true
-                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED"]
+                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
                   bind_failure_reason:
                     type: string
                     nullable: true
                   bind_reason_code:
                     type: string
                     nullable: true
+                  bind_receipt_id:
+                    type: string
+                    nullable: true
+                  execution_intent_id:
+                    type: string
+                    nullable: true
+                  authority_check_result:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  constraint_check_result:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  drift_check_result:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+                  risk_check_result:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
 
   /v1/compliance/config:
     get:

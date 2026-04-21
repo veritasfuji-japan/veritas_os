@@ -618,6 +618,15 @@ describe("types", () => {
       query: "test query",
       pipeline_steps: ["step1", "step2"],
       deterministic_replay: { seed: 42 },
+      bind_outcome: "SNAPSHOT_FAILED",
+      bind_failure_reason: "snapshot unavailable",
+      bind_reason_code: "BIND_SNAPSHOT_FAILED",
+      bind_receipt_id: "br-1",
+      execution_intent_id: "ei-1",
+      authority_check_result: { passed: true },
+      constraint_check_result: { passed: true },
+      drift_check_result: { result: "stable" },
+      risk_check_result: { result: "high" },
     })).toBe(true);
   });
 
@@ -665,6 +674,12 @@ describe("types", () => {
 
     // deterministic_replay must be null, undefined, or object
     expect(isDecideResponse({ ...base, deterministic_replay: "invalid" })).toBe(false);
+
+    // bind_outcome must be null, undefined, or FinalOutcomeStatus
+    expect(isDecideResponse({ ...base, bind_outcome: "NOT_A_BIND_STATE" })).toBe(false);
+
+    // bind check results must be object-like when present
+    expect(isDecideResponse({ ...base, authority_check_result: "invalid" })).toBe(false);
   });
 
   it("DecideResponse critique and debate use typed arrays (CritiqueItem[] and DebateView[])", () => {

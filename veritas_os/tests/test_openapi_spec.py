@@ -113,9 +113,39 @@ def test_openapi_includes_bind_artifact_schemas() -> None:
     assert "ExecutionIntent" in schemas
     assert "BindReceipt" in schemas
 
+    bind_outcomes = schemas["BindReceipt"]["properties"]["final_outcome"]["enum"]
+    assert bind_outcomes == [
+        "COMMITTED",
+        "BLOCKED",
+        "ROLLED_BACK",
+        "ESCALATED",
+        "APPLY_FAILED",
+        "SNAPSHOT_FAILED",
+        "PRECONDITION_FAILED",
+    ]
+
     export_item = schemas["GovernanceDecisionExportItem"]["properties"]
     assert "bind_outcome" in export_item
     assert "bind_failure_reason" in export_item
     assert "bind_reason_code" in export_item
     assert "bind_receipt_id" in export_item
     assert "execution_intent_id" in export_item
+    assert "authority_check_result" in export_item
+    assert "constraint_check_result" in export_item
+    assert "drift_check_result" in export_item
+    assert "risk_check_result" in export_item
+
+
+def test_openapi_decide_response_includes_bind_contract_fields() -> None:
+    """DecideResponse should expose bind contract fields used by console and audit tooling."""
+    spec = _load_openapi_spec()
+    decide_schema = spec["components"]["schemas"]["DecideResponse"]["properties"]
+    assert "bind_outcome" in decide_schema
+    assert "bind_failure_reason" in decide_schema
+    assert "bind_reason_code" in decide_schema
+    assert "bind_receipt_id" in decide_schema
+    assert "execution_intent_id" in decide_schema
+    assert "authority_check_result" in decide_schema
+    assert "constraint_check_result" in decide_schema
+    assert "drift_check_result" in decide_schema
+    assert "risk_check_result" in decide_schema

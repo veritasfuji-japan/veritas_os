@@ -381,6 +381,10 @@ def test_governance_decision_export_includes_bind_summary(monkeypatch) -> None:
         assert item["execution_intent_id"] == "ei-101"
         assert item["bind_reason_code"] == "CONSTRAINT_MISMATCH"
         assert item["bind_failure_reason"] == "operator escalation required"
+        assert item["authority_check_result"] is None
+        assert item["constraint_check_result"] == {"reason_code": "CONSTRAINT_MISMATCH"}
+        assert item["drift_check_result"] is None
+        assert item["risk_check_result"] is None
 
 
 def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
@@ -413,6 +417,12 @@ def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
     assert ok_body["bind_outcome"] == "ROLLED_BACK"
     assert ok_body["bind_reason_code"] == "POSTCONDITION_FAIL"
     assert ok_body["bind_failure_reason"] == "postcondition failed"
+    assert ok_body["bind_receipt_id"] == "br-501"
+    assert ok_body["execution_intent_id"] == "ei-501"
+    assert ok_body["authority_check_result"] == {"passed": True}
+    assert ok_body["constraint_check_result"] == {"passed": True}
+    assert ok_body["drift_check_result"] == {"passed": False}
+    assert ok_body["risk_check_result"] == {"reason_code": "POSTCONDITION_FAIL"}
     assert ok_body["bind_receipt"]["bind_receipt_id"] == "br-501"
 
     missing_resp = client.get("/v1/governance/bind-receipts/br-missing", headers=HEADERS)

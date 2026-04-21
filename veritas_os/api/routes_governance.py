@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -18,7 +18,7 @@ from veritas_os.api.schemas import (
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
-from veritas_os.policy.bind_artifacts import find_bind_receipts
+from veritas_os.policy.bind_artifacts import FinalOutcome, find_bind_receipts
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -248,7 +248,7 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
 def governance_decision_export(
     limit: int = Query(default=100, ge=1, le=1000),
     status: str | None = Query(default=None),
-    bind_outcome: str | None = Query(default=None),
+    bind_outcome: Annotated[FinalOutcome | None, Query()] = None,
 ):
     """Export recent decisions for governance/audit integrations."""
     srv = _get_server()
@@ -266,7 +266,7 @@ def governance_decision_export(
             bind_receipts = find_bind_receipts(decision_id=decision_id) if decision_id else []
             latest_bind = bind_receipts[-1].to_dict() if bind_receipts else {}
             latest_bind_outcome = str(latest_bind.get("final_outcome") or "")
-            if bind_outcome and latest_bind_outcome != bind_outcome:
+            if bind_outcome and latest_bind_outcome != bind_outcome.value:
                 continue
             normalized.append(
                 {
@@ -282,6 +282,10 @@ def governance_decision_export(
                     "execution_intent_id": latest_bind.get("execution_intent_id"),
                     "bind_failure_reason": _resolve_bind_failure_reason(latest_bind),
                     "bind_reason_code": _resolve_bind_reason_code(latest_bind),
+                    "authority_check_result": latest_bind.get("authority_check_result"),
+                    "constraint_check_result": latest_bind.get("constraint_check_result"),
+                    "drift_check_result": latest_bind.get("drift_check_result"),
+                    "risk_check_result": latest_bind.get("risk_check_result"),
                 }
             )
         return {"ok": True, "count": len(normalized), "items": normalized}
@@ -339,6 +343,12 @@ def governance_bind_receipt(bind_receipt_id: str):
             "bind_outcome": receipt.get("final_outcome"),
             "bind_failure_reason": _resolve_bind_failure_reason(receipt),
             "bind_reason_code": _resolve_bind_reason_code(receipt),
+            "bind_receipt_id": receipt.get("bind_receipt_id"),
+            "execution_intent_id": receipt.get("execution_intent_id"),
+            "authority_check_result": receipt.get("authority_check_result"),
+            "constraint_check_result": receipt.get("constraint_check_result"),
+            "drift_check_result": receipt.get("drift_check_result"),
+            "risk_check_result": receipt.get("risk_check_result"),
         }
     except Exception as e:
         logger.error("governance_bind_receipt failed: %s", e, exc_info=True)

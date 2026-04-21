@@ -154,7 +154,15 @@ describe("DecisionResultPanel", () => {
     expect(screen.getByText("PASS")).toBeInTheDocument();
   });
 
-  it.each(["COMMITTED", "BLOCKED", "ESCALATED", "ROLLED_BACK"])(
+  it.each([
+    "COMMITTED",
+    "BLOCKED",
+    "ESCALATED",
+    "ROLLED_BACK",
+    "APPLY_FAILED",
+    "SNAPSHOT_FAILED",
+    "PRECONDITION_FAILED",
+  ])(
     "renders bind outcome badge for %s",
     (outcome) => {
       render(
@@ -165,6 +173,16 @@ describe("DecisionResultPanel", () => {
       expect(screen.getByText(outcome)).toBeInTheDocument();
     },
   );
+
+  it("shows unsupported bind outcomes without collapsing to UNKNOWN", () => {
+    render(
+      <I18nProvider>
+        <DecisionResultPanel result={{ ...baseResult, bind_outcome: "CUSTOM_STATE" } as never} viewerRole="operator" />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("CUSTOM_STATE")).toBeInTheDocument();
+    expect(screen.getByText(/Non-canonical bind outcome reported by runtime contract/)).toBeInTheDocument();
+  });
 
   it("keeps legacy decision view stable when bind fields are absent", () => {
     const legacyResult = { ...baseResult };
