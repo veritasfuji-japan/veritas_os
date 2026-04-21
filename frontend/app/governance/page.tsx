@@ -15,6 +15,7 @@ import { ApprovalWorkflow } from "./components/ApprovalWorkflow";
 import { ApplyFlow } from "./components/ApplyFlow";
 import { TrustLogStream } from "./components/TrustLogStream";
 import { ChangeHistory } from "./components/ChangeHistory";
+import { PolicyBundlePromotionFlow } from "./components/PolicyBundlePromotionFlow";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 
 /* ------------------------------------------------------------------ */
@@ -375,6 +376,8 @@ export default function GovernanceControlPage(): JSX.Element {
             onApply={(mode) => void state.applyPolicy(mode)}
             onRollback={state.rollback}
           />
+
+          <PolicyBundlePromotionFlow canOperate={state.canOperate} />
 
           <TrustLogStream entries={state.trustLog} />
           <ChangeHistory entries={state.history} />

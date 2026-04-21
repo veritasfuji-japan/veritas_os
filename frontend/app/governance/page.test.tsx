@@ -131,6 +131,7 @@ describe("GovernanceControlPage", () => {
       expect(screen.getByText("WAT Settings")).toBeInTheDocument();
       expect(screen.getByText("Current vs Draft Diff")).toBeInTheDocument();
       expect(screen.getByText("Apply Flow")).toBeInTheDocument();
+      expect(screen.getByText("Policy Bundle Promotion")).toBeInTheDocument();
       expect(screen.getByText("Change History")).toBeInTheDocument();
     });
   });
