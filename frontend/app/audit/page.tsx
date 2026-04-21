@@ -2,7 +2,7 @@
 
 import { Card } from "@veritas/design-system";
 import { useI18n } from "../../components/i18n-provider";
-import { ErrorBanner } from "../../components/ui";
+import { ErrorBanner, StatusBadge } from "../../components/ui";
 import { classifyChain } from "./audit-types";
 import { useAuditData } from "./hooks/useAuditData";
 import { SearchPanel } from "./components/SearchPanel";
@@ -19,6 +19,31 @@ import { ExportPanel } from "./components/ExportPanel";
 export default function TrustLogExplorerPage(): JSX.Element {
   const { t } = useI18n();
   const data = useAuditData();
+
+  const summarizeBindCheck = (value: Record<string, unknown> | null): string => {
+    if (!value) return "-";
+    if (typeof value.passed === "boolean") {
+      return value.passed ? "PASS" : "FAIL";
+    }
+    if (typeof value.result === "string" && value.result.trim().length > 0) {
+      return value.result.trim().toUpperCase();
+    }
+    return "UNKNOWN";
+  };
+
+  const resolveOutcomeVariant = (
+    outcome: string | null,
+  ): "success" | "warning" | "danger" | "muted" => {
+    const normalized = outcome?.trim().toUpperCase() ?? "";
+    if (normalized === "COMMITTED" || normalized === "SUCCESS") return "success";
+    if (normalized === "BLOCKED" || normalized === "ROLLED_BACK" || normalized === "PRECONDITION_FAILED") {
+      return "warning";
+    }
+    if (normalized === "ESCALATED" || normalized === "APPLY_FAILED" || normalized === "SNAPSHOT_FAILED") {
+      return "danger";
+    }
+    return "muted";
+  };
 
   const verifySelectedDecision = (): void => {
     if (!data.selectedDecisionEntry) {
@@ -132,34 +157,46 @@ export default function TrustLogExplorerPage(): JSX.Element {
                   <dt>execution_intent_id</dt>
                   <dd className="font-mono">{data.bindReceiptLookupDetail.executionIntentId ?? "-"}</dd>
                   <dt>final_outcome</dt>
-                  <dd>{data.bindReceiptLookupDetail.finalOutcome ?? "-"}</dd>
-                  <dt>bind_failure_reason</dt>
+                  <dd>
+                    {data.bindReceiptLookupDetail.finalOutcome ? (
+                      <StatusBadge
+                        label={data.bindReceiptLookupDetail.finalOutcome}
+                        variant={resolveOutcomeVariant(data.bindReceiptLookupDetail.finalOutcome)}
+                      />
+                    ) : (
+                      "-"
+                    )}
+                  </dd>
+                  <dt>bindFailureReason</dt>
                   <dd>{data.bindReceiptLookupDetail.bindFailureReason ?? "-"}</dd>
-                  <dt>authority_check_result</dt>
-                  <dd className="font-mono">
-                    {data.bindReceiptLookupDetail.authorityCheckResult
-                      ? JSON.stringify(data.bindReceiptLookupDetail.authorityCheckResult)
-                      : "-"}
-                  </dd>
-                  <dt>constraint_check_result</dt>
-                  <dd className="font-mono">
-                    {data.bindReceiptLookupDetail.constraintCheckResult
-                      ? JSON.stringify(data.bindReceiptLookupDetail.constraintCheckResult)
-                      : "-"}
-                  </dd>
-                  <dt>drift_check_result</dt>
-                  <dd className="font-mono">
-                    {data.bindReceiptLookupDetail.driftCheckResult
-                      ? JSON.stringify(data.bindReceiptLookupDetail.driftCheckResult)
-                      : "-"}
-                  </dd>
-                  <dt>risk_check_result</dt>
-                  <dd className="font-mono">
-                    {data.bindReceiptLookupDetail.riskCheckResult
-                      ? JSON.stringify(data.bindReceiptLookupDetail.riskCheckResult)
-                      : "-"}
-                  </dd>
                 </dl>
+                <div className="mt-2 rounded border border-border/70 bg-background/60 px-2 py-1.5">
+                  <p className="font-semibold text-muted-foreground">Bind check summary</p>
+                  <dl className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
+                    <dt>authorityCheckResult</dt>
+                    <dd className="font-mono">
+                      {summarizeBindCheck(data.bindReceiptLookupDetail.authorityCheckResult)}
+                    </dd>
+                    <dt>constraintCheckResult</dt>
+                    <dd className="font-mono">
+                      {summarizeBindCheck(data.bindReceiptLookupDetail.constraintCheckResult)}
+                    </dd>
+                    <dt>driftCheckResult</dt>
+                    <dd className="font-mono">
+                      {summarizeBindCheck(data.bindReceiptLookupDetail.driftCheckResult)}
+                    </dd>
+                    <dt>riskCheckResult</dt>
+                    <dd className="font-mono">
+                      {summarizeBindCheck(data.bindReceiptLookupDetail.riskCheckResult)}
+                    </dd>
+                  </dl>
+                </div>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-muted-foreground">Raw fallback detail</summary>
+                  <pre className="mt-1 max-h-64 overflow-auto rounded border border-border/60 bg-background/70 p-2 font-mono text-[10px]">
+                    {JSON.stringify(data.bindReceiptLookupDetail, null, 2)}
+                  </pre>
+                </details>
               </div>
             ) : null}
           </div>
