@@ -9,14 +9,16 @@ interface PolicyBundlePromotionFlowProps {
   canOperate: boolean;
 }
 
-type BindOutcome =
-  | "success"
-  | "blocked"
-  | "rolled_back"
-  | "escalated"
-  | "apply_failed"
-  | "snapshot_failed"
-  | "precondition_failed";
+type CanonicalBindOutcome =
+  | "COMMITTED"
+  | "BLOCKED"
+  | "ESCALATED"
+  | "ROLLED_BACK"
+  | "APPLY_FAILED"
+  | "SNAPSHOT_FAILED"
+  | "PRECONDITION_FAILED";
+
+type BindCheckSummary = "PASS" | "FAIL" | "UNKNOWN";
 
 interface PromoteResponse {
   ok: boolean;
@@ -25,6 +27,11 @@ interface PromoteResponse {
   bind_reason_code?: string;
   bind_receipt_id?: string;
   execution_intent_id?: string;
+  authority_check_result?: unknown;
+  constraint_check_result?: unknown;
+  drift_check_result?: unknown;
+  risk_check_result?: unknown;
+  bind_receipt?: Record<string, unknown>;
   error?: string;
 }
 
@@ -54,6 +61,11 @@ function parsePromoteResponse(value: unknown): PromoteResponse | null {
     bind_reason_code: typeof value.bind_reason_code === "string" ? value.bind_reason_code : undefined,
     bind_receipt_id: typeof value.bind_receipt_id === "string" ? value.bind_receipt_id : undefined,
     execution_intent_id: typeof value.execution_intent_id === "string" ? value.execution_intent_id : undefined,
+    authority_check_result: value.authority_check_result,
+    constraint_check_result: value.constraint_check_result,
+    drift_check_result: value.drift_check_result,
+    risk_check_result: value.risk_check_result,
+    bind_receipt: isRecord(value.bind_receipt) ? value.bind_receipt : undefined,
     error: typeof value.error === "string" ? value.error : undefined,
   };
 }
@@ -74,18 +86,73 @@ function parseBindReceiptResponse(value: unknown): BindReceiptResponse | null {
   };
 }
 
+function normalizeBindOutcome(outcome?: string): CanonicalBindOutcome | "UNKNOWN" {
+  const normalized = (outcome ?? "").trim().toUpperCase();
+  switch (normalized) {
+    case "COMMITTED":
+    case "SUCCESS":
+      return "COMMITTED";
+    case "BLOCKED":
+      return "BLOCKED";
+    case "ROLLED_BACK":
+      return "ROLLED_BACK";
+    case "ESCALATED":
+      return "ESCALATED";
+    case "APPLY_FAILED":
+      return "APPLY_FAILED";
+    case "SNAPSHOT_FAILED":
+      return "SNAPSHOT_FAILED";
+    case "PRECONDITION_FAILED":
+      return "PRECONDITION_FAILED";
+    default:
+      return "UNKNOWN";
+  }
+}
+
 function resolveOutcomeVariant(outcome?: string): "success" | "warning" | "danger" | "muted" {
-  const normalized = (outcome ?? "").toLowerCase() as BindOutcome;
-  if (normalized === "success") {
+  const canonical = normalizeBindOutcome(outcome);
+  if (canonical === "COMMITTED") {
     return "success";
   }
-  if (normalized === "blocked" || normalized === "rolled_back" || normalized === "precondition_failed") {
+  if (canonical === "BLOCKED" || canonical === "ROLLED_BACK" || canonical === "PRECONDITION_FAILED") {
     return "warning";
   }
-  if (normalized === "escalated" || normalized === "apply_failed" || normalized === "snapshot_failed") {
+  if (canonical === "ESCALATED" || canonical === "APPLY_FAILED" || canonical === "SNAPSHOT_FAILED") {
     return "danger";
   }
   return "muted";
+}
+
+function summarizeBindCheck(value: unknown): BindCheckSummary {
+  if (!isRecord(value)) {
+    return "UNKNOWN";
+  }
+  if (typeof value.passed === "boolean") {
+    return value.passed ? "PASS" : "FAIL";
+  }
+  if (typeof value.result === "string") {
+    const result = value.result.trim().toUpperCase();
+    if (result === "PASS" || result === "OK" || result === "ALLOW") {
+      return "PASS";
+    }
+    if (result === "FAIL" || result === "DENY" || result === "BLOCK") {
+      return "FAIL";
+    }
+  }
+  return "UNKNOWN";
+}
+
+function resolveCheckResult(
+  result: PromoteResponse | null,
+  receipt: BindReceiptResponse | null,
+  key: "authority_check_result" | "constraint_check_result" | "drift_check_result" | "risk_check_result",
+): BindCheckSummary {
+  const fromResult = summarizeBindCheck(result?.[key]);
+  if (fromResult !== "UNKNOWN") {
+    return fromResult;
+  }
+  const fromReceipt = summarizeBindCheck(receipt?.bind_receipt?.[key]);
+  return fromReceipt;
 }
 
 /**
@@ -122,6 +189,8 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
     }
     return null;
   }, [bundleDirName, bundleId]);
+
+  const canonicalOutcome = normalizeBindOutcome(result?.bind_outcome);
 
   const handleSubmit = async (): Promise<void> => {
     setError(null);
@@ -312,11 +381,11 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
               onClick={() => void handleLoadReceipt()}
               disabled={receiptLoading}
             >
-              {receiptLoading ? "loading receipt..." : "load bind receipt detail"}
+              {receiptLoading ? "loading receipt..." : receiptDetail ? "reload bind receipt detail" : "load bind receipt detail"}
             </button>
           ) : null}
           {result?.bind_receipt_id ? (
-            <a className="rounded border px-3 py-1.5" href="/audit">
+            <a className="rounded border px-3 py-1.5" href={`/audit?bind_receipt_id=${encodeURIComponent(result.bind_receipt_id)}`}>
               open TrustLog Explorer
             </a>
           ) : null}
@@ -330,15 +399,41 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
           <div className="space-y-2 rounded border p-3">
             <div className="flex items-center gap-2">
               <span className="font-semibold">Promotion Result</span>
-              <StatusBadge label={result.bind_outcome ?? "unknown"} variant={resolveOutcomeVariant(result.bind_outcome)} />
+              <StatusBadge label={canonicalOutcome} variant={resolveOutcomeVariant(canonicalOutcome)} />
             </div>
             <div className="grid gap-1 md:grid-cols-2">
-              <p>bind_outcome: <span className="font-mono">{result.bind_outcome ?? "-"}</span></p>
+              <p>bind_outcome: <span className="font-mono">{canonicalOutcome}</span></p>
               <p>bind_reason_code: <span className="font-mono">{result.bind_reason_code ?? "-"}</span></p>
               <p className="md:col-span-2">bind_failure_reason: <span className="font-mono">{result.bind_failure_reason ?? "-"}</span></p>
-              <p>bind_receipt_id: <span className="font-mono">{result.bind_receipt_id ?? "-"}</span></p>
+              <p>
+                bind_receipt_id:{" "}
+                {result.bind_receipt_id ? (
+                  <a
+                    className="font-mono underline underline-offset-2"
+                    href={`/audit?bind_receipt_id=${encodeURIComponent(result.bind_receipt_id)}`}
+                  >
+                    {result.bind_receipt_id}
+                  </a>
+                ) : (
+                  <span className="font-mono">-</span>
+                )}
+              </p>
               <p>execution_intent_id: <span className="font-mono">{result.execution_intent_id ?? "-"}</span></p>
             </div>
+
+            <div className="rounded border border-muted p-2">
+              <p className="font-semibold">bind check summary</p>
+              <div className="mt-1 grid gap-1 md:grid-cols-2">
+                <p>authority: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "authority_check_result")}</span></p>
+                <p>constraints: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "constraint_check_result")}</span></p>
+                <p>drift: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "drift_check_result")}</span></p>
+                <p>risk: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "risk_check_result")}</span></p>
+              </div>
+            </div>
+
+            {receiptDetail ? (
+              <p className="text-muted-foreground">bind receipt detail loaded</p>
+            ) : null}
           </div>
         ) : null}
 
