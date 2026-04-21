@@ -12,7 +12,9 @@ vi.mock("@veritas/design-system", () => ({
 }));
 
 vi.mock("../../../components/ui", () => ({
-  StatusBadge: ({ label }: { label: string }) => <span data-testid="status-badge">{label}</span>,
+  StatusBadge: ({ label, variant }: { label: string; variant: string }) => (
+    <span data-testid="status-badge" data-variant={variant}>{label}</span>
+  ),
 }));
 
 const mockFetch = vi.fn();
@@ -51,7 +53,8 @@ describe("PolicyBundlePromotionFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
 
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(await screen.findByText("bundle_id と bundle_dir_name は同時に指定できません。")).toBeInTheDocument();
+    expect(await screen.findByText("bundle_id と bundle_dir_name は同時に指定できません。"))
+      .toBeInTheDocument();
   });
 
   it("sends promote request with expected payload shape", async () => {
@@ -59,7 +62,7 @@ describe("PolicyBundlePromotionFlow", () => {
       ok: true,
       json: async () => ({
         ok: true,
-        bind_outcome: "success",
+        bind_outcome: "COMMITTED",
         bind_receipt_id: "br-001",
         execution_intent_id: "ei-001",
       }),
@@ -89,14 +92,12 @@ describe("PolicyBundlePromotionFlow", () => {
     });
   });
 
-  it("renders blocked outcome and bind identifiers", async () => {
+  it("renders canonical COMMITTED outcome with success variant", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         ok: true,
-        bind_outcome: "blocked",
-        bind_failure_reason: "risk gate denied",
-        bind_reason_code: "RISK_BLOCK",
+        bind_outcome: "COMMITTED",
         bind_receipt_id: "br-777",
         execution_intent_id: "ei-777",
       }),
@@ -107,22 +108,61 @@ describe("PolicyBundlePromotionFlow", () => {
     fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
 
     expect(await screen.findByText("Promotion Result")).toBeInTheDocument();
-    expect(screen.getByText("bind_outcome:")).toBeInTheDocument();
-    expect(screen.getByText("risk gate denied")).toBeInTheDocument();
-    expect(screen.getByText("RISK_BLOCK")).toBeInTheDocument();
-    expect(screen.getByText("br-777")).toBeInTheDocument();
-    expect(screen.getByText("ei-777")).toBeInTheDocument();
+    expect(screen.getByTestId("status-badge")).toHaveTextContent("COMMITTED");
+    expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", "success");
   });
 
-  it("loads bind receipt detail through existing endpoint", async () => {
+  it.each([
+    ["BLOCKED", "warning"],
+    ["ROLLED_BACK", "warning"],
+    ["ESCALATED", "danger"],
+    ["APPLY_FAILED", "danger"],
+    ["SNAPSHOT_FAILED", "danger"],
+    ["PRECONDITION_FAILED", "warning"],
+  ])("renders representative canonical outcome %s", async (outcome, variant) => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        bind_outcome: outcome,
+        bind_failure_reason: "reason",
+        bind_reason_code: "CODE",
+      }),
+    });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+
+    await screen.findByText("Promotion Result");
+    expect(screen.getByTestId("status-badge")).toHaveTextContent(outcome);
+    expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", variant);
+  });
+
+  it("loads bind receipt detail and renders compact bind breakdown", async () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ ok: true, bind_outcome: "success", bind_receipt_id: "br-100", execution_intent_id: "ei-100" }),
+        json: async () => ({
+          ok: true,
+          bind_outcome: "BLOCKED",
+          bind_receipt_id: "br-100",
+          execution_intent_id: "ei-100",
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ ok: true, bind_receipt: { bind_receipt_id: "br-100", final_outcome: "success" } }),
+        json: async () => ({
+          ok: true,
+          bind_receipt: {
+            bind_receipt_id: "br-100",
+            final_outcome: "BLOCKED",
+            authority_check_result: { passed: true },
+            constraint_check_result: { passed: false },
+            drift_check_result: { result: "ok" },
+            risk_check_result: { result: "deny" },
+          },
+        }),
       });
 
     render(<PolicyBundlePromotionFlow canOperate />);
@@ -139,7 +179,28 @@ describe("PolicyBundlePromotionFlow", () => {
       );
     });
 
-    expect(await screen.findByText("bind receipt detail")).toBeInTheDocument();
+    expect(await screen.findByText("bind receipt detail loaded")).toBeInTheDocument();
+    expect(screen.getByText(/authority:/)).toBeInTheDocument();
+    expect(screen.getByText(/constraints:/)).toBeInTheDocument();
+    expect(screen.getByText(/drift:/)).toBeInTheDocument();
+    expect(screen.getByText(/risk:/)).toBeInTheDocument();
+  });
+
+  it("normalizes legacy success outcome into canonical COMMITTED", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        bind_outcome: "success",
+      }),
+    });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+
+    expect(await screen.findByTestId("status-badge")).toHaveTextContent("COMMITTED");
+    expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", "success");
   });
 
   it("handles promote endpoint error response", async () => {
