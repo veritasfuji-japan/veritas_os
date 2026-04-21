@@ -98,6 +98,7 @@ VERITAS OS は次を実現します。
 - **ドキュメント対応表**: [`docs/DOCUMENTATION_MAP.md`](docs/DOCUMENTATION_MAP.md)
 - **運用Runbook**: [`docs/ja/operations/enterprise_slo_sli_runbook_ja.md`](docs/ja/operations/enterprise_slo_sli_runbook_ja.md)
 - **ガバナンス署名運用Runbook**: [`docs/en/operations/governance-artifact-signing.md`](docs/en/operations/governance-artifact-signing.md)
+- **ポリシーバンドル昇格ガイド（EN）**: [`docs/en/guides/governance-policy-bundle-promotion.md`](docs/en/guides/governance-policy-bundle-promotion.md)
 - **ガバナンスアップグレード概要（Press）**: [`docs/press/governance_control_plane_upgrade_2026-04.md`](docs/press/governance_control_plane_upgrade_2026-04.md)
 
 ## 🚀 Quick Start（TL;DR）
@@ -592,6 +593,9 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | GET | `/v1/governance/policy/history` | ポリシー変更監査証跡 |
 | GET | `/v1/governance/value-drift` | 価値重みEMAドリフト監視 |
 | GET | `/v1/governance/decisions/export` | ガバナンス監査用意思決定エクスポート |
+| POST | `/v1/governance/policy-bundles/promote` | bind-boundaryガバナンスワークフローでポリシーバンドル昇格を実行（bind receipt系譜を返却。governance write権限が必要） |
+| GET | `/v1/governance/bind-receipts` | bind receipt一覧（decision / execution intent 系譜でフィルタ可） |
+| GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | 単一bind receipt成果物を取得 |
 
 > **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
 > 意思決定成果物には、適用中のガバナンスポリシー（バージョン、ダイジェスト、署名検証結果、署名者ID）を
