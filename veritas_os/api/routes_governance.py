@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -248,7 +248,7 @@ def governance_policy_history(limit: int = Query(default=50, ge=1, le=500)):
 def governance_decision_export(
     limit: int = Query(default=100, ge=1, le=1000),
     status: str | None = Query(default=None),
-    bind_outcome: FinalOutcome | None = Query(default=None),
+    bind_outcome: Annotated[FinalOutcome | None, Query()] = None,
 ):
     """Export recent decisions for governance/audit integrations."""
     srv = _get_server()
