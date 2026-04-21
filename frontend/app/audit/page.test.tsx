@@ -379,6 +379,57 @@ describe("TrustLogExplorerPage", () => {
       expect(screen.getByText("br-001")).toBeInTheDocument();
       expect(screen.getByText("関連する監査ログをタイムラインで選択しました。")).toBeInTheDocument();
     });
+    expect(screen.queryByText("Bind check summary")).not.toBeInTheDocument();
+  });
+
+  it("renders compact bind receipt fallback detail when timeline misses the receipt", async () => {
+    window.history.replaceState({}, "", "/audit?bind_receipt_id=br-001");
+    vi.spyOn(global, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          bind_receipt_id: "br-001",
+          execution_intent_id: "exec-001",
+          final_outcome: "BLOCKED",
+          bind_failure_reason: "policy_denied",
+          authority_check_result: { passed: true },
+          constraint_check_result: { passed: false },
+          drift_check_result: { result: "warn" },
+          risk_check_result: null,
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          items: MOCK_ITEMS_CHAINED,
+          cursor: "0",
+          next_cursor: null,
+          limit: 50,
+          has_more: false,
+        }),
+      } as Response);
+
+    render(<TrustLogExplorerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Bind Receipt Trace")).toBeInTheDocument();
+      expect(screen.getByText("Bind check summary")).toBeInTheDocument();
+      expect(screen.getByText("bindFailureReason")).toBeInTheDocument();
+      expect(screen.getByText("policy_denied")).toBeInTheDocument();
+      expect(screen.getByText("execution_intent_id")).toBeInTheDocument();
+      expect(screen.getByText("exec-001")).toBeInTheDocument();
+      expect(screen.getByText("BLOCKED")).toBeInTheDocument();
+      expect(screen.getByText("authorityCheckResult")).toBeInTheDocument();
+      expect(screen.getByText("PASS")).toBeInTheDocument();
+      expect(screen.getByText("FAIL")).toBeInTheDocument();
+      expect(screen.getByText("WARN")).toBeInTheDocument();
+      expect(screen.getByText("Raw fallback detail")).toBeInTheDocument();
+      expect(
+        screen.getByText("bind receipt は取得済みですが、現在読み込まれているタイムラインには未表示です。"),
+      ).toBeInTheDocument();
+    });
   });
 
 });
