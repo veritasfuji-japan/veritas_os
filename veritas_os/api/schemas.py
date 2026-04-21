@@ -1360,6 +1360,46 @@ class GovernanceBindReceiptResponse(BaseModel):
     error: Optional[str] = None
 
 
+class GovernancePolicyBundlePromoteRequest(BaseModel):
+    """Request body for POST /v1/governance/policy-bundles/promote."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    bundle_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bundle_dir_name: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    decision_id: str = Field(..., max_length=MAX_ID_LENGTH)
+    request_id: str = Field(..., max_length=MAX_ID_LENGTH)
+    policy_snapshot_id: str = Field(..., max_length=MAX_ID_LENGTH)
+    decision_hash: str = Field(..., max_length=MAX_ID_LENGTH)
+    approval_context: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def _validate_bundle_selector(self) -> "GovernancePolicyBundlePromoteRequest":
+        """Require exactly one bundle selector and reject traversal patterns."""
+        selector_count = int(bool(self.bundle_id)) + int(bool(self.bundle_dir_name))
+        if selector_count != 1:
+            raise ValueError("exactly one of bundle_id or bundle_dir_name must be provided")
+        candidate = (self.bundle_id or self.bundle_dir_name or "").strip()
+        if not candidate:
+            raise ValueError("bundle selector cannot be empty")
+        if any(sep in candidate for sep in ("/", "\\")) or candidate in {".", ".."}:
+            raise ValueError("invalid bundle selector")
+        return self
+
+
+class GovernancePolicyBundlePromoteResponse(BaseModel):
+    """Response envelope for POST /v1/governance/policy-bundles/promote."""
+
+    ok: bool = True
+    bind_receipt: Optional[BindReceipt] = None
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    error: Optional[str] = None
+
+
 class GovernanceBindReceiptListResponse(BaseModel):
     """Response envelope for GET /v1/governance/bind-receipts."""
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 from typing import Annotated, Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -15,10 +16,13 @@ from veritas_os.api.schemas import (
     GovernanceBindReceiptListResponse,
     GovernanceBindReceiptResponse,
     GovernanceDecisionExportResponse,
+    GovernancePolicyBundlePromoteRequest,
+    GovernancePolicyBundlePromoteResponse,
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
 from veritas_os.policy.bind_artifacts import FinalOutcome, find_bind_receipts
+from veritas_os.policy.policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -70,6 +74,35 @@ def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
         if isinstance(raw, str) and raw.strip():
             return raw.strip()
     return None
+
+
+def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
+    """Resolve promotion paths from server config/env with traversal protection."""
+    bundles_root = Path(
+        (os.getenv("VERITAS_POLICY_BUNDLES_ROOT") or "runtime/policy_bundles").strip()
+    ).expanduser().resolve()
+    pointer_path = Path(
+        (os.getenv("VERITAS_POLICY_ACTIVE_POINTER_PATH") or "runtime/active_bundle.json").strip()
+    ).expanduser().resolve()
+    target_bundle_dir = (bundles_root / bundle_name).resolve()
+    try:
+        target_bundle_dir.relative_to(bundles_root)
+    except ValueError as exc:
+        raise ValueError("invalid_bundle_id") from exc
+    return target_bundle_dir, pointer_path, bundles_root
+
+
+def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize bind receipt summary payload for governance API responses."""
+    return {
+        "ok": True,
+        "bind_receipt": bind_receipt,
+        "bind_outcome": bind_receipt.get("final_outcome"),
+        "bind_failure_reason": _resolve_bind_failure_reason(bind_receipt),
+        "bind_reason_code": _resolve_bind_reason_code(bind_receipt),
+        "bind_receipt_id": bind_receipt.get("bind_receipt_id"),
+        "execution_intent_id": bind_receipt.get("execution_intent_id"),
+    }
 
 
 # ------------------------------------------------------------------
@@ -355,4 +388,45 @@ def governance_bind_receipt(bind_receipt_id: str):
         return JSONResponse(
             status_code=500,
             content={"ok": False, "error": "Failed to load bind receipt"},
+        )
+
+
+@router.post(
+    "/v1/governance/policy-bundles/promote",
+    response_model=GovernancePolicyBundlePromoteResponse,
+    dependencies=[Depends(require_permission(Permission.governance_write))],
+)
+def governance_promote_policy_bundle(
+    body: GovernancePolicyBundlePromoteRequest,
+    x_role: Optional[str] = Header(default=None, alias="X-Role"),
+):
+    """Promote policy bundle pointer via existing bind-boundary adapter path."""
+    bundle_name = (body.bundle_id or body.bundle_dir_name or "").strip()
+    actor_identity = (x_role or "").strip() or "governance_api"
+    try:
+        target_bundle_dir, pointer_path, bundles_root = _resolve_policy_bundle_paths(bundle_name)
+    except ValueError:
+        return JSONResponse(status_code=400, content={"ok": False, "error": "invalid_bundle_id"})
+
+    try:
+        receipt = promote_policy_bundle_with_bind_boundary(
+            decision_id=body.decision_id,
+            request_id=body.request_id,
+            actor_identity=actor_identity,
+            policy_snapshot_id=body.policy_snapshot_id,
+            decision_hash=body.decision_hash,
+            target_bundle_dir=target_bundle_dir,
+            pointer_path=pointer_path,
+            allowed_root=bundles_root,
+            approval_context=dict(body.approval_context or {}),
+        )
+        return _bind_response_payload(receipt.to_dict())
+    except (ValueError, TypeError) as exc:
+        logger.warning("governance_promote_policy_bundle validation error: %s", exc)
+        return JSONResponse(status_code=400, content={"ok": False, "error": "invalid_promotion_request"})
+    except Exception as exc:
+        logger.error("governance_promote_policy_bundle failed: %s", exc, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to promote policy bundle"},
         )

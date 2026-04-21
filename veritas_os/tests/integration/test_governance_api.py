@@ -462,6 +462,143 @@ def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     assert body["items"][0]["execution_intent_id"] == "ei-list-1"
 
 
+def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -> None:
+    bundles_root = tmp_path / "bundles"
+    bundle_dir = bundles_root / "bundle-v2"
+    (bundle_dir / "compiled").mkdir(parents=True)
+    (bundle_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    (bundle_dir / "manifest.sig").write_text("sig", encoding="utf-8")
+    (bundle_dir / "compiled" / "canonical_ir.json").write_text("{}", encoding="utf-8")
+    pointer_path = tmp_path / "runtime" / "active_bundle.json"
+
+    monkeypatch.setenv("VERITAS_POLICY_BUNDLES_ROOT", str(bundles_root))
+    monkeypatch.setenv("VERITAS_POLICY_ACTIVE_POINTER_PATH", str(pointer_path))
+
+    resp = client.post(
+        "/v1/governance/policy-bundles/promote",
+        headers=HEADERS,
+        json={
+            "bundle_id": "bundle-v2",
+            "decision_id": "dec-promote-1",
+            "request_id": "req-promote-1",
+            "policy_snapshot_id": "snap-promote-1",
+            "decision_hash": "hash-promote-1",
+            "approval_context": {"policy_bundle_promotion_approved": True},
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["bind_outcome"] == "COMMITTED"
+    assert body["bind_receipt_id"]
+    assert body["execution_intent_id"]
+    assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
+
+
+def test_governance_policy_bundle_promote_blocked_returns_lineage(monkeypatch) -> None:
+    class _DummyReceipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-blocked-1",
+                "execution_intent_id": "ei-blocked-1",
+                "final_outcome": "BLOCKED",
+                "constraint_check_result": {"reason_code": "CONSTRAINT_MISMATCH"},
+                "escalation_reason": "bundle blocked by constraints",
+            }
+
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.promote_policy_bundle_with_bind_boundary",
+        lambda **_kwargs: _DummyReceipt(),
+    )
+    resp = client.post(
+        "/v1/governance/policy-bundles/promote",
+        headers=HEADERS,
+        json={
+            "bundle_dir_name": "bundle-v2",
+            "decision_id": "dec-blocked-1",
+            "request_id": "req-blocked-1",
+            "policy_snapshot_id": "snap-blocked-1",
+            "decision_hash": "hash-blocked-1",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["bind_outcome"] == "BLOCKED"
+    assert body["bind_failure_reason"] == "bundle blocked by constraints"
+    assert body["bind_reason_code"] == "CONSTRAINT_MISMATCH"
+    assert body["bind_receipt_id"] == "br-blocked-1"
+    assert body["execution_intent_id"] == "ei-blocked-1"
+
+
+def test_governance_policy_bundle_promote_rollback_returns_lineage(monkeypatch) -> None:
+    class _DummyReceipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-rollback-1",
+                "execution_intent_id": "ei-rollback-1",
+                "final_outcome": "ROLLED_BACK",
+                "rollback_reason": "postcondition failed",
+                "risk_check_result": {"reason_code": "POSTCONDITION_FAIL"},
+            }
+
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.promote_policy_bundle_with_bind_boundary",
+        lambda **_kwargs: _DummyReceipt(),
+    )
+    resp = client.post(
+        "/v1/governance/policy-bundles/promote",
+        headers=HEADERS,
+        json={
+            "bundle_id": "bundle-v2",
+            "decision_id": "dec-rollback-1",
+            "request_id": "req-rollback-1",
+            "policy_snapshot_id": "snap-rollback-1",
+            "decision_hash": "hash-rollback-1",
+        },
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["bind_outcome"] == "ROLLED_BACK"
+    assert body["bind_failure_reason"] == "postcondition failed"
+    assert body["bind_reason_code"] == "POSTCONDITION_FAIL"
+    assert body["bind_receipt"]["bind_receipt_id"] == "br-rollback-1"
+
+
+def test_governance_policy_bundle_promote_rejects_traversal_selector() -> None:
+    resp = client.post(
+        "/v1/governance/policy-bundles/promote",
+        headers=HEADERS,
+        json={
+            "bundle_id": "../etc/passwd",
+            "decision_id": "dec-invalid-1",
+            "request_id": "req-invalid-1",
+            "policy_snapshot_id": "snap-invalid-1",
+            "decision_hash": "hash-invalid-1",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_governance_policy_bundle_promote_backward_compat_bind_receipts_endpoint(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda bind_receipt_id=None, **_kwargs: [
+            type(
+                "Receipt",
+                (),
+                {"to_dict": lambda self: {"bind_receipt_id": bind_receipt_id, "final_outcome": "COMMITTED"}},
+            )()
+        ],
+    )
+    resp = client.get("/v1/governance/bind-receipts/br-backward-1", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["bind_receipt_id"] == "br-backward-1"
+    assert body["bind_outcome"] == "COMMITTED"
+
+
 def test_governance_decision_export_backward_compatible_fields(monkeypatch) -> None:
     monkeypatch.setattr(
         "veritas_os.api.routes_governance.find_bind_receipts",
