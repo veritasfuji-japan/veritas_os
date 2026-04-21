@@ -714,6 +714,10 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+        policy_lineage:
+          type: object
+          nullable: true
+          additionalProperties: true
 
     BindReceipt:
       type: object

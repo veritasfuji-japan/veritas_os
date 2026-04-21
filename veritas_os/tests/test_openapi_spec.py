@@ -112,6 +112,10 @@ def test_openapi_includes_bind_artifact_schemas() -> None:
 
     assert "ExecutionIntent" in schemas
     assert "BindReceipt" in schemas
+    policy_lineage = schemas["ExecutionIntent"]["properties"]["policy_lineage"]
+    assert policy_lineage["type"] == "object"
+    assert policy_lineage["nullable"] is True
+    assert policy_lineage["additionalProperties"] is True
 
     bind_outcomes = schemas["BindReceipt"]["properties"]["final_outcome"]["enum"]
     assert bind_outcomes == [
