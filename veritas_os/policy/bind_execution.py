@@ -18,7 +18,13 @@ from veritas_os.core.continuation_runtime.bind_admissibility import (
     CheckStatus,
     evaluate_bind_admissibility,
 )
-from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent, FinalOutcome
+from veritas_os.policy.bind_artifacts import (
+    BindReceipt,
+    ExecutionIntent,
+    FinalOutcome,
+    append_bind_receipt_trustlog,
+    append_execution_intent_trustlog,
+)
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
 
 
@@ -153,6 +159,7 @@ def execute_bind_boundary(
     adapter: BindBoundaryAdapter,
     bind_ts: str | None = None,
     bind_receipt_id: str | None = None,
+    append_trustlog: bool = True,
 ) -> BindReceipt:
     """Orchestrate snapshot -> admissibility -> apply -> verify -> commit/revert.
 
@@ -179,7 +186,10 @@ def execute_bind_boundary(
         pre_snapshot = adapter.snapshot()
         pre_fingerprint = adapter.fingerprint_state(pre_snapshot)
     except (TypeError, ValueError, RuntimeError) as exc:
-        return _with_receipt(
+        return _finalize_receipt(
+            execution_intent=execution_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
             base_receipt,
             live_state_fingerprint_before="",
             authority_check_result=_check_unknown("BIND_AUTHORITY_UNKNOWN", "snapshot unavailable"),
@@ -196,6 +206,7 @@ def execute_bind_boundary(
                 "reason": str(exc),
             },
             final_outcome=FinalOutcome.SNAPSHOT_FAILED,
+            ),
         )
 
     authority_signal = adapter.validate_authority(execution_intent, pre_snapshot)
@@ -230,7 +241,10 @@ def execute_bind_boundary(
             blocked_outcome = FinalOutcome.ESCALATED
             escalation_reason = "BIND_ADMISSIBILITY_ESCALATION_REQUIRED"
 
-        return _with_receipt(
+        return _finalize_receipt(
+            execution_intent=execution_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
             base_receipt,
             live_state_fingerprint_before=pre_fingerprint,
             authority_check_result=authority_result,
@@ -245,12 +259,16 @@ def execute_bind_boundary(
             },
             final_outcome=blocked_outcome,
             escalation_reason=escalation_reason,
+            ),
         )
 
     try:
         adapter.apply(execution_intent, pre_snapshot)
     except (TypeError, ValueError, RuntimeError) as exc:
-        return _with_receipt(
+        return _finalize_receipt(
+            execution_intent=execution_intent,
+            append_trustlog=append_trustlog,
+            receipt=_with_receipt(
             base_receipt,
             live_state_fingerprint_before=pre_fingerprint,
             authority_check_result=authority_result,
@@ -265,11 +283,15 @@ def execute_bind_boundary(
             },
             final_outcome=FinalOutcome.APPLY_FAILED,
             rollback_reason=f"BIND_APPLY_FAILED:{exc}",
+            ),
         )
 
     verified = adapter.verify_postconditions(execution_intent, pre_snapshot)
     if not verified:
-        return _rollback_after_verification_failure(
+        return _finalize_receipt(
+            execution_intent=execution_intent,
+            append_trustlog=append_trustlog,
+            receipt=_rollback_after_verification_failure(
             base_receipt=base_receipt,
             adapter=adapter,
             execution_intent=execution_intent,
@@ -280,13 +302,17 @@ def execute_bind_boundary(
             drift_result=drift_result,
             risk_result=risk_result,
             recommended_outcome=admissibility.recommended_outcome.value,
+            ),
         )
 
     try:
         post_snapshot = adapter.snapshot()
         post_fingerprint = adapter.fingerprint_state(post_snapshot)
     except (TypeError, ValueError, RuntimeError) as exc:
-        return _rollback_after_runtime_signal_failure(
+        return _finalize_receipt(
+            execution_intent=execution_intent,
+            append_trustlog=append_trustlog,
+            receipt=_rollback_after_runtime_signal_failure(
             base_receipt=base_receipt,
             adapter=adapter,
             execution_intent=execution_intent,
@@ -298,23 +324,28 @@ def execute_bind_boundary(
             risk_result=risk_result,
             reason=f"BIND_POST_FINGERPRINT_FAILED:{exc}",
             recommended_outcome=admissibility.recommended_outcome.value,
+            ),
         )
 
-    return _with_receipt(
-        base_receipt,
-        live_state_fingerprint_before=pre_fingerprint,
-        live_state_fingerprint_after=post_fingerprint,
-        authority_check_result=authority_result,
-        constraint_check_result=constraint_result,
-        drift_check_result=drift_result,
-        risk_check_result=risk_result,
-        admissibility_result={
-            "admissible": True,
-            "recommended_outcome": admissibility.recommended_outcome.value,
-            "reason_codes": [],
-            "target": adapter.describe_target(),
-        },
-        final_outcome=FinalOutcome.COMMITTED,
+    return _finalize_receipt(
+        execution_intent=execution_intent,
+        append_trustlog=append_trustlog,
+        receipt=_with_receipt(
+            base_receipt,
+            live_state_fingerprint_before=pre_fingerprint,
+            live_state_fingerprint_after=post_fingerprint,
+            authority_check_result=authority_result,
+            constraint_check_result=constraint_result,
+            drift_check_result=drift_result,
+            risk_check_result=risk_result,
+            admissibility_result={
+                "admissible": True,
+                "recommended_outcome": admissibility.recommended_outcome.value,
+                "reason_codes": [],
+                "target": adapter.describe_target(),
+            },
+            final_outcome=FinalOutcome.COMMITTED,
+        ),
     )
 
 
@@ -508,6 +539,19 @@ def _with_receipt(base_receipt: BindReceipt, **updates: Any) -> BindReceipt:
     payload = base_receipt.to_dict()
     payload.update(updates)
     return BindReceipt(**payload)
+
+
+def _finalize_receipt(
+    *,
+    execution_intent: ExecutionIntent,
+    append_trustlog: bool,
+    receipt: BindReceipt,
+) -> BindReceipt:
+    """Return receipt with optional TrustLog lineage append for orchestration paths."""
+    if not append_trustlog:
+        return receipt
+    append_execution_intent_trustlog(execution_intent)
+    return append_bind_receipt_trustlog(receipt)
 
 
 def _deep_copy_mapping(value: dict[str, Any]) -> dict[str, Any]:
