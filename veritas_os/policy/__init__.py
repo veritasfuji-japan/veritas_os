@@ -14,6 +14,7 @@ from .bind_artifacts import (
     hash_bind_receipt,
     hash_execution_intent,
 )
+from .bind_boundary_adapters import PolicyBundlePromotionAdapter
 from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
 from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
@@ -35,6 +36,7 @@ __all__ = [
     "FinalOutcome",
     "BindBoundaryAdapter",
     "ReferenceBindAdapter",
+    "PolicyBundlePromotionAdapter",
     "execute_bind_boundary",
     "append_execution_intent_trustlog",
     "append_bind_receipt_trustlog",
