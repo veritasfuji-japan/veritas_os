@@ -71,6 +71,7 @@
 | EN Path | Status | Description |
 |---------|--------|-------------|
 | `docs/en/guides/demo-script.md` | EN only | 3-minute demo script |
+| `docs/en/guides/governance-policy-bundle-promotion.md` | EN only | Operator-facing policy bundle promotion workflow |
 
 #### Architecture / アーキテクチャ
 

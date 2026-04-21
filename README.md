@@ -662,8 +662,34 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | GET | `/v1/governance/policy/history` | Policy change audit trail (with digest transitions) |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
 | GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
+| POST | `/v1/governance/policy-bundles/promote` | Execute policy bundle promotion as a bind-boundary governance workflow (returns bind receipt lineage; requires governance write permission) |
 | GET | `/v1/governance/bind-receipts` | List bind receipts (filter by decision or execution intent lineage) |
 | GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | Retrieve a single bind receipt artifact |
+
+#### Operator workflow: promote a policy bundle
+
+Use `POST /v1/governance/policy-bundles/promote` when you need to promote the active policy bundle pointer via the existing bind-boundary path.
+
+- Request accepts **exactly one** selector: `bundle_id` **or** `bundle_dir_name`.
+- Arbitrary filesystem paths are rejected (`/`, `\`, `.`, `..` are not accepted in selectors).
+- Response includes bind lineage fields: `bind_outcome`, `bind_receipt_id`, `execution_intent_id`, plus `bind_receipt`.
+- Use `GET /v1/governance/bind-receipts` or `GET /v1/governance/bind-receipts/{bind_receipt_id}` to inspect the resulting receipt.
+
+```bash
+curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
+  -H "X-API-Key: ${VERITAS_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bundle_id": "bundle-v2",
+    "decision_id": "dec-promote-1",
+    "request_id": "req-promote-1",
+    "policy_snapshot_id": "snap-promote-1",
+    "decision_hash": "hash-promote-1"
+  }'
+```
+
+For operator guidance and outcome interpretation, see
+[`docs/en/guides/governance-policy-bundle-promotion.md`](docs/en/guides/governance-policy-bundle-promotion.md).
 
 > **Signed governance artifacts** — In secure/prod posture, policy bundles must be Ed25519-signed.
 > Decision artifacts include a `governance_identity` field showing which governance policy was in
