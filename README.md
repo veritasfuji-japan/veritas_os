@@ -35,7 +35,7 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 VERITAS OS is a **Decision Governance OS for AI Agents**.
 It is the governance layer from **decision adjudication through bind-time boundary checks**:
 it determines whether an AI decision may proceed and whether an approved decision
-can be committed, blocked, escalated, or rolled back at bind time before
+can be committed, blocked, escalated, rolled back, or fail safely at bind time before
 real-world effect.
 
 ### What problem it solves
@@ -317,7 +317,7 @@ VERITAS optimizes for **governance**:
 - **Enterprise governance** — **4-eyes approval** for policy changes, **RBAC/ABAC** access control, **SSE real-time governance alerts**, external secret manager enforcement
 - **Memory & world state** as first-class inputs (MemoryOS with vector search + WorldModel with causal transitions)
 - **Operational visibility** via a full-stack **Mission Control dashboard** (Next.js) with real-time event streaming, risk analytics, and governance policy management
-- **Bind-boundary visibility** in Mission Control via bind-phase outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`) with execution intent and bind receipt lineage pointers
+- **Bind-boundary visibility** in Mission Control via bind-phase outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`/`APPLY_FAILED`/`SNAPSHOT_FAILED`/`PRECONDITION_FAILED`) with execution intent and bind receipt lineage pointers
 - **EU AI Act compliance** — built-in compliance reporting, audit export, and deployment readiness checks
 
 **Target users**
@@ -351,10 +351,10 @@ Key fields (simplified):
 | `required_evidence[]` | Evidence keys required by current policy/risk boundary |
 | `human_review_required` | Explicit human-review requirement flag |
 | `trust_log` | Hash-chained TrustLog entry (`sha256_prev`) |
-| `bind_outcome` | Bind-phase terminal outcome (`COMMITTED` / `BLOCKED` / `ESCALATED` / `ROLLED_BACK`) |
+| `bind_outcome` | Bind-phase terminal outcome (`COMMITTED` / `BLOCKED` / `ESCALATED` / `ROLLED_BACK` / `APPLY_FAILED` / `SNAPSHOT_FAILED` / `PRECONDITION_FAILED`) |
 | `execution_intent_id` | Lineage pointer to bind attempt context |
 | `bind_receipt_id` | Lineage pointer to TrustLog-linked bind receipt artifact |
-| `bind_failure_reason` | Operator-facing reason when bind-phase is blocked/escalated/rolled back |
+| `bind_failure_reason` | Operator-facing reason when bind-phase is blocked/escalated/rolled back/fails safely |
 | `extras.metrics` | Per-stage latency, memory hits, web hits |
 
 Decision output semantics:
@@ -363,7 +363,7 @@ Decision output semantics:
 - **Value Core** compares option value and informs `business_decision` + `next_action`.
 - UI must show `gate_decision`, `business_decision`, and `next_action` as different concepts.
 - `allow` is gate-level permissive status only; it must not be presented as case approval.
-- Bind-phase `COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK` is a separate adjudication layer from decision-phase approval.
+- Bind-phase outcomes (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`/`APPLY_FAILED`/`SNAPSHOT_FAILED`/`PRECONDITION_FAILED`) are a separate adjudication layer from decision-phase approval.
 - Financial/regulatory governance prompt templates are available as canonical fixtures for
   regression and demo workflows (`veritas_os/sample_data/governance/financial_regulatory_templates.json`);
   see `docs/en/guides/financial-governance-templates.md`.
