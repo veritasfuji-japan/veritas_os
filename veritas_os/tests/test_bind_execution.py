@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
+from veritas_os.logging.encryption import generate_key
+from veritas_os.policy.bind_artifacts import find_bind_receipts
 from veritas_os.policy.bind_artifacts import ExecutionIntent, FinalOutcome
 from veritas_os.policy.bind_execution import ReferenceBindAdapter, execute_bind_boundary
 
@@ -20,6 +24,25 @@ def _intent(expected_fingerprint: str = "") -> ExecutionIntent:
         decision_ts="2026-04-20T12:00:00Z",
         expected_state_fingerprint=expected_fingerprint,
     )
+
+
+@pytest.fixture()
+def trustlog_env(tmp_path, monkeypatch):
+    """Redirect TrustLog writes to a temporary log path."""
+    from veritas_os.logging import trust_log
+
+    monkeypatch.setenv("VERITAS_ENCRYPTION_KEY", generate_key())
+    monkeypatch.setattr(trust_log, "LOG_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(trust_log, "LOG_JSON", tmp_path / "trust_log.json", raising=False)
+    monkeypatch.setattr(trust_log, "LOG_JSONL", tmp_path / "trust_log.jsonl", raising=False)
+    monkeypatch.setattr(trust_log, "_append_stats", {"success": 0, "failure": 0}, raising=False)
+
+    def _open_for_append():
+        trust_log.LOG_JSONL.parent.mkdir(parents=True, exist_ok=True)
+        return open(trust_log.LOG_JSONL, "a", encoding="utf-8")
+
+    monkeypatch.setattr(trust_log, "open_trust_log_for_append", _open_for_append)
+    return tmp_path
 
 
 def test_bind_execution_success_committed() -> None:
@@ -158,12 +181,83 @@ def test_bind_execution_is_deterministic_for_same_inputs() -> None:
         adapter=adapter_a,
         bind_ts="2026-04-20T12:00:10Z",
         bind_receipt_id="br-deterministic",
+        append_trustlog=False,
     )
     receipt_b = execute_bind_boundary(
         execution_intent=intent,
         adapter=adapter_b,
         bind_ts="2026-04-20T12:00:10Z",
         bind_receipt_id="br-deterministic",
+        append_trustlog=False,
     )
 
     assert receipt_a.to_dict() == receipt_b.to_dict()
+
+
+def test_bind_execution_success_auto_appends_trustlog_receipt(trustlog_env) -> None:
+    """Committed outcome should be returned as TrustLog-linked bind receipt."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(expected_fingerprint=adapter.fingerprint_state({"version": 1}))
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.COMMITTED
+    assert receipt.trustlog_hash
+    matched = find_bind_receipts(bind_receipt_id=receipt.bind_receipt_id)
+    assert len(matched) == 1
+    assert matched[0].final_outcome is FinalOutcome.COMMITTED
+
+
+def test_bind_execution_blocked_auto_appends_trustlog_receipt(trustlog_env) -> None:
+    """Blocked outcome should also be persisted to TrustLog lineage."""
+    adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        authority_signal=False,
+    )
+    intent = _intent(expected_fingerprint=adapter.fingerprint_state({"version": 1}))
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert receipt.trustlog_hash
+    matched = find_bind_receipts(bind_receipt_id=receipt.bind_receipt_id)
+    assert len(matched) == 1
+    assert matched[0].final_outcome is FinalOutcome.BLOCKED
+
+
+def test_bind_execution_rolled_back_auto_appends_trustlog_receipt(trustlog_env) -> None:
+    """Rolled-back outcome should be persisted to TrustLog lineage."""
+    adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        postcondition_success=False,
+        revert_success=True,
+    )
+    intent = _intent(expected_fingerprint=adapter.fingerprint_state({"version": 1}))
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.ROLLED_BACK
+    assert receipt.trustlog_hash
+    matched = find_bind_receipts(bind_receipt_id=receipt.bind_receipt_id)
+    assert len(matched) == 1
+    assert matched[0].final_outcome is FinalOutcome.ROLLED_BACK
+
+
+def test_bind_execution_trustlog_lineage_traversal_by_all_ids(trustlog_env) -> None:
+    """Bind lineage must be traversable by decision/intent/receipt identifiers."""
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(expected_fingerprint=adapter.fingerprint_state({"version": 1}))
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    by_decision_id = find_bind_receipts(decision_id=intent.decision_id)
+    by_execution_intent_id = find_bind_receipts(execution_intent_id=intent.execution_intent_id)
+    by_bind_receipt_id = find_bind_receipts(bind_receipt_id=receipt.bind_receipt_id)
+
+    assert len(by_decision_id) == 1
+    assert len(by_execution_intent_id) == 1
+    assert len(by_bind_receipt_id) == 1
+    assert by_decision_id[0].bind_receipt_id == receipt.bind_receipt_id
+    assert by_execution_intent_id[0].bind_receipt_id == receipt.bind_receipt_id
