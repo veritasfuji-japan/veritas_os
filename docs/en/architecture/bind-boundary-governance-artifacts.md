@@ -23,6 +23,9 @@ This extension keeps that architecture intact and adds bind-boundary lineage:
 - `BindReceipt` records bind-time checks (authority/constraint/drift/risk/
   admissibility), links back to both decision and execution intent, and carries
   TrustLog chain linkage (`trustlog_hash`, `prev_bind_hash`).
+- `BindReceipt` also stores minimal replay/revalidation metadata:
+  `bind_receipt_hash`, `execution_intent_hash`, copied governance identity,
+  and a compact `revalidation_context` used for admissibility replay.
 
 This provides explicit governance-native artifacts at the decision → bind
 boundary without creating a parallel subsystem.
@@ -52,6 +55,9 @@ Not guaranteed by this document alone:
   in TrustLog (`bind_receipt_hash`), not from a new logging plane.
 - Retrieval helpers resolve bind receipts by `bind_receipt_id`,
   `execution_intent_id`, or `decision_id` directly from TrustLog entries.
+- Internal helper `veritas_os.policy.bind_revalidation.revalidate_bind_receipt`
+  can re-run admissibility from receipt-contained context and verify lineage/hash
+  linkage against an optional execution intent payload.
 
 This keeps decision artifacts primary while extending native VERITAS governance
 lineage toward bind-boundary control.

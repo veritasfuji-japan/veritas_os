@@ -18,6 +18,7 @@ from veritas_os.policy.bind_artifacts import (
     FinalOutcome,
     append_bind_receipt_trustlog,
     append_execution_intent_trustlog,
+    hash_execution_intent,
 )
 from veritas_os.policy.bind_core.constants import BindReasonCode
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
@@ -144,10 +145,32 @@ def execute_bind_adjudication(
         execution_intent_id=normalized_intent.execution_intent_id,
         decision_id=normalized_intent.decision_id,
         bind_ts=ts,
+        execution_intent_hash=hash_execution_intent(normalized_intent),
+        policy_snapshot_id=normalized_intent.policy_snapshot_id,
+        actor_identity=normalized_intent.actor_identity,
+        decision_hash=normalized_intent.decision_hash,
+        governance_identity=_extract_governance_identity(normalized_intent),
+        revalidation_context=_build_revalidation_context(
+            execution_intent=normalized_intent,
+            bind_policy=BindPolicyConfig(),
+            ttl_expires_at=_build_ttl_expiry(normalized_intent),
+            approval_expires_at=_build_approval_expiry(normalized_intent),
+        ),
     ) if bind_receipt_id else BindReceipt(
         execution_intent_id=normalized_intent.execution_intent_id,
         decision_id=normalized_intent.decision_id,
         bind_ts=ts,
+        execution_intent_hash=hash_execution_intent(normalized_intent),
+        policy_snapshot_id=normalized_intent.policy_snapshot_id,
+        actor_identity=normalized_intent.actor_identity,
+        decision_hash=normalized_intent.decision_hash,
+        governance_identity=_extract_governance_identity(normalized_intent),
+        revalidation_context=_build_revalidation_context(
+            execution_intent=normalized_intent,
+            bind_policy=BindPolicyConfig(),
+            ttl_expires_at=_build_ttl_expiry(normalized_intent),
+            approval_expires_at=_build_approval_expiry(normalized_intent),
+        ),
     )
 
     precondition_error = _validate_intent_preconditions(normalized_intent)
@@ -204,6 +227,15 @@ def execute_bind_adjudication(
     bind_policy = _resolve_bind_policy_config(normalized_intent)
     ttl_expires_at = _build_ttl_expiry(normalized_intent)
     approval_expires_at = _build_approval_expiry(normalized_intent)
+    base_receipt = _with_receipt(
+        base_receipt,
+        revalidation_context=_build_revalidation_context(
+            execution_intent=normalized_intent,
+            bind_policy=bind_policy,
+            ttl_expires_at=ttl_expires_at,
+            approval_expires_at=approval_expires_at,
+        ),
+    )
 
     admissibility = evaluate_bind_admissibility(
         BindAdmissibilityInput(
@@ -687,6 +719,9 @@ def _parse_missing_signal_outcome(raw_value: Any) -> AdmissibilityOutcome:
 def _with_receipt(base_receipt: BindReceipt, **updates: Any) -> BindReceipt:
     payload = base_receipt.to_dict()
     payload.update(updates)
+    final_outcome = payload.get("final_outcome")
+    if isinstance(final_outcome, str):
+        payload["final_outcome"] = FinalOutcome(final_outcome)
     return BindReceipt(**payload)
 
 
@@ -696,6 +731,13 @@ def _finalize_receipt(
     append_trustlog: bool,
     receipt: BindReceipt,
 ) -> BindReceipt:
+    if not receipt.bind_reason_code or not receipt.bind_failure_reason:
+        reason_code, failure_reason = _resolve_receipt_failure_fields(receipt)
+        receipt = _with_receipt(
+            receipt,
+            bind_reason_code=receipt.bind_reason_code or reason_code,
+            bind_failure_reason=receipt.bind_failure_reason or failure_reason,
+        )
     if not append_trustlog:
         return receipt
     append_execution_intent_trustlog(execution_intent)
@@ -725,3 +767,66 @@ def _parse_timestamp(raw_timestamp: str) -> datetime:
 
 def _utc_now_iso8601() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _extract_governance_identity(execution_intent: ExecutionIntent) -> dict[str, Any] | None:
+    """Extract governance identity lineage from execution intent payloads."""
+    policy_lineage = execution_intent.policy_lineage
+    if not isinstance(policy_lineage, dict):
+        return None
+    governance_identity = policy_lineage.get("governance_identity")
+    if not isinstance(governance_identity, dict):
+        return None
+    return dict(governance_identity)
+
+
+def _build_revalidation_context(
+    *,
+    execution_intent: ExecutionIntent,
+    bind_policy: BindPolicyConfig,
+    ttl_expires_at: str | None,
+    approval_expires_at: str | None,
+) -> dict[str, Any]:
+    """Build a minimal replay context required for bind admissibility re-checks."""
+    return {
+        "expected_state_fingerprint": execution_intent.expected_state_fingerprint,
+        "ttl_expires_at": ttl_expires_at,
+        "approval_expires_at": approval_expires_at,
+        "drift_required": bind_policy.drift_required,
+        "ttl_required": bind_policy.ttl_required,
+        "approval_freshness_required": bind_policy.approval_freshness_required,
+        "missing_signal_outcome": bind_policy.missing_signal_outcome.value,
+    }
+
+
+def _resolve_receipt_failure_fields(receipt: BindReceipt) -> tuple[str | None, str | None]:
+    """Resolve canonical failure reason code and summary from receipt payload."""
+    if isinstance(receipt.admissibility_result, dict):
+        reason_codes = receipt.admissibility_result.get("reason_codes")
+        if isinstance(reason_codes, list) and reason_codes:
+            first_code = reason_codes[0]
+            if isinstance(first_code, str) and first_code.strip():
+                reason = str(receipt.admissibility_result.get("reason") or "").strip() or None
+                if reason:
+                    return first_code.strip(), reason
+    for check_payload in (
+        receipt.authority_check_result,
+        receipt.constraint_check_result,
+        receipt.drift_check_result,
+        receipt.risk_check_result,
+    ):
+        if not isinstance(check_payload, dict):
+            continue
+        reason_code = str(check_payload.get("reason_code") or "").strip() or None
+        message = str(check_payload.get("message") or "").strip() or None
+        if reason_code:
+            return reason_code, message
+    for value in (
+        receipt.rollback_reason,
+        receipt.escalation_reason,
+    ):
+        if not isinstance(value, str) or not value.strip():
+            continue
+        prefix = value.split(":", 1)[0].strip()
+        return prefix or None, value.strip()
+    return None, None

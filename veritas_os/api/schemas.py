@@ -366,6 +366,15 @@ class BindReceipt(BaseModel):
     escalation_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     trustlog_hash: str = Field(default="", max_length=128)
     prev_bind_hash: Optional[str] = Field(default=None, max_length=128)
+    bind_receipt_hash: str = Field(default="", max_length=128)
+    execution_intent_hash: str = Field(default="", max_length=128)
+    policy_snapshot_id: str = Field(default="", max_length=MAX_ID_LENGTH)
+    actor_identity: str = Field(default="", max_length=MAX_ACTOR_LENGTH)
+    decision_hash: str = Field(default="", max_length=128)
+    governance_identity: Optional[Dict[str, Any]] = None
+    revalidation_context: Dict[str, Any] = Field(default_factory=dict)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
 
 
 # =========================

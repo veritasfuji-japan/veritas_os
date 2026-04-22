@@ -25,6 +25,7 @@ from .bind_core import (
     normalize_execution_intent,
 )
 from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
+from .bind_revalidation import replay_bind_receipt_admissibility, revalidate_bind_receipt
 from .policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
 from .generated_tests import GeneratedPolicyTestCase, build_generated_test_cases
@@ -49,6 +50,8 @@ __all__ = [
     "PolicyBundlePromotionAdapter",
     "promote_policy_bundle_with_bind_boundary",
     "execute_bind_boundary",
+    "replay_bind_receipt_admissibility",
+    "revalidate_bind_receipt",
     "execute_bind_adjudication",
     "BindAdapterContract",
     "BindOutcome",

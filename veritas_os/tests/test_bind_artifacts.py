@@ -156,6 +156,23 @@ def test_hashing_stability_for_bind_receipt() -> None:
     )
 
 
+def test_bind_receipt_hash_ignores_embedded_bind_receipt_hash_field() -> None:
+    """Hash calculation must stay stable even after ``bind_receipt_hash`` is embedded."""
+    receipt = BindReceipt(
+        bind_receipt_id="br-hash",
+        execution_intent_id="ei-hash",
+        decision_id="dec-hash",
+        bind_ts="2026-04-20T00:00:00Z",
+        final_outcome=FinalOutcome.COMMITTED,
+    )
+    hash_before_embedding = hash_bind_receipt(receipt)
+    hash_after_embedding = hash_bind_receipt(
+        replace(receipt, bind_receipt_hash=hash_before_embedding)
+    )
+
+    assert hash_before_embedding == hash_after_embedding
+
+
 def test_backward_compatibility_existing_decide_response_unchanged() -> None:
     """Existing decision artifact shape must remain usable without bind artifacts."""
     resp = DecideResponse(request_id="req-compat")
