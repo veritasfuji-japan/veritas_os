@@ -254,8 +254,8 @@ def _decode_bind_receipt_cursor(cursor: str, *, expected_sort: str) -> tuple[dat
     try:
         decoded = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
         payload = json.loads(decoded)
-    except (ValueError, TypeError, json.JSONDecodeError):
-        raise ValueError("invalid_cursor")
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid_cursor") from exc
 
     if not isinstance(payload, dict):
         raise ValueError("invalid_cursor")
@@ -269,8 +269,8 @@ def _decode_bind_receipt_cursor(cursor: str, *, expected_sort: str) -> tuple[dat
 
     try:
         timestamp = datetime.fromisoformat(raw_timestamp)
-    except ValueError:
-        raise ValueError("invalid_cursor")
+    except ValueError as exc:
+        raise ValueError("invalid_cursor") from exc
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=timezone.utc)
     return timestamp.astimezone(timezone.utc), raw_bind_receipt_id
