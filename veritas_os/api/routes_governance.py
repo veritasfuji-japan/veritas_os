@@ -15,10 +15,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
-from veritas_os.api.bind_target_catalog import (
-    get_target_catalog_payload,
-    resolve_bind_target_metadata,
+from veritas_os.api.bind_summary import (
+    build_bind_response_payload,
+    build_bind_summary_from_receipt,
+    enrich_bind_receipt_payload,
+    resolve_bind_reason_code,
 )
+from veritas_os.api.bind_target_catalog import get_target_catalog_payload
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
     GovernanceBindReceiptExportResponse,
@@ -46,53 +49,6 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
-
-
-def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
-    """Resolve a compact operator-facing bind failure reason from receipt fields."""
-    direct_reason = bind_receipt.get("bind_failure_reason")
-    if isinstance(direct_reason, str) and direct_reason.strip():
-        return direct_reason.strip()
-    reason_candidates = (
-        bind_receipt.get("rollback_reason"),
-        bind_receipt.get("escalation_reason"),
-        bind_receipt.get("admissibility_result"),
-        bind_receipt.get("risk_check_result"),
-        bind_receipt.get("constraint_check_result"),
-        bind_receipt.get("authority_check_result"),
-        bind_receipt.get("drift_check_result"),
-    )
-    for candidate in reason_candidates:
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-        if isinstance(candidate, dict):
-            nested = candidate.get("reason") or candidate.get("message") or candidate.get("detail")
-            if isinstance(nested, str) and nested.strip():
-                return nested.strip()
-    return None
-
-
-def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
-    """Extract a stable reason code when present in bind receipt check payloads."""
-    direct_reason_code = bind_receipt.get("bind_reason_code")
-    if isinstance(direct_reason_code, str) and direct_reason_code.strip():
-        return direct_reason_code.strip()
-    for key in (
-        "admissibility_result",
-        "risk_check_result",
-        "constraint_check_result",
-        "authority_check_result",
-        "drift_check_result",
-    ):
-        value = bind_receipt.get(key)
-        if not isinstance(value, dict):
-            continue
-        raw = value.get("reason_code") or value.get("code")
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-    return None
-
-
 
 
 class BindReceiptListSort(str):
@@ -208,7 +164,7 @@ def _apply_bind_receipt_filters(
         if outcome and str(payload.get("final_outcome") or "").upper() != outcome:
             continue
 
-        resolved_reason_code = (_resolve_bind_reason_code(payload) or "").lower()
+        resolved_reason_code = (resolve_bind_reason_code(payload) or "").lower()
         if reason_query and reason_query not in resolved_reason_code:
             continue
 
@@ -348,44 +304,6 @@ def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
     except ValueError as exc:
         raise ValueError("invalid_bundle_id") from exc
     return target_bundle_dir, pointer_path, bundles_root
-
-
-def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize bind receipt summary payload for governance API responses."""
-    enriched_receipt = _enrich_bind_receipt_payload(bind_receipt)
-    target_metadata = {
-        "target_path": enriched_receipt.get("target_path"),
-        "target_type": enriched_receipt.get("target_type"),
-        "target_path_type": enriched_receipt.get("target_path_type"),
-        "label": enriched_receipt.get("target_label"),
-        "operator_surface": enriched_receipt.get("operator_surface"),
-        "relevant_ui_href": enriched_receipt.get("relevant_ui_href"),
-    }
-    return {
-        "ok": True,
-        "bind_receipt": enriched_receipt,
-        "bind_outcome": enriched_receipt.get("final_outcome"),
-        "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
-        "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
-        "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
-        "execution_intent_id": enriched_receipt.get("execution_intent_id"),
-        "target_metadata": target_metadata,
-    }
-
-
-def _enrich_bind_receipt_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
-    """Attach canonical bind target metadata to any bind receipt payload."""
-    target_metadata = resolve_bind_target_metadata(
-        bind_receipt.get("target_path"),
-        bind_receipt.get("target_type"),
-    )
-    return {
-        **bind_receipt,
-        "target_path_type": target_metadata["target_path_type"],
-        "target_label": target_metadata["label"],
-        "operator_surface": target_metadata["operator_surface"],
-        "relevant_ui_href": target_metadata["relevant_ui_href"],
-    }
 
 
 def _governance_decision_hash_payload(body: Dict[str, Any]) -> Dict[str, Any]:
@@ -564,7 +482,7 @@ def governance_put(body: dict):
             bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
         ).to_dict()
         updated = srv.get_policy()
-        bind_payload = _bind_response_payload(bind_receipt)
+        bind_payload = build_bind_response_payload(bind_receipt)
         if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
             status_code, error_message = _bind_failure_status_and_error(bind_receipt)
             return JSONResponse(
@@ -645,10 +563,11 @@ def governance_decision_export(
                 continue
             decision_id = str(entry.get("decision_id") or entry.get("request_id") or "")
             bind_receipts = find_bind_receipts(decision_id=decision_id) if decision_id else []
-            latest_bind = _enrich_bind_receipt_payload(bind_receipts[-1].to_dict()) if bind_receipts else {}
+            latest_bind = enrich_bind_receipt_payload(bind_receipts[-1].to_dict()) if bind_receipts else {}
             latest_bind_outcome = str(latest_bind.get("final_outcome") or "")
             if bind_outcome and latest_bind_outcome != bind_outcome.value:
                 continue
+            bind_summary = build_bind_summary_from_receipt(latest_bind) if latest_bind else None
             normalized.append(
                 {
                     "request_id": str(entry.get("request_id") or ""),
@@ -658,19 +577,20 @@ def governance_decision_export(
                     "created_at": str(entry.get("created_at") or entry.get("ts") or ""),
                     "approver": str(entry.get("approver") or entry.get("updated_by") or "system"),
                     "trace_sha256": entry.get("sha256"),
-                    "bind_outcome": latest_bind_outcome or None,
-                    "bind_receipt_id": latest_bind.get("bind_receipt_id"),
-                    "execution_intent_id": latest_bind.get("execution_intent_id"),
-                    "bind_failure_reason": _resolve_bind_failure_reason(latest_bind),
-                    "bind_reason_code": _resolve_bind_reason_code(latest_bind),
-                    "authority_check_result": latest_bind.get("authority_check_result"),
-                    "constraint_check_result": latest_bind.get("constraint_check_result"),
-                    "drift_check_result": latest_bind.get("drift_check_result"),
-                    "risk_check_result": latest_bind.get("risk_check_result"),
-                    "target_path_type": latest_bind.get("target_path_type"),
-                    "target_label": latest_bind.get("target_label"),
-                    "operator_surface": latest_bind.get("operator_surface"),
-                    "relevant_ui_href": latest_bind.get("relevant_ui_href"),
+                    "bind_summary": bind_summary,
+                    "bind_outcome": (bind_summary or {}).get("bind_outcome") or latest_bind_outcome or None,
+                    "bind_receipt_id": (bind_summary or {}).get("bind_receipt_id"),
+                    "execution_intent_id": (bind_summary or {}).get("execution_intent_id"),
+                    "bind_failure_reason": (bind_summary or {}).get("bind_failure_reason"),
+                    "bind_reason_code": (bind_summary or {}).get("bind_reason_code"),
+                    "authority_check_result": (bind_summary or {}).get("authority_check_result"),
+                    "constraint_check_result": (bind_summary or {}).get("constraint_check_result"),
+                    "drift_check_result": (bind_summary or {}).get("drift_check_result"),
+                    "risk_check_result": (bind_summary or {}).get("risk_check_result"),
+                    "target_path_type": (bind_summary or {}).get("target_path_type"),
+                    "target_label": (bind_summary or {}).get("target_label"),
+                    "operator_surface": (bind_summary or {}).get("operator_surface"),
+                    "relevant_ui_href": (bind_summary or {}).get("relevant_ui_href"),
                 }
             )
         return {"ok": True, "count": len(normalized), "items": normalized}
@@ -743,7 +663,7 @@ def governance_bind_receipts(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
-        enriched_items = [_enrich_bind_receipt_payload(item) for item in filtered_items]
+        enriched_items = [enrich_bind_receipt_payload(item) for item in filtered_items]
         page_items, has_more, next_cursor = _paginate_bind_receipt_items(
             items=enriched_items,
             sort=parsed_sort,
@@ -840,7 +760,7 @@ def governance_bind_receipts_export(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
-        enriched_items = [_enrich_bind_receipt_payload(item) for item in filtered_items]
+        enriched_items = [enrich_bind_receipt_payload(item) for item in filtered_items]
         applied_filters = _bind_receipt_applied_filters(
             decision_id=decision_id,
             execution_intent_id=execution_intent_id,
@@ -877,28 +797,10 @@ def governance_bind_receipt(bind_receipt_id: str):
         receipts = find_bind_receipts(bind_receipt_id=bind_receipt_id)
         if not receipts:
             return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
-        enriched_receipt = _enrich_bind_receipt_payload(receipts[-1].to_dict())
-        target_metadata = {
-            "target_path": enriched_receipt.get("target_path"),
-            "target_type": enriched_receipt.get("target_type"),
-            "target_path_type": enriched_receipt.get("target_path_type"),
-            "label": enriched_receipt.get("target_label"),
-            "operator_surface": enriched_receipt.get("operator_surface"),
-            "relevant_ui_href": enriched_receipt.get("relevant_ui_href"),
-        }
+        enriched_receipt = enrich_bind_receipt_payload(receipts[-1].to_dict())
         return {
             "ok": True,
-            "bind_receipt": enriched_receipt,
-            "bind_outcome": enriched_receipt.get("final_outcome"),
-            "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
-            "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
-            "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
-            "execution_intent_id": enriched_receipt.get("execution_intent_id"),
-            "authority_check_result": enriched_receipt.get("authority_check_result"),
-            "constraint_check_result": enriched_receipt.get("constraint_check_result"),
-            "drift_check_result": enriched_receipt.get("drift_check_result"),
-            "risk_check_result": enriched_receipt.get("risk_check_result"),
-            "target_metadata": target_metadata,
+            **build_bind_response_payload(enriched_receipt),
         }
     except Exception as e:
         logger.error("governance_bind_receipt failed: %s", e, exc_info=True)
@@ -939,7 +841,7 @@ def governance_promote_policy_bundle(
             approval_context=dict(body.approval_context or {}),
             governance_policy=current_policy if isinstance(current_policy, dict) else None,
         )
-        return _bind_response_payload(receipt.to_dict())
+        return {"ok": True, **build_bind_response_payload(receipt.to_dict())}
     except (ValueError, TypeError) as exc:
         logger.warning("governance_promote_policy_bundle validation error: %s", exc)
         return JSONResponse(status_code=400, content={"ok": False, "error": "invalid_promotion_request"})

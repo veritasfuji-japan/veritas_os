@@ -18,7 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from veritas_os.api.auth import require_permission
-from veritas_os.api.bind_target_catalog import resolve_bind_target_metadata
+from veritas_os.api.bind_summary import build_bind_response_payload
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import ComplianceConfigResponse
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
@@ -52,75 +52,6 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
-
-
-def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
-    """Resolve compact operator-facing bind failure reason from receipt fields."""
-    direct_reason = bind_receipt.get("bind_failure_reason")
-    if isinstance(direct_reason, str) and direct_reason.strip():
-        return direct_reason.strip()
-    for key in (
-        "rollback_reason",
-        "escalation_reason",
-        "admissibility_result",
-        "risk_check_result",
-        "constraint_check_result",
-        "authority_check_result",
-        "drift_check_result",
-    ):
-        candidate = bind_receipt.get(key)
-        if isinstance(candidate, str) and candidate.strip():
-            return candidate.strip()
-        if isinstance(candidate, dict):
-            nested = candidate.get("reason") or candidate.get("message") or candidate.get("detail")
-            if isinstance(nested, str) and nested.strip():
-                return nested.strip()
-    return None
-
-
-def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
-    """Extract a stable bind reason code from the receipt payload."""
-    direct_reason_code = bind_receipt.get("bind_reason_code")
-    if isinstance(direct_reason_code, str) and direct_reason_code.strip():
-        return direct_reason_code.strip()
-    for key in (
-        "admissibility_result",
-        "risk_check_result",
-        "constraint_check_result",
-        "authority_check_result",
-        "drift_check_result",
-    ):
-        value = bind_receipt.get(key)
-        if not isinstance(value, dict):
-            continue
-        raw = value.get("reason_code") or value.get("code")
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-    return None
-
-
-def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
-    """Normalize bind receipt summary payload for compliance API responses."""
-    target_metadata = resolve_bind_target_metadata(
-        bind_receipt.get("target_path"),
-        bind_receipt.get("target_type"),
-    )
-    enriched_receipt = {
-        **bind_receipt,
-        "target_path_type": target_metadata["target_path_type"],
-        "target_label": target_metadata["label"],
-        "operator_surface": target_metadata["operator_surface"],
-        "relevant_ui_href": target_metadata["relevant_ui_href"],
-    }
-    return {
-        "bind_receipt": enriched_receipt,
-        "bind_outcome": enriched_receipt.get("final_outcome"),
-        "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
-        "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
-        "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
-        "execution_intent_id": enriched_receipt.get("execution_intent_id"),
-        "target_metadata": target_metadata,
-    }
 
 
 def _compliance_bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, str]:
@@ -779,7 +710,7 @@ def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
         approval_context={"compliance_config_update_approved": True},
         governance_policy=current if isinstance(current, dict) else None,
     ).to_dict()
-    bind_payload = _bind_response_payload(bind_receipt)
+    bind_payload = build_bind_response_payload(bind_receipt)
     updated = get_runtime_config()
     if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
         status_code, error_message = _compliance_bind_failure_status_and_error(bind_receipt)

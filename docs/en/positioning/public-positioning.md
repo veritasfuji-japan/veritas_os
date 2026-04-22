@@ -11,6 +11,7 @@ Core promise:
 - Current implemented bind-boundary lineage is:
   `decision artifact -> execution intent -> bind receipt` (TrustLog-integrated).
 - Operator-facing bind public contract includes `bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, and `bind_receipt_id`.
+- The contract now also exposes additive `bind_summary` objects so mutation/export responses share one compact bind vocabulary while preserving legacy flat fields.
 
 ## What VERITAS OS is / is not
 

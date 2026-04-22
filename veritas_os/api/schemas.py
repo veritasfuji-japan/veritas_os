@@ -388,6 +388,28 @@ class BindReceipt(BaseModel):
     relevant_ui_href: str = Field(default="/audit", max_length=MAX_URI_LENGTH)
 
 
+class BindSummary(BaseModel):
+    """Compact bind artifact summary shared across mutation/export responses."""
+
+    model_config = ConfigDict(extra="allow")
+
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    authority_check_result: Optional[Dict[str, Any]] = None
+    constraint_check_result: Optional[Dict[str, Any]] = None
+    drift_check_result: Optional[Dict[str, Any]] = None
+    risk_check_result: Optional[Dict[str, Any]] = None
+    target_path: Optional[str] = Field(default=None, max_length=MAX_URI_LENGTH)
+    target_type: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    target_path_type: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    target_label: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    operator_surface: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    relevant_ui_href: Optional[str] = Field(default=None, max_length=MAX_URI_LENGTH)
+
+
 # =========================
 # Response envelope — Trust Log
 # =========================
@@ -839,6 +861,10 @@ class DecideResponse(BaseModel):
     risk_check_result: Optional[Dict[str, Any]] = Field(
         default=None,
         description="Runtime risk check summary from bind-phase adjudication.",
+    )
+    bind_summary: Optional[BindSummary] = Field(
+        default=None,
+        description="Compact bind summary object; additive companion to flat bind compatibility fields.",
     )
     wat_integrity: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -1327,6 +1353,7 @@ class GovernancePolicyResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bind_summary: Optional[BindSummary] = None
     target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
@@ -1350,6 +1377,7 @@ class GovernanceDecisionExportItem(BaseModel):
     created_at: str = ""
     approver: str = "system"
     trace_sha256: Optional[str] = None
+    bind_summary: Optional[BindSummary] = None
     bind_outcome: Optional[FinalOutcome] = None
     bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
@@ -1384,6 +1412,7 @@ class GovernanceBindReceiptResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bind_summary: Optional[BindSummary] = None
     authority_check_result: Optional[Dict[str, Any]] = None
     constraint_check_result: Optional[Dict[str, Any]] = None
     drift_check_result: Optional[Dict[str, Any]] = None
@@ -1429,6 +1458,7 @@ class GovernancePolicyBundlePromoteResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bind_summary: Optional[BindSummary] = None
     target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
@@ -1444,6 +1474,7 @@ class ComplianceConfigResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    bind_summary: Optional[BindSummary] = None
     target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 

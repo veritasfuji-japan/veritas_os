@@ -113,6 +113,7 @@ def test_openapi_includes_bind_artifact_schemas() -> None:
 
     assert "ExecutionIntent" in schemas
     assert "BindReceipt" in schemas
+    assert "BindSummary" in schemas
     policy_lineage = schemas["ExecutionIntent"]["properties"]["policy_lineage"]
     assert policy_lineage["type"] == "object"
     assert policy_lineage["nullable"] is True
@@ -139,6 +140,7 @@ def test_openapi_includes_bind_artifact_schemas() -> None:
     assert "constraint_check_result" in export_item
     assert "drift_check_result" in export_item
     assert "risk_check_result" in export_item
+    assert "bind_summary" in export_item
 
 
 def test_openapi_decide_response_includes_bind_contract_fields() -> None:
@@ -154,6 +156,7 @@ def test_openapi_decide_response_includes_bind_contract_fields() -> None:
     assert "constraint_check_result" in decide_schema
     assert "drift_check_result" in decide_schema
     assert "risk_check_result" in decide_schema
+    assert "bind_summary" in decide_schema
 
 
 def test_openapi_compliance_config_put_response_includes_bind_fields() -> None:
@@ -173,3 +176,4 @@ def test_openapi_compliance_config_put_response_includes_bind_fields() -> None:
     assert "bind_receipt_id" in properties
     assert "execution_intent_id" in properties
     assert "bind_receipt" in properties
+    assert "bind_summary" in properties
