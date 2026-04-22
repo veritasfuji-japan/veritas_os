@@ -22,11 +22,14 @@ Core promise:
 
 ### Current fact (implemented)
 
-- Bind-boundary is implemented on at least two operator-governed effect paths:
+- Bind-boundary is implemented on at least three operator-governed effect paths:
   1. `PUT /v1/governance/policy` (governance policy update path)
   2. `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path)
-- Receipts can be listed/fetched via `/v1/governance/bind-receipts` and
-  `/v1/governance/bind-receipts/{bind_receipt_id}` for operator and audit flow.
+  3. `PUT /v1/compliance/config` (runtime compliance config mutation path)
+- Bind artifacts are exposed through list/export/detail operator surfaces:
+  `/v1/governance/bind-receipts`, `/v1/governance/bind-receipts/export`,
+  and `/v1/governance/bind-receipts/{bind_receipt_id}`.
+- `BindReceipt` is the full artifact contract (including canonical target metadata), while `bind_summary` is the shared compact bind vocabulary reused across bind-governed mutation/export responses.
 - Replay/revalidation helpers exist and move receipts toward replayable governance artifacts.
 
 ### Future direction (not yet complete)
@@ -59,7 +62,7 @@ Avoid unqualified use in titles, subtitles, and opening product summary paragrap
 
 ## Technical Maturity Snapshot (internal self-assessment)
 
-> This section is an **internal re-evaluation (self-assessment)** and is not third-party certification.
+> This section is an **internal re-evaluation (self-assessment)** and is not third-party certification; treat it as the current published internal snapshot.
 
 | Category | 2026-03-15 | 2026-04-15 | Delta |
 |---|---|---|---|

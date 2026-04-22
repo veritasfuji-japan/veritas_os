@@ -36,7 +36,8 @@ Implemented in this repository:
 
 - bind-time admissibility adjudication inputs on bind receipts
 - bind terminal outcomes (`COMMITTED`, `BLOCKED`, `ESCALATED`, `ROLLED_BACK`)
-- TrustLog lineage pointers and bind receipt retrieval endpoints
+- TrustLog lineage pointers and bind receipt list/export/detail endpoints
+- shared compact `bind_summary` vocabulary across bind-governed mutation/export responses
 - Mission Control bind-phase rendering on decision results
 
 Not guaranteed by this document alone:
@@ -61,6 +62,19 @@ Not guaranteed by this document alone:
 
 This keeps decision artifacts primary while extending native VERITAS governance
 lineage toward bind-boundary control.
+
+
+## Companion summary vocabulary (`bind_summary`)
+
+`BindReceipt` remains the full bind artifact contract.
+
+`bind_summary` is the companion compact summary family: it is intentionally
+smaller than the full receipt payload and is reused across mutation/export
+responses so operators can triage bind outcomes without losing a path to the
+full artifact (`/v1/governance/bind-receipts*`).
+
+This keeps full-artifact and summary-object semantics explicit rather than
+merging them into a single overloaded shape.
 
 ## Runtime behavior impact
 

@@ -34,6 +34,7 @@ Current implemented operator-governed bind paths include:
 
 1. `POST /v1/governance/policy-bundles/promote` (this guide)
 2. `PUT /v1/governance/policy` (governance policy update path)
+3. `PUT /v1/compliance/config` (runtime compliance config mutation path)
 
 Do not claim that all effect paths are bind-governed yet.
 
@@ -90,7 +91,8 @@ curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
 - `bind_reason_code`: stable reason code if provided by bind checks.
 - `bind_receipt_id`: bind receipt lineage identifier.
 - `execution_intent_id`: bind execution intent lineage identifier.
-- `bind_receipt`: full receipt payload with check results.
+- `bind_summary`: compact shared bind vocabulary reused across bind-governed mutation/export responses.
+- `bind_receipt`: full receipt payload with check results and canonical target metadata.
 
 This is the public bind outcome contract for governance-facing operator flow.
 
@@ -113,8 +115,9 @@ When promotion does not cleanly commit:
 1. Check `bind_reason_code` first for machine-stable cause category.
 2. Check `bind_failure_reason` for compact operator summary.
 3. Inspect `bind_receipt` for authority / constraint / drift / risk check details.
-4. Retrieve persisted receipt lineage by ID:
+4. Retrieve persisted receipt lineage through list/export/detail surfaces:
    - `GET /v1/governance/bind-receipts`
+   - `GET /v1/governance/bind-receipts/export`
    - `GET /v1/governance/bind-receipts/{bind_receipt_id}`
 5. Correlate with decision exports if needed:
    - `GET /v1/governance/decisions/export`
@@ -130,5 +133,6 @@ standardization in this release.
 ## Related endpoints
 
 - `GET /v1/governance/bind-receipts`
+- `GET /v1/governance/bind-receipts/export`
 - `GET /v1/governance/bind-receipts/{bind_receipt_id}`
 - `GET /v1/governance/decisions/export`
