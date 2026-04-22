@@ -42,6 +42,9 @@ def _get_server():
 
 def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
     """Resolve a compact operator-facing bind failure reason from receipt fields."""
+    direct_reason = bind_receipt.get("bind_failure_reason")
+    if isinstance(direct_reason, str) and direct_reason.strip():
+        return direct_reason.strip()
     reason_candidates = (
         bind_receipt.get("rollback_reason"),
         bind_receipt.get("escalation_reason"),
@@ -63,6 +66,9 @@ def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
 
 def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
     """Extract a stable reason code when present in bind receipt check payloads."""
+    direct_reason_code = bind_receipt.get("bind_reason_code")
+    if isinstance(direct_reason_code, str) and direct_reason_code.strip():
+        return direct_reason_code.strip()
     for key in (
         "admissibility_result",
         "risk_check_result",

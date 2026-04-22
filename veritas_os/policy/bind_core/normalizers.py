@@ -48,8 +48,9 @@ def normalize_execution_intent(
 def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt:
     """Return normalized ``BindReceipt`` with canonical enum mapping."""
     if isinstance(payload, BindReceipt):
-        return payload
-    data = dict(payload)
+        data = payload.to_dict()
+    else:
+        data = dict(payload)
     final_outcome = data.get("final_outcome") or FinalOutcome.BLOCKED.value
     return BindReceipt(
         bind_receipt_id=str(data.get("bind_receipt_id") or ""),
@@ -70,4 +71,19 @@ def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt
         ),
         trustlog_hash=str(data.get("trustlog_hash") or ""),
         prev_bind_hash=(str(data.get("prev_bind_hash")) if data.get("prev_bind_hash") else None),
+        bind_receipt_hash=str(data.get("bind_receipt_hash") or ""),
+        execution_intent_hash=str(data.get("execution_intent_hash") or ""),
+        policy_snapshot_id=str(data.get("policy_snapshot_id") or ""),
+        actor_identity=str(data.get("actor_identity") or ""),
+        decision_hash=str(data.get("decision_hash") or ""),
+        governance_identity=(
+            dict(data.get("governance_identity"))
+            if isinstance(data.get("governance_identity"), dict)
+            else None
+        ),
+        revalidation_context=dict(data.get("revalidation_context") or {}),
+        bind_reason_code=(str(data.get("bind_reason_code")) if data.get("bind_reason_code") else None),
+        bind_failure_reason=(
+            str(data.get("bind_failure_reason")) if data.get("bind_failure_reason") else None
+        ),
     )

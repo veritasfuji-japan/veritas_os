@@ -111,9 +111,23 @@ class BindReceipt:
     escalation_reason: str | None = None
     trustlog_hash: str = ""
     prev_bind_hash: str | None = None
+    bind_receipt_hash: str = ""
+    execution_intent_hash: str = ""
+    policy_snapshot_id: str = ""
+    actor_identity: str = ""
+    decision_hash: str = ""
+    governance_identity: dict[str, Any] | None = None
+    revalidation_context: dict[str, Any] = field(default_factory=dict)
+    bind_reason_code: str | None = None
+    bind_failure_reason: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
+        final_outcome = (
+            self.final_outcome.value
+            if isinstance(self.final_outcome, FinalOutcome)
+            else str(self.final_outcome)
+        )
         return {
             "bind_receipt_id": self.bind_receipt_id,
             "execution_intent_id": self.execution_intent_id,
@@ -126,11 +140,20 @@ class BindReceipt:
             "drift_check_result": dict(self.drift_check_result),
             "risk_check_result": dict(self.risk_check_result),
             "admissibility_result": dict(self.admissibility_result),
-            "final_outcome": self.final_outcome.value,
+            "final_outcome": final_outcome,
             "rollback_reason": self.rollback_reason,
             "escalation_reason": self.escalation_reason,
             "trustlog_hash": self.trustlog_hash,
             "prev_bind_hash": self.prev_bind_hash,
+            "bind_receipt_hash": self.bind_receipt_hash,
+            "execution_intent_hash": self.execution_intent_hash,
+            "policy_snapshot_id": self.policy_snapshot_id,
+            "actor_identity": self.actor_identity,
+            "decision_hash": self.decision_hash,
+            "governance_identity": self.governance_identity,
+            "revalidation_context": dict(self.revalidation_context),
+            "bind_reason_code": self.bind_reason_code,
+            "bind_failure_reason": self.bind_failure_reason,
         }
 
 
@@ -198,6 +221,27 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
             escalation_reason=payload.get("escalation_reason"),
             trustlog_hash=str(payload.get("trustlog_hash") or ""),
             prev_bind_hash=payload.get("prev_bind_hash"),
+            bind_receipt_hash=str(payload.get("bind_receipt_hash") or ""),
+            execution_intent_hash=str(payload.get("execution_intent_hash") or ""),
+            policy_snapshot_id=str(payload.get("policy_snapshot_id") or ""),
+            actor_identity=str(payload.get("actor_identity") or ""),
+            decision_hash=str(payload.get("decision_hash") or ""),
+            governance_identity=(
+                dict(payload.get("governance_identity"))
+                if isinstance(payload.get("governance_identity"), dict)
+                else None
+            ),
+            revalidation_context=dict(payload.get("revalidation_context") or {}),
+            bind_reason_code=(
+                str(payload.get("bind_reason_code"))
+                if payload.get("bind_reason_code")
+                else None
+            ),
+            bind_failure_reason=(
+                str(payload.get("bind_failure_reason"))
+                if payload.get("bind_failure_reason")
+                else None
+            ),
         )
     except (TypeError, ValueError):
         return None
@@ -237,6 +281,7 @@ def append_bind_receipt_trustlog(receipt: BindReceipt) -> BindReceipt:
     )
     candidate = replace(receipt, prev_bind_hash=prev_bind_hash)
     bind_receipt_hash = hash_bind_receipt(candidate)
+    candidate = replace(candidate, bind_receipt_hash=bind_receipt_hash)
 
     entry = append_trust_log(
         {
@@ -246,7 +291,11 @@ def append_bind_receipt_trustlog(receipt: BindReceipt) -> BindReceipt:
             "execution_intent_id": candidate.execution_intent_id,
             "bind_receipt_id": candidate.bind_receipt_id,
             "bind_ts": candidate.bind_ts,
-            "final_outcome": candidate.final_outcome.value,
+            "final_outcome": (
+                candidate.final_outcome.value
+                if isinstance(candidate.final_outcome, FinalOutcome)
+                else str(candidate.final_outcome)
+            ),
             "prev_bind_hash": candidate.prev_bind_hash,
             "bind_receipt_hash": bind_receipt_hash,
             "bind_receipt": candidate.to_dict(),
