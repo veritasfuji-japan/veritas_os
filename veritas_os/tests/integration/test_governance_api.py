@@ -607,6 +607,113 @@ def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     assert body["items"][0]["execution_intent_id"] == "ei-list-1"
 
 
+def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
+    class _Receipt:
+        def __init__(self, payload: dict):
+            self._payload = payload
+
+        def to_dict(self) -> dict:
+            return dict(self._payload)
+
+    receipts = [
+        _Receipt(
+            {
+                "bind_receipt_id": "br-1",
+                "decision_id": "dec-1",
+                "execution_intent_id": "ei-1",
+                "policy_snapshot_id": "ps-1",
+                "target_path": "/v1/governance/policy",
+                "target_type": "governance_policy",
+                "final_outcome": "COMMITTED",
+                "bind_reason_code": "OK",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+        ),
+        _Receipt(
+            {
+                "bind_receipt_id": "br-2",
+                "decision_id": "dec-2",
+                "execution_intent_id": "ei-2",
+                "policy_snapshot_id": "ps-2",
+                "target_path": "/v1/compliance/config",
+                "target_type": "compliance_config",
+                "final_outcome": "BLOCKED",
+                "bind_reason_code": "POLICY_DENY",
+                "occurred_at": "2026-04-22T10:00:00Z",
+            }
+        ),
+        _Receipt(
+            {
+                "bind_receipt_id": "br-3",
+                "decision_id": "dec-3",
+                "execution_intent_id": "ei-3",
+                "policy_snapshot_id": "ps-3",
+                "target_path": "/v1/governance/policy",
+                "target_type": "governance_policy",
+                "final_outcome": "ESCALATED",
+                "bind_reason_code": "APPROVAL_MISSING",
+                "occurred_at": "2026-04-20T10:00:00Z",
+            }
+        ),
+    ]
+
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda **_kwargs: receipts,
+    )
+
+    outcome_resp = client.get("/v1/governance/bind-receipts?outcome=BLOCKED", headers=HEADERS)
+    assert outcome_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in outcome_resp.json()["items"]] == ["br-2"]
+
+    target_path_resp = client.get(
+        "/v1/governance/bind-receipts?target_path=/v1/compliance/config",
+        headers=HEADERS,
+    )
+    assert target_path_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in target_path_resp.json()["items"]] == ["br-2"]
+
+    reason_resp = client.get("/v1/governance/bind-receipts?reason_code=policy", headers=HEADERS)
+    assert reason_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in reason_resp.json()["items"]] == ["br-2"]
+
+    lineage_resp = client.get("/v1/governance/bind-receipts?lineage_query=ps-2", headers=HEADERS)
+    assert lineage_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in lineage_resp.json()["items"]] == ["br-2"]
+
+    failed_only_resp = client.get("/v1/governance/bind-receipts?failed_only=true", headers=HEADERS)
+    assert failed_only_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in failed_only_resp.json()["items"]] == ["br-2", "br-3"]
+
+    recent_only_resp = client.get("/v1/governance/bind-receipts?recent_only=true", headers=HEADERS)
+    assert recent_only_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in recent_only_resp.json()["items"]] == ["br-1", "br-2"]
+
+    oldest_resp = client.get("/v1/governance/bind-receipts?sort=oldest", headers=HEADERS)
+    assert oldest_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in oldest_resp.json()["items"]] == ["br-3", "br-2", "br-1"]
+
+    limit_resp = client.get("/v1/governance/bind-receipts?sort=newest&limit=1", headers=HEADERS)
+    assert limit_resp.status_code == 200
+    assert [item["bind_receipt_id"] for item in limit_resp.json()["items"]] == ["br-1"]
+
+
+
+def test_governance_bind_receipts_list_invalid_query_returns_400(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "veritas_os.api.routes_governance.find_bind_receipts",
+        lambda **_kwargs: [],
+    )
+
+    invalid_outcome_resp = client.get("/v1/governance/bind-receipts?outcome=NOT_A_REAL_OUTCOME", headers=HEADERS)
+    assert invalid_outcome_resp.status_code == 400
+    assert invalid_outcome_resp.json()["error"] == "invalid_bind_receipt_query"
+
+    invalid_sort_resp = client.get("/v1/governance/bind-receipts?sort=sideways", headers=HEADERS)
+    assert invalid_sort_resp.status_code == 400
+    assert invalid_sort_resp.json()["error"] == "invalid_bind_receipt_query"
+
+
 def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -> None:
     bundles_root = tmp_path / "bundles"
     bundle_dir = bundles_root / "bundle-v2"

@@ -2139,18 +2139,85 @@ paths:
 
   /v1/governance/bind-receipts:
     get:
-      summary: Bind receipt search by lineage filters
+      summary: Bind receipt search with operator filters
+      description: |
+        Lists governance bind receipt artifacts with additive server-side filters.
+        Existing `decision_id` and `execution_intent_id` filters remain supported.
+        `failed_only=true` excludes `COMMITTED` outcomes.
+        `recent_only=true` returns only receipts within the last 24 hours from server clock.
+        Default sort is `newest`; `limit` defaults to unbounded when omitted and is capped at 200 when specified.
       parameters:
         - in: query
           name: decision_id
           required: false
+          description: Exact governance decision identifier filter.
           schema:
             type: string
         - in: query
           name: execution_intent_id
           required: false
+          description: Exact execution intent identifier filter.
           schema:
             type: string
+        - in: query
+          name: target_path
+          required: false
+          description: Canonical target API path filter (exact match).
+          schema:
+            type: string
+        - in: query
+          name: target_type
+          required: false
+          description: Exact target type filter.
+          schema:
+            type: string
+        - in: query
+          name: outcome
+          required: false
+          description: Bind final outcome filter.
+          schema:
+            type: string
+            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+        - in: query
+          name: reason_code
+          required: false
+          description: Case-insensitive contains filter for bind reason code.
+          schema:
+            type: string
+        - in: query
+          name: lineage_query
+          required: false
+          description: Case-insensitive contains search across decision_id, execution_intent_id, bind_receipt_id, and policy_snapshot_id.
+          schema:
+            type: string
+        - in: query
+          name: failed_only
+          required: false
+          description: When true, include only outcomes other than COMMITTED.
+          schema:
+            type: boolean
+        - in: query
+          name: recent_only
+          required: false
+          description: When true, include only receipts from the last 24 hours.
+          schema:
+            type: boolean
+        - in: query
+          name: limit
+          required: false
+          description: Maximum receipts to return (safe upper bound is 200).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - in: query
+          name: sort
+          required: false
+          description: Timestamp sort order; default is newest.
+          schema:
+            type: string
+            enum: ["newest", "oldest"]
+            default: "newest"
       responses:
         "200":
           description: Bind receipts by filter
@@ -2167,6 +2234,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/BindReceipt'
+        "400":
+          description: Invalid bind receipt query parameter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
+                  detail:
+                    type: string
 
   /v1/governance/bind-receipts/{bind_receipt_id}:
     get:

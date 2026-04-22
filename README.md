@@ -670,7 +670,7 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
 | GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
 | POST | `/v1/governance/policy-bundles/promote` | Execute policy bundle promotion as a bind-boundary governance workflow (returns bind receipt lineage; requires governance write permission) |
-| GET | `/v1/governance/bind-receipts` | List bind receipts (filter by decision or execution intent lineage) |
+| GET | `/v1/governance/bind-receipts` | List bind receipts (decision/execution lineage + target/outcome/reason/failed/recent/sort/limit filters) |
 | GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | Retrieve a single bind receipt artifact |
 
 #### Operator workflow: promote a policy bundle

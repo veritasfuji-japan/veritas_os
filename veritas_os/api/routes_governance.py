@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, Optional
 from uuid import uuid4
 
@@ -22,7 +23,7 @@ from veritas_os.api.schemas import (
     GovernancePolicyResponse,
     GovernancePolicyHistoryResponse,
 )
-from veritas_os.policy.bind_artifacts import FinalOutcome, find_bind_receipts
+from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome, find_bind_receipts
 from veritas_os.policy.governance_policy_update import update_governance_policy_with_bind_boundary
 from veritas_os.policy.policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from veritas_os.security.hash import sha256_of_canonical_json
@@ -84,6 +85,148 @@ def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
             return raw.strip()
     return None
 
+
+
+
+class BindReceiptListSort(str):
+    """Canonical sort keys for bind receipt list endpoint."""
+
+    NEWEST = "newest"
+    OLDEST = "oldest"
+
+
+def _parse_bool_query(value: str | None, *, field_name: str) -> bool | None:
+    """Parse an optional query boolean with stable 400 semantics."""
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"invalid_{field_name}")
+
+
+def _parse_bind_receipt_sort(value: str | None) -> str:
+    """Resolve bind receipt list sort key with stable 400 semantics."""
+    if value is None:
+        return BindReceiptListSort.NEWEST
+    normalized = value.strip().lower()
+    if normalized not in {BindReceiptListSort.NEWEST, BindReceiptListSort.OLDEST}:
+        raise ValueError("invalid_sort")
+    return normalized
+
+
+def _parse_bind_receipt_outcome(value: str | None) -> str | None:
+    """Normalize bind outcome query for list endpoint filtering."""
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if not normalized:
+        return None
+    valid = {item.value for item in FinalOutcome}
+    if normalized not in valid:
+        raise ValueError("invalid_outcome")
+    return normalized
+
+
+def _parse_bind_receipt_timestamp(bind_receipt: dict[str, Any]) -> datetime | None:
+    """Parse bind receipt timestamp from known fields as UTC datetime."""
+    for key in ("occurred_at", "created_at", "bind_ts"):
+        raw = bind_receipt.get(key)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        candidate = raw.strip().replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(candidate)
+        except ValueError:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return None
+
+
+def _canonical_path(value: Any) -> str:
+    """Normalize API path-like value for canonical matching."""
+    if not isinstance(value, str):
+        return ""
+    stripped = value.strip()
+    if not stripped:
+        return ""
+    return stripped.rstrip("/") or "/"
+
+
+def _receipt_matches_lineage_query(bind_receipt: dict[str, Any], lineage_query: str) -> bool:
+    """Return True when lineage query matches common bind lineage identifiers."""
+    query = lineage_query.strip().lower()
+    if not query:
+        return True
+    for key in ("decision_id", "execution_intent_id", "bind_receipt_id", "policy_snapshot_id"):
+        value = bind_receipt.get(key)
+        if isinstance(value, str) and query in value.lower():
+            return True
+    return False
+
+
+def _apply_bind_receipt_filters(
+    receipts: list[BindReceipt],
+    *,
+    target_path: str | None,
+    target_type: str | None,
+    outcome: str | None,
+    reason_code: str | None,
+    lineage_query: str | None,
+    failed_only: bool | None,
+    recent_only: bool | None,
+    sort: str,
+    limit: int | None,
+) -> list[dict[str, Any]]:
+    """Apply additive bind receipt list query semantics deterministically."""
+    now_utc = datetime.now(timezone.utc)
+    recent_threshold = now_utc - timedelta(hours=24)
+    canonical_target_path = _canonical_path(target_path) if target_path else None
+    reason_query = (reason_code or "").strip().lower()
+    lineage_term = (lineage_query or "").strip()
+
+    filtered: list[dict[str, Any]] = []
+    for receipt in receipts:
+        payload = receipt.to_dict()
+
+        if canonical_target_path:
+            payload_target_path = _canonical_path(payload.get("target_path"))
+            if payload_target_path != canonical_target_path:
+                continue
+        if target_type and payload.get("target_type") != target_type:
+            continue
+        if outcome and str(payload.get("final_outcome") or "").upper() != outcome:
+            continue
+
+        resolved_reason_code = (_resolve_bind_reason_code(payload) or "").lower()
+        if reason_query and reason_query not in resolved_reason_code:
+            continue
+
+        if lineage_term and not _receipt_matches_lineage_query(payload, lineage_term):
+            continue
+
+        normalized_outcome = str(payload.get("final_outcome") or "").upper()
+        if failed_only is True and normalized_outcome == FinalOutcome.COMMITTED.value:
+            continue
+
+        if recent_only is True:
+            parsed_ts = _parse_bind_receipt_timestamp(payload)
+            if parsed_ts is None or parsed_ts < recent_threshold:
+                continue
+
+        filtered.append(payload)
+
+    filtered.sort(
+        key=lambda item: _parse_bind_receipt_timestamp(item) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=sort == BindReceiptListSort.NEWEST,
+    )
+    if limit is not None:
+        return filtered[:limit]
+    return filtered
 
 def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
     """Resolve promotion paths from server config/env with traversal protection."""
@@ -410,19 +553,60 @@ def governance_decision_export(
     dependencies=[Depends(require_permission(Permission.governance_read))],
 )
 def governance_bind_receipts(
-    decision_id: str | None = Query(default=None),
-    execution_intent_id: str | None = Query(default=None),
+    decision_id: str | None = Query(default=None, description="Filter by exact governance decision_id."),
+    execution_intent_id: str | None = Query(default=None, description="Filter by exact execution_intent_id."),
+    target_path: str | None = Query(default=None, description="Filter by canonical target_path match."),
+    target_type: str | None = Query(default=None, description="Filter by exact target_type match."),
+    outcome: str | None = Query(default=None, description="Filter by final_outcome enum value."),
+    reason_code: str | None = Query(default=None, description="Case-insensitive contains match for bind reason_code."),
+    lineage_query: str | None = Query(
+        default=None,
+        description="Case-insensitive contains search across decision_id, execution_intent_id, bind_receipt_id, and policy_snapshot_id.",
+    ),
+    failed_only: str | None = Query(
+        default=None,
+        description="When true, include outcomes except COMMITTED.",
+    ),
+    recent_only: str | None = Query(
+        default=None,
+        description="When true, include only receipts from the last 24 hours based on server clock.",
+    ),
+    limit: int | None = Query(default=None, ge=1, le=200, description="Max receipts returned (safe upper bound: 200)."),
+    sort: str | None = Query(default=None, description="Sort order: newest (default) or oldest."),
 ):
-    """Return bind receipt artifacts filtered by decision/execution intent lineage."""
+    """Return bind receipt artifacts with additive operator-focused server-side filtering."""
+    try:
+        parsed_outcome = _parse_bind_receipt_outcome(outcome)
+        parsed_sort = _parse_bind_receipt_sort(sort)
+        parsed_failed_only = _parse_bool_query(failed_only, field_name="failed_only")
+        parsed_recent_only = _parse_bool_query(recent_only, field_name="recent_only")
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"ok": False, "error": "invalid_bind_receipt_query", "detail": str(exc)},
+        )
+
     try:
         receipts = find_bind_receipts(
             decision_id=decision_id,
             execution_intent_id=execution_intent_id,
         )
+        filtered_items = _apply_bind_receipt_filters(
+            receipts,
+            target_path=target_path,
+            target_type=target_type,
+            outcome=parsed_outcome,
+            reason_code=reason_code,
+            lineage_query=lineage_query,
+            failed_only=parsed_failed_only,
+            recent_only=parsed_recent_only,
+            sort=parsed_sort,
+            limit=limit,
+        )
         return {
             "ok": True,
-            "count": len(receipts),
-            "items": [receipt.to_dict() for receipt in receipts],
+            "count": len(filtered_items),
+            "items": filtered_items,
         }
     except Exception as e:
         logger.error("governance_bind_receipts failed: %s", e, exc_info=True)
