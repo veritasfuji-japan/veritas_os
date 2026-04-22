@@ -178,7 +178,10 @@ def hash_execution_intent(intent: ExecutionIntent) -> str:
 
 def hash_bind_receipt(receipt: BindReceipt) -> str:
     """Compute SHA-256 over canonical ``BindReceipt`` payload."""
-    return sha256_of_canonical_json(receipt.to_dict())
+    payload = receipt.to_dict()
+    # Keep hash semantics stable/non-recursive even when receipt stores its own hash.
+    payload["bind_receipt_hash"] = ""
+    return sha256_of_canonical_json(payload)
 
 
 def build_execution_intent_trustlog_entry(intent: ExecutionIntent) -> dict[str, Any]:
