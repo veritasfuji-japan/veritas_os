@@ -108,6 +108,19 @@ def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _resolve_bind_failure_status_code(bind_receipt: Dict[str, Any]) -> int:
+    """Map bind outcome classes to legacy-compatible HTTP failure status codes."""
+    outcome = str(bind_receipt.get("final_outcome") or "")
+    if outcome in {
+        FinalOutcome.PRECONDITION_FAILED.value,
+        FinalOutcome.APPLY_FAILED.value,
+    }:
+        return 400
+    if outcome in {FinalOutcome.BLOCKED.value, FinalOutcome.ESCALATED.value}:
+        return 403
+    return 500
+
+
 # ------------------------------------------------------------------
 # RBAC helpers
 # ------------------------------------------------------------------
@@ -255,7 +268,7 @@ def governance_put(body: dict):
         bind_payload = _bind_response_payload(bind_receipt)
         if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
             return JSONResponse(
-                status_code=500,
+                status_code=_resolve_bind_failure_status_code(bind_receipt),
                 content={
                     "ok": False,
                     "error": "Failed to update governance policy",

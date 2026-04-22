@@ -143,6 +143,7 @@ def _governance_effective_patch(policy_patch: dict[str, Any]) -> dict[str, Any]:
     """Filter transient governance request metadata from postcondition checks."""
     ignored_fields = {
         "approvals",
+        "approval",
         "_event_type",
         "policy_lineage",
         "execution_intent_id",
