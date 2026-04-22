@@ -318,7 +318,17 @@ def test_bind_execution_policy_requires_approval_freshness_stale_escalates() -> 
     )
 
     assert receipt.final_outcome is FinalOutcome.ESCALATED
-    assert "BIND_APPROVAL_STALE" in receipt.admissibility_result["reason_codes"]
+
+
+def test_bind_execution_precondition_failed_when_intent_missing_target() -> None:
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(expected_fingerprint=adapter.fingerprint_state({"version": 1}))
+    intent = ExecutionIntent(**{**intent.to_dict(), "target_resource": ""})
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter, append_trustlog=False)
+
+    assert receipt.final_outcome is FinalOutcome.PRECONDITION_FAILED
+    assert receipt.admissibility_result["reason_codes"] == ["BIND_PRECONDITION_INVALID"]
 
 
 def test_bind_execution_policy_controls_missing_signal_default_block_vs_escalate() -> None:

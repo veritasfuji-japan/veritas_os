@@ -13,7 +13,7 @@ from uuid import uuid4
 
 from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
 from veritas_os.policy.bind_boundary_adapters import PolicyBundlePromotionAdapter
-from veritas_os.policy.bind_execution import execute_bind_boundary
+from veritas_os.policy.bind_core import execute_bind_adjudication
 
 
 def promote_policy_bundle_with_bind_boundary(
@@ -38,7 +38,7 @@ def promote_policy_bundle_with_bind_boundary(
     """Promote active policy bundle pointer via bind-boundary execution.
 
     The function builds an ``ExecutionIntent`` and routes promotion through
-    ``execute_bind_boundary`` using ``PolicyBundlePromotionAdapter``.
+    ``execute_bind_adjudication`` using ``PolicyBundlePromotionAdapter``.
     """
     target_path = Path(target_bundle_dir).expanduser().resolve()
     adapter = PolicyBundlePromotionAdapter(
@@ -69,7 +69,7 @@ def promote_policy_bundle_with_bind_boundary(
         policy_lineage=dict(policy_lineage or {}),
     )
 
-    return execute_bind_boundary(
+    return execute_bind_adjudication(
         execution_intent=intent,
         adapter=adapter,
         bind_ts=bind_ts,

@@ -1,0 +1,73 @@
+"""Normalization helpers for bind core artifacts."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent, FinalOutcome
+
+
+def normalize_execution_intent(
+    payload: ExecutionIntent | dict[str, Any],
+) -> ExecutionIntent:
+    """Return normalized ``ExecutionIntent`` with compatible defaults."""
+    if isinstance(payload, ExecutionIntent):
+        return payload
+    data = dict(payload)
+    evidence_refs = data.get("evidence_refs")
+    if not isinstance(evidence_refs, list):
+        evidence_refs = []
+
+    return ExecutionIntent(
+        execution_intent_id=str(data.get("execution_intent_id") or ""),
+        decision_id=str(data.get("decision_id") or ""),
+        request_id=str(data.get("request_id") or ""),
+        policy_snapshot_id=str(data.get("policy_snapshot_id") or ""),
+        actor_identity=str(data.get("actor_identity") or ""),
+        target_system=str(data.get("target_system") or ""),
+        target_resource=str(data.get("target_resource") or ""),
+        intended_action=str(data.get("intended_action") or ""),
+        evidence_refs=[str(item) for item in evidence_refs],
+        decision_hash=str(data.get("decision_hash") or ""),
+        decision_ts=str(data.get("decision_ts") or ""),
+        ttl_seconds=data.get("ttl_seconds"),
+        expected_state_fingerprint=data.get("expected_state_fingerprint"),
+        approval_context=(
+            dict(data.get("approval_context"))
+            if isinstance(data.get("approval_context"), dict)
+            else None
+        ),
+        policy_lineage=(
+            dict(data.get("policy_lineage"))
+            if isinstance(data.get("policy_lineage"), dict)
+            else None
+        ),
+    )
+
+
+def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt:
+    """Return normalized ``BindReceipt`` with canonical enum mapping."""
+    if isinstance(payload, BindReceipt):
+        return payload
+    data = dict(payload)
+    final_outcome = data.get("final_outcome") or FinalOutcome.BLOCKED.value
+    return BindReceipt(
+        bind_receipt_id=str(data.get("bind_receipt_id") or ""),
+        execution_intent_id=str(data.get("execution_intent_id") or ""),
+        decision_id=str(data.get("decision_id") or ""),
+        bind_ts=str(data.get("bind_ts") or ""),
+        live_state_fingerprint_before=str(data.get("live_state_fingerprint_before") or ""),
+        live_state_fingerprint_after=str(data.get("live_state_fingerprint_after") or ""),
+        authority_check_result=dict(data.get("authority_check_result") or {}),
+        constraint_check_result=dict(data.get("constraint_check_result") or {}),
+        drift_check_result=dict(data.get("drift_check_result") or {}),
+        risk_check_result=dict(data.get("risk_check_result") or {}),
+        admissibility_result=dict(data.get("admissibility_result") or {}),
+        final_outcome=FinalOutcome(str(final_outcome)),
+        rollback_reason=(str(data.get("rollback_reason")) if data.get("rollback_reason") else None),
+        escalation_reason=(
+            str(data.get("escalation_reason")) if data.get("escalation_reason") else None
+        ),
+        trustlog_hash=str(data.get("trustlog_hash") or ""),
+        prev_bind_hash=(str(data.get("prev_bind_hash")) if data.get("prev_bind_hash") else None),
+    )
