@@ -2,7 +2,7 @@
 
 ## Official public positioning
 
-**VERITAS OS = Decision Governance OS for AI Agents**
+**VERITAS OS = Decision Governance and Bind-Boundary Control Plane for AI Agents**
 
 Core promise:
 
@@ -10,11 +10,29 @@ Core promise:
 - VERITAS OS functions as a governance layer from **decision adjudication through bind-boundary enforcement**, not only an execution runtime.
 - Current implemented bind-boundary lineage is:
   `decision artifact -> execution intent -> bind receipt` (TrustLog-integrated).
+- Operator-facing bind public contract includes `bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, and `bind_receipt_id`.
 
 ## What VERITAS OS is / is not
 
 - **Is:** a governance-first operating layer for AI agent decisions in enterprise and regulated workflows.
 - **Is not:** a blanket replacement for all orchestration/runtimes, or a speculative AGI narrative product.
+
+## Current fact vs future direction
+
+### Current fact (implemented)
+
+- Bind-boundary is implemented on at least two operator-governed effect paths:
+  1. `PUT /v1/governance/policy` (governance policy update path)
+  2. `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path)
+- Receipts can be listed/fetched via `/v1/governance/bind-receipts` and
+  `/v1/governance/bind-receipts/{bind_receipt_id}` for operator and audit flow.
+- Replay/revalidation helpers exist and move receipts toward replayable governance artifacts.
+
+### Future direction (not yet complete)
+
+- Expand bind-boundary coverage across additional effect paths.
+- Converge toward a standardized governance framework that governs multiple effect paths consistently.
+- Keep this framed as direction; do not claim all effect paths are complete today.
 
 ## Recommended language
 
@@ -24,6 +42,9 @@ Core promise:
 - reviewable / traceable / replayable / auditable / enforceable
 - fail-closed safety gate
 - tamper-evident TrustLog lineage
+- decision -> execution_intent -> bind_receipt lineage
+- operator-facing governance surface
+- bind outcome public contract
 
 ## Caution / restricted language
 

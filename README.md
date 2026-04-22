@@ -16,7 +16,7 @@
 [![README JP](https://img.shields.io/badge/README-日本語-0f766e.svg)](README_JP.md)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Takeshi%20Fujishita-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/takeshi-fujishita-279709392?utm_source=share&utm_campaign=share_via&utm_content=profile&utm_medium=ios_app)
 
-VERITAS OS is a **Decision Governance OS** for AI agents.
+VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane** for AI agents.
 Instead of passing model output directly to execution, VERITAS routes each decision through a **reproducible, fail-closed, safety-gated, hash-chained governance pipeline** with operational visibility through **Mission Control**.
 
 This project is not only about running agents.
@@ -32,7 +32,7 @@ It is about making AI decisions **reviewable, traceable, replayable, auditable, 
 
 ## What VERITAS OS is
 
-VERITAS OS is a **Decision Governance OS for AI Agents**.
+VERITAS OS is a **Decision Governance and Bind-Boundary Control Plane for AI Agents**.
 It is the governance layer from **decision adjudication through bind-time boundary checks**:
 it determines whether an AI decision may proceed and whether an approved decision
 can be committed, blocked, escalated, rolled back, or fail safely at bind time before
@@ -52,12 +52,12 @@ VERITAS addresses this by making decisions:
 ### How it differs from runtime/orchestration tools
 
 Many agent stacks optimize task execution and tool wiring.
-VERITAS OS focuses on **decision governance**:
+VERITAS OS focuses on **decision governance and bind-boundary control**:
 
 - Governance controls are applied **before real-world effect**.
 - FUJI gate behavior is **fail-closed by default** on unsafe/undefined paths.
 - TrustLog + governance identity create **audit-grade decision lineage**.
-- Mission Control provides an operator-facing governance surface, not only developer telemetry.
+- Mission Control + governance APIs provide an operator-facing governance surface, not only developer telemetry.
 
 ### Why this fits regulated / enterprise use
 
@@ -68,13 +68,19 @@ VERITAS OS focuses on **decision governance**:
 
 ## What VERITAS OS is / is not
 
-- **Is:** a Decision Governance OS for AI agents, covering decision governance and bind-boundary governance before real-world effect.
+- **Is:** a Decision Governance and Bind-Boundary Control Plane for AI agents, covering decision governance and bind-boundary governance before real-world effect.
 - **Is not:** a replacement for all agent runtimes, nor only an orchestration convenience wrapper.
 
 ## Fact vs roadmap (read this first)
 
 - **Current fact (beta):** Core decision pipeline, bind artifact lineage (`decision -> execution_intent -> bind_receipt`), bind-time admissibility checks, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
+- **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least two operator-governed effect paths:
+  1) `PUT /v1/governance/policy` (governance policy update path), and
+  2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path).
+- **Current fact (bind outcome public contract):** Governance bind responses expose `bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, and `bind_receipt_id`, with full receipt retrieval via `/v1/governance/bind-receipts*`.
+- **Current fact (replay/operator flow):** Bind receipts are persisted as governance artifacts and can be fetched for replay/revalidation-oriented operator and audit workflows.
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
+- **Roadmap / future direction:** Bind-boundary policy surface is expected to expand to more effect paths and become a broader standardization framework for multi-path effect governance; this is direction, not a claim of full completion today.
 - **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
 
 ### Technical Maturity Snapshot (internal)

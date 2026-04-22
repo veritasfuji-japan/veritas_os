@@ -5,6 +5,9 @@
 Operational runbook for AML/KYC pilot execution using synthetic fixtures.
 No production customer data is allowed.
 
+This runbook assumes VERITAS is used as a **Decision Governance and
+Bind-Boundary Control Plane**, not as a generic runtime replacement.
+
 ## Inputs
 
 - Runner CLI: `scripts/run_financial_poc.py`
@@ -63,6 +66,7 @@ Additionally, confirm bind-boundary lineage visibility on sampled decisions:
 - `bind_outcome` is present when bind adjudication ran.
 - `execution_intent_id` and `bind_receipt_id` are present for bind-tracked cases.
 - `bind_outcome` is interpreted separately from decision approval status.
+- Use `bind_reason_code` first, then `bind_failure_reason` for triage ordering.
 
 ### 5) Failure-path validation
 
@@ -84,6 +88,21 @@ curl -s "http://localhost:8000/v1/governance/bind-receipts/<bind_receipt_id>"
 
 Expected: receipt includes authority/constraint/drift/risk/admissibility
 payloads and a terminal bind outcome (`COMMITTED`/`BLOCKED`/`ESCALATED`/`ROLLED_BACK`).
+
+## Current fact vs future direction (operator notes)
+
+Current fact:
+
+- Bind-boundary lineage is available in operator APIs and tied to decision lineage
+  (`decision -> execution_intent -> bind_receipt`).
+- Bind-governed effect paths currently include governance policy update and policy
+  bundle promotion paths.
+
+Future direction (do not over-claim during pilot readout):
+
+- Additional effect paths are expected to adopt the same bind-boundary contract.
+- Treat receipt artifacts as replayable governance artifacts; do not claim complete
+  standardization across all effect paths yet.
 
 ## Operator triage rubric
 
