@@ -9,12 +9,151 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from veritas_os.core.atomic_io import atomic_write_json
 from veritas_os.policy.bind_artifacts import ExecutionIntent
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.security.hash import sha256_of_canonical_json
+
+
+@dataclass
+class GovernancePolicyUpdateAdapter(BindAdapterContract):
+    """Bind adapter for governed policy update execution.
+
+    The adapter wraps the existing governance policy update and rollback paths,
+    preserving four-eyes approval and policy history semantics while exposing
+    deterministic bind-boundary snapshots.
+    """
+
+    policy_reader: Callable[[], dict[str, Any]]
+    policy_updater: Callable[[dict[str, Any]], dict[str, Any]]
+    policy_patch: dict[str, Any]
+    policy_rollback: Callable[..., dict[str, Any]] | None = None
+    revert_actor: str = "bind_boundary"
+    approval_records: list[dict[str, Any]] | None = None
+    target_description: str = "governance/policy"
+
+    def __post_init__(self) -> None:
+        self._last_updated_policy: dict[str, Any] | None = None
+        self._effective_patch = _governance_effective_patch(self.policy_patch)
+
+    def snapshot(self) -> dict[str, Any]:
+        """Capture deterministic policy snapshot."""
+        return {"policy": self.policy_reader()}
+
+    def fingerprint_state(self, snapshot: Any) -> str:
+        """Return deterministic fingerprint for policy snapshot."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("BIND_STATE_SNAPSHOT_INVALID")
+        policy = snapshot.get("policy")
+        if not isinstance(policy, dict):
+            raise ValueError("BIND_POLICY_SNAPSHOT_INVALID")
+        return sha256_of_canonical_json(policy)
+
+    def validate_authority(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Require explicit authority flag in bind approval context."""
+        del snapshot
+        if not isinstance(intent.approval_context, dict):
+            return False
+        return bool(intent.approval_context.get("governance_policy_update_approved"))
+
+    def validate_constraints(
+        self,
+        intent: ExecutionIntent,
+        snapshot: Any,
+    ) -> dict[str, bool] | None:
+        """Validate deterministic local constraints for policy patch."""
+        del intent
+        policy = snapshot.get("policy") if isinstance(snapshot, dict) else None
+        return {
+            "patch_is_dict": isinstance(self._effective_patch, dict),
+            "snapshot_has_policy": isinstance(policy, dict),
+        }
+
+    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Assess runtime risk for in-process governed policy update."""
+        del intent, snapshot
+        return True
+
+    def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Apply governed policy patch via existing update path."""
+        del intent, snapshot
+        try:
+            updated = self.policy_updater(self.policy_patch)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"BIND_INPUT_VALIDATION:{exc}") from exc
+        if not isinstance(updated, dict):
+            raise ValueError("BIND_POLICY_UPDATE_INVALID")
+        self._last_updated_policy = updated
+        return True
+
+    def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Verify that patched fields are reflected in the persisted policy."""
+        del intent
+        if not isinstance(snapshot, dict) or not isinstance(snapshot.get("policy"), dict):
+            return False
+
+        latest = self._last_updated_policy if isinstance(self._last_updated_policy, dict) else self.policy_reader()
+        if not isinstance(latest, dict):
+            return False
+        return _dict_contains_patch(latest, self._effective_patch)
+
+    def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Revert failed apply by restoring pre-apply policy snapshot."""
+        del intent
+        if not isinstance(snapshot, dict):
+            return False
+        previous_policy = snapshot.get("policy")
+        if not isinstance(previous_policy, dict):
+            return False
+
+        if callable(self.policy_rollback):
+            self.policy_rollback(
+                previous_policy,
+                rolled_back_by=self.revert_actor,
+                approvals=self.approval_records,
+                reason="bind_postcondition_failure_revert",
+            )
+            return True
+
+        self.policy_updater(previous_policy)
+        return True
+
+    def describe_target(self) -> str:
+        """Return human-readable target descriptor."""
+        return self.target_description
+
+
+def _dict_contains_patch(target: dict[str, Any], patch: dict[str, Any]) -> bool:
+    """Return True when ``target`` recursively includes all ``patch`` values."""
+    for key, expected in patch.items():
+        if key not in target:
+            return False
+        actual = target[key]
+        if isinstance(expected, dict):
+            if not isinstance(actual, dict):
+                return False
+            if not _dict_contains_patch(actual, expected):
+                return False
+            continue
+        if actual != expected:
+            return False
+    return True
+
+
+def _governance_effective_patch(policy_patch: dict[str, Any]) -> dict[str, Any]:
+    """Filter transient governance request metadata from postcondition checks."""
+    ignored_fields = {
+        "approvals",
+        "_event_type",
+        "policy_lineage",
+        "execution_intent_id",
+        "bind_receipt_id",
+        "decision_id",
+        "request_id",
+    }
+    return {key: value for key, value in policy_patch.items() if key not in ignored_fields}
 
 
 @dataclass

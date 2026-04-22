@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
+from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
 
 client = TestClient(srv.app)
 HEADERS = {"X-API-Key": "test-governance-key", "X-Role": "admin"}
@@ -185,6 +186,41 @@ class TestPutPolicy:
         )
         resp = client.get("/v1/governance/policy", headers=HEADERS)
         assert resp.json()["policy"]["risk_thresholds"]["warn_upper"] == 0.55
+
+    def test_put_returns_bind_lineage_fields(self):
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"fuji_rules": {"pii_check": False}}),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["bind_outcome"] == "COMMITTED"
+        assert body["bind_receipt_id"]
+        assert body["execution_intent_id"]
+        assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
+
+    def test_put_preserves_backward_compatible_response_shape(self, monkeypatch):
+        monkeypatch.setattr(
+            "veritas_os.api.routes_governance.update_governance_policy_with_bind_boundary",
+            lambda **_kwargs: BindReceipt(
+                bind_receipt_id="br-gov-backward",
+                execution_intent_id="ei-gov-backward",
+                decision_id="dec-gov-backward",
+                final_outcome=FinalOutcome.COMMITTED,
+            ),
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"fuji_rules": {"pii_check": False}}),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert "policy" in body
+        assert "fuji_rules" in body["policy"]
 
 
 class TestGovernanceModule:
