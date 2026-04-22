@@ -28,6 +28,27 @@ class BindReasonCode(str, Enum):
     POSTCONDITION_FAILED = "BIND_POSTCONDITION_FAILED"
     POST_SIGNAL_MISSING = "BIND_POST_SIGNAL_MISSING"
     ADMISSIBILITY_ESCALATION_REQUIRED = "BIND_ADMISSIBILITY_ESCALATION_REQUIRED"
+    IDEMPOTENT_REPLAY = "BIND_IDEMPOTENT_REPLAY"
+
+
+class BindRetrySafety(str, Enum):
+    """Minimal retry safety classes for bind-boundary failures."""
+
+    SAFE = "SAFE"
+    UNSAFE = "UNSAFE"
+    REQUIRES_ESCALATION = "REQUIRES_ESCALATION"
+
+
+class BindFailureCategory(str, Enum):
+    """Minimal failure taxonomy for bind receipts and adapter operators."""
+
+    NONE = "NONE"
+    PRECONDITION = "PRECONDITION"
+    SNAPSHOT = "SNAPSHOT"
+    ADMISSIBILITY = "ADMISSIBILITY"
+    APPLY = "APPLY"
+    POSTCONDITION = "POSTCONDITION"
+    ROLLBACK = "ROLLBACK"
 
 
 BIND_OUTCOME_VALUES: tuple[str, ...] = tuple(item.value for item in BindOutcome)

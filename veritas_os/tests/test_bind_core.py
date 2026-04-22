@@ -50,3 +50,5 @@ def test_normalize_bind_receipt_payload_compatibility() -> None:
     )
     assert receipt.bind_receipt_id == "br-001"
     assert receipt.final_outcome is FinalOutcome.BLOCKED
+    assert receipt.retry_safety is None
+    assert receipt.failure_category is None

@@ -86,4 +86,11 @@ def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt
         bind_failure_reason=(
             str(data.get("bind_failure_reason")) if data.get("bind_failure_reason") else None
         ),
+        idempotency_key=(str(data.get("idempotency_key")) if data.get("idempotency_key") else None),
+        idempotency_status=(
+            str(data.get("idempotency_status")) if data.get("idempotency_status") else None
+        ),
+        retry_safety=(str(data.get("retry_safety")) if data.get("retry_safety") else None),
+        rollback_status=(str(data.get("rollback_status")) if data.get("rollback_status") else None),
+        failure_category=(str(data.get("failure_category")) if data.get("failure_category") else None),
     )

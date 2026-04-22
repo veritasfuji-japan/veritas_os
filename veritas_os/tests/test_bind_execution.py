@@ -378,3 +378,99 @@ def test_bind_execution_policy_controls_missing_signal_default_block_vs_escalate
 
     assert block_receipt.final_outcome is FinalOutcome.BLOCKED
     assert escalate_receipt.final_outcome is FinalOutcome.ESCALATED
+
+
+def test_bind_execution_duplicate_submission_reuses_existing_receipt(trustlog_env) -> None:
+    adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        approval_context={"idempotency_key": "idem-001"},
+    )
+
+    first = execute_bind_boundary(execution_intent=intent, adapter=adapter, append_trustlog=True)
+    state_after_first = dict(adapter.state)
+    second = execute_bind_boundary(execution_intent=intent, adapter=adapter, append_trustlog=True)
+
+    assert first.bind_receipt_id == second.bind_receipt_id
+    assert second.idempotency_status == "replayed"
+    assert second.bind_reason_code == "BIND_IDEMPOTENT_REPLAY"
+    assert adapter.state == state_after_first
+    assert len(find_bind_receipts(execution_intent_id=intent.execution_intent_id)) == 1
+
+
+def test_bind_execution_retry_safety_min_classification() -> None:
+    committed_adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    committed = execute_bind_boundary(
+        execution_intent=_intent(expected_fingerprint=committed_adapter.fingerprint_state({"version": 1})),
+        adapter=committed_adapter,
+        append_trustlog=False,
+    )
+    assert committed.retry_safety == "SAFE"
+
+    failed_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        apply_success=False,
+    )
+    failed = execute_bind_boundary(
+        execution_intent=_intent(expected_fingerprint=failed_adapter.fingerprint_state({"version": 1})),
+        adapter=failed_adapter,
+        append_trustlog=False,
+    )
+    assert failed.retry_safety == "REQUIRES_ESCALATION"
+
+
+def test_bind_execution_rollback_status_labels() -> None:
+    rolled_back_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        postcondition_success=False,
+        revert_success=True,
+    )
+    rolled_back = execute_bind_boundary(
+        execution_intent=_intent(expected_fingerprint=rolled_back_adapter.fingerprint_state({"version": 1})),
+        adapter=rolled_back_adapter,
+        append_trustlog=False,
+    )
+    assert rolled_back.rollback_status == "rolled_back"
+
+    escalate_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        postcondition_success=False,
+        revert_success=False,
+    )
+    escalated = execute_bind_boundary(
+        execution_intent=_intent(expected_fingerprint=escalate_adapter.fingerprint_state({"version": 1})),
+        adapter=escalate_adapter,
+        append_trustlog=False,
+    )
+    assert escalated.rollback_status == "rollback_failed"
+
+
+def test_bind_execution_failure_taxonomy_minimum_mapping() -> None:
+    blocked_adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        authority_signal=False,
+    )
+    blocked = execute_bind_boundary(
+        execution_intent=_intent(expected_fingerprint=blocked_adapter.fingerprint_state({"version": 1})),
+        adapter=blocked_adapter,
+        append_trustlog=False,
+    )
+    assert blocked.failure_category == "ADMISSIBILITY"
+
+    precondition_adapter = ReferenceBindAdapter(state={"version": 1}, pending_changes={"version": 2})
+    missing_target_intent = _intent(
+        expected_fingerprint=precondition_adapter.fingerprint_state({"version": 1})
+    )
+    missing_target_intent = ExecutionIntent(
+        **{**missing_target_intent.to_dict(), "target_resource": ""}
+    )
+    precondition = execute_bind_boundary(
+        execution_intent=missing_target_intent,
+        adapter=precondition_adapter,
+        append_trustlog=False,
+    )
+    assert precondition.failure_category == "PRECONDITION"
