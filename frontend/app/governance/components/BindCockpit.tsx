@@ -24,35 +24,30 @@ const DEFAULT_FILTERS: BindFilterState = {
 
 const DEFAULT_LIST_LIMIT = 50;
 
-const FALLBACK_TARGET_CATALOG: BindTargetCatalogEntry[] = [
-  {
-    targetPath: "/v1/governance/policy",
-    targetType: "governance_policy",
-    targetPathType: "governance_policy_update",
-    label: "governance policy update",
-    operatorSurface: "governance",
-    relevantUiHref: "/governance",
-    supportsFiltering: true,
-  },
-  {
-    targetPath: "/v1/governance/policy-bundles/promote",
-    targetType: "policy_bundle",
-    targetPathType: "policy_bundle_promotion",
-    label: "policy bundle promotion",
-    operatorSurface: "governance",
-    relevantUiHref: "/governance",
-    supportsFiltering: true,
-  },
-  {
-    targetPath: "/v1/compliance/config",
-    targetType: "compliance_config",
-    targetPathType: "compliance_config_update",
-    label: "compliance config update",
-    operatorSurface: "compliance",
-    relevantUiHref: "/system",
-    supportsFiltering: true,
-  },
-];
+const FALLBACK_TARGET_CATALOG: BindTargetCatalogEntry[] = [];
+
+function deriveCatalogFromReceipts(receipts: CanonicalBindReceipt[]): BindTargetCatalogEntry[] {
+  const deduped = new Map<string, BindTargetCatalogEntry>();
+  receipts.forEach((receipt) => {
+    if (!receipt.targetPath || receipt.targetPath === "-" || receipt.targetPathType === "other") {
+      return;
+    }
+    const key = `${receipt.targetPathType}::${receipt.targetPath}::${receipt.targetType}`;
+    if (deduped.has(key)) {
+      return;
+    }
+    deduped.set(key, {
+      targetPath: receipt.targetPath,
+      targetType: receipt.targetType === "-" ? "" : receipt.targetType,
+      targetPathType: receipt.targetPathType,
+      label: receipt.targetLabel || receipt.targetPathType.replaceAll("_", " "),
+      operatorSurface: receipt.operatorSurface || "audit",
+      relevantUiHref: receipt.relevantUiHref || "/audit",
+      supportsFiltering: true,
+    });
+  });
+  return Array.from(deduped.values());
+}
 
 function buildBindReceiptListQuery(
   filters: BindFilterState,
@@ -142,7 +137,14 @@ export function BindCockpit(): JSX.Element {
   const [currentSort, setCurrentSort] = useState<"newest" | "oldest">("newest");
   const [targetCatalog, setTargetCatalog] = useState<BindTargetCatalogEntry[]>(FALLBACK_TARGET_CATALOG);
 
-  const listQuery = useMemo(() => buildBindReceiptListQuery(filters, targetCatalog), [filters, targetCatalog]);
+  const effectiveCatalog = useMemo(() => {
+    if (targetCatalog.length > 0) {
+      return targetCatalog;
+    }
+    const derived = deriveCatalogFromReceipts(receipts);
+    return derived.length > 0 ? derived : FALLBACK_TARGET_CATALOG;
+  }, [receipts, targetCatalog]);
+
   const exportUrl = useMemo(
     () => `/api/veritas/v1/governance/bind-receipts/export?${buildBindReceiptListQuery(filters, targetCatalog)}`,
     [filters, targetCatalog],
@@ -185,7 +187,9 @@ export function BindCockpit(): JSX.Element {
 
   useEffect(() => {
     void loadReceipts(null, false);
-  }, [loadReceipts, listQuery]);
+    // targetCatalog update alone should not retrigger list fetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   useEffect(() => {
     if (receipts.length > 0 && !selectedReceiptId) {
@@ -223,8 +227,8 @@ export function BindCockpit(): JSX.Element {
   }, [selectedReceiptId]);
 
   const filterableCatalog = useMemo(
-    () => targetCatalog.filter((entry) => entry.supportsFiltering && entry.targetPathType !== "other"),
-    [targetCatalog],
+    () => effectiveCatalog.filter((entry) => entry.supportsFiltering && entry.targetPathType !== "other"),
+    [effectiveCatalog],
   );
 
   const filteredReceipts = useMemo(() => {

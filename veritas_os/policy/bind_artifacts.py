@@ -125,6 +125,31 @@ class BindReceipt:
     retry_safety: str | None = None
     rollback_status: str | None = None
     failure_category: str | None = None
+    target_path: str = ""
+    target_type: str = ""
+    target_path_type: str = "other"
+    target_label: str = "other"
+    operator_surface: str = "audit"
+    relevant_ui_href: str = "/audit"
+
+    @staticmethod
+    def _resolve_target_fields(target_path: Any, target_type: Any) -> dict[str, Any]:
+        """Resolve canonical target metadata from backend source of truth."""
+        try:
+            from veritas_os.api.bind_target_catalog import resolve_bind_target_metadata
+
+            return resolve_bind_target_metadata(target_path, target_type)
+        except Exception:
+            canonical_path = str(target_path).strip() if isinstance(target_path, str) else ""
+            canonical_type = str(target_type).strip() if isinstance(target_type, str) else ""
+            return {
+                "target_path": canonical_path,
+                "target_type": canonical_type,
+                "target_path_type": "other",
+                "label": "other",
+                "operator_surface": "audit",
+                "relevant_ui_href": "/audit",
+            }
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -132,6 +157,17 @@ class BindReceipt:
             self.final_outcome.value
             if isinstance(self.final_outcome, FinalOutcome)
             else str(self.final_outcome)
+        )
+        target_metadata = self._resolve_target_fields(self.target_path, self.target_type)
+        target_path_type = str(self.target_path_type or "").strip() or str(
+            target_metadata["target_path_type"]
+        )
+        target_label = str(self.target_label or "").strip() or str(target_metadata["label"])
+        operator_surface = str(self.operator_surface or "").strip() or str(
+            target_metadata["operator_surface"]
+        )
+        relevant_ui_href = str(self.relevant_ui_href or "").strip() or str(
+            target_metadata["relevant_ui_href"]
         )
         return {
             "bind_receipt_id": self.bind_receipt_id,
@@ -164,6 +200,12 @@ class BindReceipt:
             "retry_safety": self.retry_safety,
             "rollback_status": self.rollback_status,
             "failure_category": self.failure_category,
+            "target_path": str(target_metadata["target_path"]),
+            "target_type": str(target_metadata["target_type"]),
+            "target_path_type": target_path_type,
+            "target_label": target_label,
+            "operator_surface": operator_surface,
+            "relevant_ui_href": relevant_ui_href,
         }
 
 
@@ -276,6 +318,12 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
                 if payload.get("failure_category")
                 else None
             ),
+            target_path=str(payload.get("target_path") or ""),
+            target_type=str(payload.get("target_type") or ""),
+            target_path_type=str(payload.get("target_path_type") or "other"),
+            target_label=str(payload.get("target_label") or "other"),
+            operator_surface=str(payload.get("operator_surface") or "audit"),
+            relevant_ui_href=str(payload.get("relevant_ui_href") or "/audit"),
         )
     except (TypeError, ValueError):
         return None

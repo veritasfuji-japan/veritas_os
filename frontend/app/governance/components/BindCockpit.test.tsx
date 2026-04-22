@@ -67,6 +67,10 @@ const LIST_PAYLOAD = {
     {
       bind_receipt_id: "br-committed",
       target_path: "/v1/governance/policy",
+      target_path_type: "governance_policy_update",
+      target_label: "governance policy update canonical",
+      relevant_ui_href: "/governance/policy",
+      operator_surface: "governance",
       final_outcome: "COMMITTED",
       bind_reason_code: "OK",
       decision_id: "decision-1",
@@ -128,6 +132,7 @@ describe("BindCockpit", () => {
     render(<BindCockpit />);
     await screen.findByText("br-blocked");
     expect(screen.getByRole("option", { name: "compliance config update" })).toBeInTheDocument();
+    expect(screen.getByText("governance policy update canonical")).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("bind-path-type"), { target: { value: "compliance_config_update" } });
     fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "BLOCKED" } });
@@ -247,5 +252,21 @@ describe("BindCockpit", () => {
     expect(screen.getByRole("link", { name: "related execution intent" })).toHaveAttribute("href", "/audit?cross=exec-2");
     expect(screen.getByRole("link", { name: "related bind receipt" })).toHaveAttribute("href", "/audit?bind_receipt_id=br-blocked");
     expect(screen.getByRole("link", { name: "relevant governance/compliance surface" })).toHaveAttribute("href", "/system");
+  });
+
+  it("derives minimal filter catalog from receipt-level canonical fields when target_catalog is absent", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          ...LIST_PAYLOAD,
+          target_catalog: [],
+        }),
+      })
+      .mockResolvedValue({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, target_catalog: [], items: [] }) });
+
+    render(<BindCockpit />);
+    await screen.findByText("br-blocked");
+    expect(screen.getByRole("option", { name: "compliance config update" })).toBeInTheDocument();
   });
 });

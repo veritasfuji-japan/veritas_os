@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from veritas_os.api.auth import require_permission
+from veritas_os.api.bind_target_catalog import resolve_bind_target_metadata
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import ComplianceConfigResponse
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
@@ -100,13 +101,25 @@ def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
 
 def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize bind receipt summary payload for compliance API responses."""
+    target_metadata = resolve_bind_target_metadata(
+        bind_receipt.get("target_path"),
+        bind_receipt.get("target_type"),
+    )
+    enriched_receipt = {
+        **bind_receipt,
+        "target_path_type": target_metadata["target_path_type"],
+        "target_label": target_metadata["label"],
+        "operator_surface": target_metadata["operator_surface"],
+        "relevant_ui_href": target_metadata["relevant_ui_href"],
+    }
     return {
-        "bind_receipt": bind_receipt,
-        "bind_outcome": bind_receipt.get("final_outcome"),
-        "bind_failure_reason": _resolve_bind_failure_reason(bind_receipt),
-        "bind_reason_code": _resolve_bind_reason_code(bind_receipt),
-        "bind_receipt_id": bind_receipt.get("bind_receipt_id"),
-        "execution_intent_id": bind_receipt.get("execution_intent_id"),
+        "bind_receipt": enriched_receipt,
+        "bind_outcome": enriched_receipt.get("final_outcome"),
+        "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
+        "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
+        "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
+        "execution_intent_id": enriched_receipt.get("execution_intent_id"),
+        "target_metadata": target_metadata,
     }
 
 

@@ -93,4 +93,10 @@ def normalize_bind_receipt(payload: BindReceipt | dict[str, Any]) -> BindReceipt
         retry_safety=(str(data.get("retry_safety")) if data.get("retry_safety") else None),
         rollback_status=(str(data.get("rollback_status")) if data.get("rollback_status") else None),
         failure_category=(str(data.get("failure_category")) if data.get("failure_category") else None),
+        target_path=str(data.get("target_path") or ""),
+        target_type=str(data.get("target_type") or ""),
+        target_path_type=str(data.get("target_path_type") or "other"),
+        target_label=str(data.get("target_label") or "other"),
+        operator_surface=str(data.get("operator_surface") or "audit"),
+        relevant_ui_href=str(data.get("relevant_ui_href") or "/audit"),
     )
