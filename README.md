@@ -74,9 +74,10 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 ## Fact vs roadmap (read this first)
 
 - **Current fact (beta):** Core decision pipeline, bind artifact lineage (`decision -> execution_intent -> bind_receipt`), bind-time admissibility checks, FUJI fail-closed gating, TrustLog lineage, Mission Control workflows, and governance endpoints are implemented.
-- **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least two operator-governed effect paths:
-  1) `PUT /v1/governance/policy` (governance policy update path), and
-  2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path).
+- **Current fact (bind policy surface):** Bind-boundary adjudication is currently wired on at least three operator-governed effect paths:
+  1) `PUT /v1/governance/policy` (governance policy update path),
+  2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path), and
+  3) `PUT /v1/compliance/config` (runtime compliance config mutation path).
 - **Current fact (bind outcome public contract):** Governance bind responses expose `bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, and `bind_receipt_id`, with full receipt retrieval via `/v1/governance/bind-receipts*`.
 - **Current fact (replay/operator flow):** Bind receipts are persisted as governance artifacts and can be fetched for replay/revalidation-oriented operator and audit workflows.
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.

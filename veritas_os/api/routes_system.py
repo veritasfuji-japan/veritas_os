@@ -11,6 +11,7 @@ import queue
 import time
 from pathlib import Path
 from typing import Any, Dict
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -18,12 +19,18 @@ from pydantic import BaseModel, Field
 
 from veritas_os.api.auth import require_permission
 from veritas_os.api.rbac import Permission
+from veritas_os.api.schemas import ComplianceConfigResponse
 from veritas_os.api.utils import _is_direct_fuji_api_enabled
 from veritas_os.api.pipeline_orchestrator import (
     get_runtime_config,
     update_runtime_config,
 )
 from veritas_os.logging.encryption import get_encryption_status
+from veritas_os.policy.bind_artifacts import FinalOutcome
+from veritas_os.policy.compliance_config_update import (
+    update_compliance_config_with_bind_boundary,
+)
+from veritas_os.security.hash import sha256_of_canonical_json
 from veritas_os.storage.factory import get_backend_info
 # Note: report/compliance functions accessed via _get_server() to support
 # test monkeypatching on the server module.
@@ -44,6 +51,78 @@ def _get_server():
     """Late import to avoid circular dependency at module load time."""
     from veritas_os.api import server as srv
     return srv
+
+
+def _resolve_bind_failure_reason(bind_receipt: Dict[str, Any]) -> str | None:
+    """Resolve compact operator-facing bind failure reason from receipt fields."""
+    direct_reason = bind_receipt.get("bind_failure_reason")
+    if isinstance(direct_reason, str) and direct_reason.strip():
+        return direct_reason.strip()
+    for key in (
+        "rollback_reason",
+        "escalation_reason",
+        "admissibility_result",
+        "risk_check_result",
+        "constraint_check_result",
+        "authority_check_result",
+        "drift_check_result",
+    ):
+        candidate = bind_receipt.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+        if isinstance(candidate, dict):
+            nested = candidate.get("reason") or candidate.get("message") or candidate.get("detail")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    return None
+
+
+def _resolve_bind_reason_code(bind_receipt: Dict[str, Any]) -> str | None:
+    """Extract a stable bind reason code from the receipt payload."""
+    direct_reason_code = bind_receipt.get("bind_reason_code")
+    if isinstance(direct_reason_code, str) and direct_reason_code.strip():
+        return direct_reason_code.strip()
+    for key in (
+        "admissibility_result",
+        "risk_check_result",
+        "constraint_check_result",
+        "authority_check_result",
+        "drift_check_result",
+    ):
+        value = bind_receipt.get(key)
+        if not isinstance(value, dict):
+            continue
+        raw = value.get("reason_code") or value.get("code")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    return None
+
+
+def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize bind receipt summary payload for compliance API responses."""
+    return {
+        "bind_receipt": bind_receipt,
+        "bind_outcome": bind_receipt.get("final_outcome"),
+        "bind_failure_reason": _resolve_bind_failure_reason(bind_receipt),
+        "bind_reason_code": _resolve_bind_reason_code(bind_receipt),
+        "bind_receipt_id": bind_receipt.get("bind_receipt_id"),
+        "execution_intent_id": bind_receipt.get("execution_intent_id"),
+    }
+
+
+def _compliance_bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, str]:
+    """Map bind outcomes to compatibility-preserving compliance config errors."""
+    outcome = str(bind_receipt.get("final_outcome") or "")
+    rollback_reason = str(bind_receipt.get("rollback_reason") or "")
+    if outcome == FinalOutcome.PRECONDITION_FAILED.value:
+        return 400, "Failed to update compliance config"
+    if outcome == FinalOutcome.APPLY_FAILED.value:
+        if "COMPLIANCE_CONFIG_VALIDATION_FAILED" in rollback_reason:
+            return 400, "Failed to update compliance config"
+        return 500, "Failed to update compliance config"
+    if outcome in {FinalOutcome.BLOCKED.value, FinalOutcome.ESCALATED.value}:
+        return 403, "compliance bind approval validation failed"
+    return 500, "Failed to update compliance config"
 
 
 def _runtime_feature_checks(srv: Any) -> Dict[str, str]:
@@ -651,22 +730,58 @@ async def trustlog_ws(websocket: WebSocket):
 # Compliance config
 # ------------------------------------------------------------------
 
-@router.get("/v1/compliance/config", dependencies=[Depends(require_permission(Permission.compliance_read))])
+@router.get(
+    "/v1/compliance/config",
+    response_model=ComplianceConfigResponse,
+    dependencies=[Depends(require_permission(Permission.compliance_read))],
+)
 def compliance_get_config() -> Dict[str, Any]:
     """Return runtime compliance config for UI toggle."""
     return {"ok": True, "config": get_runtime_config()}
 
 
-@router.put("/v1/compliance/config", dependencies=[Depends(require_permission(Permission.config_write))])
+@router.put(
+    "/v1/compliance/config",
+    response_model=ComplianceConfigResponse,
+    dependencies=[Depends(require_permission(Permission.config_write))],
+)
 def compliance_put_config(body: ComplianceConfigBody) -> Dict[str, Any]:
-    """Update runtime compliance config."""
+    """Update runtime compliance config via bind-boundary adjudication."""
     srv = _get_server()
-    updated = update_runtime_config(
-        eu_ai_act_mode=body.eu_ai_act_mode,
-        safety_threshold=body.safety_threshold,
-    )
+    current = get_runtime_config()
+    payload = {
+        "eu_ai_act_mode": body.eu_ai_act_mode,
+        "safety_threshold": body.safety_threshold,
+    }
+    decision_id = uuid4().hex
+    bind_receipt = update_compliance_config_with_bind_boundary(
+        decision_id=decision_id,
+        request_id=decision_id,
+        actor_identity="api",
+        policy_snapshot_id="compliance_runtime_config",
+        decision_hash=sha256_of_canonical_json(payload),
+        config_patch=payload,
+        config_reader=get_runtime_config,
+        config_updater=update_runtime_config,
+        approval_context={"compliance_config_update_approved": True},
+        governance_policy=current if isinstance(current, dict) else None,
+    ).to_dict()
+    bind_payload = _bind_response_payload(bind_receipt)
+    updated = get_runtime_config()
+    if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
+        status_code, error_message = _compliance_bind_failure_status_and_error(bind_receipt)
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "ok": False,
+                "error": error_message,
+                "config": updated,
+                **bind_payload,
+            },
+        )
+
     srv._publish_event("compliance.config.updated", {"config": updated})
-    return {"ok": True, "config": updated}
+    return {"ok": True, "config": updated, **bind_payload}
 
 
 # ------------------------------------------------------------------

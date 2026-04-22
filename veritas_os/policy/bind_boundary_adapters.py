@@ -315,3 +315,116 @@ class PolicyBundlePromotionAdapter(BindAdapterContract):
         if not isinstance(loaded, dict):
             raise ValueError("BIND_POINTER_PAYLOAD_INVALID")
         return loaded
+
+
+@dataclass
+class ComplianceConfigUpdateAdapter(BindAdapterContract):
+    """Bind adapter for runtime compliance configuration updates.
+
+    The adapter wraps the existing compliance runtime config accessors so
+    bind adjudication can govern config mutation without changing the
+    underlying orchestrator semantics.
+    """
+
+    config_reader: Callable[[], dict[str, Any]]
+    config_updater: Callable[..., dict[str, Any]]
+    config_patch: dict[str, Any]
+    target_description: str = "compliance/config"
+
+    def __post_init__(self) -> None:
+        self._last_updated_config: dict[str, Any] | None = None
+
+    def snapshot(self) -> dict[str, Any]:
+        """Capture deterministic compliance config snapshot."""
+        return {"config": self.config_reader()}
+
+    def fingerprint_state(self, snapshot: Any) -> str:
+        """Return deterministic fingerprint for compliance config snapshot."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("BIND_STATE_SNAPSHOT_INVALID")
+        config = snapshot.get("config")
+        if not isinstance(config, dict):
+            raise ValueError("BIND_COMPLIANCE_CONFIG_SNAPSHOT_INVALID")
+        return sha256_of_canonical_json(config)
+
+    def validate_authority(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Require explicit authority signal in bind approval context."""
+        del snapshot
+        if not isinstance(intent.approval_context, dict):
+            return False
+        return bool(intent.approval_context.get("compliance_config_update_approved"))
+
+    def validate_constraints(
+        self,
+        intent: ExecutionIntent,
+        snapshot: Any,
+    ) -> dict[str, bool] | None:
+        """Validate deterministic local constraints for config patch."""
+        del intent
+        config = snapshot.get("config") if isinstance(snapshot, dict) else None
+        threshold = self.config_patch.get("safety_threshold")
+        threshold_is_valid = isinstance(threshold, (int, float)) and 0.0 <= float(threshold) <= 1.0
+        return {
+            "patch_is_dict": isinstance(self.config_patch, dict),
+            "snapshot_has_config": isinstance(config, dict),
+            "safety_threshold_in_range": threshold_is_valid,
+            "contains_supported_fields": set(self.config_patch).issubset(
+                {"eu_ai_act_mode", "safety_threshold"}
+            ),
+        }
+
+    def assess_runtime_risk(self, intent: ExecutionIntent, snapshot: Any) -> bool | None:
+        """Assess runtime risk for in-process compliance config update."""
+        del intent, snapshot
+        return True
+
+    def apply(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Apply compliance config patch through the runtime updater."""
+        del intent, snapshot
+        try:
+            updated = self.config_updater(
+                eu_ai_act_mode=bool(self.config_patch.get("eu_ai_act_mode", False)),
+                safety_threshold=float(self.config_patch.get("safety_threshold", 0.8)),
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"COMPLIANCE_CONFIG_VALIDATION_FAILED:{exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"COMPLIANCE_CONFIG_UPDATE_INTERNAL:{exc}") from exc
+        if not isinstance(updated, dict):
+            raise ValueError("BIND_COMPLIANCE_CONFIG_UPDATE_INVALID")
+        self._last_updated_config = updated
+        return True
+
+    def verify_postconditions(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Verify that patched fields are reflected in runtime config."""
+        del intent, snapshot
+        latest = (
+            self._last_updated_config
+            if isinstance(self._last_updated_config, dict)
+            else self.config_reader()
+        )
+        if not isinstance(latest, dict):
+            return False
+        expected = {
+            "eu_ai_act_mode": bool(self.config_patch.get("eu_ai_act_mode", False)),
+            "safety_threshold": float(self.config_patch.get("safety_threshold", 0.8)),
+        }
+        return _dict_contains_patch(latest, expected)
+
+    def revert(self, intent: ExecutionIntent, snapshot: Any) -> bool:
+        """Restore pre-apply compliance config snapshot."""
+        del intent
+        if not isinstance(snapshot, dict):
+            return False
+        previous = snapshot.get("config")
+        if not isinstance(previous, dict):
+            return False
+        self.config_updater(
+            eu_ai_act_mode=bool(previous.get("eu_ai_act_mode", False)),
+            safety_threshold=float(previous.get("safety_threshold", 0.8)),
+        )
+        return True
+
+    def describe_target(self) -> str:
+        """Return human-readable target descriptor."""
+        return self.target_description

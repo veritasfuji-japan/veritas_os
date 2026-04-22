@@ -154,3 +154,22 @@ def test_openapi_decide_response_includes_bind_contract_fields() -> None:
     assert "constraint_check_result" in decide_schema
     assert "drift_check_result" in decide_schema
     assert "risk_check_result" in decide_schema
+
+
+def test_openapi_compliance_config_put_response_includes_bind_fields() -> None:
+    """Compliance config mutation route should document bind lineage fields."""
+    spec = _load_openapi_spec()
+    schema = (
+        spec["paths"]["/v1/compliance/config"]["put"]["responses"]["200"]["content"]
+        ["application/json"]["schema"]
+    )
+    if "$ref" in schema:
+        ref_name = str(schema["$ref"]).split("/")[-1]
+        schema = spec["components"]["schemas"][ref_name]
+    properties = schema["properties"]
+    assert "bind_outcome" in properties
+    assert "bind_failure_reason" in properties
+    assert "bind_reason_code" in properties
+    assert "bind_receipt_id" in properties
+    assert "execution_intent_id" in properties
+    assert "bind_receipt" in properties

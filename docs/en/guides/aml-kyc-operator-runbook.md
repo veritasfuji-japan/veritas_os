@@ -95,8 +95,14 @@ Current fact:
 
 - Bind-boundary lineage is available in operator APIs and tied to decision lineage
   (`decision -> execution_intent -> bind_receipt`).
-- Bind-governed effect paths currently include governance policy update and policy
-  bundle promotion paths.
+- Bind-governed effect paths currently include:
+  - `PUT /v1/governance/policy` (governance policy update)
+  - `POST /v1/governance/policy-bundles/promote` (policy bundle promotion)
+  - `PUT /v1/compliance/config` (runtime compliance config mutation)
+- For `PUT /v1/compliance/config`, operators should trace
+  `execution_intent_id` and `bind_receipt_id`, then inspect bind receipt fields
+  (`authority_check_result`, `constraint_check_result`, `risk_check_result`,
+  `admissibility_result`, and `final_outcome`) when troubleshooting failures.
 
 Future direction (do not over-claim during pilot readout):
 
