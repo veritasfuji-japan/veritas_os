@@ -57,7 +57,7 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
 - Governance controls are applied **before real-world effect**.
 - FUJI gate behavior is **fail-closed by default** on unsafe/undefined paths.
 - TrustLog + governance identity create **audit-grade decision lineage**.
-- Mission Control + governance APIs provide an operator-facing governance surface, not only developer telemetry.
+- Mission Control + governance APIs provide an operator-facing governance surface with bind-phase outcomes, bind receipts, and compact bind summaries, not only developer telemetry.
 
 ### Why this fits regulated / enterprise use
 
@@ -78,15 +78,16 @@ VERITAS OS focuses on **decision governance and bind-boundary control**:
   1) `PUT /v1/governance/policy` (governance policy update path),
   2) `POST /v1/governance/policy-bundles/promote` (policy bundle promotion path), and
   3) `PUT /v1/compliance/config` (runtime compliance config mutation path).
-- **Current fact (bind outcome public contract):** Governance bind responses expose `bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, and `bind_receipt_id`, with full receipt retrieval via `/v1/governance/bind-receipts*`.
-- **Current fact (replay/operator flow):** Bind receipts are persisted as governance artifacts and can be fetched for replay/revalidation-oriented operator and audit workflows.
+- **Current fact (bind outcome public contract):** Governance bind responses expose legacy flat bind fields (`bind_outcome`, `bind_failure_reason`, `bind_reason_code`, `execution_intent_id`, `bind_receipt_id`) and additive `bind_summary` objects as a shared compact bind vocabulary.
+- **Current fact (bind artifact family):** `BindReceipt` is persisted as a full governance artifact and carries canonical target metadata as part of the artifact contract.
+- **Current fact (replay/operator flow):** Operator surfaces expose bind artifacts via list/export/detail endpoints (`/v1/governance/bind-receipts`, `/v1/governance/bind-receipts/export`, `/v1/governance/bind-receipts/{bind_receipt_id}`), with mutation/export responses reusing `bind_summary` for triage and audit workflows.
 - **Current fact (boundary):** Production readiness still depends on environment-specific hardening, integration, and operational controls.
 - **Roadmap / future direction:** Bind-boundary policy surface is expected to expand to more effect paths and become a broader standardization framework for multi-path effect governance; this is direction, not a claim of full completion today.
 - **Roadmap:** Expanded enterprise integrations (for example deeper IdP/JWT scope models and broader distributed failure-mode validation).
 
 ### Technical Maturity Snapshot (internal)
 
-> This is a **self-assessment / internal re-evaluation** summary (not third-party certification).
+> This is a **self-assessment / internal re-evaluation** summary (not third-party certification), published as a conservative internal snapshot.
 
 - Latest internal re-evaluation date: **2026-04-15**
 - Internal overall snapshot: **85 / 100** (from 82 on 2026-03-15)
@@ -665,13 +666,21 @@ All protected endpoints require `X-API-Key`. The full list of endpoints:
 | Method | Path | Description |
 |---|---|---|
 | GET | `/v1/governance/policy` | Retrieve current governance policy |
-| PUT | `/v1/governance/policy` | Update governance policy (hot-reload, **4-eyes approval required**) |
+| PUT | `/v1/governance/policy` | Update governance policy (hot-reload, **4-eyes approval required**; bind-governed mutation response includes bind lineage fields + `bind_summary`) |
 | GET | `/v1/governance/policy/history` | Policy change audit trail (with digest transitions) |
 | GET | `/v1/governance/value-drift` | Monitor value weight EMA drift |
-| GET | `/v1/governance/decisions/export` | Export decisions for governance audit |
-| POST | `/v1/governance/policy-bundles/promote` | Execute policy bundle promotion as a bind-boundary governance workflow (returns bind receipt lineage; requires governance write permission) |
-| GET | `/v1/governance/bind-receipts` | List bind receipts (decision/execution lineage + target/outcome/reason/failed/recent/sort/limit filters) |
-| GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | Retrieve a single bind receipt artifact |
+| GET | `/v1/governance/decisions/export` | Export decisions for governance audit, including bind lineage fields and additive `bind_summary` vocabulary |
+| POST | `/v1/governance/policy-bundles/promote` | Execute policy bundle promotion as a bind-boundary governance workflow (returns bind receipt lineage and additive `bind_summary`; requires governance write permission) |
+| GET | `/v1/governance/bind-receipts` | List bind receipts (decision/execution lineage + canonical target/outcome/reason/failed/recent/sort/limit filters) |
+| GET | `/v1/governance/bind-receipts/export` | Export bind receipts for operator/audit pipelines using the same filter vocabulary as list |
+| GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | Retrieve a single full bind receipt artifact (including canonical target metadata and bind checks) |
+
+#### Bind artifact family: operator meaning
+
+- `BindReceipt` is the full bind artifact used for reviewable/auditable lineage and replay-oriented investigation.
+- `bind_summary` is the compact shared bind vocabulary reused across bind-governed mutation and export responses.
+- This separation keeps decision approval and bind commitment distinct on the operator-facing governance surface (Mission Control + APIs).
+
 
 #### Operator workflow: promote a policy bundle
 
@@ -679,8 +688,8 @@ Use `POST /v1/governance/policy-bundles/promote` when you need to promote the ac
 
 - Request accepts **exactly one** selector: `bundle_id` **or** `bundle_dir_name`.
 - Arbitrary filesystem paths are rejected (`/`, `\`, `.`, `..` are not accepted in selectors).
-- Response includes bind lineage fields: `bind_outcome`, `bind_receipt_id`, `execution_intent_id`, plus `bind_receipt`.
-- Use `GET /v1/governance/bind-receipts` or `GET /v1/governance/bind-receipts/{bind_receipt_id}` to inspect the resulting receipt.
+- Response includes bind lineage fields (`bind_outcome`, `bind_receipt_id`, `execution_intent_id`), additive `bind_summary`, and the full `bind_receipt`.
+- Use `GET /v1/governance/bind-receipts`, `GET /v1/governance/bind-receipts/export`, or `GET /v1/governance/bind-receipts/{bind_receipt_id}` to inspect/export resulting artifacts.
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
@@ -712,7 +721,7 @@ For operator guidance and outcome interpretation, see
 | GET | `/v1/report/governance` | Internal governance report |
 | GET | `/v1/compliance/deployment-readiness` | Pre-deployment compliance check |
 | GET | `/v1/compliance/config` | Retrieve compliance configuration |
-| PUT | `/v1/compliance/config` | Update compliance configuration |
+| PUT | `/v1/compliance/config` | Update compliance configuration (bind-governed mutation response includes bind lineage fields + `bind_summary`) |
 
 ### System
 
