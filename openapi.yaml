@@ -629,6 +629,26 @@ components:
           default: 0.5
           minimum: 0
           maximum: 1
+    BindAdjudicationPolicyConfig:
+      type: object
+      description: "Bind adjudication runtime controls."
+      properties:
+        missing_signal_default:
+          type: string
+          enum: ["block", "escalate"]
+          default: "block"
+        drift_required:
+          type: boolean
+          default: true
+        ttl_required:
+          type: boolean
+          default: false
+        approval_freshness_required:
+          type: boolean
+          default: false
+        rollback_on_apply_failure:
+          type: boolean
+          default: false
 
     GovernancePolicy:
       type: object
@@ -659,6 +679,8 @@ components:
           $ref: '#/components/schemas/RevocationConfig'
         drift_scoring:
           $ref: '#/components/schemas/DriftScoringConfig'
+        bind_adjudication:
+          $ref: '#/components/schemas/BindAdjudicationPolicyConfig'
         updated_at:
           type: string
           format: date-time
