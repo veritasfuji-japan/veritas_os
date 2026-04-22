@@ -23,6 +23,7 @@ from pydantic import ValidationError
 
 from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
+from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
 
 client = TestClient(srv.app)
 HEADERS = {"X-API-Key": "test-governance-key", "X-Role": "admin"}
@@ -185,6 +186,112 @@ class TestPutPolicy:
         )
         resp = client.get("/v1/governance/policy", headers=HEADERS)
         assert resp.json()["policy"]["risk_thresholds"]["warn_upper"] == 0.55
+
+    def test_put_returns_bind_lineage_fields(self):
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"fuji_rules": {"pii_check": False}}),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["bind_outcome"] == "COMMITTED"
+        assert body["bind_receipt_id"]
+        assert body["execution_intent_id"]
+        assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
+
+    def test_put_preserves_backward_compatible_response_shape(self, monkeypatch):
+        monkeypatch.setattr(
+            "veritas_os.api.routes_governance.update_governance_policy_with_bind_boundary",
+            lambda **_kwargs: BindReceipt(
+                bind_receipt_id="br-gov-backward",
+                execution_intent_id="ei-gov-backward",
+                decision_id="dec-gov-backward",
+                final_outcome=FinalOutcome.COMMITTED,
+            ),
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"fuji_rules": {"pii_check": False}}),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert "policy" in body
+        assert "fuji_rules" in body["policy"]
+
+    def test_put_redacts_approval_signatures_from_decision_hash_payload(self, monkeypatch):
+        captured: dict[str, object] = {}
+
+        def _capture(payload):
+            captured["payload"] = payload
+            return "h" * 64
+
+        monkeypatch.setattr("veritas_os.api.routes_governance.sha256_of_canonical_json", _capture)
+
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json={
+                "fuji_rules": {"pii_check": False},
+                "approval": {"approved_by": "alice", "signature": "secret-signature"},
+                "approvals": [
+                    {"reviewer": "alice", "signature": "sig-a"},
+                    {"reviewer": "bob", "signature": "sig-b"},
+                ],
+            },
+        )
+        assert resp.status_code == 200
+        payload = captured["payload"]
+        assert isinstance(payload, dict)
+        assert "approvals" not in payload
+        assert payload["approval"] == {"approved_by": "alice"}
+
+    def test_put_returns_400_on_bind_apply_failed(self, monkeypatch):
+        monkeypatch.setattr(
+            "veritas_os.api.routes_governance.update_governance_policy_with_bind_boundary",
+            lambda **_kwargs: BindReceipt(
+                bind_receipt_id="br-gov-apply-failed",
+                execution_intent_id="ei-gov-apply-failed",
+                decision_id="dec-gov-apply-failed",
+                final_outcome=FinalOutcome.APPLY_FAILED,
+                rollback_reason=(
+                    "BIND_APPLY_FAILED:GOVERNANCE_POLICY_VALIDATION_FAILED:invalid audit level"
+                ),
+            ),
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"log_retention": {"audit_level": "INVALID_LEVEL"}}),
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["error"] == "Governance policy validation failed"
+
+    def test_put_returns_500_on_bind_apply_failed_internal_error(self, monkeypatch):
+        monkeypatch.setattr(
+            "veritas_os.api.routes_governance.update_governance_policy_with_bind_boundary",
+            lambda **_kwargs: BindReceipt(
+                bind_receipt_id="br-gov-apply-internal",
+                execution_intent_id="ei-gov-apply-internal",
+                decision_id="dec-gov-apply-internal",
+                final_outcome=FinalOutcome.APPLY_FAILED,
+                rollback_reason="BIND_APPLY_FAILED:GOVERNANCE_POLICY_UPDATE_INTERNAL:db write fail",
+            ),
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"log_retention": {"audit_level": "strict"}}),
+        )
+        assert resp.status_code == 500
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["error"] == "Failed to update governance policy"
 
 
 class TestGovernanceModule:

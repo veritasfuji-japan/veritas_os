@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Annotated, Any, Dict, Optional
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -22,7 +23,9 @@ from veritas_os.api.schemas import (
     GovernancePolicyHistoryResponse,
 )
 from veritas_os.policy.bind_artifacts import FinalOutcome, find_bind_receipts
+from veritas_os.policy.governance_policy_update import update_governance_policy_with_bind_boundary
 from veritas_os.policy.policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
+from veritas_os.security.hash import sha256_of_canonical_json
 
 # Governance functions accessed via _get_server() for test monkeypatching compat
 
@@ -103,6 +106,37 @@ def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
         "bind_receipt_id": bind_receipt.get("bind_receipt_id"),
         "execution_intent_id": bind_receipt.get("execution_intent_id"),
     }
+
+
+def _governance_decision_hash_payload(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a redacted payload used to compute governance bind decision hash."""
+    if not isinstance(body, dict):
+        return {}
+    payload = dict(body)
+    payload.pop("approvals", None)
+    approval = payload.get("approval")
+    if isinstance(approval, dict):
+        payload["approval"] = {
+            key: value
+            for key, value in approval.items()
+            if str(key) not in {"signature", "signatures", "signed_payload"}
+        }
+    return payload
+
+
+def _bind_failure_status_and_error(bind_receipt: Dict[str, Any]) -> tuple[int, str]:
+    """Map bind outcomes to legacy governance API status/error semantics."""
+    outcome = str(bind_receipt.get("final_outcome") or "")
+    rollback_reason = str(bind_receipt.get("rollback_reason") or "")
+    if outcome == FinalOutcome.PRECONDITION_FAILED.value:
+        return 400, "Governance policy validation failed"
+    if outcome == FinalOutcome.APPLY_FAILED.value:
+        if "GOVERNANCE_POLICY_VALIDATION_FAILED" in rollback_reason:
+            return 400, "Governance policy validation failed"
+        return 500, "Failed to update governance policy"
+    if outcome in {FinalOutcome.BLOCKED.value, FinalOutcome.ESCALATED.value}:
+        return 403, "governance approval validation failed"
+    return 500, "Failed to update governance policy"
 
 
 # ------------------------------------------------------------------
@@ -227,13 +261,46 @@ def governance_put(body: dict):
     try:
         srv.enforce_four_eyes_approval(body)
         previous = srv.get_policy()
-        updated = srv.update_policy(body)
+        decision_id = str(body.get("decision_id") or uuid4().hex)
+        request_id = str(body.get("request_id") or decision_id)
+        policy_snapshot_id = str(previous.get("updated_at") or previous.get("version") or "governance_policy")
+        bind_receipt = update_governance_policy_with_bind_boundary(
+            decision_id=decision_id,
+            request_id=request_id,
+            actor_identity=str(body.get("updated_by") or "api"),
+            policy_snapshot_id=policy_snapshot_id,
+            decision_hash=sha256_of_canonical_json(_governance_decision_hash_payload(body)),
+            policy_patch=body,
+            policy_reader=srv.get_policy,
+            policy_updater=srv.update_policy,
+            policy_rollback=getattr(srv, "rollback_policy", None),
+            approval_context={"governance_policy_update_approved": True},
+            approval_records=body.get("approvals") if isinstance(body.get("approvals"), list) else None,
+            policy_lineage=body.get("policy_lineage")
+            if isinstance(body.get("policy_lineage"), dict)
+            else None,
+            execution_intent_id=str(body.get("execution_intent_id") or "") or None,
+            bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
+        ).to_dict()
+        updated = srv.get_policy()
+        bind_payload = _bind_response_payload(bind_receipt)
+        if bind_receipt.get("final_outcome") != FinalOutcome.COMMITTED.value:
+            status_code, error_message = _bind_failure_status_and_error(bind_receipt)
+            return JSONResponse(
+                status_code=status_code,
+                content={
+                    **bind_payload,
+                    "ok": False,
+                    "error": error_message,
+                    "policy": updated,
+                },
+            )
         srv._publish_event(
             "governance.updated",
             {"updated_by": updated.get("updated_by", "api")},
         )
         _emit_governance_change_alert(previous=previous, updated=updated)
-        return {"ok": True, "policy": updated}
+        return {"ok": True, "policy": updated, **bind_payload}
     except PermissionError as e:
         logger.warning("governance_put rejected: %s", e)
         return JSONResponse(
