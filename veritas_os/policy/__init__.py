@@ -15,6 +15,15 @@ from .bind_artifacts import (
     hash_execution_intent,
 )
 from .bind_boundary_adapters import PolicyBundlePromotionAdapter
+from .bind_core import (
+    BIND_OUTCOME_VALUES,
+    BindAdapterContract,
+    BindOutcome,
+    BindReasonCode,
+    execute_bind_adjudication,
+    normalize_bind_receipt,
+    normalize_execution_intent,
+)
 from .bind_execution import BindBoundaryAdapter, ReferenceBindAdapter, execute_bind_boundary
 from .policy_bundle_promotion import promote_policy_bundle_with_bind_boundary
 from .evaluator import PolicyEvaluationResult, evaluate_runtime_policies
@@ -40,6 +49,13 @@ __all__ = [
     "PolicyBundlePromotionAdapter",
     "promote_policy_bundle_with_bind_boundary",
     "execute_bind_boundary",
+    "execute_bind_adjudication",
+    "BindAdapterContract",
+    "BindOutcome",
+    "BindReasonCode",
+    "BIND_OUTCOME_VALUES",
+    "normalize_execution_intent",
+    "normalize_bind_receipt",
     "append_execution_intent_trustlog",
     "append_bind_receipt_trustlog",
     "find_bind_receipts",

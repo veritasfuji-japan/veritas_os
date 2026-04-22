@@ -13,11 +13,12 @@ from typing import Any
 
 from veritas_os.core.atomic_io import atomic_write_json
 from veritas_os.policy.bind_artifacts import ExecutionIntent
+from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.security.hash import sha256_of_canonical_json
 
 
 @dataclass
-class PolicyBundlePromotionAdapter:
+class PolicyBundlePromotionAdapter(BindAdapterContract):
     """Bind adapter for active policy-bundle pointer promotion.
 
     The adapter promotes a single pointer file that identifies the active
