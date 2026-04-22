@@ -40,6 +40,7 @@ describe("PolicyBundlePromotionFlow", () => {
   it("renders compact promotion form", () => {
     render(<PolicyBundlePromotionFlow canOperate />);
     expect(screen.getByText("Policy Bundle Promotion")).toBeInTheDocument();
+    expect(screen.getByText(/Bind-oriented promotion cockpit/i)).toBeInTheDocument();
     expect(screen.getByLabelText("bundle_id")).toBeInTheDocument();
     expect(screen.getByLabelText("bundle_dir_name")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "promote bundle" })).toBeInTheDocument();
@@ -173,6 +174,9 @@ describe("PolicyBundlePromotionFlow", () => {
           ok: true,
           bind_receipt: {
             bind_receipt_id: "br-100",
+            decision_id: "decision-100",
+            execution_intent_id: "ei-100",
+            policy_snapshot_id: "snapshot-100",
             final_outcome: "BLOCKED",
             authority_check_result: { passed: true },
             constraint_check_result: { passed: false },
@@ -203,6 +207,12 @@ describe("PolicyBundlePromotionFlow", () => {
     expect(screen.getByText(/^risk:/)).toBeInTheDocument();
     expect(screen.getAllByText("PASS")).toHaveLength(2);
     expect(screen.getAllByText("FAIL")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "decision-100" })).toHaveAttribute("href", "/audit?decision_id=decision-100");
+    expect(screen.getByRole("link", { name: "ei-100" })).toHaveAttribute("href", "/audit?cross=ei-100");
+    expect(screen.getByRole("link", { name: "snapshot-100" })).toHaveAttribute("href", "/audit?cross=snapshot-100");
+    expect(screen.getByRole("link", { name: "bind_receipt/br-100" })).toHaveAttribute("href", "/audit?bind_receipt_id=br-100");
+    expect(screen.getByText(/failure triage guidance/i)).toBeInTheDocument();
+    expect(screen.getByText(/Policy gate triage/i)).toBeInTheDocument();
   });
 
   it("falls back to bind_receipt.final_outcome when bind_outcome is absent", async () => {
@@ -278,6 +288,23 @@ describe("PolicyBundlePromotionFlow", () => {
 
     expect(await screen.findByTestId("status-badge")).toHaveTextContent("COMMITTED");
     expect(screen.getByTestId("status-badge")).toHaveAttribute("data-variant", "success");
+    expect(screen.getByText(/No triage required/i)).toBeInTheDocument();
+  });
+
+  it("shows escalation triage guidance for ESCALATED outcome", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        bind_outcome: "ESCALATED",
+      }),
+    });
+
+    render(<PolicyBundlePromotionFlow canOperate />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "promote bundle" }));
+
+    expect(await screen.findByText(/Escalation handoff/i)).toBeInTheDocument();
   });
 
   it("handles promote endpoint error response", async () => {

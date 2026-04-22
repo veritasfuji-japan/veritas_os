@@ -32,6 +32,11 @@ type BindCheckPayload = {
   reason_code?: string;
 };
 
+interface BindTriageGuide {
+  heading: string;
+  detail: string;
+}
+
 type BindReceiptPayload = Record<string, unknown> & Partial<Record<BindCheckKey, BindCheckPayload>>;
 
 interface PromoteResponse {
@@ -219,6 +224,60 @@ function resolveCheckResult(
   return fromReceipt;
 }
 
+function getTriageGuide(
+  outcome: BindOutcomeDisplay,
+  reasonCode?: string,
+  failureReason?: string,
+): BindTriageGuide {
+  if (outcome === "COMMITTED") {
+    return {
+      heading: "No triage required",
+      detail: "Bind completed. Continue with post-bind audit verification and evidence export.",
+    };
+  }
+  if (outcome === "BLOCKED" || outcome === "PRECONDITION_FAILED") {
+    return {
+      heading: "Policy gate triage",
+      detail: `Check bind_reason_code (${reasonCode ?? "-"}) and compare decision input with current policy snapshot (${failureReason ?? "no failure reason"}).`,
+    };
+  }
+  if (outcome === "ROLLED_BACK") {
+    return {
+      heading: "Rollback investigation",
+      detail: "Review execution intent and receipt lineage to locate the rollback trigger. Confirm whether rollback was safety-driven or operator-driven.",
+    };
+  }
+  if (outcome === "ESCALATED") {
+    return {
+      heading: "Escalation handoff",
+      detail: "Escalation path is active. Hand off bind receipt + execution intent to governance approver and capture a human decision trace.",
+    };
+  }
+  if (outcome === "APPLY_FAILED" || outcome === "SNAPSHOT_FAILED") {
+    return {
+      heading: "Execution failure triage",
+      detail: "Check policy snapshot integrity and runtime apply logs. Retry only after root cause is identified in lineage and trust logs.",
+    };
+  }
+  return {
+    heading: "Manual triage",
+    detail: "Outcome is unknown. Use bind receipt detail and trust lineage to determine next operator action.",
+  };
+}
+
+function pickIdentifier(
+  resultValue: string | undefined,
+  receiptValue: unknown,
+): string | null {
+  if (typeof resultValue === "string" && resultValue.trim().length > 0) {
+    return resultValue;
+  }
+  if (typeof receiptValue === "string" && receiptValue.trim().length > 0) {
+    return receiptValue;
+  }
+  return null;
+}
+
 /**
  * Compact operator-facing workflow to submit policy bundle promotion
  * using the existing governance promote endpoint and inspect bind lineage.
@@ -255,6 +314,27 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
   }, [bundleDirName, bundleId]);
 
   const canonicalOutcome = result?.bind_outcome ?? "UNKNOWN";
+  const relatedDecisionId = pickIdentifier(
+    undefined,
+    receiptDetail?.bind_receipt?.decision_id,
+  );
+  const relatedExecutionIntentId = pickIdentifier(
+    result?.execution_intent_id,
+    receiptDetail?.bind_receipt?.execution_intent_id,
+  );
+  const relatedPolicySnapshotId = pickIdentifier(
+    undefined,
+    receiptDetail?.bind_receipt?.policy_snapshot_id,
+  );
+  const relatedBindReceiptId = pickIdentifier(
+    result?.bind_receipt_id,
+    receiptDetail?.bind_receipt?.bind_receipt_id,
+  );
+  const triageGuide = getTriageGuide(
+    canonicalOutcome,
+    result?.bind_reason_code ?? receiptDetail?.bind_reason_code,
+    result?.bind_failure_reason ?? receiptDetail?.bind_failure_reason,
+  );
 
   const handleSubmit = async (): Promise<void> => {
     setError(null);
@@ -362,7 +442,7 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
     <Card title="Policy Bundle Promotion" titleSize="md" variant="elevated" accent="info">
       <div className="space-y-3 text-xs">
         <p className="text-muted-foreground">
-          Existing bind-boundary endpoint を使って promotion を実行し、bind outcome / receipt lineage を追跡します。
+          Bind-oriented promotion cockpit. Existing bind-boundary endpoint を使って promotion を実行し、bind outcome / receipt lineage を追跡します。
         </p>
 
         <div className="grid gap-3 md:grid-cols-2">
@@ -465,6 +545,16 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
               <span className="font-semibold">Promotion Result</span>
               <StatusBadge label={canonicalOutcome} variant={resolveOutcomeVariant(canonicalOutcome)} />
             </div>
+            <div className="rounded border border-border/70 bg-background/60 px-2 py-1.5">
+              <p className="font-semibold text-[11px] uppercase tracking-wide text-muted-foreground">
+                Bind lifecycle visibility
+              </p>
+              <ul className="mt-1 list-disc pl-4 text-xs">
+                <li>Promotion submitted → bind outcome classified</li>
+                <li>Bind receipt lookup for operator evidence</li>
+                <li>Decision / execution intent / policy snapshot lineage trace</li>
+              </ul>
+            </div>
             <div className="grid gap-1 md:grid-cols-2">
               <p>bind_outcome: <span className="font-mono">{canonicalOutcome}</span></p>
               <p>bind_reason_code: <span className="font-mono">{result.bind_reason_code ?? "-"}</span></p>
@@ -493,6 +583,59 @@ export function PolicyBundlePromotionFlow({ canOperate }: PolicyBundlePromotionF
                 <p>drift: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "drift_check_result")}</span></p>
                 <p>risk: <span className="font-mono">{resolveCheckResult(result, receiptDetail, "risk_check_result")}</span></p>
               </div>
+            </div>
+
+            <div className="rounded border border-info/30 bg-info/10 p-2">
+              <p className="font-semibold">related governance lineage</p>
+              <div className="mt-1 grid gap-1 md:grid-cols-2">
+                <p>
+                  decision_id:{" "}
+                  {relatedDecisionId ? (
+                    <a className="font-mono underline underline-offset-2" href={`/audit?decision_id=${encodeURIComponent(relatedDecisionId)}`}>
+                      {relatedDecisionId}
+                    </a>
+                  ) : (
+                    <span className="font-mono">-</span>
+                  )}
+                </p>
+                <p>
+                  execution_intent_id:{" "}
+                  {relatedExecutionIntentId ? (
+                    <a className="font-mono underline underline-offset-2" href={`/audit?cross=${encodeURIComponent(relatedExecutionIntentId)}`}>
+                      {relatedExecutionIntentId}
+                    </a>
+                  ) : (
+                    <span className="font-mono">-</span>
+                  )}
+                </p>
+                <p>
+                  policy_snapshot_id:{" "}
+                  {relatedPolicySnapshotId ? (
+                    <a className="font-mono underline underline-offset-2" href={`/audit?cross=${encodeURIComponent(relatedPolicySnapshotId)}`}>
+                      {relatedPolicySnapshotId}
+                    </a>
+                  ) : (
+                    <span className="font-mono">-</span>
+                  )}
+                </p>
+                <p>
+                  trust lineage:{" "}
+                  {relatedBindReceiptId ? (
+                    <a className="font-mono underline underline-offset-2" href={`/audit?bind_receipt_id=${encodeURIComponent(relatedBindReceiptId)}`}>
+                      bind_receipt/{relatedBindReceiptId}
+                    </a>
+                  ) : (
+                    <span className="font-mono">-</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded border border-warning/40 bg-warning/10 p-2">
+              <p className="font-semibold">failure triage guidance</p>
+              <p className="text-xs">
+                <span className="font-medium">{triageGuide.heading}:</span> {triageGuide.detail}
+              </p>
             </div>
 
             {receiptDetail ? (
