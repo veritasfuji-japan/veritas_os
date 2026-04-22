@@ -2,24 +2,22 @@ openapi: 3.1.0
 info:
   title: VERITAS Public API
   version: 1.0.0
-
 servers:
-  - url: http://127.0.0.1:8000
-
+- url: http://127.0.0.1:8000
 security:
-  - ApiKeyAuth: []
-
+- ApiKeyAuth: []
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: X-API-Key
-
   schemas:
     Context:
       type: object
-      required: [user_id, query]
+      required:
+      - user_id
+      - query
       properties:
         user_id:
           type: string
@@ -30,7 +28,7 @@ components:
         query:
           type: string
           maxLength: 10000
-          description: "ユーザ要求/問題文"
+          description: ユーザ要求/問題文
         goals:
           type: array
           items:
@@ -41,15 +39,23 @@ components:
             type: string
         time_horizon:
           type: string
-          enum: ["short", "mid", "long"]
+          enum:
+          - short
+          - mid
+          - long
         preferences:
           type: array
           items:
             type: string
-          description: "返答スタイル等の好み設定リスト"
+          description: 返答スタイル等の好み設定リスト
         response_style:
           type: string
-          enum: ["logic", "emotional", "business", "expert", "casual"]
+          enum:
+          - logic
+          - emotional
+          - business
+          - expert
+          - casual
         tools_allowed:
           type: array
           items:
@@ -62,11 +68,10 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: "感情ヒント（key-value形式）"
-
+          description: 感情ヒント（key-value形式）
     Option:
       type: object
-      description: "入力用の候補選択肢（全フィールド省略可能）"
+      description: 入力用の候補選択肢（全フィールド省略可能）
       properties:
         id:
           type: string
@@ -77,7 +82,7 @@ components:
         text:
           type: string
           maxLength: 1000
-          description: "titleの別名（後方互換フィールド）。titleが未指定の場合にtitleとして使用される。"
+          description: titleの別名（後方互換フィールド）。titleが未指定の場合にtitleとして使用される。
         description:
           type: string
           maxLength: 20000
@@ -86,21 +91,24 @@ components:
         score_raw:
           type: number
           nullable: true
-
     Alt:
       type: object
-      description: "レスポンス用の候補選択肢（パイプラインにより正規化済み）"
-      required: [id, title, description, score]
+      description: レスポンス用の候補選択肢（パイプラインにより正規化済み）
+      required:
+      - id
+      - title
+      - description
+      - score
       properties:
         id:
           type: string
-          default: ""
+          default: ''
         title:
           type: string
-          default: ""
+          default: ''
         description:
           type: string
-          default: ""
+          default: ''
         score:
           type: number
           default: 1.0
@@ -115,14 +123,16 @@ components:
           type: object
           nullable: true
           additionalProperties: true
-
     EvidenceItem:
       type: object
-      required: [source, snippet, confidence]
+      required:
+      - source
+      - snippet
+      - confidence
       properties:
         source:
           type: string
-          default: "unknown"
+          default: unknown
           maxLength: 500
         uri:
           type: string
@@ -135,31 +145,36 @@ components:
           maxLength: 1000
         snippet:
           type: string
-          default: ""
+          default: ''
           maxLength: 50000
         confidence:
           type: number
           default: 0.7
           minimum: 0.0
           maximum: 1.0
-
     CritiqueItem:
       type: object
-      required: [issue]
+      required:
+      - issue
       properties:
         issue:
           type: string
         severity:
           type: string
-          enum: ["low", "med", "high"]
-          default: "med"
+          enum:
+          - low
+          - med
+          - high
+          default: med
         fix:
           type: string
           nullable: true
-
     DebateView:
       type: object
-      required: [stance, argument, score]
+      required:
+      - stance
+      - argument
+      - score
       properties:
         stance:
           type: string
@@ -167,14 +182,19 @@ components:
           type: string
         score:
           type: number
-
     FujiDecision:
       type: object
-      required: [status]
+      required:
+      - status
       properties:
         status:
           type: string
-          enum: ["allow", "modify", "rejected", "block", "abstain"]
+          enum:
+          - allow
+          - modify
+          - rejected
+          - block
+          - abstain
         reasons:
           type: array
           items:
@@ -189,23 +209,22 @@ components:
           type: string
           nullable: true
           maxLength: 500
-          description: "トリガーされたポリシールールまたはキーワード"
+          description: トリガーされたポリシールールまたはキーワード
         severity:
           type: string
           nullable: true
           maxLength: 50
-          description: "リスク重大度 (low / medium / high / critical)"
+          description: リスク重大度 (low / medium / high / critical)
         remediation_hint:
           type: string
           nullable: true
           maxLength: 1000
-          description: "ゲート発火時のオペレーター向け修正提案"
+          description: ゲート発火時のオペレーター向け修正提案
         risky_text_fragment:
           type: string
           nullable: true
           maxLength: 500
-          description: "ポリシールールをトリガーした入力の抜粋"
-
+          description: ポリシールールをトリガーした入力の抜粋
     GateOut:
       type: object
       properties:
@@ -220,8 +239,13 @@ components:
           nullable: true
         decision_status:
           type: string
-          enum: ["allow", "modify", "rejected", "block", "abstain"]
-          default: "allow"
+          enum:
+          - allow
+          - modify
+          - rejected
+          - block
+          - abstain
+          default: allow
         reason:
           type: string
           nullable: true
@@ -230,33 +254,36 @@ components:
           default: []
           items:
             oneOf:
-              - type: string
-              - type: object
-                additionalProperties: true
+            - type: string
+            - type: object
+              additionalProperties: true
         rule_hit:
           type: string
           nullable: true
           maxLength: 500
-          description: "トリガーされたポリシールールまたはキーワード"
+          description: トリガーされたポリシールールまたはキーワード
         severity:
           type: string
           nullable: true
           maxLength: 50
-          description: "リスク重大度 (low / medium / high / critical)"
+          description: リスク重大度 (low / medium / high / critical)
         remediation_hint:
           type: string
           nullable: true
           maxLength: 1000
-          description: "ゲート発火時のオペレーター向け修正提案"
+          description: ゲート発火時のオペレーター向け修正提案
         risky_text_fragment:
           type: string
           nullable: true
           maxLength: 500
-          description: "ポリシールールをトリガーした入力の抜粋"
-
+          description: ポリシールールをトリガーした入力の抜粋
     ValuesOut:
       type: object
-      required: [scores, total, top_factors, rationale]
+      required:
+      - scores
+      - total
+      - top_factors
+      - rationale
       properties:
         scores:
           type: object
@@ -273,28 +300,29 @@ components:
         ema:
           type: number
           nullable: true
-
     PersonaState:
       type: object
       properties:
         name:
           type: string
-          default: "VERITAS"
+          default: VERITAS
         style:
           type: string
-          default: "direct, strategic, honest"
+          default: direct, strategic, honest
         tone:
           type: string
-          default: "warm"
+          default: warm
         principles:
           type: array
           items:
             type: string
-          default: ["honesty", "dignity", "growth"]
+          default:
+          - honesty
+          - dignity
+          - growth
         last_updated:
           type: string
           nullable: true
-
     EvoTips:
       type: object
       properties:
@@ -313,39 +341,42 @@ components:
           type: array
           items:
             type: string
-
     StageMetrics:
       type: object
-      description: "パイプラインステージごとの実行メトリクス（extras.stage_metricsに格納）"
+      description: パイプラインステージごとの実行メトリクス（extras.stage_metricsに格納）
       properties:
         latency_ms:
           type: number
           nullable: true
-          description: "ステージの実行時間（ミリ秒）"
+          description: ステージの実行時間（ミリ秒）
         health:
           type: string
-          enum: ["ok", "warning", "failed", "unknown"]
-          default: "unknown"
-          description: "パイプラインビジュアライザーが使用するステージヘルスステータス"
+          enum:
+          - ok
+          - warning
+          - failed
+          - unknown
+          default: unknown
+          description: パイプラインビジュアライザーが使用するステージヘルスステータス
         summary:
           type: string
           nullable: true
           maxLength: 500
-          description: "ステージ結果の1行説明"
+          description: ステージ結果の1行説明
         detail:
           type: string
           nullable: true
           maxLength: 5000
-          description: "ステージの拡張診断テキスト（展開UIビューで表示）"
+          description: ステージの拡張診断テキスト（展開UIビューで表示）
         reason:
           type: string
           nullable: true
           maxLength: 2000
-          description: "detailが存在しない場合のフォールバック（例: ゲート拒否理由）"
-
+          description: 'detailが存在しない場合のフォールバック（例: ゲート拒否理由）'
     ChatRequest:
       type: object
-      required: [message]
+      required:
+      - message
       properties:
         message:
           type: string
@@ -360,10 +391,9 @@ components:
         persona_evolve:
           type: boolean
           default: true
-
     FujiRules:
       type: object
-      description: "FUJI安全ゲートのルール設定"
+      description: FUJI安全ゲートのルール設定
       properties:
         pii_check:
           type: boolean
@@ -389,14 +419,13 @@ components:
         llm_safety_head:
           type: boolean
           default: true
-
     RiskThresholds:
       type: object
-      description: "リスクしきい値設定"
+      description: リスクしきい値設定
       properties:
         allow_upper:
           type: number
-          default: 0.40
+          default: 0.4
           minimum: 0.0
           maximum: 1.0
         warn_upper:
@@ -411,13 +440,12 @@ components:
           maximum: 1.0
         deny_upper:
           type: number
-          default: 1.00
+          default: 1.0
           minimum: 0.0
           maximum: 1.0
-
     AutoStop:
       type: object
-      description: "自動停止設定"
+      description: 自動停止設定
       properties:
         enabled:
           type: boolean
@@ -437,10 +465,9 @@ components:
           default: 60
           minimum: 1
           maximum: 10000
-
     LogRetention:
       type: object
-      description: "ログ保持設定"
+      description: ログ保持設定
       properties:
         retention_days:
           type: integer
@@ -449,8 +476,14 @@ components:
           maximum: 3650
         audit_level:
           type: string
-          default: "full"
-          enum: ["none", "minimal", "summary", "standard", "full", "strict"]
+          default: full
+          enum:
+          - none
+          - minimal
+          - summary
+          - standard
+          - full
+          - strict
         include_fields:
           type: array
           items:
@@ -463,15 +496,18 @@ components:
           default: 10000
           minimum: 100
           maximum: 1000000
-
     RolloutControls:
       type: object
-      description: "段階的適用コントロール"
+      description: 段階的適用コントロール
       properties:
         strategy:
           type: string
-          default: "disabled"
-          enum: ["disabled", "canary", "staged", "full"]
+          default: disabled
+          enum:
+          - disabled
+          - canary
+          - staged
+          - full
         canary_percent:
           type: integer
           default: 0
@@ -485,14 +521,13 @@ components:
         staged_enforcement:
           type: boolean
           default: false
-
     ApprovalWorkflowConfig:
       type: object
-      description: "人手承認ワークフロー設定"
+      description: 人手承認ワークフロー設定
       properties:
         human_review_ticket:
           type: string
-          default: ""
+          default: ''
         human_review_required:
           type: boolean
           default: false
@@ -503,18 +538,19 @@ components:
           type: array
           items:
             type: string
-
     WatConfig:
       type: object
-      description: "WAT 発行制御設定"
+      description: WAT 発行制御設定
       properties:
         enabled:
           type: boolean
           default: false
         issuance_mode:
           type: string
-          default: "shadow_only"
-          enum: ["shadow_only", "disabled"]
+          default: shadow_only
+          enum:
+          - shadow_only
+          - disabled
         require_observable_digest:
           type: boolean
           default: true
@@ -525,36 +561,36 @@ components:
           maximum: 86400
         signer_backend:
           type: string
-          default: "existing_signer"
-
+          default: existing_signer
     PsidConfig:
       type: object
-      description: "PSID 表示・適用設定"
+      description: PSID 表示・適用設定
       properties:
         enforcement_mode:
           type: string
-          default: "full_digest_only"
-          enum: ["full_digest_only"]
+          default: full_digest_only
+          enum:
+          - full_digest_only
         display_length:
           type: integer
           default: 12
           minimum: 4
           maximum: 128
-
     ShadowValidationConfig:
       type: object
-      description: "シャドウ検証設定"
+      description: シャドウ検証設定
       properties:
         enabled:
           type: boolean
           default: true
         partial_validation_default:
           type: string
-          default: "non_admissible"
-          enum: ["non_admissible"]
+          default: non_admissible
+          enum:
+          - non_admissible
         warning_only_until:
           type: string
-          default: ""
+          default: ''
         timestamp_skew_tolerance_seconds:
           type: integer
           default: 5
@@ -563,18 +599,18 @@ components:
         replay_binding_required:
           type: boolean
           default: false
-
     RevocationConfig:
       type: object
-      description: "失効反映の整合性設定"
+      description: 失効反映の整合性設定
       properties:
         enabled:
           type: boolean
           default: true
         mode:
           type: string
-          default: "bounded_eventual_consistency"
-          enum: ["bounded_eventual_consistency"]
+          default: bounded_eventual_consistency
+          enum:
+          - bounded_eventual_consistency
         alert_target_seconds:
           type: integer
           default: 30
@@ -588,10 +624,9 @@ components:
         degrade_on_pending:
           type: boolean
           default: true
-
     DriftScoringConfig:
       type: object
-      description: "ドリフト評価スコア重み"
+      description: ドリフト評価スコア重み
       properties:
         policy_weight:
           type: number
@@ -631,12 +666,14 @@ components:
           maximum: 1
     BindAdjudicationPolicyConfig:
       type: object
-      description: "Bind adjudication runtime controls."
+      description: Bind adjudication runtime controls.
       properties:
         missing_signal_default:
           type: string
-          enum: ["block", "escalate"]
-          default: "block"
+          enum:
+          - block
+          - escalate
+          default: block
         drift_required:
           type: boolean
           default: true
@@ -649,14 +686,13 @@ components:
         rollback_on_apply_failure:
           type: boolean
           default: false
-
     GovernancePolicy:
       type: object
-      description: "ガバナンスポリシー設定"
+      description: ガバナンスポリシー設定
       properties:
         version:
           type: string
-          default: "governance_v1"
+          default: governance_v1
         fuji_rules:
           $ref: '#/components/schemas/FujiRules'
         risk_thresholds:
@@ -686,21 +722,27 @@ components:
           format: date-time
         updated_by:
           type: string
-          default: "system"
-
+          default: system
     GovernancePolicyResponse:
       type: object
-      required: [ok, policy]
-      description: "ガバナンスポリシーAPIレスポンス"
+      required:
+      - ok
+      - policy
+      description: ガバナンスポリシーAPIレスポンス
       properties:
         ok:
           type: boolean
         policy:
           $ref: '#/components/schemas/GovernancePolicy'
-
+        bind_summary:
+          anyOf:
+          - $ref: '#/components/schemas/BindSummary'
+          - type: 'null'
+          description: Shared compact bind summary object.
     ComplianceConfigResponse:
       type: object
-      description: "Compliance config response with optional bind lineage fields on mutation."
+      description: Compliance config response with optional bind lineage fields on
+        mutation.
       properties:
         ok:
           type: boolean
@@ -711,16 +753,23 @@ components:
         bind_outcome:
           type: string
           nullable: true
-          description: "Present when bind adjudication runs for compliance config mutation."
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+          description: Present when bind adjudication runs for compliance config mutation.
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
         bind_failure_reason:
           type: string
           nullable: true
-          description: "Compact bind failure reason resolved from receipt checks."
+          description: Compact bind failure reason resolved from receipt checks.
         bind_reason_code:
           type: string
           nullable: true
-          description: "Stable bind reason code when available."
+          description: Stable bind reason code when available.
         bind_receipt_id:
           type: string
           nullable: true
@@ -729,15 +778,19 @@ components:
           nullable: true
         bind_receipt:
           allOf:
-            - $ref: '#/components/schemas/BindReceipt'
+          - $ref: '#/components/schemas/BindReceipt'
           nullable: true
         error:
           type: string
           nullable: true
-
+        bind_summary:
+          anyOf:
+          - $ref: '#/components/schemas/BindSummary'
+          - type: 'null'
+          description: Shared compact bind summary object.
     ExecutionIntent:
       type: object
-      description: "Decision-linked execution attempt descriptor."
+      description: Decision-linked execution attempt descriptor.
       properties:
         execution_intent_id:
           type: string
@@ -777,10 +830,10 @@ components:
           type: object
           nullable: true
           additionalProperties: true
-
     BindReceipt:
       type: object
-      description: "Bind-time governance artifact linked to decision lineage. Canonical target metadata fields are part of this artifact contract."
+      description: Bind-time governance artifact linked to decision lineage. Canonical
+        target metadata fields are part of this artifact contract.
       properties:
         bind_receipt_id:
           type: string
@@ -811,7 +864,14 @@ components:
           additionalProperties: true
         final_outcome:
           type: string
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
         rollback_reason:
           type: string
           nullable: true
@@ -831,7 +891,8 @@ components:
           description: Canonical bind-governed target type identifier.
         target_path_type:
           type: string
-          description: Canonical target path classification. Unknown/unmapped paths resolve to `other`.
+          description: Canonical target path classification. Unknown/unmapped paths
+            resolve to `other`.
         target_label:
           type: string
           description: Operator-facing canonical label for target path/type.
@@ -841,10 +902,9 @@ components:
         relevant_ui_href:
           type: string
           description: Canonical operator UI href for this bind target.
-
     GovernanceDecisionExportItem:
       type: object
-      description: "Governance decision export row with bind summary."
+      description: Governance decision export row with bind summary.
       properties:
         request_id:
           type: string
@@ -865,7 +925,14 @@ components:
         bind_outcome:
           type: string
           nullable: true
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
         bind_failure_reason:
           type: string
           nullable: true
@@ -906,10 +973,14 @@ components:
         relevant_ui_href:
           type: string
           nullable: true
-
+        bind_summary:
+          anyOf:
+          - $ref: '#/components/schemas/BindSummary'
+          - type: 'null'
+          description: Shared compact bind summary object.
     TrustFeedbackRequest:
       type: object
-      description: "信頼フィードバックリクエスト（全フィールドにデフォルト値あり）"
+      description: 信頼フィードバックリクエスト（全フィールドにデフォルト値あり）
       properties:
         user_id:
           type: string
@@ -920,21 +991,26 @@ components:
           default: 0.5
           minimum: 0.0
           maximum: 1.0
-          description: "フィードバックスコア（0.0〜1.0）"
+          description: フィードバックスコア（0.0〜1.0）
         note:
           type: string
-          default: ""
+          default: ''
           maxLength: 10000
-          description: "フィードバックメモ"
+          description: フィードバックメモ
         source:
           type: string
-          default: "manual"
+          default: manual
           maxLength: 200
-          description: "フィードバック元"
-
+          description: フィードバック元
     TrustLog:
       type: object
-      required: [request_id, created_at, sources, critics, checks, approver]
+      required:
+      - request_id
+      - created_at
+      - sources
+      - critics
+      - checks
+      - approver
       properties:
         request_id:
           type: string
@@ -955,40 +1031,39 @@ components:
             type: string
         approver:
           type: string
-          default: "system"
+          default: system
         fuji:
           oneOf:
-            - $ref: '#/components/schemas/FujiDecision'
-            - type: object
-              additionalProperties: true
+          - $ref: '#/components/schemas/FujiDecision'
+          - type: object
+            additionalProperties: true
           nullable: true
         sha256:
           type: string
           nullable: true
-          description: "このエントリ自身のSHA-256ハッシュ"
+          description: このエントリ自身のSHA-256ハッシュ
         sha256_prev:
           type: string
           nullable: true
-          description: "チェーン用ハッシュ（前エントリのsha256）"
+          description: チェーン用ハッシュ（前エントリのsha256）
         query:
           type: string
           nullable: true
-          description: "元のユーザークエリテキスト（パイプライン監査エントリに付与）"
+          description: 元のユーザークエリテキスト（パイプライン監査エントリに付与）
         gate_status:
           type: string
           nullable: true
-          description: "FUJIゲートの判定ステータス（allow/modify/rejected/block/abstain）"
+          description: FUJIゲートの判定ステータス（allow/modify/rejected/block/abstain）
         gate_risk:
           type: number
           nullable: true
-          description: "ゲートのリスクスコア"
-
+          description: ゲートのリスクスコア
     WatIntegrity:
       type: object
       properties:
         integrity_state:
           type: string
-          description: "WAT integrity state summary (healthy / warning / critical)"
+          description: WAT integrity state summary (healthy / warning / critical)
         wat_id:
           type: string
           nullable: true
@@ -1011,7 +1086,6 @@ components:
           type: string
           nullable: true
       additionalProperties: true
-
     WatDriftVector:
       type: object
       properties:
@@ -1028,27 +1102,26 @@ components:
           type: number
           default: 0.0
       additionalProperties: false
-
     DecideResponse:
       type: object
       properties:
         ok:
           type: boolean
           default: true
-          description: "レスポンス成否フラグ"
+          description: レスポンス成否フラグ
         error:
           type: string
           nullable: true
-          description: "エラー詳細（ok=falseの場合に設定）"
+          description: エラー詳細（ok=falseの場合に設定）
         request_id:
           type: string
         version:
           type: string
-          default: "veritas-api 1.x"
+          default: veritas-api 1.x
         chosen:
           type: object
           additionalProperties: true
-          description: "選択されたアクションと理由（構造は可変。action/rationale/uncertaintyを含むことが多い）"
+          description: 選択されたアクションと理由（構造は可変。action/rationale/uncertaintyを含むことが多い）
           properties:
             action:
               type: string
@@ -1061,13 +1134,13 @@ components:
           default: []
           items:
             $ref: '#/components/schemas/Alt'
-          description: "候補選択肢（後方互換フィールド、alternativesと同値に正規化）"
+          description: 候補選択肢（後方互換フィールド、alternativesと同値に正規化）
         alternatives:
           type: array
           default: []
           items:
             $ref: '#/components/schemas/Alt'
-          description: "候補選択肢（canonicalフィールド）"
+          description: 候補選択肢（canonicalフィールド）
         evidence:
           type: array
           default: []
@@ -1091,58 +1164,68 @@ components:
           additionalProperties: true
         trust_log:
           oneOf:
-            - $ref: '#/components/schemas/TrustLog'
-            - type: object
-              additionalProperties: true
+          - $ref: '#/components/schemas/TrustLog'
+          - type: object
+            additionalProperties: true
           nullable: true
         rsi_note:
           type: object
           nullable: true
           additionalProperties: true
-          description: "RSI関連メタ情報（オブジェクト形式）"
+          description: RSI関連メタ情報（オブジェクト形式）
         decision_status:
           type: string
-          enum: ["allow", "modify", "rejected", "block", "abstain"]
-          default: "allow"
-          description: "Legacy compatibility decision status. Public contract should prefer gate_decision."
+          enum:
+          - allow
+          - modify
+          - rejected
+          - block
+          - abstain
+          default: allow
+          description: Legacy compatibility decision status. Public contract should
+            prefer gate_decision.
         rejection_reason:
           type: string
           nullable: true
         gate_decision:
           type: string
           enum:
-            [
-              "proceed",
-              "hold",
-              "block",
-              "human_review_required",
-              "allow",
-              "deny",
-              "modify",
-              "rejected",
-              "abstain",
-              "unknown",
-            ]
-          default: "unknown"
-          description: "Canonical public values are proceed|hold|block|human_review_required. Legacy aliases remain compatibility-only inputs and are normalized before public output. proceed indicates gate pass-through only and is not business approval."
-          examples: ["proceed", "hold", "human_review_required", "block"]
+          - proceed
+          - hold
+          - block
+          - human_review_required
+          - allow
+          - deny
+          - modify
+          - rejected
+          - abstain
+          - unknown
+          default: unknown
+          description: Canonical public values are proceed|hold|block|human_review_required.
+            Legacy aliases remain compatibility-only inputs and are normalized before
+            public output. proceed indicates gate pass-through only and is not business
+            approval.
+          examples:
+          - proceed
+          - hold
+          - human_review_required
+          - block
         business_decision:
           type: string
           enum:
-            [
-              "APPROVE",
-              "DENY",
-              "HOLD",
-              "REVIEW_REQUIRED",
-              "POLICY_DEFINITION_REQUIRED",
-              "EVIDENCE_REQUIRED",
-            ]
-          default: "HOLD"
-          description: "Business lifecycle decision state. Keep distinct from next_action."
+          - APPROVE
+          - DENY
+          - HOLD
+          - REVIEW_REQUIRED
+          - POLICY_DEFINITION_REQUIRED
+          - EVIDENCE_REQUIRED
+          default: HOLD
+          description: Business lifecycle decision state. Keep distinct from next_action.
         next_action:
           type: string
-          default: "REVISE_AND_RESUBMIT"
-          description: "Operational guidance action; separate from business_decision state."
+          default: REVISE_AND_RESUBMIT
+          description: Operational guidance action; separate from business_decision
+            state.
         required_evidence:
           type: array
           default: []
@@ -1164,7 +1247,8 @@ components:
         human_review_required:
           type: boolean
           default: false
-          description: "Must be true when gate_decision=human_review_required or business_decision=REVIEW_REQUIRED. REVIEW_REQUIRED must be paired with gate_decision=human_review_required."
+          description: Must be true when gate_decision=human_review_required or business_decision=REVIEW_REQUIRED.
+            REVIEW_REQUIRED must be paired with gate_decision=human_review_required.
         rationale:
           type: string
           nullable: true
@@ -1184,9 +1268,9 @@ components:
           additionalProperties: true
         persona:
           oneOf:
-            - $ref: '#/components/schemas/PersonaState'
-            - type: object
-              additionalProperties: true
+          - $ref: '#/components/schemas/PersonaState'
+          - type: object
+            additionalProperties: true
         plan:
           type: object
           nullable: true
@@ -1199,9 +1283,9 @@ components:
           nullable: true
         evo:
           oneOf:
-            - $ref: '#/components/schemas/EvoTips'
-            - type: object
-              additionalProperties: true
+          - $ref: '#/components/schemas/EvoTips'
+          - type: object
+            additionalProperties: true
           nullable: true
         memory_citations:
           type: array
@@ -1212,111 +1296,124 @@ components:
           default: 0
         ai_disclosure:
           type: string
-          default: "This response was generated by an AI system (VERITAS OS)."
+          default: This response was generated by an AI system (VERITAS OS).
         regulation_notice:
           type: string
-          default: "Subject to EU AI Act Regulation (EU) 2024/1689."
+          default: Subject to EU AI Act Regulation (EU) 2024/1689.
         affected_parties_notice:
           type: object
           nullable: true
           additionalProperties: true
-          description: "高リスクAI決定で第三者に影響する場合の通知レコード"
+          description: 高リスクAI決定で第三者に影響する場合の通知レコード
         query:
           type: string
           nullable: true
-          description: "監査・再現用に付与された元のユーザークエリテキスト"
+          description: 監査・再現用に付与された元のユーザークエリテキスト
         pipeline_steps:
           type: array
           nullable: true
           items:
             type: string
-          description: "オーケストレーターが解決した動的パイプラインステップ（EU AI Act準拠）"
+          description: オーケストレーターが解決した動的パイプラインステップ（EU AI Act準拠）
         deterministic_replay:
           type: object
           nullable: true
           additionalProperties: true
-          description: "決定の決定論的再現に必要なスナップショット"
+          description: 決定の決定論的再現に必要なスナップショット
         governance_identity:
           type: object
           nullable: true
           additionalProperties: true
-          description: "Identity of the governance artifact in force at decision time."
+          description: Identity of the governance artifact in force at decision time.
         bind_outcome:
           type: string
           nullable: true
-          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
-          description: "Bind-phase governance outcome linked to this decision when available."
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
+          description: Bind-phase governance outcome linked to this decision when
+            available.
         bind_failure_reason:
           type: string
           nullable: true
-          description: "Operator-facing reason when bind phase was blocked/escalated/rolled back."
+          description: Operator-facing reason when bind phase was blocked/escalated/rolled
+            back.
         bind_reason_code:
           type: string
           nullable: true
-          description: "Machine-readable bind reason code for compact governance filtering."
+          description: Machine-readable bind reason code for compact governance filtering.
         bind_receipt_id:
           type: string
           nullable: true
-          description: "Lineage pointer to the bind receipt artifact."
+          description: Lineage pointer to the bind receipt artifact.
         execution_intent_id:
           type: string
           nullable: true
-          description: "Lineage pointer to the execution intent linked to bind phase."
+          description: Lineage pointer to the execution intent linked to bind phase.
         authority_check_result:
           type: object
           nullable: true
           additionalProperties: true
-          description: "Authority check summary from bind-phase adjudication."
+          description: Authority check summary from bind-phase adjudication.
         constraint_check_result:
           type: object
           nullable: true
           additionalProperties: true
-          description: "Constraint check summary from bind-phase adjudication."
+          description: Constraint check summary from bind-phase adjudication.
         drift_check_result:
           type: object
           nullable: true
           additionalProperties: true
-          description: "Drift check summary from bind-phase adjudication."
+          description: Drift check summary from bind-phase adjudication.
         risk_check_result:
           type: object
           nullable: true
           additionalProperties: true
-          description: "Runtime risk check summary from bind-phase adjudication."
+          description: Runtime risk check summary from bind-phase adjudication.
         wat_integrity:
           $ref: '#/components/schemas/WatIntegrity'
           nullable: true
-          description: "Canonical additive WAT integrity summary for console consumers."
+          description: Canonical additive WAT integrity summary for console consumers.
         wat_drift_vector:
           $ref: '#/components/schemas/WatDriftVector'
           nullable: true
-          description: "Canonical additive WAT drift vector with normalized keys."
-
+          description: Canonical additive WAT drift vector with normalized keys.
+        bind_summary:
+          anyOf:
+          - $ref: '#/components/schemas/BindSummary'
+          - type: 'null'
+          description: Shared compact bind summary object.
     DecideRequest:
       type: object
-      description: "意思決定リクエスト（全フィールドにデフォルト値あり、alternatives/options互換）"
+      description: 意思決定リクエスト（全フィールドにデフォルト値あり、alternatives/options互換）
       properties:
         query:
           type: string
-          default: ""
+          default: ''
           maxLength: 10000
-          description: "ユーザ要求/問題文（context.queryの代替）"
+          description: ユーザ要求/問題文（context.queryの代替）
         context:
           oneOf:
-            - $ref: '#/components/schemas/Context'
-            - type: object
-              additionalProperties: true
+          - $ref: '#/components/schemas/Context'
+          - type: object
+            additionalProperties: true
           default: {}
-          description: "コンテキスト情報（省略可、デフォルト空dict）"
+          description: コンテキスト情報（省略可、デフォルト空dict）
         alternatives:
           type: array
           items:
             $ref: '#/components/schemas/Option'
-          description: "候補選択肢（canonicalフィールド）"
+          description: 候補選択肢（canonicalフィールド）
         options:
           type: array
           items:
             $ref: '#/components/schemas/Option'
-          description: "候補選択肢（後方互換フィールド、alternativesを優先）"
+          description: 候補選択肢（後方互換フィールド、alternativesを優先）
         min_evidence:
           type: integer
           default: 1
@@ -1328,10 +1425,9 @@ components:
         persona_evolve:
           type: boolean
           default: true
-
     MemoryPutRequest:
       type: object
-      description: "メモリ保存リクエスト"
+      description: メモリ保存リクエスト
       properties:
         user_id:
           type: string
@@ -1343,44 +1439,48 @@ components:
           maxLength: 500
         text:
           type: string
-          default: ""
+          default: ''
           maxLength: 100000
-          description: "メモリ本文テキスト（最大100,000文字）"
+          description: メモリ本文テキスト（最大100,000文字）
         tags:
           type: array
           items:
             type: string
-          description: "タグリスト（最大100件）"
+          description: タグリスト（最大100件）
         value:
-          description: "任意のJSON値"
+          description: 任意のJSON値
         kind:
           type: string
-          default: "semantic"
+          default: semantic
           maxLength: 50
-          description: "メモリ種別 (semantic / episodic / skills / doc / plan)"
+          description: メモリ種別 (semantic / episodic / skills / doc / plan)
         retention_class:
           type: string
           nullable: true
           maxLength: 50
-          enum: ["short", "standard", "long", "regulated"]
-          description: "保持クラス"
+          enum:
+          - short
+          - standard
+          - long
+          - regulated
+          description: 保持クラス
         meta:
           type: object
           additionalProperties: true
-          description: "任意メタデータ"
+          description: 任意メタデータ
         expires_at:
           type: integer
           nullable: true
-          description: "有効期限（UNIXタイムスタンプ秒）"
+          description: 有効期限（UNIXタイムスタンプ秒）
         legal_hold:
           type: boolean
           default: false
-          description: "法的保持フラグ"
-
+          description: 法的保持フラグ
     MemoryGetRequest:
       type: object
-      description: "メモリ取得リクエスト"
-      required: [key]
+      description: メモリ取得リクエスト
+      required:
+      - key
       properties:
         user_id:
           type: string
@@ -1389,10 +1489,9 @@ components:
         key:
           type: string
           maxLength: 500
-
     MemorySearchRequest:
       type: object
-      description: "メモリ検索リクエスト"
+      description: メモリ検索リクエスト
       properties:
         user_id:
           type: string
@@ -1400,33 +1499,32 @@ components:
           maxLength: 500
         query:
           type: string
-          default: ""
+          default: ''
           maxLength: 10000
-          description: "検索クエリ（最大10,000文字）"
+          description: 検索クエリ（最大10,000文字）
         k:
           type: integer
           default: 8
           minimum: 1
           maximum: 100
-          description: "返却件数上限"
+          description: 返却件数上限
         min_sim:
           type: number
           default: 0.25
           minimum: 0.0
           maximum: 1.0
-          description: "最小類似度スコア"
+          description: 最小類似度スコア
         kinds:
           oneOf:
-            - type: string
-            - type: array
-              items:
-                type: string
+          - type: string
+          - type: array
+            items:
+              type: string
           nullable: true
-          description: "絞り込むメモリ種別（単一または配列）"
-
+          description: 絞り込むメモリ種別（単一または配列）
     MemoryEraseRequest:
       type: object
-      description: "メモリ消去リクエスト"
+      description: メモリ消去リクエスト
       properties:
         user_id:
           type: string
@@ -1434,18 +1532,24 @@ components:
           maxLength: 500
         reason:
           type: string
-          default: "user_request"
+          default: user_request
           maxLength: 500
-          description: "消去理由"
+          description: 消去理由
         actor:
           type: string
-          default: "api"
+          default: api
           maxLength: 200
-          description: "消去を行うアクター名"
-
+          description: 消去を行うアクター名
     WatEvent:
       type: object
-      required: [event_id, ts, lane, wat_id, event_type, actor, status]
+      required:
+      - event_id
+      - ts
+      - lane
+      - wat_id
+      - event_type
+      - actor
+      - status
       properties:
         event_id:
           type: string
@@ -1454,7 +1558,8 @@ components:
           format: date-time
         lane:
           type: string
-          enum: ["wat_shadow"]
+          enum:
+          - wat_shadow
         wat_id:
           type: string
         event_type:
@@ -1469,10 +1574,10 @@ components:
         trustlog_anchor_ref:
           type: object
           additionalProperties: true
-
     WatIssueShadowRequest:
       type: object
-      required: [psid]
+      required:
+      - psid
       properties:
         wat_id:
           type: string
@@ -1489,10 +1594,10 @@ components:
         metadata:
           type: object
           additionalProperties: true
-
     WatValidateShadowRequest:
       type: object
-      required: [wat_id]
+      required:
+      - wat_id
       properties:
         wat_id:
           type: string
@@ -1508,7 +1613,6 @@ components:
         details:
           type: object
           additionalProperties: true
-
     WatRevocationRequest:
       type: object
       properties:
@@ -1520,19 +1624,83 @@ components:
         details:
           type: object
           additionalProperties: true
-
-security:
-  - ApiKeyAuth: []
-
+    BindSummary:
+      type: object
+      description: Compact bind summary shared across mutation/export responses. Full
+        artifact data remains in BindReceipt.
+      properties:
+        bind_outcome:
+          anyOf:
+          - $ref: '#/components/schemas/FinalOutcome'
+          - type: 'null'
+        bind_failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+        bind_reason_code:
+          anyOf:
+          - type: string
+          - type: 'null'
+        bind_receipt_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+        execution_intent_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+        authority_check_result:
+          anyOf:
+          - type: object
+            additionalProperties: true
+          - type: 'null'
+        constraint_check_result:
+          anyOf:
+          - type: object
+            additionalProperties: true
+          - type: 'null'
+        drift_check_result:
+          anyOf:
+          - type: object
+            additionalProperties: true
+          - type: 'null'
+        risk_check_result:
+          anyOf:
+          - type: object
+            additionalProperties: true
+          - type: 'null'
+        target_path:
+          anyOf:
+          - type: string
+          - type: 'null'
+        target_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+        target_path_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+        target_label:
+          anyOf:
+          - type: string
+          - type: 'null'
+        operator_surface:
+          anyOf:
+          - type: string
+          - type: 'null'
+        relevant_ui_href:
+          anyOf:
+          - type: string
+          - type: 'null'
 paths:
   /health:
     get:
       security: []
       summary: Health check
       responses:
-        "200":
+        '200':
           description: OK
-
   /v1/decide:
     post:
       summary: Run full VERITAS decision loop
@@ -1543,24 +1711,23 @@ paths:
             schema:
               $ref: '#/components/schemas/DecideRequest'
       responses:
-        "200":
+        '200':
           description: Decision
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/DecideResponse'
-
   /v1/replay/{decision_id}:
     post:
       summary: Replay a persisted decision and store replay report
       parameters:
-        - in: path
-          name: decision_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: decision_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Replay execution result
           content:
             application/json:
@@ -1584,34 +1751,39 @@ paths:
                     description: Replay artifact schema version (e.g. "1.0.0")
                   severity:
                     type: string
-                    description: Highest severity among changed fields (critical, warning, info)
-                    enum: [critical, warning, info]
+                    description: Highest severity among changed fields (critical,
+                      warning, info)
+                    enum:
+                    - critical
+                    - warning
+                    - info
                   divergence_level:
                     type: string
                     description: Overall divergence classification
-                    enum: [no_divergence, acceptable_divergence, critical_divergence]
+                    enum:
+                    - no_divergence
+                    - acceptable_divergence
+                    - critical_divergence
                   audit_summary:
                     type: string
                     description: Human-readable audit summary of the replay result
-
   /v1/decision/replay/{decision_id}:
     post:
       summary: Decision replay (v2)
       parameters:
-        - in: path
-          name: decision_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: decision_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Replay execution result
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/fuji/validate:
     post:
       summary: Safety/ethics validation for a candidate action
@@ -1621,20 +1793,21 @@ paths:
           application/json:
             schema:
               type: object
-              required: [action, context]
+              required:
+              - action
+              - context
               properties:
                 action:
                   type: string
                 context:
                   $ref: '#/components/schemas/Context'
       responses:
-        "200":
+        '200':
           description: FUJI decision
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/FujiDecision'
-
   /v1/memory/put:
     post:
       summary: Append to persistent memory
@@ -1645,7 +1818,7 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoryPutRequest'
       responses:
-        "200":
+        '200':
           description: OK
           content:
             application/json:
@@ -1687,7 +1860,6 @@ paths:
                         nullable: true
                       legal_hold:
                         type: boolean
-
   /v1/memory/get:
     post:
       summary: Retrieve memory by key
@@ -1698,7 +1870,7 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoryGetRequest'
       responses:
-        "200":
+        '200':
           description: Retrieved memory entry
           content:
             application/json:
@@ -1711,8 +1883,7 @@ paths:
                     type: string
                     nullable: true
                   value:
-                    description: "取得した値（任意のJSON）"
-
+                    description: 取得した値（任意のJSON）
   /v1/memory/search:
     post:
       summary: Memory search
@@ -1723,14 +1894,13 @@ paths:
             schema:
               $ref: '#/components/schemas/MemorySearchRequest'
       responses:
-        "200":
+        '200':
           description: Search results
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/memory/erase:
     post:
       summary: Memory erasure
@@ -1741,26 +1911,26 @@ paths:
             schema:
               $ref: '#/components/schemas/MemoryEraseRequest'
       responses:
-        "200":
+        '200':
           description: Erasure result
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/trust/{request_id}:
     get:
       summary: Get trust log entries for a request (with chain verification)
       parameters:
-        - in: path
-          name: request_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
-          description: Trust log entries for the given request_id with chain integrity result
+        '200':
+          description: Trust log entries for the given request_id with chain integrity
+            result
           content:
             application/json:
               schema:
@@ -1778,25 +1948,27 @@ paths:
                     type: boolean
                   verification_result:
                     type: string
-                    enum: ["ok", "broken", "not_found"]
-
+                    enum:
+                    - ok
+                    - broken
+                    - not_found
   /v1/trust/logs:
     get:
       summary: Cursor-paginated trust log listing
       parameters:
-        - in: query
-          name: cursor
-          schema:
-            type: string
-          description: "カーソル（前回レスポンスの next_cursor を指定）"
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            default: 50
-          description: "1回の取得件数上限"
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: カーソル（前回レスポンスの next_cursor を指定）
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          default: 50
+        description: 1回の取得件数上限
       responses:
-        "200":
+        '200':
           description: Cursor-paginated trust logs
           content:
             application/json:
@@ -1809,16 +1981,15 @@ paths:
                       $ref: '#/components/schemas/TrustLog'
                   cursor:
                     type: string
-                    description: "現在のオフセット（文字列）"
+                    description: 現在のオフセット（文字列）
                   next_cursor:
                     type: string
                     nullable: true
-                    description: "次ページのカーソル（null = 末尾）"
+                    description: 次ページのカーソル（null = 末尾）
                   limit:
                     type: integer
                   has_more:
                     type: boolean
-
   /v1/trust/feedback:
     post:
       summary: Human feedback recording
@@ -1829,7 +2000,7 @@ paths:
             schema:
               $ref: '#/components/schemas/TrustFeedbackRequest'
       responses:
-        "200":
+        '200':
           description: Feedback recorded
           content:
             application/json:
@@ -1838,12 +2009,11 @@ paths:
                 properties:
                   ok:
                     type: boolean
-
   /v1/trustlog/verify:
     get:
       summary: Trust log chain verification
       responses:
-        "200":
+        '200':
           description: Chain verification result
           content:
             application/json:
@@ -1856,38 +2026,34 @@ paths:
                     type: boolean
                   detail:
                     type: string
-
   /v1/trustlog/export:
     get:
       summary: Trust log export
       responses:
-        "200":
+        '200':
           description: Exported trust logs
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
-
   /v1/trust/{request_id}/prov:
     get:
       summary: Decision trace export as W3C PROV JSON
       parameters:
-        - in: path
-          name: request_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: request_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: PROV export payload
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/wat/issue-shadow:
     post:
       summary: Persist shadow-only WAT issuance event
@@ -1898,14 +2064,13 @@ paths:
             schema:
               $ref: '#/components/schemas/WatIssueShadowRequest'
       responses:
-        "200":
+        '200':
           description: WAT shadow issuance recorded
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/wat/validate-shadow:
     post:
       summary: Persist shadow-only WAT validation event
@@ -1916,69 +2081,66 @@ paths:
             schema:
               $ref: '#/components/schemas/WatValidateShadowRequest'
       responses:
-        "200":
+        '200':
           description: WAT shadow validation recorded
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/wat/{wat_id}:
     get:
       summary: Get latest WAT event and timeline by WAT id
       parameters:
-        - in: path
-          name: wat_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: wat_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: WAT event summary
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/wat/events:
     get:
       summary: List WAT shadow event lane records
       parameters:
-        - in: query
-          name: wat_id
-          schema:
-            type: string
-        - in: query
-          name: event_type
-          schema:
-            type: string
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-            default: 100
+      - in: query
+        name: wat_id
+        schema:
+          type: string
+      - in: query
+        name: event_type
+        schema:
+          type: string
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
       responses:
-        "200":
+        '200':
           description: WAT event list
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/wat/revocation/{wat_id}:
     post:
       summary: Persist WAT revocation pending/confirmed shadow events
       parameters:
-        - in: path
-          name: wat_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: wat_id
+        required: true
+        schema:
+          type: string
       requestBody:
         required: false
         content:
@@ -1986,76 +2148,72 @@ paths:
             schema:
               $ref: '#/components/schemas/WatRevocationRequest'
       responses:
-        "200":
+        '200':
           description: WAT revocation events recorded
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/events:
     get:
       summary: SSE event stream
       responses:
-        "200":
+        '200':
           description: Server-Sent Events stream
           content:
             text/event-stream:
               schema:
                 type: string
-
   /v1/metrics:
     get:
       summary: System metrics
       responses:
-        "200":
+        '200':
           description: System metrics
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/governance/value-drift:
     get:
       summary: Value drift metrics
       parameters:
-        - in: header
-          name: X-Role
-          required: false
-          schema:
-            type: string
-        - in: header
-          name: X-Tenant-Id
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Role
+        required: false
+        schema:
+          type: string
+      - in: header
+        name: X-Tenant-Id
+        required: false
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Value drift data
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/governance/policy:
     get:
       summary: Governance policy read
       parameters:
-        - in: header
-          name: X-Role
-          required: false
-          schema:
-            type: string
-        - in: header
-          name: X-Tenant-Id
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Role
+        required: false
+        schema:
+          type: string
+      - in: header
+        name: X-Tenant-Id
+        required: false
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Governance policy
           content:
             application/json:
@@ -2064,16 +2222,16 @@ paths:
     put:
       summary: Governance policy update
       parameters:
-        - in: header
-          name: X-Role
-          required: false
-          schema:
-            type: string
-        - in: header
-          name: X-Tenant-Id
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Role
+        required: false
+        schema:
+          type: string
+      - in: header
+        name: X-Tenant-Id
+        required: false
+        schema:
+          type: string
       requestBody:
         required: true
         content:
@@ -2081,29 +2239,28 @@ paths:
             schema:
               $ref: '#/components/schemas/GovernancePolicy'
       responses:
-        "200":
+        '200':
           description: Updated policy
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GovernancePolicyResponse'
-
   /v1/governance/policy/history:
     get:
       summary: Governance policy change history
       parameters:
-        - in: header
-          name: X-Role
-          required: false
-          schema:
-            type: string
-        - in: header
-          name: X-Tenant-Id
-          required: false
-          schema:
-            type: string
+      - in: header
+        name: X-Role
+        required: false
+        schema:
+          type: string
+      - in: header
+        name: X-Tenant-Id
+        required: false
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Policy change history
           content:
             application/json:
@@ -2126,32 +2283,38 @@ paths:
                           $ref: '#/components/schemas/GovernancePolicy'
                         new:
                           $ref: '#/components/schemas/GovernancePolicy'
-
   /v1/governance/decisions/export:
     get:
       summary: Governance decision export
       parameters:
-        - in: query
-          name: limit
-          required: false
-          schema:
-            type: integer
-            default: 100
-            minimum: 1
-            maximum: 1000
-        - in: query
-          name: status
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: bind_outcome
-          required: false
-          schema:
-            type: string
-            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+      - in: query
+        name: limit
+        required: false
+        schema:
+          type: integer
+          default: 100
+          minimum: 1
+          maximum: 1000
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: bind_outcome
+        required: false
+        schema:
+          type: string
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
       responses:
-        "200":
+        '200':
           description: Decision export rows
           content:
             application/json:
@@ -2166,98 +2329,119 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/GovernanceDecisionExportItem'
-
   /v1/governance/bind-receipts:
     get:
       summary: Bind receipt search with operator filters
-      description: |
-        Lists governance bind receipt artifacts with additive server-side filters.
+      description: 'Lists governance bind receipt artifacts with additive server-side
+        filters.
+
         Existing `decision_id` and `execution_intent_id` filters remain supported.
+
         `BindReceipt` items include canonical backend-owned target metadata.
-        `target_catalog` returns the same metadata vocabulary for selector/discovery surfaces.
+
+        `target_catalog` returns the same metadata vocabulary for selector/discovery
+        surfaces.
+
         `failed_only=true` excludes `COMMITTED` outcomes.
-        `recent_only=true` returns only receipts within the last 24 hours from server clock.
-        Cursor pagination is stable across equal timestamps by using timestamp + bind_receipt_id ordering.
+
+        `recent_only=true` returns only receipts within the last 24 hours from server
+        clock.
+
+        Cursor pagination is stable across equal timestamps by using timestamp + bind_receipt_id
+        ordering.
+
+        '
       parameters:
-        - in: query
-          name: decision_id
-          required: false
-          description: Exact governance decision identifier filter.
-          schema:
-            type: string
-        - in: query
-          name: execution_intent_id
-          required: false
-          description: Exact execution intent identifier filter.
-          schema:
-            type: string
-        - in: query
-          name: target_path
-          required: false
-          description: Canonical target API path filter (exact match).
-          schema:
-            type: string
-        - in: query
-          name: target_type
-          required: false
-          description: Exact target type filter.
-          schema:
-            type: string
-        - in: query
-          name: outcome
-          required: false
-          description: Bind final outcome filter.
-          schema:
-            type: string
-            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
-        - in: query
-          name: reason_code
-          required: false
-          description: Case-insensitive contains filter for bind reason code.
-          schema:
-            type: string
-        - in: query
-          name: lineage_query
-          required: false
-          description: Case-insensitive contains search across decision_id, execution_intent_id, bind_receipt_id, and policy_snapshot_id.
-          schema:
-            type: string
-        - in: query
-          name: failed_only
-          required: false
-          description: When true, include only outcomes other than COMMITTED.
-          schema:
-            type: boolean
-        - in: query
-          name: recent_only
-          required: false
-          description: When true, include only receipts from the last 24 hours.
-          schema:
-            type: boolean
-        - in: query
-          name: limit
-          required: false
-          description: Maximum receipts per page (safe upper bound is 200).
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 200
-        - in: query
-          name: cursor
-          required: false
-          description: Opaque cursor from `next_cursor` to continue current filtered/sorted result set.
-          schema:
-            type: string
-        - in: query
-          name: sort
-          required: false
-          description: Timestamp sort order; default is newest.
-          schema:
-            type: string
-            enum: ["newest", "oldest"]
-            default: "newest"
+      - in: query
+        name: decision_id
+        required: false
+        description: Exact governance decision identifier filter.
+        schema:
+          type: string
+      - in: query
+        name: execution_intent_id
+        required: false
+        description: Exact execution intent identifier filter.
+        schema:
+          type: string
+      - in: query
+        name: target_path
+        required: false
+        description: Canonical target API path filter (exact match).
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        required: false
+        description: Exact target type filter.
+        schema:
+          type: string
+      - in: query
+        name: outcome
+        required: false
+        description: Bind final outcome filter.
+        schema:
+          type: string
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
+      - in: query
+        name: reason_code
+        required: false
+        description: Case-insensitive contains filter for bind reason code.
+        schema:
+          type: string
+      - in: query
+        name: lineage_query
+        required: false
+        description: Case-insensitive contains search across decision_id, execution_intent_id,
+          bind_receipt_id, and policy_snapshot_id.
+        schema:
+          type: string
+      - in: query
+        name: failed_only
+        required: false
+        description: When true, include only outcomes other than COMMITTED.
+        schema:
+          type: boolean
+      - in: query
+        name: recent_only
+        required: false
+        description: When true, include only receipts from the last 24 hours.
+        schema:
+          type: boolean
+      - in: query
+        name: limit
+        required: false
+        description: Maximum receipts per page (safe upper bound is 200).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - in: query
+        name: cursor
+        required: false
+        description: Opaque cursor from `next_cursor` to continue current filtered/sorted
+          result set.
+        schema:
+          type: string
+      - in: query
+        name: sort
+        required: false
+        description: Timestamp sort order; default is newest.
+        schema:
+          type: string
+          enum:
+          - newest
+          - oldest
+          default: newest
       responses:
-        "200":
+        '200':
           description: Bind receipts by filter with cursor pagination metadata
           content:
             application/json:
@@ -2278,7 +2462,9 @@ paths:
                     nullable: true
                   sort:
                     type: string
-                    enum: ["newest", "oldest"]
+                    enum:
+                    - newest
+                    - oldest
                   limit:
                     type: integer
                     nullable: true
@@ -2290,7 +2476,8 @@ paths:
                     additionalProperties: true
                   target_catalog:
                     type: array
-                    description: Canonical backend metadata catalog used for path-type selectors, labels, and navigation links.
+                    description: Canonical backend metadata catalog used for path-type
+                      selectors, labels, and navigation links.
                     items:
                       type: object
                       properties:
@@ -2312,7 +2499,7 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/BindReceipt'
-        "400":
+        '400':
           description: Invalid bind receipt query parameter or cursor
           content:
             application/json:
@@ -2325,70 +2512,83 @@ paths:
                     type: string
                   detail:
                     type: string
-
   /v1/governance/bind-receipts/export:
     get:
       summary: Bind receipt export with list-filter parity
-      description: |
-        Exports bind receipts using the same filter/sort semantics as `/v1/governance/bind-receipts`.
+      description: 'Exports bind receipts using the same filter/sort semantics as
+        `/v1/governance/bind-receipts`.
+
         This guarantees operator UI filtered-set parity for audit handoff.
-        `BindReceipt` items include canonical target metadata; `target_catalog` follows the same backend source of truth for selector/discovery UX.
+
+        `BindReceipt` items include canonical target metadata; `target_catalog` follows
+        the same backend source of truth for selector/discovery UX.
+
+        '
       parameters:
-        - in: query
-          name: decision_id
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: execution_intent_id
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: target_path
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: target_type
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: outcome
-          required: false
-          schema:
-            type: string
-            enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
-        - in: query
-          name: reason_code
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: lineage_query
-          required: false
-          schema:
-            type: string
-        - in: query
-          name: failed_only
-          required: false
-          schema:
-            type: boolean
-        - in: query
-          name: recent_only
-          required: false
-          schema:
-            type: boolean
-        - in: query
-          name: sort
-          required: false
-          schema:
-            type: string
-            enum: ["newest", "oldest"]
-            default: "newest"
+      - in: query
+        name: decision_id
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: execution_intent_id
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: target_path
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: target_type
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: outcome
+        required: false
+        schema:
+          type: string
+          enum:
+          - COMMITTED
+          - BLOCKED
+          - ROLLED_BACK
+          - ESCALATED
+          - APPLY_FAILED
+          - SNAPSHOT_FAILED
+          - PRECONDITION_FAILED
+      - in: query
+        name: reason_code
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: lineage_query
+        required: false
+        schema:
+          type: string
+      - in: query
+        name: failed_only
+        required: false
+        schema:
+          type: boolean
+      - in: query
+        name: recent_only
+        required: false
+        schema:
+          type: boolean
+      - in: query
+        name: sort
+        required: false
+        schema:
+          type: string
+          enum:
+          - newest
+          - oldest
+          default: newest
       responses:
-        "200":
+        '200':
           description: Bind receipt export payload
           content:
             application/json:
@@ -2401,7 +2601,9 @@ paths:
                     type: integer
                   sort:
                     type: string
-                    enum: ["newest", "oldest"]
+                    enum:
+                    - newest
+                    - oldest
                   total_count:
                     type: integer
                     nullable: true
@@ -2431,20 +2633,19 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/BindReceipt'
-        "400":
+        '400':
           description: Invalid bind receipt export parameter
-
   /v1/governance/bind-receipts/{bind_receipt_id}:
     get:
       summary: Bind receipt retrieval by ID
       parameters:
-        - in: path
-          name: bind_receipt_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: bind_receipt_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: Bind receipt artifact
           content:
             application/json:
@@ -2458,7 +2659,14 @@ paths:
                   bind_outcome:
                     type: string
                     nullable: true
-                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+                    enum:
+                    - COMMITTED
+                    - BLOCKED
+                    - ROLLED_BACK
+                    - ESCALATED
+                    - APPLY_FAILED
+                    - SNAPSHOT_FAILED
+                    - PRECONDITION_FAILED
                   bind_failure_reason:
                     type: string
                     nullable: true
@@ -2490,9 +2698,9 @@ paths:
                   target_metadata:
                     type: object
                     nullable: true
-                    description: Canonical backend-owned metadata for this receipt target. Unknown paths are returned as `target_path_type=other`.
+                    description: Canonical backend-owned metadata for this receipt
+                      target. Unknown paths are returned as `target_path_type=other`.
                     additionalProperties: true
-
   /v1/governance/policy-bundles/promote:
     post:
       summary: Promote policy bundle with bind-boundary governance workflow
@@ -2519,12 +2727,12 @@ paths:
                   type: object
                   additionalProperties: true
               required:
-                - decision_id
-                - request_id
-                - policy_snapshot_id
-                - decision_hash
+              - decision_id
+              - request_id
+              - policy_snapshot_id
+              - decision_hash
       responses:
-        "200":
+        '200':
           description: Bind receipt lineage for promotion execution
           content:
             application/json:
@@ -2536,7 +2744,14 @@ paths:
                   bind_outcome:
                     type: string
                     nullable: true
-                    enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+                    enum:
+                    - COMMITTED
+                    - BLOCKED
+                    - ROLLED_BACK
+                    - ESCALATED
+                    - APPLY_FAILED
+                    - SNAPSHOT_FAILED
+                    - PRECONDITION_FAILED
                   bind_failure_reason:
                     type: string
                     nullable: true
@@ -2551,12 +2766,11 @@ paths:
                     nullable: true
                   bind_receipt:
                     $ref: '#/components/schemas/BindReceipt'
-
   /v1/compliance/config:
     get:
       summary: Compliance config read
       responses:
-        "200":
+        '200':
           description: Compliance config
           content:
             application/json:
@@ -2580,18 +2794,17 @@ paths:
                   minimum: 0.0
                   maximum: 1.0
       responses:
-        "200":
+        '200':
           description: Updated config with bind receipt lineage fields
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ComplianceConfigResponse'
-
   /v1/compliance/deployment-readiness:
     get:
       summary: Deployment readiness check
       responses:
-        "200":
+        '200':
           description: Deployment readiness result
           content:
             application/json:
@@ -2605,7 +2818,6 @@ paths:
                   checks:
                     type: object
                     additionalProperties: true
-
   /v1/system/halt:
     post:
       summary: Emergency system halt
@@ -2614,7 +2826,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [reason, operator]
+              required:
+              - reason
+              - operator
               properties:
                 reason:
                   type: string
@@ -2625,7 +2839,7 @@ paths:
                   minLength: 1
                   maxLength: 200
       responses:
-        "200":
+        '200':
           description: System halted
           content:
             application/json:
@@ -2636,7 +2850,6 @@ paths:
                     type: boolean
                   halted:
                     type: boolean
-
   /v1/system/resume:
     post:
       summary: System resume
@@ -2645,7 +2858,8 @@ paths:
           application/json:
             schema:
               type: object
-              required: [operator]
+              required:
+              - operator
               properties:
                 operator:
                   type: string
@@ -2653,10 +2867,10 @@ paths:
                   maxLength: 200
                 comment:
                   type: string
-                  default: ""
+                  default: ''
                   maxLength: 500
       responses:
-        "200":
+        '200':
           description: System resumed
           content:
             application/json:
@@ -2667,12 +2881,11 @@ paths:
                     type: boolean
                   halted:
                     type: boolean
-
   /v1/system/halt-status:
     get:
       summary: Halt status check
       responses:
-        "200":
+        '200':
           description: Current halt status
           content:
             application/json:
@@ -2686,30 +2899,28 @@ paths:
                   reason:
                     type: string
                     nullable: true
-
   /v1/report/eu_ai_act/{decision_id}:
     get:
       summary: EU AI Act report for a decision
       parameters:
-        - in: path
-          name: decision_id
-          required: true
-          schema:
-            type: string
+      - in: path
+        name: decision_id
+        required: true
+        schema:
+          type: string
       responses:
-        "200":
+        '200':
           description: EU AI Act compliance report
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties: true
-
   /v1/report/governance:
     get:
       summary: Governance report
       responses:
-        "200":
+        '200':
           description: Governance report
           content:
             application/json:
