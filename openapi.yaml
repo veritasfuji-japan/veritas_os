@@ -2143,6 +2143,7 @@ paths:
       description: |
         Lists governance bind receipt artifacts with additive server-side filters.
         Existing `decision_id` and `execution_intent_id` filters remain supported.
+        `target_catalog` returns canonical backend-owned metadata for operator surfaces.
         `failed_only=true` excludes `COMMITTED` outcomes.
         `recent_only=true` returns only receipts within the last 24 hours from server clock.
         Cursor pagination is stable across equal timestamps by using timestamp + bind_receipt_id ordering.
@@ -2256,6 +2257,26 @@ paths:
                   applied_filters:
                     type: object
                     additionalProperties: true
+                  target_catalog:
+                    type: array
+                    description: Canonical backend metadata catalog used for path-type selectors, labels, and navigation links.
+                    items:
+                      type: object
+                      properties:
+                        target_path:
+                          type: string
+                        target_type:
+                          type: string
+                        target_path_type:
+                          type: string
+                        label:
+                          type: string
+                        operator_surface:
+                          type: string
+                        relevant_ui_href:
+                          type: string
+                        supports_filtering:
+                          type: boolean
                   items:
                     type: array
                     items:
@@ -2280,6 +2301,7 @@ paths:
       description: |
         Exports bind receipts using the same filter/sort semantics as `/v1/governance/bind-receipts`.
         This guarantees operator UI filtered-set parity for audit handoff.
+        `target_catalog` follows the same canonical semantics as the list endpoint.
       parameters:
         - in: query
           name: decision_id
@@ -2355,6 +2377,25 @@ paths:
                   applied_filters:
                     type: object
                     additionalProperties: true
+                  target_catalog:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        target_path:
+                          type: string
+                        target_type:
+                          type: string
+                        target_path_type:
+                          type: string
+                        label:
+                          type: string
+                        operator_surface:
+                          type: string
+                        relevant_ui_href:
+                          type: string
+                        supports_filtering:
+                          type: boolean
                   items:
                     type: array
                     items:
@@ -2414,6 +2455,11 @@ paths:
                   risk_check_result:
                     type: object
                     nullable: true
+                    additionalProperties: true
+                  target_metadata:
+                    type: object
+                    nullable: true
+                    description: Canonical backend-owned metadata for this receipt target. Unknown paths are returned as `target_path_type=other`.
                     additionalProperties: true
 
   /v1/governance/policy-bundles/promote:

@@ -569,6 +569,8 @@ def test_governance_bind_receipt_endpoint(monkeypatch) -> None:
     assert ok_body["drift_check_result"] == {"passed": False}
     assert ok_body["risk_check_result"] == {"reason_code": "POSTCONDITION_FAIL"}
     assert ok_body["bind_receipt"]["bind_receipt_id"] == "br-501"
+    assert ok_body["bind_receipt"]["target_path_type"] in {"governance_policy_update", "other"}
+    assert "target_metadata" in ok_body
 
     missing_resp = client.get("/v1/governance/bind-receipts/br-missing", headers=HEADERS)
     assert missing_resp.status_code == 404
@@ -609,6 +611,8 @@ def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     assert body["items"][0]["bind_receipt_id"] == "br-list-1"
     assert body["items"][0]["decision_id"] == "dec-list-1"
     assert body["items"][0]["execution_intent_id"] == "ei-list-1"
+    assert isinstance(body["target_catalog"], list)
+    assert any(item["target_path_type"] == "governance_policy_update" for item in body["target_catalog"])
 
 
 def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
@@ -700,6 +704,30 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
     limit_resp = client.get("/v1/governance/bind-receipts?sort=newest&limit=1", headers=HEADERS)
     assert limit_resp.status_code == 200
     assert [item["bind_receipt_id"] for item in limit_resp.json()["items"]] == ["br-1"]
+    assert target_path_resp.json()["items"][0]["target_path_type"] == "compliance_config_update"
+    assert target_path_resp.json()["items"][0]["target_label"] == "compliance config update"
+
+
+def test_governance_bind_receipts_unknown_target_metadata_fallback(monkeypatch) -> None:
+    class _Receipt:
+        def to_dict(self) -> dict:
+            return {
+                "bind_receipt_id": "br-unknown",
+                "decision_id": "dec-unknown",
+                "execution_intent_id": "ei-unknown",
+                "target_path": "/v1/unknown/path",
+                "target_type": "mystery_target",
+                "final_outcome": "BLOCKED",
+                "bind_reason_code": "DENY",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: [_Receipt()])
+    resp = client.get("/v1/governance/bind-receipts", headers=HEADERS)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["items"][0]["target_path_type"] == "other"
+    assert body["items"][0]["target_label"] == "other"
 
 
 def test_governance_bind_receipts_cursor_pagination_and_export_parity(monkeypatch) -> None:
@@ -784,6 +812,7 @@ def test_governance_bind_receipts_cursor_pagination_and_export_parity(monkeypatc
     assert export_body["sort"] == "newest"
     assert export_body["total_count"] == 2
     assert [item["bind_receipt_id"] for item in export_body["items"]] == ["br-b", "br-a"]
+    assert export_body["target_catalog"] == first_body["target_catalog"]
 
 
 
