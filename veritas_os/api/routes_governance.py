@@ -15,6 +15,10 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from veritas_os.api.auth import require_permission
+from veritas_os.api.bind_target_catalog import (
+    get_target_catalog_payload,
+    resolve_bind_target_metadata,
+)
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
     GovernanceBindReceiptExportResponse,
@@ -348,14 +352,26 @@ def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
 
 def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize bind receipt summary payload for governance API responses."""
+    target_metadata = resolve_bind_target_metadata(
+        bind_receipt.get("target_path"),
+        bind_receipt.get("target_type"),
+    )
+    enriched_receipt = {
+        **bind_receipt,
+        "target_path_type": target_metadata["target_path_type"],
+        "target_label": target_metadata["label"],
+        "operator_surface": target_metadata["operator_surface"],
+        "relevant_ui_href": target_metadata["relevant_ui_href"],
+    }
     return {
         "ok": True,
-        "bind_receipt": bind_receipt,
-        "bind_outcome": bind_receipt.get("final_outcome"),
-        "bind_failure_reason": _resolve_bind_failure_reason(bind_receipt),
-        "bind_reason_code": _resolve_bind_reason_code(bind_receipt),
-        "bind_receipt_id": bind_receipt.get("bind_receipt_id"),
-        "execution_intent_id": bind_receipt.get("execution_intent_id"),
+        "bind_receipt": enriched_receipt,
+        "bind_outcome": enriched_receipt.get("final_outcome"),
+        "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
+        "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
+        "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
+        "execution_intent_id": enriched_receipt.get("execution_intent_id"),
+        "target_metadata": target_metadata,
     }
 
 
@@ -710,8 +726,20 @@ def governance_bind_receipts(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
+        enriched_items: list[dict[str, Any]] = []
+        for item in filtered_items:
+            target_metadata = resolve_bind_target_metadata(item.get("target_path"), item.get("target_type"))
+            enriched_items.append(
+                {
+                    **item,
+                    "target_path_type": target_metadata["target_path_type"],
+                    "target_label": target_metadata["label"],
+                    "operator_surface": target_metadata["operator_surface"],
+                    "relevant_ui_href": target_metadata["relevant_ui_href"],
+                }
+            )
         page_items, has_more, next_cursor = _paginate_bind_receipt_items(
-            items=filtered_items,
+            items=enriched_items,
             sort=parsed_sort,
             limit=limit,
             cursor=cursor,
@@ -738,6 +766,7 @@ def governance_bind_receipts(
             "limit": limit,
             "applied_filters": applied_filters,
             "total_count": len(filtered_items),
+            "target_catalog": get_target_catalog_payload(),
         }
     except ValueError as exc:
         if str(exc) == "invalid_cursor":
@@ -805,6 +834,18 @@ def governance_bind_receipts_export(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
+        enriched_items: list[dict[str, Any]] = []
+        for item in filtered_items:
+            target_metadata = resolve_bind_target_metadata(item.get("target_path"), item.get("target_type"))
+            enriched_items.append(
+                {
+                    **item,
+                    "target_path_type": target_metadata["target_path_type"],
+                    "target_label": target_metadata["label"],
+                    "operator_surface": target_metadata["operator_surface"],
+                    "relevant_ui_href": target_metadata["relevant_ui_href"],
+                }
+            )
         applied_filters = _bind_receipt_applied_filters(
             decision_id=decision_id,
             execution_intent_id=execution_intent_id,
@@ -818,11 +859,12 @@ def governance_bind_receipts_export(
         )
         return {
             "ok": True,
-            "count": len(filtered_items),
-            "items": filtered_items,
+            "count": len(enriched_items),
+            "items": enriched_items,
             "sort": parsed_sort,
             "applied_filters": applied_filters,
-            "total_count": len(filtered_items),
+            "total_count": len(enriched_items),
+            "target_catalog": get_target_catalog_payload(),
         }
     except Exception as exc:
         logger.error("governance_bind_receipts_export failed: %s", exc, exc_info=True)
@@ -841,18 +883,27 @@ def governance_bind_receipt(bind_receipt_id: str):
         if not receipts:
             return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
         receipt = receipts[-1].to_dict()
+        target_metadata = resolve_bind_target_metadata(receipt.get("target_path"), receipt.get("target_type"))
+        enriched_receipt = {
+            **receipt,
+            "target_path_type": target_metadata["target_path_type"],
+            "target_label": target_metadata["label"],
+            "operator_surface": target_metadata["operator_surface"],
+            "relevant_ui_href": target_metadata["relevant_ui_href"],
+        }
         return {
             "ok": True,
-            "bind_receipt": receipt,
-            "bind_outcome": receipt.get("final_outcome"),
-            "bind_failure_reason": _resolve_bind_failure_reason(receipt),
-            "bind_reason_code": _resolve_bind_reason_code(receipt),
-            "bind_receipt_id": receipt.get("bind_receipt_id"),
-            "execution_intent_id": receipt.get("execution_intent_id"),
-            "authority_check_result": receipt.get("authority_check_result"),
-            "constraint_check_result": receipt.get("constraint_check_result"),
-            "drift_check_result": receipt.get("drift_check_result"),
-            "risk_check_result": receipt.get("risk_check_result"),
+            "bind_receipt": enriched_receipt,
+            "bind_outcome": enriched_receipt.get("final_outcome"),
+            "bind_failure_reason": _resolve_bind_failure_reason(enriched_receipt),
+            "bind_reason_code": _resolve_bind_reason_code(enriched_receipt),
+            "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
+            "execution_intent_id": enriched_receipt.get("execution_intent_id"),
+            "authority_check_result": enriched_receipt.get("authority_check_result"),
+            "constraint_check_result": enriched_receipt.get("constraint_check_result"),
+            "drift_check_result": enriched_receipt.get("drift_check_result"),
+            "risk_check_result": enriched_receipt.get("risk_check_result"),
+            "target_metadata": target_metadata,
         }
     except Exception as e:
         logger.error("governance_bind_receipt failed: %s", e, exc_info=True)

@@ -15,7 +15,21 @@ describe("bind-cockpit-normalization", () => {
   });
 
   it("parses list/detail payload safely", () => {
-    expect(parseBindReceiptListPayload({ items: [{ bind_receipt_id: "br-1" }], count: 1 }).items).toHaveLength(1);
+    const parsed = parseBindReceiptListPayload({
+      items: [{ bind_receipt_id: "br-1" }],
+      count: 1,
+      target_catalog: [{
+        target_path: "/v1/governance/policy",
+        target_type: "governance_policy",
+        target_path_type: "governance_policy_update",
+        label: "governance policy update",
+        operator_surface: "governance",
+        relevant_ui_href: "/governance",
+        supports_filtering: true,
+      }],
+    });
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.targetCatalog[0]?.targetPathType).toBe("governance_policy_update");
     expect(parseBindReceiptListPayload({ bad: [] }).items).toHaveLength(0);
     expect(parseBindReceiptDetailPayload({ bind_receipt: { bind_receipt_id: "br-1" } })?.bind_receipt_id).toBe("br-1");
     expect(parseBindReceiptDetailPayload({ bind_receipt: {} })).toBeNull();
@@ -25,12 +39,17 @@ describe("bind-cockpit-normalization", () => {
     const normalized = normalizeBindReceipt({
       bind_receipt_id: "br-7",
       target_path: "/v1/governance/policy-bundles/promote",
+      target_path_type: "policy_bundle_promotion",
+      target_label: "policy bundle promotion",
+      relevant_ui_href: "/governance",
       final_outcome: "blocked",
       bind_reason_code: "APPROVAL_MISSING",
       authority_check_result: { passed: true },
       constraint_check_result: { result: "deny" },
     });
     expect(normalized.targetPathType).toBe("policy_bundle_promotion");
+    expect(normalized.targetLabel).toBe("policy bundle promotion");
+    expect(normalized.relevantUiHref).toBe("/governance");
     expect(normalized.outcome).toBe("BLOCKED");
     expect(normalized.checks.authority).toBe("PASS");
     expect(normalized.checks.constraint).toBe("FAIL");

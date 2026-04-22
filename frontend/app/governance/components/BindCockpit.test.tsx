@@ -34,6 +34,35 @@ const LIST_PAYLOAD = {
   limit: 50,
   applied_filters: {},
   total_count: 2,
+  target_catalog: [
+    {
+      target_path: "/v1/governance/policy",
+      target_type: "governance_policy",
+      target_path_type: "governance_policy_update",
+      label: "governance policy update",
+      operator_surface: "governance",
+      relevant_ui_href: "/governance",
+      supports_filtering: true,
+    },
+    {
+      target_path: "/v1/governance/policy-bundles/promote",
+      target_type: "policy_bundle",
+      target_path_type: "policy_bundle_promotion",
+      label: "policy bundle promotion",
+      operator_surface: "governance",
+      relevant_ui_href: "/governance",
+      supports_filtering: true,
+    },
+    {
+      target_path: "/v1/compliance/config",
+      target_type: "compliance_config",
+      target_path_type: "compliance_config_update",
+      label: "compliance config update",
+      operator_surface: "compliance",
+      relevant_ui_href: "/system",
+      supports_filtering: true,
+    },
+  ],
   items: [
     {
       bind_receipt_id: "br-committed",
@@ -47,6 +76,9 @@ const LIST_PAYLOAD = {
     {
       bind_receipt_id: "br-blocked",
       target_path: "/v1/compliance/config",
+      target_path_type: "compliance_config_update",
+      target_label: "compliance config update",
+      relevant_ui_href: "/system",
       final_outcome: "BLOCKED",
       bind_reason_code: "POLICY_DENY",
       decision_id: "decision-2",
@@ -61,6 +93,9 @@ const DETAIL_PAYLOAD = {
   bind_receipt: {
     bind_receipt_id: "br-blocked",
     target_path: "/v1/compliance/config",
+    target_path_type: "compliance_config_update",
+    target_label: "compliance config update",
+    relevant_ui_href: "/system",
     final_outcome: "BLOCKED",
     bind_failure_reason: "policy denied",
     bind_reason_code: "POLICY_DENY",
@@ -92,6 +127,7 @@ describe("BindCockpit", () => {
 
     render(<BindCockpit />);
     await screen.findByText("br-blocked");
+    expect(screen.getByRole("option", { name: "compliance config update" })).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("bind-path-type"), { target: { value: "compliance_config_update" } });
     fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "BLOCKED" } });
@@ -210,5 +246,6 @@ describe("BindCockpit", () => {
     expect(screen.getByRole("link", { name: "related decision" })).toHaveAttribute("href", "/audit?decision_id=decision-2");
     expect(screen.getByRole("link", { name: "related execution intent" })).toHaveAttribute("href", "/audit?cross=exec-2");
     expect(screen.getByRole("link", { name: "related bind receipt" })).toHaveAttribute("href", "/audit?bind_receipt_id=br-blocked");
+    expect(screen.getByRole("link", { name: "relevant governance/compliance surface" })).toHaveAttribute("href", "/system");
   });
 });

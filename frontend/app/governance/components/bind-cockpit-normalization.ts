@@ -26,6 +26,10 @@ export interface BindCockpitReceipt {
   target_path?: string;
   target_resource?: string;
   target_type?: string;
+  target_path_type?: string;
+  target_label?: string;
+  operator_surface?: string;
+  relevant_ui_href?: string;
   final_outcome?: string;
   bind_reason_code?: string;
   bind_failure_reason?: string;
@@ -50,6 +54,9 @@ export interface CanonicalBindReceipt {
   targetResource: string;
   targetType: string;
   targetPathType: CanonicalTargetPathType;
+  targetLabel: string;
+  operatorSurface: string;
+  relevantUiHref: string;
   outcome: CanonicalBindOutcome | "UNKNOWN";
   reasonCode: string;
   failureReason: string;
@@ -79,6 +86,17 @@ export interface BindReceiptListResponseMeta {
 export interface BindReceiptListParsedPayload {
   items: BindCockpitReceipt[];
   meta: BindReceiptListResponseMeta;
+  targetCatalog: BindTargetCatalogEntry[];
+}
+
+export interface BindTargetCatalogEntry {
+  targetPath: string;
+  targetType: string;
+  targetPathType: CanonicalTargetPathType;
+  label: string;
+  operatorSurface: string;
+  relevantUiHref: string;
+  supportsFiltering: boolean;
 }
 
 export interface BindFilterState {
@@ -129,6 +147,20 @@ function normalizePathType(path: unknown): CanonicalTargetPathType {
     return "other";
   }
   return TARGET_PATH_TYPE_MAP[path] ?? "other";
+}
+
+function normalizePathTypeValue(pathType: unknown): CanonicalTargetPathType {
+  if (typeof pathType !== "string") {
+    return "other";
+  }
+  if (
+    pathType === "governance_policy_update"
+    || pathType === "policy_bundle_promotion"
+    || pathType === "compliance_config_update"
+  ) {
+    return pathType;
+  }
+  return "other";
 }
 
 function resolveCheck(value: unknown): "PASS" | "FAIL" | "UNKNOWN" {
@@ -199,6 +231,10 @@ export function normalizeBindReceipt(receipt: BindCockpitReceipt): CanonicalBind
   const timestamp =
     pickString(receipt.occurred_at, receipt.created_at) ?? new Date(0).toISOString();
 
+  const normalizedPathType = normalizePathTypeValue(receipt.target_path_type);
+  const fallbackPathType = normalizePathType(receipt.target_path);
+  const targetPathType = normalizedPathType === "other" ? fallbackPathType : normalizedPathType;
+
   return {
     bindReceiptId: pickString(receipt.bind_receipt_id) ?? "-",
     executionIntentId: pickString(receipt.execution_intent_id),
@@ -208,7 +244,10 @@ export function normalizeBindReceipt(receipt: BindCockpitReceipt): CanonicalBind
     targetPath: pickString(receipt.target_path) ?? "-",
     targetResource: pickString(receipt.target_resource) ?? "-",
     targetType: pickString(receipt.target_type) ?? "-",
-    targetPathType: normalizePathType(receipt.target_path),
+    targetPathType,
+    targetLabel: pickString(receipt.target_label) ?? targetPathType.replaceAll("_", " "),
+    operatorSurface: pickString(receipt.operator_surface) ?? "audit",
+    relevantUiHref: pickString(receipt.relevant_ui_href) ?? "/audit",
     outcome,
     reasonCode,
     failureReason,
@@ -279,6 +318,7 @@ export function parseBindReceiptListPayload(value: unknown): BindReceiptListPars
         appliedFilters: {},
         totalCount: null,
       },
+      targetCatalog: [],
     };
   }
 
@@ -288,6 +328,19 @@ export function parseBindReceiptListPayload(value: unknown): BindReceiptListPars
   const nextCursor = typeof value.next_cursor === "string" ? value.next_cursor : null;
   const sort = value.sort === "oldest" ? "oldest" : "newest";
   const appliedFilters = isRecord(value.applied_filters) ? value.applied_filters : {};
+  const targetCatalog = Array.isArray(value.target_catalog)
+    ? value.target_catalog
+      .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+      .map((entry) => ({
+        targetPath: typeof entry.target_path === "string" ? entry.target_path : "",
+        targetType: typeof entry.target_type === "string" ? entry.target_type : "",
+        targetPathType: normalizePathTypeValue(entry.target_path_type),
+        label: typeof entry.label === "string" ? entry.label : "other",
+        operatorSurface: typeof entry.operator_surface === "string" ? entry.operator_surface : "audit",
+        relevantUiHref: typeof entry.relevant_ui_href === "string" ? entry.relevant_ui_href : "/audit",
+        supportsFiltering: Boolean(entry.supports_filtering),
+      }))
+    : [];
 
   return {
     items,
@@ -301,6 +354,7 @@ export function parseBindReceiptListPayload(value: unknown): BindReceiptListPars
       appliedFilters,
       totalCount: typeof value.total_count === "number" ? value.total_count : null,
     },
+    targetCatalog,
   };
 }
 

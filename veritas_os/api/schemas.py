@@ -1362,7 +1362,7 @@ class GovernanceBindReceiptResponse(BaseModel):
     """Response envelope for GET /v1/governance/bind-receipts/{bind_receipt_id}."""
 
     ok: bool = True
-    bind_receipt: Optional[BindReceipt] = None
+    bind_receipt: Optional[Dict[str, Any]] = None
     bind_outcome: Optional[FinalOutcome] = None
     bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
@@ -1372,6 +1372,7 @@ class GovernanceBindReceiptResponse(BaseModel):
     constraint_check_result: Optional[Dict[str, Any]] = None
     drift_check_result: Optional[Dict[str, Any]] = None
     risk_check_result: Optional[Dict[str, Any]] = None
+    target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -1441,7 +1442,8 @@ class GovernanceBindReceiptListResponse(BaseModel):
     limit: Optional[int] = None
     applied_filters: Dict[str, Any] = Field(default_factory=dict)
     total_count: Optional[int] = None
-    items: List[BindReceipt] = Field(default_factory=list)
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    target_catalog: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -1453,5 +1455,6 @@ class GovernanceBindReceiptExportResponse(BaseModel):
     sort: Literal["newest", "oldest"] = "newest"
     applied_filters: Dict[str, Any] = Field(default_factory=dict)
     total_count: Optional[int] = None
-    items: List[BindReceipt] = Field(default_factory=list)
+    items: List[Dict[str, Any]] = Field(default_factory=list)
+    target_catalog: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None

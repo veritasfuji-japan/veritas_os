@@ -5,6 +5,7 @@ import { Card } from "@veritas/design-system";
 import { StatusBadge } from "../../../components/ui";
 import { veritasFetch } from "../../../lib/api-client";
 import {
+  type BindTargetCatalogEntry,
   type BindFilterState,
   type CanonicalBindReceipt,
   normalizeBindReceipt,
@@ -21,21 +22,52 @@ const DEFAULT_FILTERS: BindFilterState = {
   recentOnly: false,
 };
 
-const PATH_TYPE_TO_TARGET_PATH: Record<Exclude<BindFilterState["pathType"], "all" | "other">, string> = {
-  governance_policy_update: "/v1/governance/policy",
-  policy_bundle_promotion: "/v1/governance/policy-bundles/promote",
-  compliance_config_update: "/v1/compliance/config",
-};
-
 const DEFAULT_LIST_LIMIT = 50;
 
-function buildBindReceiptListQuery(filters: BindFilterState, cursor?: string | null): string {
+const FALLBACK_TARGET_CATALOG: BindTargetCatalogEntry[] = [
+  {
+    targetPath: "/v1/governance/policy",
+    targetType: "governance_policy",
+    targetPathType: "governance_policy_update",
+    label: "governance policy update",
+    operatorSurface: "governance",
+    relevantUiHref: "/governance",
+    supportsFiltering: true,
+  },
+  {
+    targetPath: "/v1/governance/policy-bundles/promote",
+    targetType: "policy_bundle",
+    targetPathType: "policy_bundle_promotion",
+    label: "policy bundle promotion",
+    operatorSurface: "governance",
+    relevantUiHref: "/governance",
+    supportsFiltering: true,
+  },
+  {
+    targetPath: "/v1/compliance/config",
+    targetType: "compliance_config",
+    targetPathType: "compliance_config_update",
+    label: "compliance config update",
+    operatorSurface: "compliance",
+    relevantUiHref: "/system",
+    supportsFiltering: true,
+  },
+];
+
+function buildBindReceiptListQuery(
+  filters: BindFilterState,
+  targetCatalog: BindTargetCatalogEntry[],
+  cursor?: string | null,
+): string {
   const params = new URLSearchParams();
   params.set("sort", "newest");
   params.set("limit", String(DEFAULT_LIST_LIMIT));
 
   if (filters.pathType !== "all" && filters.pathType !== "other") {
-    params.set("target_path", PATH_TYPE_TO_TARGET_PATH[filters.pathType]);
+    const matched = targetCatalog.find((entry) => entry.targetPathType === filters.pathType);
+    if (matched?.targetPath) {
+      params.set("target_path", matched.targetPath);
+    }
   }
   if (filters.outcome !== "all") {
     params.set("outcome", filters.outcome);
@@ -59,6 +91,24 @@ function buildBindReceiptListQuery(filters: BindFilterState, cursor?: string | n
   return params.toString();
 }
 
+function isSameCatalog(left: BindTargetCatalogEntry[], right: BindTargetCatalogEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((entry, index) => {
+    const candidate = right[index];
+    return (
+      entry.targetPath === candidate?.targetPath
+      && entry.targetType === candidate?.targetType
+      && entry.targetPathType === candidate?.targetPathType
+      && entry.label === candidate?.label
+      && entry.operatorSurface === candidate?.operatorSurface
+      && entry.relevantUiHref === candidate?.relevantUiHref
+      && entry.supportsFiltering === candidate?.supportsFiltering
+    );
+  });
+}
+
 function resolveOutcomeVariant(
   outcome: CanonicalBindReceipt["outcome"],
 ): "success" | "warning" | "danger" | "muted" {
@@ -72,22 +122,6 @@ function resolveOutcomeVariant(
     return "danger";
   }
   return "muted";
-}
-
-function formatPathType(pathType: BindFilterState["pathType"]): string {
-  if (pathType === "governance_policy_update") {
-    return "governance policy update";
-  }
-  if (pathType === "policy_bundle_promotion") {
-    return "policy bundle promotion";
-  }
-  if (pathType === "compliance_config_update") {
-    return "compliance config update";
-  }
-  if (pathType === "other") {
-    return "other";
-  }
-  return "all";
 }
 
 /**
@@ -106,15 +140,19 @@ export function BindCockpit(): JSX.Element {
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [currentSort, setCurrentSort] = useState<"newest" | "oldest">("newest");
+  const [targetCatalog, setTargetCatalog] = useState<BindTargetCatalogEntry[]>(FALLBACK_TARGET_CATALOG);
 
-  const listQuery = useMemo(() => buildBindReceiptListQuery(filters), [filters]);
-  const exportUrl = useMemo(() => `/api/veritas/v1/governance/bind-receipts/export?${buildBindReceiptListQuery(filters)}`, [filters]);
+  const listQuery = useMemo(() => buildBindReceiptListQuery(filters, targetCatalog), [filters, targetCatalog]);
+  const exportUrl = useMemo(
+    () => `/api/veritas/v1/governance/bind-receipts/export?${buildBindReceiptListQuery(filters, targetCatalog)}`,
+    [filters, targetCatalog],
+  );
 
   const loadReceipts = useCallback(async (cursor?: string | null, append = false): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const query = buildBindReceiptListQuery(filters, cursor);
+      const query = buildBindReceiptListQuery(filters, targetCatalog, cursor);
       const response = await veritasFetch(`/api/veritas/v1/governance/bind-receipts?${query}`);
       if (!response.ok) {
         setError(`HTTP ${response.status}: Failed to load bind receipts.`);
@@ -125,6 +163,9 @@ export function BindCockpit(): JSX.Element {
       }
       const payload = parseBindReceiptListPayload(await response.json());
       const normalized = payload.items.map(normalizeBindReceipt);
+      if (payload.targetCatalog.length > 0 && !isSameCatalog(payload.targetCatalog, targetCatalog)) {
+        setTargetCatalog(payload.targetCatalog);
+      }
       setReturnedCount(payload.meta.returnedCount);
       setTotalCount(payload.meta.totalCount);
       setHasMore(payload.meta.hasMore);
@@ -140,7 +181,7 @@ export function BindCockpit(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, targetCatalog]);
 
   useEffect(() => {
     void loadReceipts(null, false);
@@ -181,6 +222,11 @@ export function BindCockpit(): JSX.Element {
     })();
   }, [selectedReceiptId]);
 
+  const filterableCatalog = useMemo(
+    () => targetCatalog.filter((entry) => entry.supportsFiltering && entry.targetPathType !== "other"),
+    [targetCatalog],
+  );
+
   const filteredReceipts = useMemo(() => {
     if (filters.pathType !== "other") {
       return receipts;
@@ -211,9 +257,11 @@ export function BindCockpit(): JSX.Element {
               }}
             >
               <option value="all">all</option>
-              <option value="governance_policy_update">governance policy update</option>
-              <option value="policy_bundle_promotion">policy bundle promotion</option>
-              <option value="compliance_config_update">compliance config update</option>
+              {filterableCatalog.map((entry) => (
+                <option key={entry.targetPathType} value={entry.targetPathType}>
+                  {entry.label}
+                </option>
+              ))}
               <option value="other">other</option>
             </select>
           </label>
@@ -333,7 +381,7 @@ export function BindCockpit(): JSX.Element {
                   <td className="px-2 py-2 font-mono">{receipt.timestamp}</td>
                   <td className="px-2 py-2">
                     <div className="font-mono">{receipt.targetPath}</div>
-                    <div className="text-muted-foreground">{formatPathType(receipt.targetPathType)}</div>
+                    <div className="text-muted-foreground">{receipt.targetLabel}</div>
                   </td>
                   <td className="px-2 py-2">
                     <StatusBadge label={receipt.outcome} variant={resolveOutcomeVariant(receipt.outcome)} />
@@ -411,7 +459,7 @@ export function BindCockpit(): JSX.Element {
                 <a className="rounded border px-2 py-1" href="/audit">
                   trust / audit explorer
                 </a>
-                <a className="rounded border px-2 py-1" href={selectedDetail.targetPath.startsWith("/v1/compliance") ? "/system" : "/governance"}>
+                <a className="rounded border px-2 py-1" href={selectedDetail.relevantUiHref}>
                   relevant governance/compliance surface
                 </a>
               </div>
