@@ -16,6 +16,7 @@ import { ApplyFlow } from "./components/ApplyFlow";
 import { TrustLogStream } from "./components/TrustLogStream";
 import { ChangeHistory } from "./components/ChangeHistory";
 import { PolicyBundlePromotionFlow } from "./components/PolicyBundlePromotionFlow";
+import { BindCockpit } from "./components/BindCockpit";
 import { ConfirmDialog } from "../../components/ui/confirm-dialog";
 
 /* ------------------------------------------------------------------ */
@@ -378,6 +379,8 @@ export default function GovernanceControlPage(): JSX.Element {
           />
 
           <PolicyBundlePromotionFlow canOperate={state.canOperate} />
+
+          <BindCockpit />
 
           <TrustLogStream entries={state.trustLog} />
           <ChangeHistory entries={state.history} />
