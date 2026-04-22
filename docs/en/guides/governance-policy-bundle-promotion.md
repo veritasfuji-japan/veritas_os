@@ -7,6 +7,9 @@ This guide describes the operator-facing workflow for:
 It is part of VERITAS OS Decision Governance OS operations and uses the existing
 bind-boundary execution path.
 
+VERITAS is not positioned as a generic runtime replacement; this endpoint is an
+operator-facing governance control-plane path.
+
 ---
 
 ## What this endpoint does
@@ -24,6 +27,15 @@ The endpoint requires governance write permission.
 Use this endpoint when an approved governance decision needs to move runtime to
 another already-present policy bundle directory (for example, from `bundle-v1`
 to `bundle-v2`) while preserving bind execution lineage.
+
+## Current bind policy surface (operator fact)
+
+Current implemented operator-governed bind paths include:
+
+1. `POST /v1/governance/policy-bundles/promote` (this guide)
+2. `PUT /v1/governance/policy` (governance policy update path)
+
+Do not claim that all effect paths are bind-governed yet.
 
 ---
 
@@ -80,6 +92,8 @@ curl -X POST "http://127.0.0.1:8000/v1/governance/policy-bundles/promote" \
 - `execution_intent_id`: bind execution intent lineage identifier.
 - `bind_receipt`: full receipt payload with check results.
 
+This is the public bind outcome contract for governance-facing operator flow.
+
 ### Representative `bind_outcome` values
 
 - `COMMITTED`
@@ -104,6 +118,12 @@ When promotion does not cleanly commit:
    - `GET /v1/governance/bind-receipts/{bind_receipt_id}`
 5. Correlate with decision exports if needed:
    - `GET /v1/governance/decisions/export`
+
+## Receipt replayability note
+
+Bind receipts can be treated as replay/revalidation-oriented governance artifacts.
+Use this wording as current direction and avoid claiming complete cross-path
+standardization in this release.
 
 ---
 

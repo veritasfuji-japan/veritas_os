@@ -18,7 +18,7 @@
 **Release Status**: ベータ版  
 **Author**: Takeshi Fujishita
 
-VERITAS OS は **Decision Governance OS for AI Agents**（AIエージェント向け意思決定ガバナンスOS）です。
+VERITAS OS は **Decision Governance and Bind-Boundary Control Plane for AI Agents**（AIエージェント向け意思決定ガバナンス / bind-boundary 制御プレーン）です。
 エージェント実行の前段に **governance layer before execution** を置き、現実世界に影響する前に意思決定を制御します。
 
 > メンタルモデル: **LLM = CPU**、**VERITAS OS = その上に載る Decision Governance OS**
@@ -42,7 +42,7 @@ VERITAS OS は次を実現します。
 
 ## runtime/orchestration ツールとの違い
 
-- 主眼はタスク実行最適化ではなく、**意思決定ガバナンス**
+- 主眼はタスク実行最適化ではなく、**意思決定ガバナンスと bind-boundary 統制**
 - ポリシー・安全ゲートは **real-world effect の前** に適用
 - TrustLog と governance identity により、監査可能な意思決定系譜を保持
 
@@ -54,13 +54,19 @@ VERITAS OS は次を実現します。
 
 ## VERITAS OS が「あるもの」と「ないもの」
 
-- **あるもの**: AIエージェント向け Decision Governance OS（実行前ガバナンス層）
+- **あるもの**: AIエージェント向け Decision Governance and Bind-Boundary Control Plane（実行前ガバナンス＋bind-boundary統制層）
 - **ないもの**: すべてのランタイムを置き換える実行基盤、または単なるオーケストレーション便利層
 
 ## 事実とロードマップの境界
 
 - **現時点の事実（ベータ）**: `/v1/decide` 中心の意思決定パイプライン、FUJI fail-closed、TrustLog、Mission Control、ガバナンスAPIが実装済みで、公開上は **ベータ品質のガバナンス基盤** として位置づけます
+- **現時点の事実（bind policy surface）**: bind-boundary adjudication は少なくとも次の2つの運用経路で実装されています。
+  1) `PUT /v1/governance/policy`（governance policy update path）
+  2) `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
+- **現時点の事実（bind outcome公開契約）**: ガバナンス系レスポンスでは `bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id` を返し、`/v1/governance/bind-receipts*` でレシート本体を取得可能です
+- **現時点の事実（replay/運用フロー）**: bind receipt はガバナンス成果物として保存され、運用・監査フローで再検証（revalidation/replay）に使える形へ進んでいます
 - **現時点の境界**: 本番適用には環境ごとのハードニング・統合・運用審査が必要
+- **将来方向（標準化）**: bind-boundary は複数の effect path を統治する標準枠組みへ拡張していく方針ですが、現時点で全経路完了を主張するものではありません
 - **ロードマップ**: IdP/JWT スコープ連携の深耕、分散障害モード検証の拡張
 
 ### Technical Maturity Snapshot（内部）

@@ -2,17 +2,35 @@
 
 ## 公式の公開ポジション
 
-**VERITAS OS = Decision Governance OS for AI Agents**
+**VERITAS OS = Decision Governance and Bind-Boundary Control Plane for AI Agents**
 
 コアメッセージ:
 
 - AIの意思決定を、現実世界に作用する前に **reviewable / traceable / replayable / auditable / enforceable** にする。
 - VERITAS OS は **governance layer before execution** であり、実行ランタイムそのものとは役割が異なる。
+- bind の公開契約として、`bind_outcome` / `bind_failure_reason` / `bind_reason_code` / `execution_intent_id` / `bind_receipt_id` を運用側で扱える。
 
 ## VERITAS OS が「あるもの / ないもの」
 
 - **あるもの:** 企業・規制領域のワークフローで意思決定統制を担うガバナンス中心のOS層。
 - **ないもの:** すべてのオーケストレーション/ランタイムを置換する基盤、または投機的AGI物語を前面に出す製品。
+
+## 現時点の事実 / 将来方向
+
+### 現時点の事実（実装済み）
+
+- bind-boundary は少なくとも次の2つの運用経路で実装済み:
+  1. `PUT /v1/governance/policy`（governance policy update path）
+  2. `POST /v1/governance/policy-bundles/promote`（policy bundle promotion path）
+- `GET /v1/governance/bind-receipts` と
+  `GET /v1/governance/bind-receipts/{bind_receipt_id}` でレシート系譜を取得可能。
+- replay/revalidation helper により、receipt は replayable governance artifact に近づいている。
+
+### 将来方向（未完了）
+
+- bind-boundary の適用範囲を追加の effect path へ拡張する。
+- 複数 effect path を一貫統治する標準枠組みへ収束させる。
+- これは方向性であり、現時点で全 effect path 完了を主張しない。
 
 ## 推奨表現
 
@@ -21,6 +39,9 @@
 - reviewable / traceable / replayable / auditable / enforceable
 - fail-closed safety gate
 - tamper-evident TrustLog lineage
+- decision -> execution_intent -> bind_receipt lineage
+- operator-facing governance surface
+- bind outcome public contract
 
 ## 注意表現（限定利用）
 
