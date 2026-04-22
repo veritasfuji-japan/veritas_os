@@ -123,6 +123,7 @@ class BindPolicyConfig:
     drift_required: bool = True
     ttl_required: bool = False
     approval_freshness_required: bool = False
+    rollback_on_apply_failure: bool = False
     missing_signal_outcome: AdmissibilityOutcome = AdmissibilityOutcome.BLOCK
 
 
@@ -258,6 +259,24 @@ def execute_bind_adjudication(
     try:
         adapter.apply(normalized_intent, pre_snapshot)
     except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        if bind_policy.rollback_on_apply_failure:
+            return _finalize_receipt(
+                execution_intent=normalized_intent,
+                append_trustlog=append_trustlog,
+                receipt=_rollback_after_apply_failure(
+                    base_receipt=base_receipt,
+                    adapter=adapter,
+                    execution_intent=normalized_intent,
+                    pre_snapshot=pre_snapshot,
+                    pre_fingerprint=pre_fingerprint,
+                    authority_result=authority_result,
+                    constraint_result=constraint_result,
+                    drift_result=drift_result,
+                    risk_result=risk_result,
+                    recommended_outcome=admissibility.recommended_outcome.value,
+                    apply_error=exc,
+                ),
+            )
         return _finalize_receipt(
             execution_intent=normalized_intent,
             append_trustlog=append_trustlog,
@@ -519,6 +538,79 @@ def _rollback_after_runtime_signal_failure(
     )
 
 
+def _rollback_after_apply_failure(
+    *,
+    base_receipt: BindReceipt,
+    adapter: BindBoundaryAdapter,
+    execution_intent: ExecutionIntent,
+    pre_snapshot: Any,
+    pre_fingerprint: str,
+    authority_result: dict[str, str],
+    constraint_result: dict[str, str],
+    drift_result: dict[str, str],
+    risk_result: dict[str, str],
+    recommended_outcome: str,
+    apply_error: Exception,
+) -> BindReceipt:
+    apply_reason = f"{BindReasonCode.APPLY_FAILED.value}:{apply_error}"
+    try:
+        reverted = adapter.revert(execution_intent, pre_snapshot)
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        return _with_receipt(
+            base_receipt,
+            live_state_fingerprint_before=pre_fingerprint,
+            authority_check_result=authority_result,
+            constraint_check_result=constraint_result,
+            drift_check_result=drift_result,
+            risk_check_result=risk_result,
+            admissibility_result={
+                "admissible": True,
+                "recommended_outcome": recommended_outcome,
+                "reason_codes": [BindReasonCode.APPLY_FAILED.value],
+                "target": adapter.describe_target(),
+            },
+            final_outcome=FinalOutcome.ESCALATED,
+            rollback_reason=apply_reason,
+            escalation_reason=f"BIND_REVERT_FAILED_AFTER_APPLY_ERROR:{exc}",
+        )
+
+    if reverted:
+        return _with_receipt(
+            base_receipt,
+            live_state_fingerprint_before=pre_fingerprint,
+            authority_check_result=authority_result,
+            constraint_check_result=constraint_result,
+            drift_check_result=drift_result,
+            risk_check_result=risk_result,
+            admissibility_result={
+                "admissible": True,
+                "recommended_outcome": recommended_outcome,
+                "reason_codes": [BindReasonCode.APPLY_FAILED.value],
+                "target": adapter.describe_target(),
+            },
+            final_outcome=FinalOutcome.ROLLED_BACK,
+            rollback_reason=apply_reason,
+        )
+
+    return _with_receipt(
+        base_receipt,
+        live_state_fingerprint_before=pre_fingerprint,
+        authority_check_result=authority_result,
+        constraint_check_result=constraint_result,
+        drift_check_result=drift_result,
+        risk_check_result=risk_result,
+        admissibility_result={
+            "admissible": True,
+            "recommended_outcome": recommended_outcome,
+            "reason_codes": [BindReasonCode.APPLY_FAILED.value],
+            "target": adapter.describe_target(),
+        },
+        final_outcome=FinalOutcome.ESCALATED,
+        rollback_reason=apply_reason,
+        escalation_reason="BIND_REVERT_REPORTED_FALSE",
+    )
+
+
 def _check_from_runtime(check_result: Any) -> dict[str, str]:
     return BindExecutionCheckResult(
         status=check_result.status.value,
@@ -577,6 +669,7 @@ def _resolve_bind_policy_config(execution_intent: ExecutionIntent) -> BindPolicy
         drift_required=bool(merged.get("drift_required", True)),
         ttl_required=bool(merged.get("ttl_required", False)),
         approval_freshness_required=bool(merged.get("approval_freshness_required", False)),
+        rollback_on_apply_failure=bool(merged.get("rollback_on_apply_failure", False)),
         missing_signal_outcome=_parse_missing_signal_outcome(
             merged.get("missing_signal_default", AdmissibilityOutcome.BLOCK.value)
         ),

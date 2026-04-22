@@ -114,6 +114,18 @@ def test_governance_policy_update_bind_escalated_when_signal_missing(monkeypatch
     assert receipt.final_outcome is FinalOutcome.ESCALATED
 
 
+def test_governance_policy_update_uses_governance_bind_policy_surface(monkeypatch) -> None:
+    monkeypatch.setattr(
+        GovernancePolicyUpdateAdapter,
+        "assess_runtime_risk",
+        lambda self, intent, snapshot: None,
+    )
+    receipt, _state, _history = _execute(
+        governance_policy={"bind_adjudication": {"missing_signal_default": "escalate"}}
+    )
+    assert receipt.final_outcome is FinalOutcome.ESCALATED
+
+
 def test_governance_policy_update_bind_rolled_back_on_postcondition_failure(monkeypatch) -> None:
     monkeypatch.setattr(
         GovernancePolicyUpdateAdapter,

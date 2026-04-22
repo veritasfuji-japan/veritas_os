@@ -24,6 +24,7 @@ from pydantic import ValidationError
 from veritas_os.api import governance as gov_mod
 from veritas_os.api import server as srv
 from veritas_os.policy.bind_artifacts import BindReceipt, FinalOutcome
+from veritas_os.policy.bind_boundary_adapters import GovernancePolicyUpdateAdapter
 
 client = TestClient(srv.app)
 HEADERS = {"X-API-Key": "test-governance-key", "X-Role": "admin"}
@@ -64,6 +65,7 @@ class TestGetPolicy:
         assert "log_retention" in policy
         assert "rollout_controls" in policy
         assert "approval_workflow" in policy
+        assert "bind_adjudication" in policy
 
     def test_get_requires_api_key(self):
         resp = client.get("/v1/governance/policy")
@@ -78,6 +80,18 @@ class TestGetPolicy:
 
 
 class TestPutPolicy:
+    def test_put_updates_bind_adjudication_policy(self):
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"bind_adjudication": {"missing_signal_default": "escalate"}}),
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["policy"]["bind_adjudication"]["missing_signal_default"] == "escalate"
+        assert body["policy"]["bind_adjudication"]["drift_required"] is True
+
     def test_put_updates_fuji_rules(self):
         resp = client.put(
             "/v1/governance/policy",
@@ -293,6 +307,28 @@ class TestPutPolicy:
         assert body["ok"] is False
         assert body["error"] == "Failed to update governance policy"
 
+    def test_put_bind_policy_effect_path_escalates_when_signal_missing(self, monkeypatch):
+        setup_resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"bind_adjudication": {"missing_signal_default": "escalate"}}),
+        )
+        assert setup_resp.status_code == 200
+        monkeypatch.setattr(
+            GovernancePolicyUpdateAdapter,
+            "assess_runtime_risk",
+            lambda self, intent, snapshot: None,
+        )
+        resp = client.put(
+            "/v1/governance/policy",
+            headers=HEADERS,
+            json=_approved({"fuji_rules": {"pii_check": False}}),
+        )
+        assert resp.status_code == 403
+        body = resp.json()
+        assert body["ok"] is False
+        assert body["bind_outcome"] == "ESCALATED"
+
 
 class TestGovernanceModule:
     def test_get_policy_returns_dict(self):
@@ -317,6 +353,8 @@ class TestGovernanceModule:
         assert policy.shadow_validation.partial_validation_default == "non_admissible"
         assert policy.revocation.mode == "bounded_eventual_consistency"
         assert policy.drift_scoring.policy_weight == 0.4
+        assert policy.bind_adjudication.missing_signal_default == "block"
+        assert policy.bind_adjudication.drift_required is True
 
     def test_update_policy_patches_nested_wat_fields(self):
         result = gov_mod.update_policy(

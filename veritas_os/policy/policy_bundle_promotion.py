@@ -28,6 +28,7 @@ def promote_policy_bundle_with_bind_boundary(
     allowed_root: str | Path,
     approval_context: dict[str, Any] | None = None,
     policy_lineage: dict[str, Any] | None = None,
+    governance_policy: dict[str, Any] | None = None,
     decision_ts: str | None = None,
     require_signature: bool = True,
     append_trustlog: bool = True,
@@ -66,7 +67,10 @@ def promote_policy_bundle_with_bind_boundary(
         decision_ts=decision_ts or _utc_now_iso8601(),
         expected_state_fingerprint=expected_fingerprint,
         approval_context=merged_approval_context,
-        policy_lineage=dict(policy_lineage or {}),
+        policy_lineage=_with_bind_policy_lineage(
+            lineage=policy_lineage,
+            governance_policy=governance_policy,
+        ),
     )
 
     return execute_bind_adjudication(
@@ -81,3 +85,18 @@ def promote_policy_bundle_with_bind_boundary(
 def _utc_now_iso8601() -> str:
     """Return current UTC timestamp in canonical bind intent format."""
     return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _with_bind_policy_lineage(
+    *,
+    lineage: dict[str, Any] | None,
+    governance_policy: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge governance bind policy surface into execution intent lineage."""
+    merged: dict[str, Any] = dict(lineage or {})
+    if not isinstance(governance_policy, dict):
+        return merged
+    bind_policy = governance_policy.get("bind_adjudication")
+    if isinstance(bind_policy, dict):
+        merged.setdefault("bind_adjudication", dict(bind_policy))
+    return merged

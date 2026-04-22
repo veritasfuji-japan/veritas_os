@@ -149,6 +149,25 @@ def test_bind_execution_apply_failure_is_apply_failed() -> None:
     assert adapter.state["version"] == 1
 
 
+def test_bind_execution_apply_failure_can_rollback_via_policy() -> None:
+    adapter = ReferenceBindAdapter(
+        state={"version": 1},
+        pending_changes={"version": 2},
+        apply_success=False,
+        revert_success=True,
+    )
+    intent = _intent(
+        expected_fingerprint=adapter.fingerprint_state({"version": 1}),
+        policy_lineage={"bind_adjudication": {"rollback_on_apply_failure": True}},
+    )
+
+    receipt = execute_bind_boundary(execution_intent=intent, adapter=adapter)
+
+    assert receipt.final_outcome is FinalOutcome.ROLLED_BACK
+    assert receipt.rollback_reason.startswith("BIND_APPLY_FAILED:")
+    assert adapter.state["version"] == 1
+
+
 def test_bind_execution_postcondition_failure_rolls_back() -> None:
     adapter = ReferenceBindAdapter(
         state={"version": 1},

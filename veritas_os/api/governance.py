@@ -153,6 +153,16 @@ class DriftScoringConfig(BaseModel):
     critical_threshold: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
+class BindAdjudicationPolicyConfig(BaseModel):
+    """Runtime bind-adjudication controls used by bind core/adapters."""
+
+    missing_signal_default: Literal["block", "escalate"] = "block"
+    drift_required: bool = True
+    ttl_required: bool = False
+    approval_freshness_required: bool = False
+    rollback_on_apply_failure: bool = False
+
+
 class GovernancePolicy(BaseModel):
     version: str = "governance_v1"
     fuji_rules: FujiRules = Field(default_factory=FujiRules)
@@ -166,6 +176,7 @@ class GovernancePolicy(BaseModel):
     shadow_validation: ShadowValidationConfig = Field(default_factory=ShadowValidationConfig)
     revocation: RevocationConfig = Field(default_factory=RevocationConfig)
     drift_scoring: DriftScoringConfig = Field(default_factory=DriftScoringConfig)
+    bind_adjudication: BindAdjudicationPolicyConfig = Field(default_factory=BindAdjudicationPolicyConfig)
     updated_at: str = ""
     updated_by: str = "system"
 
@@ -182,6 +193,7 @@ _NESTED_POLICY_MODELS = {
     "shadow_validation": ShadowValidationConfig,
     "revocation": RevocationConfig,
     "drift_scoring": DriftScoringConfig,
+    "bind_adjudication": BindAdjudicationPolicyConfig,
 }
 
 

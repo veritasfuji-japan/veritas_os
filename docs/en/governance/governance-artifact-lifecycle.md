@@ -37,6 +37,16 @@ A governance policy change is proposed via `PUT /v1/governance/policy`.
 The proposer identity is captured in the `updated_by` field and recorded
 in the audit history as `proposer`.
 
+When bind adjudication behavior needs an operator-level change, use the
+`bind_adjudication` section in the same policy document. The runtime currently
+consumes only these fields:
+
+- `missing_signal_default` (`block` or `escalate`)
+- `drift_required`
+- `ttl_required`
+- `approval_freshness_required`
+- `rollback_on_apply_failure`
+
 ### 2. Approve (4-Eyes)
 
 By default, governance updates require two distinct approvals (4-eyes

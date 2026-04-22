@@ -279,6 +279,7 @@ def governance_put(body: dict):
             policy_lineage=body.get("policy_lineage")
             if isinstance(body.get("policy_lineage"), dict)
             else None,
+            governance_policy=previous if isinstance(previous, dict) else None,
             execution_intent_id=str(body.get("execution_intent_id") or "") or None,
             bind_receipt_id=str(body.get("bind_receipt_id") or "") or None,
         ).to_dict()
@@ -476,6 +477,7 @@ def governance_promote_policy_bundle(
         return JSONResponse(status_code=400, content={"ok": False, "error": "invalid_bundle_id"})
 
     try:
+        current_policy = _get_server().get_policy()
         receipt = promote_policy_bundle_with_bind_boundary(
             decision_id=body.decision_id,
             request_id=body.request_id,
@@ -486,6 +488,7 @@ def governance_promote_policy_bundle(
             pointer_path=pointer_path,
             allowed_root=bundles_root,
             approval_context=dict(body.approval_context or {}),
+            governance_policy=current_policy if isinstance(current_policy, dict) else None,
         )
         return _bind_response_payload(receipt.to_dict())
     except (ValueError, TypeError) as exc:
