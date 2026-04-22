@@ -39,6 +39,8 @@ def test_compliance_config_get_and_put(monkeypatch) -> None:
         assert put_payload["bind_receipt_id"]
         assert put_payload["execution_intent_id"]
         assert put_payload["bind_receipt"]["final_outcome"] == "COMMITTED"
+        assert put_payload["bind_receipt"]["target_path_type"] in {"compliance_config_update", "other"}
+        assert put_payload["target_metadata"]["target_path_type"] == put_payload["bind_receipt"]["target_path_type"]
 
         get_resp = client.get("/v1/compliance/config", headers=headers)
         assert get_resp.status_code == 200
@@ -90,5 +92,6 @@ def test_compliance_config_put_bind_blocked(monkeypatch) -> None:
         assert body["ok"] is False
         assert body["bind_outcome"] == "BLOCKED"
         assert body["bind_receipt_id"] == "br-comp-blocked"
+        assert body["bind_receipt"]["target_path_type"] == "other"
     finally:
         server.API_KEY_DEFAULT = original

@@ -352,16 +352,14 @@ def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
 
 def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize bind receipt summary payload for governance API responses."""
-    target_metadata = resolve_bind_target_metadata(
-        bind_receipt.get("target_path"),
-        bind_receipt.get("target_type"),
-    )
-    enriched_receipt = {
-        **bind_receipt,
-        "target_path_type": target_metadata["target_path_type"],
-        "target_label": target_metadata["label"],
-        "operator_surface": target_metadata["operator_surface"],
-        "relevant_ui_href": target_metadata["relevant_ui_href"],
+    enriched_receipt = _enrich_bind_receipt_payload(bind_receipt)
+    target_metadata = {
+        "target_path": enriched_receipt.get("target_path"),
+        "target_type": enriched_receipt.get("target_type"),
+        "target_path_type": enriched_receipt.get("target_path_type"),
+        "label": enriched_receipt.get("target_label"),
+        "operator_surface": enriched_receipt.get("operator_surface"),
+        "relevant_ui_href": enriched_receipt.get("relevant_ui_href"),
     }
     return {
         "ok": True,
@@ -372,6 +370,21 @@ def _bind_response_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
         "bind_receipt_id": enriched_receipt.get("bind_receipt_id"),
         "execution_intent_id": enriched_receipt.get("execution_intent_id"),
         "target_metadata": target_metadata,
+    }
+
+
+def _enrich_bind_receipt_payload(bind_receipt: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach canonical bind target metadata to any bind receipt payload."""
+    target_metadata = resolve_bind_target_metadata(
+        bind_receipt.get("target_path"),
+        bind_receipt.get("target_type"),
+    )
+    return {
+        **bind_receipt,
+        "target_path_type": target_metadata["target_path_type"],
+        "target_label": target_metadata["label"],
+        "operator_surface": target_metadata["operator_surface"],
+        "relevant_ui_href": target_metadata["relevant_ui_href"],
     }
 
 
@@ -632,7 +645,7 @@ def governance_decision_export(
                 continue
             decision_id = str(entry.get("decision_id") or entry.get("request_id") or "")
             bind_receipts = find_bind_receipts(decision_id=decision_id) if decision_id else []
-            latest_bind = bind_receipts[-1].to_dict() if bind_receipts else {}
+            latest_bind = _enrich_bind_receipt_payload(bind_receipts[-1].to_dict()) if bind_receipts else {}
             latest_bind_outcome = str(latest_bind.get("final_outcome") or "")
             if bind_outcome and latest_bind_outcome != bind_outcome.value:
                 continue
@@ -654,6 +667,10 @@ def governance_decision_export(
                     "constraint_check_result": latest_bind.get("constraint_check_result"),
                     "drift_check_result": latest_bind.get("drift_check_result"),
                     "risk_check_result": latest_bind.get("risk_check_result"),
+                    "target_path_type": latest_bind.get("target_path_type"),
+                    "target_label": latest_bind.get("target_label"),
+                    "operator_surface": latest_bind.get("operator_surface"),
+                    "relevant_ui_href": latest_bind.get("relevant_ui_href"),
                 }
             )
         return {"ok": True, "count": len(normalized), "items": normalized}
@@ -726,18 +743,7 @@ def governance_bind_receipts(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
-        enriched_items: list[dict[str, Any]] = []
-        for item in filtered_items:
-            target_metadata = resolve_bind_target_metadata(item.get("target_path"), item.get("target_type"))
-            enriched_items.append(
-                {
-                    **item,
-                    "target_path_type": target_metadata["target_path_type"],
-                    "target_label": target_metadata["label"],
-                    "operator_surface": target_metadata["operator_surface"],
-                    "relevant_ui_href": target_metadata["relevant_ui_href"],
-                }
-            )
+        enriched_items = [_enrich_bind_receipt_payload(item) for item in filtered_items]
         page_items, has_more, next_cursor = _paginate_bind_receipt_items(
             items=enriched_items,
             sort=parsed_sort,
@@ -834,18 +840,7 @@ def governance_bind_receipts_export(
             recent_only=parsed_recent_only,
             sort=parsed_sort,
         )
-        enriched_items: list[dict[str, Any]] = []
-        for item in filtered_items:
-            target_metadata = resolve_bind_target_metadata(item.get("target_path"), item.get("target_type"))
-            enriched_items.append(
-                {
-                    **item,
-                    "target_path_type": target_metadata["target_path_type"],
-                    "target_label": target_metadata["label"],
-                    "operator_surface": target_metadata["operator_surface"],
-                    "relevant_ui_href": target_metadata["relevant_ui_href"],
-                }
-            )
+        enriched_items = [_enrich_bind_receipt_payload(item) for item in filtered_items]
         applied_filters = _bind_receipt_applied_filters(
             decision_id=decision_id,
             execution_intent_id=execution_intent_id,
@@ -882,14 +877,14 @@ def governance_bind_receipt(bind_receipt_id: str):
         receipts = find_bind_receipts(bind_receipt_id=bind_receipt_id)
         if not receipts:
             return JSONResponse(status_code=404, content={"ok": False, "error": "bind_receipt_not_found"})
-        receipt = receipts[-1].to_dict()
-        target_metadata = resolve_bind_target_metadata(receipt.get("target_path"), receipt.get("target_type"))
-        enriched_receipt = {
-            **receipt,
-            "target_path_type": target_metadata["target_path_type"],
-            "target_label": target_metadata["label"],
-            "operator_surface": target_metadata["operator_surface"],
-            "relevant_ui_href": target_metadata["relevant_ui_href"],
+        enriched_receipt = _enrich_bind_receipt_payload(receipts[-1].to_dict())
+        target_metadata = {
+            "target_path": enriched_receipt.get("target_path"),
+            "target_type": enriched_receipt.get("target_type"),
+            "target_path_type": enriched_receipt.get("target_path_type"),
+            "label": enriched_receipt.get("target_label"),
+            "operator_surface": enriched_receipt.get("operator_surface"),
+            "relevant_ui_href": enriched_receipt.get("relevant_ui_href"),
         }
         return {
             "ok": True,

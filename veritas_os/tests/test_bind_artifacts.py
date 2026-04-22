@@ -60,6 +60,20 @@ def test_bind_receipt_model_creation() -> None:
     assert receipt.prev_bind_hash == "c" * 64
 
 
+def test_bind_receipt_target_metadata_defaults_are_present() -> None:
+    """BindReceipt serialization should expose canonical target metadata fields."""
+    receipt = BindReceipt(
+        execution_intent_id="ei-target-default",
+        decision_id="dec-target-default",
+        final_outcome=FinalOutcome.BLOCKED,
+    )
+    payload = receipt.to_dict()
+    assert payload["target_path_type"] == "other"
+    assert payload["target_label"] == "other"
+    assert payload["operator_surface"] == "audit"
+    assert payload["relevant_ui_href"] == "/audit"
+
+
 def test_final_outcome_enum_serialization() -> None:
     """Enum should serialize to canonical uppercase contract values."""
     receipt = BindReceipt(

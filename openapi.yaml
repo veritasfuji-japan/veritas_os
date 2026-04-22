@@ -780,7 +780,7 @@ components:
 
     BindReceipt:
       type: object
-      description: "Bind-time governance artifact linked to decision lineage."
+      description: "Bind-time governance artifact linked to decision lineage. Canonical target metadata fields are part of this artifact contract."
       properties:
         bind_receipt_id:
           type: string
@@ -823,6 +823,24 @@ components:
         prev_bind_hash:
           type: string
           nullable: true
+        target_path:
+          type: string
+          description: Canonical bind-governed target API path.
+        target_type:
+          type: string
+          description: Canonical bind-governed target type identifier.
+        target_path_type:
+          type: string
+          description: Canonical target path classification. Unknown/unmapped paths resolve to `other`.
+        target_label:
+          type: string
+          description: Operator-facing canonical label for target path/type.
+        operator_surface:
+          type: string
+          description: Canonical operator surface owner for this target.
+        relevant_ui_href:
+          type: string
+          description: Canonical operator UI href for this bind target.
 
     GovernanceDecisionExportItem:
       type: object
@@ -876,6 +894,18 @@ components:
           type: object
           nullable: true
           additionalProperties: true
+        target_path_type:
+          type: string
+          nullable: true
+        target_label:
+          type: string
+          nullable: true
+        operator_surface:
+          type: string
+          nullable: true
+        relevant_ui_href:
+          type: string
+          nullable: true
 
     TrustFeedbackRequest:
       type: object
@@ -2143,7 +2173,8 @@ paths:
       description: |
         Lists governance bind receipt artifacts with additive server-side filters.
         Existing `decision_id` and `execution_intent_id` filters remain supported.
-        `target_catalog` returns canonical backend-owned metadata for operator surfaces.
+        `BindReceipt` items include canonical backend-owned target metadata.
+        `target_catalog` returns the same metadata vocabulary for selector/discovery surfaces.
         `failed_only=true` excludes `COMMITTED` outcomes.
         `recent_only=true` returns only receipts within the last 24 hours from server clock.
         Cursor pagination is stable across equal timestamps by using timestamp + bind_receipt_id ordering.
@@ -2301,7 +2332,7 @@ paths:
       description: |
         Exports bind receipts using the same filter/sort semantics as `/v1/governance/bind-receipts`.
         This guarantees operator UI filtered-set parity for audit handoff.
-        `target_catalog` follows the same canonical semantics as the list endpoint.
+        `BindReceipt` items include canonical target metadata; `target_catalog` follows the same backend source of truth for selector/discovery UX.
       parameters:
         - in: query
           name: decision_id

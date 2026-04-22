@@ -214,6 +214,9 @@ class TestPutPolicy:
         assert body["bind_receipt_id"]
         assert body["execution_intent_id"]
         assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
+        assert body["bind_receipt"]["target_path_type"] in {"governance_policy_update", "other"}
+        assert body["bind_receipt"]["target_label"]
+        assert body["target_metadata"]["target_path_type"] == body["bind_receipt"]["target_path_type"]
 
     def test_put_preserves_backward_compatible_response_shape(self, monkeypatch):
         monkeypatch.setattr(
@@ -868,6 +871,8 @@ def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -
     assert body["bind_receipt_id"]
     assert body["execution_intent_id"]
     assert body["bind_receipt"]["final_outcome"] == "COMMITTED"
+    assert body["bind_receipt"]["target_path_type"] in {"policy_bundle_promotion", "other"}
+    assert body["target_metadata"]["target_path_type"] == body["bind_receipt"]["target_path_type"]
 
 
 def test_governance_policy_bundle_promote_blocked_returns_lineage(monkeypatch) -> None:
@@ -904,6 +909,7 @@ def test_governance_policy_bundle_promote_blocked_returns_lineage(monkeypatch) -
     assert body["bind_reason_code"] == "CONSTRAINT_MISMATCH"
     assert body["bind_receipt_id"] == "br-blocked-1"
     assert body["execution_intent_id"] == "ei-blocked-1"
+    assert body["bind_receipt"]["target_path_type"] == "other"
 
 
 def test_governance_policy_bundle_promote_rollback_returns_lineage(monkeypatch) -> None:

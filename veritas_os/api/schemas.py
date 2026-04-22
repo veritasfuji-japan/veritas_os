@@ -346,7 +346,12 @@ class ExecutionIntent(BaseModel):
 
 
 class BindReceipt(BaseModel):
-    """Bind-time governance artifact linked to decision lineage."""
+    """Bind-time governance artifact linked to decision lineage.
+
+    Canonical target metadata fields are backend-owned and additive:
+    ``target_path_type``, ``target_label``, ``operator_surface``,
+    and ``relevant_ui_href``.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -375,6 +380,12 @@ class BindReceipt(BaseModel):
     revalidation_context: Dict[str, Any] = Field(default_factory=dict)
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    target_path: str = Field(default="", max_length=MAX_URI_LENGTH)
+    target_type: str = Field(default="", max_length=MAX_TITLE_LENGTH)
+    target_path_type: str = Field(default="other", max_length=MAX_TITLE_LENGTH)
+    target_label: str = Field(default="other", max_length=MAX_TITLE_LENGTH)
+    operator_surface: str = Field(default="audit", max_length=MAX_TITLE_LENGTH)
+    relevant_ui_href: str = Field(default="/audit", max_length=MAX_URI_LENGTH)
 
 
 # =========================
@@ -1316,6 +1327,7 @@ class GovernancePolicyResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -1347,6 +1359,10 @@ class GovernanceDecisionExportItem(BaseModel):
     constraint_check_result: Optional[Dict[str, Any]] = None
     drift_check_result: Optional[Dict[str, Any]] = None
     risk_check_result: Optional[Dict[str, Any]] = None
+    target_path_type: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    target_label: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    operator_surface: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    relevant_ui_href: Optional[str] = Field(default=None, max_length=MAX_URI_LENGTH)
 
 
 class GovernanceDecisionExportResponse(BaseModel):
@@ -1362,7 +1378,7 @@ class GovernanceBindReceiptResponse(BaseModel):
     """Response envelope for GET /v1/governance/bind-receipts/{bind_receipt_id}."""
 
     ok: bool = True
-    bind_receipt: Optional[Dict[str, Any]] = None
+    bind_receipt: Optional[BindReceipt] = None
     bind_outcome: Optional[FinalOutcome] = None
     bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
@@ -1413,6 +1429,7 @@ class GovernancePolicyBundlePromoteResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -1427,6 +1444,7 @@ class ComplianceConfigResponse(BaseModel):
     bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
     bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
     execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    target_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
 
@@ -1442,7 +1460,7 @@ class GovernanceBindReceiptListResponse(BaseModel):
     limit: Optional[int] = None
     applied_filters: Dict[str, Any] = Field(default_factory=dict)
     total_count: Optional[int] = None
-    items: List[Dict[str, Any]] = Field(default_factory=list)
+    items: List[BindReceipt] = Field(default_factory=list)
     target_catalog: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None
 
@@ -1455,6 +1473,6 @@ class GovernanceBindReceiptExportResponse(BaseModel):
     sort: Literal["newest", "oldest"] = "newest"
     applied_filters: Dict[str, Any] = Field(default_factory=dict)
     total_count: Optional[int] = None
-    items: List[Dict[str, Any]] = Field(default_factory=list)
+    items: List[BindReceipt] = Field(default_factory=list)
     target_catalog: List[Dict[str, Any]] = Field(default_factory=list)
     error: Optional[str] = None

@@ -125,6 +125,12 @@ class BindReceipt:
     retry_safety: str | None = None
     rollback_status: str | None = None
     failure_category: str | None = None
+    target_path: str = ""
+    target_type: str = ""
+    target_path_type: str = "other"
+    target_label: str = "other"
+    operator_surface: str = "audit"
+    relevant_ui_href: str = "/audit"
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -133,6 +139,12 @@ class BindReceipt:
             if isinstance(self.final_outcome, FinalOutcome)
             else str(self.final_outcome)
         )
+        target_path = str(self.target_path).strip() if isinstance(self.target_path, str) else ""
+        target_type = str(self.target_type).strip() if isinstance(self.target_type, str) else ""
+        target_path_type = str(self.target_path_type or "").strip() or "other"
+        target_label = str(self.target_label or "").strip() or "other"
+        operator_surface = str(self.operator_surface or "").strip() or "audit"
+        relevant_ui_href = str(self.relevant_ui_href or "").strip() or "/audit"
         return {
             "bind_receipt_id": self.bind_receipt_id,
             "execution_intent_id": self.execution_intent_id,
@@ -164,6 +176,12 @@ class BindReceipt:
             "retry_safety": self.retry_safety,
             "rollback_status": self.rollback_status,
             "failure_category": self.failure_category,
+            "target_path": target_path,
+            "target_type": target_type,
+            "target_path_type": target_path_type,
+            "target_label": target_label,
+            "operator_surface": operator_surface,
+            "relevant_ui_href": relevant_ui_href,
         }
 
 
@@ -276,6 +294,12 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
                 if payload.get("failure_category")
                 else None
             ),
+            target_path=str(payload.get("target_path") or ""),
+            target_type=str(payload.get("target_type") or ""),
+            target_path_type=str(payload.get("target_path_type") or "other"),
+            target_label=str(payload.get("target_label") or "other"),
+            operator_surface=str(payload.get("operator_surface") or "audit"),
+            relevant_ui_href=str(payload.get("relevant_ui_href") or "/audit"),
         )
     except (TypeError, ValueError):
         return None
