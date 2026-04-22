@@ -2,6 +2,8 @@
 """Governance policy API endpoints with RBAC/ABAC support."""
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import os
 from pathlib import Path
@@ -15,6 +17,7 @@ from fastapi.responses import JSONResponse
 from veritas_os.api.auth import require_permission
 from veritas_os.api.rbac import Permission
 from veritas_os.api.schemas import (
+    GovernanceBindReceiptExportResponse,
     GovernanceBindReceiptListResponse,
     GovernanceBindReceiptResponse,
     GovernanceDecisionExportResponse,
@@ -180,7 +183,6 @@ def _apply_bind_receipt_filters(
     failed_only: bool | None,
     recent_only: bool | None,
     sort: str,
-    limit: int | None,
 ) -> list[dict[str, Any]]:
     """Apply additive bind receipt list query semantics deterministically."""
     now_utc = datetime.now(timezone.utc)
@@ -221,12 +223,112 @@ def _apply_bind_receipt_filters(
         filtered.append(payload)
 
     filtered.sort(
-        key=lambda item: _parse_bind_receipt_timestamp(item) or datetime.min.replace(tzinfo=timezone.utc),
+        key=_bind_receipt_cursor_key,
         reverse=sort == BindReceiptListSort.NEWEST,
     )
-    if limit is not None:
-        return filtered[:limit]
     return filtered
+
+
+
+def _bind_receipt_cursor_key(bind_receipt: dict[str, Any]) -> tuple[datetime, str]:
+    """Return deterministic cursor key tuple for bind receipt pagination."""
+    return (
+        _parse_bind_receipt_timestamp(bind_receipt) or datetime.min.replace(tzinfo=timezone.utc),
+        str(bind_receipt.get("bind_receipt_id") or ""),
+    )
+
+
+def _encode_bind_receipt_cursor(*, sort: str, bind_receipt: dict[str, Any]) -> str:
+    """Encode opaque cursor payload for bind receipt pagination windowing."""
+    timestamp, bind_receipt_id = _bind_receipt_cursor_key(bind_receipt)
+    payload = {
+        "s": sort,
+        "t": timestamp.isoformat(),
+        "id": bind_receipt_id,
+    }
+    return base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode("utf-8")).decode("ascii")
+
+
+def _decode_bind_receipt_cursor(cursor: str, *, expected_sort: str) -> tuple[datetime, str]:
+    """Decode and validate bind receipt cursor payload for stable paging."""
+    try:
+        decoded = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        payload = json.loads(decoded)
+    except (ValueError, TypeError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid_cursor") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("invalid_cursor")
+    if payload.get("s") != expected_sort:
+        raise ValueError("invalid_cursor")
+
+    raw_timestamp = payload.get("t")
+    raw_bind_receipt_id = payload.get("id")
+    if not isinstance(raw_timestamp, str) or not isinstance(raw_bind_receipt_id, str):
+        raise ValueError("invalid_cursor")
+
+    try:
+        timestamp = datetime.fromisoformat(raw_timestamp)
+    except ValueError as exc:
+        raise ValueError("invalid_cursor") from exc
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    return timestamp.astimezone(timezone.utc), raw_bind_receipt_id
+
+
+def _paginate_bind_receipt_items(
+    *,
+    items: list[dict[str, Any]],
+    sort: str,
+    limit: int | None,
+    cursor: str | None,
+) -> tuple[list[dict[str, Any]], bool, str | None]:
+    """Return paged bind receipt items with has_more and next_cursor."""
+    start_index = 0
+    if cursor:
+        cursor_key = _decode_bind_receipt_cursor(cursor, expected_sort=sort)
+        for idx, item in enumerate(items):
+            if _bind_receipt_cursor_key(item) == cursor_key:
+                start_index = idx + 1
+                break
+        else:
+            raise ValueError("invalid_cursor")
+
+    if limit is None:
+        page_items = items[start_index:]
+        return page_items, False, None
+
+    page_items = items[start_index:start_index + limit]
+    has_more = (start_index + limit) < len(items)
+    next_cursor = _encode_bind_receipt_cursor(sort=sort, bind_receipt=page_items[-1]) if has_more and page_items else None
+    return page_items, has_more, next_cursor
+
+
+def _bind_receipt_applied_filters(
+    *,
+    decision_id: str | None,
+    execution_intent_id: str | None,
+    target_path: str | None,
+    target_type: str | None,
+    outcome: str | None,
+    reason_code: str | None,
+    lineage_query: str | None,
+    failed_only: bool | None,
+    recent_only: bool | None,
+) -> dict[str, Any]:
+    """Build operator-visible summary of applied bind receipt filters."""
+    return {
+        "decision_id": decision_id,
+        "execution_intent_id": execution_intent_id,
+        "target_path": target_path,
+        "target_type": target_type,
+        "outcome": outcome,
+        "reason_code": reason_code,
+        "lineage_query": lineage_query,
+        "failed_only": failed_only,
+        "recent_only": recent_only,
+    }
+
 
 def _resolve_policy_bundle_paths(bundle_name: str) -> tuple[Path, Path, Path]:
     """Resolve promotion paths from server config/env with traversal protection."""
@@ -572,9 +674,106 @@ def governance_bind_receipts(
         description="When true, include only receipts from the last 24 hours based on server clock.",
     ),
     limit: int | None = Query(default=None, ge=1, le=200, description="Max receipts returned (safe upper bound: 200)."),
+    cursor: str | None = Query(default=None, description="Opaque pagination cursor for continuing list results."),
     sort: str | None = Query(default=None, description="Sort order: newest (default) or oldest."),
 ):
     """Return bind receipt artifacts with additive operator-focused server-side filtering."""
+    try:
+        parsed_outcome = _parse_bind_receipt_outcome(outcome)
+        parsed_sort = _parse_bind_receipt_sort(sort)
+        parsed_failed_only = _parse_bool_query(failed_only, field_name="failed_only")
+        parsed_recent_only = _parse_bool_query(recent_only, field_name="recent_only")
+    except ValueError as exc:
+        detail = "invalid_cursor" if str(exc) == "invalid_cursor" else "invalid_query_parameter"
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "invalid_bind_receipt_query",
+                "detail": detail,
+            },
+        )
+
+    try:
+        receipts = find_bind_receipts(
+            decision_id=decision_id,
+            execution_intent_id=execution_intent_id,
+        )
+        filtered_items = _apply_bind_receipt_filters(
+            receipts,
+            target_path=target_path,
+            target_type=target_type,
+            outcome=parsed_outcome,
+            reason_code=reason_code,
+            lineage_query=lineage_query,
+            failed_only=parsed_failed_only,
+            recent_only=parsed_recent_only,
+            sort=parsed_sort,
+        )
+        page_items, has_more, next_cursor = _paginate_bind_receipt_items(
+            items=filtered_items,
+            sort=parsed_sort,
+            limit=limit,
+            cursor=cursor,
+        )
+        applied_filters = _bind_receipt_applied_filters(
+            decision_id=decision_id,
+            execution_intent_id=execution_intent_id,
+            target_path=target_path,
+            target_type=target_type,
+            outcome=parsed_outcome,
+            reason_code=reason_code,
+            lineage_query=lineage_query,
+            failed_only=parsed_failed_only,
+            recent_only=parsed_recent_only,
+        )
+        return {
+            "ok": True,
+            "count": len(page_items),
+            "returned_count": len(page_items),
+            "items": page_items,
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "sort": parsed_sort,
+            "limit": limit,
+            "applied_filters": applied_filters,
+            "total_count": len(filtered_items),
+        }
+    except ValueError as exc:
+        if str(exc) == "invalid_cursor":
+            return JSONResponse(
+                status_code=400,
+                content={"ok": False, "error": "invalid_bind_receipt_query", "detail": "invalid_cursor"},
+            )
+        raise
+    except Exception as e:
+        logger.error("governance_bind_receipts failed: %s", e, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"ok": False, "error": "Failed to load bind receipts"},
+        )
+
+
+
+
+@router.get(
+    "/v1/governance/bind-receipts/export",
+    response_model=GovernanceBindReceiptExportResponse,
+    dependencies=[Depends(require_permission(Permission.governance_read))],
+)
+def governance_bind_receipts_export(
+    decision_id: str | None = Query(default=None),
+    execution_intent_id: str | None = Query(default=None),
+    target_path: str | None = Query(default=None),
+    target_type: str | None = Query(default=None),
+    outcome: str | None = Query(default=None),
+    reason_code: str | None = Query(default=None),
+    lineage_query: str | None = Query(default=None),
+    failed_only: str | None = Query(default=None),
+    recent_only: str | None = Query(default=None),
+    sort: str | None = Query(default=None),
+):
+    """Export bind receipts with list-equivalent filter and sort semantics."""
     try:
         parsed_outcome = _parse_bind_receipt_outcome(outcome)
         parsed_sort = _parse_bind_receipt_sort(sort)
@@ -605,19 +804,29 @@ def governance_bind_receipts(
             failed_only=parsed_failed_only,
             recent_only=parsed_recent_only,
             sort=parsed_sort,
-            limit=limit,
+        )
+        applied_filters = _bind_receipt_applied_filters(
+            decision_id=decision_id,
+            execution_intent_id=execution_intent_id,
+            target_path=target_path,
+            target_type=target_type,
+            outcome=parsed_outcome,
+            reason_code=reason_code,
+            lineage_query=lineage_query,
+            failed_only=parsed_failed_only,
+            recent_only=parsed_recent_only,
         )
         return {
             "ok": True,
             "count": len(filtered_items),
             "items": filtered_items,
+            "sort": parsed_sort,
+            "applied_filters": applied_filters,
+            "total_count": len(filtered_items),
         }
-    except Exception as e:
-        logger.error("governance_bind_receipts failed: %s", e, exc_info=True)
-        return JSONResponse(
-            status_code=500,
-            content={"ok": False, "error": "Failed to load bind receipts"},
-        )
+    except Exception as exc:
+        logger.error("governance_bind_receipts_export failed: %s", exc, exc_info=True)
+        return JSONResponse(status_code=500, content={"ok": False, "error": "Failed to export bind receipts"})
 
 
 @router.get(

@@ -26,6 +26,14 @@ import { BindCockpit } from "./BindCockpit";
 
 const LIST_PAYLOAD = {
   ok: true,
+  count: 2,
+  returned_count: 2,
+  has_more: false,
+  next_cursor: null,
+  sort: "newest",
+  limit: 50,
+  applied_filters: {},
+  total_count: 2,
   items: [
     {
       bind_receipt_id: "br-committed",
@@ -68,11 +76,11 @@ const DETAIL_PAYLOAD = {
 describe("BindCockpit", () => {
   beforeEach(() => {
     mockFetch.mockReset();
-    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, items: [] }) });
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, items: [] }) });
   });
 
   it("renders empty state when no receipts", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, items: [] }) });
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, items: [] }) });
     render(<BindCockpit />);
     expect(await screen.findByText(/No bind receipts matched filters/i)).toBeInTheDocument();
   });
@@ -80,7 +88,7 @@ describe("BindCockpit", () => {
   it("reflects filter state into server-side bind receipt query", async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => LIST_PAYLOAD })
-      .mockResolvedValue({ ok: true, json: async () => ({ ok: true, items: [LIST_PAYLOAD.items[1]] }) });
+      .mockResolvedValue({ ok: true, json: async () => ({ ok: true, count: 1, returned_count: 1, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 1, items: [LIST_PAYLOAD.items[1]] }) });
 
     render(<BindCockpit />);
     await screen.findByText("br-blocked");
@@ -101,7 +109,7 @@ describe("BindCockpit", () => {
       expect(calledUrls.some((url) => url.includes("failed_only=true"))).toBe(true);
       expect(calledUrls.some((url) => url.includes("recent_only=true"))).toBe(true);
       expect(calledUrls.some((url) => url.includes("sort=newest"))).toBe(true);
-      expect(calledUrls.some((url) => url.includes("limit=200"))).toBe(true);
+      expect(calledUrls.some((url) => url.includes("limit=50"))).toBe(true);
     });
   });
 
@@ -109,7 +117,7 @@ describe("BindCockpit", () => {
   it("renders no match state for filtered server response", async () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => LIST_PAYLOAD })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, items: [] }) });
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true, count: 0, returned_count: 0, has_more: false, next_cursor: null, sort: "newest", limit: 50, applied_filters: {}, total_count: 0, items: [] }) });
 
     render(<BindCockpit />);
     await screen.findByText("br-blocked");
@@ -117,6 +125,68 @@ describe("BindCockpit", () => {
     fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "SNAPSHOT_FAILED" } });
 
     expect(await screen.findByText(/No bind receipts matched filters/i)).toBeInTheDocument();
+  });
+
+  
+
+  it("supports load more and export parity with current filters", async () => {
+    const firstPage = {
+      ok: true,
+      count: 1,
+      returned_count: 1,
+      has_more: true,
+      next_cursor: "cursor-1",
+      sort: "newest",
+      limit: 50,
+      applied_filters: {},
+      total_count: 2,
+      items: [LIST_PAYLOAD.items[0]],
+    };
+    const secondPage = {
+      ok: true,
+      count: 1,
+      returned_count: 1,
+      has_more: false,
+      next_cursor: null,
+      sort: "newest",
+      limit: 50,
+      applied_filters: {},
+      total_count: 2,
+      items: [LIST_PAYLOAD.items[1]],
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("/bind-receipts/export")) {
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true, items: [] }) });
+      }
+      if (url.includes("/bind-receipts/br-")) {
+        return Promise.resolve({ ok: true, json: async () => DETAIL_PAYLOAD });
+      }
+      if (url.includes("cursor=cursor-1")) {
+        return Promise.resolve({ ok: true, json: async () => secondPage });
+      }
+      return Promise.resolve({ ok: true, json: async () => firstPage });
+    });
+
+    render(<BindCockpit />);
+    await screen.findByText("br-committed");
+
+    expect(screen.getByText(/has more pages/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /load more receipts/i }));
+
+    await screen.findByText("br-blocked");
+    expect(screen.getByText(/no more pages/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("bind-outcome"), { target: { value: "BLOCKED" } });
+
+    await waitFor(() => {
+      const exportLink = screen.getByRole("link", { name: /export current filtered set/i });
+      expect(exportLink.getAttribute("href")).toContain("/api/veritas/v1/governance/bind-receipts/export?");
+      expect(exportLink.getAttribute("href")).toContain("outcome=BLOCKED");
+    });
+
+    const calledUrls = mockFetch.mock.calls.map((call) => String(call[0]));
+    expect(calledUrls.some((url) => url.includes("cursor=cursor-1"))).toBe(true);
   });
 
   it("supports drill-down and related lineage navigation", async () => {

@@ -15,8 +15,8 @@ describe("bind-cockpit-normalization", () => {
   });
 
   it("parses list/detail payload safely", () => {
-    expect(parseBindReceiptListPayload({ items: [{ bind_receipt_id: "br-1" }] })).toHaveLength(1);
-    expect(parseBindReceiptListPayload({ bad: [] })).toHaveLength(0);
+    expect(parseBindReceiptListPayload({ items: [{ bind_receipt_id: "br-1" }], count: 1 }).items).toHaveLength(1);
+    expect(parseBindReceiptListPayload({ bad: [] }).items).toHaveLength(0);
     expect(parseBindReceiptDetailPayload({ bind_receipt: { bind_receipt_id: "br-1" } })?.bind_receipt_id).toBe("br-1");
     expect(parseBindReceiptDetailPayload({ bind_receipt: {} })).toBeNull();
   });

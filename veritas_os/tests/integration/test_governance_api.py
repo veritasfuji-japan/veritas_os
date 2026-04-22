@@ -602,6 +602,10 @@ def test_governance_bind_receipts_list_endpoint(monkeypatch) -> None:
     body = resp.json()
     assert body["ok"] is True
     assert body["count"] == 1
+    assert body["returned_count"] == 1
+    assert body["has_more"] is False
+    assert body["next_cursor"] is None
+    assert body["sort"] == "newest"
     assert body["items"][0]["bind_receipt_id"] == "br-list-1"
     assert body["items"][0]["decision_id"] == "dec-list-1"
     assert body["items"][0]["execution_intent_id"] == "ei-list-1"
@@ -698,6 +702,90 @@ def test_governance_bind_receipts_list_extended_filters(monkeypatch) -> None:
     assert [item["bind_receipt_id"] for item in limit_resp.json()["items"]] == ["br-1"]
 
 
+def test_governance_bind_receipts_cursor_pagination_and_export_parity(monkeypatch) -> None:
+    class _Receipt:
+        def __init__(self, payload: dict):
+            self._payload = payload
+
+        def to_dict(self) -> dict:
+            return dict(self._payload)
+
+    receipts = [
+        _Receipt(
+            {
+                "bind_receipt_id": "br-a",
+                "decision_id": "dec-a",
+                "execution_intent_id": "ei-a",
+                "target_path": "/v1/governance/policy",
+                "target_type": "governance_policy",
+                "final_outcome": "COMMITTED",
+                "bind_reason_code": "OK",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+        ),
+        _Receipt(
+            {
+                "bind_receipt_id": "br-b",
+                "decision_id": "dec-b",
+                "execution_intent_id": "ei-b",
+                "target_path": "/v1/governance/policy",
+                "target_type": "governance_policy",
+                "final_outcome": "BLOCKED",
+                "bind_reason_code": "POLICY_DENY",
+                "occurred_at": "2026-04-22T11:00:00Z",
+            }
+        ),
+        _Receipt(
+            {
+                "bind_receipt_id": "br-c",
+                "decision_id": "dec-c",
+                "execution_intent_id": "ei-c",
+                "target_path": "/v1/compliance/config",
+                "target_type": "compliance_config",
+                "final_outcome": "ESCALATED",
+                "bind_reason_code": "APPROVAL_MISSING",
+                "occurred_at": "2026-04-22T10:00:00Z",
+            }
+        ),
+    ]
+
+    monkeypatch.setattr("veritas_os.api.routes_governance.find_bind_receipts", lambda **_kwargs: receipts)
+
+    first = client.get("/v1/governance/bind-receipts?sort=newest&limit=1", headers=HEADERS)
+    assert first.status_code == 200
+    first_body = first.json()
+    assert first_body["count"] == 1
+    assert first_body["returned_count"] == 1
+    assert first_body["has_more"] is True
+    assert first_body["sort"] == "newest"
+    assert first_body["total_count"] == 3
+    assert [item["bind_receipt_id"] for item in first_body["items"]] == ["br-b"]
+    assert isinstance(first_body["next_cursor"], str)
+
+    second = client.get(
+        f"/v1/governance/bind-receipts?sort=newest&limit=1&cursor={first_body['next_cursor']}",
+        headers=HEADERS,
+    )
+    assert second.status_code == 200
+    second_body = second.json()
+    assert [item["bind_receipt_id"] for item in second_body["items"]] == ["br-a"]
+
+    oldest = client.get("/v1/governance/bind-receipts?sort=oldest&limit=2", headers=HEADERS)
+    assert oldest.status_code == 200
+    oldest_body = oldest.json()
+    assert [item["bind_receipt_id"] for item in oldest_body["items"]] == ["br-c", "br-a"]
+
+    export_resp = client.get(
+        "/v1/governance/bind-receipts/export?target_path=/v1/governance/policy&sort=newest",
+        headers=HEADERS,
+    )
+    assert export_resp.status_code == 200
+    export_body = export_resp.json()
+    assert export_body["sort"] == "newest"
+    assert export_body["total_count"] == 2
+    assert [item["bind_receipt_id"] for item in export_body["items"]] == ["br-b", "br-a"]
+
+
 
 def test_governance_bind_receipts_list_invalid_query_returns_400(monkeypatch) -> None:
     monkeypatch.setattr(
@@ -714,6 +802,10 @@ def test_governance_bind_receipts_list_invalid_query_returns_400(monkeypatch) ->
     assert invalid_sort_resp.status_code == 400
     assert invalid_sort_resp.json()["error"] == "invalid_bind_receipt_query"
     assert invalid_sort_resp.json()["detail"] == "invalid_query_parameter"
+
+    invalid_cursor_resp = client.get("/v1/governance/bind-receipts?cursor=not-a-valid-cursor", headers=HEADERS)
+    assert invalid_cursor_resp.status_code == 400
+    assert invalid_cursor_resp.json()["detail"] == "invalid_cursor"
 
 
 def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -> None:
