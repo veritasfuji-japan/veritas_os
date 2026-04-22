@@ -1415,6 +1415,20 @@ class GovernancePolicyBundlePromoteResponse(BaseModel):
     error: Optional[str] = None
 
 
+class ComplianceConfigResponse(BaseModel):
+    """Response envelope for GET/PUT /v1/compliance/config."""
+
+    ok: bool = True
+    config: Optional[Dict[str, Any]] = None
+    bind_receipt: Optional[BindReceipt] = None
+    bind_outcome: Optional[FinalOutcome] = None
+    bind_failure_reason: Optional[str] = Field(default=None, max_length=MAX_DESCRIPTION_LENGTH)
+    bind_reason_code: Optional[str] = Field(default=None, max_length=MAX_TITLE_LENGTH)
+    bind_receipt_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    execution_intent_id: Optional[str] = Field(default=None, max_length=MAX_ID_LENGTH)
+    error: Optional[str] = None
+
+
 class GovernanceBindReceiptListResponse(BaseModel):
     """Response envelope for GET /v1/governance/bind-receipts."""
 

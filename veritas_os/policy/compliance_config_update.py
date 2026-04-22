@@ -1,0 +1,91 @@
+"""Bind-controlled runtime compliance config update helpers."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Callable
+from uuid import uuid4
+
+from veritas_os.policy.bind_artifacts import BindReceipt, ExecutionIntent
+from veritas_os.policy.bind_boundary_adapters import ComplianceConfigUpdateAdapter
+from veritas_os.policy.bind_core import execute_bind_adjudication
+
+
+def update_compliance_config_with_bind_boundary(
+    *,
+    decision_id: str,
+    request_id: str,
+    actor_identity: str,
+    policy_snapshot_id: str,
+    decision_hash: str,
+    config_patch: dict[str, Any],
+    config_reader: Callable[[], dict[str, Any]],
+    config_updater: Callable[..., dict[str, Any]],
+    approval_context: dict[str, Any] | None = None,
+    policy_lineage: dict[str, Any] | None = None,
+    governance_policy: dict[str, Any] | None = None,
+    decision_ts: str | None = None,
+    append_trustlog: bool = True,
+    bind_ts: str | None = None,
+    execution_intent_id: str | None = None,
+    bind_receipt_id: str | None = None,
+) -> BindReceipt:
+    """Apply compliance config patch through bind-boundary adjudication."""
+    adapter = ComplianceConfigUpdateAdapter(
+        config_reader=config_reader,
+        config_updater=config_updater,
+        config_patch=dict(config_patch),
+    )
+
+    pre_snapshot = adapter.snapshot()
+    expected_fingerprint = adapter.fingerprint_state(pre_snapshot)
+
+    merged_approval_context: dict[str, Any] = dict(approval_context or {})
+    merged_approval_context.setdefault("compliance_config_update_approved", True)
+
+    intent = ExecutionIntent(
+        execution_intent_id=execution_intent_id or uuid4().hex,
+        decision_id=decision_id,
+        request_id=request_id,
+        policy_snapshot_id=policy_snapshot_id,
+        actor_identity=actor_identity,
+        target_system="compliance",
+        target_resource="compliance/config",
+        intended_action="update_compliance_config",
+        decision_hash=decision_hash,
+        decision_ts=decision_ts or _utc_now_iso8601(),
+        expected_state_fingerprint=expected_fingerprint,
+        approval_context=merged_approval_context,
+        policy_lineage=_with_bind_policy_lineage(
+            lineage=policy_lineage,
+            governance_policy=governance_policy,
+        ),
+    )
+
+    return execute_bind_adjudication(
+        execution_intent=intent,
+        adapter=adapter,
+        bind_ts=bind_ts,
+        bind_receipt_id=bind_receipt_id,
+        append_trustlog=append_trustlog,
+    )
+
+
+def _utc_now_iso8601() -> str:
+    """Return current UTC timestamp in canonical bind intent format."""
+    return datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def _with_bind_policy_lineage(
+    *,
+    lineage: dict[str, Any] | None,
+    governance_policy: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge governance bind policy surface into execution intent lineage."""
+    merged: dict[str, Any] = dict(lineage or {})
+    if not isinstance(governance_policy, dict):
+        return merged
+    bind_policy = governance_policy.get("bind_adjudication")
+    if isinstance(bind_policy, dict):
+        merged.setdefault("bind_adjudication", dict(bind_policy))
+    return merged

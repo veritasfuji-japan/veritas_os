@@ -698,6 +698,43 @@ components:
         policy:
           $ref: '#/components/schemas/GovernancePolicy'
 
+    ComplianceConfigResponse:
+      type: object
+      description: "Compliance config response with optional bind lineage fields on mutation."
+      properties:
+        ok:
+          type: boolean
+        config:
+          type: object
+          nullable: true
+          additionalProperties: true
+        bind_outcome:
+          type: string
+          nullable: true
+          description: "Present when bind adjudication runs for compliance config mutation."
+          enum: ["COMMITTED", "BLOCKED", "ROLLED_BACK", "ESCALATED", "APPLY_FAILED", "SNAPSHOT_FAILED", "PRECONDITION_FAILED"]
+        bind_failure_reason:
+          type: string
+          nullable: true
+          description: "Compact bind failure reason resolved from receipt checks."
+        bind_reason_code:
+          type: string
+          nullable: true
+          description: "Stable bind reason code when available."
+        bind_receipt_id:
+          type: string
+          nullable: true
+        execution_intent_id:
+          type: string
+          nullable: true
+        bind_receipt:
+          allOf:
+            - $ref: '#/components/schemas/BindReceipt'
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
     ExecutionIntent:
       type: object
       description: "Decision-linked execution attempt descriptor."
@@ -2253,15 +2290,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                  config:
-                    type: object
-                    additionalProperties: true
+                $ref: '#/components/schemas/ComplianceConfigResponse'
     put:
-      summary: Compliance config update
+      summary: Compliance config update via bind-boundary adjudication
       requestBody:
         required: true
         content:
@@ -2279,12 +2310,11 @@ paths:
                   maximum: 1.0
       responses:
         "200":
-          description: Updated config
+          description: Updated config with bind receipt lineage fields
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: '#/components/schemas/ComplianceConfigResponse'
 
   /v1/compliance/deployment-readiness:
     get:
