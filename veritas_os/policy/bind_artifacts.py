@@ -120,6 +120,11 @@ class BindReceipt:
     revalidation_context: dict[str, Any] = field(default_factory=dict)
     bind_reason_code: str | None = None
     bind_failure_reason: str | None = None
+    idempotency_key: str | None = None
+    idempotency_status: str | None = None
+    retry_safety: str | None = None
+    rollback_status: str | None = None
+    failure_category: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-serializable representation."""
@@ -154,6 +159,11 @@ class BindReceipt:
             "revalidation_context": dict(self.revalidation_context),
             "bind_reason_code": self.bind_reason_code,
             "bind_failure_reason": self.bind_failure_reason,
+            "idempotency_key": self.idempotency_key,
+            "idempotency_status": self.idempotency_status,
+            "retry_safety": self.retry_safety,
+            "rollback_status": self.rollback_status,
+            "failure_category": self.failure_category,
         }
 
 
@@ -243,6 +253,27 @@ def _extract_bind_receipt(entry: dict[str, Any]) -> BindReceipt | None:
             bind_failure_reason=(
                 str(payload.get("bind_failure_reason"))
                 if payload.get("bind_failure_reason")
+                else None
+            ),
+            idempotency_key=(
+                str(payload.get("idempotency_key"))
+                if payload.get("idempotency_key")
+                else None
+            ),
+            idempotency_status=(
+                str(payload.get("idempotency_status"))
+                if payload.get("idempotency_status")
+                else None
+            ),
+            retry_safety=(
+                str(payload.get("retry_safety")) if payload.get("retry_safety") else None
+            ),
+            rollback_status=(
+                str(payload.get("rollback_status")) if payload.get("rollback_status") else None
+            ),
+            failure_category=(
+                str(payload.get("failure_category"))
+                if payload.get("failure_category")
                 else None
             ),
         )

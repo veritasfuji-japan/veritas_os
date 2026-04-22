@@ -50,3 +50,11 @@ class BindAdapterContract(ABC):
     @abstractmethod
     def describe_target(self) -> str:
         """Return short human-readable target description."""
+
+    def build_idempotency_key(self, intent: ExecutionIntent) -> str:
+        """Return idempotency key for dedupe/replay detection.
+
+        Adapters may override this when intent id alone is insufficient.
+        """
+        del intent
+        return ""

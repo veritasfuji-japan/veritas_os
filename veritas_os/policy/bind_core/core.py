@@ -21,6 +21,7 @@ from veritas_os.policy.bind_artifacts import (
     hash_execution_intent,
 )
 from veritas_os.policy.bind_core.constants import BindReasonCode
+from veritas_os.policy.bind_core.constants import BindFailureCategory, BindRetrySafety
 from veritas_os.policy.bind_core.contracts import BindAdapterContract
 from veritas_os.policy.bind_core.normalizers import normalize_execution_intent
 from veritas_os.security.hash import canonical_json_dumps, sha256_of_canonical_json
@@ -139,6 +140,34 @@ def execute_bind_adjudication(
     """Orchestrate snapshot -> admissibility -> apply -> verify -> commit/revert."""
     normalized_intent = normalize_execution_intent(execution_intent)
     ts = bind_ts or _utc_now_iso8601()
+    adapter_idempotency_key = str(adapter.build_idempotency_key(normalized_intent) or "").strip()
+    idempotency_key = _resolve_idempotency_key(
+        adapter_key=adapter_idempotency_key,
+        execution_intent=normalized_intent,
+    )
+
+    if append_trustlog and _idempotency_replay_enabled(
+        adapter_key=adapter_idempotency_key,
+        execution_intent=normalized_intent,
+    ):
+        duplicate_receipt = _find_duplicate_bind_receipt(
+            execution_intent=normalized_intent,
+            idempotency_key=idempotency_key,
+        )
+        if duplicate_receipt is not None:
+            return _with_receipt(
+                duplicate_receipt,
+                idempotency_key=idempotency_key,
+                idempotency_status="replayed",
+                bind_reason_code=BindReasonCode.IDEMPOTENT_REPLAY.value,
+                bind_failure_reason=(
+                    f"{BindReasonCode.IDEMPOTENT_REPLAY.value}:"
+                    f"{duplicate_receipt.bind_receipt_id}"
+                ),
+                retry_safety=BindRetrySafety.SAFE.value,
+                rollback_status=duplicate_receipt.rollback_status or "not_required",
+                failure_category=duplicate_receipt.failure_category or BindFailureCategory.NONE.value,
+            )
 
     base_receipt = BindReceipt(
         bind_receipt_id=bind_receipt_id or "",
@@ -149,12 +178,14 @@ def execute_bind_adjudication(
         policy_snapshot_id=normalized_intent.policy_snapshot_id,
         actor_identity=normalized_intent.actor_identity,
         decision_hash=normalized_intent.decision_hash,
+        idempotency_key=idempotency_key,
         governance_identity=_extract_governance_identity(normalized_intent),
         revalidation_context=_build_revalidation_context(
             execution_intent=normalized_intent,
             bind_policy=BindPolicyConfig(),
             ttl_expires_at=_build_ttl_expiry(normalized_intent),
             approval_expires_at=_build_approval_expiry(normalized_intent),
+            idempotency_key=idempotency_key,
         ),
     ) if bind_receipt_id else BindReceipt(
         execution_intent_id=normalized_intent.execution_intent_id,
@@ -164,12 +195,14 @@ def execute_bind_adjudication(
         policy_snapshot_id=normalized_intent.policy_snapshot_id,
         actor_identity=normalized_intent.actor_identity,
         decision_hash=normalized_intent.decision_hash,
+        idempotency_key=idempotency_key,
         governance_identity=_extract_governance_identity(normalized_intent),
         revalidation_context=_build_revalidation_context(
             execution_intent=normalized_intent,
             bind_policy=BindPolicyConfig(),
             ttl_expires_at=_build_ttl_expiry(normalized_intent),
             approval_expires_at=_build_approval_expiry(normalized_intent),
+            idempotency_key=idempotency_key,
         ),
     )
 
@@ -234,6 +267,7 @@ def execute_bind_adjudication(
             bind_policy=bind_policy,
             ttl_expires_at=ttl_expires_at,
             approval_expires_at=approval_expires_at,
+            idempotency_key=idempotency_key,
         ),
     )
 
@@ -738,6 +772,13 @@ def _finalize_receipt(
             bind_reason_code=receipt.bind_reason_code or reason_code,
             bind_failure_reason=receipt.bind_failure_reason or failure_reason,
         )
+    receipt = _with_receipt(
+        receipt,
+        idempotency_status=receipt.idempotency_status or "fresh",
+        retry_safety=receipt.retry_safety or _resolve_retry_safety(receipt).value,
+        rollback_status=receipt.rollback_status or _resolve_rollback_status(receipt),
+        failure_category=receipt.failure_category or _resolve_failure_category(receipt).value,
+    )
     if not append_trustlog:
         return receipt
     append_execution_intent_trustlog(execution_intent)
@@ -786,6 +827,7 @@ def _build_revalidation_context(
     bind_policy: BindPolicyConfig,
     ttl_expires_at: str | None,
     approval_expires_at: str | None,
+    idempotency_key: str,
 ) -> dict[str, Any]:
     """Build a minimal replay context required for bind admissibility re-checks."""
     return {
@@ -796,7 +838,115 @@ def _build_revalidation_context(
         "ttl_required": bind_policy.ttl_required,
         "approval_freshness_required": bind_policy.approval_freshness_required,
         "missing_signal_outcome": bind_policy.missing_signal_outcome.value,
+        "idempotency_key": idempotency_key,
     }
+
+
+def _resolve_idempotency_key(
+    *,
+    adapter_key: str,
+    execution_intent: ExecutionIntent,
+) -> str:
+    """Resolve deterministic idempotency key from adapter and intent context."""
+    if adapter_key:
+        return adapter_key
+    if isinstance(execution_intent.approval_context, dict):
+        approval_key = execution_intent.approval_context.get("idempotency_key")
+        if isinstance(approval_key, str) and approval_key.strip():
+            return approval_key.strip()
+    return execution_intent.execution_intent_id
+
+
+def _idempotency_replay_enabled(
+    *,
+    adapter_key: str,
+    execution_intent: ExecutionIntent,
+) -> bool:
+    """Return True when replay detection should dedupe repeated submissions."""
+    if adapter_key:
+        return True
+    if not isinstance(execution_intent.approval_context, dict):
+        return False
+    raw_key = execution_intent.approval_context.get("idempotency_key")
+    return isinstance(raw_key, str) and bool(raw_key.strip())
+
+
+def _find_duplicate_bind_receipt(
+    *,
+    execution_intent: ExecutionIntent,
+    idempotency_key: str,
+) -> BindReceipt | None:
+    """Return the latest receipt for the same intent/idempotency key."""
+    from veritas_os.policy.bind_artifacts import find_bind_receipts
+
+    receipts = find_bind_receipts(
+        execution_intent_id=execution_intent.execution_intent_id,
+        decision_id=execution_intent.decision_id,
+    )
+    for receipt in reversed(receipts):
+        receipt_key = ""
+        if isinstance(receipt.revalidation_context, dict):
+            receipt_key = str(receipt.revalidation_context.get("idempotency_key") or "").strip()
+        if receipt_key and receipt_key == idempotency_key:
+            return receipt
+    return None
+
+
+def _resolve_retry_safety(receipt: BindReceipt) -> BindRetrySafety:
+    """Classify retry safety for operator-visible bind semantics."""
+    if receipt.final_outcome in {FinalOutcome.COMMITTED, FinalOutcome.ROLLED_BACK}:
+        return BindRetrySafety.SAFE
+    if receipt.final_outcome is FinalOutcome.BLOCKED:
+        return BindRetrySafety.SAFE
+    if receipt.final_outcome in {FinalOutcome.ESCALATED, FinalOutcome.APPLY_FAILED}:
+        return BindRetrySafety.REQUIRES_ESCALATION
+    if receipt.final_outcome in {FinalOutcome.SNAPSHOT_FAILED, FinalOutcome.PRECONDITION_FAILED}:
+        return BindRetrySafety.UNSAFE
+    return BindRetrySafety.REQUIRES_ESCALATION
+
+
+def _resolve_rollback_status(receipt: BindReceipt) -> str:
+    """Resolve rollback status label from final outcome and reason context."""
+    if receipt.final_outcome is FinalOutcome.ROLLED_BACK:
+        return "rolled_back"
+    if receipt.final_outcome is FinalOutcome.COMMITTED:
+        return "not_required"
+    if receipt.final_outcome is FinalOutcome.ESCALATED:
+        if isinstance(receipt.escalation_reason, str) and "BIND_REVERT" in receipt.escalation_reason:
+            return "rollback_failed"
+        return "manual_intervention_required"
+    if receipt.final_outcome is FinalOutcome.APPLY_FAILED:
+        return "rollback_not_attempted"
+    return "not_required"
+
+
+def _resolve_failure_category(receipt: BindReceipt) -> BindFailureCategory:
+    """Map receipt outcomes/reasons into a minimal failure taxonomy."""
+    if receipt.final_outcome is FinalOutcome.COMMITTED:
+        return BindFailureCategory.NONE
+    if receipt.final_outcome is FinalOutcome.PRECONDITION_FAILED:
+        return BindFailureCategory.PRECONDITION
+    if receipt.final_outcome is FinalOutcome.SNAPSHOT_FAILED:
+        return BindFailureCategory.SNAPSHOT
+    if receipt.final_outcome is FinalOutcome.APPLY_FAILED:
+        return BindFailureCategory.APPLY
+    if receipt.final_outcome is FinalOutcome.BLOCKED:
+        return BindFailureCategory.ADMISSIBILITY
+    if receipt.final_outcome is FinalOutcome.ROLLED_BACK:
+        if isinstance(receipt.rollback_reason, str) and receipt.rollback_reason.startswith(
+            BindReasonCode.APPLY_FAILED.value
+        ):
+            return BindFailureCategory.APPLY
+        return BindFailureCategory.POSTCONDITION
+    if receipt.final_outcome is FinalOutcome.ESCALATED:
+        if isinstance(receipt.escalation_reason, str) and "BIND_REVERT" in receipt.escalation_reason:
+            return BindFailureCategory.ROLLBACK
+        if isinstance(receipt.rollback_reason, str) and receipt.rollback_reason.startswith(
+            BindReasonCode.APPLY_FAILED.value
+        ):
+            return BindFailureCategory.APPLY
+        return BindFailureCategory.POSTCONDITION
+    return BindFailureCategory.ADMISSIBILITY
 
 
 def _resolve_receipt_failure_fields(receipt: BindReceipt) -> tuple[str | None, str | None]:
