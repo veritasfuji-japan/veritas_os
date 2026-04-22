@@ -7,7 +7,6 @@ import { veritasFetch } from "../../../lib/api-client";
 import {
   type BindFilterState,
   type CanonicalBindReceipt,
-  filterCanonicalReceipts,
   normalizeBindReceipt,
   parseBindReceiptDetailPayload,
   parseBindReceiptListPayload,
@@ -21,6 +20,41 @@ const DEFAULT_FILTERS: BindFilterState = {
   failedOnly: false,
   recentOnly: false,
 };
+
+const PATH_TYPE_TO_TARGET_PATH: Record<Exclude<BindFilterState["pathType"], "all" | "other">, string> = {
+  governance_policy_update: "/v1/governance/policy",
+  policy_bundle_promotion: "/v1/governance/policy-bundles/promote",
+  compliance_config_update: "/v1/compliance/config",
+};
+
+const DEFAULT_LIST_LIMIT = 200;
+
+function buildBindReceiptListQuery(filters: BindFilterState): string {
+  const params = new URLSearchParams();
+  params.set("sort", "newest");
+  params.set("limit", String(DEFAULT_LIST_LIMIT));
+
+  if (filters.pathType !== "all" && filters.pathType !== "other") {
+    params.set("target_path", PATH_TYPE_TO_TARGET_PATH[filters.pathType]);
+  }
+  if (filters.outcome !== "all") {
+    params.set("outcome", filters.outcome);
+  }
+  if (filters.reasonCode.trim()) {
+    params.set("reason_code", filters.reasonCode.trim());
+  }
+  if (filters.lineageQuery.trim()) {
+    params.set("lineage_query", filters.lineageQuery.trim());
+  }
+  if (filters.failedOnly) {
+    params.set("failed_only", "true");
+  }
+  if (filters.recentOnly) {
+    params.set("recent_only", "true");
+  }
+
+  return params.toString();
+}
 
 function resolveOutcomeVariant(
   outcome: CanonicalBindReceipt["outcome"],
@@ -65,20 +99,20 @@ export function BindCockpit(): JSX.Element {
   const [selectedReceiptId, setSelectedReceiptId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CanonicalBindReceipt | null>(null);
 
+  const listQuery = useMemo(() => buildBindReceiptListQuery(filters), [filters]);
+
   const loadReceipts = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await veritasFetch("/api/veritas/v1/governance/bind-receipts");
+      const response = await veritasFetch(`/api/veritas/v1/governance/bind-receipts?${listQuery}`);
       if (!response.ok) {
         setError(`HTTP ${response.status}: Failed to load bind receipts.`);
         setReceipts([]);
         return;
       }
       const payload = parseBindReceiptListPayload(await response.json());
-      const normalized = payload
-        .map(normalizeBindReceipt)
-        .sort((a, b) => b.timestampMs - a.timestampMs);
+      const normalized = payload.map(normalizeBindReceipt);
       setReceipts(normalized);
     } catch (caught: unknown) {
       console.error("loadReceipts failed", caught);
@@ -87,7 +121,7 @@ export function BindCockpit(): JSX.Element {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [listQuery]);
 
   useEffect(() => {
     void loadReceipts();
@@ -128,10 +162,12 @@ export function BindCockpit(): JSX.Element {
     })();
   }, [selectedReceiptId]);
 
-  const filteredReceipts = useMemo(
-    () => filterCanonicalReceipts(receipts, filters),
-    [receipts, filters],
-  );
+  const filteredReceipts = useMemo(() => {
+    if (filters.pathType !== "other") {
+      return receipts;
+    }
+    return receipts.filter((receipt) => receipt.targetPathType === "other");
+  }, [receipts, filters.pathType]);
 
   return (
     <Card

@@ -600,7 +600,7 @@ VERITAS_MEMORY_BACKEND=postgresql VERITAS_TRUSTLOG_BACKEND=postgresql \
 | GET | `/v1/governance/value-drift` | 価値重みEMAドリフト監視 |
 | GET | `/v1/governance/decisions/export` | ガバナンス監査用意思決定エクスポート |
 | POST | `/v1/governance/policy-bundles/promote` | bind-boundaryガバナンスワークフローでポリシーバンドル昇格を実行（bind receipt系譜を返却。governance write権限が必要） |
-| GET | `/v1/governance/bind-receipts` | bind receipt一覧（decision / execution intent 系譜でフィルタ可） |
+| GET | `/v1/governance/bind-receipts` | bind receipt一覧（decision / execution intent 系譜 + target/outcome/reason/failed/recent/sort/limit でフィルタ可） |
 | GET | `/v1/governance/bind-receipts/{bind_receipt_id}` | 単一bind receipt成果物を取得 |
 
 > **署名付きガバナンス成果物** — secure/prodポスチャでは、ポリシーバンドルにEd25519署名が必須です。
