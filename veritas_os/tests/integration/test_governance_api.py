@@ -708,10 +708,12 @@ def test_governance_bind_receipts_list_invalid_query_returns_400(monkeypatch) ->
     invalid_outcome_resp = client.get("/v1/governance/bind-receipts?outcome=NOT_A_REAL_OUTCOME", headers=HEADERS)
     assert invalid_outcome_resp.status_code == 400
     assert invalid_outcome_resp.json()["error"] == "invalid_bind_receipt_query"
+    assert invalid_outcome_resp.json()["detail"] == "invalid_query_parameter"
 
     invalid_sort_resp = client.get("/v1/governance/bind-receipts?sort=sideways", headers=HEADERS)
     assert invalid_sort_resp.status_code == 400
     assert invalid_sort_resp.json()["error"] == "invalid_bind_receipt_query"
+    assert invalid_sort_resp.json()["detail"] == "invalid_query_parameter"
 
 
 def test_governance_policy_bundle_promote_success(monkeypatch, tmp_path: Path) -> None:

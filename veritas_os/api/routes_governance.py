@@ -580,10 +580,14 @@ def governance_bind_receipts(
         parsed_sort = _parse_bind_receipt_sort(sort)
         parsed_failed_only = _parse_bool_query(failed_only, field_name="failed_only")
         parsed_recent_only = _parse_bool_query(recent_only, field_name="recent_only")
-    except ValueError as exc:
+    except ValueError:
         return JSONResponse(
             status_code=400,
-            content={"ok": False, "error": "invalid_bind_receipt_query", "detail": str(exc)},
+            content={
+                "ok": False,
+                "error": "invalid_bind_receipt_query",
+                "detail": "invalid_query_parameter",
+            },
         )
 
     try:
